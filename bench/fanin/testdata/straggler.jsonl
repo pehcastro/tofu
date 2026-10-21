@@ -1,16 +1,16 @@
 # three workers finishing together while a fourth runs on, so the quiet timer closes the window
 {"text":"spawning 4 workers","tools":[{"name":"spawn","args":{"task":"fan-in worker 1: run the one command you are given, then report","owns":["w1/**"]}},{"name":"spawn","args":{"task":"fan-in worker 2: run the one command you are given, then report","owns":["w2/**"]}},{"name":"spawn","args":{"task":"fan-in worker 3: run the one command you are given, then report","owns":["w3/**"]}},{"name":"spawn","args":{"task":"fan-in worker 4: run the one command you are given, then report","owns":["w4/**"]}}]}
 {"agent":"c1","tools":[{"name":"bash","args":{"command":"sleep 0.5"}}]}
-{"agent":"c1","text":"fanin report from c1 after 0.5 s"}
+{"agent":"c1","text":"fanin report from c1 after 0.5 s","tools":[{"name":"finish","args":{"verdict":"done","summary":"fanin report from c1 after 0.5 s","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"the cassette says so"}}}]}
 {"agent":"c2","tools":[{"name":"bash","args":{"command":"sleep 1"}}]}
-{"agent":"c2","text":"fanin report from c2 after 1 s"}
+{"agent":"c2","text":"fanin report from c2 after 1 s","tools":[{"name":"finish","args":{"verdict":"done","summary":"fanin report from c2 after 1 s","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"the cassette says so"}}}]}
 {"agent":"c3","tools":[{"name":"bash","args":{"command":"sleep 1.5"}}]}
-{"agent":"c3","text":"fanin report from c3 after 1.5 s"}
+{"agent":"c3","text":"fanin report from c3 after 1.5 s","tools":[{"name":"finish","args":{"verdict":"done","summary":"fanin report from c3 after 1.5 s","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"the cassette says so"}}}]}
 {"agent":"c4","tools":[{"name":"bash","args":{"command":"sleep 5"}}]}
 {"agent":"c4","tools":[{"name":"bash","args":{"command":"sleep 4.9"}}]}
 {"agent":"c4","tools":[{"name":"bash","args":{"command":"sleep 4.8"}}]}
 {"agent":"c4","tools":[{"name":"bash","args":{"command":"sleep 0.3"}}]}
-{"agent":"c4","text":"fanin report from c4 after 15 s"}
+{"agent":"c4","text":"fanin report from c4 after 15 s","tools":[{"name":"finish","args":{"verdict":"done","summary":"fanin report from c4 after 15 s","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"the cassette says so"}}}]}
 {"text":"lead turn reply 1"}
 {"text":"lead turn reply 2"}
 {"text":"lead turn reply 3"}

@@ -22,12 +22,10 @@ const SpawnAddendum = "spawn hands one piece of work to a sub-agent with its own
 	"and returns what the sub-agent did rather than its transcript: give each separable piece its own sub-agent, with paths that do not overlap another sub-agent's. " +
 	ContractAddendum
 
-const ContractAddendum = "if you were spawned as a sub-agent and your own brief names a ticket with an ## Acceptance section, finish with a fenced json block: " +
-	`{"claims": [{"line": "<an acceptance line, copied exactly as given>", "command": "<the command you ran for it>", "output": "<what that command printed>", "met": true}], "blocked": ["<a line you could not attempt, and why>"]}` +
-	". every acceptance line needs the real command that proved it and the real output it printed, whatever met says: a line with no command and no output behind it is counted as omitted, not as met. " +
+const ContractAddendum = "if you were spawned as a sub-agent, end your work by calling finish: it carries your report to the lead, and a turn that ends without it is sent back once and then reported blocked. " +
+	"when your own brief names a ticket with an ## Acceptance section, finish's claims carry every acceptance line, copied exactly as given, with the real command that proved it and the real output it printed, whatever met says: " +
+	"a line with no command and no output behind it is counted as omitted, not as met. " +
 	"an empty output is still a pass when the command ran and printed nothing, such as a formatter finding nothing to complain about. " +
-	"if your reply already shows another fenced json block, such as the contents of a file you edited, put this one after it: the last fenced json block in your reply is read as the contract, and an earlier one is not. " +
-	"a sub-agent spawned with no ticket, or whose brief has no ## Acceptance section, sends no such block. " +
 	"the shape is at library/general/references/contract.md."
 
 func SubAgentList(defined []subagent.Definition) string {

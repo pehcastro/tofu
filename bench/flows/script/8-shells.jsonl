@@ -1,4 +1,4 @@
 {"text":"spawning one","tools":[{"name":"spawn","args":{"task":"shell worker: report at once","owns":["work/**"]}}]}
 {"text":"SHELLSANSWER the worker reported"}
 {"text":"spare reply one"}
-{"agent":"c1","text":"SHELLSREPORT the worker is done"}
+{"agent":"c1","text":"SHELLSREPORT the worker is done","tools":[{"name":"finish","args":{"verdict":"done","summary":"SHELLSREPORT the worker is done","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"the cassette says so"}}}]}

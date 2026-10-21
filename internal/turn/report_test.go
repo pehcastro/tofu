@@ -37,7 +37,7 @@ func TestASubAgentThatRetriedAFailureAndLearnedNothingReportsNeitherAndEndsDone(
 	model := &stubModel{decisions: []llm.Decision{
 		toolCallDecision(llm.ToolCall{ID: "check-1", Name: "check", Arguments: json.RawMessage(`{}`)}),
 		toolCallDecision(llm.ToolCall{ID: "check-2", Name: "check", Arguments: json.RawMessage(`{}`)}),
-		claimDecision("the check passes"),
+		finishDecision("the check passes"),
 	}}
 	root := t.TempDir()
 	base := Config{

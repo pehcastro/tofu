@@ -52,4 +52,4 @@ After the gate, run what you changed the way a person uses it: the command with 
 
 ## Report
 
-One verdict first: VERIFIED, NOT VERIFIED or INCONCLUSIVE. Then the files you changed, each gate command with its exit status and the lines that matter, any step you skipped and why, and anything outside your paths that looks wrong.
+End by calling finish. verdict is done only when the gate passed after your last edit, otherwise done_with_concerns or blocked. files names every file you changed, checks carries each gate command exactly as you ran it with its exit code and the lines that matter, and findings carries any step you skipped and why, and anything outside your paths that looks wrong.

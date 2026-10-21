@@ -163,6 +163,14 @@ func redacted(event Event, mask func(string) string) Event {
 		for j := range row.Calls {
 			row.Calls[j].Text, row.Calls[j].Result = mask(row.Calls[j].Text), mask(row.Calls[j].Result)
 		}
+		if row.Result != nil {
+			result := *row.Result
+			result.Summary, result.Body, result.Checks = mask(result.Summary), mask(result.Body), slices.Clone(result.Checks)
+			for j := range result.Checks {
+				result.Checks[j].Excerpt = mask(result.Checks[j].Excerpt)
+			}
+			row.Result = &result
+		}
 	}
 	return event
 }

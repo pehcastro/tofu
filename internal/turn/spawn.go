@@ -670,7 +670,9 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 	if subAgent.Plan != nil {
 		subAgent.Plan = plan.shown
 	}
-	subAgent.Tools = claimedTools(NewRegistry(append(owned, watchedTool{tool: ask, held: held, definition: ask.Definition()})...), t.base.Sessions, t.base.Session)
+	finish := finishTool{}
+	owned = append(owned, watchedTool{tool: ask, held: held, definition: ask.Definition()}, watchedTool{tool: finish, held: held, definition: finish.Definition()})
+	subAgent.Tools = claimedTools(NewRegistry(owned...), t.base.Sessions, t.base.Session)
 	subAgent.Caps.MaxSteps, subAgent.Caps.MaxForks = cmp.Or(subAgent.Caps.MaxSteps, konst.SubAgentMaxSteps), konst.SubAgentMaxForks
 	subAgent.Caps.WallClock = cmp.Or(limits.WallClock, konst.SubAgentWallClockSeconds*time.Second)
 	held.kept.Lock()
@@ -753,8 +755,13 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 		if len(sentBack) > 1 {
 			times = strconv.Itoa(len(sentBack)) + " times"
 		}
-		report.Findings = append(report.Findings, subagent.Finding{Bucket: subagent.Noted, Reason: "sent back " + times + ": " + strings.Join(sentBack, "; then ")})
+		report.Findings = append(report.Findings, subagent.Finding{Bucket: subagent.Noted, Text: "sent back " + times + ": " + strings.Join(sentBack, "; then ")})
 	}
+	result, finished := finishedWith(*last)
+	if state == subagent.Finished && endedWithoutFinish(*last) {
+		report.Findings, report.Completion = append(report.Findings, subagent.Finding{Bucket: subagent.ActOn, Text: itEndedWithoutFinish}), subagent.Blocked
+	}
+	report.conclude(result, finished, t.Project)
 	t.tree.mu.Lock()
 	t.tree.retain(claims)
 	for _, claim := range append(slices.Clone(forked), claims...) {
@@ -770,12 +777,14 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 			contract = subagent.TicketContract(ticket.ID, ticket.Acceptance, report.Prose, stoppedEarly(state, last.Outcome))
 		}
 	}
+	if finished {
+		contract = contract.Answered(result.Claims)
+	}
 	contract.Wrote = report.Wrote
 	text := report.Text(t.proseStore()) + "\n\n" + contract.Block()
 	if agent.Ticket != "" && t.base.Board != nil {
-		said, _, _ := strings.Cut(strings.TrimSpace(report.Prose), "\n")
 		summary, _, _ := strings.Cut(contract.Block(), "\n")
-		reported := boardy.Event{Ticket: agent.Ticket, Kind: boardy.Reported, Actor: t.ticketActor(agent.Ticket), Author: boardy.SubAgentAuthor(t.base.Session, agent.ID), Session: t.base.Session, Agent: agent.ID, Call: site.call, Text: cmp.Or(said, report.State) + "; " + summary, Files: report.Wrote}
+		reported := boardy.Event{Ticket: agent.Ticket, Kind: boardy.Reported, Actor: t.ticketActor(agent.Ticket), Author: boardy.SubAgentAuthor(t.base.Session, agent.ID), Session: t.base.Session, Agent: agent.ID, Call: site.call, Text: cmp.Or(firstLine(report.Result.Summary), report.State) + "; " + summary, Files: report.Wrote}
 		if err := t.base.Board.Store.RecordTicket(reported); err != nil {
 			text += "\n\nthis report was not written to " + agent.Ticket + "'s thread: " + err.Error()
 		}
@@ -784,8 +793,9 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 	if runs := held.runsAs(); runs != "" {
 		text = agent.ID + " ran" + runs + "\n\n" + text
 	}
+	t.roster.Concluded(agent.ID, *report.Result)
 	t.roster.Reached(agent.ID, state, text)
-	held.agent.State = state
+	held.agent.State, held.agent.Result = state, report.Result
 	if runErr != nil && state != subagent.Parked {
 		return fmt.Sprintf("sub-agent %s is %s: %v\n\n%s", agent.ID, state, runErr, text), report.Completion
 	}

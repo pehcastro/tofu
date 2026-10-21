@@ -14,7 +14,7 @@ func TestASubAgentWritingAfterTheLeadForksKeepsEveryEventInTheSessionLog(t *test
 	model := newCrew(map[string][]llm.Decision{
 		leadKey: {besideARead(spawnCall("call-spawn", usersRoute, "src/users.ts")), claimDecision("goal: add the users route"), claimDecision("sub-1 is on it"),
 			claimDecision("goal: add the users route, sub-1 is on it"), claimDecision("sub-1 is done")},
-		usersRoute: {claimDecision("the users route is added")},
+		usersRoute: {finishDecision("the users route is added")},
 	})
 	release := model.hold(usersRoute, 1)
 	defer release()

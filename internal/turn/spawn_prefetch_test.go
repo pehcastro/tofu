@@ -34,6 +34,10 @@ func (s *prefetchScript) Ask(_ context.Context, request llm.Request) (llm.Decisi
 		script = &s.subAgent
 		s.asked = append(s.asked, request)
 	}
+	if len(*script) == 0 && script == &s.subAgent {
+		return calling(turn.FinishToolName, map[string]any{"verdict": "done", "summary": "done", "files": []any{}, "checks": []any{}, "findings": []any{},
+			"confidence": map[string]string{"level": "high", "reason": "the fixture says so"}}), nil
+	}
 	if len(*script) == 0 {
 		return llm.Decision{Build: "m1", Outcome: llm.OutcomeMessage, Content: "done"}, nil
 	}
@@ -80,7 +84,6 @@ func TestABriefNamingFilesStartsTheSubAgentHoldingThemAndItsEditIsNotRefused(t *
 	brief := "Read API_SPEC.md, then change src/db.ts. Leave ../secret.txt, big.txt and src/index.ts alone."
 	script := &prefetchScript{brief: brief, lead: []llm.Decision{calling("spawn", map[string]any{"task": brief, "owns": []string{"src/**"}})}, subAgent: []llm.Decision{
 		calling("edit", map[string]any{"path": "src/db.ts", "old_string": "open()", "new_string": "open('app.db')"}),
-		{Build: "m1", Outcome: llm.OutcomeMessage, Content: "changed src/db.ts"},
 	}}
 	base := turn.Config{
 		Model:          script,

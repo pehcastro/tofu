@@ -40,85 +40,85 @@
 {"agent": "c1", "tools": [{"name": "read", "args": {"path": "a01/note.txt"}}]}
 {"agent": "c1", "tools": [{"name": "edit", "args": {"path": "a01/note.txt", "old_string": "line three\n", "new_string": "line three, edited\n"}}]}
 {"agent": "c1", "tools": [{"name": "bash", "args": {"command": "echo ready; sleep 1; echo shell 1 done", "background": true}}]}
-{"agent": "c1", "text": "agent 1 done: wrote a01/note.txt"}
+{"agent": "c1", "text": "agent 1 done: wrote a01/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 1 done: wrote a01/note.txt", "files": [{"path": "a01/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c2", "text": "writing", "tools": [{"name": "write", "args": {"path": "a02/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 2\n"}}]}
 {"agent": "c2", "tools": [{"name": "read", "args": {"path": "a02/note.txt"}}]}
 {"agent": "c2", "tools": [{"name": "edit", "args": {"path": "a02/note.txt", "old_string": "line three\n", "new_string": "line three, edited\n"}}]}
 {"agent": "c2", "tools": [{"name": "bash", "args": {"command": "echo ready; sleep 1; echo shell 2 done", "background": true}}]}
-{"agent": "c2", "text": "agent 2 done: wrote a02/note.txt"}
+{"agent": "c2", "text": "agent 2 done: wrote a02/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 2 done: wrote a02/note.txt", "files": [{"path": "a02/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c3", "text": "writing", "tools": [{"name": "write", "args": {"path": "a03/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 3\n"}}]}
 {"agent": "c3", "tools": [{"name": "read", "args": {"path": "a03/note.txt"}}]}
 {"agent": "c3", "tools": [{"name": "edit", "args": {"path": "a03/note.txt", "old_string": "line three\n", "new_string": "line three, edited\n"}}]}
 {"agent": "c3", "tools": [{"name": "bash", "args": {"command": "echo ready; sleep 1; echo shell 3 done", "background": true}}]}
-{"agent": "c3", "text": "agent 3 done: wrote a03/note.txt"}
+{"agent": "c3", "text": "agent 3 done: wrote a03/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 3 done: wrote a03/note.txt", "files": [{"path": "a03/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c4", "text": "writing", "tools": [{"name": "write", "args": {"path": "a04/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 4\n"}}]}
 {"agent": "c4", "tools": [{"name": "read", "args": {"path": "a04/note.txt"}}]}
 {"agent": "c4", "tools": [{"name": "edit", "args": {"path": "a04/note.txt", "old_string": "line three\n", "new_string": "line three, edited\n"}}]}
 {"agent": "c4", "tools": [{"name": "bash", "args": {"command": "echo ready; sleep 1; echo shell 4 done", "background": true}}]}
-{"agent": "c4", "text": "agent 4 done: wrote a04/note.txt"}
+{"agent": "c4", "text": "agent 4 done: wrote a04/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 4 done: wrote a04/note.txt", "files": [{"path": "a04/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c5", "text": "writing", "tools": [{"name": "write", "args": {"path": "a05/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 5\n"}}]}
 {"agent": "c5", "tools": [{"name": "bash", "args": {"command": "echo ready; sleep 1; echo shell 5 done", "background": true}}]}
-{"agent": "c5", "text": "agent 5 done: wrote a05/note.txt"}
+{"agent": "c5", "text": "agent 5 done: wrote a05/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 5 done: wrote a05/note.txt", "files": [{"path": "a05/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c6", "text": "writing", "tools": [{"name": "write", "args": {"path": "a06/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 6\n"}}]}
 {"agent": "c6", "tools": [{"name": "bash", "args": {"command": "echo ready; sleep 1; echo shell 6 done", "background": true}}]}
-{"agent": "c6", "text": "agent 6 done: wrote a06/note.txt"}
+{"agent": "c6", "text": "agent 6 done: wrote a06/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 6 done: wrote a06/note.txt", "files": [{"path": "a06/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c7", "text": "writing", "tools": [{"name": "write", "args": {"path": "a07/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 7\n"}}]}
-{"agent": "c7", "text": "agent 7 done: wrote a07/note.txt"}
+{"agent": "c7", "text": "agent 7 done: wrote a07/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 7 done: wrote a07/note.txt", "files": [{"path": "a07/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c8", "text": "writing", "tools": [{"name": "write", "args": {"path": "a08/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 8\n"}}]}
-{"agent": "c8", "text": "agent 8 done: wrote a08/note.txt"}
+{"agent": "c8", "text": "agent 8 done: wrote a08/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 8 done: wrote a08/note.txt", "files": [{"path": "a08/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c9", "text": "writing", "tools": [{"name": "write", "args": {"path": "a09/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 9\n"}}]}
-{"agent": "c9", "text": "agent 9 done: wrote a09/note.txt"}
+{"agent": "c9", "text": "agent 9 done: wrote a09/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 9 done: wrote a09/note.txt", "files": [{"path": "a09/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c10", "text": "writing", "tools": [{"name": "write", "args": {"path": "a10/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 10\n"}}]}
-{"agent": "c10", "text": "agent 10 done: wrote a10/note.txt"}
+{"agent": "c10", "text": "agent 10 done: wrote a10/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 10 done: wrote a10/note.txt", "files": [{"path": "a10/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c11", "text": "writing", "tools": [{"name": "write", "args": {"path": "a11/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 11\n"}}]}
-{"agent": "c11", "text": "agent 11 done: wrote a11/note.txt"}
+{"agent": "c11", "text": "agent 11 done: wrote a11/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 11 done: wrote a11/note.txt", "files": [{"path": "a11/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c12", "text": "writing", "tools": [{"name": "write", "args": {"path": "a12/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 12\n"}}]}
-{"agent": "c12", "text": "agent 12 done: wrote a12/note.txt"}
+{"agent": "c12", "text": "agent 12 done: wrote a12/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 12 done: wrote a12/note.txt", "files": [{"path": "a12/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c13", "text": "writing", "tools": [{"name": "write", "args": {"path": "a13/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 13\n"}}]}
-{"agent": "c13", "text": "agent 13 done: wrote a13/note.txt"}
+{"agent": "c13", "text": "agent 13 done: wrote a13/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 13 done: wrote a13/note.txt", "files": [{"path": "a13/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c14", "text": "writing", "tools": [{"name": "write", "args": {"path": "a14/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 14\n"}}]}
-{"agent": "c14", "text": "agent 14 done: wrote a14/note.txt"}
+{"agent": "c14", "text": "agent 14 done: wrote a14/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 14 done: wrote a14/note.txt", "files": [{"path": "a14/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c15", "text": "writing", "tools": [{"name": "write", "args": {"path": "a15/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 15\n"}}]}
-{"agent": "c15", "text": "agent 15 done: wrote a15/note.txt"}
+{"agent": "c15", "text": "agent 15 done: wrote a15/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 15 done: wrote a15/note.txt", "files": [{"path": "a15/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c16", "text": "writing", "tools": [{"name": "write", "args": {"path": "a16/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 16\n"}}]}
-{"agent": "c16", "text": "agent 16 done: wrote a16/note.txt"}
+{"agent": "c16", "text": "agent 16 done: wrote a16/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 16 done: wrote a16/note.txt", "files": [{"path": "a16/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c17", "text": "writing", "tools": [{"name": "write", "args": {"path": "a17/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 17\n"}}]}
-{"agent": "c17", "text": "agent 17 done: wrote a17/note.txt"}
+{"agent": "c17", "text": "agent 17 done: wrote a17/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 17 done: wrote a17/note.txt", "files": [{"path": "a17/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c18", "text": "writing", "tools": [{"name": "write", "args": {"path": "a18/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 18\n"}}]}
-{"agent": "c18", "text": "agent 18 done: wrote a18/note.txt"}
+{"agent": "c18", "text": "agent 18 done: wrote a18/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 18 done: wrote a18/note.txt", "files": [{"path": "a18/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c19", "text": "writing", "tools": [{"name": "write", "args": {"path": "a19/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 19\n"}}]}
-{"agent": "c19", "text": "agent 19 done: wrote a19/note.txt"}
+{"agent": "c19", "text": "agent 19 done: wrote a19/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 19 done: wrote a19/note.txt", "files": [{"path": "a19/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c20", "text": "writing", "tools": [{"name": "write", "args": {"path": "a20/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 20\n"}}]}
-{"agent": "c20", "text": "agent 20 done: wrote a20/note.txt"}
+{"agent": "c20", "text": "agent 20 done: wrote a20/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 20 done: wrote a20/note.txt", "files": [{"path": "a20/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c21", "text": "writing", "tools": [{"name": "write", "args": {"path": "a21/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 21\n"}}]}
-{"agent": "c21", "text": "agent 21 done: wrote a21/note.txt"}
+{"agent": "c21", "text": "agent 21 done: wrote a21/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 21 done: wrote a21/note.txt", "files": [{"path": "a21/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c22", "text": "writing", "tools": [{"name": "write", "args": {"path": "a22/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 22\n"}}]}
-{"agent": "c22", "text": "agent 22 done: wrote a22/note.txt"}
+{"agent": "c22", "text": "agent 22 done: wrote a22/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 22 done: wrote a22/note.txt", "files": [{"path": "a22/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c23", "text": "writing", "tools": [{"name": "write", "args": {"path": "a23/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 23\n"}}]}
-{"agent": "c23", "text": "agent 23 done: wrote a23/note.txt"}
+{"agent": "c23", "text": "agent 23 done: wrote a23/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 23 done: wrote a23/note.txt", "files": [{"path": "a23/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c24", "text": "writing", "tools": [{"name": "write", "args": {"path": "a24/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 24\n"}}]}
-{"agent": "c24", "text": "agent 24 done: wrote a24/note.txt"}
+{"agent": "c24", "text": "agent 24 done: wrote a24/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 24 done: wrote a24/note.txt", "files": [{"path": "a24/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c25", "text": "writing", "tools": [{"name": "write", "args": {"path": "a25/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 25\n"}}]}
-{"agent": "c25", "text": "agent 25 done: wrote a25/note.txt"}
+{"agent": "c25", "text": "agent 25 done: wrote a25/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 25 done: wrote a25/note.txt", "files": [{"path": "a25/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c26", "text": "writing", "tools": [{"name": "write", "args": {"path": "a26/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 26\n"}}]}
-{"agent": "c26", "text": "agent 26 done: wrote a26/note.txt"}
+{"agent": "c26", "text": "agent 26 done: wrote a26/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 26 done: wrote a26/note.txt", "files": [{"path": "a26/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c27", "text": "writing", "tools": [{"name": "write", "args": {"path": "a27/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 27\n"}}]}
-{"agent": "c27", "text": "agent 27 done: wrote a27/note.txt"}
+{"agent": "c27", "text": "agent 27 done: wrote a27/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 27 done: wrote a27/note.txt", "files": [{"path": "a27/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c28", "text": "writing", "tools": [{"name": "write", "args": {"path": "a28/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 28\n"}}]}
-{"agent": "c28", "text": "agent 28 done: wrote a28/note.txt"}
+{"agent": "c28", "text": "agent 28 done: wrote a28/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 28 done: wrote a28/note.txt", "files": [{"path": "a28/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c29", "text": "writing", "tools": [{"name": "write", "args": {"path": "a29/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 29\n"}}]}
-{"agent": "c29", "text": "agent 29 done: wrote a29/note.txt"}
+{"agent": "c29", "text": "agent 29 done: wrote a29/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 29 done: wrote a29/note.txt", "files": [{"path": "a29/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c30", "text": "writing", "tools": [{"name": "write", "args": {"path": "a30/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 30\n"}}]}
-{"agent": "c30", "text": "agent 30 done: wrote a30/note.txt"}
+{"agent": "c30", "text": "agent 30 done: wrote a30/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 30 done: wrote a30/note.txt", "files": [{"path": "a30/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c31", "text": "writing", "tools": [{"name": "write", "args": {"path": "a31/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 31\n"}}]}
-{"agent": "c31", "text": "agent 31 done: wrote a31/note.txt"}
+{"agent": "c31", "text": "agent 31 done: wrote a31/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 31 done: wrote a31/note.txt", "files": [{"path": "a31/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c32", "text": "writing", "tools": [{"name": "write", "args": {"path": "a32/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 32\n"}}]}
-{"agent": "c32", "text": "agent 32 done: wrote a32/note.txt"}
+{"agent": "c32", "text": "agent 32 done: wrote a32/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 32 done: wrote a32/note.txt", "files": [{"path": "a32/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c33", "text": "writing", "tools": [{"name": "write", "args": {"path": "a33/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 33\n"}}]}
-{"agent": "c33", "text": "agent 33 done: wrote a33/note.txt"}
+{"agent": "c33", "text": "agent 33 done: wrote a33/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 33 done: wrote a33/note.txt", "files": [{"path": "a33/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c34", "text": "writing", "tools": [{"name": "write", "args": {"path": "a34/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 34\n"}}]}
-{"agent": "c34", "text": "agent 34 done: wrote a34/note.txt"}
+{"agent": "c34", "text": "agent 34 done: wrote a34/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 34 done: wrote a34/note.txt", "files": [{"path": "a34/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c35", "text": "writing", "tools": [{"name": "write", "args": {"path": "a35/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 35\n"}}]}
-{"agent": "c35", "text": "agent 35 done: wrote a35/note.txt"}
+{"agent": "c35", "text": "agent 35 done: wrote a35/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 35 done: wrote a35/note.txt", "files": [{"path": "a35/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}
 {"agent": "c36", "text": "writing", "tools": [{"name": "write", "args": {"path": "a36/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 36\n"}}]}
-{"agent": "c36", "text": "agent 36 done: wrote a36/note.txt"}
+{"agent": "c36", "text": "agent 36 done: wrote a36/note.txt", "tools": [{"name": "finish", "args": {"verdict": "done", "summary": "agent 36 done: wrote a36/note.txt", "files": [{"path": "a36/note.txt", "change": "written"}], "checks": [], "findings": [], "confidence": {"level": "high", "reason": "the cassette says so"}}}]}

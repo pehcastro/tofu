@@ -59,7 +59,7 @@ func TestALeadStepOfOnlyStartedSpawnsEndsTheTurnWithoutAnAnnounceRequest(t *test
 		t.Run(c.name, func(t *testing.T) {
 			model := newCrew(map[string][]llm.Decision{
 				leadKey:    {c.first, claimDecision("sub-1 is on it")},
-				usersRoute: {claimDecision("the users route is added")},
+				usersRoute: {finishDecision("the users route is added")},
 			})
 			lead := crewLead(t, model)
 			lead.SpawnedFrom = c.spawnedFrom
@@ -220,7 +220,7 @@ func TestHooksSubagentStopFiresForATofuSubAgentWithItsID(t *testing.T) {
 	project, bash := hookedProject(t, `{"SubagentStop":[{"hooks":[{"type":"command","command":"cat >> subagent-stop.log"}]}]}`)
 	model := newCrew(map[string][]llm.Decision{
 		leadKey:    {spawnCall("call-spawn", usersRoute, "src/users.ts"), claimDecision("sub-1 is on it")},
-		usersRoute: {claimDecision("the users route is added")},
+		usersRoute: {finishDecision("the users route is added")},
 	})
 	lead := crewLead(t, model)
 	lead.Tools, lead.Person = NewRegistry(append(lead.Tools.tools, bash)...), alwaysTrusting

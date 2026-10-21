@@ -53,16 +53,16 @@ func TestASubAgentIsOfferedWriteAndEditOnlyWhenItsDefinitionNamesThem(t *testing
 		}
 	}
 	for agent, want := range map[string]string{
-		"browser":  "browser_tabs browser_observe browser_act browser_motion",
-		"research": "read write fetch glob search symbols bash reference",
-		"ts-dev":   "read write edit typecheck test glob search symbols bash reference",
-		"rust-dev": "read write edit glob search symbols bash reference",
-		"go-dev":   "read write edit glob search symbols bash reference",
-		"py-dev":   "read write edit glob search symbols bash reference",
-		"qa":       "read write typecheck test glob search symbols bash reference",
-		"":         "read write edit typecheck test browser_tabs browser_observe browser_act browser_motion fetch glob search symbols bash spawn message subagents",
+		"browser":  "browser_tabs browser_observe browser_act browser_motion finish",
+		"research": "read write fetch glob search symbols bash finish reference",
+		"ts-dev":   "read write edit typecheck test glob search symbols bash finish reference",
+		"rust-dev": "read write edit glob search symbols bash finish reference",
+		"go-dev":   "read write edit glob search symbols bash finish reference",
+		"py-dev":   "read write edit glob search symbols bash finish reference",
+		"qa":       "read write typecheck test glob search symbols bash finish reference",
+		"":         "read write edit typecheck test browser_tabs browser_observe browser_act browser_motion fetch glob search symbols bash spawn finish message subagents",
 	} {
-		model := &stubModel{decisions: []llm.Decision{claimDecision("did the piece")}}
+		model := &stubModel{decisions: []llm.Decision{finishDecision("did the piece")}}
 		config := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(base...), Caps: Caps{MaxSteps: 5}, ResultBytesCap: 4096,
 			ArtifactDir: t.TempDir(), NewID: func() string { return "turn-orchestrator" }}
 		spawn := NewSpawnTool("turn-orchestrator", config, &subagent.Roster{})
@@ -186,7 +186,7 @@ func (m *forksTwiceThenAnswers) Ask(_ context.Context, request llm.Request) (llm
 	}
 	m.asked++
 	if m.asked > 2 || strings.HasSuffix(request.Messages[len(request.Messages)-1].Content, andThisIsItsLastStep) {
-		return claimDecision("found the house"), nil
+		return finishDecision("found the house"), nil
 	}
 	args := json.RawMessage(`{"tab":1,"actions":[{"action":"fill","ref":"e5458","value":"Atibaia"}]}`)
 	return toolCallDecision(
@@ -240,8 +240,8 @@ func sessionWithTwoFinishedSubAgents(t *testing.T) (*session.Store, string) {
 			toolCallDecision(llm.ToolCall{ID: "call-users", Name: "spawn", Arguments: users}, llm.ToolCall{ID: "call-orders", Name: "spawn", Arguments: orders}),
 			claimDecision("one reported"), claimDecision("both reported"), claimDecision("done"),
 		},
-		usersRoute:  {claimDecision("the users route is added")},
-		ordersRoute: {claimDecision("the orders route is added")},
+		usersRoute:  {finishDecision("the users route is added")},
+		ordersRoute: {finishDecision("the orders route is added")},
 	})
 	store, id := session.NewStore(t.TempDir()), session.NewEventID()
 	lead := crewLead(t, model)
@@ -336,7 +336,7 @@ func TestAMessageAfterAResumeReachesAFinishedSubAgentWithItsConversation(t *test
 	if err := RestoreSubAgents(store, id, resumed, inbox); err != nil {
 		t.Fatal(err)
 	}
-	model := newCrew(map[string][]llm.Decision{usersRoute: {claimDecision("the health route is added")}})
+	model := newCrew(map[string][]llm.Decision{usersRoute: {finishDecision("the health route is added")}})
 	spawn := NewSpawnTool("turn-lead", Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(), Caps: Caps{MaxSteps: 5}, ResultBytesCap: 4096, ArtifactDir: t.TempDir()}, resumed)
 	spawn.Inbox = inbox
 	if _, err := (messageTool{orchestrator: spawn}).Run(context.Background(), json.RawMessage(`{"to":"sub-1","text":"also add /health"}`)); err != nil {
@@ -363,7 +363,7 @@ func reported(t *testing.T, spawn *SpawnTool) string {
 func TestTheLeadHasTheSpawnResultBeforeTheSubAgentsFirstRequestIsAnswered(t *testing.T) {
 	model := newCrew(map[string][]llm.Decision{
 		leadKey:    {spawnCall("call-spawn", usersRoute, "src/users.ts"), claimDecision("sub-1 is done")},
-		usersRoute: {claimDecision("the users route is added")},
+		usersRoute: {finishDecision("the users route is added")},
 	})
 	release := model.hold(usersRoute, 1)
 	defer release()
@@ -395,7 +395,7 @@ func TestASpawnWithNoOwnsStartsAndItsWriteEditAndNestedSpawnAreRefused(t *testin
 			llm.ToolCall{ID: "w", Name: "write", Arguments: json.RawMessage(`{"path":"ping-run-1.txt","content":"placeholder"}`)},
 			llm.ToolCall{ID: "e", Name: "edit", Arguments: json.RawMessage(`{"path":"ping-run-1.txt","old_string":"a","new_string":"b"}`)},
 			llm.ToolCall{ID: "s", Name: "spawn", Arguments: json.RawMessage(`{"task":"write it for me","owns":["**"]}`)}),
-			claimDecision("ping answered three times")}}
+			finishDecision("ping answered three times")}}
 		base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(write, namedTool("edit"), namedTool("bash")), ResultBytesCap: 4096,
 			ArtifactDir: t.TempDir(), NewID: func() string { return "turn-orchestrator" }}
 		spawn := NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})

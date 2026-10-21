@@ -38,7 +38,7 @@ func (o *effortOpener) open(definition subagent.Definition, wanted llm.Effort) (
 
 func TestASpawnRunsItsSubAgentAtTheNearestEffortItsModelTakes(t *testing.T) {
 	lowToHigh := []llm.Effort{llm.EffortLow, llm.EffortMedium, llm.EffortHigh}
-	ran := []llm.Decision{claimDecision("done")}
+	ran := []llm.Decision{finishDecision("done")}
 	for _, spawned := range []struct {
 		name         string
 		effort       string
@@ -50,12 +50,12 @@ func TestASpawnRunsItsSubAgentAtTheNearestEffortItsModelTakes(t *testing.T) {
 		leadRequests int
 	}{
 		{"exact then resumed", "low", lowToHigh, []llm.Decision{messageTo("call-message", "ts-dev-1", "once more"), claimDecision("asked again"), claimDecision("done")},
-			[]llm.Decision{claimDecision("done"), claimDecision("again")}, []llm.Effort{llm.EffortLow, llm.EffortLow}, "at effort low", 4},
+			[]llm.Decision{finishDecision("done"), finishDecision("again")}, []llm.Effort{llm.EffortLow, llm.EffortLow}, "at effort low", 4},
 		{"inherited", "", lowToHigh, []llm.Decision{claimDecision("done")}, ran, []llm.Effort{""}, "at effort medium", 2},
 		{"below the lowest", "minimal", lowToHigh, []llm.Decision{claimDecision("done")}, ran, []llm.Effort{llm.EffortLow},
 			"effort minimal is not one stub/model takes, so it runs at low", 2},
 		{"below the lowest, resumed", "minimal", lowToHigh, []llm.Decision{messageTo("call-message", "ts-dev-1", "once more"), claimDecision("asked again"), claimDecision("done")},
-			[]llm.Decision{claimDecision("done"), claimDecision("again")}, []llm.Effort{llm.EffortLow, llm.EffortLow}, "so it runs at low", 4},
+			[]llm.Decision{finishDecision("done"), finishDecision("again")}, []llm.Effort{llm.EffortLow, llm.EffortLow}, "so it runs at low", 4},
 		{"above the highest", "max", lowToHigh, []llm.Decision{claimDecision("done")}, ran, []llm.Effort{llm.EffortHigh},
 			"effort max is not one stub/model takes, so it runs at high", 2},
 		{"between two, a tie goes up", "medium", []llm.Effort{llm.EffortLow, llm.EffortHigh}, []llm.Decision{claimDecision("done")}, ran, []llm.Effort{llm.EffortHigh},

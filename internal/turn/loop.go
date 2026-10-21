@@ -643,6 +643,22 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	guard := newLoopGuard(config.Caps)
 	forks, stopContinuations, handbacks := 0, 0, 0
+	stop := hook.Stop
+	if config.SpawnedFrom != "" {
+		stop = hook.SubagentStop
+	}
+	keptGoingByStopHook := func(lastMessage string) bool {
+		blocked := fire(ctx, hook.Input{Event: stop, LastMessage: lastMessage, StopActive: stopContinuations > 0}).Block
+		if blocked != "" && stopContinuations < konst.HookStopContinuations {
+			stopContinuations++
+			messages = append(messages, inserted(sourceStopHook, "a "+string(stop)+" hook kept this turn going: "+blocked, time.Time{}))
+			return true
+		}
+		if blocked != "" {
+			row.Warnings = append(row.Warnings, "the turn ended with a "+string(stop)+" hook still blocking after "+strconv.Itoa(stopContinuations)+" continuations: "+blocked)
+		}
+		return false
+	}
 	var recordedGrants []subagent.Question
 	if config.Boundary != nil {
 		recordedGrants = config.Boundary.Asked()
@@ -888,19 +904,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		switch decision.Outcome {
 		case llm.OutcomeMessage:
 			messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: decision.Content})
-			stop := hook.Stop
-			if config.SpawnedFrom != "" {
-				stop = hook.SubagentStop
-			}
-			blocked := fire(ctx, hook.Input{Event: stop, LastMessage: decision.Content, StopActive: stopContinuations > 0}).Block
-			if blocked != "" && stopContinuations < konst.HookStopContinuations {
-				stopContinuations++
-				messages = append(messages, inserted(sourceStopHook, "a "+string(stop)+" hook kept this turn going: "+blocked, time.Time{}))
+			if keptGoingByStopHook(decision.Content) {
 				keep(stepRow)
 				continue
-			}
-			if blocked != "" {
-				row.Warnings = append(row.Warnings, "the turn ended with a "+string(stop)+" hook still blocking after "+strconv.Itoa(stopContinuations)+" continuations: "+blocked)
 			}
 			if offered := handedBack(decision.Content); offered != "" && config.SpawnedFrom == "" && concluding == "" && handbacks < konst.LeadHandbackContinuations {
 				handbacks++
@@ -1141,6 +1147,11 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				return finish(OutcomeStopped), nil
 			}
 			if config.SpawnedFrom == "" && onlyStartedSpawns(stepTools, stepRow.ToolCalls) {
+				keep(stepRow)
+				answered(decision.Content)
+				return finish(OutcomeStopped), nil
+			}
+			if config.SpawnedFrom != "" && slices.ContainsFunc(stepRow.ToolCalls, finishCalled) && !keptGoingByStopHook(decision.Content) {
 				keep(stepRow)
 				answered(decision.Content)
 				return finish(OutcomeStopped), nil

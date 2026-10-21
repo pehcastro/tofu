@@ -74,7 +74,11 @@ func ContractOf(subAgent Row) subagent.Contract {
 			break
 		}
 	}
-	return subagent.BuildContract(subAgent.Task, prose, outcomeStoppedEarly(subAgent.Outcome))
+	contract := subagent.BuildContract(subAgent.Task, prose, outcomeStoppedEarly(subAgent.Outcome))
+	if result, finished := finishedWith(subAgent); finished {
+		return contract.Answered(result.Claims)
+	}
+	return contract
 }
 
 func (t *SpawnTool) decided(ctx context.Context, first Row) (DoneDecision, error) {
@@ -133,34 +137,14 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 	held.remember(first)
 	var sentBack []string
 	recipes := projectRecipes(t.Project)
+	askedToFinish := false
 	for state == subagent.Finished {
-		missed := gateMissed(t.Project, recipes, held.definition, held.boundary.Owns(), claims)
-		if len(missed) == 0 && t.Review == nil {
-			break
-		}
 		last := &claims[len(claims)-1]
-		why := strings.Join(missed, "; ")
-		decision := DoneDecision{Verdict: DoneReopen, Reason: fmt.Sprintf("you changed a %s file, and your gate is %s, each run after your last edit and passing: %s",
-			held.definition.Language, strings.Join(held.definition.Gate, " and "), why)}
-		if len(missed) == 0 {
-			t.roster.Reached(agent.ID, subagent.InReview, reportOf(agent, held.forkedSoFar(), []Row{wholeRun(claims)}, subagent.InReview).Text(t.proseStore()))
-			reviewed := *last
-			reviewed.Task = agent.Brief
-			var err error
-			if decision, err = t.decided(subAgentCtx, reviewed); err != nil {
-				last.Warnings = append(last.Warnings, "the done review did not run, so the sub-agent's own claim stands: "+err.Error())
-				break
-			}
-			why = decision.Reason
-		}
-		if decision.ID != "" {
-			last.DecisionIDs = append(last.DecisionIDs, decision.ID)
-		}
-		if decision.Verdict == DoneAccepted {
+		var why, task string
+		if endedWithoutFinish(*last) && !askedToFinish {
+			askedToFinish, why, task = true, "it ended without calling finish", youEndedWithoutFinish
+		} else if why, task = t.doneReview(subAgentCtx, held, claims, recipes); why == "" {
 			break
-		}
-		if decision.Verdict != DoneReopen {
-			panic("turn: unknown done verdict " + string(decision.Verdict))
 		}
 		if _, err := t.roster.Reopen(agent.ID, why); err != nil {
 			last.Warnings = append(last.Warnings, err.Error())
@@ -169,7 +153,7 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 		t.roster.Reached(agent.ID, subagent.Working, "sent back: "+why)
 		sentBack = append(sentBack, why)
 		subAgent.History = held.history
-		subAgent.Task = "You reported this finished and the done review did not believe you: " + decision.Reason
+		subAgent.Task = task
 		reRow, reErr := Run(subAgentCtx, subAgent)
 		claims = append(claims, reRow)
 		held.remember(reRow)
@@ -182,6 +166,37 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 		}
 	}
 	return claims, sentBack, state, firstErr
+}
+
+func (t *SpawnTool) doneReview(ctx context.Context, held *heldSubAgent, claims []Row, recipes map[string]string) (why, task string) {
+	const notBelieved = "You reported this finished and the done review did not believe you: "
+	last := &claims[len(claims)-1]
+	if missed := gateMissed(t.Project, recipes, held.definition, held.boundary.Owns(), claims); len(missed) > 0 {
+		why = strings.Join(missed, "; ")
+		return why, notBelieved + fmt.Sprintf("you changed a %s file, and your gate is %s, each run after your last edit and passing: %s",
+			held.definition.Language, strings.Join(held.definition.Gate, " and "), why)
+	}
+	if t.Review == nil {
+		return "", ""
+	}
+	t.roster.Reached(held.agent.ID, subagent.InReview, reportOf(held.agent, held.forkedSoFar(), []Row{wholeRun(claims)}, subagent.InReview).Text(t.proseStore()))
+	reviewed := *last
+	reviewed.Task = held.agent.Brief
+	decision, err := t.decided(ctx, reviewed)
+	if err != nil {
+		last.Warnings = append(last.Warnings, "the done review did not run, so the sub-agent's own claim stands: "+err.Error())
+		return "", ""
+	}
+	if decision.ID != "" {
+		last.DecisionIDs = append(last.DecisionIDs, decision.ID)
+	}
+	switch decision.Verdict {
+	case DoneAccepted:
+		return "", ""
+	case DoneReopen:
+		return decision.Reason, notBelieved + decision.Reason
+	}
+	panic("turn: unknown done verdict " + string(decision.Verdict))
 }
 
 func (t *SpawnTool) reportTaken(task string) string {

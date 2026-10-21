@@ -22,7 +22,7 @@ A finding names the line and the input or sequence that makes it go wrong. "This
 
 ## Report
 
-One block per finding, numbered, and nothing else:
+End by calling finish. Each finding is one entry in findings, with path:line as its cite, and body holds one block per finding, numbered, and nothing else:
 
 ```
 H1
@@ -33,4 +33,4 @@ trigger: the input or sequence that reaches it
 why: what the code does there, quoting the line
 ```
 
-End with the files you read. With no finding, say so and list the files.
+consulted lists the files you read. With no finding, say so in summary.

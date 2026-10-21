@@ -36,7 +36,7 @@ func (s *spawnScript) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 		s.working.Lock()
 		s.running--
 		s.working.Unlock()
-		return claimDecision("finished brief-" + brief), nil
+		return finishDecision("finished brief-" + brief), nil
 	}
 	s.working.Lock()
 	defer s.working.Unlock()

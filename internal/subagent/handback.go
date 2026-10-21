@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 type Completion int
@@ -58,7 +59,8 @@ func (b Bucket) Concerns() bool { return b == ActOn || b == Consider }
 
 type Finding struct {
 	Bucket Bucket `json:"bucket"`
-	Reason string `json:"reason"`
+	Text   string `json:"text"`
+	Cite   string `json:"cite,omitempty"`
 }
 
 type Attempt struct {
@@ -82,8 +84,20 @@ func byName[T named](data []byte, past T, kind string) (T, error) {
 			return candidate, nil
 		}
 	}
-	return 0, fmt.Errorf("subagent: %q is not a %s this build knows", text, kind)
+	return 0, fmt.Errorf("%q is not a %s, which is one of %s", text, kind, strings.Join(names(past), ", "))
 }
+
+func names[T named](past T) []string {
+	var all []string
+	for candidate := T(0); candidate < past; candidate++ {
+		all = append(all, candidate.String())
+	}
+	return all
+}
+
+func (Completion) Enum() []string { return names(completionCount) }
+
+func (Bucket) Enum() []string { return names(bucketCount) }
 
 func (c Completion) MarshalJSON() ([]byte, error) { return json.Marshal(c.String()) }
 

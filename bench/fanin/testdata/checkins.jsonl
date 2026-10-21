@@ -1,9 +1,9 @@
 # two workers running five seconds with a check-in every second
 {"text":"spawning 2 workers","tools":[{"name":"spawn","args":{"task":"fan-in worker 1: run the one command you are given, then report","owns":["w1/**"]}},{"name":"spawn","args":{"task":"fan-in worker 2: run the one command you are given, then report","owns":["w2/**"]}}]}
 {"agent":"c1","tools":[{"name":"bash","args":{"command":"sleep 4"}}]}
-{"agent":"c1","text":"fanin report from c1 after 4 s"}
+{"agent":"c1","text":"fanin report from c1 after 4 s","tools":[{"name":"finish","args":{"verdict":"done","summary":"fanin report from c1 after 4 s","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"the cassette says so"}}}]}
 {"agent":"c2","tools":[{"name":"bash","args":{"command":"sleep 5"}}]}
-{"agent":"c2","text":"fanin report from c2 after 5 s"}
+{"agent":"c2","text":"fanin report from c2 after 5 s","tools":[{"name":"finish","args":{"verdict":"done","summary":"fanin report from c2 after 5 s","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"the cassette says so"}}}]}
 {"text":"lead turn reply 1"}
 {"text":"lead turn reply 2"}
 {"text":"lead turn reply 3"}

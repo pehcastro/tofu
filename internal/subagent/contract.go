@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"tofu/internal/konst"
@@ -111,16 +112,9 @@ func acceptanceBullets(lines []string) []string {
 	return found
 }
 
-type reportedClaim struct {
-	Line    string `json:"line"`
-	Command string `json:"command"`
-	Output  string `json:"output"`
-	Met     bool   `json:"met"`
-}
-
 type reported struct {
-	Claims  []reportedClaim `json:"claims"`
-	Blocked []string        `json:"blocked"`
+	Claims  []Claim  `json:"claims"`
+	Blocked []string `json:"blocked"`
 }
 
 func parseReported(text string) (reported, bool) {
@@ -150,20 +144,25 @@ func contractOf(ticket string, lines []string, report string, stopped bool) Cont
 	if ticket == "" || len(lines) == 0 {
 		return Contract{NoTicket: true}
 	}
-	given, found := parseReported(report)
-	byLine := make(map[string]reportedClaim, len(given.Claims))
-	for _, claim := range given.Claims {
-		byLine[strings.TrimSpace(claim.Line)] = claim
-	}
+	given, _ := parseReported(report)
 	contract := Contract{TicketID: ticket, Partial: stopped, Blocked: given.Blocked}
 	for _, line := range lines {
-		claim := Claim{Line: line}
-		if match, ok := byLine[strings.TrimSpace(line)]; found && ok {
-			claim.Command = match.Command
-			claim.Output, claim.Cut = capped(match.Output)
-			claim.Met = match.Met
-		}
-		contract.Claims = append(contract.Claims, claim)
+		contract.Claims = append(contract.Claims, Claim{Line: line})
 	}
-	return contract
+	return contract.Answered(given.Claims)
+}
+
+func (c Contract) Answered(given []Claim) Contract {
+	byLine := make(map[string]Claim, len(given))
+	for _, claim := range given {
+		byLine[strings.TrimSpace(claim.Line)] = claim
+	}
+	c.Claims = slices.Clone(c.Claims)
+	for i, claim := range c.Claims {
+		if match, ok := byLine[strings.TrimSpace(claim.Line)]; ok {
+			c.Claims[i].Command, c.Claims[i].Met = match.Command, match.Met
+			c.Claims[i].Output, c.Claims[i].Cut = capped(match.Output)
+		}
+	}
+	return c
 }

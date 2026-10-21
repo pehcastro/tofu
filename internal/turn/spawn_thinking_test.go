@@ -15,9 +15,9 @@ func thought(decision llm.Decision, signature string) llm.Decision {
 
 func TestASubAgentSentBackReplaysItsLastRequestUnchangedThinkingIncluded(t *testing.T) {
 	run := gatedRun(t, "", rustDev,
-		thought(edited("src/lib.rs"), "sig-1"), claimDecision("done"),
-		thought(bashed("cargo clippy", 0), "sig-2"), claimDecision("done"),
-		thought(bashed("cargo test", 0), "sig-3"), claimDecision("done"))
+		thought(edited("src/lib.rs"), "sig-1"), finishDecision("done"),
+		thought(bashed("cargo clippy", 0), "sig-2"), finishDecision("done"),
+		thought(bashed("cargo test", 0), "sig-3"), finishDecision("done"))
 	reopenedFor(t, run.rows, 3)
 	requests := run.spawn.base.Model.(*stubModel).requests
 	boundaries := 0

@@ -1199,7 +1199,7 @@ func TestASubAgentRunningForTenSecondsIsHandedToTheViewAsTenSeconds(t *testing.T
 	model := clockedFrom(time.Date(2026, 9, 20, 9, 0, 0, 0, time.UTC),
 		[]clockedStep{
 			{waited: 10 * time.Second, decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-2")}}},
-			{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent wrote it"}},
+			{decision: finishing("the sub-agent wrote it", "note.txt")},
 		},
 		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, Content: "the sub-agent is on it", ToolCalls: []llm.ToolCall{spawnCall}}},
 		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent did it"}},
@@ -1232,7 +1232,7 @@ func subAgentHeldInsideOneCall(t *testing.T) *appDriver {
 	model := clockedFrom(time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC),
 		[]clockedStep{
 			{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-2")}}},
-			{waited: subAgentHeldFor, holds: heldInsideOneCall, decision: reply("the sub-agent wrote it")},
+			{waited: subAgentHeldFor, holds: heldInsideOneCall, decision: finishing("the sub-agent wrote it", "note.txt")},
 		},
 		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, Content: "the sub-agent is on it", ToolCalls: []llm.ToolCall{spawnCall}}},
 		clockedStep{waited: orchestratorHeldFor, holds: heldInsideOneCall, decision: reply("the sub-agent did it")},
@@ -2518,9 +2518,6 @@ func TestABrowserRunTeachesItsHostARecipeTheNextRunIsGivenUntilItFailsTwice(t *t
 		return appWire{}, errors.New("the browser sub-agent inherits the scripted model")
 	}
 	_, spawner := mustConfig(t, opts, built, runtime{model: script, spend: turn.SpendSubscription, open: noWire})
-	answer := func(text string) llm.Decision {
-		return llm.Decision{Build: "m1", Outcome: llm.OutcomeMessage, Content: text}
-	}
 	spawnOn := func(replies ...llm.Decision) string {
 		t.Helper()
 		script.replies, script.requests = replies, nil
@@ -2536,7 +2533,7 @@ func TestABrowserRunTeachesItsHostARecipeTheNextRunIsGivenUntilItFailsTwice(t *t
 		return ""
 	}
 	navigate := toolCallDecisionFor("browser_act", `{"actions":[{"action":"navigate","value":"https://www.fake.test/"}]}`)
-	cleanHandBack := answer("**Found:** a house for 4\n**Tab:** tab 1 is left open on " + final + "\n**Failed:** nothing material")
+	cleanHandBack := finishing("**Found:** a house for 4\n**Tab:** tab 1 is left open on " + final + "\n**Failed:** nothing material")
 	home, err := sys.HomeConfigDir()
 	if err != nil {
 		t.Fatal(err)
@@ -2564,12 +2561,12 @@ func TestABrowserRunTeachesItsHostARecipeTheNextRunIsGivenUntilItFailsTwice(t *t
 			t.Errorf("the recipe holds %q", leaked)
 		}
 	}
-	if first := spawnOn(navigate, answer("**Found:** a house for 4")); !strings.Contains(first, "adults={adults}") {
+	if first := spawnOn(navigate, finishing("**Found:** a house for 4")); !strings.Contains(first, "adults={adults}") {
 		t.Errorf("the second browser run on www.fake.test was not given the recipe in its first message:\n%s", first)
 	}
-	spawnOn(answer("**Failed:** the search never loaded"))
-	spawnOn(answer("**Failed:** the search never loaded"))
-	if first := spawnOn(answer("**Found:** nothing")); strings.Contains(first, "adults={adults}") {
+	spawnOn(finishing("**Failed:** the search never loaded"))
+	spawnOn(finishing("**Failed:** the search never loaded"))
+	if first := spawnOn(finishing("**Found:** nothing")); strings.Contains(first, "adults={adults}") {
 		t.Errorf("a recipe that failed twice in a row is still handed out:\n%s", first)
 	}
 }

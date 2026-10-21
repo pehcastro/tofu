@@ -19,7 +19,7 @@ You are given a hunter's findings and a skeptic's decisions on them. Neither is 
 
 ## Report
 
-One block per finding, with the hunter's number, and nothing else:
+End by calling finish. Each confirmed finding is one entry in findings, act_on, and body holds one block per finding, with the hunter's number, and nothing else:
 
 ```
 H1
@@ -29,4 +29,4 @@ shown by: the failing test, the command and its output, or the input and path
 fix direction: one line, when confirmed
 ```
 
-End with the confirmed numbers ordered by severity.
+summary names the confirmed numbers ordered by severity.

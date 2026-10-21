@@ -50,4 +50,4 @@ Keep to the line cap in the brief. When the answer does not fit, cut the least i
 
 ## Report
 
-Your final message is all your caller reads. It stands alone: no reference to what you said earlier, no "as above", and no file the caller has to open to understand the verdict. Follow research-report exactly.
+Your finish call is all your caller reads. It stands alone: no reference to what you said earlier, no "as above", and no file the caller has to open to understand the verdict. Follow research-report exactly.

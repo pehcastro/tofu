@@ -304,7 +304,7 @@ func TestAWriteToTofusOwnSettingsAsksThePersonInAutoModeAndASubAgentsIsRefused(t
 			decisions: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
 				{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"set gatePrompt to auto","owns":["**"]}`)}}},
 				reply("the sub-agent is on it"), reply("done")},
-			subAgents: []llm.Decision{writes("call-2"), reply("could not")},
+			subAgents: []llm.Decision{writes("call-2"), finishing("could not")},
 		}
 		stubbedTurn(dir, model, false)(t.Context(), onTheSubscription, "hand the settings change to a sub-agent", driver.emit)
 		if asked := driver.of(tui.EventAwaitPerson); len(asked) != 0 {

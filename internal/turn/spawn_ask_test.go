@@ -76,7 +76,7 @@ func subAgentSaw(t *testing.T, model *sideCallModel) string {
 
 func TestASubAgentAsksAndItsNextStepSeesTheOrchestratorsAnswer(t *testing.T) {
 	const answer = "no, bash-2 serves it on 3003"
-	model := askTurn(t, false, []llm.Decision{claimDecision(answer)}, claimDecision("the route is added and checked on 3003"))
+	model := askTurn(t, false, []llm.Decision{claimDecision(answer)}, finishDecision("the route is added and checked on 3003"))
 	if model.sideRuns != 1 {
 		t.Fatalf("the side call ran %d times, want 1", model.sideRuns)
 	}
@@ -106,7 +106,7 @@ func TestASubAgentAsksAndItsNextStepSeesTheOrchestratorsAnswer(t *testing.T) {
 
 func TestARunThatAskedEndsFinishedAndItsOpenGrantStillNeedsContext(t *testing.T) {
 	outside := toolCallDecision(llm.ToolCall{ID: "call-write", Name: "write", Arguments: json.RawMessage(`{"path":"src/orders.ts","content":"x"}`)})
-	model := askTurn(t, false, []llm.Decision{claimDecision("yes, on 3000")}, outside, claimDecision("the route is added"))
+	model := askTurn(t, false, []llm.Decision{claimDecision("yes, on 3000")}, outside, finishDecision("the route is added"))
 	listed, err := subAgentsTool{orchestrator: model.spawn}.Run(t.Context(), nil)
 	if err != nil || !strings.Contains(listed.Content, "sub-1: no definition, finished") {
 		t.Errorf("subagents after the run ended listed %q, %v, want sub-1 finished", listed.Content, err)
@@ -123,7 +123,7 @@ func TestARunThatAskedEndsFinishedAndItsOpenGrantStillNeedsContext(t *testing.T)
 }
 
 func TestAFailedSideCallAnswersWithTheDefaultMarkedAssumed(t *testing.T) {
-	model := askTurn(t, true, nil, claimDecision("started on 3000"))
+	model := askTurn(t, true, nil, finishDecision("started on 3000"))
 	saw := subAgentSaw(t, model)
 	if !strings.Contains(saw, "I start it on 3000") || !strings.Contains(saw, "assumed") {
 		t.Errorf("after a failed side call the sub-agent saw %q, want its default marked assumed", saw)

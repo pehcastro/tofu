@@ -384,7 +384,7 @@ func (s *items) agentChanges(rows []SubAgentRow, now time.Time) []outgoing {
 				endedAt = now
 			}
 			id.Turn = cmp.Or(row.Turn, id.Turn)
-			out = append(out, kept("agent.ended", &AgentEnded{Identity: id, Instance: row.Name, State: state, Report: row.Report, EndedAt: endedAt, DurationMs: endedAt.Sub(row.Started).Milliseconds()}))
+			out = append(out, kept("agent.ended", &AgentEnded{Identity: id, Instance: row.Name, State: state, Report: row.Report, Result: row.Result, EndedAt: endedAt, DurationMs: endedAt.Sub(row.Started).Milliseconds()}))
 		}
 		if s.settled == nil {
 			s.settled = map[string]bool{}

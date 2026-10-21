@@ -19,9 +19,9 @@ func reviewedSubAgent(t *testing.T, named string) (*stubReview, []Row) {
 	root := t.TempDir()
 	review := &stubReview{writer: ledger.NewWriter(filepath.Join(root, "ledger")), verdict: DoneReopen}
 	_, spawn := orchestratorTurn(t, root, []llm.Decision{
-		claimDecision("all done"),
-		claimDecision("done again"),
-		claimDecision("done a third time"),
+		finishDecision("all done"),
+		finishDecision("done again"),
+		finishDecision("done a third time"),
 	})
 	spawn.Review = review
 	spawn.Methods = methodTable(t, named)
@@ -74,7 +74,7 @@ func TestAnUnwiredStopCheckLeavesTheSubAgentsOwnClaimStanding(t *testing.T) {
 func TestTheStopCheckMethodComesFromTheShippedTableWhenNobodyPassesOne(t *testing.T) {
 	root := t.TempDir()
 	review := &stubReview{writer: ledger.NewWriter(filepath.Join(root, "ledger")), verdict: DoneAccepted}
-	_, spawn := orchestratorTurn(t, root, []llm.Decision{claimDecision("all done")})
+	_, spawn := orchestratorTurn(t, root, []llm.Decision{finishDecision("all done")})
 	spawn.Review = review
 	spawnGreeting(t, spawn)
 
@@ -115,6 +115,21 @@ func methodTable(t *testing.T, named string) method.Table {
 
 func claimDecision(text string) llm.Decision {
 	return llm.Decision{Build: "m1", Outcome: llm.OutcomeMessage, Content: text}
+}
+
+func finishDecision(summary string, files ...string) llm.Decision {
+	changed := []subagent.FileChange{}
+	for _, path := range files {
+		changed = append(changed, subagent.FileChange{Path: path, Change: "written"})
+	}
+	args, err := json.Marshal(map[string]any{"verdict": "done", "summary": summary, "files": changed, "checks": []any{}, "findings": []any{},
+		"confidence": map[string]string{"level": "high", "reason": "the fixture says so"}})
+	if err != nil {
+		panic(err)
+	}
+	decision := toolCallDecision(llm.ToolCall{ID: "call-finish", Name: FinishToolName, Arguments: args})
+	decision.Content = summary
+	return decision
 }
 
 func spawnCall(id, task string, owns ...string) llm.Decision {

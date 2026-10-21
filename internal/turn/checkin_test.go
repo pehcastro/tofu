@@ -50,7 +50,7 @@ func noted(n int) []llm.Decision {
 func TestACheckOnASlowSubAgentNeverWakesTheLeadAndRidesWithItsReport(t *testing.T) {
 	model := newCrew(map[string][]llm.Decision{
 		leadKey:    append([]llm.Decision{spawnCall("call-spawn", usersRoute, "src/users.ts")}, noted(200)...),
-		usersRoute: {writeUsers(), claimDecision("the users route is added")},
+		usersRoute: {writeUsers(), finishDecision("the users route is added", "src/users.ts")},
 	})
 	release := model.hold(usersRoute, 2)
 	defer release()
@@ -80,7 +80,7 @@ func TestACheckOnASlowSubAgentNeverWakesTheLeadAndRidesWithItsReport(t *testing.
 func TestNoCheckIsSentWhenTheIntervalIsZero(t *testing.T) {
 	model := newCrew(map[string][]llm.Decision{
 		leadKey:    {spawnCall("call-spawn", usersRoute, "src/users.ts"), claimDecision("sub-1 is on it"), claimDecision("sub-1 is done")},
-		usersRoute: {writeUsers(), claimDecision("the users route is added")},
+		usersRoute: {writeUsers(), finishDecision("the users route is added", "src/users.ts")},
 	})
 	release := model.hold(usersRoute, 2)
 	defer release()

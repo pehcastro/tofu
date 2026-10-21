@@ -61,10 +61,10 @@ func TestTheLeadGrantsARefusedPathAndTheWriteRuns(t *testing.T) {
 			claimDecision("sub-2 is done"),
 		},
 		writer: {
-			writeCall("first", "other/x.txt"), claimDecision("other/x.txt is outside my paths"),
-			writeCall("again", "other/x.txt"), claimDecision("wrote other/x.txt"),
+			writeCall("first", "other/x.txt"), finishDecision("other/x.txt is outside my paths"),
+			writeCall("again", "other/x.txt"), finishDecision("wrote other/x.txt", "other/x.txt"),
 		},
-		holder: {claimDecision("held theirs")},
+		holder: {finishDecision("held theirs")},
 	})
 	release := model.hold(holder, 1)
 	defer release()
@@ -108,10 +108,10 @@ func TestTheLeadRevokesAPathAndALaterWriteThereIsRefused(t *testing.T) {
 			claimDecision("a report"), claimDecision("another report"), claimDecision("a third report"),
 		},
 		holder: {
-			claimDecision("holding a and b"),
-			writeCall("late", "b/y.txt"), claimDecision("b/y.txt was refused"),
+			finishDecision("holding a and b"),
+			writeCall("late", "b/y.txt"), finishDecision("b/y.txt was refused"),
 		},
-		taker: {claimDecision("took b")},
+		taker: {finishDecision("took b")},
 	})
 	lead, root := writingCrew(t, model)
 	led := startLead(t.Context(), lead, nil)
@@ -180,7 +180,7 @@ func TestASubAgentWritesAndDeletesInItsScratchWithNoAsk(t *testing.T) {
 			case 2:
 				return called("bash", map[string]any{"command": "rm " + scratch + "/run.log"})
 			}
-			return claimDecision("wrote and removed " + scratch + "/run.log")
+			return finishDecision("wrote and removed " + scratch + "/run.log")
 		},
 	}
 	asked := 0

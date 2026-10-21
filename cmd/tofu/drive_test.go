@@ -326,7 +326,7 @@ func TestACassetteGivesACancelledTurnNoDeltaAndNoReply(t *testing.T) {
 const addressedCassette = `{"text":"handing it to a sub-agent","tools":[{"name":"spawn","args":{"task":"read note.txt and say what it holds","owns":["note.txt"]}}]}
 {"text":"the sub-agent read it and the note says a note"}
 {"agent":"c1","text":"reading the note","tools":[{"name":"read","args":{"path":"note.txt"}}]}
-{"agent":"c1","text":"the note says a note"}
+{"agent":"c1","text":"the note says a note","tools":[{"name":"finish","args":{"verdict":"done","summary":"the note says a note","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"it read the note"}}}]}
 `
 
 func asked(t *testing.T, deck *cassette, task string) string {
@@ -570,7 +570,7 @@ const subAgentOnCodexCassette = `{"text":"reading the note first","tools":[{"nam
 {"text":"handing it to go-dev","tools":[{"name":"spawn","args":{"agent":"go-dev","task":"wait a moment, then say done","owns":["note.txt"]}}]}
 {"text":"go-dev is done"}
 {"agent":"c1","text":"waiting","tools":[{"name":"bash","args":{"command":"sleep 5"}}]}
-{"agent":"c1","text":"done"}
+{"agent":"c1","text":"done","tools":[{"name":"finish","args":{"verdict":"done","summary":"done","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"it waited"}}}]}
 `
 
 const bothQuotas = `[{"label":"claude-sub 5h","fraction":0.62,"reported":true,"resetsIn":"3h28m"},

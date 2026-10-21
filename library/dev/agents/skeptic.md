@@ -19,7 +19,7 @@ You are given findings from a hunter and nothing else. For each one, read the co
 
 ## Report
 
-One block per finding, with the hunter's number, and nothing else:
+End by calling finish. body holds one block per finding, with the hunter's number, and nothing else:
 
 ```
 H1
@@ -28,4 +28,4 @@ confidence: 0-100
 evidence: the quoted line and its path:line that decides it
 ```
 
-End with the numbers you accepted.
+summary names the numbers you accepted.

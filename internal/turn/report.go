@@ -17,6 +17,7 @@ import (
 type SubAgentCommand struct {
 	Tool     string `json:"tool"`
 	Command  string `json:"command,omitempty"`
+	Asked    string `json:"asked,omitempty"`
 	ExitCode *int   `json:"exit_code,omitempty"`
 	Error    string `json:"error,omitempty"`
 }
@@ -39,6 +40,7 @@ type SubAgentReport struct {
 	Asked      []subagent.Question `json:"asked,omitempty"`
 	Prose      string              `json:"prose,omitempty"`
 	ProseStep  int                 `json:"prose_step,omitempty"`
+	Result     *subagent.Result    `json:"result,omitempty"`
 }
 
 func reportOf(agent subagent.SubAgent, forked, attempts []Row, state subagent.State) SubAgentReport {
@@ -65,9 +67,14 @@ func reportOf(agent subagent.SubAgent, forked, attempts []Row, state subagent.St
 		report.Steps, report.CostUSD = report.Steps+len(segment.Steps), report.CostUSD+segment.TotalCostUSD
 		for _, step := range segment.Steps {
 			for _, call := range step.ToolCalls {
-				report.Ran = append(report.Ran, SubAgentCommand{
-					Tool: call.Tool, Command: call.Command, ExitCode: call.ExitCode, Error: call.Error,
-				})
+				if call.Tool == FinishToolName {
+					continue
+				}
+				ran := SubAgentCommand{Tool: call.Tool, Command: call.Command, ExitCode: call.ExitCode, Error: call.Error}
+				if call.Proxy != nil {
+					ran.Asked = call.Proxy.Asked
+				}
+				report.Ran = append(report.Ran, ran)
 				if path := writtenPath(call); path != "" {
 					report.Wrote = append(report.Wrote, path)
 				}
@@ -136,7 +143,7 @@ func findings(row Row, state subagent.State) []subagent.Finding {
 		if failure == "" {
 			failure = "exit code " + strconv.Itoa(*call.ExitCode)
 		}
-		found = append(found, subagent.Finding{Bucket: subagent.ActOn, Reason: call.Tool + " failed and nothing after it made " + call.Tool + " work: " + failure})
+		found = append(found, subagent.Finding{Bucket: subagent.ActOn, Text: call.Tool + " failed and nothing after it made " + call.Tool + " work: " + failure})
 	}
 	return found
 }
@@ -144,23 +151,23 @@ func findings(row Row, state subagent.State) []subagent.Finding {
 func outcomeFinding(outcome Outcome, state subagent.State) (subagent.Finding, bool) {
 	if state == subagent.Parked {
 		return subagent.Finding{Bucket: subagent.ActOn,
-			Reason: "the sub-agent was stopped from outside partway through, so its work is unfinished and what it did do stands"}, true
+			Text: "the sub-agent was stopped from outside partway through, so its work is unfinished and what it did do stands"}, true
 	}
 	switch outcome {
 	case OutcomeUnset, OutcomeStopped:
 		return subagent.Finding{}, false
 	case OutcomeStepCap, OutcomeRetiredCostCap, OutcomeRetiredWallClockCap, OutcomeDecisionCap:
 		return subagent.Finding{Bucket: subagent.ActOn,
-			Reason: "the sub-agent was stopped by the " + outcome.String() + " and its work is unfinished"}, true
+			Text: "the sub-agent was stopped by the " + outcome.String() + " and its work is unfinished"}, true
 	case OutcomeError:
-		return subagent.Finding{Bucket: subagent.ActOn, Reason: "the sub-agent ended on an error and its work is unfinished"}, true
+		return subagent.Finding{Bucket: subagent.ActOn, Text: "the sub-agent ended on an error and its work is unfinished"}, true
 	case OutcomeLoopGuard:
-		return subagent.Finding{Bucket: subagent.ActOn, Reason: "the sub-agent repeated one call until the loop guard stopped it"}, true
+		return subagent.Finding{Bucket: subagent.ActOn, Text: "the sub-agent repeated one call until the loop guard stopped it"}, true
 	case OutcomeTruncated:
 		return subagent.Finding{Bucket: subagent.Consider,
-			Reason: "output was truncated, so what the sub-agent read may be short of what it asked for"}, true
+			Text: "output was truncated, so what the sub-agent read may be short of what it asked for"}, true
 	case OutcomeForked:
-		return subagent.Finding{Bucket: subagent.Noted, Reason: "the sub-agent forked its conversation and this report is the fork"}, true
+		return subagent.Finding{Bucket: subagent.Noted, Text: "the sub-agent forked its conversation and this report is the fork"}, true
 	}
 	panic("turn: unknown sub-agent outcome " + strconv.Itoa(int(outcome)))
 }
@@ -206,11 +213,12 @@ func (r SubAgentReport) Text(store *recall.Store) string {
 			fmt.Fprintf(body, "  attempt %d, %s, tried %s, ended %s\n", i+1, attempt.ID, attempt.Tried, attempt.Outcome)
 		}
 	}
-	if len(r.Wrote) > 0 {
+	finished := r.Result != nil && r.Result.Measured.Finished
+	if len(r.Wrote) > 0 && !finished {
 		fmt.Fprintf(body, "wrote %s\n", strings.Join(r.Wrote, ", "))
 	}
 	for _, finding := range r.Findings {
-		fmt.Fprintf(body, "%s: %s\n", finding.Bucket, finding.Reason)
+		fmt.Fprintf(body, "%s: %s\n", finding.Bucket, finding.Text)
 	}
 	if len(r.Learned) > 0 {
 		fmt.Fprintf(body, "learned: %s\n", strings.Join(r.Learned, "; "))
@@ -218,22 +226,26 @@ func (r SubAgentReport) Text(store *recall.Store) string {
 	for _, question := range r.Asked {
 		fmt.Fprintf(body, "asks a %s: %s\n", question.Kind, question.Ask)
 	}
-	if r.Prose == "" {
-		return body.String()
-	}
-	spoke := "its last message"
-	if r.ProseStep > 0 && r.ProseStep < r.Steps {
+	prose, spoke := r.Prose, "its last message"
+	switch {
+	case finished:
+		body.WriteString(r.Result.Text())
+		prose, spoke = r.Result.Body, "its body"
+	case r.ProseStep > 0 && r.ProseStep < r.Steps:
 		spoke = fmt.Sprintf("it last spoke at step %d of %d", r.ProseStep, r.Steps)
 	}
-	if len(r.Prose) <= konst.SubAgentProseBytes {
-		fmt.Fprintf(body, "%s, each line marked >:\n%s", spoke, marked(r.Prose))
+	if prose == "" {
 		return body.String()
 	}
-	head, tail := runeSafeHead(r.Prose, konst.SubAgentProseEndBytes), runeSafeTail(r.Prose, konst.SubAgentProseEndBytes)
-	dropped := len(r.Prose) - len(head) - len(tail)
+	if len(prose) <= konst.SubAgentProseBytes {
+		fmt.Fprintf(body, "%s, each line marked >:\n%s", spoke, marked(prose))
+		return body.String()
+	}
+	head, tail := runeSafeHead(prose, konst.SubAgentProseEndBytes), runeSafeTail(prose, konst.SubAgentProseEndBytes)
+	dropped := len(prose) - len(head) - len(tail)
 	held := fmt.Sprintf("the %d bytes between were dropped and not stored anywhere", dropped)
 	if store != nil {
-		elided, err := recall.Elide(store, recall.Config{ElideAboveBytes: konst.SubAgentProseBytes}, []byte(r.Prose), true)
+		elided, err := recall.Elide(store, recall.Config{ElideAboveBytes: konst.SubAgentProseBytes}, []byte(prose), true)
 		if err != nil {
 			held += ", because storing them failed: " + err.Error()
 		} else {
@@ -241,7 +253,7 @@ func (r SubAgentReport) Text(store *recall.Store) string {
 		}
 	}
 	fmt.Fprintf(body, "%s is %d bytes, each line marked >. the first %d and the last %d bytes follow, and %s:\n%s\n...(%d bytes cut)...\n%s",
-		spoke, len(r.Prose), len(head), len(tail), held, marked(head), dropped, marked(tail))
+		spoke, len(prose), len(head), len(tail), held, marked(head), dropped, marked(tail))
 	return body.String()
 }
 

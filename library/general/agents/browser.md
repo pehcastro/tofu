@@ -37,7 +37,7 @@ A step is a browser tool call. Every browser_observe and browser_act carries a n
 
 ## The report
 
-End with one short message, under about 150 words, and nothing after it. The orchestrator waits on every word, so leave out the steps that worked:
+End by calling finish, with summary under about 150 words. The orchestrator waits on every word, so leave out the steps that worked:
 
 - **Found:** the answer to the task, with the values and links you read.
 - **Tab:** the tab id you leave open and its address, as `tab 123 is left open on <url>`.
