@@ -3,6 +3,7 @@ package memory
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
@@ -23,6 +24,7 @@ const (
 	idSeparator = "-"
 	localIDTags = 1 << 16
 	lastIDFile  = "last-id"
+	mintedDir   = "minted"
 )
 
 type Scope string
@@ -227,31 +229,34 @@ func (m *Memory) Add(e Entry, replace string) (Entry, error) {
 	if !e.Kind.valid() {
 		return Entry{}, fmt.Errorf("kind is %s, %s or %s, not %q", KindPerson, KindProject, KindReference, e.Kind)
 	}
-	shelf := m.shelf(e.Scope)
-	e.ID, e.File = m.nextID(), ""
-	if e.Scope.local() {
-		e.ID = fmt.Sprintf("%s%s%04x", e.ID, idSeparator, rand.IntN(localIDTags))
+	kept := m.All()
+	old := slices.IndexFunc(kept, func(o Entry) bool { return replace != "" && o.ID == replace })
+	if replace != "" && old < 0 {
+		return Entry{}, fmt.Errorf("no memory entry is %s, so nothing replaces it", replace)
 	}
-	if replace != "" {
-		old, err := m.Find(e.Scope, replace)
-		if err != nil {
-			return Entry{}, err
-		}
-		e.ID, e.File = replace, old.File
-	}
-	if len(e.viewed()) > konst.MemtreeLineBytes {
-		return Entry{}, fmt.Errorf("the entry reads as %d bytes, over the %d a memory line holds; write the rule itself and nothing else", len(e.viewed()), konst.MemtreeLineBytes)
-	}
-	e, err := m.keep(e, false)
+	id, err := m.mint()
 	if err != nil {
 		return Entry{}, err
 	}
-	if replace == "" {
-		if err := sys.WriteFile(filepath.Join(m.home, dirName, lastIDFile), []byte(strconv.Itoa(e.number())), 0o644); err != nil {
-			return Entry{}, err
+	e.ID, e.File = id, ""
+	if e.Scope.local() {
+		e.ID = fmt.Sprintf("%s%s%04x", e.ID, idSeparator, rand.IntN(localIDTags))
+	}
+	if len(e.viewed()) > konst.MemtreeLineBytes {
+		err = fmt.Errorf("the entry reads as %d bytes, over the %d a memory line holds; write the rule itself and nothing else", len(e.viewed()), konst.MemtreeLineBytes)
+	} else {
+		e, err = m.keep(e, false)
+	}
+	if err != nil {
+		return Entry{}, errors.Join(err, os.Remove(filepath.Join(m.home, dirName, mintedDir, id)))
+	}
+	shelf := m.shelf(e.Scope)
+	shelf.Entries = append(shelf.Entries, e)
+	if old >= 0 {
+		if _, err := m.Remove(kept[old].Scope, replace); err != nil {
+			return e, fmt.Errorf("kept %s but %s is still there: %w", e.ID, replace, err)
 		}
 	}
-	shelf.Entries = append(slices.DeleteFunc(shelf.Entries, func(old Entry) bool { return old.ID == e.ID }), e)
 	return e, nil
 }
 
@@ -277,7 +282,11 @@ func (m *Memory) Remove(scope Scope, id string) (Entry, error) {
 	return gone, nil
 }
 
-func (m Memory) nextID() string {
+func (m Memory) mint() (string, error) {
+	minted := filepath.Join(m.home, dirName, mintedDir)
+	if err := os.MkdirAll(minted, 0o755); err != nil {
+		return "", err
+	}
 	highest := 0
 	if given, err := os.ReadFile(filepath.Join(m.home, dirName, lastIDFile)); err == nil {
 		highest, _ = strconv.Atoi(strings.TrimSpace(string(given)))
@@ -285,7 +294,17 @@ func (m Memory) nextID() string {
 	for _, e := range m.All() {
 		highest = max(highest, e.number())
 	}
-	return entryPrefix + strconv.Itoa(highest+1)
+	for n := highest + 1; ; n++ {
+		id := entryPrefix + strconv.Itoa(n)
+		taken, err := os.OpenFile(filepath.Join(minted, id), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+		if errors.Is(err, fs.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		return id, taken.Close()
+	}
 }
 
 func Rule(statement string) (string, error) {

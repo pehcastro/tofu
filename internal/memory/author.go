@@ -108,10 +108,16 @@ func saltOf(root string, writing bool) ([]byte, error) {
 }
 
 func (m *Memory) tellUnknownOnce() error {
-	told := filepath.Join(m.home, dirName, toldFile)
-	if _, err := os.Stat(told); !errors.Is(err, os.ErrNotExist) {
+	if err := os.MkdirAll(filepath.Join(m.home, dirName), 0o755); err != nil {
+		return err
+	}
+	told, err := os.OpenFile(filepath.Join(m.home, dirName, toldFile), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if errors.Is(err, os.ErrExist) {
 		return nil
 	}
+	if err != nil {
+		return err
+	}
 	m.Notices = append(m.Notices, "no gh login and no git user.email here, so memory is written by author "+UnknownAuthor+"; set git config user.email to own what you write. Said once")
-	return sys.WriteFile(told, nil, 0o644)
+	return told.Close()
 }

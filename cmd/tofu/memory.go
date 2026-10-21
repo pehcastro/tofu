@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -142,7 +143,13 @@ func memoryAdd(o verbOutput, opts memoryOpts, shelves *memory.Memory) int {
 	if len(opts.rest) != 1 {
 		return o.usage(errors.New("one statement, in quotes"))
 	}
-	kind, scope := opts.kind, opts.scope
+	var old memory.Entry
+	if kept := shelves.All(); opts.replace != "" {
+		if at := slices.IndexFunc(kept, func(e memory.Entry) bool { return e.ID == opts.replace }); at >= 0 {
+			old = kept[at]
+		}
+	}
+	kind, scope := cmp.Or(opts.kind, old.Kind), cmp.Or(opts.scope, old.Scope)
 	if kind == "" {
 		kind = memory.KindProject
 		if scope == memory.Global || scope == memory.UserLocal {
@@ -152,14 +159,13 @@ func memoryAdd(o verbOutput, opts memoryOpts, shelves *memory.Memory) int {
 	if scope == "" {
 		scope = kind.Scope()
 	}
-	old, _ := shelves.Find(scope, opts.replace)
 	added, err := shelves.Add(memory.Entry{Scope: scope, Kind: kind, Text: opts.rest[0], Said: opts.said, At: time.Now(), By: memory.ByPerson}, opts.replace)
 	if err != nil {
 		return o.fail(err)
 	}
 	change, undo := changeAdded, added.Undo()+opts.dirFlag()
 	if opts.replace != "" {
-		change, undo = changeChanged, "tofu memory add --scope "+string(scope)+opts.dirFlag()+" --replace "+added.ID+" "+strconv.Quote(old.Text)
+		change, undo = changeChanged, "tofu memory add --scope "+string(old.Scope)+" --kind "+string(old.Kind)+opts.dirFlag()+" --replace "+added.ID+" "+strconv.Quote(old.Text)
 	}
 	return o.receipt(writeReceipt{Changes: []fileChange{{Change: change, What: "memory " + added.ID + " · " + string(added.Scope), File: added.File}}, Undo: undo})
 }

@@ -268,12 +268,21 @@ func TestAKilledBuildResumesAndBuildsNoNodeTwice(t *testing.T) {
 	}
 }
 
-func TestASecondWriterIsRefused(t *testing.T) {
-	_, path := openLog(t)
+func TestASecondWriterWaitsForTheFirstAndIsRefusedPastTheWait(t *testing.T) {
+	first, path := openLog(t)
 	if second, err := Open(path); err == nil {
 		_ = second.Close()
-		t.Fatal("a second Open on a held log succeeded")
+		t.Fatal("a second Open on a log held past the wait succeeded")
 	}
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		_ = first.Close()
+	}()
+	second, err := Open(path)
+	if err != nil {
+		t.Fatalf("a second writer did not wait for the first to close: %v", err)
+	}
+	_ = second.Close()
 }
 
 func TestLinesAreFreeUpTo512BytesAndClippedAtARuneAbove(t *testing.T) {

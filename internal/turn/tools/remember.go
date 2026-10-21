@@ -257,12 +257,14 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 		return turn.Result{}, fmt.Errorf("remember: %w", err)
 	}
 	kept := shelves.All()
-	replaced := slices.IndexFunc(kept, func(e memory.Entry) bool { return e.ID == args.Replaces })
+	replaced := slices.IndexFunc(kept, func(e memory.Entry) bool { return args.Replaces != "" && e.ID == args.Replaces })
 	unsure := false
 	switch {
 	case args.Replaces != "" && replaced < 0:
 		return turn.Result{}, fmt.Errorf("remember: no memory entry is %s, so nothing replaces it", args.Replaces)
-	case args.Replaces == "" && !args.KeepBoth:
+	case replaced >= 0:
+		entry.Scope = kept[replaced].Scope
+	case !args.KeepBoth:
 		same, err := r.Judge.duplicate(ctx, rule, kept, r.Project)
 		if same >= 0 {
 			return turn.Result{Content: fmt.Sprintf("refused: this says the same as %s %q. call remember again with replaces %q to put this one in its place, or with keep_both true if the two differ", kept[same].Ref(), kept[same].Text, kept[same].ID)}, nil
@@ -270,6 +272,10 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 		unsure = err != nil
 	}
 	judged := r.Judge.judge(ctx, entry, r.Project)
+	offered := cmp.Or(judged.pick, entry.Scope)
+	if replaced >= 0 {
+		offered = entry.Scope
+	}
 	refused := entry.Scope == memory.ProjectLocal && judged.refusesLocal
 	asks := !r.Auto() || entry.Scope == memory.ProjectLocal || unsure
 	verdict := ledger.VerdictAllow
@@ -294,7 +300,7 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 		if judged.refusesLocal {
 			scopes = scopes[:3]
 		}
-		picked, err := pick(ctx, MemoryOffer{Statement: entry.Text, Said: args.Said, Scope: cmp.Or(judged.pick, entry.Scope), Scopes: scopes})
+		picked, err := pick(ctx, MemoryOffer{Statement: entry.Text, Said: args.Said, Scope: offered, Scopes: scopes})
 		if err != nil {
 			return turn.Result{Content: "the person could not be asked, so nothing was kept: " + err.Error()}, nil
 		}
@@ -309,20 +315,11 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 		}
 		entry.Scope = picked
 	}
-	var swapped string
-	if replaced >= 0 && kept[replaced].Scope == entry.Scope {
-		swapped = kept[replaced].ID
-	}
-	if entry, err = shelves.Add(entry, swapped); err != nil {
+	if entry, err = shelves.Add(entry, args.Replaces); err != nil {
 		return turn.Result{}, fmt.Errorf("remember: %w", err)
 	}
-	if replaced >= 0 && swapped == "" {
-		if _, err := shelves.Remove(kept[replaced].Scope, kept[replaced].ID); err != nil {
-			return turn.Result{}, fmt.Errorf("remember: kept %s but %s is still there: %w", entry.ID, kept[replaced].ID, err)
-		}
-	}
 	if told, telling := ctx.Value(memoryKeptKey{}).(func(MemoryKept)); telling && !asks {
-		told(MemoryKept{Statement: entry.Text, Offered: cmp.Or(judged.pick, entry.Scope), Kept: entry.Scope})
+		told(MemoryKept{Statement: entry.Text, Offered: offered, Kept: entry.Scope})
 	}
 	r.Inbox.Remembered(entry.Saved())
 	return turn.Result{Content: entry.Saved(), Command: entry.Ref()}, nil

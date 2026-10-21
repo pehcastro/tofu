@@ -443,6 +443,8 @@ const (
 	MemtreeCompactionsAtOnce = 8
 	MemtreeViewBytes         = 32 << 10
 	MemtreeContextBytes      = 32 << 10
+	MemtreeLockWaitMillis    = 5000
+	MemtreeLockRetryMillis   = 10
 
 	EpisodeViewPercentOfRoom = 50
 )

@@ -4,7 +4,6 @@ package memtree
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"syscall"
 )
@@ -20,7 +19,7 @@ func takeLock(path string) (*os.File, error) {
 	}
 	_ = file.Close()
 	if errors.Is(err, syscall.EWOULDBLOCK) {
-		return nil, fmt.Errorf("%s is held by another writer, and a log takes one", path)
+		return nil, heldLog{}
 	}
 	return nil, err
 }

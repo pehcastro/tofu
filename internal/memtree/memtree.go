@@ -8,6 +8,9 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
+
+	"tofu/internal/konst"
 )
 
 type Item struct {
@@ -48,9 +51,20 @@ type Store struct {
 	ready []Ref
 }
 
+type heldLog struct{}
+
+func (heldLog) Error() string { return "held by another writer" }
+
 func Open(logPath string) (*Store, error) {
 	base := strings.TrimSuffix(logPath, ".jsonl")
 	lock, err := takeLock(base + ".lock")
+	for deadline := time.Now().Add(konst.MemtreeLockWaitMillis * time.Millisecond); errors.Is(err, heldLog{}) && time.Now().Before(deadline); {
+		time.Sleep(konst.MemtreeLockRetryMillis * time.Millisecond)
+		lock, err = takeLock(base + ".lock")
+	}
+	if errors.Is(err, heldLog{}) {
+		return nil, fmt.Errorf("%s.lock is held by another writer past %d ms, and a log takes one", base, konst.MemtreeLockWaitMillis)
+	}
 	if err != nil {
 		return nil, err
 	}
