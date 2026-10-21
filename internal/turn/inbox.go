@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/safe"
 	"tofu/internal/session"
+	"tofu/internal/shell"
 	"tofu/internal/sys"
 )
 
@@ -41,6 +43,7 @@ const (
 	sourceGateAsk       = "sub-agent gate ask"
 	sourceMemory        = "memory saved"
 	sourceAnswer        = "question answer"
+	sourceShellExit     = "shell exit"
 )
 
 type inboxItem struct {
@@ -69,6 +72,8 @@ type Inbox struct {
 	queued   laterCompaction
 	said     map[string][]PersonSaid
 	repeats  *repeat.Judge
+	watched  map[string]bool
+	typed    <-chan string
 
 	repeatsRead bool
 
@@ -315,7 +320,76 @@ func (b *Inbox) stillAsked() []string {
 }
 
 func NewInbox() *Inbox {
-	return &Inbox{wake: make(chan struct{}, 1), held: map[string]*heldSubAgent{}, logs: map[*session.Log]int{}}
+	return &Inbox{wake: make(chan struct{}, 1), held: map[string]*heldSubAgent{}, logs: map[*session.Log]int{}, watched: map[string]bool{}}
+}
+
+type leadInboxKey struct{}
+
+func leadInboxFrom(ctx context.Context) *Inbox {
+	inbox, _ := ctx.Value(leadInboxKey{}).(*Inbox)
+	return inbox
+}
+
+func ExitComesBack(ctx context.Context, name string) bool {
+	inbox := leadInboxFrom(ctx)
+	if inbox == nil || !ledByTheLead(ctx) {
+		return false
+	}
+	inbox.mu.Lock()
+	defer inbox.mu.Unlock()
+	return inbox.watched[name]
+}
+
+func (b *Inbox) whenTyped(report safe.Report) (typedNow <-chan struct{}, stop func()) {
+	b.mu.Lock()
+	typed := b.typed
+	b.mu.Unlock()
+	if typed == nil {
+		return nil, func() {}
+	}
+	arrived, stopped := make(chan struct{}), make(chan struct{})
+	safe.Go(report, "typed while bash runs", func() {
+		poll := time.NewTicker(konst.ReadyPollMillis * time.Millisecond)
+		defer poll.Stop()
+		for len(typed) == 0 {
+			select {
+			case <-poll.C:
+			case <-stopped:
+				return
+			}
+		}
+		close(arrived)
+	})
+	return arrived, func() { close(stopped) }
+}
+
+func (b *Inbox) watchShell(report safe.Report, registry *shell.Registry, name string) {
+	b.mu.Lock()
+	b.watched[name] = true
+	b.mu.Unlock()
+	safe.Go(report, "lead shell watch", func() {
+		ended, err := registry.AwaitEnd(context.Background(), name, konst.ShellWaitMillis*time.Millisecond)
+		for err == nil && ended.State == shell.Running && !ended.HeldByPerson() {
+			ended, err = registry.AwaitEnd(context.Background(), name, konst.ShellWaitMillis*time.Millisecond)
+		}
+		var said string
+		if err == nil && ended.State == shell.Exited {
+			tail, _ := registry.Tail(name, shell.DefaultTail)
+			code := "with an exit code tofu did not see"
+			if ended.ExitCode != nil {
+				code = strconv.Itoa(*ended.ExitCode)
+			}
+			now := time.Now()
+			said = fmt.Sprintf("%s, your command moved to the background, exited %s, %s: %s\nits last lines:\n%s", name, code, registry.Timing(ended, now).Words(now), ended.Command, tail)
+		}
+		b.mu.Lock()
+		delete(b.watched, name)
+		if said != "" {
+			b.items = append(b.items, inboxItem{text: said, source: sourceShellExit, posted: time.Now()})
+		}
+		b.mu.Unlock()
+		b.signal()
+	})
 }
 
 func (b *Inbox) signal() {
@@ -565,7 +639,7 @@ func (b *Inbox) due(now time.Time) (taken []inboxItem, done bool, closesIn time.
 	case !first.IsZero() && (b.running == 0 || closesIn <= 0):
 		taken, b.items = b.items, nil
 		return taken, true, 0
-	case b.running+len(b.asked) == 0:
+	case b.running+len(b.asked)+len(b.watched) == 0:
 		return nil, true, 0
 	case first.IsZero():
 		return nil, false, 0
@@ -941,6 +1015,10 @@ func (b *Inbox) releasing(log *session.Log) error {
 
 func Lead(ctx context.Context, config Config, typed <-chan string, heard func(string), ended func(Row, error)) error {
 	var failed []error
+	ctx = context.WithValue(ctx, leadInboxKey{}, config.Inbox)
+	config.Inbox.mu.Lock()
+	config.Inbox.typed = typed
+	config.Inbox.mu.Unlock()
 	config.Inbox.judgeRepeats(config)
 	if SaidByThePerson(cmp.Or(config.TaskOrigin.Source, sourceTask)) {
 		config.Task += config.Inbox.repeatNote(config.Sessions, config.Session, config.Task)

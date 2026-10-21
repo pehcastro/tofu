@@ -46,6 +46,7 @@ type Wait struct {
 	Port   int
 	Kept   Kept
 	Call   string
+	Early  <-chan struct{}
 }
 
 type Yielded struct {
@@ -110,6 +111,8 @@ func (r *Registry) YieldReady(ctx context.Context, cmd *exec.Cmd, command, owner
 		case waitErr := <-waited:
 			return exited(waitErr)
 		case <-gaveUp:
+			got.Ready = ReadyWaited
+		case <-wait.Early:
 			got.Ready = ReadyWaited
 		case <-ctx.Done():
 			got.Ready = ReadyStopped

@@ -84,6 +84,9 @@ func runShellOp(ctx context.Context, registry *shell.Registry, args shellArgs) (
 		if _, err := registry.AgentRead(args.Name); err != nil {
 			return "", nil, err
 		}
+		if turn.ExitComesBack(ctx, args.Name) {
+			return args.Name + " is your own command, moved to the background, and its exit comes back to you as a message when it ends, so this does not wait: answer the person, go on with other work, or end your turn", nil, nil
+		}
 		ended, tail, err := awaitEndOrText(ctx, registry, args.Name, args.Until)
 		if err != nil {
 			return "", nil, err

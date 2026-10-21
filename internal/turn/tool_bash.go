@@ -79,7 +79,7 @@ func NewBashToolCached(root string, cache *ToolchainCache) (*BashTool, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &BashTool{root: resolved, choice: choice, probe: probe, softLimit: konst.BashSoftLimitMillis * time.Millisecond}, nil
+	return &BashTool{root: resolved, choice: choice, probe: probe, softLimit: konst.LeadBashSoftLimitMillis * time.Millisecond}, nil
 }
 
 type toolchainProbe struct {
@@ -161,7 +161,7 @@ func NewBashToolFromShell(root string, shell RunShell) (*BashTool, error) {
 		return nil, err
 	}
 	probe := shell.cache.probeFor(string(resolved), shell.runner(), konst.ToolchainProbeTimeoutMillis*time.Millisecond)
-	return &BashTool{root: resolved, choice: shell.choice, probe: probe, softLimit: konst.BashSoftLimitMillis * time.Millisecond}, nil
+	return &BashTool{root: resolved, choice: shell.choice, probe: probe, softLimit: konst.LeadBashSoftLimitMillis * time.Millisecond}, nil
 }
 
 func shellLinesFromShell(dir string, shell RunShell) []string {
@@ -310,11 +310,12 @@ func (t *BashTool) Name() string { return bashToolName }
 func (t *BashTool) Definition() llm.Tool {
 	description := fmt.Sprintf(
 		"runs one command in %s for the project's own package manager, build and tests. cwd is the working directory: no cd. "+
-			"a command still running after %d ms moves to a background shell and returns its name: read it back with shell wait, never sleep or poll. "+
-			"timeout_ms at or under %[2]d kills it there instead. "+
+			"a command still running after %d ms, or %d ms in a sub-agent, moves to a background shell and returns its name. "+
+			"the lead gets its exit back as a message on its own and never waits on it: it answers the person, goes on, or ends the turn. a sub-agent reads it back with shell wait, never sleep or poll. "+
+			"timeout_ms at or under that limit kills it there instead. "+
 			"background true is only for a server or watcher that never ends: run the server itself, no & or nohup, and stop it with the shell tool, never kill. "+
 			"check_port names what holds a port",
-		t.choice.Label, t.softLimit.Milliseconds())
+		t.choice.Label, t.softLimit.Milliseconds(), konst.BashSoftLimitMillis)
 	if t.choice.Note != "" {
 		description += " " + t.choice.Note
 	}
@@ -433,16 +434,25 @@ func deadlineResult(command, output string, deadline time.Duration) Result {
 }
 
 func (t *BashTool) runOrMove(ctx context.Context, registry *shell.Registry, command, corrected string, deadline time.Duration) (Result, error) {
-	wait := shell.Wait{Within: min(deadline, t.softLimit), Call: shellCallFrom(ctx)}
-	if deadline > t.softLimit {
+	limit, inbox := konst.BashSoftLimitMillis*time.Millisecond, (*Inbox)(nil)
+	if ledByTheLead(ctx) {
+		limit, inbox = t.softLimit, leadInboxFrom(ctx)
+	}
+	wait := shell.Wait{Within: min(deadline, limit), Call: shellCallFrom(ctx)}
+	if deadline > limit {
 		wait.Kept = shell.KeptMoved
+	}
+	if wait.Kept == shell.KeptMoved && inbox != nil {
+		var stop func()
+		wait.Early, stop = inbox.whenTyped(sys.Crashes(string(t.root)))
+		defer stop()
 	}
 	got, err := registry.YieldReady(ctx, t.command(context.Background(), ctx, command), command, shellOwnerFrom(ctx), wait)
 	if err != nil {
 		return Result{}, fmt.Errorf("bash: %w", err)
 	}
 	ran := got.Shell
-	if got.Ready == shell.ReadyWaited && deadline <= t.softLimit {
+	if got.Ready == shell.ReadyWaited && deadline <= limit {
 		if err := registry.KillAtDeadline(ran.Name, deadline); err != nil && !errors.Is(err, shell.ErrNotRunning) {
 			return Result{}, fmt.Errorf("bash: %w", err)
 		}
@@ -462,14 +472,26 @@ func (t *BashTool) runOrMove(ctx context.Context, registry *shell.Registry, comm
 			FailureText: fmt.Sprintf(cancelledWhileRunning, command),
 		}, registry.Kill(ran.Name)
 	}
+	readBack := fmt.Sprintf("read it back with the shell tool: wait %s returns as soon as it ends, or after %d ms, with its exit code and last lines; logs %[1]s returns its last lines now. never wait on it with another bash call",
+		ran.Name, konst.ShellWaitMillis)
+	if inbox != nil {
+		inbox.watchShell(sys.Crashes(string(t.root)), registry, ran.Name)
+		readBack = "its exit comes back to you as a message when it ends, so do not wait on it: answer the person, go on with other work, or end your turn. logs " + ran.Name + " returns its last lines now"
+		if got.Took < limit {
+			readBack = "the person wrote while it ran, so it moved before the " + limit.String() + " limit. " + readBack
+		}
+	}
 	return Result{
-		Content: fmt.Sprintf("%s is still running after %d ms, so it moved to a background shell as pid %d instead of holding this call. it was not killed and keeps running, listed on the shells screen. "+
-			"read it back with the shell tool: wait %s returns as soon as it ends, or after %d ms, with its exit code and last lines; logs %s returns its last lines now. "+
-			"never wait on it with another bash call. its output so far:\n%s",
-			ran.Name, got.Took.Milliseconds(), ran.PID, ran.Name, t.softLimit.Milliseconds(), ran.Name, got.Output),
+		Content: fmt.Sprintf("%s is still running after %d ms, so it moved to a background shell as pid %d instead of holding this call. it was not killed and keeps running, listed on the shells screen. %s. its output so far:\n%s",
+			ran.Name, got.Took.Milliseconds(), ran.PID, readBack, got.Output),
 		Command: "background " + ran.Name + ": " + command,
 		Outcome: ResultSucceeded,
 	}, nil
+}
+
+func ledByTheLead(ctx context.Context) bool {
+	owner := shellOwnerFrom(ctx)
+	return owner == "" || owner == session.AuthorOrchestrator
 }
 
 func OwnShellsCalled(ctx context.Context, request GateRequest) []string {
@@ -575,7 +597,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 		return Result{}, errors.New("bash: command is required unless check_port is set")
 	}
 	owner := shellOwnerFrom(ctx)
-	subAgent := owner != "" && owner != session.AuthorOrchestrator
+	subAgent := !ledByTheLead(ctx)
 	if registry := ShellRegistryFrom(ctx); registry != nil {
 		owned := registry.Owning(args.Command)
 		startedElsewhere := slices.ContainsFunc(owned, func(one shell.Shell) bool { return one.Owner != owner })

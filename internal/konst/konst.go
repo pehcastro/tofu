@@ -4,6 +4,8 @@ const Version = "0.5.15-rc13"
 
 const GateAskArgsBytes = 4096
 
+const LeadBashSoftLimitMillis = 10000
+
 const (
 	DocsPageLinesMin = 60
 	DocsPageLinesMax = 120
