@@ -1,0 +1,40 @@
+name: steer_answered
+domain: general
+questions_version: 1
+mode: enforced
+notes: >-
+  asked by internal/turn/loop.go while a message the person wrote mid-turn has
+  no answer yet, once for each assistant text that is not blank. state.said is
+  the first line of that message and state.reply is the text the lead wrote
+  after reading it. the question stays open, so the turn is sent back once,
+  unless answered is at or above answered_at; an error or a timeout keeps it
+  open too. it replaced a fixed list of later-promise phrases, which closed the
+  question on any narration. answered_at is the middle of the noul range, an
+  uncalibrated prior; library/questions/testdata/steer_answered.jsonl holds 30
+  hand-written pairs it was measured on.
+
+thresholds:
+  answered_at: 0.5
+
+state:
+  - said
+  - reply
+
+questions:
+  answered:
+    type: noul
+    instructions: >-
+      A person wrote said to a coding agent while the agent was busy with a
+      task. reply is the text the agent wrote after reading said. Decide
+      whether reply responds to said itself, so the person has what they
+      wrote for without waiting.
+    criteria:
+      true: >-
+        reply gives what said asks for: the fact, the reason, the decision, a
+        yes or a no, or a plain admission that the agent does not know; or,
+        where said tells the agent to do or stop something, reply takes it up
+        and says what changes now.
+      false: >-
+        reply leaves said without a response: it sets the response aside
+        for later, or it only reports the agent's own work, plans or results
+        without taking up said.

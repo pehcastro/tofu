@@ -17,7 +17,10 @@ import (
 	"time"
 
 	"tofu/internal/hook"
+	"tofu/internal/judge/jev"
+	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/judge/question"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/wire/anthropic"
@@ -28,6 +31,7 @@ import (
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
+	"tofu/library/questions"
 )
 
 const theResponseHitTheOutputTokenLimit = "the response hit the output token limit, so its arguments may be truncated. " +
@@ -59,17 +63,74 @@ func (q openQuestion) sendBack() string {
 		"before any tool call, board work or spawn. never wait on your own running work or a sub-agent; research goes after the answer, in this turn."
 }
 
-func laterPromises() []string {
-	return []string{
-		"next reply", "next message", "next turn", "next update", "i'll answer", "will answer", "answer once", "answer after", "answer when",
-		"i'll reply", "will reply", "get back to you", "come back to", "once this finishes", "once that finishes", "after this finishes",
-		"when this finishes", "in a moment", "shortly",
-	}
+const (
+	steerAnsweredRef     = "steer_answered@1"
+	steerAnsweredName    = "answered"
+	steerAnsweredBuilder = "steer_answered_state@1"
+)
+
+type steerJudge struct {
+	client    *jev.Client
+	set       question.Set
+	asked     jev.Question
+	threshold float64
+	ledger    *ledger.Writer
 }
 
-func unanswering(reply string) bool {
-	lower := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(reply), "’", "'"))
-	return lower == "" || slices.ContainsFunc(laterPromises(), func(promise string) bool { return strings.Contains(lower, promise) })
+func newSteerJudge(config Config) (*steerJudge, error) {
+	places, err := config.ResolvedPlaces()
+	if err != nil {
+		return nil, err
+	}
+	layers, err := question.Layers(questions.Files(), config.Project)
+	if err != nil {
+		return nil, err
+	}
+	set, fields, err := question.Resolve(steerAnsweredRef, layers)
+	if err != nil {
+		return nil, err
+	}
+	asked, found := set.Question(steerAnsweredName)
+	at := slices.IndexFunc(fields, func(f question.Field) bool { return f.Path == "thresholds."+steerAnsweredName+"_at" })
+	if !found || at < 0 {
+		return nil, fmt.Errorf("%s names no %s question or no thresholds.%s_at", steerAnsweredRef, steerAnsweredName, steerAnsweredName)
+	}
+	threshold, err := strconv.ParseFloat(fields[at].Value, 64)
+	if err != nil {
+		return nil, err
+	}
+	client, err := typesafe.Judge()
+	if err != nil {
+		return nil, err
+	}
+	return &steerJudge{client: client, set: set, asked: asked.ToJev(), threshold: threshold, ledger: ledger.NewWriter(places.Log)}, nil
+}
+
+func (j *steerJudge) answers(ctx context.Context, said, reply string) (bool, error) {
+	body, err := json.Marshal(struct {
+		Said  string `json:"said"`
+		Reply string `json:"reply"`
+	}{said, reply})
+	if err != nil {
+		return false, err
+	}
+	asked := []jev.Question{j.asked}
+	row := ledger.Row{Point: j.set.Name, Questions: j.set.Name, Version: j.set.QuestionsVersion, StateHash: ledger.HashOf(body), StateBuilder: steerAnsweredBuilder, State: body,
+		Verdict: ledger.VerdictAsk, Reason: &ledger.Reason{Question: steerAnsweredName, Comparison: ">= " + strconv.FormatFloat(j.threshold, 'f', -1, 64), Threshold: j.threshold, Mode: ledger.ModeEnforced}}
+	decision, err := j.client.Ask(ctx, jev.Request{State: json.RawMessage(body), Questions: asked})
+	if err != nil {
+		failed := "jev could not answer, so the person's question stays open: " + err.Error()
+		row.Reason.ModeReason = &failed
+		_, unwritten := j.ledger.Append(row)
+		return false, errors.Join(err, unwritten)
+	}
+	decision.Record(&row, asked, j.set.QuestionsVersion)
+	row.Reason.Value = row.Answers[0].Noul
+	if row.Reason.Value >= j.threshold {
+		row.Verdict = ledger.VerdictAllow
+	}
+	_, err = j.ledger.Append(row)
+	return row.Verdict == ledger.VerdictAllow, err
 }
 
 const (
@@ -751,6 +812,20 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		recorded.notice(told)
 		messages = append(messages, inserted(sourceHandback, asked.sendBack(), time.Time{}))
 	}
+	var steer *steerJudge
+	answeredBy := func(reply string) (bool, error) {
+		if strings.TrimSpace(reply) == "" {
+			return false, nil
+		}
+		if steer == nil {
+			built, err := newSteerJudge(config)
+			if err != nil {
+				return false, err
+			}
+			steer = built
+		}
+		return steer.answers(ctx, asked.said, reply)
+	}
 	noticeStep := config.Caps.MaxSteps - max(1, int(math.Ceil(float64(config.Caps.MaxSteps)*konst.TurnStepCapNoticeShare)))
 	for step := 1; ; step++ {
 		if err := ctx.Err(); err != nil {
@@ -932,9 +1007,15 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			continue
 		}
 		askedAgainAfterBlank = false
-		if asked != nil && !unanswering(decision.Content) {
-			recorded.notice("the person's question from step " + strconv.Itoa(asked.step) + " was answered at step " + strconv.Itoa(step))
-			asked = nil
+		if asked != nil {
+			answered, err := answeredBy(decision.Content)
+			switch {
+			case err != nil:
+				recorded.notice("the person's question from step " + strconv.Itoa(asked.step) + " stays open, since jev could not judge the reply at step " + strconv.Itoa(step) + ": " + err.Error())
+			case answered:
+				recorded.notice("the person's question from step " + strconv.Itoa(asked.step) + " was answered at step " + strconv.Itoa(step))
+				asked = nil
+			}
 		}
 
 		switch decision.Outcome {
