@@ -14,6 +14,7 @@ use gpui::{
 
 use crate::components::overlay::{ContextMenu, actions, context_menu};
 use crate::components::paint::{arrowed, focus_ring, ink, pressed, pressed_by, tint};
+use crate::components::scroll::scrollbar;
 use crate::components::size::{
     CARET_BLINK_MS, CARET_HEIGHT, CARET_WIDTH, DIM_TEXT, FIELD, FIELD_PAD, FIELD_WIDTH, FONT_BODY,
     FONT_SMALL, RADIUS_CHIP, RADIUS_ROW, SEGMENT_PAD_X, SEGMENT_PAD_Y, SEGMENTED_PAD,
@@ -213,6 +214,7 @@ struct Span {
     reversed: bool,
     layout: TextLayout,
     dragging: bool,
+    goal: Option<Pixels>,
 }
 
 impl Span {
@@ -223,6 +225,7 @@ impl Span {
             reversed: false,
             layout: TextLayout::default(),
             dragging: false,
+            goal: None,
         }
     }
 
@@ -242,6 +245,7 @@ impl Span {
         };
         self.reversed = to < tail;
         self.range = to.min(tail)..to.max(tail);
+        self.goal = None;
     }
 
     fn selected(&self) -> &str {
@@ -276,13 +280,17 @@ impl Span {
         at
     }
 
-    fn vertical(&self, lines: f32) -> usize {
+    fn vertical(&mut self, lines: f32, extend: bool) -> bool {
         let head = self.head();
         let Some(at) = self.layout.position_for_index(head) else {
-            return head;
+            return true;
         };
+        let goal = self.goal.unwrap_or(at.x);
         let height = self.layout.line_height();
-        self.index_at(point(at.x, at.y + height * (0.5 + lines)))
+        let to = self.index_at(point(goal, at.y + height * (0.5 + lines)));
+        self.select(to, extend);
+        self.goal = Some(goal);
+        true
     }
 
     fn navigate(&mut self, key: &str, modifiers: &Modifiers) -> bool {
@@ -296,8 +304,8 @@ impl Span {
             (false, "end") => self.text.len(),
             (true, "home") => 0,
             (true, "end") => self.text.len(),
-            (false, "up") => self.vertical(-1.0),
-            (false, "down") => self.vertical(1.0),
+            (false, "up") => return self.vertical(-1.0, modifiers.shift),
+            (false, "down") => return self.vertical(1.0, modifiers.shift),
             (true, "a") => {
                 self.select(0, false);
                 self.text.len()
@@ -1009,11 +1017,16 @@ impl Render for TextArea {
             .on_key_down(cx.listener(Self::key_down))
             .child(
                 div()
-                    .id("text-area-scroll")
-                    .track_scroll(&self.scroll)
-                    .overflow_y_scroll()
-                    .max_h(px(tallest))
-                    .child(body),
+                    .relative()
+                    .child(
+                        div()
+                            .id("text-area-scroll")
+                            .track_scroll(&self.scroll)
+                            .overflow_y_scroll()
+                            .max_h(px(tallest))
+                            .child(body),
+                    )
+                    .child(scrollbar("text-area-bar", &self.scroll)),
             );
         edit_menu("text-area-menu", field, cx)
     }
