@@ -258,6 +258,7 @@ func (d *turnDigests) result(digest *TurnDigest, event session.Event) {
 		return
 	}
 	edited, body := TurnFile{Path: called.Path, Agent: event.Agent}, turn.WithoutToolRef(said.Content)
+	_, appended, appends := turn.AppendedLines(body)
 	switch {
 	case edited.Path == "" || said.ToolOutcome == session.ToolOutcomeFailed:
 		return
@@ -278,6 +279,8 @@ func (d *turnDigests) result(digest *TurnDigest, event session.Event) {
 		}
 	case strings.HasPrefix(body, createdFilePrefix):
 		edited.Op, edited.Added = EditCreate, lineCount(called.Content)
+	case appends:
+		edited.Op, edited.Added = EditModify, len(appended)
 	default:
 		return
 	}

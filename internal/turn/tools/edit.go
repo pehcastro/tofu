@@ -120,10 +120,10 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 	shown, targets := make([]string, len(plans)), make([]string, len(plans))
 	for i, plan := range plans {
 		e.ledger.Rewrote(plan.preview.Path, []byte(plan.preview.After), plan.change)
-		shown[i] = e.checkers.Typechecked(ctx, plan.resolved, strings.Join(append(plan.notes, plan.preview.Diff), "\n"))
+		shown[i] = e.checkers.Typechecked(ctx, plan.resolved, strings.Join(append([]string{plan.preview.Diff}, plan.notes...), "\n"))
 		targets[i] = plan.preview.Path
 	}
-	return turn.Result{Content: strings.Join(append(skipped, shown...), "\n"), Command: strings.Join(targets, " ")}, nil
+	return turn.Result{Content: strings.Join(append(shown, skipped...), "\n"), Command: strings.Join(targets, " ")}, nil
 }
 
 func refusedChange(change turn.EditChange, onFile int) error {
