@@ -226,6 +226,16 @@ fn build(
     if workspaces.is_empty() {
         workspaces.push(Workspace::new(WORK_NAME, Preset::Work));
     }
+    for (at, workspace) in workspaces.iter().enumerate() {
+        eprintln!(
+            "desk: work: loaded workspace {}/{} {:?} preset {}: {}",
+            at + 1,
+            workspaces.len(),
+            workspace.name,
+            workspace.preset.name(),
+            desk_tiling::readout(workspace.tree()).join(" ")
+        );
+    }
     let store = cx.new(|_| Store::default());
     let chat = match replay {
         Some(_) => chat::fed(store.clone(), window, cx),
@@ -1098,6 +1108,12 @@ impl Work {
 
     pub fn run(&mut self, action: Action, key: &str, window: &mut Window, cx: &mut Context<Self>) {
         self.nudge = None;
+        if action == Action::Reset {
+            eprintln!(
+                "desk: work: reset layout of workspace {}",
+                self.board.active()
+            );
+        }
         self.board.run(action, key);
         if matches!(
             action,
