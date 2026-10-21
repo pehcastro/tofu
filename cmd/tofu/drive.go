@@ -763,7 +763,7 @@ func printDriveSettings(out io.Writer, dir, named string) {
 		_, _ = fmt.Fprintf(out, "settings: unreadable, so every setting is its declared default: %v\n", err)
 		return
 	}
-	printSettingsList(out, store)
+	printSettingsList(out, store, dir)
 }
 
 func driveFail(errOut io.Writer, err error) int {

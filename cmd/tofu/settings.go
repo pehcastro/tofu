@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/boardy"
 	"tofu/internal/host"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/sys"
@@ -87,16 +88,18 @@ func settingsVerb(args []string, out, errOut io.Writer) int {
 	}
 	if len(args) == 0 {
 		report := settingsReport{Global: store.Path(settingspkg.Global), Project: store.Path(settingspkg.Project)}
+		var why []string
 		for _, spec := range store.Table() {
-			report.Settings = append(report.Settings, resolvedSetting(store, spec))
+			setting, because := resolvedSetting(store, spec, dir)
+			report.Settings, why = append(report.Settings, setting), append(why, because)
 		}
 		return show(out, o.asJSON, cli.Envelope{Verb: o.verb, OK: true, At: time.Now(), Data: report},
-			func(page cli.Page) []string { return settingsPage(page, report) })
+			func(page cli.Page) []string { return settingsPage(page, report, why) })
 	}
 	switch args[0] {
 	case "get":
 		o.verb, o.usageLine = "settings get", settingsGetUsage
-		return settingsGetVerb(o, args[1:], store)
+		return settingsGetVerb(o, args[1:], store, dir)
 	case "set":
 		o.verb, o.usageLine = "settings set", settingsSetUsage
 		return settingsSetVerb(o, args[1:], store)
@@ -104,19 +107,37 @@ func settingsVerb(args []string, out, errOut io.Writer) int {
 	return o.usage(fmt.Errorf("unknown subcommand %q", args[0]))
 }
 
-func printSettingsList(out io.Writer, store *settingspkg.Store) {
+func printSettingsList(out io.Writer, store *settingspkg.Store, dir string) {
 	widest, category := 0, 0
 	for _, spec := range store.Table() {
 		widest, category = max(widest, len(spec.Key)), max(category, len(spec.Category))
 	}
 	for _, spec := range store.Table() {
-		scope, fromFile := store.Source(spec.Key)
-		source := "default"
-		if fromFile {
-			source = scope.String() + " " + store.Path(scope)
+		setting, because := resolvedSetting(store, spec, dir)
+		source := setting.Source
+		if scope, fromFile := store.Source(spec.Key); fromFile {
+			source += " " + store.Path(scope)
 		}
-		_, _ = fmt.Fprintf(out, "%-*s %-*s %-6v %s\n", category, spec.Category, widest, spec.Key, settingOf(store, spec), source)
+		_, _ = fmt.Fprintf(out, "%-*s %-*s %-6v %s\n", category, spec.Category, widest, spec.Key, setting.Value, joinedWhy(source, because))
 	}
+}
+
+func joinedWhy(source, because string) string {
+	if because == "" {
+		return source
+	}
+	return source + ", " + because
+}
+
+func managementInForce(store *settingspkg.Store, dir string) (string, string) {
+	_, set := store.Source(boardy.ManagementSetting)
+	switch {
+	case !projectHasBoard(dir):
+		return string(boardy.ManagementOff), "off until the project has a board: tofu boardy init"
+	case boardManaged(dir) && !set:
+		return string(boardy.ManagementBoardy), "on because the project has a board"
+	}
+	return store.Text(boardy.ManagementSetting), ""
 }
 
 func settingOf(store *settingspkg.Store, spec settingspkg.Spec) any {
@@ -130,12 +151,16 @@ func settingOf(store *settingspkg.Store, spec settingspkg.Spec) any {
 	}
 }
 
-func resolvedSetting(store *settingspkg.Store, spec settingspkg.Spec) settingValue {
+func resolvedSetting(store *settingspkg.Store, spec settingspkg.Spec, dir string) (settingValue, string) {
 	source := "default"
 	if scope, fromFile := store.Source(spec.Key); fromFile {
 		source = scope.String()
 	}
-	row := settingValue{Key: spec.Key, Category: spec.Category, Value: settingOf(store, spec), Source: source,
+	value, because := settingOf(store, spec), ""
+	if spec.Key == boardy.ManagementSetting {
+		value, because = managementInForce(store, dir)
+	}
+	row := settingValue{Key: spec.Key, Category: spec.Category, Value: value, Source: source,
 		Label: spec.Label, Description: spec.Description, Kind: host.SettingText, Unit: spec.Unit, Restart: spec.Restart}
 	switch {
 	case spec.Kind == settingspkg.Bool:
@@ -152,14 +177,14 @@ func resolvedSetting(store *settingspkg.Store, spec settingspkg.Spec) settingVal
 	case spec.Choices != nil:
 		row.Kind, row.Choices = host.SettingChoice, spec.Choices
 	}
-	return row
+	return row, because
 }
 
-func settingsPage(page cli.Page, report settingsReport) []string {
+func settingsPage(page cli.Page, report settingsReport, why []string) []string {
 	rows := make([]cli.Row, len(report.Settings))
 	set := 0
 	for i, setting := range report.Settings {
-		rows[i] = cli.Row{Cells: []string{setting.Key, cmp.Or(fmt.Sprint(setting.Value), "empty"), setting.Source}}
+		rows[i] = cli.Row{Cells: []string{setting.Key, cmp.Or(fmt.Sprint(setting.Value), "empty"), joinedWhy(setting.Source, why[i])}}
 		if setting.Source != "default" {
 			rows[i].Mark = cli.Active
 			set++
@@ -179,7 +204,7 @@ func settingsPage(page cli.Page, report settingsReport) []string {
 	return append(append(lines, ""), cli.Indent(page.Hint("tofu docs settings"))...)
 }
 
-func settingsGetVerb(o verbOutput, args []string, store *settingspkg.Store) int {
+func settingsGetVerb(o verbOutput, args []string, store *settingspkg.Store, dir string) int {
 	if len(args) != 1 {
 		return o.usage(errors.New("wants one key"))
 	}
@@ -187,7 +212,7 @@ func settingsGetVerb(o verbOutput, args []string, store *settingspkg.Store) int 
 	if !known {
 		return o.usage(fmt.Errorf("%q is not a declared setting", args[0]))
 	}
-	setting := resolvedSetting(store, spec)
+	setting, _ := resolvedSetting(store, spec, dir)
 	return show(o.out, o.asJSON, cli.Envelope{Verb: o.verb, OK: true, At: time.Now(), Data: setting},
 		func(cli.Page) []string { return []string{fmt.Sprint(setting.Value)} })
 }
