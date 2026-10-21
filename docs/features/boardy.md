@@ -188,6 +188,7 @@ tofu boardy manager add <lead session id>
 | `ticket_move` | every agent | an agent moves its own ticket from doing to review; a manager moves any ticket |
 | `ticket_create` | managers | creates a numbered ticket, or a sub-ticket with `parent` |
 | `ticket_assign` | managers | assigns a ticket |
+| `ticket_list` | managers | lists a board's tickets by status, oldest first with the time since each last changed, up to ten and how many more |
 
 With the setting `off`, the default, nothing changes: no board file is
 written, no board rule reaches a prompt, and a spawn's owns are the paths

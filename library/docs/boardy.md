@@ -60,7 +60,7 @@ subcommand takes `--json`. Sub-tickets, `new --parent DEMO-1`, are in
 
 With `projectManagement` set to `boardy`, every agent gets `ticket_read`,
 `ticket_log`, `ticket_ask`, `ticket_request` and `ticket_move`; a session
-that manages a board also gets `ticket_create` and `ticket_assign`. An
+that manages a board also gets `ticket_create`, `ticket_assign` and `ticket_list`. An
 agent's `ticket_move` offers only review, and only for its own ticket.
 
 A spawn names a ticket by id. Its owns become the sub-agent's paths, the

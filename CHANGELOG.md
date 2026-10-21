@@ -10,6 +10,17 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc12-fix5 - 2026-10-21
+
+### Added
+
+- A lead that manages a board lists its tickets with `ticket_list`, by status, oldest first with the time since each last changed, up to ten and how many more; the board rule names it instead of a shell command.
+
+### Fixed
+
+- `tofu settings` and the `tofu drive` header print projectManagement as it is in force: on because the project has a board, or off until it has one, instead of off while the board rules were on.
+- A code block still streaming draws plain in the theme's text colour and highlights when its closing fence arrives, and the finished part of a reply is drawn once and appended: a frame inside a long code block takes about 2 ms where it took 11.
+
 ## 0.5.15-rc12-fix4 - 2026-10-21
 
 ### Fixed

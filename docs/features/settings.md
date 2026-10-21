@@ -74,7 +74,7 @@ Turn
     verifySubAgents         true                             default
     agentSources            tofu,agents,claude               default
 Projects
-    projectManagement       off                              default
+    projectManagement       off                              default, off until the project has a board: tofu boardy init
     boardFlow               jira                             default
     scratchCleanupDays      7                                default
     scratchMaxGB            50                               default

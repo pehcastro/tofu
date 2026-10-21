@@ -22,7 +22,8 @@ number to fix each.
 
 **The chat is for you, the tabs are for the detail.** Tool calls stay out of
 the chat by default, so what you read is the lead's answer, and every call is
-one tab away.
+one tab away. An answer streams without stutter: a code block draws plain
+while it is typed and gets its colours when its closing fence arrives.
 
 **You never wait on the model to type.** A message sent mid-turn reaches the
 model at its next step.
