@@ -34,6 +34,8 @@ type resumedLead struct {
 	origins map[string]string
 	rows    []SubAgentRow
 	said    []recordedMessage
+	loose   []session.Attachment
+	images  map[string][]session.Attachment
 	runs    map[string]session.AgentRun
 	worked  map[string][]session.Event
 	turn    string
@@ -68,7 +70,7 @@ func resumedChat(carry Carry, dir string) []Event {
 		keys = &loaded
 	}
 	mask := keys.Redact
-	lead := &resumedLead{calls: map[string]*recordedCall{}, origins: map[string]string{}, worked: map[string][]session.Event{}, runs: map[string]session.AgentRun{}}
+	lead := &resumedLead{calls: map[string]*recordedCall{}, origins: map[string]string{}, worked: map[string][]session.Event{}, runs: map[string]session.AgentRun{}, images: map[string][]session.Attachment{}}
 	lead.watch = &watcher{emit: func(event Event) {
 		event.Turn = lead.turn
 		chat = append(chat, redacted(event, mask))
@@ -93,7 +95,11 @@ func resumedChat(carry Carry, dir string) []Event {
 		case llm.RoleUser:
 			task := carry.taskIn(message.Content)
 			if left, drew := lead.reportsIn(task); !drew {
-				lead.watch.emit(Event{Kind: EventTask, Text: task, Origin: lead.originOf(message.Content)})
+				var images []MessageImage
+				if said != nil && store != nil {
+					images = shownAttached(task, lead.images[said.ID], store)
+				}
+				lead.watch.emit(Event{Kind: EventTask, Text: task, Origin: lead.originOf(message.Content), Images: images})
 			} else if left != "" && lead.typed(message.Content) {
 				lead.watch.emit(Event{Kind: EventTask, Text: left, Origin: Origin{Kind: OriginPerson}})
 			}
@@ -140,6 +146,13 @@ func (l *resumedLead) note(event session.Event) {
 		}
 		return
 	}
+	if event.Kind == session.EventAttachment {
+		var attached session.Attachment
+		if json.Unmarshal(event.Body, &attached) == nil {
+			l.loose = append(l.loose, attached)
+		}
+		return
+	}
 	if event.Agent != "" {
 		if event.Kind == session.EventToolCall || event.Kind == session.EventToolResult {
 			l.worked[event.Agent] = append(l.worked[event.Agent], event)
@@ -153,6 +166,7 @@ func (l *resumedLead) note(event session.Event) {
 		}
 		if message.Role == session.RoleUser {
 			l.origins[message.Content] = message.Origin
+			l.images[event.ID], l.loose = l.loose, nil
 		}
 		l.said = append(l.said, recordedMessage{logged: event, body: message})
 		return

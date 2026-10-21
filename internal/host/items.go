@@ -117,7 +117,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 	switch event.Kind {
 	case EventTurnStarted:
 		s.turn, s.task, s.began, s.status = event.ID, event.Text, now, StatusFailed
-		return append(out, kept("turn.started", &TurnStarted{Identity: s.identity("", s.turn), Task: event.Text, Origin: event.Origin, StartedAt: now}))
+		return append(out, kept("turn.started", &TurnStarted{Identity: s.identity("", s.turn), Task: event.Text, Origin: event.Origin, StartedAt: now, Images: event.Images}))
 	case EventTurnEnded:
 		s.unlogged = nil
 		return append(out, kept("turn.completed", &TurnCompleted{Identity: s.identity("", s.turn), Status: s.status, StartedAt: s.began, WorkedForMs: now.Sub(s.began).Milliseconds()}))
@@ -140,7 +140,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 	case EventTask:
 		id.Item = s.mint("task")
 		s.awaitLog(id.Item, session.RoleUser, event.Text)
-		return append(out, notify("message.user", &UserMessage{Identity: id, Text: event.Text, Origin: event.Origin}))
+		return append(out, notify("message.user", &UserMessage{Identity: id, Text: event.Text, Origin: event.Origin, Images: event.Images}))
 	case EventStreamReset:
 		if event.Agent != "" || s.message == "" {
 			return out

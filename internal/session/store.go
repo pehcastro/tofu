@@ -76,6 +76,10 @@ func (s *Store) AttachmentDir(id string) string {
 
 func AttachmentPath(id, name string) string { return attachmentsName + "/" + id + "/" + name }
 
+func (s *Store) AttachmentFile(recorded string) string {
+	return filepath.Join(filepath.Dir(s.dir), filepath.FromSlash(recorded))
+}
+
 type Shape string
 
 const (

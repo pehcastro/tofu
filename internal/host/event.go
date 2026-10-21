@@ -86,6 +86,7 @@ type Event struct {
 	Accepts   []ApprovalDecision
 	Scoped    *MemoryScoped
 	Account   *TurnAccount
+	Images    []MessageImage
 	from      *Host
 }
 

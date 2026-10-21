@@ -62,6 +62,7 @@ type Attachment struct {
 	File   string `json:"file"`
 	Bytes  int    `json:"bytes"`
 	Format string `json:"format"`
+	N      int    `json:"n,omitempty"`
 }
 
 type TurnStart struct {

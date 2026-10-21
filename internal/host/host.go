@@ -141,8 +141,11 @@ type Host struct {
 }
 
 type pendingImage struct {
-	Index int
-	Path  string
+	Index    int
+	Path     string
+	Bytes    int
+	Format   string
+	Recorded bool
 }
 
 func New(cfg Config) (*Host, []string) {
@@ -290,11 +293,13 @@ func (h *Host) begin(pick Pick, task string, origin Origin) {
 	turnOver := make(chan struct{})
 	h.running, h.stopped, h.cancelled, h.stopBy, h.cancel, h.turn, h.turnOver = true, false, false, "", cancel, turn.NewID(h.now()), turnOver
 	live := Live{Turn: h.turn, Steering: h.steering.ready, LeadStop: h.stopLead, Answers: h.answers, Origin: origin}
+	h.recordUnrecorded()
+	images := shownPending(task, h.pending)
 	safe.Go(h.report, "turn", func() {
 		defer close(turnOver)
 		out := h.emitter()
 		live.Emit = out.emit
-		out.emit(Event{Kind: EventTurnStarted, ID: live.Turn, Text: task, Origin: origin})
+		out.emit(Event{Kind: EventTurnStarted, ID: live.Turn, Text: task, Origin: origin, Images: images})
 		crashed := ""
 		_ = safe.Call(func(p safe.Panic) {
 			crashed = p.Saved(h.stateDir())
@@ -803,10 +808,31 @@ func (h *Host) Attached(index int, name string, bytes int, format string) {
 		return
 	}
 	id := h.pendingID()
-	_ = store.AppendEvent(id, session.EventAttachment, session.Attachment{File: session.AttachmentPath(id, name), Bytes: bytes, Format: format})
+	image := pendingImage{Index: index, Path: filepath.Join(store.AttachmentDir(id), name), Bytes: bytes, Format: format}
 	h.mu.Lock()
-	h.pending = append(h.pending, pendingImage{Index: index, Path: filepath.Join(store.AttachmentDir(id), name)})
+	image.Recorded = h.release != nil
+	h.pending = append(h.pending, image)
 	h.mu.Unlock()
+	if image.Recorded {
+		recordAttached(store, id, image)
+	}
+}
+
+func recordAttached(store *session.Store, id string, image pendingImage) {
+	_ = store.AppendEvent(id, session.EventAttachment, session.Attachment{File: session.AttachmentPath(id, filepath.Base(image.Path)), Bytes: image.Bytes, Format: image.Format, N: image.Index})
+}
+
+func (h *Host) recordUnrecorded() {
+	store, err := session.OpenIn(h.dir)
+	if err != nil {
+		return
+	}
+	for i, image := range h.pending {
+		if !image.Recorded {
+			recordAttached(store, h.id, image)
+			h.pending[i].Recorded = true
+		}
+	}
 }
 
 func (h *Host) takePending(task string) []pendingImage {
@@ -834,6 +860,46 @@ func (h *Host) takePendingImages(task string) ([]llm.Image, error) {
 		images = append(images, llm.Image{MediaType: imageMediaType(image.Path), Data: data})
 	}
 	return images, nil
+}
+
+func shownPending(task string, pending []pendingImage) []MessageImage {
+	var shown []MessageImage
+	for _, image := range pending {
+		if strings.Contains(task, ImageToken(image.Index)) {
+			shown = append(shown, MessageImage{N: image.Index, Path: image.Path, Mime: imageMediaType(image.Path)})
+		}
+	}
+	return shown
+}
+
+func shownAttached(text string, attached []session.Attachment, store *session.Store) []MessageImage {
+	var shown []MessageImage
+	for k, n := range imageNumbers(text) {
+		at := slices.IndexFunc(attached, func(image session.Attachment) bool { return image.N == n })
+		if at < 0 && k < len(attached) && attached[k].N == 0 {
+			at = k
+		}
+		if at >= 0 {
+			path := store.AttachmentFile(attached[at].File)
+			shown = append(shown, MessageImage{N: n, Path: path, Mime: imageMediaType(path)})
+		}
+	}
+	return shown
+}
+
+func imageNumbers(text string) []int {
+	var numbers []int
+	for {
+		_, after, found := strings.Cut(text, ImageTokenHead)
+		if !found {
+			return numbers
+		}
+		token, rest, _ := strings.Cut(after, "]")
+		if n, err := strconv.Atoi(token); err == nil {
+			numbers = append(numbers, n)
+		}
+		text = rest
+	}
 }
 
 func imageMediaType(name string) string {

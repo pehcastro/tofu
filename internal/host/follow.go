@@ -359,7 +359,7 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 		h.mu.Lock()
 		h.pending = append(h.pending, ask.Images...)
 		h.mu.Unlock()
-		h.emitter().emit(Event{Kind: EventTask, Text: ask.Text, Origin: Origin{Kind: OriginPerson}})
+		h.emitter().emit(Event{Kind: EventTask, Text: ask.Text, Origin: Origin{Kind: OriginPerson}, Images: shownPending(ask.Text, ask.Images)})
 		reply.OK = h.Send(pick, ask.Text)
 	case followStop:
 		h.Stop(ask.Stop)

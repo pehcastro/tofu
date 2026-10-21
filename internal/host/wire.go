@@ -241,17 +241,25 @@ type Origin struct {
 	Source   string     `json:"source,omitempty"`
 }
 
+type MessageImage struct {
+	N    int    `json:"n"`
+	Path string `json:"path"`
+	Mime string `json:"mime"`
+}
+
 type UserMessage struct {
 	Identity
-	Text   string `json:"text"`
-	Origin Origin `json:"origin"`
+	Text   string         `json:"text"`
+	Origin Origin         `json:"origin"`
+	Images []MessageImage `json:"images,omitempty"`
 }
 
 type TurnStarted struct {
 	Identity
-	Task      string    `json:"task"`
-	Origin    Origin    `json:"origin"`
-	StartedAt time.Time `json:"startedAt"`
+	Task      string         `json:"task"`
+	Origin    Origin         `json:"origin"`
+	StartedAt time.Time      `json:"startedAt"`
+	Images    []MessageImage `json:"images,omitempty"`
 }
 
 type TurnAccount struct {
