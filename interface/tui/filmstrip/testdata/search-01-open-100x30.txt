@@ -22,7 +22,7 @@
                   1 of 8 results                                                    
                                                                                     
 
-  ⠋ waiting on 1 sub-agent  |  0s  [request#9d4f10]
+  ⠋ lead idle, free to talk  |  1 sub-agent running  |  0s  
 
                                                                                                     
   ▯ Ask tofu to build, inspect, or delegate                                                         

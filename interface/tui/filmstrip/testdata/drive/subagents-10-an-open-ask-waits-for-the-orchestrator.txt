@@ -1,7 +1,7 @@
 # moment 10: a sub-agent whose ask to the orchestrator is open past the watch time, lowered to 60 s here, counts as waiting for an answer and is never stalled.
 type subagents-10-an-open-ask-waits-for-the-orchestrator
 key enter
-wait waiting on 1 sub-agent
+wait 1 sub-agent running
 clock 30s
 absent waiting for an answer
 clock 5m

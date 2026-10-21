@@ -1,7 +1,7 @@
 # moment 6: a sub-agent with no new output, step or request for the watch time, ten minutes by default, counts as stalled; a call first seen open is not stalled for the minutes before tofu saw it, and a sub-agent that took a step is not stalled at all.
 type subagents-6-a-call-past-its-deadline-is-flagged
 key enter
-wait waiting on 2 sub-agents
+wait 2 sub-agents running
 absent stalled
 clock 9m
 absent stalled

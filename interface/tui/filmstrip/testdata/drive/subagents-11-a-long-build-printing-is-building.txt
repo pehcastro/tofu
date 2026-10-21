@@ -1,7 +1,7 @@
 # moment 11: a sub-agent whose bash runs a known build past the watch time, lowered to 60 s here, counts as building while its output moves, and stalled only once the output stops for the watch time. The shells screen shows each new line before the clock moves on, so the app has read it.
 type subagents-11-a-long-build-printing-is-building
 key enter
-wait waiting on 1 sub-agent
+wait 1 sub-agent running
 key alt+4
 wait build-1
 key down

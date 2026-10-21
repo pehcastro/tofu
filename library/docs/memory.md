@@ -62,8 +62,7 @@ Without `--scope` a `person` entry goes to `user-global`, the others to `project
 `--kind` a user scope takes `person` and a project scope `project`. `--said "<your words>"` keeps
 the words, `--replace <id>` writes a new version, `--dir <project>` names another project.
 
-In the app, `/remember <what>` keeps a `user-global` entry at once and
-prints the undo. A message you type is never offered as memory.
+In the app, `/remember <what>` keeps a `user-global` entry at once and prints the undo. A message you type is never offered as memory.
 
 The lead offers one rule with its `remember` tool, only with words you typed in this conversation:
 one line, at most 160 bytes, naming no one. Its card, `[&orchestrator] wants to add a
