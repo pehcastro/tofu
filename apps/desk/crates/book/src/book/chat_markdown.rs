@@ -1,4 +1,6 @@
-use desk_ui::components::chat::{Block, lead, markdown};
+use std::rc::Rc;
+
+use desk_ui::components::chat::{Block, OnLink, flowing_lead, lead, markdown};
 use desk_ui::theme::Theme;
 use gpui::{Div, div, prelude::*, px};
 
@@ -35,9 +37,13 @@ const TABLES: [(&str, &str); 6] = [
 
 const PROSE: &str = "A reply mixes prose, tables and code, one gap apart.\n\n```go\nfunc main() {\n\tfmt.Println(\"go\")\n}\n```\n\nThe fence above names its language top right.";
 
+const FLOW: &str = "The owner's flow, drawn as nodes.\n\n```flow\nflowchart TD\n    start([:play: Start]) --> license[:file: Get license]\n    subgraph attempt [Try/Catch]\n        research[:search: Research license]\n        review[:eye: Review manually]\n    end\n    license -->|Try| research\n    license -->|Catch| review\n    research --> eligible{:help: Eligible?}\n    review --> eligible\n    eligible -->|Yes| issue[Issue license]\n    eligible -->|No| refuse[Explain refusal]\n    issue --> approval[:mail: Send approval email]\n    refuse --> rejection[:mail: Send rejection email]\n    approval & rejection --> followup[:mail: Send follow-up email]\n    followup --> record[Record outcome] --> close[Close case] --> done([End])\n```";
+
 pub struct ChatMarkdownPage {
     tables: Vec<(&'static str, Vec<Block>)>,
     prose: Vec<Block>,
+    flow: Vec<Block>,
+    on_flow: OnLink,
 }
 
 impl ChatMarkdownPage {
@@ -48,6 +54,11 @@ impl ChatMarkdownPage {
                 .map(|(name, source)| (*name, markdown(source)))
                 .collect(),
             prose: markdown(PROSE),
+            flow: markdown(FLOW),
+            on_flow: Rc::new(|source, _, _| match draw_doc::flow(source) {
+                Ok(read) => eprintln!("book: open in draw {} nodes", read.graph.nodes.len()),
+                Err(why) => eprintln!("book: open in draw refused: {why}"),
+            }),
         }
     }
 
@@ -62,6 +73,18 @@ impl ChatMarkdownPage {
             .flex()
             .flex_col()
             .gap_4()
+            .child(block(
+                "Flow fence",
+                theme,
+                div().w(px(COLUMN)).min_w_0().child(flowing_lead(
+                    "flow",
+                    "now",
+                    &self.flow,
+                    &[],
+                    Some(self.on_flow.clone()),
+                    theme,
+                )),
+            ))
             .children(
                 self.tables
                     .iter()
