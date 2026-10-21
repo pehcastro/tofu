@@ -17,6 +17,7 @@ import (
 	"tofu/internal/learn/repeat"
 	"tofu/internal/learn/words"
 	"tofu/internal/llm"
+	"tofu/internal/memory"
 	"tofu/internal/safe"
 	"tofu/internal/session"
 	"tofu/internal/shell"
@@ -72,6 +73,7 @@ type Inbox struct {
 	queued   laterCompaction
 	said     map[string][]PersonSaid
 	repeats  *repeat.Judge
+	project  string
 	watched  map[string]bool
 	typed    <-chan string
 
@@ -449,12 +451,14 @@ func (b *Inbox) SaidInChain(store *session.Store, id string) ([]PersonSaid, erro
 			return nil, err
 		}
 		for _, message := range reading.Messages {
-			if task, typed := TaskIn(message.Content); typed && message.Role == session.RoleUser && SaidByThePerson(message.Origin) {
-				_, notes, _ := strings.Cut(message.Content, NotesAfterTheTask+repeatNoteOpening)
-				_, quoted, _ := strings.Cut(notes, repeatQuoteOpens)
-				quoted, _, _ = strings.Cut(quoted, `"`)
-				kept = append(kept, PersonSaid{Session: header.ID, At: message.TakenAt, Words: strings.TrimSpace(task), Quoted: quoted})
+			task, typed := TaskIn(message.Content)
+			if task = beforeCronFire(task); task == "" || !typed || message.Role != session.RoleUser || !SaidByThePerson(message.Origin) {
+				continue
 			}
+			_, notes, _ := strings.Cut(message.Content, NotesAfterTheTask+repeatNoteOpening)
+			_, quoted, _ := strings.Cut(notes, repeatQuoteOpens)
+			quoted, _, _ = strings.Cut(quoted, `"`)
+			kept = append(kept, PersonSaid{Session: header.ID, At: message.TakenAt, Words: task, Quoted: quoted})
 		}
 		if header.ID != newest.ID {
 			b.mu.Lock()
@@ -475,7 +479,7 @@ func (b *Inbox) judgeRepeats(config Config) {
 	if b.repeatsRead {
 		return
 	}
-	b.repeatsRead = true
+	b.repeatsRead, b.project = true, config.Project
 	places, err := config.ResolvedPlaces()
 	if err == nil {
 		b.repeats, err = repeat.New(config.Project, places.Log)
@@ -489,7 +493,7 @@ func (b *Inbox) repeatNote(store *session.Store, id, said string) string {
 	b.mu.Lock()
 	judge := b.repeats
 	b.mu.Unlock()
-	said = strings.TrimSpace(said)
+	said = beforeCronFire(said)
 	if judge == nil || store == nil || id == "" || said == "" {
 		return ""
 	}
@@ -507,9 +511,14 @@ func (b *Inbox) repeatNote(store *session.Store, id, said string) string {
 	}
 	picked := slices.DeleteFunc(words.Candidates(texts, said), func(i int) bool {
 		flattened := strings.Join(strings.Fields(texts[i]), " ")
-		return before[i].Session == id && before[i].Quoted != "" || slices.ContainsFunc(quoted, func(q string) bool { return strings.HasPrefix(flattened, q) })
+		return before[i].Session == id && before[i].Quoted != "" || slices.ContainsFunc(quoted, func(q string) bool { return strings.Contains(flattened, q) })
 	})
-	if len(picked) == 0 {
+	shelves, _ := memory.Open(b.project)
+	entries, stems := shelves.All(), words.Stems(said)
+	slices.SortStableFunc(entries, func(x, y memory.Entry) int {
+		return words.Shared(stems, words.Stems(y.Text), nil) - words.Shared(stems, words.Stems(x.Text), nil)
+	})
+	if len(picked) == 0 && len(entries) == 0 {
 		return ""
 	}
 	earlier := make([]repeat.Earlier, len(picked))
@@ -519,16 +528,35 @@ func (b *Inbox) repeatNote(store *session.Store, id, said string) string {
 			earlier[i].At = before[at].At.Format(time.RFC3339)
 		}
 	}
-	repeated, err := judge.Repeats(context.Background(), said, earlier)
-	if err != nil || repeated < 0 {
+	kept := make([]repeat.Kept, len(entries))
+	for i, entry := range entries {
+		kept[i] = repeat.Kept{ID: entry.ID, Text: entry.Text}
+	}
+	found, err := judge.Repeats(context.Background(), said, earlier, kept)
+	switch {
+	case err != nil:
+		return ""
+	case found.Kept >= 0:
+		entry := entries[found.Kept]
+		since := ""
+		if !entry.At.IsZero() {
+			since = " since " + entry.At.Local().Format("Mon 2 Jan 2006")
+		}
+		return NotesAfterTheTask + "memory already keeps what the person asks here, as " + entry.ID + since + `: "` + strings.TrimSuffix(entry.Text, ".") + `". It is already in force: answer plainly that we already do this, kept as ` + entry.ID + since +
+			". If they added a detail the entry lacks, say which, and keep only that detail with remember, replaces " + entry.ID + "; otherwise call no remember. Never answer from now on, which tells them it was not kept."
+	case found.Earlier < 0:
 		return ""
 	}
-	first := before[picked[repeated]]
+	first := before[picked[found.Earlier]]
 	when := "in an earlier message"
 	if first.At != nil {
 		when = "on " + first.At.Local().Format("Mon 2 Jan 15:04")
 	}
-	quote, cut := strings.Join(strings.Fields(first.Words), " "), ""
+	units := words.Units([]string{strings.Join(strings.Fields(first.Words), " ")})
+	closest := slices.MaxFunc(units, func(x, y words.Unit) int {
+		return words.Shared(stems, x.Stems, nil) - words.Shared(stems, y.Stems, nil)
+	})
+	quote, cut := closest.Text, ""
 	if len(quote) > words.RepeatQuoteBytes {
 		end := words.RepeatQuoteBytes
 		for !utf8.RuneStart(quote[end]) {
@@ -537,6 +565,14 @@ func (b *Inbox) repeatNote(store *session.Store, id, said string) string {
 		quote, cut = quote[:end], "..."
 	}
 	return NotesAfterTheTask + repeatNoteOpening + ", " + when + repeatQuoteOpens + quote + `"` + cut + ". Having to say it again makes it a standing instruction: unless it only fits this one task, keep it with remember, quoting their words from either message."
+}
+
+func beforeCronFire(said string) string {
+	marked := strings.Index(said, konst.CronPromptMark)
+	if marked < 0 {
+		return strings.TrimSpace(said)
+	}
+	return strings.TrimSpace(said[:strings.LastIndex(said[:marked], "\n")+1])
 }
 
 func (b *Inbox) Remembered(note string) {

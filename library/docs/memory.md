@@ -12,8 +12,11 @@ have to say them again. Each entry is one line, like `never run cargo
 with more than 2 jobs`, with your own words beside it. It opens each session as its own message
 after the system message, written fresh at every fork and every resume, so
 an entry added between sessions reaches the lead; every sub-agent gets the
-same view. When you repeat an instruction, Jev spots it and the lead is told
-to keep it with `remember`. Orders like "always" or "from now on" carry
+same view. When you repeat an instruction, Jev compares it with what memory
+already keeps and with your earlier messages. If an entry already covers it,
+the lead is told that entry's id and date and answers that it is already in
+force, keeping only a new detail you added, never "from now on"; if nothing
+covers it, the lead is told to keep it with `remember`. Orders like "always" or "from now on" carry
 across forks in their own section, and a cron prompt is never your words.
 
 A kind says what it is about: `person` (how you work), `project` (a fact

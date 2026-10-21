@@ -13,7 +13,7 @@ methods:
     cost: one jev request per ticket created without an epic, 263 ms in the driven run
   person_repeat:
     method: judged
-    why: jev catches 7 of 14 hand-labelled repeats with 2 false notes over 13 generations of one long session, against 1 of 14 with 3 false for the local stem matcher
+    why: jev catches 7 of 14 hand-labelled repeats with 2 false notes over 13 generations of one long session, against 1 of 14 with 3 false for the local stem matcher; the same request also asks whether a kept memory entry already covers the message, so the lead says it is in force rather than promising it again
     cost: about $0.0069 for 42 requests over that corpus, p50 276 ms, worst 412 ms
   browser_step:
     method: judged

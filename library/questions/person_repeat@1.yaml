@@ -11,16 +11,24 @@ notes: >-
   recency only, never by a match. a note goes to the lead when standing is at
   or above standing_at and the highest repeats answer is at or above
   repeats_at, naming that earlier message. both sit at the middle of the noul
-  range, uncalibrated priors.
+  range, uncalibrated priors. state.kept holds the entries memory already
+  keeps, each with its id, present and empty when memory keeps none, and
+  kept_rubric is asked once for each of them in that same request. when
+  standing passes and the highest kept answer is at or above kept_at, the note
+  names that entry instead of an earlier message and tells the lead it is
+  already in force. kept_at is the same uncalibrated prior.
 
 thresholds:
   standing_at: 0.5
   repeats_at: 0.5
+  kept_at: 0.5
 
 state:
   - said
   - earlier
   - rubric
+  - kept
+  - kept_rubric
 
 questions:
   standing:
@@ -61,3 +69,22 @@ questions:
         new task, reports a problem seen for the first time, answers, approves,
         or repeats a one-off request about a single moment such as a restart,
         a status check or a go-ahead.
+
+  kept:
+    type: noul
+    instructions: >-
+      A person working with a coding agent typed the message in said. One
+      entry in kept is a short rule the agent already keeps in memory and
+      reads at the start of every session. Decide whether said asks for the
+      behaviour that this rule already asks for, or corrects the agent for
+      not following it, so the rule already covers what said asks. Judge what
+      the two ask the agent to do, not the words they share.
+    criteria:
+      true: >-
+        said asks again for the lasting behaviour the kept rule already asks
+        for, wholly or in part, or complains that the agent did not follow
+        it.
+      false: >-
+        said asks for a different behaviour, or only gives a task, a question,
+        an answer, an approval or news, even where it shares a subject or
+        words with the kept rule.
