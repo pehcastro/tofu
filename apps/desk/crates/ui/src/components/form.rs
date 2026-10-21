@@ -2,7 +2,7 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use desk_motion::tokens::TOGGLE;
+use desk_motion::tokens::{PRESS, TOGGLE};
 use gpui::{
     App, Bounds, ClipboardItem, Context, Div, ElementId, ElementInputHandler, Entity,
     EntityInputHandler, FocusHandle, Focusable, FontWeight, HighlightStyle, KeyDownEvent,
@@ -18,7 +18,8 @@ use crate::components::scroll::scrollbar;
 use crate::components::size::{
     CARET_BLINK_MS, CARET_HEIGHT, CARET_WIDTH, DIM_TEXT, FIELD, FIELD_PAD, FIELD_WIDTH, FONT_BODY,
     FONT_SMALL, RADIUS_CHIP, RADIUS_ROW, SEGMENT_PAD_X, SEGMENT_PAD_Y, SEGMENTED_PAD,
-    SELECTION_FILL, SWITCH_HEIGHT, SWITCH_INSET, SWITCH_THUMB, SWITCH_WIDTH, T1, T3,
+    SELECTION_FILL, SWITCH_HEIGHT, SWITCH_INSET, SWITCH_THUMB, SWITCH_THUMB_HELD, SWITCH_WIDTH, T1,
+    T3,
 };
 use crate::live::ActiveTheme;
 use crate::theme::{ColorToken, Theme};
@@ -163,10 +164,12 @@ pub fn switch_bare(
     on: bool,
     theme: &Theme,
 ) -> Stateful<Div> {
-    let travel = if on {
-        SWITCH_WIDTH - SWITCH_THUMB - 2.0 * SWITCH_INSET
+    let stretch = SWITCH_THUMB_HELD - SWITCH_THUMB;
+    let (travel, held_travel) = if on {
+        let travel = SWITCH_WIDTH - SWITCH_THUMB - 2.0 * SWITCH_INSET;
+        (travel, travel - stretch)
     } else {
-        0.0
+        (0.0, 0.0)
     };
     focus_ring(div().id(id), theme)
         .group(SWITCH_GROUP)
@@ -201,9 +204,13 @@ pub fn switch_bare(
                     .id("thumb")
                     .ml(px(travel))
                     .size(px(SWITCH_THUMB))
+                    .cursor_pointer()
                     .rounded_full()
                     .bg(theme.color(ColorToken::SwitchThumb))
-                    .transitions(|transitions| transitions.ml(TOGGLE)),
+                    .transitions(|transitions| transitions.ml(TOGGLE).w(PRESS))
+                    .group_active(SWITCH_GROUP, move |style| {
+                        style.w(px(SWITCH_THUMB_HELD)).ml(px(held_travel))
+                    }),
             ),
         )
 }

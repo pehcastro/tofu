@@ -112,6 +112,7 @@ pub const PRESS_FILL: f32 = 256.0;
 pub const SWITCH_WIDTH: f32 = 30.0;
 pub const SWITCH_HEIGHT: f32 = 17.0;
 pub const SWITCH_THUMB: f32 = 13.0;
+pub const SWITCH_THUMB_HELD: f32 = 17.0;
 pub const SWITCH_INSET: f32 = 2.0;
 pub const SEGMENTED_PAD: f32 = 2.0;
 pub const SEGMENT_PAD_X: f32 = 10.0;

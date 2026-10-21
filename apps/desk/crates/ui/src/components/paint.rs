@@ -168,17 +168,25 @@ const PRESS_SINK: f32 = 1.0;
 const PRESS_SHADE: f32 = 0.16;
 
 pub fn pressed(element: Stateful<Div>, _backdrop: Rgba) -> Stateful<Div> {
+    pressed_by(element, None)
+}
+
+pub fn pressed_by(element: Stateful<Div>, group: Option<&'static str>) -> Stateful<Div> {
     let spring = || Motion::new(PRESS_MS).with_spring(PRESS);
     let shade = |alpha| tint(rgba(0x000000ff), alpha);
-    sinkable(element)
+    let held = move |style: gpui::StyleRefinement| {
+        style
+            .top(px(PRESS_SINK))
+            .inset_ring_color(shade(PRESS_SHADE))
+    };
+    let element = sinkable(element)
         .inset_ring(px(PRESS_FILL))
         .inset_ring_color(shade(0.0))
-        .transitions(|transitions| transitions.top(spring()).inset_ring_color(spring()))
-        .active(move |style| {
-            style
-                .top(px(PRESS_SINK))
-                .inset_ring_color(shade(PRESS_SHADE))
-        })
+        .transitions(|transitions| transitions.top(spring()).inset_ring_color(spring()));
+    match group {
+        Some(group) => element.group_active(group, held),
+        None => element.active(held),
+    }
 }
 
 fn sinkable(mut element: Stateful<Div>) -> Stateful<Div> {
