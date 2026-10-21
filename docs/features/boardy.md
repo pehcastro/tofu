@@ -169,6 +169,12 @@ tofu boardy manager add <lead session id>
   `ticket_ask` lands there as a question.
 - Two board rules, `board_lead` and `board_sub_agent`, reach the prompt only
   while the setting is `boardy`.
+- `board_lead` has the lead review every ticket in review each turn, oldest
+  first and whoever spawned it. It judges from the Log, the code and the
+  cited commit, asks for a live drive only for a line none of them proves,
+  and batches drives per wave. A ticket whose work is already in, that
+  repeats another or that a later one replaced moves to done or dropped
+  with a reason naming the commit or ticket that holds the work.
 
 | Tool | Who gets it | Does |
 |---|---|---|

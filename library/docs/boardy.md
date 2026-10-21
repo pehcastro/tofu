@@ -75,9 +75,10 @@ With no managers the lead manages the board as the lead, never as you, with
 `board_rule`, `epic`, `sprint`, `milestone`, `triage`, and `epic` and `sprint` on `ticket_create`.
 
 The rules `board_lead` and `board_sub_agent` ship off and switch on with
-the setting in a project that has a board. With it `off`, or with no board
-yet, no board rule reaches a prompt: `tofu rules list` says `off until the
-project has a board: tofu boardy init`.
+the setting in a project that has a board, and `tofu rules list` says
+`off until the project has a board: tofu boardy init` until then. With
+them on the lead closes every review oldest first from its Log, code and
+commit, drops or merges a dead ticket with a pointer, and batches drives.
 
 ## Check it
 
