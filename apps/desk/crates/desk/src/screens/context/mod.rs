@@ -52,6 +52,7 @@ pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView
             answer: Answer::default(),
             kept: BTreeMap::new(),
             open: None,
+            picked: None,
             switching: false,
             live: None,
             trail: Vec::new(),
@@ -68,6 +69,7 @@ pub struct ContextScreen {
     answer: Answer<ContextReport>,
     kept: BTreeMap<String, Read<ContextReport>>,
     open: Option<String>,
+    picked: Option<String>,
     switching: bool,
     live: Option<(i64, i64)>,
     trail: Vec<i64>,
@@ -122,17 +124,23 @@ impl ContextScreen {
     }
 
     fn saw(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
-        let open = self
+        let chat = self
             .source
             .as_ref()
-            .and_then(|source| source.chat.upgrade())
+            .and_then(|source| source.chat.upgrade());
+        let open = chat
+            .as_ref()
             .and_then(|chat| chat.read(cx).open_id().map(str::to_owned));
+        let asked = chat
+            .as_ref()
+            .and_then(|chat| chat.read(cx).asked_id().map(str::to_owned));
         let store = store.read(cx);
         let live = open
             .as_deref()
             .and_then(|id| store.sessions.get(id))
             .and_then(|session| session.context);
-        if store.context == self.answer && live == self.live && open == self.open {
+        let repicked = asked.is_some() && asked != self.picked;
+        if store.context == self.answer && live == self.live && open == self.open && !repicked {
             return;
         }
         if !self.answer.asking && store.context.asking {
@@ -165,6 +173,15 @@ impl ContextScreen {
             Some(_) => false,
             None => self.switching || self.open.is_some(),
         };
+        if let Some(id) = &asked
+            && repicked
+            && self.kept.contains_key(id)
+        {
+            eprintln!("desk: context shows kept read for {id}");
+        }
+        if repicked {
+            self.picked = asked;
+        }
         self.answer = store.context.clone();
         self.live = live;
         self.open = open;
@@ -214,7 +231,7 @@ impl ContextScreen {
     }
 
     fn shown(&self) -> Shown<'_> {
-        let kept = match &self.open {
+        let kept = match self.open.as_ref().or(self.picked.as_ref()) {
             Some(open) => self.kept.get(open),
             None if self.switching => None,
             None => self.answer.read.as_ref(),

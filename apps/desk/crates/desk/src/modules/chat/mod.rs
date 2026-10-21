@@ -721,6 +721,17 @@ impl Chat {
         }
     }
 
+    pub fn asked_id(&self) -> Option<&str> {
+        match &self.opening {
+            Opening::Open(id) => Some(id),
+            Opening::Pending => self
+                .history
+                .as_ref()
+                .map(|history| history.session.as_str()),
+            Opening::Closed | Opening::Held(_) => None,
+        }
+    }
+
     pub fn project(&self) -> &str {
         &self.project
     }
@@ -1376,16 +1387,39 @@ impl Chat {
     ) where
         R::Result: 'static,
     {
-        self.request_typed::<R>(params, cx, |chat, reply, cx| match reply {
-            Ok(result) => then(chat, result, cx),
+        self.request_typed::<R>(params, cx, |chat, reply, cx| {
+            chat.landed::<R>(reply, then, cx)
+        });
+    }
+
+    fn landed<R: Request>(
+        &mut self,
+        reply: Result<R::Result, BridgeError>,
+        then: impl FnOnce(&mut Self, R::Result, &mut Context<Self>),
+        cx: &mut Context<Self>,
+    ) {
+        match reply {
+            Ok(result) => then(self, result, cx),
             Err(error) if error.turn_running() => {
                 eprintln!("desk: {} waits, a turn is running: {error}", R::METHOD);
             }
             Err(error) => {
                 eprintln!("desk: {} failed: {error:?}", R::METHOD);
-                chat.fail(error.to_string(), cx);
+                self.fail(error.to_string(), cx);
             }
-        });
+        }
+    }
+
+    fn moved(&self, method: &str, sent: &str) -> bool {
+        let now = self.open_id();
+        if now == Some(sent) {
+            return false;
+        }
+        eprintln!(
+            "desk: dropped {method} for {sent}, now {}",
+            now.unwrap_or("none")
+        );
+        true
     }
 
     pub(crate) fn request<R: Request>(
@@ -1774,26 +1808,54 @@ impl Chat {
             let params = StatusListParams {
                 session: Some(open.clone()),
             };
-            self.call::<request::StatusList>(&params, cx, move |chat, list, cx| {
-                let listed = chat.store.update(cx, |store, cx| {
-                    cx.notify();
-                    store.statuses.listed(&open, &list.records)
-                });
-                match listed {
-                    Ok(changes) => changes
-                        .iter()
-                        .for_each(|(id, state)| eprintln!("desk: status {id} {}", state.word())),
-                    Err(error) => chat.fail(format!("status.list: {error}"), cx),
+            self.request_typed::<request::StatusList>(&params, cx, move |chat, reply, cx| {
+                if chat.moved(request::StatusList::METHOD, &open) {
+                    return;
                 }
+                chat.landed::<request::StatusList>(
+                    reply,
+                    |chat, list, cx| {
+                        let listed = chat.store.update(cx, |store, cx| {
+                            cx.notify();
+                            store.statuses.listed(&open, &list.records)
+                        });
+                        match listed {
+                            Ok(changes) => changes.iter().for_each(|(id, state)| {
+                                eprintln!("desk: status {id} {}", state.word())
+                            }),
+                            Err(error) => chat.fail(format!("status.list: {error}"), cx),
+                        }
+                    },
+                    cx,
+                );
             });
         }
         let open = SessionParams {
             session: self.open_id().map(str::to_owned),
         };
-        self.ask::<request::QueryContext>(&open, |store| &mut store.context, context_said, cx);
-        self.ask::<request::SessionInfo>(&open, |store| &mut store.info, info_said, cx);
-        if open.session.is_some() {
-            self.ask::<request::SessionTrace>(&open, |store| &mut store.trace, trace_said, cx);
+        let sent = open.session.clone();
+        self.ask::<request::QueryContext>(
+            &open,
+            sent.clone(),
+            |store| &mut store.context,
+            context_said,
+            cx,
+        );
+        self.ask::<request::SessionInfo>(
+            &open,
+            sent.clone(),
+            |store| &mut store.info,
+            info_said,
+            cx,
+        );
+        if sent.is_some() {
+            self.ask::<request::SessionTrace>(
+                &open,
+                sent,
+                |store| &mut store.trace,
+                trace_said,
+                cx,
+            );
         }
         let lineage: Vec<String> = self.store.read(cx).lineage.keys().cloned().collect();
         for session in lineage {
@@ -1802,6 +1864,7 @@ impl Chat {
             };
             self.ask::<request::SessionInfo>(
                 &params,
+                None,
                 move |store| store.lineage.entry(session.clone()).or_default(),
                 info_said,
                 cx,
@@ -1810,18 +1873,21 @@ impl Chat {
         self.ask_accounts(cx);
         self.ask::<request::QueryUsage>(
             &NoParams {},
+            None,
             |store| &mut store.usage,
             |usage| windows_said(&usage.providers),
             cx,
         );
         self.ask::<request::QueryAgents>(
             &NoParams {},
+            None,
             |store| &mut store.agents,
             |agents| agents_said(&agents.definitions),
             cx,
         );
         self.ask::<request::QueryRules>(
             &NoParams {},
+            None,
             |store| &mut store.rules,
             |rules| {
                 let ids: Vec<&str> = rules.rules.iter().map(|rule| rule.id.as_str()).collect();
@@ -1839,6 +1905,7 @@ impl Chat {
     fn ask<R: Request>(
         &mut self,
         params: &R::Params,
+        sent: Option<String>,
         slot: impl Fn(&mut Store) -> &mut Answer<R::Result> + 'static,
         said: fn(&R::Result) -> String,
         cx: &mut Context<Self>,
@@ -1858,10 +1925,18 @@ impl Chat {
             return;
         }
         eprintln!("desk: {} asked, stale {stale}", R::METHOD);
-        self.request::<R>(params, cx, move |chat, reply, cx| {
+        self.request_typed::<R>(params, cx, move |chat, reply, cx| {
+            if sent.is_some_and(|sent| chat.moved(R::METHOD, &sent)) {
+                chat.store.update(cx, |store, _| {
+                    let answer = slot(store);
+                    answer.asking = false;
+                    answer.again();
+                });
+                return chat.ask_due(cx);
+            }
             let answer = reply.map(Read::now).map_err(|reason| QueryError {
                 method: R::METHOD,
-                reason,
+                reason: reason.to_string(),
             });
             match &answer {
                 Ok(read) => eprintln!(
