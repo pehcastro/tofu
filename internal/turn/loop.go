@@ -44,6 +44,11 @@ const aMessageArrivedMidTurn = "the person wrote to you while you were working. 
 	"answer a question now when you can without new work, or say when you will answer it, and take in what they told you in their own terms. " +
 	"never call their message irrelevant or say it changes nothing."
 
+const (
+	sourceBlankAnswer     = "blank answer"
+	yourLastReplyWasEmpty = "[your last reply was empty: no text and no tool call. Answer the person, or call a tool]"
+)
+
 const theLeadSkippedTheLine = "the lead read a message from the person mid-turn and called a tool without a line to the person"
 
 const cronTaskSource = "cron "
@@ -856,13 +861,25 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 
 		if decision.Outcome == llm.OutcomeMessage && strings.TrimSpace(decision.Content) == "" {
+			if reasoned, _, _ := strings.Cut(strings.TrimSpace(decision.Thinking.Text), "\n"); reasoned != "" {
+				told := "the model ended its turn with nothing to say, so the turn ends here; its reasoning was: " + reasoned
+				stepRow.Warnings = append(stepRow.Warnings, told)
+				recorded.notice(told)
+				if config.Notify != nil {
+					config.Notify(told)
+				}
+				keep(stepRow)
+				return finish(OutcomeStopped), nil
+			}
 			if askedAgainAfterBlank {
 				keep(stepRow)
-				return fail(transport.Fail("turn.Run", transport.KindInvalidAnswer, nil,
-					"the model answered twice in a row with no text and no tool call"))
+				blank := transport.Fail("turn.Run", transport.KindInvalidAnswer, nil, "the model answered twice in a row with no text and no tool call")
+				blank.Code, blank.Said, blank.Account.Source = transport.EmptyAnswer, "twice in a row it sent no text, no tool call and no reasoning", decision.Build
+				return fail(blank)
 			}
 			askedAgainAfterBlank = true
 			stepRow.Warnings = append(stepRow.Warnings, "the model answered with no text and no tool call, so it was asked again")
+			messages = append(messages, inserted(sourceBlankAnswer, yourLastReplyWasEmpty, time.Time{}))
 			keep(stepRow)
 			continue
 		}

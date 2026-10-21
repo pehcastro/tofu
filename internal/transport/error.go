@@ -11,7 +11,10 @@ import (
 	"time"
 )
 
-const resetLayout = "Mon 15:04"
+const (
+	resetLayout = "Mon 15:04"
+	EmptyAnswer = "empty_answer"
+)
 
 type Kind int
 
@@ -174,7 +177,12 @@ func (e *Error) Sentence() string {
 		return who + " is at its usage limit (" + answered + "), which resets at " + e.ResetAt.Local().Format(resetLayout) + ". Wait until then, or " + pick + "."
 	case KindRequestTooLarge:
 		return who + " refused the request as too large (" + answered + "). Run /compact, or start a new session."
-	case KindBadRequest, KindInvalidAnswer, KindUnknown:
+	case KindInvalidAnswer:
+		if e.Code == EmptyAnswer {
+			return who + " answered with nothing (" + answered + "). Send it again, or " + pick + "."
+		}
+		return who + " answered with something tofu could not read (" + answered + "). Send it again, or " + pick + "."
+	case KindBadRequest, KindUnknown:
 		return who + " refused the request (" + answered + "). Send it again, or " + pick + "."
 	case KindTimeout, KindProvider:
 		return who + " failed on its side (" + answered + "). Send it again in a moment, or " + pick + "."

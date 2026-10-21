@@ -302,7 +302,7 @@ func readCassette(path string) (*cassette, error) {
 		}
 		decision := llm.Decision{Build: cassetteBuild, Outcome: llm.OutcomeMessage, Content: strings.Join(reply.Deltas, ""), FirstTokenMS: recordedFlight.Milliseconds(),
 			Usage: llm.Usage{InputTokens: reply.Usage.Input}, PromptAccounting: llm.PromptExcludesCacheReads,
-			CacheReadTokens: reply.Usage.CacheRead, CacheWriteTokens: reply.Usage.CacheWrite}
+			CacheReadTokens: reply.Usage.CacheRead, CacheWriteTokens: reply.Usage.CacheWrite, Thinking: llm.Thinking{Text: reply.Thinking}}
 		for index, one := range reply.Tools {
 			decision.Outcome = llm.OutcomeToolCalls
 			decision.ToolCalls = append(decision.ToolCalls, llm.ToolCall{
