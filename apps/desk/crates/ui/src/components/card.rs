@@ -172,6 +172,8 @@ pub fn caption(text: impl Into<SharedString>, theme: &Theme) -> Div {
         .line_height(relative(1.0))
         .letter_spacing(px(CAP2_TRACKING))
         .text_color(ink(theme, CAPTION_TEXT))
+        .min_w_0()
+        .truncate()
         .child(text.into().to_uppercase())
 }
 
