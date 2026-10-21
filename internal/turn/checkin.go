@@ -13,9 +13,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"tofu/internal/boardy"
 	"tofu/internal/konst"
+	"tofu/internal/llm"
 	"tofu/internal/safe"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
@@ -113,6 +115,7 @@ func (t *SpawnTool) watch(held *heldSubAgent, check *checkIn) func() {
 const (
 	sourceLeadCheckIn    = "lead check-in"
 	leadCheckInOpening   = "lead check-in: the last turn ended"
+	leadEndedOpening     = "you ended the turn"
 	leadBoardReadFile    = "lead-board.json"
 	leadNotifiedFile     = "lead-notified.json"
 	boardNotifiesOpening = "board hooks notify you: "
@@ -265,6 +268,27 @@ func (w leadWork) checkInDue(held bool, reviews []boardy.Front) bool {
 func (w leadWork) asks(opening, review string) string {
 	return fmt.Sprintf("%s with %d of %d sub-agents running, free todo %s and review %s: close each review, done or back to doing with the failing lines, "+
 		"and spawn free todo up to the limit in this reply, or say in one line why not.", opening, w.running, w.limit, listed(w.free), review)
+}
+
+func (w leadWork) quietBecause(messages []llm.Message, byThePerson bool, said string) string {
+	words := strings.FieldsFunc(said, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '-' })
+	ids := append(slices.Collect(maps.Keys(w.status)), w.free...)
+	if byThePerson && !slices.ContainsFunc(words, func(word string) bool { return slices.Contains(ids, strings.TrimRight(word, "-")) }) {
+		return "the person's message names none of the board work"
+	}
+	asked := w.asks(leadEndedOpening, listed(w.review))
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Origin.Source != sourceHandback || !strings.HasPrefix(messages[i].Content, leadEndedOpening+" with ") {
+			continue
+		}
+		if messages[i].Content == asked && slices.ContainsFunc(messages[i+1:], func(reply llm.Message) bool {
+			return reply.Role == llm.RoleAssistant && !llm.BlankText(reply.Content)
+		}) {
+			return "the running, free and review sets are as they were at its last ask, and the lead gave its reason then"
+		}
+		return ""
+	}
+	return ""
 }
 
 func (t *SpawnTool) boardReviews() []boardy.Front {

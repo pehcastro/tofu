@@ -966,10 +966,14 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			work, held := lead.work()
 			if held && work.open() && concluding == "" && !nudged {
 				nudged = true
-				stepRow.Warnings = append(stepRow.Warnings, "the lead ended with board work open, so it was asked to take it")
-				messages = append(messages, inserted(sourceHandback, work.asks("you ended the turn", listed(work.review)), time.Time{}))
-				keep(stepRow)
-				continue
+				if quiet := work.quietBecause(messages, SaidByThePerson(taskOrigin.Source), config.Task); quiet != "" {
+					recorded.notice("the board nudge stayed quiet: " + quiet)
+				} else {
+					stepRow.Warnings = append(stepRow.Warnings, "the lead ended with board work open, so it was asked to take it")
+					messages = append(messages, inserted(sourceHandback, work.asks(leadEndedOpening, listed(work.review)), time.Time{}))
+					keep(stepRow)
+					continue
+				}
 			}
 			keep(stepRow)
 			answered(decision.Content)
