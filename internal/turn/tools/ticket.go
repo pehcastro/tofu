@@ -1,12 +1,16 @@
 package tools
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
+	"time"
 
 	"tofu/internal/boardy"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/turn"
 )
@@ -21,6 +25,7 @@ const (
 	ticketCreate  ticketVerb = "ticket_create"
 	ticketMove    ticketVerb = "ticket_move"
 	ticketAssign  ticketVerb = "ticket_assign"
+	ticketList    ticketVerb = "ticket_list"
 )
 
 type ticketTool struct {
@@ -38,7 +43,7 @@ func TicketTools(board boardy.Managed, actor string) ([]turn.Tool, error) {
 	manager := slices.ContainsFunc(boards, func(b boardy.Board) bool { return board.Manages(b.Key, actor, "") == nil })
 	verbs := []ticketVerb{ticketRead, ticketLog, ticketAsk, ticketRequest, ticketMove}
 	if manager {
-		verbs = append(verbs, ticketCreate, ticketAssign)
+		verbs = append(verbs, ticketCreate, ticketAssign, ticketList)
 	}
 	list := make([]turn.Tool, len(verbs))
 	for i, verb := range verbs {
@@ -116,15 +121,18 @@ func (t ticketTool) Definition() llm.Tool {
 	case ticketAssign:
 		describe = "assigns a ticket on a board you manage to a session or the person, by name"
 		properties["to"], required = stringParam("who the ticket goes to"), append(required, "to")
+	case ticketList:
+		describe = fmt.Sprintf("lists the tickets in one status across the boards of this project, oldest first, with the time since each last changed; it shows %d and counts the rest", konst.LeadCheckInReviewsMost)
+		properties, required = map[string]any{"status": map[string]any{"type": "string", "enum": boardy.Statuses()}}, []string{"status"}
 	}
 	return llm.Tool{Name: string(t.verb), Description: describe, Parameters: map[string]any{"type": "object", "properties": properties, "required": required}}
 }
 
 func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 	var args struct {
-		ID, Text, Question, ELI5, Why, Board, Title, Problem, Scope, Acceptance, To, Reason, Parent, Epic, Sprint string
-		Owns, Options                                                                                             []string
-		Recommend                                                                                                 int
+		ID, Text, Question, ELI5, Why, Board, Title, Problem, Scope, Acceptance, To, Reason, Parent, Epic, Sprint, Status string
+		Owns, Options                                                                                                     []string
+		Recommend                                                                                                         int
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.verb, err)
@@ -168,6 +176,21 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 		case ticketAssign:
 			ticket, err = t.board.Assign(args.ID, args.To, t.actor)
 			said = ticket.ID + " is assigned to " + ticket.Assignee
+		case ticketList:
+			command = string(t.verb) + " " + args.Status
+			var status boardy.Status
+			if status, err = boardy.ParseStatus(args.Status); err != nil {
+				break
+			}
+			tickets := turn.BoardTickets(t.board.Store, status)
+			lines, more := turn.Waiting(tickets, time.Now())
+			for i := range lines {
+				lines[i] += " " + tickets[i].Title
+			}
+			said = fmt.Sprintf("%d %s: %s", len(tickets), status, cmp.Or(strings.Join(lines, "; "), "none"))
+			if more > 0 {
+				said += fmt.Sprintf("; and %d more", more)
+			}
 		}
 		return turn.Result{Content: said, Command: command}, err
 	})

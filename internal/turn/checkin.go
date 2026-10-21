@@ -267,28 +267,36 @@ func (t *SpawnTool) boardReviews() []boardy.Front {
 	if t == nil || t.base.Board == nil {
 		return nil
 	}
-	store := t.base.Board.Store
+	return BoardTickets(t.base.Board.Store, boardy.Review)
+}
+
+func BoardTickets(store boardy.Store, status boardy.Status) []boardy.Front {
 	boards, _ := store.Boards()
-	var reviews []boardy.Front
+	var tickets []boardy.Front
 	for _, fronts := range keptFronts(store, boards) {
 		for _, kept := range fronts {
-			if kept.Front.Status == boardy.Review {
-				reviews = append(reviews, kept.Front)
+			if kept.Front.Status == status {
+				tickets = append(tickets, kept.Front)
 			}
 		}
 	}
-	slices.SortFunc(reviews, func(a, b boardy.Front) int { return cmp.Or(a.Updated.Compare(b.Updated), cmp.Compare(a.ID, b.ID)) })
-	return reviews
+	slices.SortFunc(tickets, func(a, b boardy.Front) int { return cmp.Or(a.Updated.Compare(b.Updated), cmp.Compare(a.ID, b.ID)) })
+	return tickets
+}
+
+func Waiting(tickets []boardy.Front, now time.Time) (lines []string, more int) {
+	shown := tickets[:min(len(tickets), konst.LeadCheckInReviewsMost)]
+	lines = make([]string, len(shown))
+	for i, one := range shown {
+		lines[i] = fmt.Sprintf("%s (%s since last change)", one.ID, now.Sub(one.Updated).Round(time.Minute))
+	}
+	return lines, len(tickets) - len(shown)
 }
 
 func waitingReviews(reviews []boardy.Front, now time.Time) string {
-	shown := reviews[:min(len(reviews), konst.LeadCheckInReviewsMost)]
-	waiting := make([]string, len(shown))
-	for i, one := range shown {
-		waiting[i] = fmt.Sprintf("%s (%s since last change)", one.ID, now.Sub(one.Updated).Round(time.Minute))
-	}
+	waiting, more := Waiting(reviews, now)
 	said := listed(waiting)
-	if more := len(reviews) - len(shown); more > 0 {
+	if more > 0 {
 		said += fmt.Sprintf(", and %d more in review", more)
 	}
 	return said
