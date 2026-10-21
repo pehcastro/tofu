@@ -40,16 +40,42 @@ const andThisIsItsLastStep = ", and this is its last step: answer now from what 
 
 const theLastStepRunsNoTool = "this was the turn's last step, which runs no tool"
 
-const aMessageArrivedMidTurn = "the person wrote to you while you were working. before your next tool call, reply to them in one line: " +
-	"answer a question now when you can without new work, or say when you will answer it, and take in what they told you in their own terms. " +
+const aMessageArrivedMidTurn = "the person wrote to you while you were working. answer them first, in the reply you write now, before any tool call, board work or spawn: " +
+	"answer from what you know now, never wait on your own running work or a sub-agent, and never promise the answer for later. " +
+	"research it after that answer, in this turn. take in what they told you in their own terms. " +
 	"never call their message irrelevant or say it changes nothing."
+
+const theAnswerComesFirst = "the person's message is answered before any tool call"
+
+type openQuestion struct {
+	said      string
+	step      int
+	toolsHeld bool
+	endHeld   bool
+}
+
+func (q openQuestion) sendBack() string {
+	return "the person asked \"" + q.said + "\" at step " + strconv.Itoa(q.step) + " and has no answer yet: answer it now, from what you know now, " +
+		"before any tool call, board work or spawn. never wait on your own running work or a sub-agent; research goes after the answer, in this turn."
+}
+
+func laterPromises() []string {
+	return []string{
+		"next reply", "next message", "next turn", "next update", "i'll answer", "will answer", "answer once", "answer after", "answer when",
+		"i'll reply", "will reply", "get back to you", "come back to", "once this finishes", "once that finishes", "after this finishes",
+		"when this finishes", "in a moment", "shortly",
+	}
+}
+
+func unanswering(reply string) bool {
+	lower := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(reply), "’", "'"))
+	return lower == "" || slices.ContainsFunc(laterPromises(), func(promise string) bool { return strings.Contains(lower, promise) })
+}
 
 const (
 	sourceBlankAnswer     = "blank answer"
 	yourLastReplyWasEmpty = "[your last reply was empty: no text and no tool call. Answer the person, or call a tool]"
 )
-
-const theLeadSkippedTheLine = "the lead read a message from the person mid-turn and called a tool without a line to the person"
 
 const cronTaskSource = "cron "
 
@@ -718,6 +744,13 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	askedAgainAfterBlank, polled, nudged := false, false, false
 	steeredAt := 0
+	var asked *openQuestion
+	holdFor := func(stepRow *StepRow, why string) {
+		told := why + ", so it was sent back to answer the person's message from step " + strconv.Itoa(asked.step)
+		stepRow.Warnings = append(stepRow.Warnings, told)
+		recorded.notice(told)
+		messages = append(messages, inserted(sourceHandback, asked.sendBack(), time.Time{}))
+	}
 	noticeStep := config.Caps.MaxSteps - max(1, int(math.Ceil(float64(config.Caps.MaxSteps)*konst.TurnStepCapNoticeShare)))
 	for step := 1; ; step++ {
 		if err := ctx.Err(); err != nil {
@@ -727,6 +760,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			for _, steered := range config.Steering() {
 				if steeredAt != step {
 					messages = append(messages, inserted(sourceMidTurnNote, aMessageArrivedMidTurn, time.Time{}))
+					first, _, _ := strings.Cut(strings.TrimSpace(steered), "\n")
+					asked = &openQuestion{said: runeSafeHead(first, konst.LeadHandbackQuoteBytes), step: step}
+					recorded.notice("open question from the person at step " + strconv.Itoa(step) + ": " + asked.said)
 				}
 				steeredAt = step
 				said := inserted(sourceSteer, steered, time.Time{})
@@ -872,10 +908,6 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		answering = stepRow.id
 		measuredAgainst := budget.Bands
 		stepRow.Occupancy, stepRow.Bands = &asSent, &measuredAgainst
-		if steeredAt == step && decision.Outcome == llm.OutcomeToolCalls && strings.TrimSpace(decision.Content) == "" {
-			stepRow.Warnings = append(stepRow.Warnings, theLeadSkippedTheLine)
-		}
-
 		if decision.Outcome == llm.OutcomeMessage && strings.TrimSpace(decision.Content) == "" {
 			if reasoned, _, _ := strings.Cut(strings.TrimSpace(decision.Thinking.Text), "\n"); reasoned != "" {
 				told := "the model ended its turn with nothing to say, so the turn ends here; its reasoning was: " + reasoned
@@ -900,11 +932,21 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			continue
 		}
 		askedAgainAfterBlank = false
+		if asked != nil && !unanswering(decision.Content) {
+			recorded.notice("the person's question from step " + strconv.Itoa(asked.step) + " was answered at step " + strconv.Itoa(step))
+			asked = nil
+		}
 
 		switch decision.Outcome {
 		case llm.OutcomeMessage:
 			messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: decision.Content})
 			if keptGoingByStopHook(decision.Content) {
+				keep(stepRow)
+				continue
+			}
+			if asked != nil && !asked.endHeld {
+				asked.endHeld = true
+				holdFor(&stepRow, "the lead tried to end the turn before answering the person")
 				keep(stepRow)
 				continue
 			}
@@ -955,6 +997,13 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				refuse(&stepRow, decision.ToolCalls, theTurnEndsOnACleanReport)
 				keep(stepRow)
 				return endAt(OutcomeStopped, theTurnEndsOnACleanReport, messages), nil
+			}
+			if asked != nil && !asked.toolsHeld {
+				asked.toolsHeld = true
+				refuse(&stepRow, decision.ToolCalls, theAnswerComesFirst)
+				holdFor(&stepRow, "the lead called a tool before answering the person")
+				keep(stepRow)
+				continue
 			}
 			pending, batches := decision.ToolCalls, 0
 			codes := map[string]Registry{}
@@ -1147,9 +1196,13 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				return finish(OutcomeStopped), nil
 			}
 			if config.SpawnedFrom == "" && onlyStartedSpawns(stepTools, stepRow.ToolCalls) {
-				keep(stepRow)
-				answered(decision.Content)
-				return finish(OutcomeStopped), nil
+				if asked == nil || asked.endHeld {
+					keep(stepRow)
+					answered(decision.Content)
+					return finish(OutcomeStopped), nil
+				}
+				asked.endHeld = true
+				holdFor(&stepRow, "the lead tried to end the turn on a spawn before answering the person")
 			}
 			if config.SpawnedFrom != "" && slices.ContainsFunc(stepRow.ToolCalls, finishCalled) && !keptGoingByStopHook(decision.Content) {
 				keep(stepRow)
