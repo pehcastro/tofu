@@ -146,7 +146,8 @@ the lead.
 A sub-agent's one-hour cap counts only its own work: time it spends waiting
 on the lead or on you does not count. A crash inside a sub-agent ends only
 that sub-agent, as errored with the stack in its trace, and the lead and the
-app carry on. A crash in the interface turns mouse reporting and the
+app carry on; a crash in a parallel tool call or another background task of
+a turn ends only that task or that turn, its stack in a crash file. A crash in the interface turns mouse reporting and the
 full-screen mode off before it prints the error, so the terminal stays usable.
 
 ## Paths

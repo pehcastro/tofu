@@ -32,8 +32,8 @@ context. `tofu docs serve-methods` lists every request; this page is what serve 
 - `session.settings`: `asking` and the `pick` of wire, model and effort, to every client on `session.set`
 - `origin` on `turn.started` and every `message.user`: `{"kind":"person"}`, `{"kind":"cron","job":"c1",
   "schedule":"every 30m"}`, `{"kind":"agent","name":"research-1"}` or `{"kind":"tofu","source":"stop hook"}`:
-  you, a cron fire, a sub-agent's report, a line tofu added. Older sessions, and a cron fire that joined a
-  running turn, read as `person`
+  you, a cron fire, a sub-agent's report, a line tofu added; older sessions and a cron fire that joined a
+  running turn read as `person`. Both carry `images: [{n, path, mime}]`, `n` the `[Image #N]` in the text
 - `cron.updated` and `query.cron`: `live`, `goals` and each job's `id`, `schedule`, `prompt`, `paused`, `next`
   and `ended`; a fire that starts a turn shows in its `origin` alone, one joining a running turn sends a `note`
 - `tool.started`, `tool.completed` and `file.edit` (an append as an added hunk) by a sub-agent carry its

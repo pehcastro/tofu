@@ -93,6 +93,8 @@ started it.
   `shell.takeover` again for a fresh replay. `shell.started` and `session.state` say `terminal`,
   `holder` and `heldSince`.
 - `turn.account`: the account a turn spends, `picked` as it starts and `moved` off a spent one.
+- `turn.started` and every `message.user` carry the images pasted into the message as
+  `images: [{n, path, mime}]`, `n` being the `[Image #N]` in its text, live and in history.
 - `turn.steerQueued` when another window following the session steers it: the message waits on the
   holder's queue, `item` its id and `text` what was typed, until `turn.steered` says the lead read it.
 - `session.turns.updated`: the digest of a turn just ended, the row `session.turns` answers.

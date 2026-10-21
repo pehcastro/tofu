@@ -10,6 +10,13 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc12-fix6 - 2026-10-21
+
+### Fixed
+
+- An image pasted into any message of a running session is recorded; while a holder kept the session, every image after the first message was lost. Over `tofu serve`, a user message and `turn.started` carry their images as `images: [{n, path, mime}]`, `n` being the `[Image #N]` in the text.
+- A panic inside a parallel tool call, a typecheck watch, a test runner, an undo snapshot or another background task of a turn ends only that task or that turn, with its stack in a crash file or the trace, instead of ending tofu.
+
 ## 0.5.15-rc12-fix5 - 2026-10-21
 
 ### Added
