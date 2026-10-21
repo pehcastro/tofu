@@ -6,9 +6,9 @@ use std::time::Instant;
 
 use gpui::{
     AnyElement, App, AppContext, Bounds, ClipboardItem, CursorStyle, Element, ElementId,
-    FocusHandle, GlobalElementId, Hitbox, HitboxBehavior, Hsla, InspectorElementId, IntoElement,
-    KeyDownEvent, LayoutId, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
-    Point, SharedString, TextLayout, Window, fill, point, px,
+    FocusHandle, Global, GlobalElementId, Hitbox, HitboxBehavior, Hsla, InspectorElementId,
+    IntoElement, KeyDownEvent, LayoutId, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    Pixels, Point, SharedString, TextLayout, Window, fill, point, px,
 };
 
 pub struct Piece {
@@ -72,25 +72,43 @@ impl Piece {
     }
 
     fn word(&self, at: usize) -> Range<usize> {
-        let kind = |c: char| match c {
-            c if c.is_alphanumeric() || c == '_' => 0,
+        let wordy = |c: char| c.is_alphanumeric() || c == '_';
+        let text = &self.text;
+        let kind = |ix: usize, c: char| match c {
+            c if wordy(c) => 0,
+            '\'' | '\u{2019}'
+                if text
+                    .get(..ix)
+                    .and_then(|s| s.chars().next_back())
+                    .is_some_and(wordy)
+                    && text
+                        .get(ix + c.len_utf8()..)
+                        .and_then(|s| s.chars().next())
+                        .is_some_and(wordy) =>
+            {
+                0
+            }
             c if c.is_whitespace() => 1,
             _ => 2,
         };
         let (before, after) = self.text.split_at_checked(at).unwrap_or_default();
-        let Some(under) = after.chars().next().or_else(|| before.chars().next_back()) else {
+        let Some(under) = after
+            .chars()
+            .next()
+            .map(|c| kind(at, c))
+            .or_else(|| before.char_indices().next_back().map(|(ix, c)| kind(ix, c)))
+        else {
             return at..at;
         };
-        let same = |(_, c): &(usize, char)| kind(*c) == kind(under);
         let start = before
             .char_indices()
             .rev()
-            .take_while(same)
+            .take_while(|&(ix, c)| kind(ix, c) == under)
             .last()
             .map_or(at, |(ix, _)| ix);
         let end = after
             .char_indices()
-            .find(|found| !same(found))
+            .find(|&(ix, c)| kind(at + ix, c) != under)
             .map_or(self.text.len(), |(ix, _)| at + ix);
         start..end
     }
@@ -127,6 +145,11 @@ impl Piece {
         }
     }
 }
+
+#[derive(Default)]
+struct Kept(Option<(GlobalElementId, Rc<RefCell<Held>>)>);
+
+impl Global for Kept {}
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 struct Spot {
@@ -352,7 +375,11 @@ impl Element for Selectable {
         let hitbox = window.insert_hitbox(bounds, HitboxBehavior::Normal);
         self.child.prepaint(window, cx);
         let held = window.with_optional_element_state(id, |held, _| {
-            let held = held.flatten().unwrap_or_else(|| {
+            let kept = || {
+                let (at, held) = cx.try_global::<Kept>()?.0.as_ref()?;
+                (Some(at) == id).then(|| held.clone())
+            };
+            let held = held.flatten().or_else(kept).unwrap_or_else(|| {
                 Rc::new(RefCell::new(Held {
                     focus: cx.focus_handle(),
                     tail: Spot::default(),
@@ -364,6 +391,14 @@ impl Element for Selectable {
             (held.clone(), Some(held))
         });
         window.set_focus_handle(&held.borrow().focus, cx);
+        let picked = held.borrow().tail != held.borrow().head;
+        let stored = cx
+            .try_global::<Kept>()
+            .and_then(|kept| kept.0.as_ref())
+            .is_some_and(|(_, kept)| Rc::ptr_eq(kept, &held));
+        if let (true, false, Some(id)) = (picked, stored, id) {
+            cx.set_global(Kept(Some((id.clone(), held.clone()))));
+        }
         (hitbox, held)
     }
 
