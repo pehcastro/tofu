@@ -10,6 +10,7 @@ pub const RECENT_SPANS: Duration = Duration::from_secs(1);
 pub const PENDING_SPANS: usize = 65_536;
 pub const RECORDED_EVENTS: usize = 500_000;
 pub const BENCH_WARMUP_FRAMES: u32 = 30;
+pub const BENCH_SETTLE: Duration = Duration::from_secs(2);
 pub const OVERLAY_TOP_SPANS: usize = 8;
 pub const RECORD_MAX: Duration = Duration::from_secs(20);
 pub const RECORD_MAX_BYTES: usize = 2 * 1024 * 1024 * 1024;

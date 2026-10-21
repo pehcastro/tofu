@@ -7,8 +7,7 @@ use gpui::profiler::hang::{HangDetector, SerializedHangIncident};
 use gpui::{App, FrameEvent, FrameTiming, FrameTimingCollector, Global, KeystrokeEvent, Window};
 use serde::Serialize;
 
-use crate::bench::{BenchMark, BenchResult};
-use crate::frames::{FrameSummary, ms};
+use crate::frames::ms;
 use crate::limits::{
     HANG_CONTRIBUTORS, HANG_THRESHOLD, MEMORY_INTERVAL, POLL_INTERVAL, RECENT_FRAMES, RECENT_SPANS,
     RECORD_MAX,
@@ -18,8 +17,6 @@ use crate::record::{Input, InputKind, Recorder, Stop};
 use crate::span::{self, SpanRecord};
 use crate::trace::Recording;
 
-const MIB: f64 = 1024.0 * 1024.0;
-
 pub struct Profiler {
     startup: Instant,
     collector: FrameTimingCollector,
@@ -28,7 +25,6 @@ pub struct Profiler {
     pub(crate) recent_spans: VecDeque<SpanRecord>,
     pub(crate) memory: Option<MemorySample>,
     memory_at: Option<Instant>,
-    peak_working_set: usize,
     allocations_seen: usize,
     pub(crate) allocations_per_frame: f64,
     recording: Option<Recording>,
@@ -64,7 +60,6 @@ impl Profiler {
             recent_spans: VecDeque::new(),
             memory: None,
             memory_at: None,
-            peak_working_set: 0,
             allocations_seen: memory::allocations(),
             allocations_per_frame: 0.0,
             recording: trace_path.as_ref().map(|_| Recording::new()),
@@ -269,9 +264,6 @@ impl Profiler {
     fn sample_memory(&mut self, now: Instant) {
         self.memory = memory::sample();
         self.memory_at = Some(now);
-        if let Some(sample) = self.memory {
-            self.peak_working_set = self.peak_working_set.max(sample.working_set);
-        }
     }
 
     fn write_trace(&mut self) {
@@ -284,40 +276,6 @@ impl Profiler {
                 "tofu desk could not write its trace to {}: {error}",
                 path.display()
             );
-        }
-    }
-
-    pub(crate) fn mark(&mut self) -> BenchMark {
-        self.recording.get_or_insert_with(Recording::new);
-        self.retrace();
-        self.poll();
-        BenchMark {
-            frame: self
-                .recording
-                .as_ref()
-                .map_or(0, |recording| recording.frames.len()),
-            allocations: memory::allocations(),
-            started: Instant::now(),
-        }
-    }
-
-    pub(crate) fn bench_result(&mut self, scenario: String, mark: &BenchMark) -> BenchResult {
-        self.poll();
-        self.sample_memory(Instant::now());
-        let frames = FrameSummary::of(
-            self.recording
-                .iter()
-                .flat_map(|recording| recording.frames.get(mark.frame..).unwrap_or_default())
-                .map(FrameTiming::draw_duration),
-        );
-        let allocations = memory::allocations().saturating_sub(mark.allocations);
-        BenchResult {
-            scenario,
-            debug_assertions: cfg!(debug_assertions),
-            frames,
-            allocations_per_frame: allocations as f64 / frames.frames.max(1) as f64,
-            peak_working_set_mb: self.peak_working_set as f64 / MIB,
-            wall_ms: ms(mark.started.elapsed()),
         }
     }
 }

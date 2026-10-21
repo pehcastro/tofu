@@ -34,6 +34,7 @@ embed-resource = "3.0.11"
 
 [features]
 default = ["screen-work", "module-subagents", "module-file-edits", "module-shells", "screen-limits", "screen-classifier", "screen-library", "screen-context", "screen-session", "screen-forks", "screen-usage", "screen-boardy"]
+profiler = ["desk_perf/profiler"]
 screen-work = []
 screen-boardy = ["screen-work"]
 screen-settings = []

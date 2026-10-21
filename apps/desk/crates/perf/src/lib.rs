@@ -1,13 +1,10 @@
-#[cfg(feature = "profiler")]
 mod bench;
 mod capture;
 #[cfg(feature = "profiler")]
 mod cells;
-#[cfg(feature = "profiler")]
 mod frames;
 mod grab;
 pub mod limits;
-#[cfg(feature = "profiler")]
 mod memory;
 #[cfg(feature = "profiler")]
 mod overlay;
@@ -23,12 +20,29 @@ mod span;
 mod trace;
 
 #[cfg(feature = "profiler")]
+#[macro_export]
+macro_rules! profiled {
+    (on { $($on:tt)* } off { $($off:tt)* }) => { $($on)* };
+}
+
+#[cfg(not(feature = "profiler"))]
+#[macro_export]
+macro_rules! profiled {
+    (on { $($on:tt)* } off { $($off:tt)* }) => { $($off)* };
+}
+
+#[cfg(not(feature = "profiler"))]
+#[macro_export]
+macro_rules! span {
+    ($name:expr) => {
+        let _: &'static str = $name;
+    };
+}
+
 pub use bench::{BenchResult, run_bench};
 pub use capture::CaptureError;
-#[cfg(feature = "profiler")]
 pub use frames::FrameSummary;
 pub use grab::{GrabError, grab, grab_region};
-#[cfg(feature = "profiler")]
 pub use memory::{ALLOCATOR, CountingAllocator, MemorySample};
 #[cfg(feature = "profiler")]
 pub use overlay::overlay;

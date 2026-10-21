@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod bench;
 #[cfg(feature = "screen-work")]
 mod control;
 mod desk;
@@ -88,6 +89,7 @@ use std::process::ExitCode;
 use std::rc::Rc;
 use std::time::Instant;
 
+use bench::Scenario;
 use desk::{Desk, NoTofu, Open, Screen};
 use desk_core::first_run::FirstRun;
 use desk_ui::components::title_bar::focused_name;
@@ -131,8 +133,10 @@ fn open_dir(
     Err("--dir needs the editor: rebuild with --features module-editor".to_owned())
 }
 
-const USAGE: &str = "usage: desk [<folder>] | [--screen <name> [--board <ID>] [--file <path>] [--dir <path>]] | [--install-plugin <folder>]\n\
+const USAGE: &str = "usage: desk [<folder>] | [--screen <name> [--board <ID>] [--file <path>] [--dir <path>]] | [--install-plugin <folder>] | [--bench <scenario>]\n\
 --install-plugin installs the plugin in <folder> and opens Settings > Plugins on its consent sheet\n\
+--bench drives one scenario, prints its frame times as one JSON line and quits: editor-scroll boardy-list theme-switch\n\
+DESK_PROFILE=<path> writes a Chrome trace of the run to <path> when the desk quits\n\
 --file opens a file in the editor screen\n\
 --dir lists a folder in the editor screen's file tree\n\
 screens: work settings boardy accounts theme library classifier usage limits context session forks intro onboarding platforms\n\
@@ -157,6 +161,8 @@ const SCREENS: [&str; 16] = [
 ];
 
 const FIRST_RUN_VARIABLE: &str = "DESK_FIRST_RUN";
+const PROFILE_VARIABLE: &str = "DESK_PROFILE";
+const BENCH_REFUSED: u8 = 2;
 const TAB_WALK_LIMIT: usize = 512;
 const FOCUS_TRACE: &str = "DESK_FOCUS_TRACE";
 const NO_TOFU: &str = "no-tofu";
@@ -183,6 +189,18 @@ struct ScreenLaunch {
 enum Launch {
     Desk,
     Screen(ScreenLaunch),
+    Bench(Scenario, ScreenLaunch),
+}
+
+enum Refused {
+    Usage(String),
+    Bench(&'static str),
+}
+
+impl From<String> for Refused {
+    fn from(error: String) -> Self {
+        Refused::Usage(error)
+    }
 }
 
 macro_rules! gated {
@@ -227,8 +245,12 @@ fn screen(name: &str) -> Result<Open, String> {
     })
 }
 
-fn parse(args: &[String]) -> Result<Launch, String> {
+fn parse(args: &[String]) -> Result<Launch, Refused> {
     match args {
+        [flag, name] if flag == "--bench" => {
+            let scenario = Scenario::named(name).ok_or(Refused::Bench(bench::KNOWN))?;
+            Ok(Launch::Bench(scenario, scenario.launch()?))
+        }
         [] => Ok(Launch::Desk),
         [folder] if !folder.starts_with("--") => Ok(Launch::Desk),
         [flag, folder] if flag == "--install-plugin" => Ok(Launch::Screen(ScreenLaunch {
@@ -248,7 +270,7 @@ fn parse(args: &[String]) -> Result<Launch, String> {
                     [flag, path] if flag == "--dir" && name == "editor" && dir.is_none() => {
                         dir = Some(PathBuf::from(path))
                     }
-                    _ => return Err(USAGE.to_owned()),
+                    _ => return Err(Refused::Usage(USAGE.to_owned())),
                 }
             }
             let target = match (dir, file) {
@@ -262,7 +284,7 @@ fn parse(args: &[String]) -> Result<Launch, String> {
                 target,
             }))
         }
-        _ => Err(USAGE.to_owned()),
+        _ => Err(Refused::Usage(USAGE.to_owned())),
     }
 }
 
@@ -425,7 +447,7 @@ fn open_launch(launch: Launch, cx: &mut App) -> Result<WindowHandle<Desk>, Strin
             None,
             screen("work")?,
         ),
-        Launch::Screen(launch) => (
+        Launch::Screen(launch) | Launch::Bench(_, launch) => (
             format!("{} {}", desk::WINDOW_TITLE, launch.name),
             if launch.name == "chat" {
                 desk::desk_client()
@@ -468,18 +490,23 @@ fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
     let (launch, forced) = match parse(&args).and_then(|launch| Ok((launch, forced()?))) {
         Ok(parsed) => parsed,
-        Err(error) => {
+        Err(Refused::Usage(error)) => {
             eprintln!("{error}");
             return ExitCode::FAILURE;
+        }
+        Err(Refused::Bench(why)) => {
+            eprintln!("{why}");
+            return ExitCode::from(BENCH_REFUSED);
         }
     };
     if let Err(error) = desk_core::home::Home::find().and_then(|home| home.migrate()) {
         eprintln!("desk: home: {error}");
         return ExitCode::FAILURE;
     }
-    let explicit = match &launch {
-        Launch::Desk => None,
-        Launch::Screen(launch) => Some(launch.name.clone()),
+    let (explicit, scenario) = match &launch {
+        Launch::Desk => (None, None),
+        Launch::Screen(launch) => (Some(launch.name.clone()), None),
+        Launch::Bench(scenario, launch) => (Some(launch.name.clone()), Some(*scenario)),
     };
     let (told, heard) = flume::bounded(1);
     std::thread::spawn(move || {
@@ -525,6 +552,17 @@ fn main() -> ExitCode {
             let trace = env::var_os(FOCUS_TRACE).is_some();
             cx.observe_keystrokes(move |event, window, cx| walk_focus(event, trace, window, cx))
                 .detach();
+            if let Some(path) = env::var_os(PROFILE_VARIABLE) {
+                desk_perf::profiled! {
+                    on { desk_perf::Profiler::install(Some(PathBuf::from(path)), cx); }
+                    off {
+                        eprintln!(
+                            "desk: {PROFILE_VARIABLE} {} is not written: traces need the profiling build, --features desk/profiler",
+                            path.to_string_lossy()
+                        );
+                    }
+                }
+            }
             #[cfg(feature = "screen-work")]
             cx.on_app_quit(move |_| {
                 drop(server.take());
@@ -546,6 +584,9 @@ fn main() -> ExitCode {
                     return;
                 }
             };
+            if let Some(scenario) = scenario {
+                bench::start(scenario, opened, Rc::clone(&failure), cx);
+            }
             cx.spawn(async move |cx| {
                 let Ok(run) = heard.recv_async().await else {
                     return eprintln!("desk: first run never answered");
