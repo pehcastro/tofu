@@ -10,6 +10,13 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc12-fix4 - 2026-10-21
+
+### Fixed
+
+- The lead's board check-in lists every ticket in review on its boards, oldest first with the time since each last changed, up to ten and how many more; before, it listed only tickets its own sub-agents held, so reviews from earlier sessions were never shown. It adds no step to an ordinary turn.
+- `tofu boardy lint` names a live ticket assigned to an agent type that does not exist, since a spawn for it is refused.
+
 ## 0.5.15-rc12-fix3 - 2026-10-21
 
 ### Fixed

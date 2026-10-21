@@ -97,7 +97,7 @@ order, one line each. `held <path>` names the ticket holding a path, on any boar
 and the glob that matched, or says it is not held; a hook asks it before a
 write. `lint` reads every ticket on every
 board and exits 1 on a front matter error, a reference to a ticket no board
-holds, a blocked ticket with no reason, a counter behind its tickets, a
+holds, an assignee that is no agent type, a blocked ticket with no reason, a counter behind its tickets, a
 sub-ticket owning outside its parent, or two
 doing tickets whose owns overlap, naming both: `x/*.go` and `x/*_test.go`
 overlap, because both hold `x/a_test.go`.

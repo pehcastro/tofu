@@ -22,6 +22,8 @@ new` started at once get twenty different numbers.
 **Ownership is checked, not hoped for.** A ticket names the paths it owns.
 `tofu boardy lint` refuses two doing tickets whose owns overlap and names
 both, globs included: `x/*.go` and `x/*_test.go` both hold `x/a_test.go`.
+It also names a live ticket assigned to an agent type that does not exist,
+since a spawn for it is refused.
 A ticket holds its owns only while it is doing; review, todo and done
 tickets keep theirs as a record. An owns entry may be an absolute path in
 another repository, such as `F:/work/other-repo/**`.
@@ -170,7 +172,8 @@ tofu boardy manager add <lead session id>
 - Two board rules, `board_lead` and `board_sub_agent`, reach the prompt only
   while the setting is `boardy`.
 - `board_lead` has the lead review every ticket in review each turn, oldest
-  first and whoever spawned it. It judges from the Log, the code and the
+  first and whoever spawned it; its timed check-in lists them, up to ten,
+  with the time since each last changed. It judges from the Log, the code and the
   cited commit, asks for a live drive only for a line none of them proves,
   and batches drives per wave. A ticket whose work is already in, that
   repeats another or that a later one replaced moves to done or dropped
