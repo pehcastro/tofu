@@ -151,6 +151,13 @@ impl Held {
         self.tail = from;
         self.head = to;
     }
+
+    fn said(&self, pieces: &[Piece]) {
+        if self.tail != self.head {
+            let chars = selected(pieces, self.span()).chars().count();
+            eprintln!("desk: select: {chars} chars");
+        }
+    }
 }
 
 fn spot(pieces: &[Piece], position: Point<Pixels>) -> Option<Spot> {
@@ -371,6 +378,37 @@ impl Element for Selectable {
         cx: &mut App,
     ) {
         window.set_cursor_style(CursorStyle::IBeam, hitbox);
+        let view = window.current_view();
+        let (pieces, state) = (self.pieces.clone(), held.clone());
+        window.on_key_event(move |event: &KeyDownEvent, phase, _, cx| {
+            let keys = &event.keystroke;
+            if !phase.bubble() || !keys.modifiers.secondary() {
+                return;
+            }
+            let mut held = state.borrow_mut();
+            match keys.key.as_str() {
+                "c" if held.tail != held.head => {
+                    let text = selected(&pieces, held.span());
+                    eprintln!("desk: select: copied {} chars", text.chars().count());
+                    cx.write_to_clipboard(ClipboardItem::new_string(text));
+                }
+                "a" => {
+                    let last = pieces.len().saturating_sub(1);
+                    let end = pieces.last().map_or(0, |piece| piece.text.len());
+                    held.pick(
+                        Spot::default(),
+                        Spot {
+                            piece: last,
+                            at: end,
+                        },
+                    );
+                    held.said(&pieces);
+                    cx.notify(view);
+                }
+                _ => return,
+            }
+            cx.stop_propagation();
+        });
         self.child.paint(window, cx);
         let span = held.borrow().span();
         if span.0 != span.1 {
@@ -380,7 +418,6 @@ impl Element for Selectable {
                 }
             }
         }
-        let view = window.current_view();
         let (pieces, state, inside) = (self.pieces.clone(), held.clone(), hitbox.clone());
         window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
             if event.button != MouseButton::Left {
@@ -412,6 +449,9 @@ impl Element for Selectable {
                             _ => held.pick(Spot { at: 0, ..at }, Spot { at: whole, ..at }),
                         }
                         held.dragging = event.click_count <= 1;
+                        if !held.dragging {
+                            held.said(&pieces);
+                        }
                         held.focus.clone()
                     }
                     (false, false) if held.tail != held.head => {
@@ -423,6 +463,7 @@ impl Element for Selectable {
                 }
             };
             window.focus(&focus, cx);
+            window.prevent_default();
             cx.notify(view);
         });
         let (pieces, state) = (self.pieces.clone(), held.clone());
@@ -439,40 +480,13 @@ impl Element for Selectable {
                 cx.notify(view);
             }
         });
-        let state = held.clone();
-        window.on_mouse_event(move |event: &MouseUpEvent, phase, _, _| {
-            if phase.bubble() && event.button == MouseButton::Left {
-                state.borrow_mut().dragging = false;
-            }
-        });
         let (pieces, state) = (self.pieces.clone(), held.clone());
-        window.on_key_event(move |event: &KeyDownEvent, phase, _, cx| {
-            let keys = &event.keystroke;
-            if !phase.bubble() || !keys.modifiers.secondary() {
-                return;
-            }
+        window.on_mouse_event(move |event: &MouseUpEvent, phase, _, _| {
             let mut held = state.borrow_mut();
-            match keys.key.as_str() {
-                "c" if held.tail != held.head => {
-                    let text = selected(&pieces, held.span());
-                    eprintln!("desk: select: copied {} bytes", text.len());
-                    cx.write_to_clipboard(ClipboardItem::new_string(text));
-                }
-                "a" => {
-                    let last = pieces.len().saturating_sub(1);
-                    let end = pieces.last().map_or(0, |piece| piece.text.len());
-                    held.pick(
-                        Spot::default(),
-                        Spot {
-                            piece: last,
-                            at: end,
-                        },
-                    );
-                    cx.notify(view);
-                }
-                _ => return,
+            if phase.bubble() && event.button == MouseButton::Left && held.dragging {
+                held.dragging = false;
+                held.said(&pieces);
             }
-            cx.stop_propagation();
         });
         let mut held = held.borrow_mut();
         if held.moved {
