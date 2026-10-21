@@ -97,6 +97,7 @@ enum Opening {
     Closed,
     Pending,
     Open(String),
+    Held(String),
 }
 
 struct Slot {
@@ -180,6 +181,7 @@ pub struct Chat {
     reopening: Option<Instant>,
     history: Option<History>,
     painting: Option<(String, Instant)>,
+    landed: Option<Instant>,
     head: Entity<SessionHead>,
     _drain: Option<Task<()>>,
     _flash: Option<Task<()>>,
@@ -495,6 +497,7 @@ impl Chat {
             reopening: None,
             history: None,
             painting: None,
+            landed: None,
             head,
             _drain: None,
             _flash: None,
@@ -530,7 +533,7 @@ impl Chat {
     fn set_opening(&mut self, opening: Opening, cx: &mut Context<Self>) {
         let open = match &opening {
             Opening::Open(id) => Some(id.clone()),
-            Opening::Closed | Opening::Pending => None,
+            Opening::Closed | Opening::Pending | Opening::Held(_) => None,
         };
         let opened = open.is_some();
         self.store.update(cx, |store, cx| {
@@ -623,6 +626,7 @@ impl Chat {
             );
             history.lines = Vec::new();
             history.live = Vec::new();
+            self.landed = Some(Instant::now());
         }
         self.ask_shells(cx);
     }
@@ -713,7 +717,7 @@ impl Chat {
     pub fn open_id(&self) -> Option<&str> {
         match &self.opening {
             Opening::Open(id) => Some(id),
-            Opening::Closed | Opening::Pending => None,
+            Opening::Closed | Opening::Pending | Opening::Held(_) => None,
         }
     }
 
@@ -774,6 +778,8 @@ impl Chat {
                             "desk: session attach {wanted} held by {}, which shares nothing, so tofu refused it",
                             holder(Some(&held))
                         );
+                        chat.set_opening(Opening::Held(wanted), cx);
+                        chat.rebuild(cx);
                     }
                     eprintln!("desk: session.open failed: {error:?}");
                     return chat.fail(error.to_string(), cx);
@@ -1244,7 +1250,7 @@ impl Chat {
 
     fn refresh(&mut self, cx: &mut Context<Self>) {
         let spliced = self.restack(cx);
-        let Opening::Open(id) = &self.opening else {
+        let (Opening::Open(id) | Opening::Held(id)) = &self.opening else {
             return;
         };
         let Some(session) = self.store.read(cx).sessions.get(id) else {
@@ -1277,7 +1283,7 @@ impl Chat {
     }
 
     fn restack(&mut self, cx: &mut Context<Self>) -> Vec<Spliced> {
-        let Opening::Open(id) = &self.opening else {
+        let (Opening::Open(id) | Opening::Held(id)) = &self.opening else {
             return Vec::new();
         };
         let Some(session) = self.store.read(cx).sessions.get(id) else {
@@ -1874,6 +1880,10 @@ impl Chat {
             Opening::Pending => {
                 self.fail("the session is still opening".to_owned(), cx);
             }
+            Opening::Held(session) => {
+                let problem = format!("session {session} is held by another tofu");
+                self.fail(problem, cx);
+            }
             Opening::Closed => {
                 self.set_opening(Opening::Pending, cx);
                 let params = SessionOpenParams {
@@ -1928,7 +1938,7 @@ impl Chat {
     }
 
     fn flip(&mut self, cx: &mut Context<Self>) {
-        if matches!(self.opening, Opening::Pending) {
+        if matches!(self.opening, Opening::Pending | Opening::Held(_)) {
             return eprintln!("desk: asking waits for the session to open");
         }
         let was = self.asking.clone();
@@ -2188,6 +2198,15 @@ impl Render for Chat {
             eprintln!(
                 "desk: session {session} first message painted in {} ms",
                 asked.elapsed().as_millis()
+            );
+        }
+        if !self.items.is_empty()
+            && let Some(landed) = self.landed.take()
+        {
+            eprintln!(
+                "desk: chat history painted {} items {} ms after landing",
+                self.items.len(),
+                landed.elapsed().as_millis()
             );
         }
         let theme = ActiveTheme::theme(cx);
