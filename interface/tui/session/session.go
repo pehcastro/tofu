@@ -264,7 +264,14 @@ func (m *Model) rerender(entry *Entry) {
 		entry.rendered, entry.stable, entry.width, entry.tail = lines, len(entry.Body), room, nil
 		return
 	}
-	if entry.boundary != entry.stable || room != entry.width {
+	switch {
+	case room == entry.width && entry.stable > 0 && entry.boundary > entry.stable:
+		grown := m.prose(entry.Body[entry.stable:entry.boundary], room)
+		if len(grown) > 0 && len(entry.rendered) > 0 {
+			grown = append([]string{""}, grown...)
+		}
+		entry.rendered, entry.stable = append(slices.Clip(entry.rendered), grown...), entry.boundary
+	case entry.boundary != entry.stable || room != entry.width:
 		entry.width, entry.stable, entry.rendered = room, entry.boundary, nil
 		if entry.boundary > 0 {
 			entry.rendered = m.prose(entry.Body[:entry.boundary], room)

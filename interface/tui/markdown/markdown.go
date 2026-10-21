@@ -28,6 +28,7 @@ type blockKind int
 const (
 	proseBlock blockKind = iota
 	codeBlock
+	openCodeBlock
 	tableBlock
 )
 
@@ -47,7 +48,7 @@ func (r *Renderer) Lines(source string, width int) []string {
 		}
 		r.width, r.term = width, term
 	}
-	rule := look.Style(look.FaintColor).Render(codeRule)
+	rule, typedCode := look.Style(look.FaintColor).Render(codeRule), look.Style(look.Text)
 	var lines []string
 	for _, part := range blocks(source) {
 		var rendered []string
@@ -57,6 +58,10 @@ func (r *Renderer) Lines(source string, width int) []string {
 			rendered, err = r.table(part.text, width)
 		case proseBlock, codeBlock:
 			rendered, err = r.render(part.text)
+		case openCodeBlock:
+			for _, typed := range strings.Split(part.text, "\n") {
+				rendered = append(rendered, typedCode.Render(typed))
+			}
 		}
 		if err != nil {
 			return widget.Wrap(source, width)
@@ -65,7 +70,7 @@ func (r *Renderer) Lines(source string, width int) []string {
 			lines = append(lines, "")
 		}
 		for _, line := range rendered {
-			if part.kind == codeBlock {
+			if part.kind == codeBlock || part.kind == openCodeBlock {
 				line = rule + line
 			}
 			lines = append(lines, trimRight(ansi.Truncate(line, width, "")))
@@ -108,7 +113,15 @@ func blocks(source string) []block {
 			for end < len(lines) && !isFenceLine(lines[end]) {
 				end++
 			}
-			code, language, at = lines[at+1:min(end, len(lines))], strings.TrimLeft(lines[at], " `~"), end
+			if end == len(lines) {
+				flushProse()
+				if typed := strings.TrimRight(strings.Join(lines[at+1:], "\n"), "\n"); typed != "" {
+					parts = append(parts, block{text: typed, kind: openCodeBlock})
+				}
+				at = end
+				continue
+			}
+			code, language, at = lines[at+1:end], strings.TrimLeft(lines[at], " `~"), end
 		case opensIndentedCode(lines[at], prose):
 			for ; at < len(lines) && (strings.TrimSpace(lines[at]) == "" || indented(lines[at])); at++ {
 				code = append(code, strings.TrimPrefix(strings.TrimPrefix(lines[at], "\t"), codeIndent))
