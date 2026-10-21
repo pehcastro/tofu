@@ -13,6 +13,7 @@ use gpui::{
 use crate::components::button::{ButtonKind, button};
 use crate::components::overlay::Side;
 use crate::components::paint::{ink, ring, tint};
+use crate::components::scroll::ScrollArea;
 use crate::components::size::{
     BUTTON_GAP, FONT_BODY, HEADER, HEADER_PAD_LEFT, POP_SHADOW_BLUR, RADIUS_POP, SHEET_HANDLE,
     SHEET_HANDLE_HEIGHT, SHEET_HANDLE_WIDTH, SHEET_INSET, SHEET_RING, SHEET_SHADOW_Y, SHEET_SHARE,
@@ -53,6 +54,7 @@ pub(crate) struct Slide {
     from: SpringState,
     since: Instant,
     extent: f32,
+    top: f32,
     grab: Option<Grab>,
 }
 
@@ -70,6 +72,7 @@ impl Slide {
             from: SpringState::default(),
             since: Instant::now(),
             extent: 0.0,
+            top: 0.0,
             grab: None,
         }
     }
@@ -248,7 +251,11 @@ fn stage(id: ElementId, slide: Entity<Slide>, side: Side) -> Stateful<Div> {
         .on_children_prepainted(move |bounds, _, cx| {
             if let Some(panel) = bounds.last() {
                 let measured = extent(side, panel);
-                slide.update(cx, |slide, _| slide.extent = measured);
+                let top = panel.origin.y.as_f32();
+                slide.update(cx, |slide, _| {
+                    slide.extent = measured;
+                    slide.top = top;
+                });
             }
         })
         .id(id)
@@ -558,13 +565,21 @@ impl RenderOnce for Sheet {
         let surface = if modal {
             modal_card(&pose, &theme)
         } else {
-            panel(
-                self.side,
-                px(SHEET_SIZE).into(),
-                &pose,
-                slide.read(cx).extent,
-                &theme,
-            )
+            let (extent, top) = (slide.read(cx).extent, slide.read(cx).top);
+            let room = window.viewport_size().height.as_f32() - top - SHEET_INSET;
+            panel(self.side, px(SHEET_SIZE).into(), &pose, extent, &theme)
+                .when(!vertical(self.side) && top > 0.0, |panel| {
+                    panel.max_h(px(room.max(0.0)))
+                })
+        };
+        let body = if modal {
+            self.children
+        } else {
+            vec![
+                ScrollArea::new("sheet-body")
+                    .children(self.children)
+                    .into_any_element(),
+            ]
         };
         let drawn = surface
             .flex_col()
@@ -584,7 +599,7 @@ impl RenderOnce for Sheet {
                     .when(!modal, |body| body.flex_1().min_h_0())
                     .px(px(HEADER_PAD_LEFT))
                     .overflow_hidden()
-                    .children(self.children),
+                    .children(body),
             )
             .child(
                 div()
