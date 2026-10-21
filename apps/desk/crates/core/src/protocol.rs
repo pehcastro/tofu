@@ -9,7 +9,7 @@ pub type TurnCompletedStatus = TurnStatus;
 pub trait Request {
     const METHOD: &'static str;
     type Params: Serialize;
-    type Result: DeserializeOwned;
+    type Result: DeserializeOwned + Send + 'static;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -1,7 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
 use std::io::{self, BufRead, BufReader, Read, Write};
-use std::marker::PhantomData;
 use std::path::Path;
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
@@ -23,7 +22,22 @@ use crate::protocol::{
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 type Reply = Result<Value, Refusal>;
-type Waiting = Arc<Mutex<Option<HashMap<i64, flume::Sender<Reply>>>>>;
+type Waiting = Arc<Mutex<Option<HashMap<i64, Asked>>>>;
+type Deliver = Box<dyn FnOnce(Reply, Took) + Send>;
+
+const LOGGED_REPLY_MS: u128 = 50;
+const LOGGED_REPLY_BYTES: usize = 64 * 1024;
+
+struct Asked {
+    sent: Instant,
+    deliver: Deliver,
+}
+
+struct Took {
+    wire: Duration,
+    parse: Duration,
+    bytes: usize,
+}
 type Log = Arc<Mutex<VecDeque<String>>>;
 
 #[derive(Debug)]
@@ -162,25 +176,38 @@ impl From<serde_json::Error> for BridgeError {
 }
 
 pub struct Pending<T> {
-    answer: flume::Receiver<Reply>,
-    shape: PhantomData<fn() -> T>,
+    answer: flume::Receiver<Result<T, BridgeError>>,
 }
 
-impl<T: DeserializeOwned> Pending<T> {
+impl<T> Pending<T> {
     pub fn wait(self) -> Result<T, BridgeError> {
-        decode(self.answer.recv())
+        self.answer.recv().map_err(|_| BridgeError::Closed)?
     }
 
     pub async fn reply(self) -> Result<T, BridgeError> {
-        decode(self.answer.recv_async().await)
+        self.answer
+            .recv_async()
+            .await
+            .map_err(|_| BridgeError::Closed)?
     }
 }
 
-fn decode<T: DeserializeOwned>(answer: Result<Reply, flume::RecvError>) -> Result<T, BridgeError> {
-    let value = answer
-        .map_err(|_| BridgeError::Closed)?
-        .map_err(BridgeError::Refused)?;
-    Ok(serde_json::from_value(value)?)
+fn decode<T: DeserializeOwned>(method: &str, reply: Reply, took: &Took) -> Result<T, BridgeError> {
+    let value = reply.map_err(BridgeError::Refused)?;
+    let at = Instant::now();
+    let shaped = serde_json::from_value(value)?;
+    let (wire, parse, decode) = (
+        took.wire.as_millis(),
+        took.parse.as_millis(),
+        at.elapsed().as_millis(),
+    );
+    if wire + parse + decode >= LOGGED_REPLY_MS || took.bytes >= LOGGED_REPLY_BYTES {
+        eprintln!(
+            "desk: {method} wire {wire} ms, {} KB, parse {parse} ms, decode {decode} ms off the ui thread",
+            took.bytes / 1024
+        );
+    }
+    Ok(shaped)
 }
 
 #[derive(Serialize)]
@@ -327,12 +354,19 @@ impl Bridge {
             .unwrap_or_else(PoisonError::into_inner)
             .as_mut()
             .ok_or(BridgeError::Closed)?
-            .insert(id, reply);
+            .insert(
+                id,
+                Asked {
+                    sent: Instant::now(),
+                    deliver: Box::new(move |answered, took| {
+                        match reply.send(decode(R::METHOD, answered, &took)) {
+                            Ok(()) | Err(flume::SendError(_)) => {}
+                        }
+                    }),
+                },
+            );
         self.lines.send(line).map_err(|_| BridgeError::Closed)?;
-        Ok(Pending {
-            answer,
-            shape: PhantomData,
-        })
+        Ok(Pending { answer })
     }
 
     pub fn answer<A: Serialize>(&self, id: &RequestId, answer: &A) -> Result<(), BridgeError> {
@@ -476,6 +510,7 @@ fn read_stdout(stdout: impl Read, watch: &Watch, events: &flume::Sender<Event>) 
 }
 
 fn route(line: &str, waiting: &Waiting) -> Result<Option<Event>, String> {
+    let arrived = Instant::now();
     let incoming: Incoming = serde_json::from_str(line).map_err(|error| error.to_string())?;
     let unshaped = |error: serde_json::Error| error.to_string();
     match (
@@ -505,9 +540,15 @@ fn route(line: &str, waiting: &Waiting) -> Result<Option<Event>, String> {
                 .ok_or(format!(
                     "a response to request {id}, which nobody is waiting on"
                 ))?;
-            match waiter.send(reply) {
-                Ok(()) | Err(flume::SendError(_)) => Ok(None),
-            }
+            (waiter.deliver)(
+                reply,
+                Took {
+                    wire: arrived.saturating_duration_since(waiter.sent),
+                    parse: arrived.elapsed(),
+                    bytes: line.len(),
+                },
+            );
+            Ok(None)
         }
         (None, id, _, error) => Err(format!(
             "a response to no request of this desk: {id:?} {error:?}"

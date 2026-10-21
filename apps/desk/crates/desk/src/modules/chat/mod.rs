@@ -1042,6 +1042,7 @@ impl Chat {
     }
 
     fn forget_view(&mut self, cx: &mut Context<Self>) {
+        self.history = None;
         self.set_opening(Opening::Closed, cx);
         self.clear_view(cx);
     }
@@ -1280,12 +1281,20 @@ impl Chat {
             .map_or_else(|| WORKING.to_owned(), |doing| format!("{WORKING}: {doing}"))
     }
 
+    fn shown_id(&self) -> Option<String> {
+        match &self.opening {
+            Opening::Open(id) | Opening::Held(id) => Some(id.clone()),
+            Opening::Pending => self.history.as_ref().map(|history| history.session.clone()),
+            Opening::Closed => None,
+        }
+    }
+
     fn refresh(&mut self, cx: &mut Context<Self>) {
         let spliced = self.restack(cx);
-        let (Opening::Open(id) | Opening::Held(id)) = &self.opening else {
+        let Some(id) = self.shown_id() else {
             return;
         };
-        let Some(session) = self.store.read(cx).sessions.get(id) else {
+        let Some(session) = self.store.read(cx).sessions.get(&id) else {
             return;
         };
         let kept = self.card.as_ref().is_some_and(|shown| {
@@ -1315,13 +1324,13 @@ impl Chat {
     }
 
     fn restack(&mut self, cx: &mut Context<Self>) -> Vec<Spliced> {
-        let (Opening::Open(id) | Opening::Held(id)) = &self.opening else {
+        let Some(id) = self.shown_id() else {
             return Vec::new();
         };
-        let Some(session) = self.store.read(cx).sessions.get(id) else {
+        let Some(session) = self.store.read(cx).sessions.get(&id) else {
             return Vec::new();
         };
-        let order = self.orders.get(id).map_or(&[][..], Vec::as_slice);
+        let order = self.orders.get(&id).map_or(&[][..], Vec::as_slice);
         let shown = Rc::make_mut(&mut self.items);
         let (mut at, mut spliced) = (0, Vec::new());
         for (index, entry) in order.iter().enumerate() {
@@ -2344,13 +2353,22 @@ impl Render for Chat {
         let stop = cx.listener(|chat, _: &(), _, cx| chat.stop(cx));
         let pick = cx.listener(|chat, at: &usize, window, cx| chat.pick(*at, window, cx));
         let unmention = cx.listener(|chat, at: &usize, _, cx| chat.remove_mention(*at, cx));
+        let lead_busy = self.running(cx).is_some();
+        let sub_agents = self
+            .store
+            .read(cx)
+            .open_session()
+            .map_or(0, items::sub_agents);
         let composer = Composer::new("chat-composer", self.area.clone())
             .content_width(px(CONTENT_WIDTH))
-            .busy(self.running(cx).is_some())
-            .phase(if waiting {
-                "waiting on you".to_owned()
-            } else {
-                self.doing(cx)
+            .busy(lead_busy || sub_agents > 0)
+            .phase(match (waiting, lead_busy) {
+                (true, _) => "waiting on you".to_owned(),
+                (false, true) => self.doing(cx),
+                (false, false) => format!(
+                    "lead idle, free to talk · {sub_agents} sub-agent{} running",
+                    if sub_agents == 1 { "" } else { "s" }
+                ),
             })
             .model(self.models.clone())
             .effort(mode)
