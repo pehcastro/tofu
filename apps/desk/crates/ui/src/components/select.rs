@@ -430,6 +430,10 @@ impl Element for Selectable {
                         let Some(at) = spot(&pieces, event.position) else {
                             return;
                         };
+                        eprintln!(
+                            "desk: select: press click {} at piece {} byte {}",
+                            event.click_count, at.piece, at.at
+                        );
                         let whole = pieces.get(at.piece).map_or(0, |piece| piece.text.len());
                         match event.click_count {
                             0 | 1 if event.modifiers.shift => held.head = at,
