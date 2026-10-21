@@ -4,7 +4,7 @@ use gpui::{
     StyledImage, Window, div, img, linear_color_stop, linear_gradient, prelude::*, px,
 };
 
-use crate::components::glyph::Glyph;
+use crate::components::glyph::{Glyph, MARK_BLEED};
 use crate::components::paint::{drop, glyph, halo, ink, spinning_arc, tint};
 use crate::components::size::{
     AVATAR_FEED, AVATAR_LARGE, AVATAR_LIST, AVATAR_ROW, AVATAR_TINT_FEED, AVATAR_TINT_LIST,
@@ -18,6 +18,7 @@ use crate::theme::{ColorToken, Theme};
 
 const STACK_OVERLAP: f32 = 0.35;
 const STACK_FAN: f32 = 0.15;
+const STACK_GROUP: &str = "avatar-stack";
 const TIP_PAD_X: f32 = 8.0;
 const TIP_PAD_Y: f32 = 4.0;
 const TIP_SHADOW_Y: f32 = 4.0;
@@ -70,15 +71,8 @@ pub fn avatar_stack(
 }
 
 impl RenderOnce for AvatarStack {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let open = window.use_keyed_state(self.id.clone(), cx, |_, _| false);
+    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
         let (side, font, alpha) = self.size.metrics();
-        let gap = px(side
-            * if *open.read(cx) {
-                STACK_FAN
-            } else {
-                -STACK_OVERLAP
-            });
         let backing = self.backing;
         let disc = |ix: usize| {
             div()
@@ -95,9 +89,11 @@ impl RenderOnce for AvatarStack {
                 .bg(backing)
                 .shadow(vec![halo(backing, MARK_RING)])
                 .when(ix > 0, |disc| {
-                    disc.ml(gap).transitions(|transitions| {
-                        transitions.ml(Motion::new(TOGGLE_MS).with_easing(EASE_OUT))
-                    })
+                    disc.ml(px(-side * STACK_OVERLAP))
+                        .group_hover(STACK_GROUP, |style| style.ml(px(side * STACK_FAN)))
+                        .transitions(|transitions| {
+                            transitions.ml(Motion::new(TOGGLE_MS).with_easing(EASE_OUT))
+                        })
                 })
         };
         let face = |fill: Rgba, color: Rgba, text: SharedString| {
@@ -112,6 +108,8 @@ impl RenderOnce for AvatarStack {
                 .child(text)
         };
         let count = self.shown.len();
+        let steps = (count + usize::from(self.hidden > 0)).saturating_sub(1) as f32;
+        let width = |step: f32| px(side + steps * side * step);
         let shown = self
             .shown
             .into_iter()
@@ -131,15 +129,13 @@ impl RenderOnce for AvatarStack {
         });
         div()
             .id(self.id)
+            .group(STACK_GROUP)
             .flex()
             .flex_none()
             .items_center()
-            .on_hover(move |hovered, _, cx| {
-                open.update(cx, |open, cx| {
-                    *open = *hovered;
-                    cx.notify();
-                })
-            })
+            .w(width(1.0 - STACK_OVERLAP))
+            .hover(|style| style.w(width(1.0 + STACK_FAN)))
+            .transitions(|transitions| transitions.w(Motion::new(TOGGLE_MS).with_easing(EASE_OUT)))
             .children(shown)
             .children(more)
     }
@@ -266,7 +262,7 @@ impl AgentStatus {
 
     pub fn group(self) -> &'static str {
         match self {
-            AgentStatus::Working => "Working",
+            AgentStatus::Working => "Running",
             AgentStatus::Asking => "Asking the lead",
             AgentStatus::Failed => "Failed",
             AgentStatus::Finished => "Finished",
@@ -283,7 +279,7 @@ pub struct Agent {
 
 impl Agent {
     pub fn name(&self) -> SharedString {
-        format!("{} {}", self.kind.name(), self.instance).into()
+        format!("{}-{}", self.kind.name(), self.instance).into()
     }
 }
 
@@ -324,6 +320,8 @@ pub fn avatar(id: impl Into<ElementId>, agent: &Agent, size: AvatarSize, theme: 
             .shadow(vec![halo(backing, MARK_RING)])
     };
     let live = theme.color(ColorToken::StatusLive);
+    let working = agent.status == AgentStatus::Working;
+    let inset = if working { RING_OUTSET } else { 0.0 };
     div()
         .relative()
         .flex_none()
@@ -331,27 +329,29 @@ pub fn avatar(id: impl Into<ElementId>, agent: &Agent, size: AvatarSize, theme: 
         .flex()
         .items_center()
         .justify_center()
-        .rounded_full()
-        .bg(tint(tone, alpha))
         .text_color(tone)
         .font_weight(FontWeight::SEMIBOLD)
         .text_size(px(font))
         .line_height(px(side))
-        .child(agent.kind.initial())
+        .child(
+            div()
+                .absolute()
+                .inset(px(inset))
+                .rounded_full()
+                .bg(tint(tone, alpha)),
+        )
+        .when(working, |disc| {
+            disc.child(div().absolute().inset(px(MARK_BLEED)).child(spinning_arc(
+                id,
+                side - 2.0 * MARK_BLEED,
+                tint(live, RING_TRACK),
+                live,
+                theme,
+            )))
+        })
+        .child(div().relative().child(agent.kind.initial()))
         .map(|disc| match agent.status {
-            AgentStatus::Working => disc.child(
-                div()
-                    .absolute()
-                    .top(px(-RING_OUTSET))
-                    .left(px(-RING_OUTSET))
-                    .child(spinning_arc(
-                        id,
-                        side + 2.0 * RING_OUTSET,
-                        tint(live, RING_TRACK),
-                        live,
-                        theme,
-                    )),
-            ),
+            AgentStatus::Working => disc,
             AgentStatus::Finished => disc.child(
                 mark(DONE_MARK, DONE_OFFSET, theme.color(ColorToken::GitAdded)).child(glyph(
                     Glyph::Check,

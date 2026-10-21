@@ -13,7 +13,7 @@ use gpui::{
 };
 
 use crate::components::overlay::{ContextMenu, actions, context_menu};
-use crate::components::paint::{arrowed, focus_ring, ink, pressed, tint};
+use crate::components::paint::{arrowed, focus_ring, ink, pressed, pressed_by, tint};
 use crate::components::size::{
     CARET_BLINK_MS, CARET_HEIGHT, CARET_WIDTH, DIM_TEXT, FIELD, FIELD_PAD, FIELD_WIDTH, FONT_BODY,
     FONT_SMALL, RADIUS_CHIP, RADIUS_ROW, SEGMENT_PAD_X, SEGMENT_PAD_Y, SEGMENTED_PAD,
@@ -23,6 +23,7 @@ use crate::live::ActiveTheme;
 use crate::theme::{ColorToken, Theme};
 
 const CARET_SCALE: f32 = 0.85;
+const SWITCH_GROUP: &str = "switch";
 const TEXT_AREA_LINES: usize = 8;
 const TEXT_AREA_LINE: f32 = 20.0;
 const TEXT_AREA_PAD_Y: f32 = 5.0;
@@ -167,6 +168,7 @@ pub fn switch_bare(
         0.0
     };
     focus_ring(div().id(id), theme)
+        .group(SWITCH_GROUP)
         .aria_label(label)
         .flex()
         .items_center()
@@ -175,7 +177,7 @@ pub fn switch_bare(
         .text_size(px(FONT_BODY))
         .text_color(ink(theme, T1))
         .child(
-            pressed(
+            pressed_by(
                 div()
                     .id("track")
                     .flex()
@@ -184,13 +186,14 @@ pub fn switch_bare(
                     .w(px(SWITCH_WIDTH))
                     .h(px(SWITCH_HEIGHT))
                     .px(px(SWITCH_INSET))
+                    .cursor_pointer()
                     .rounded_full()
                     .bg(theme.color(if on {
                         ColorToken::SwitchOn
                     } else {
                         ColorToken::SwitchOff
                     })),
-                theme.color(ColorToken::CardsInnerFill),
+                Some(SWITCH_GROUP),
             )
             .child(
                 div()
