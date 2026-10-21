@@ -188,6 +188,7 @@ fn row(
         theme,
     )
     .on_click(cx.listener(move |screen, _: &ClickEvent, _, cx| {
+        eprintln!("desk: git: restore {} keep={keep}", short(&sha));
         pop.update(cx, |pop, cx| {
             pop.open = false;
             cx.notify();

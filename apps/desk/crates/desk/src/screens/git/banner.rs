@@ -78,10 +78,10 @@ fn banner(
     };
     let (doing, sides, finish, undo) = match operation {
         Operation::Merge { theirs } => (
-            format!("Merging {theirs} into {here}: {left}"),
+            format!("Merging {} into {here}: {left}", short(theirs)),
             Sides {
                 ours: here.clone(),
-                theirs: theirs.clone(),
+                theirs: short(theirs).to_owned(),
             },
             format!("Continue: finish the merge with a merge commit on {here}"),
             format!("Abort: stop merging and put {here} back as it was before"),
