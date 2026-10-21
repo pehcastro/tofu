@@ -79,8 +79,10 @@ func (s session) env() []string {
 		return name == "HOME" || name == "USERPROFILE" || name == "GOMAXPROCS" || strings.HasPrefix(name, "TOFU_") ||
 			strings.HasPrefix(name, "CLAUDE") || strings.HasPrefix(name, "OPENROUTER") || strings.HasSuffix(name, "_API_KEY")
 	})
-	return append(env, "HOME="+s.home, "USERPROFILE="+s.home, "GOMAXPROCS="+childProcs)
+	return append(env, "HOME="+s.home, "USERPROFILE="+s.home, "GOMAXPROCS="+childProcs, "TOFU_DRIVE_REQUESTS="+s.requests())
 }
+
+func (s session) requests() string { return filepath.Join(s.dir, "requests.txt") }
 
 func (s session) setting(name, value string) error {
 	cmd := exec.Command(s.exe, "settings", "set", name, value)

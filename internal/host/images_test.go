@@ -1,6 +1,7 @@
 package host
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -34,5 +35,24 @@ func TestAPastedImageSurvivesAForkBeforeItIsSentAndIsTakenOnce(t *testing.T) {
 	again, err := h.takePendingImages("and again " + ImageToken(1))
 	if err != nil || len(again) != 0 {
 		t.Fatalf("an image already sent is still pending: %d images, %v", len(again), err)
+	}
+}
+
+func TestAnImageOnASendTheHolderNeverGotStaysPendingThroughTheSteerFallback(t *testing.T) {
+	home, project := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	h, _ := New(Config{Dir: project})
+	ours, holders := net.Pipe()
+	_ = holders.Close()
+	h.following.Store(&following{link: linked(ours), waiting: map[int]chan followReply{}})
+	h.Attached(1, "flag.png", 3, "PNG")
+	said := "what is this " + ImageToken(1)
+	if h.Send(Pick{}, said) {
+		t.Fatal("a send over a closed holder socket says it was sent")
+	}
+	h.Steer(said)
+	if pending := h.takePending(said); len(pending) != 1 {
+		t.Fatalf("a send the holder never got and its steer fallback left %d of 1 pasted image pending, so a takeover or a resend runs without it", len(pending))
 	}
 }

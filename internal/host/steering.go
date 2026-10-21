@@ -94,7 +94,8 @@ func (q *steerQueue) heard() string {
 
 func (h *Host) Steer(text string) string {
 	if f := h.following.Load(); f != nil {
-		return f.ask(followAsk{Op: followSteer, Text: text}).Steered
+		images := h.takePending(text)
+		return h.keepUndelivered(f.ask(followAsk{Op: followSteer, Text: text, Images: images}), images).Steered
 	}
 	h.steering.mu.Lock()
 	defer h.steering.mu.Unlock()

@@ -481,7 +481,11 @@ func (s *server) steer(p TurnSteerParams) (any, error) {
 	if !running || turn != p.ExpectedTurnID {
 		return nil, &Refusal{Code: CodeRefused, Message: "turn " + strconv.Quote(p.ExpectedTurnID) + " is not running, so nothing was steered"}
 	}
-	return SteerResult{Turn: turn, ID: l.host.Steer(p.Text)}, nil
+	tokens, err := attach(l.host, p.Images)
+	if err != nil {
+		return nil, err
+	}
+	return SteerResult{Turn: turn, ID: l.host.Steer(p.Text + tokens)}, nil
 }
 
 func (s *server) sendNow(p SendNowParams) (any, error) {

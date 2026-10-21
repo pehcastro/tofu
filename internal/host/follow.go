@@ -348,17 +348,15 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 	reply := followReply{ID: ask.ID, OK: true}
 	switch ask.Op {
 	case followSend:
+		h.received(ask.Images)
 		if _, running := h.Turn(); running {
-			reply.Steered = h.steerFor(ask.Text)
+			reply.OK = false
 			break
 		}
 		_, pick := h.Settings()
 		if ask.Pick != (Pick{}) {
 			pick = ask.Pick
 		}
-		h.mu.Lock()
-		h.pending = append(h.pending, ask.Images...)
-		h.mu.Unlock()
 		h.emitter().emit(Event{Kind: EventTask, Text: ask.Text, Origin: Origin{Kind: OriginPerson}, Images: shownPending(ask.Text, ask.Images)})
 		reply.OK = h.Send(pick, ask.Text)
 	case followStop:
@@ -374,6 +372,7 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 	case followMemory:
 		reply.OK = h.AnswerMemory(ask.Asked, ask.Scope)
 	case followSteer:
+		h.received(ask.Images)
 		reply.Steered = h.steerFor(ask.Text)
 	case followSendNow:
 		reply.OK = h.SendNow(ask.Text)
@@ -504,17 +503,28 @@ func (f *following) ask(ask followAsk) followReply {
 	return followReply{}
 }
 
-func (f *following) send(pick Pick, task string, images []pendingImage) bool {
+func (f *following) send(pick Pick, task string, images []pendingImage) followReply {
 	f.mu.Lock()
 	f.typed = task
 	f.mu.Unlock()
 	reply := f.ask(followAsk{Op: followSend, Text: task, Pick: pick, Images: images})
-	if reply.Refused != "" || reply.ID == 0 {
+	if !reply.delivered() {
 		f.mu.Lock()
 		f.unsent = task
 		f.mu.Unlock()
 	}
-	return reply.OK
+	return reply
+}
+
+func (reply followReply) delivered() bool { return reply.Refused == "" && reply.ID != 0 }
+
+func (h *Host) keepUndelivered(reply followReply, images []pendingImage) followReply {
+	if !reply.delivered() {
+		h.mu.Lock()
+		h.pending = append(h.pending, images...)
+		h.mu.Unlock()
+	}
+	return reply
 }
 
 func (f *following) chosen(pick Pick) bool {

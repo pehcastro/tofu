@@ -34,6 +34,7 @@ var flows = []flow{
 	{7, "450 settled sub-agents fold and one opens by search", true, foldAndSearch},
 	{8, "10,000 kept shells: memory under 300 MB for 3 min, a report reaches the lead, ctrl+c quits within 3 s", false, keptShellsQuit},
 	{9, "a sub-agent resumed by message outlives the lead's turn, a person message, a cancelled ask, esc once and a cron fire", true, resumedSurvives},
+	{10, "under a holder, an image pasted into a message the lead reads mid-turn reaches its next request", false, steeredImage},
 }
 
 var clockOnScreen = regexp.MustCompile(`(?m)(?:spawning|running) \[&sub-1\][^\n]*?  ((?:\d+h )?(?:\d+m )?\d+s)\s*[│┃]?\s*$`)
@@ -212,6 +213,29 @@ func resumedSurvives(s session) (string, error) {
 		}
 	}
 	return "after the cancelled ask, esc and the cron fire: " + lineWith(out, "ACTIVE  ") + ", " + lineWith(out, "WAITING  ") + ", " + lineWith(out, "DEAD  "), nil
+}
+
+func steeredImage(s session) (string, error) {
+	shot, err := s.unpack("10-shot.png")
+	if err != nil {
+		return "", err
+	}
+	if _, err := s.drive("10-steer-image", "", time.Minute, "--holder", "--clipboard", shot); err != nil {
+		return "", err
+	}
+	dump, err := os.ReadFile(s.requests())
+	if err != nil {
+		return "", fmt.Errorf("the holder wrote no request: %w", err)
+	}
+	lead, err := lastLead(string(dump))
+	if err != nil {
+		return "", err
+	}
+	steered := strings.TrimSpace(lead.last())
+	if !strings.HasSuffix(steered, "1 image(s)") {
+		return "", fmt.Errorf("%s ends on %q, which carries no image", lead.name(), steered)
+	}
+	return lead.name() + " ends on " + steered, nil
 }
 
 func crowdCassette(dir string) (string, error) {

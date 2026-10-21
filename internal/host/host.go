@@ -272,10 +272,8 @@ func (h *Host) Send(pick Pick, task string) bool {
 		return false
 	}
 	if f := h.following.Load(); f != nil {
-		h.mu.Lock()
 		images := h.takePending(task)
-		h.mu.Unlock()
-		return f.send(pick, task, images)
+		return h.keepUndelivered(f.send(pick, task, images), images).OK
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -835,7 +833,16 @@ func (h *Host) recordUnrecorded() {
 	}
 }
 
+func (h *Host) received(images []pendingImage) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.pending = append(h.pending, images...)
+	h.recordUnrecorded()
+}
+
 func (h *Host) takePending(task string) []pendingImage {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	var wanted []pendingImage
 	h.pending = slices.DeleteFunc(h.pending, func(image pendingImage) bool {
 		taken := strings.Contains(task, ImageToken(image.Index))
@@ -848,9 +855,7 @@ func (h *Host) takePending(task string) []pendingImage {
 }
 
 func (h *Host) takePendingImages(task string) ([]llm.Image, error) {
-	h.mu.Lock()
 	wanted := h.takePending(task)
-	h.mu.Unlock()
 	images := make([]llm.Image, 0, len(wanted))
 	for _, image := range wanted {
 		data, err := os.ReadFile(image.Path)

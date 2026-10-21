@@ -949,9 +949,10 @@ type AttachedImage struct {
 }
 
 type TurnSteerParams struct {
-	Session        string `json:"session"`
-	ExpectedTurnID string `json:"expectedTurnId"`
-	Text           string `json:"text"`
+	Session        string          `json:"session"`
+	ExpectedTurnID string          `json:"expectedTurnId"`
+	Text           string          `json:"text"`
+	Images         []AttachedImage `json:"images,omitempty"`
 }
 
 type TurnParams struct {

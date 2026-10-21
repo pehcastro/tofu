@@ -33,7 +33,7 @@ import (
 	"tofu/internal/widget"
 )
 
-const driveUsage = `usage: tofu drive [SCRIPT] [--dir PATH] [--home PATH] [--cassette PATH] [--clipboard PATH] [--source NAME] [--quota PATH] [--width N] [--height N] [--timeout 60s] [--plain] [--fresh | --continue] [ARM]
+const driveUsage = `usage: tofu drive [SCRIPT] [--dir PATH] [--home PATH] [--cassette PATH] [--clipboard PATH] [--source NAME] [--quota PATH] [--width N] [--height N] [--timeout 60s] [--plain] [--fresh | --continue] [--holder] [ARM]
 
 drives the app the way a person does, with no terminal and no model call.
 SCRIPT is a file of steps, or - for standard input.
@@ -48,6 +48,14 @@ asking the vendors, which a fresh home cannot do:
 The driven app never reads your clipboard. --clipboard PATH makes it hold that
 file, as a file copied in the explorer does, so ctrl+v attaches it; without it
 the clipboard is empty.
+
+--holder runs the session in a holder process and the app follows it over the
+session's socket, as tofu does, so what a person types and pastes crosses that
+socket. The holder answers from the same cassette.
+
+TOFU_DRIVE_REQUESTS names a file that every cassette, here, in a holder or in a
+server, appends each request it was sent to, in the form requests prints, so a
+run under a holder still shows what the model was sent.
 
 --fresh starts the app as a new session does: the chat, with the tofu cat and
 wordmark in the empty transcript until the first message. --continue starts it
@@ -96,8 +104,8 @@ Steps:
   requests     print every request sent so far: its bytes, messages and tools as
                json, its tool count, a hash of its tools, and its tool_choice
                when that is not auto, then one line per message: its role, the
-               bytes of its text, the id of each tool call it makes and of the
-               call it answers
+               bytes of its text, the images it carries, the id of each tool
+               call it makes and of the call it answers
   requests text [N]  the same, with each message's text and tool calls under
                it, each line cut at --width and every key masked as the session
                log masks it; N prints only the Nth request sent
@@ -162,6 +170,7 @@ sits until --timeout. Wait for the failure text instead, or for opens no live wi
 const (
 	cassetteVariable   = "TOFU_DRIVE_CASSETTE"
 	clockVariable      = "TOFU_DRIVE_CLOCK"
+	requestsVariable   = "TOFU_DRIVE_REQUESTS"
 	cassetteBuild      = "cassette"
 	envOpen            = "<env>"
 	envClose           = "</env>"
@@ -218,6 +227,7 @@ type cassette struct {
 	firstOnSystem map[string]string
 	last          llm.Request
 	sent          []sentRequest
+	dump          string
 }
 
 type sentRequest struct {
@@ -284,6 +294,7 @@ func readCassette(path string) (*cassette, error) {
 		taken:         map[string]int{},
 		callers:       map[string]string{},
 		firstOnSystem: map[string]string{},
+		dump:          os.Getenv(requestsVariable),
 	}
 	for number, line := range strings.Split(string(body), "\n") {
 		trimmed := strings.TrimSpace(line)
@@ -404,7 +415,13 @@ func (c *cassette) take(request llm.Request) (recordedReply, error) {
 	if choice := request.ToolChoice.OpenAIValue(); choice != "" {
 		line += ", tool_choice " + choice
 	}
-	c.sent = append(c.sent, sentRequest{summary: line, messages: slices.Clone(request.Messages)})
+	sent := sentRequest{summary: line, messages: slices.Clone(request.Messages)}
+	c.sent = append(c.sent, sent)
+	if c.dump != "" {
+		if err := appendLines(c.dump, sent.lines(requestsForm{}, 0, sys.KeyRedactor{})); err != nil {
+			return recordedReply{}, fmt.Errorf("%s: %w", requestsVariable, err)
+		}
+	}
 	return c.decks[name][c.taken[name]-1], nil
 }
 
@@ -420,33 +437,49 @@ func (c *cassette) requests(form requestsForm, width int) string {
 	redactor := sys.LoadKeyRedactor()
 	var lines []string
 	for number, sent := range c.sent {
-		if form.only != 0 && form.only != number+1 {
-			continue
-		}
-		lines = append(lines, sent.summary)
-		for index, message := range sent.messages {
-			line := fmt.Sprintf("  message %d %s: %d bytes", index+1, message.Role, len(message.Content))
-			if message.ToolCallID != "" {
-				line += ", result of " + message.ToolCallID
-			}
-			var said []string
-			if message.Content != "" {
-				said = append(said, message.Content)
-			}
-			for _, call := range message.ToolCalls {
-				line += ", calls " + call.Name + " " + call.ID
-				said = append(said, call.Name+" "+string(call.Arguments))
-			}
-			lines = append(lines, line)
-			if !form.text {
-				continue
-			}
-			for _, one := range strings.Split(redactor.Redact(strings.Join(said, "\n")), "\n") {
-				lines = append(lines, widget.Fit("    "+one, width))
-			}
+		if form.only == 0 || form.only == number+1 {
+			lines = append(lines, sent.lines(form, width, redactor)...)
 		}
 	}
 	return cmp.Or(strings.Join(lines, "\n"), noRequest)
+}
+
+func (sent sentRequest) lines(form requestsForm, width int, redactor sys.KeyRedactor) []string {
+	lines := []string{sent.summary}
+	for index, message := range sent.messages {
+		line := fmt.Sprintf("  message %d %s: %d bytes", index+1, message.Role, len(message.Content))
+		if len(message.Images) > 0 {
+			line += fmt.Sprintf(", %d image(s)", len(message.Images))
+		}
+		if message.ToolCallID != "" {
+			line += ", result of " + message.ToolCallID
+		}
+		var said []string
+		if message.Content != "" {
+			said = append(said, message.Content)
+		}
+		for _, call := range message.ToolCalls {
+			line += ", calls " + call.Name + " " + call.ID
+			said = append(said, call.Name+" "+string(call.Arguments))
+		}
+		lines = append(lines, line)
+		if !form.text {
+			continue
+		}
+		for _, one := range strings.Split(redactor.Redact(strings.Join(said, "\n")), "\n") {
+			lines = append(lines, widget.Fit("    "+one, width))
+		}
+	}
+	return lines
+}
+
+func appendLines(path string, lines []string) error {
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return err
+	}
+	_, err = file.WriteString(strings.Join(lines, "\n") + "\n")
+	return errors.Join(err, file.Close())
 }
 
 func (c *cassette) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
@@ -591,8 +624,9 @@ func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePla
 			}
 			return sys.Clipboard{Kind: sys.ClipboardFiles, Files: []string{plan.clipboard}}, nil
 		},
-		quota: quotas,
-		now:   clock,
+		quota:    quotas,
+		now:      clock,
+		detached: plan.holder,
 	}
 	return tui.New(appOptions(dir, plan.arms, recorded, launch, held))
 }
@@ -624,6 +658,7 @@ type drivePlan struct {
 	plain     bool
 	fresh     bool
 	resume    bool
+	holder    bool
 	arms      runOpts
 }
 
@@ -657,6 +692,9 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 			continue
 		case "--continue":
 			plan.resume = true
+			continue
+		case "--holder":
+			plan.holder = true
 			continue
 		case "--no-gate":
 			plan.arms.gateArm = gateOff
@@ -802,6 +840,13 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	deck, err := readCassette(plan.cassette)
 	if err != nil {
 		return driveFail(errOut, err)
+	}
+	if plan.holder && deck != nil {
+		held, err := filepath.Abs(plan.cassette)
+		if err != nil {
+			return driveFail(errOut, err)
+		}
+		_ = os.Setenv(cassetteVariable, held)
 	}
 	clock, err := driveClock(deck)
 	if err != nil {
