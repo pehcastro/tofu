@@ -21,6 +21,7 @@ mod foundations;
 mod graph;
 mod kit;
 mod lists;
+mod nav;
 mod palette;
 mod settings;
 mod shell;
@@ -41,18 +42,18 @@ use desk_ui::components::overlay::{ToastKind, Toaster};
 use desk_ui::components::paint::{ink, ms};
 use desk_ui::components::scroll::ScrollArea;
 use desk_ui::components::size::{
-    CAPTION_TEXT, DIM_TEXT, FONT_SMALL, FONT_TITLE, RADIUS_CHIP, RADIUS_ROW, T1, T2, T3,
+    CAPTION_TEXT, DIM_TEXT, FONT_SMALL, FONT_TITLE, RADIUS_CHIP, RADIUS_ROW, T1, T2,
 };
 use desk_ui::live::ActiveTheme;
-use desk_ui::metrics::{SIDEBAR_WIDTH, TEXT};
+use desk_ui::metrics::TEXT;
 use desk_ui::theme::{ColorToken, Mode, NumberToken, Theme};
 use gpui::{
     App, ClickEvent, Context, Div, Entity, FocusHandle, FontWeight, KeyDownEvent,
-    ModifiersChangedEvent, SharedString, Stateful, Window, deferred, div, prelude::*, px,
+    ModifiersChangedEvent, SharedString, Window, deferred, div, prelude::*, px,
 };
 
 use crate::Launch;
-use crate::catalog::{Group, Page, UNBUILT};
+use crate::catalog::Page;
 use crate::themes::{self, Choice};
 use agents::AgentsPage;
 use boardy::BoardyPage;
@@ -74,6 +75,7 @@ use foundations::FoundationsState;
 use graph::GraphPage;
 use kit::{MODELS, label};
 use lists::ListsState;
+use nav::Nav;
 use palette::PalettePage;
 use settings::SettingsPage;
 use shell::ShellPage;
@@ -85,6 +87,7 @@ const META_WIDTH: f32 = 150.0;
 
 pub struct Book {
     page: Crossfade<Page>,
+    nav: Entity<Nav>,
     themes: Vec<Choice>,
     theme: usize,
     theme_error: Option<SharedString>,
@@ -131,6 +134,7 @@ impl Book {
         set_reduced_motion(system_reduced_motion(), cx);
         Book {
             page: Crossfade::new(launch.page),
+            nav: Nav::new(launch.page, cx),
             themes: launch.themes,
             theme: launch.theme,
             theme_error: None,
@@ -232,6 +236,7 @@ impl Book {
             }
             Err(error) => self.theme_error = Some(error.into()),
         }
+        self.nav.update(cx, |_, cx| cx.notify());
         cx.notify();
     }
 
@@ -246,67 +251,14 @@ impl Book {
             }
             Err(error) => self.theme_error = Some(error.into()),
         }
+        self.nav.update(cx, |_, cx| cx.notify());
         cx.notify();
     }
 
-    fn entry(&self, page: Page, theme: &Theme, cx: &mut Context<Self>) -> Stateful<Div> {
-        let chosen = page == self.page.shown();
-        let hover = theme.color(ColorToken::StateHover);
-        div()
-            .id(page.sheet().slug)
-            .px_2()
-            .py_1()
-            .rounded(px(RADIUS_ROW))
-            .cursor_pointer()
-            .when(chosen, |entry| {
-                entry
-                    .bg(theme.color(ColorToken::StateActive))
-                    .text_color(ink(theme, T1))
-            })
-            .when(!chosen, |entry| {
-                entry
-                    .text_color(ink(theme, T2))
-                    .hover(move |style| style.bg(hover))
-            })
-            .child(page.sheet().title)
-            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                this.page.switch(page, Instant::now());
-                cx.notify();
-            }))
-    }
-
-    fn sidebar(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
-        let mut groups = Vec::new();
-        for group in Group::ALL {
-            let mut column = div()
-                .flex()
-                .flex_col()
-                .gap_0p5()
-                .pt_3()
-                .child(div().px_2().pb_1().child(caption(group.title(), theme)));
-            for page in Page::ALL
-                .into_iter()
-                .filter(|page| page.sheet().group == group)
-            {
-                column = column.child(self.entry(page, theme, cx));
-            }
-            column = column.children(UNBUILT.iter().filter(|(of, _)| *of == group).map(
-                |(_, name)| {
-                    div()
-                        .px_2()
-                        .py_1()
-                        .text_color(ink(theme, T3))
-                        .child(format!("{name}, not built"))
-                },
-            ));
-            groups.push(column);
-        }
-        div()
-            .w(px(SIDEBAR_WIDTH))
-            .flex_none()
-            .flex()
-            .flex_col()
-            .child(ScrollArea::new("sidebar").child(div().p_2().children(groups)))
+    fn open(&mut self, page: Page, now: Instant, cx: &mut Context<Self>) {
+        self.page.switch(page, now);
+        self.nav.update(cx, |nav, cx| nav.show(page, cx));
+        cx.notify();
     }
 
     fn toolbar(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
@@ -535,7 +487,7 @@ impl Render for Book {
             .bg(theme.color(ColorToken::SurfaceWindow))
             .text_size(px(TEXT))
             .text_color(theme.color(ColorToken::TextBase))
-            .child(self.sidebar(&theme, cx))
+            .child(Nav::cached(&self.nav))
             .child(
                 div()
                     .flex_1()
