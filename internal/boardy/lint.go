@@ -12,6 +12,7 @@ import (
 	"unicode"
 
 	"tofu/internal/subagent"
+	"tofu/internal/sys"
 )
 
 type Finding struct {
@@ -47,8 +48,9 @@ func (s Store) Lint(boards []Board) []Finding {
 			findings = append(findings, Finding{File: filepath.Join(board.Dir, counterFileName), What: fmt.Sprintf("the counter of %s is %d, behind its highest ticket %d", board.Key, counter, highest)})
 		}
 	}
+	agents := AgentTypes(s.Root)
 	for _, ticket := range tickets {
-		findings = append(findings, s.lintTicket(ticket, tickets)...)
+		findings = append(findings, s.lintTicket(ticket, tickets, agents)...)
 	}
 	for i, a := range holding {
 		for _, b := range holding[i+1:] {
@@ -63,13 +65,17 @@ func (s Store) Lint(boards []Board) []Finding {
 
 func (s Store) path(id string) string { path, _ := s.TicketPath(id); return path }
 
-func (s Store) lintTicket(ticket Ticket, tickets map[string]Ticket) []Finding {
+func (s Store) lintTicket(ticket Ticket, tickets map[string]Ticket, agents []string) []Finding {
 	var findings []Finding
 	say := func(format string, args ...any) {
 		findings = append(findings, Finding{Ticket: ticket.ID, File: s.path(ticket.ID), What: fmt.Sprintf(format, args...)})
 	}
 	if strings.TrimSpace(ticket.Title) == "" {
 		say("%s has no title", ticket.ID)
+	}
+	heldBySpawn := strings.HasSuffix(ticket.Assignee, "/"+ticket.ID)
+	if ticket.Status.Live() && ticket.Assignee != "" && !heldBySpawn && !slices.ContainsFunc(agents, func(name string) bool { return strings.EqualFold(name, ticket.Assignee) }) {
+		say("%s is assigned %s, which is not a registered agent type, so a spawn for it is refused: the board lead assigns one of %s", ticket.ID, ticket.Assignee, strings.Join(agents, ", "))
 	}
 	if ticket.Status == Blocked && ticket.Reason == "" {
 		say("%s is blocked with no reason", ticket.ID)
@@ -100,6 +106,22 @@ func (s Store) lintTicket(ticket Ticket, tickets map[string]Ticket) []Finding {
 		say("%s owns %q, outside its parent %s (%s)", ticket.ID, glob, parent.ID, strings.Join(parent.Owns, ", "))
 	}
 	return findings
+}
+
+var agentName = sys.LazyRegexp(`(?im)^name:\s*(\S+)\s*$`)
+
+func AgentTypes(root string) []string {
+	known := []string{"orchestrator", "general-purpose"}
+	files, _ := filepath.Glob(filepath.Join(root, ".claude", "agents", "*.md"))
+	shipped, _ := filepath.Glob(filepath.Join(root, "library", "*", "agents", "*.md"))
+	for _, file := range append(files, shipped...) {
+		data, _ := os.ReadFile(file)
+		if name := agentName().FindStringSubmatch(string(data)); name != nil {
+			known = append(known, name[1])
+		}
+	}
+	slices.SortFunc(known, func(a, b string) int { return strings.Compare(strings.ToLower(a), strings.ToLower(b)) })
+	return slices.Compact(known)
 }
 
 func family(a, b Front) bool {

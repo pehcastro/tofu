@@ -3,6 +3,9 @@ package boardy
 import (
 	"os"
 	"path/filepath"
+	"slices"
+
+	"tofu/internal/sys"
 )
 
 type starterHook struct{ id, source string }
@@ -53,9 +56,33 @@ func (s Store) WriteStarterHooks(key string) error {
 		return err
 	}
 	for _, h := range starterHooks() {
-		if err := writeAtomic(filepath.Join(dir, h.id+".yaml"), []byte(h.source+"\n")); err != nil {
+		path := filepath.Join(dir, h.id+".yaml")
+		kept, err := sys.Exists(path)
+		switch {
+		case err != nil:
+			return err
+		case kept:
+			continue
+		}
+		if err := writeAtomic(path, []byte(h.source+"\n")); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func StarterHookIDs() []string {
+	hooks := starterHooks()
+	ids := make([]string, len(hooks))
+	for i, h := range hooks {
+		ids[i] = h.id
+	}
+	return ids
+}
+
+func Unruled(boards []Board) []Board {
+	return slices.DeleteFunc(slices.Clone(boards), func(board Board) bool {
+		rules, _ := filepath.Glob(filepath.Join(board.Dir, RulesDirName, "*.yaml"))
+		return len(rules) > 0
+	})
 }

@@ -5,11 +5,14 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"tofu/interface/cli"
 	"tofu/interface/tui/frame"
+	"tofu/internal/boardy"
 	"tofu/internal/browser"
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
@@ -23,8 +26,10 @@ import (
 )
 
 const (
-	doctorUsage       = "tofu doctor [--imports] [--json]"
+	doctorUsage       = "tofu doctor [--imports] [--fix] [--json]"
 	importsFlag       = "--imports"
+	fixFlag           = "--fix"
+	doctorFix         = "tofu doctor --fix writes the starter hooks to every board with no rules, and touches no rule that exists"
 	doctorGateEnv     = "the environment"
 	doctorGateDotEnv  = "an .env file"
 	doctorGateStore   = "the credential store"
@@ -49,12 +54,14 @@ const (
 )
 
 func doctor(args []string, out, errOut io.Writer) int {
-	asJSON, imports := jsonAsked(args), false
+	asJSON, imports, fix := jsonAsked(args), false, false
 	for _, arg := range args {
 		switch arg {
 		case jsonFlag:
 		case importsFlag:
 			imports = true
+		case fixFlag:
+			fix = true
 		default:
 			return verbOutput{verb: "doctor", usageLine: doctorUsage, asJSON: asJSON, out: out, errOut: errOut}.usage(errors.New("unknown argument " + strconv.Quote(arg)))
 		}
@@ -65,12 +72,13 @@ func doctor(args []string, out, errOut io.Writer) int {
 	now := time.Now()
 	report := doctorState(now)
 	ready := report.Verdict == doctorReady
+	unruled, fixed := doctorBoards(report.Root, fix)
 	var err error
 	if asJSON {
-		err = writeJSON(out, cli.Envelope{Verb: "doctor", OK: ready, At: now, Data: report, Problems: blockerProblems(report.Blockers)})
+		err = writeJSON(out, cli.Envelope{Verb: "doctor", OK: ready, At: now, Data: report, Problems: append(blockerProblems(report.Blockers), unruled...)})
 	} else {
 		page := cli.Detect(out, os.Environ())
-		err = page.Print(out, doctorPage(page, report))
+		err = page.Print(out, append(doctorPage(page, report), boardLines(page, unruled, fixed)...))
 	}
 	switch {
 	case err != nil:
@@ -160,6 +168,46 @@ func shellSiftRule(point doctorRule) doctorRule {
 		point.Mode = gate.ModeEnforced.String()
 	}
 	return point
+}
+
+func doctorBoards(root string, fix bool) (unruled []cli.Problem, fixed []string) {
+	store, err := boardy.OpenStore(root)
+	boards, listed := store.Boards()
+	if err = errors.Join(err, listed); err != nil {
+		unruled = append(unruled, cli.Problem{What: "boards: " + err.Error()})
+	}
+	hooks := strings.Join(boardy.StarterHookIDs(), ", ")
+	for _, board := range boardy.Unruled(boards) {
+		rules := filepath.Join(board.Dir, boardy.RulesDirName)
+		if !fix {
+			unruled = append(unruled, cli.Problem{What: "board " + board.Key + " has no rules, so " + hooks + " never fire", Hint: doctorFix})
+			continue
+		}
+		if err := store.WriteStarterHooks(board.Key); err != nil {
+			unruled = append(unruled, cli.Problem{What: "board " + board.Key + ": its starter hooks were not all written to " + rules + ": " + err.Error()})
+			continue
+		}
+		fixed = append(fixed, "board "+board.Key+": wrote "+hooks+" to "+rules)
+	}
+	return unruled, fixed
+}
+
+func boardLines(page cli.Page, unruled []cli.Problem, fixed []string) []string {
+	if len(unruled)+len(fixed) == 0 {
+		return nil
+	}
+	lines := []string{"", page.Section("boards", cli.Verdict{})}
+	for _, problem := range unruled {
+		said := []string{page.Rows([]cli.Row{{Mark: cli.Warn, Cells: []string{problem.What}}})[0]}
+		if problem.Hint != "" {
+			said = append(said, cli.Gap+page.Hint(problem.Hint))
+		}
+		lines = append(lines, cli.Indent(said...)...)
+	}
+	for _, line := range fixed {
+		lines = append(lines, cli.Indent(page.Rows([]cli.Row{{Mark: cli.Done, Cells: []string{line}}})...)...)
+	}
+	return lines
 }
 
 func doctorBlockers() []doctorBlocker {
