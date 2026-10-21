@@ -234,25 +234,34 @@ func (m *Memory) Add(e Entry, replace string) (Entry, error) {
 	if replace != "" && old < 0 {
 		return Entry{}, fmt.Errorf("no memory entry is %s, so nothing replaces it", replace)
 	}
-	id, err := m.mint()
-	if err != nil {
-		return Entry{}, err
-	}
-	e.ID, e.File = id, ""
-	if e.Scope.local() {
-		e.ID = fmt.Sprintf("%s%s%04x", e.ID, idSeparator, rand.IntN(localIDTags))
+	inPlace := old >= 0 && kept[old].Scope == e.Scope
+	var minted string
+	var err error
+	if inPlace {
+		e.ID, e.File = replace, kept[old].File
+	} else {
+		if minted, err = m.mint(); err != nil {
+			return Entry{}, err
+		}
+		e.ID, e.File = minted, ""
+		if e.Scope.local() {
+			e.ID = fmt.Sprintf("%s%s%04x", e.ID, idSeparator, rand.IntN(localIDTags))
+		}
 	}
 	if len(e.viewed()) > konst.MemtreeLineBytes {
 		err = fmt.Errorf("the entry reads as %d bytes, over the %d a memory line holds; write the rule itself and nothing else", len(e.viewed()), konst.MemtreeLineBytes)
 	} else {
 		e, err = m.keep(e, false)
 	}
+	if err != nil && minted != "" {
+		err = errors.Join(err, os.Remove(filepath.Join(m.home, dirName, mintedDir, minted)))
+	}
 	if err != nil {
-		return Entry{}, errors.Join(err, os.Remove(filepath.Join(m.home, dirName, mintedDir, id)))
+		return Entry{}, err
 	}
 	shelf := m.shelf(e.Scope)
-	shelf.Entries = append(shelf.Entries, e)
-	if old >= 0 {
+	shelf.Entries = append(slices.DeleteFunc(shelf.Entries, func(o Entry) bool { return o.ID == e.ID }), e)
+	if old >= 0 && !inPlace {
 		if _, err := m.Remove(kept[old].Scope, replace); err != nil {
 			return e, fmt.Errorf("kept %s but %s is still there: %w", e.ID, replace, err)
 		}

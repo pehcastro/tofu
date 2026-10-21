@@ -16,6 +16,7 @@ import (
 type Item struct {
 	Kind string `json:"kind"`
 	Text string `json:"text"`
+	Key  string `json:"key,omitempty"`
 }
 
 func (i Item) rendered() string { return i.Kind + ": " + i.Text }

@@ -32,12 +32,18 @@ func (s *Store) size(lines []Ref) int {
 }
 
 func (s *Store) View(saidElsewhere ...string) string {
+	latest := map[string]int{}
+	for i, item := range s.items {
+		latest[item.Key] = i
+	}
 	var view strings.Builder
 	for _, ref := range s.view.Lines {
-		heldElsewhere := ref.Level == 0 && s.items[ref.Index].Kind == KindPerson && slices.ContainsFunc(saidElsewhere, func(said string) bool {
-			return strings.TrimSpace(said) == strings.TrimSpace(s.items[ref.Index].Text)
+		item := s.items[ref.Index]
+		heldElsewhere := ref.Level == 0 && item.Kind == KindPerson && slices.ContainsFunc(saidElsewhere, func(said string) bool {
+			return strings.TrimSpace(said) == strings.TrimSpace(item.Text)
 		})
-		if !heldElsewhere {
+		superseded := ref.Level == 0 && item.Key != "" && latest[item.Key] != ref.Index
+		if !heldElsewhere && !superseded {
 			view.WriteString(s.line(ref) + "\n")
 		}
 	}

@@ -296,8 +296,7 @@ func TestAFullScopeKeepsEveryWriteRemovesByAppendingAndSurvivesATornLine(t *test
 	if _, err := m.Remove(Global, "m1"); err != nil {
 		t.Fatal(err)
 	}
-	swapped, err := m.Add(Entry{Scope: Global, Kind: KindPerson, Text: "replaced text", At: time.Now(), By: ByPerson}, "m2")
-	if err != nil {
+	if _, err := m.Add(Entry{Scope: Global, Kind: KindPerson, Text: "replaced text", At: time.Now(), By: ByPerson}, "m2"); err != nil {
 		t.Fatal(err)
 	}
 	log, err := os.OpenFile(kept.File, os.O_APPEND|os.O_WRONLY, 0o644)
@@ -308,8 +307,8 @@ func TestAFullScopeKeepsEveryWriteRemovesByAppendingAndSurvivesATornLine(t *test
 		t.Fatal(err)
 	}
 	back := opened(t, repo)
-	if newest := back.Global.Entries[len(back.Global.Entries)-1]; len(back.Global.Entries) != 79 || back.Global.Entries[0].ID != "m3" || newest.ID != swapped.ID || newest.Text != swapped.Text {
-		t.Fatalf("after a removal, a replace and a torn line the scope holds %d entries, %s first and %+v last, want 79 from m3 ending with %+v", len(back.Global.Entries), back.Global.Entries[0].ID, newest, swapped)
+	if len(back.Global.Entries) != 79 || back.Global.Entries[0].ID != "m2" || back.Global.Entries[0].Text != "replaced text" {
+		t.Fatalf("after a removal, a replace and a torn line the scope holds %d entries starting %+v, want 79 starting with the replaced m2", len(back.Global.Entries), back.Global.Entries[0])
 	}
 	block := sent(t, back)
 	if lines := strings.Count(block, "\n"); lines >= 80 || !strings.Contains(block, "replaced text") {
@@ -344,7 +343,7 @@ func TestALeadRuleIsOneLineOfAtMost160BytesNamingNoOne(t *testing.T) {
 	}
 }
 
-func TestSavesAtOnceNeverShareAnIdAndAReplaceTakesANewOne(t *testing.T) {
+func TestSavesAtOnceNeverShareAnIdAndAReplaceKeepsItsIdInItsScope(t *testing.T) {
 	freshHome(t)
 	repo := t.TempDir()
 	opened(t, repo)
@@ -374,15 +373,20 @@ func TestSavesAtOnceNeverShareAnIdAndAReplaceTakesANewOne(t *testing.T) {
 		t.Fatalf("eight saves at once minted %d ids and kept %s, want eight of each", len(minted), ids(back.Project.Entries))
 	}
 	old := back.Project.Entries[0]
-	replaced, err := back.Add(Entry{Scope: Project, Kind: KindProject, Text: "a rule in its place", At: time.Now(), By: ByPerson}, old.ID)
+	edited, err := back.Add(Entry{Scope: Project, Kind: KindProject, Text: "a rule in its place", At: time.Now(), By: ByPerson}, old.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block := sent(t, opened(t, repo))
+	if edited.ID != old.ID || strings.Count(block, "[memory#"+old.ID+"]") != 1 || !strings.Contains(block, "[memory#"+old.ID+"] a rule in its place") {
+		t.Errorf("replacing %s in its scope gave %s and the view %q, want %s kept and one line for it with the new text", old.ID, edited.ID, block, old.ID)
+	}
+	moved, err := back.Add(Entry{Scope: Global, Kind: KindProject, Text: "a rule for everywhere", At: time.Now(), By: ByPerson}, old.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	after := opened(t, repo)
-	if minted[replaced.ID] || slices.ContainsFunc(after.Project.Entries, func(e Entry) bool { return e.ID == old.ID }) || len(after.Project.Entries) != 8 {
-		t.Errorf("replacing %s gave %s and left %s, want a new id and %s gone", old.ID, replaced.ID, ids(after.Project.Entries), old.ID)
-	}
-	if block := sent(t, after); !strings.Contains(block, "removed: [memory#"+old.ID+"] "+old.Text) {
-		t.Errorf("the view after a replace reads %q, want %s marked removed", block, old.ID)
+	if minted[moved.ID] || len(after.Project.Entries) != 7 || len(after.Global.Entries) != 1 || slices.ContainsFunc(after.Project.Entries, func(e Entry) bool { return e.ID == old.ID }) {
+		t.Errorf("moving %s to %s gave %s and left project %s, global %s; want a new id and %s gone from project", old.ID, Global, moved.ID, ids(after.Project.Entries), ids(after.Global.Entries), old.ID)
 	}
 }

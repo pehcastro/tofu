@@ -93,7 +93,7 @@ func project(store *memtree.Store, entries, log string) error {
 		return err
 	}
 	for _, r := range records[min(bytes.Count(projected, []byte{'\n'}), len(records)):] {
-		item := memtree.Item{Kind: string(r.Kind), Text: Entry{ID: r.ID, Text: r.Text}.Line()}
+		item := memtree.Item{Kind: string(r.Kind), Text: Entry{ID: r.ID, Text: r.Text}.Line(), Key: r.ID}
 		if r.Removed {
 			item.Kind = removedKind
 		}
