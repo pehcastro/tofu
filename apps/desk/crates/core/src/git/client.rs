@@ -460,7 +460,20 @@ impl GitBinary {
         if let Some(rebasing) = rebase(&dir.join("rebase-apply"), "next", "last")? {
             return Ok(Some(rebasing));
         }
-        if let Some(theirs) = read(dir, "MERGE_HEAD")? {
+        if let Some(sha) = read(dir, "MERGE_HEAD")? {
+            let merged_branch = read(dir, "MERGE_MSG")?.and_then(|message| {
+                let first = message.lines().next()?;
+                let rest = first.strip_prefix("Merge branch '")?;
+                Some(rest.get(..rest.find('\'')?)?.to_owned())
+            });
+            let theirs = merged_branch
+                .or_else(|| {
+                    self.run(&["name-rev", "--name-only", "MERGE_HEAD"], None)
+                        .ok()
+                        .map(|name| name.trim().to_owned())
+                        .filter(|name| !name.is_empty() && name != "undefined")
+                })
+                .unwrap_or(sha);
             return Ok(Some(Operation::Merge { theirs }));
         }
         if let Some(sha) = read(dir, "CHERRY_PICK_HEAD")? {

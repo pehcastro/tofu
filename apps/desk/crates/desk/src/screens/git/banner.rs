@@ -77,15 +77,22 @@ fn banner(
         count => format!("{} in conflict", plural(count, "file")),
     };
     let (doing, sides, finish, undo) = match operation {
-        Operation::Merge { theirs } => (
-            format!("Merging {} into {here}: {left}", short(theirs)),
-            Sides {
-                ours: here.clone(),
-                theirs: short(theirs).to_owned(),
-            },
-            format!("Continue: finish the merge with a merge commit on {here}"),
-            format!("Abort: stop merging and put {here} back as it was before"),
-        ),
+        Operation::Merge { theirs } => {
+            let theirs = if theirs.len() == 40 && theirs.bytes().all(|b| b.is_ascii_hexdigit()) {
+                short(theirs)
+            } else {
+                theirs.as_str()
+            };
+            (
+                format!("Merging {theirs} into {here}: {left}"),
+                Sides {
+                    ours: here.clone(),
+                    theirs: theirs.to_owned(),
+                },
+                format!("Continue: finish the merge with a merge commit on {here}"),
+                format!("Abort: stop merging and put {here} back as it was before"),
+            )
+        }
         Operation::Rebase { onto, step, of } => (
             format!("Rebasing onto {onto}, step {step} of {of}: {left}"),
             Sides {
