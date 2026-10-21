@@ -2,6 +2,7 @@ package codex
 
 import (
 	"bufio"
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -175,8 +176,10 @@ func (s *streamState) handle(event streamEvent) error {
 		case failed.Code == "server_is_overloaded" || failed.Code == "server_error" || failed.Type == "server_error":
 			cause = llm.ErrStreamBroke
 		}
-		return transport.Fail("codex.ReadStream", kind, cause,
+		refused := transport.Fail("codex.ReadStream", kind, cause,
 			"the stream carried an error: %s %s: %s", failed.Type, failed.Code, failed.Message)
+		refused.Code, refused.Said = cmp.Or(failed.Code, failed.Type), failed.Message
+		return refused
 
 	case "response.output_item.added":
 		item := &openItem{kind: event.Item.Type, toolIndex: -1}

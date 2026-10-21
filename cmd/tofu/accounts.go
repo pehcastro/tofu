@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +23,7 @@ import (
 	"tofu/internal/safe"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/sys"
+	"tofu/internal/transport"
 	"tofu/internal/turn"
 )
 
@@ -266,6 +268,7 @@ func (a *accounts) modelOn(row cred.Row) (turn.Model, error) {
 		return nil, err
 	}
 	heard := quota.Account{Provider: quota.Provider(a.provider), AccountID: row.Credential.Identity.AccountID, Row: row.ID}
+	named := transport.Account{Source: string(a.provider), Label: strings.TrimSpace("#" + strconv.FormatInt(row.ID, 10) + " " + row.Credential.Identity.Email), SignIn: loginHint(string(a.provider))}
 	onHeaders := func(header http.Header) { _ = poller.Heard(heard, header) }
 	if a.provider == cred.CodexSub {
 		wire, err := codex.New(codex.Config{
@@ -274,6 +277,7 @@ func (a *accounts) modelOn(row cred.Row) (turn.Model, error) {
 			InstallationID: session,
 			SessionID:      session,
 			Transport:      turnTransportConfig(),
+			Account:        named,
 			ClientVersion:  versions.Codex,
 			OnHeaders:      onHeaders,
 		})
@@ -291,6 +295,7 @@ func (a *accounts) modelOn(row cred.Row) (turn.Model, error) {
 		SessionID: session,
 		AccountID: row.Credential.Identity.AccountID,
 		Transport: turnTransportConfig(),
+		Account:   named,
 
 		ClaudeCodeVersion: versions.ClaudeCode,
 		AdoptVersion:      adopt,

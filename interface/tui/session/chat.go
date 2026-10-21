@@ -11,6 +11,7 @@ import (
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/progress"
 	"tofu/interface/tui/trace"
+	"tofu/internal/transport"
 	"tofu/internal/widget"
 )
 
@@ -249,7 +250,7 @@ func (m *Model) render(index int) []string {
 		}
 		return indented(lines)
 	case Failure:
-		return indented([]string{m.failureLine(entry)})
+		return indented(m.failureLines(entry))
 	}
 	panic("session: unknown entry kind")
 }
@@ -289,13 +290,31 @@ func indented(lines []string) []string {
 	return lines
 }
 
-func (m *Model) failureLine(entry Entry) string {
+func (m *Model) failureLines(entry Entry) []string {
 	tail := ""
 	if short := m.FeedID(entry.ID); short != "" {
 		tail = gap + look.Faint(wholeErrorInWork) + look.TypedID(toolKind, short)
 	}
-	room := max(m.textWidth()-widget.Cells(failureMarker+tail), 1)
-	return look.Style(look.Red).Render(failureMarker+widget.Fit(oneLine(entry.Body), room)) + tail
+	said, sentenced := transport.Sentenced(entry.Body)
+	if !sentenced {
+		room := max(m.textWidth()-widget.Cells(failureMarker+tail), 1)
+		return []string{look.Style(look.Red).Render(failureMarker+widget.Fit(oneLine(entry.Body), room)) + tail}
+	}
+	room := max(m.textWidth()-widget.Cells(failureMarker), 1)
+	lines := widget.Wrap(said, room)
+	last := len(lines) - 1
+	for index, line := range lines {
+		marker := failureMarker
+		if index > 0 {
+			marker = strings.Repeat(" ", widget.Cells(failureMarker))
+		}
+		lines[index] = look.Style(look.Red).Render(marker + line)
+	}
+	if widget.Cells(lines[last])+widget.Cells(tail) > room+widget.Cells(failureMarker) {
+		return append(lines, strings.Repeat(" ", widget.Cells(failureMarker))+strings.TrimPrefix(tail, gap))
+	}
+	lines[last] += tail
+	return lines
 }
 
 func (m *Model) toolLine(entry Entry) string {

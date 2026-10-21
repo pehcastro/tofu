@@ -2,6 +2,7 @@ package turn
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -39,8 +40,18 @@ func (r *RateLimited) Error() string {
 	for i, id := range r.Tried {
 		tried[i] = "#" + strconv.FormatInt(id, 10)
 	}
-	return "every " + r.Wire + " account this turn could move to answered with its rate limit (" + strings.Join(tried, ", ") +
-		"), and the soonest resets at " + r.ResetAt.Format(time.RFC3339) + ": " + r.Cause.Error()
+	said := "every " + r.Wire + " account this turn could move to answered with its rate limit (" + strings.Join(tried, ", ") +
+		"), and the soonest resets at " + r.ResetAt.Format(time.RFC3339)
+	var refused *transport.Error
+	if errors.As(r.Cause, &refused) {
+		resetting := *refused
+		resetting.ResetAt = r.ResetAt
+		said = resetting.Sentence()
+		if len(tried) > 1 {
+			said += " Every account this turn could move to is limited: " + strings.Join(tried, ", ") + "."
+		}
+	}
+	return said + "\n" + r.Cause.Error()
 }
 
 func (r *RateLimited) Unwrap() error { return r.Cause }
@@ -65,6 +76,10 @@ func (a Accounts) limited(ctx context.Context, wire string, tried []Account, att
 		if at, known := a.Resets(ctx, account); known && (limited.ResetAt.IsZero() || at.Before(limited.ResetAt)) {
 			limited.ResetAt = at
 		}
+	}
+	var refused *transport.Error
+	if limited.ResetAt.IsZero() && errors.As(cause, &refused) {
+		limited.ResetAt = refused.ResetAt
 	}
 	if !limited.ResetAt.IsZero() {
 		return limited

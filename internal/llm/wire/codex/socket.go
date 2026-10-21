@@ -12,7 +12,6 @@ import (
 	"os"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -163,7 +162,7 @@ func (w *Wire) dial(ctx context.Context, dump Dump, note llm.Note) error {
 	note.Change(func(attempt *llm.Attempt) { attempt.Error = "opening the socket: " + err.Error() })
 	if response != nil && (response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusTooManyRequests) {
 		detail, _ := io.ReadAll(io.LimitReader(response.Body, konst.TransportErrorDetailBytes))
-		return &transport.Error{Kind: transport.StatusKind(response.StatusCode), Op: "codex.Ask", Status: response.StatusCode, Detail: strings.TrimSpace(string(detail))}
+		return Refusal(response.StatusCode, response.Header, detail)
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -242,7 +241,7 @@ func (w *Wire) socketEvent(payload []byte, note llm.Note) error {
 			note.Change(func(attempt *llm.Attempt) {
 				attempt.Status, attempt.ErrorBody, attempt.RetryAfter = status, string(payload), failure.Header["retry-after"]
 			})
-			return &transport.Error{Kind: transport.StatusKind(status), Op: "codex.Ask", Status: status, Detail: string(payload)}
+			return Refusal(status, http.Header{transport.RetryAfterHeader: {failure.Header["retry-after"]}}, payload)
 		}
 	}
 	var limits socketLimits

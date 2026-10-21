@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -24,6 +25,7 @@ import (
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/wire/anthropic"
+	"tofu/internal/llm/wire/codex"
 	sessionstore "tofu/internal/session"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
@@ -128,6 +130,12 @@ A refused reply is the error a wire returns for that HTTP status and body, so a
 driven run reaches a context overflow or any other refusal without a network:
   {"refused":{"status":400,"detail":"prompt is too long: 213462 tokens > 200000 maximum"}}
 
+Naming the wire reads the body and headers the way that wire does, and naming
+the account says whose it was, so the chat words the refusal as it would live:
+  {"refused":{"status":402,"wire":"codex","detail":"{\"error\":{\"code\":\"billing_not_configured\"}}",
+   "account":{"source":"codex-sub","label":"#1","plan":"free"}}}
+  {"refused":{"status":429,"wire":"anthropic","headers":{"retry-after":"3600"},"detail":"..."}}
+
 A reply with no agent is the orchestrator's. A spawned sub-agent takes only the
 replies addressed to it, so the two conversations never take each other's:
   {"agent":"c1","text":"reading it","tools":[{"name":"read","args":{"path":"x"}}]}
@@ -176,8 +184,11 @@ type cassetteReply struct {
 	Agent      string   `json:"agent"`
 	Unfinished bool     `json:"unfinished"`
 	Refused    *struct {
-		Status int    `json:"status"`
-		Detail string `json:"detail"`
+		Status  int               `json:"status"`
+		Detail  string            `json:"detail"`
+		Wire    string            `json:"wire"`
+		Headers map[string]string `json:"headers"`
+		Account transport.Account `json:"account"`
 	} `json:"refused"`
 	Tools []struct {
 		Name string          `json:"name"`
@@ -302,7 +313,26 @@ func readCassette(path string) (*cassette, error) {
 		}
 		recorded := recordedReply{decision: decision, deltas: reply.Deltas, thinking: reply.Thinking, unfinished: reply.Unfinished}
 		if refused := reply.Refused; refused != nil {
-			recorded.refused = &transport.Error{Kind: transport.StatusKind(refused.Status), Op: "cassette.Ask", Status: refused.Status, Detail: refused.Detail}
+			header := http.Header{}
+			for name, value := range refused.Headers {
+				header.Set(name, value)
+			}
+			var said *transport.Error
+			switch refused.Wire {
+			case "":
+				said = &transport.Error{Kind: transport.StatusKind(refused.Status), Op: "cassette.Ask", Status: refused.Status, Detail: refused.Detail}
+			case codex.Name:
+				said = codex.Refusal(refused.Status, header, []byte(refused.Detail))
+			case anthropic.Name:
+				said = anthropic.Refusal(refused.Status, header, refused.Detail)
+			default:
+				return nil, fmt.Errorf("%s line %d: refused wire %q is none of %s and %s", path, number+1, refused.Wire, codex.Name, anthropic.Name)
+			}
+			said.Account = refused.Account
+			if said.Account.Source != "" {
+				said.Account.SignIn = loginHint(said.Account.Source)
+			}
+			recorded.refused = said
 		}
 		deck.decks[reply.Agent] = append(deck.decks[reply.Agent], recorded)
 	}

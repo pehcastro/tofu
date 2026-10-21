@@ -6,11 +6,13 @@ import (
 	"compress/flate"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +35,7 @@ type Config struct {
 	Token      llm.TokenSource
 	HTTP       *http.Client
 	Transport  transport.Config
+	Account    transport.Account
 	StreamIdle time.Duration
 	Proxy      bool
 	SessionID  string
@@ -231,12 +234,9 @@ func (w *Wire) post(ctx context.Context, dump Dump, oauth bool, onDelta, onThink
 	}
 
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return Result{}, &transport.Error{
-			Kind:   transport.StatusKind(response.StatusCode),
-			Op:     "anthropic.Ask",
-			Status: response.StatusCode,
-			Detail: errorDetail(response),
-		}
+		refused := Refusal(response.StatusCode, response.Header, errorDetail(response))
+		refused.Account = w.config.Account
+		return Result{}, refused
 	}
 
 	body := llm.WatchIdle(response.Body, w.config.StreamIdle)
@@ -251,6 +251,29 @@ func (w *Wire) post(ctx context.Context, dump Dump, oauth bool, onDelta, onThink
 
 func normalizedEncoding(header string) string {
 	return strings.ToLower(strings.TrimSpace(header))
+}
+
+const unifiedReset = "anthropic-ratelimit-unified-reset"
+
+type refusalBody struct {
+	Error struct {
+		Type    string `json:"type"`
+		Message string `json:"message"`
+		Details struct {
+			Code string `json:"error_code"`
+		} `json:"details"`
+	} `json:"error"`
+}
+
+func Refusal(status int, header http.Header, body string) *transport.Error {
+	var said refusalBody
+	_ = json.Unmarshal([]byte(body), &said)
+	refused := &transport.Error{Kind: transport.StatusKind(status), Op: "anthropic.Ask", Status: status, Detail: body,
+		Code: cmp.Or(said.Error.Details.Code, said.Error.Type), Said: said.Error.Message, ResetAt: transport.ResetAt(header, time.Now())}
+	if epoch, err := strconv.ParseInt(strings.TrimSpace(header.Get(unifiedReset)), 10, 64); err == nil && epoch > 0 {
+		refused.ResetAt = time.Unix(epoch, 0)
+	}
+	return refused
 }
 
 func errorDetail(response *http.Response) string {

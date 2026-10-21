@@ -3,6 +3,7 @@ package codex
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -23,6 +24,7 @@ type Config struct {
 	Token          llm.TokenSource
 	HTTP           *http.Client
 	Transport      transport.Config
+	Account        transport.Account
 	StreamIdle     time.Duration
 	InstallationID string
 	SessionID      string
@@ -194,7 +196,33 @@ func (w *Wire) send(ctx context.Context, request Request, token string) (Result,
 		return w.post(ctx, dump, request.OnThinking)
 	})
 	result.FirstTokenMS = llm.MillisSince(sent, result.firstDelta)
+	var refused *transport.Error
+	if errors.As(err, &refused) {
+		refused.Account = w.config.Account
+		refused.Account.Plan = cmp.Or(refused.Account.Plan, claims.PlanType)
+	}
 	return result, dump, err
+}
+
+type refusalBody struct {
+	Error struct {
+		Code     string `json:"code"`
+		Type     string `json:"type"`
+		Message  string `json:"message"`
+		ResetsAt int64  `json:"resets_at"`
+	} `json:"error"`
+	Detail string `json:"detail"`
+}
+
+func Refusal(status int, header http.Header, body []byte) *transport.Error {
+	var said refusalBody
+	_ = json.Unmarshal(body, &said)
+	refused := &transport.Error{Kind: transport.StatusKind(status), Op: "codex.Ask", Status: status, Detail: strings.TrimSpace(string(body)),
+		Code: cmp.Or(said.Error.Code, said.Error.Type), Said: cmp.Or(said.Error.Message, said.Detail), ResetAt: transport.ResetAt(header, time.Now())}
+	if said.Error.ResetsAt > 0 {
+		refused.ResetAt = time.Unix(said.Error.ResetsAt, 0)
+	}
+	return refused
 }
 
 func (w *Wire) endpoint(subscription bool) string {
@@ -227,12 +255,7 @@ func (w *Wire) post(ctx context.Context, dump Dump, onThinking func(string)) (Re
 
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		detail, _ := io.ReadAll(io.LimitReader(response.Body, konst.TransportErrorDetailBytes))
-		return Result{}, &transport.Error{
-			Kind:   transport.StatusKind(response.StatusCode),
-			Op:     "codex.Ask",
-			Status: response.StatusCode,
-			Detail: strings.TrimSpace(string(detail)),
-		}
+		return Result{}, Refusal(response.StatusCode, response.Header, detail)
 	}
 
 	body := llm.WatchIdle(response.Body, w.config.StreamIdle)

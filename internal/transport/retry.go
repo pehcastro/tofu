@@ -71,6 +71,13 @@ func (c Config) Pause(ctx context.Context, wait time.Duration) error {
 	}
 }
 
+func ResetAt(header http.Header, now time.Time) time.Time {
+	if wait := RetryAfter(header, now); wait > 0 {
+		return now.Add(wait)
+	}
+	return time.Time{}
+}
+
 func RetryAfter(header http.Header, now time.Time) time.Duration {
 	if value := strings.TrimSpace(header.Get(RetryAfterMillisHeader)); value != "" {
 		if millis, err := strconv.ParseFloat(value, 64); err == nil && millis >= 0 {
