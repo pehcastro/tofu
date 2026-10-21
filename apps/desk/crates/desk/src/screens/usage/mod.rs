@@ -29,7 +29,7 @@ const NO_SESSION: &str =
 const NOTHING_YET: &str = "tofu sends usage.updated once per model call. Run a turn in this session and its calls show here as they arrive.";
 const NOT_REPLAYED: &str = "Calls before the desk opened this session come from session.trace requests; calls after come from usage.updated as they arrive.";
 const LEAD: &str = "lead";
-const COUNT_LEAST: f32 = 120.0;
+const COUNT_LEAST: f32 = 150.0;
 const ACTIVITY_LEAST: f32 = 360.0;
 const WENT_LEAST: f32 = 280.0;
 const SPLIT_LEAST: f32 = 300.0;
@@ -644,7 +644,8 @@ fn count(label: &'static str, value: String, grow: f32, theme: &Theme) -> Div {
                 .child(caption(label, theme)),
         )
         .child(
-            ellipsis(inner_card(theme))
+            inner_card(theme)
+                .overflow_hidden()
                 .px(px(14.0))
                 .py(px(10.0))
                 .text_size(px(FIGURE))
