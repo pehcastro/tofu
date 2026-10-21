@@ -27,11 +27,14 @@ PowerShell. Elsewhere it's `$SHELL`, or `/bin/sh`. The `shell` setting or
 
 ## Limits, guards and background servers
 
-A command still running after 30 s, such as a long build, moves to a
+A sub-agent's command still running after 30 s, such as a long build, moves to a
 background shell instead of holding the call. The call returns its name, such
 as `bash-3`, and what it printed so far, and the command keeps running on the
-**shells** tab. The model reads it back with `shell wait`, which returns when
+**shells** tab. The sub-agent reads it back with `shell wait`, which returns when
 the command ends or after another 30 s, with its exit code and last lines.
+The lead's own command moves after 10 s, or at once when you type, so you can
+always talk to it: its turn ends without waiting, and the exit comes back to
+the lead as one message with the exit code and last lines.
 Nothing is killed at a deadline, so a 10 minute build is not lost at 10
 minutes. A `timeout_ms` of 30,000 or less is a hard limit instead: the
 command is killed there and returns what it printed. The result and the

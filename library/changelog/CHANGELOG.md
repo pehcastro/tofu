@@ -10,6 +10,23 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc14 - 2026-10-21
+
+### Changed
+
+- A message you send while the lead works is answered first, before any other call, board work or spawn, from what the lead knows then; a step that skips the answer, or a turn that would end on a promise to answer later, is sent back once.
+- The lead's own command moves to a background shell after 10 s, or at once when you type, and its turn ends without waiting; the exit comes back to the lead as one message with its code and last lines. A sub-agent's command still moves after 30 s.
+- When you repeat something memory already keeps, the lead is told the entry and the date and answers that it is already in force, instead of promising it again; a cron prompt is never taken for your words.
+- Over `tofu serve`, `turn.steer` takes `images` like `turn.send`.
+
+### Fixed
+
+- An image in a message sent while the lead works, queued, or sent to an idle lead beside running sub-agents reaches the lead; before, under a session holder, only its `[Image #N]` text did.
+- A message typed while only sub-agents run is sent and starts the lead at once, and the status reads lead idle, free to talk, instead of queued and waiting on the sub-agents.
+- The lead's end-of-turn board check stays quiet when nothing on the board changed or your message is about something else, so the same status line is not repeated every turn.
+- A ticket a lead files for another board lands in that board's triage, and the tool says where.
+- Memory saves made at once each keep their own id and none is lost; a replace keeps its id and scope and shows once.
+
 ## 0.5.15-rc13 - 2026-10-21
 
 ### Added

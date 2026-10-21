@@ -92,7 +92,12 @@ no request to announce the work. Sub-agents started in one reply are named in
 the order the reply lists them.
 
 The lead has one inbox. Your messages, finished reports, asks and checks
-all go into it. In the middle of a turn, the lead reads it at its next step.
+all go into it. In the middle of a turn, the lead reads it at its next step,
+and answers you first, before any other call, board work or spawn, from what
+it knows then; a step that skips the answer, or a turn that would end on a
+promise to answer later, is sent back. While only sub-agents or the lead's
+background commands run, the lead is idle and a message you type starts its
+turn at once.
 When idle, each kind wakes it differently:
 
 - **A message or an ask** starts a turn at once and never waits. An ask goes

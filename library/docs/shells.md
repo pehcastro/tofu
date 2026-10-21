@@ -16,7 +16,7 @@ The second kind is not killed. The call returns the shell's name, such as
 `bash-3`, and what it printed so far, and the command keeps running. The
 model, or a sub-agent, reads it back with `shell wait`, which returns as
 soon as the command ends, or after another 30 s, with its exit code and its
-last lines. A sub-agent that can run bash can always use `shell`, and may
+last lines. The lead's own command moves after 10 s instead, or at once when you type, and its exit comes back to the lead as one message, so the lead never waits on it and you can always talk to it. A sub-agent that can run bash can always use `shell`, and may
 start a server, a watcher or a `sleep` with `background: true`; outside
 the background it sleeps 5 s at most.
 
