@@ -119,6 +119,7 @@ type Host struct {
 	id        string
 	started   string
 	carried   []llm.Message
+	carriedOn string
 	prefix    *turn.Prefix
 	pending   []pendingImage
 	ran       []string
@@ -657,7 +658,7 @@ func (h *Host) carry(resumed Carry) error {
 		h.engine.Renew()
 	}
 	h.reads, h.inbox, h.roster, h.spent = turn.NewReadLedger(), turn.NewInbox(), &roster.Roster{}, &tokenTally{}
-	h.ran, h.carried, h.prefix, h.shown = nil, resumed.Messages, &turn.Prefix{}, map[string]bool{}
+	h.ran, h.carried, h.carriedOn, h.prefix, h.shown = nil, resumed.Messages, "", &turn.Prefix{}, map[string]bool{}
 	for _, message := range resumed.Messages {
 		if message.ToolCallID != "" {
 			h.shown[message.ToolCallID] = true
@@ -672,6 +673,9 @@ func (h *Host) carry(resumed Carry) error {
 	}
 	if err != nil {
 		return fmt.Errorf("the sub-agents of %s were not all read back: %w", resumed.Session, err)
+	}
+	if header, err := store.Header(resumed.Session); err == nil {
+		h.carriedOn = header.Wire
 	}
 	side, found, err := store.Side(resumed.Session)
 	if err != nil || !found || side.Effort == "" {

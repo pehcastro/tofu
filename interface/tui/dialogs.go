@@ -24,6 +24,7 @@ import (
 	"tofu/interface/tui/quota"
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/shells"
+	library "tofu/internal/llm/models"
 	isettings "tofu/internal/settings"
 	isubagent "tofu/internal/subagent"
 )
@@ -329,6 +330,9 @@ func (a *App) choseModel(intent models.Intent) tea.Cmd {
 		a.roles = nil
 		a.refreshSettingsRows()
 		a.notify(string(intent.Role) + " now runs " + intent.Slug)
+		if intent.Role == library.RoleOrchestrator {
+			a.runNextTurnOn(intent.Slug, intent.Effort)
+		}
 		return a.pop()
 	case models.Assign:
 		if !a.save(isettings.Write{Kind: isettings.WriteSubAgent, Key: intent.Agent, Value: intent.Slug}) {

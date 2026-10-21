@@ -105,7 +105,7 @@ func (h *Host) runFrom(ctx context.Context, pick Pick, task string, live Live, r
 	case !goesOn:
 	case other != nil:
 		h.mu.Lock()
-		h.carried, h.pick = turn.WithoutThinking(h.carried), other.Pick
+		h.pick = other.Pick
 		h.mu.Unlock()
 		live.Emit(Event{Kind: EventNote, Text: "the turn continues on " + other.Name + " from the same conversation"})
 		h.runFrom(ctx, other.Pick, resumedTask, live, true)
@@ -203,6 +203,10 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	watch.runs = func() map[string]session.AgentRun { return recordedRuns(sessions, h.ID()) }
 	h.mu.Lock()
 	config.SessionSource, h.started = h.started, ""
+	if h.carriedOn != "" && h.carriedOn != config.Wire {
+		h.carried = turn.WithoutThinking(h.carried)
+	}
+	h.carriedOn = config.Wire
 	config.History, config.Prefix = h.carried, h.prefix
 	config.TaskOrigin.Source = live.Origin.recorded()
 	h.mu.Unlock()
@@ -394,7 +398,8 @@ func (h *Host) anotherSource(ctx context.Context, reached limitReached, resumesA
 }
 
 func (h *Host) waitForTheReset(ctx context.Context, reached limitReached, resumesAt string, live Live) (string, bool) {
-	live.Emit(Event{Kind: EventNote, Text: "every " + reached.source + " account is at its limit, so the turn resumes by itself at " + resumesAt +
+	said, _, _ := strings.Cut(reached.Error(), "\n")
+	live.Emit(Event{Kind: EventNote, Text: said + "\nevery " + reached.source + " account is at its limit, so the turn resumes by itself at " + resumesAt +
 		": type to go on now, or press esc to cancel"})
 	timer := time.NewTimer(reached.ResetAt.Sub(h.now()))
 	defer timer.Stop()

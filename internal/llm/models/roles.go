@@ -78,11 +78,18 @@ func (r RoleID) Unbound() string {
 	panic("models: unknown role " + string(r))
 }
 
-func (c Library) Classifier(keys map[string]string) (Model, error) {
+func (c Library) Bound(id RoleID) (Model, bool) {
 	for _, role := range c.Roles {
-		if role.ID == RoleClassifier {
-			return role.Model, nil
+		if role.ID == id {
+			return role.Model, true
 		}
+	}
+	return Model{}, false
+}
+
+func (c Library) Classifier(keys map[string]string) (Model, error) {
+	if model, bound := c.Bound(RoleClassifier); bound {
+		return model, nil
 	}
 	if keys[sys.OpenRouterKeyName] == "" && keys[sys.TypeSafeKeyName] != "" {
 		return c.Select(typeSafeClassifier)

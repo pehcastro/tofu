@@ -238,25 +238,28 @@ func chooseModel(opts runOpts) (models.Model, error) {
 }
 
 func onTheBoundKeyWire(opts runOpts) runOpts {
-	if opts.model != "" || wireSpend(opts.wire) == turn.SpendAPIKey {
+	if opts.model != "" || opts.wire == wireKey {
 		return opts
 	}
-	bound, err := boundRoles(opts.wire, opts.dir)
-	if orchestrator := bound[models.RoleOrchestrator]; err == nil && orchestrator.Wire == wireMeta {
-		opts.wire, opts.model = wireMeta, orchestrator.Model.Slug()
+	library, err := modelLibrary(opts.dir)
+	if err != nil {
+		return opts
+	}
+	if orchestrator, bound := library.Bound(models.RoleOrchestrator); bound {
+		opts.wire, opts.model = library.WireOf(orchestrator), orchestrator.Slug()
 	}
 	return opts
 }
 
 func boundSubAgent(opts runOpts) (string, error) {
-	if wireSpend(opts.wire) == turn.SpendAPIKey {
-		return "", nil
-	}
-	bound, err := boundRoles(opts.wire, opts.dir)
-	if err != nil || bound[models.RoleSubAgent].By != models.BoundByFile {
+	library, err := modelLibrary(opts.dir)
+	if err != nil {
 		return "", err
 	}
-	return bound[models.RoleSubAgent].Model.Slug(), nil
+	if subAgent, bound := library.Bound(models.RoleSubAgent); bound {
+		return subAgent.Slug(), nil
+	}
+	return "", nil
 }
 
 type subAgentTarget struct {

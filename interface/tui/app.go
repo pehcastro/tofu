@@ -409,6 +409,18 @@ func (a *App) readWires() {
 	}
 	a.wires = signed
 	a.wire, a.model, a.provider = signed[0].Name, signed[0].Model, signed[0].Provider
+	if a.options.Models == nil {
+		return
+	}
+	loaded, err := a.options.Models()
+	orchestrator, bound := loaded.Bound(library.RoleOrchestrator)
+	if err != nil || !bound {
+		return
+	}
+	source, model, _ := strings.Cut(orchestrator.Slug(), "/")
+	if at := slices.IndexFunc(signed, func(wire Wire) bool { return wire.Provider == source }); at >= 0 {
+		a.wire, a.model, a.provider, a.picked = signed[at].Name, model, source, orchestrator.Slug()
+	}
 }
 
 func consoleEnviron(environ []string, goos string) []string {

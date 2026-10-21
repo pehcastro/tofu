@@ -514,7 +514,7 @@ func (m *Model) choose() Intent {
 	case target.subAgent():
 		return Intent{Action: Assign, Agent: target.Name, Slug: row.Slug}
 	}
-	return Intent{Action: Bind, Role: target.Role, Slug: row.Slug}
+	return Intent{Action: Bind, Role: target.Role, Slug: row.Slug, Effort: m.effort}
 }
 
 func (m *Model) Click(x, y int) Intent {
