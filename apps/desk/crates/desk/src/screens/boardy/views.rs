@@ -33,7 +33,7 @@ use gpui::{
     rgb_to_hsla, uniform_list,
 };
 
-use super::look::{self, age, day, disc, kit, noun};
+use super::look::{self, age, day, kit, noun};
 use super::{Boardy, Layout, MS_PER_SECOND, Place, SCROLL_WINDOW_MS, Section};
 use crate::screens::frame::note;
 
@@ -358,7 +358,12 @@ fn layout_toggle(boardy: &Boardy, theme: &Theme, cx: &mut Context<Boardy>) -> Di
 
 const SKELETON_LINES: usize = 8;
 
-pub(super) fn main(boardy: &mut Boardy, theme: &Theme, cx: &mut Context<Boardy>) -> Div {
+pub(super) fn main(
+    boardy: &mut Boardy,
+    theme: &Theme,
+    window: &mut Window,
+    cx: &mut Context<Boardy>,
+) -> Div {
     let started = Instant::now();
     let words = boardy.store.words.clone();
     let (crumbs, tickets) = match &boardy.place {
@@ -408,7 +413,7 @@ pub(super) fn main(boardy: &mut Boardy, theme: &Theme, cx: &mut Context<Boardy>)
                 cx,
             ))
             .into_any_element(),
-        (Place::Board(key, Section::Triage), _) => triage(boardy, &key.clone(), theme, cx),
+        (Place::Board(key, Section::Triage), _) => triage(boardy, &key.clone(), theme, window, cx),
         (Place::Board(key, Section::Milestones), _) => milestones(boardy, key, theme),
         (Place::Board(key, Section::Tickets), Layout::Board) => {
             columns(boardy, &key.clone(), cx).into_any_element()
@@ -582,7 +587,7 @@ fn line_row(boardy: &Boardy, line: &Line, theme: &Theme, cx: &mut Context<Boardy
             )
             .into_any_element(),
         Line::Row { spot, at } => match ticket_at(&boardy.store, *spot) {
-            Some(ticket) => ticket_row(ticket, *at == boardy.at, theme, cx),
+            Some(ticket) => ticket_row(boardy, ticket, *at == boardy.at, theme, cx),
             None => div().h(px(LINE)).into_any_element(),
         },
     }
@@ -610,19 +615,19 @@ fn chips(ticket: &Row, theme: &Theme) -> Vec<AnyElement> {
         .collect()
 }
 
-fn who(ticket: &Row, theme: &Theme) -> Option<Div> {
+fn who(ticket: &Row, boardy: &Boardy, theme: &Theme) -> Option<Div> {
     let assignee = ticket.assignee.as_deref().filter(|who| !who.is_empty())?;
-    let letter = assignee
-        .chars()
-        .next()
-        .map(String::from)
-        .unwrap_or_default();
+    let (writer, _) = super::ticket::assigned(assignee, &boardy.requesters);
     Some(
         div()
-            .relative()
-            .child(disc(&letter.to_uppercase(), ink(theme, T2)))
-            .when(running(ticket), |disc| {
-                disc.child(
+            .flex()
+            .items_center()
+            .gap_1p5()
+            .min_w_0()
+            .text_size(px(FONT_SMALL))
+            .text_color(ink(theme, CAPTION_TEXT))
+            .child(writer.face(theme).when(running(ticket), |face| {
+                face.child(
                     div()
                         .absolute()
                         .right_0()
@@ -631,7 +636,8 @@ fn who(ticket: &Row, theme: &Theme) -> Option<Div> {
                         .rounded_full()
                         .bg(theme.color(ColorToken::StatusLive)),
                 )
-            }),
+            }))
+            .child(div().min_w_0().truncate().child(writer.name().to_owned())),
     )
 }
 
@@ -654,7 +660,13 @@ pub(super) fn opener(
     })
 }
 
-fn ticket_row(ticket: &Row, selected: bool, theme: &Theme, cx: &mut Context<Boardy>) -> AnyElement {
+fn ticket_row(
+    boardy: &Boardy,
+    ticket: &Row,
+    selected: bool,
+    theme: &Theme,
+    cx: &mut Context<Boardy>,
+) -> AnyElement {
     let mut row = issue_row(ElementId::Name(ticket.id.clone().into()))
         .ticket(ticket.id.clone())
         .age(age(&ticket.created, Utc::now()))
@@ -669,7 +681,7 @@ fn ticket_row(ticket: &Row, selected: bool, theme: &Theme, cx: &mut Context<Boar
     if let Some(status) = kit(&ticket.status) {
         row = row.status(status);
     }
-    if let Some(who) = who(ticket, theme) {
+    if let Some(who) = who(ticket, boardy, theme) {
         row = row.avatar(who);
     }
     div()
@@ -787,7 +799,7 @@ fn card(
     if let Some(status) = kit(&ticket.status) {
         card = card.status(status);
     }
-    if let Some(who) = who(ticket, theme) {
+    if let Some(who) = who(ticket, boardy, theme) {
         card = card.avatar(who);
     }
     flip(
@@ -802,7 +814,13 @@ fn card(
     .into_any_element()
 }
 
-fn triage(boardy: &Boardy, key: &str, theme: &Theme, cx: &mut Context<Boardy>) -> AnyElement {
+fn triage(
+    boardy: &Boardy,
+    key: &str,
+    theme: &Theme,
+    window: &mut Window,
+    cx: &mut Context<Boardy>,
+) -> AnyElement {
     let Some(requests) = boardy.triage.get(key) else {
         return note("Reading triage", theme).into_any_element();
     };
@@ -826,13 +844,31 @@ fn triage(boardy: &Boardy, key: &str, theme: &Theme, cx: &mut Context<Boardy>) -
                 .flex_col()
                 .gap_1()
                 .children(requests.iter().map(|request| {
+                    let chip = super::ticket::asker(
+                        &format!("request-by-{}", request.id),
+                        &request.by,
+                        &format!("· {}", age(&request.at, now)),
+                        boardy,
+                        theme,
+                        window,
+                        cx,
+                    );
                     let act = |accept: bool| {
                         let (board, id) = (key.to_owned(), request.id.clone());
                         cx.listener(move |boardy: &mut Boardy, _: &ClickEvent, _, cx| {
+                            cx.stop_propagation();
                             boardy.triage_act(board.clone(), id.clone(), accept, cx)
                         })
                     };
+                    let (board, id) = (key.to_owned(), request.id.clone());
                     div()
+                        .id(SharedString::from(format!("request-{}", request.id)))
+                        .cursor_pointer()
+                        .on_click(
+                            cx.listener(move |boardy: &mut Boardy, _: &ClickEvent, _, cx| {
+                                boardy.open_request(board.clone(), &id, cx)
+                            }),
+                        )
                         .flex()
                         .items_center()
                         .gap_3()
@@ -848,10 +884,7 @@ fn triage(boardy: &Boardy, key: &str, theme: &Theme, cx: &mut Context<Boardy>) -
                                 .text_color(ink(theme, T1))
                                 .child(request.ticket.title.clone()),
                         )
-                        .child(note(
-                            format!("{} · {}", request.by, age(&request.at, now)),
-                            theme,
-                        ))
+                        .child(chip)
                         .child(
                             button(
                                 SharedString::from(format!("accept-{}", request.id)),

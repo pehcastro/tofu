@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use crate::protocol::boardy::{BoardSummary, BoardsAnswer, Event, Row, RowsAnswer, Ticket, Words};
-use crate::protocol::{BoardyEventKind, BoardyStatus as Status};
+use crate::protocol::{BoardyAuthorKind, BoardyEventKind, BoardyStatus as Status};
 use crate::settings::{Settings, Value};
 
 pub const MANAGEMENT: &str = "projectManagement";
@@ -145,7 +145,8 @@ pub fn spoken(event: &Event) -> bool {
         | BoardyEventKind::Answered
         | BoardyEventKind::Spawned
         | BoardyEventKind::Reported
-        | BoardyEventKind::Messaged => !event.text.as_deref().unwrap_or_default().is_empty(),
+        | BoardyEventKind::Messaged
+        | BoardyEventKind::Unknown(_) => !event.text.as_deref().unwrap_or_default().is_empty(),
         BoardyEventKind::Created
         | BoardyEventKind::Moved
         | BoardyEventKind::Rule
@@ -158,9 +159,34 @@ pub fn spoken(event: &Event) -> bool {
         | BoardyEventKind::Managers
         | BoardyEventKind::Assigned
         | BoardyEventKind::Hook
-        | BoardyEventKind::HookFailed
-        | BoardyEventKind::Unknown(_) => false,
+        | BoardyEventKind::HookFailed => false,
     }
+}
+
+pub fn engineers(events: &[Event]) -> BTreeMap<String, String> {
+    events
+        .iter()
+        .filter_map(|event| {
+            let named = match event.kind {
+                BoardyEventKind::Spawned => event.agent.as_deref(),
+                _ => event
+                    .author
+                    .as_ref()
+                    .filter(|author| author.kind == BoardyAuthorKind::SubAgent)
+                    .filter(|_| {
+                        event.actor.as_deref().is_some_and(|actor| {
+                            actor
+                                .strip_suffix(event.ticket.as_str())
+                                .is_some_and(|session| session.ends_with('/'))
+                        })
+                    })
+                    .map(|author| author.name.as_str()),
+            };
+            named
+                .filter(|name| Speaker::of(name) == Speaker::Named && *name != event.ticket)
+                .map(|name| (event.ticket.clone(), name.to_owned()))
+        })
+        .collect()
 }
 
 pub fn report_echoes(events: &[Event]) -> Vec<bool> {

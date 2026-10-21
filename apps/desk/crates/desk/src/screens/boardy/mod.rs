@@ -9,16 +9,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 use std::time::Instant;
 
-use desk_core::boardy::{ALL_VIEW, BoardyStore, COLUMNS, Flow, Gate};
+use desk_core::boardy::{ALL_VIEW, BoardyStore, COLUMNS, Flow, Gate, engineers};
 use desk_core::limits::TOAST_LIFETIME;
 use desk_core::protocol::boardy::{
-    AnswerRequest, AskedQuestion, BoardsAnswer, GetAnswer, GetRequest, InitRequest, ListRequest,
-    LogRequest, MoveRequest, PlanAnswer, PlanRequest, QuestionsRequest, ReportAnswer,
-    ReportRequest, Request as Asked, TriageRequest,
+    Actual, AnswerRequest, AskedQuestion, BoardsAnswer, Event, EventsRequest, GetRequest,
+    InitRequest, ListRequest, LogRequest, MoveRequest, PlanAnswer, PlanRequest, QuestionsRequest,
+    ReportAnswer, ReportRequest, Request as Asked, Ticket, TriageRequest,
 };
 use desk_core::protocol::request::{
-    BoardyAnswer, BoardyBoards, BoardyGet, BoardyInit, BoardyLog, BoardyMove, BoardyPlan,
-    BoardyQuestions, BoardyReport, BoardyRows, BoardyTriage,
+    BoardyAnswer, BoardyBoards, BoardyEvents, BoardyGet, BoardyInit, BoardyLog, BoardyMove,
+    BoardyPlan, BoardyQuestions, BoardyReport, BoardyRows, BoardyTriage,
 };
 use desk_core::protocol::{
     BoardyStatus as Status, BoardyTo, BoardyTriageRequestAction, NoParams, Request,
@@ -81,12 +81,26 @@ enum Layout {
     Board,
 }
 
+enum Origin {
+    Ticket(Actual),
+    Request {
+        board: String,
+        id: String,
+        by: String,
+        at: String,
+    },
+}
+
 struct Opened {
-    answer: GetAnswer,
+    ticket: Ticket,
+    events: Vec<Event>,
+    origin: Origin,
     body: Vec<Block>,
     acceptance: Vec<Block>,
     said: Vec<ticket::Said>,
     ran: Vec<Option<String>>,
+    lines: Vec<ticket::Line>,
+    tab: ticket::Tab,
     unfolded: BTreeSet<usize>,
     body_refs: Vec<refs::Ref>,
     owned: Vec<(String, Option<refs::To>)>,
@@ -100,6 +114,8 @@ pub struct Boardy {
     store: BoardyStore,
     reports: BTreeMap<String, ReportAnswer>,
     triage: BTreeMap<String, Vec<Asked>>,
+    requesters: BTreeMap<String, Option<String>>,
+    events_read: BTreeMap<String, i64>,
     plans: BTreeMap<String, PlanAnswer>,
     questions: Vec<AskedQuestion>,
     naming: Option<Entity<TextInput>>,
@@ -159,6 +175,8 @@ impl Boardy {
             store: BoardyStore::default(),
             reports: BTreeMap::new(),
             triage: BTreeMap::new(),
+            requesters: BTreeMap::new(),
+            events_read: BTreeMap::new(),
             plans: BTreeMap::new(),
             questions: Vec::new(),
             naming: None,
@@ -211,6 +229,8 @@ impl Boardy {
         self.flow = gate.flow;
         self.tofu = Some((chat.downgrade(), chat.entity_id()));
         chat.read(cx).project().clone_into(&mut self.project);
+        self.events_read.clear();
+        self.requesters.clear();
         eprintln!(
             "desk: boardy reads from tofu in {}, flow {:?}",
             self.project, self.flow
@@ -392,6 +412,18 @@ impl Boardy {
             }
             cx.notify();
         });
+        let events = EventsRequest {
+            board: Some(key.clone()),
+            since: self.events_read.get(&key).copied(),
+        };
+        self.send::<BoardyEvents>(events, cx, |boardy, reply, cx| match reply {
+            Ok(answer) => {
+                boardy.named(&answer.events);
+                boardy.events_read.insert(answer.board, answer.next);
+                cx.notify();
+            }
+            Err(error) => boardy.fail(error),
+        });
         let report = ReportRequest {
             board: Some(key.clone()),
             since: None,
@@ -418,12 +450,76 @@ impl Boardy {
             request: None,
             sprint: None,
         };
-        self.send::<BoardyTriage>(triage, cx, |boardy, reply, _| match reply {
-            Ok(answer) => {
-                boardy.triage.insert(answer.board, answer.requests);
-            }
+        self.send::<BoardyTriage>(triage, cx, |boardy, reply, cx| match reply {
+            Ok(answer) => boardy.triage_landed(answer.board, answer.requests, cx),
             Err(error) => boardy.fail(error),
         });
+    }
+
+    fn triage_landed(&mut self, board: String, requests: Vec<Asked>, cx: &mut Context<Self>) {
+        let gone = matches!(
+            &self.opened,
+            Some(Opened { origin: Origin::Request { board: held, id, .. }, .. })
+                if *held == board && !requests.iter().any(|request| request.id == *id)
+        );
+        if gone {
+            self.opened = None;
+        }
+        let unread: BTreeSet<String> = requests
+            .iter()
+            .filter_map(|request| request.by.split_once('/'))
+            .map(|(_, ticket)| ticket)
+            .filter(|ticket| {
+                !self.requesters.contains_key(*ticket)
+                    && ticket.split_once('-').is_some_and(|(key, _)| {
+                        self.store.boards.iter().any(|summary| summary.key == key)
+                    })
+            })
+            .map(str::to_owned)
+            .collect();
+        for ticket in unread {
+            self.requesters.insert(ticket.clone(), None);
+            let params = GetRequest { id: ticket.clone() };
+            self.send::<BoardyGet>(params, cx, move |boardy, reply, _| match reply {
+                Ok(answer) => {
+                    let spawned = engineers(&answer.events).remove(&ticket);
+                    eprintln!("desk: boardy requester {ticket} ran as {spawned:?}");
+                    boardy.requesters.insert(ticket, spawned);
+                }
+                Err(error) => boardy.fail(error),
+            });
+        }
+        self.triage.insert(board, requests);
+    }
+
+    fn open_request(&mut self, board: String, id: &str, cx: &mut Context<Self>) {
+        let Some(request) = self
+            .triage
+            .get(&board)
+            .and_then(|requests| requests.iter().find(|request| request.id == id))
+        else {
+            return;
+        };
+        eprintln!("desk: boardy reads request {id} in {board}");
+        let origin = Origin::Request {
+            id: request.id.clone(),
+            by: request.by.clone(),
+            at: request.at.clone(),
+            board,
+        };
+        let opened = self.opening(request.ticket.clone(), Vec::new(), origin);
+        self.opened = Some(opened);
+        cx.notify();
+    }
+
+    fn reading_request(&self) -> bool {
+        matches!(
+            &self.opened,
+            Some(Opened {
+                origin: Origin::Request { .. },
+                ..
+            })
+        )
     }
 
     fn triage_act(&mut self, board: String, request: String, accept: bool, cx: &mut Context<Self>) {
@@ -517,6 +613,7 @@ impl Boardy {
             self.pump(cx);
         }
         self.place = place;
+        self.opened = None;
         self.at = 0;
         cx.notify();
     }
@@ -546,49 +643,73 @@ impl Boardy {
                     answer.ticket.id,
                     answer.events.len()
                 );
-                let unfolded = boardy
+                let (unfolded, tab) = boardy
                     .opened
                     .take()
-                    .filter(|held| held.answer.ticket.id == answer.ticket.id)
-                    .map(|held| held.unfolded)
+                    .filter(|held| held.ticket.id == answer.ticket.id)
+                    .map(|held| (held.unfolded, held.tab))
                     .unwrap_or_default();
-                let ticket = &answer.ticket;
-                let boards: Vec<&str> =
-                    boardy.store.boards.iter().map(|b| b.key.as_str()).collect();
-                let root = std::path::Path::new(&boardy.project);
-                let found = |text: &str| refs::refs(text, &ticket.id, &boards, root, &ticket.owns);
-                let body = format!("{}\n\n{}", ticket.problem, ticket.scope);
-                let acceptance = ticket.acceptance.last().map_or("", String::as_str);
-                let mut body_refs = found(&body);
-                let more: Vec<refs::Ref> = found(acceptance)
-                    .into_iter()
-                    .filter(|one| !body_refs.iter().any(|held| held.label == one.label))
-                    .collect();
-                body_refs.extend(more);
-                let said = ticket::said(&answer.events, found);
-                let ran = ticket::runners(&answer.events);
-                let owned = ticket
-                    .owns
-                    .iter()
-                    .map(|glob| {
-                        let dir = glob.trim_end_matches(['*', '/']);
-                        (glob.clone(), refs::target(dir, root, &[]))
-                    })
-                    .collect();
-                let (body, acceptance) = (markdown(&body), markdown(acceptance));
+                boardy.named(&answer.events);
+                let origin = Origin::Ticket(answer.actual);
+                let opened = boardy.opening(answer.ticket, answer.events, origin);
                 boardy.opened = Some(Opened {
-                    body,
-                    acceptance,
-                    said,
-                    ran,
                     unfolded,
-                    body_refs,
-                    owned,
-                    answer,
+                    tab,
+                    ..opened
                 });
             }
             Err(error) => boardy.fail(error),
         });
+    }
+
+    fn named(&mut self, events: &[Event]) {
+        let found = engineers(events);
+        eprintln!(
+            "desk: boardy named the engineers of {} tickets",
+            found.len()
+        );
+        self.requesters
+            .extend(found.into_iter().map(|(ticket, name)| (ticket, Some(name))));
+    }
+
+    fn opening(&self, ticket: Ticket, events: Vec<Event>, origin: Origin) -> Opened {
+        let boards: Vec<&str> = self.store.boards.iter().map(|b| b.key.as_str()).collect();
+        let root = std::path::Path::new(&self.project);
+        let found = |text: &str| refs::refs(text, &ticket.id, &boards, root, &ticket.owns);
+        let body = format!("{}\n\n{}", ticket.problem, ticket.scope);
+        let acceptance = ticket.acceptance.last().map_or("", String::as_str);
+        let mut body_refs = found(&body);
+        let more: Vec<refs::Ref> = found(acceptance)
+            .into_iter()
+            .filter(|one| !body_refs.iter().any(|held| held.label == one.label))
+            .collect();
+        body_refs.extend(more);
+        let said = ticket::said(&events, found);
+        let ran = ticket::runners(&events);
+        let lines = ticket::thread(&events, &said);
+        let owned = ticket
+            .owns
+            .iter()
+            .map(|glob| {
+                let dir = glob.trim_end_matches(['*', '/']);
+                (glob.clone(), refs::target(dir, root, &[]))
+            })
+            .collect();
+        let (body, acceptance) = (markdown(&body), markdown(acceptance));
+        Opened {
+            body,
+            acceptance,
+            said,
+            ran,
+            lines,
+            tab: ticket::Tab::default(),
+            unfolded: BTreeSet::new(),
+            body_refs,
+            owned,
+            ticket,
+            events,
+            origin,
+        }
     }
 
     fn move_to(&mut self, id: String, to: Status, cx: &mut Context<Self>) {
@@ -769,6 +890,7 @@ impl Boardy {
                 self.place = self.back.clone();
                 self.opened = None;
             }
+            "escape" if self.reading_request() => self.opened = None,
             _ => return,
         }
         cx.stop_propagation();
@@ -860,8 +982,13 @@ impl Render for Boardy {
         }
         let body = match &self.place {
             Place::Ticket(_) => ticket::page(self, &theme, window, cx).into_any_element(),
+            Place::Board(_, Section::Triage) if self.reading_request() => {
+                ticket::request_page(self, &theme, window, cx).into_any_element()
+            }
             Place::CatchUp => views::catch_up(self, &theme, cx).into_any_element(),
-            Place::Attention | Place::Board(..) => views::main(self, &theme, cx).into_any_element(),
+            Place::Attention | Place::Board(..) => {
+                views::main(self, &theme, window, cx).into_any_element()
+            }
         };
         let items = self.menu();
         let timed = self.timed(started);

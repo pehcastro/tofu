@@ -303,26 +303,13 @@ impl AvatarSize {
     }
 }
 
-pub fn avatar(id: impl Into<ElementId>, agent: &Agent, size: AvatarSize, theme: &Theme) -> Div {
+pub fn kind_avatar(kind: AgentKind, size: AvatarSize, theme: &Theme) -> Div {
+    tinted(kind, size, 0.0, theme).child(div().relative().child(kind.initial()))
+}
+
+fn tinted(kind: AgentKind, size: AvatarSize, inset: f32, theme: &Theme) -> Div {
     let (side, font, alpha) = size.metrics();
-    let tone = agent.kind.color(theme);
-    let backing = theme.color(ColorToken::AvatarRing);
-    let mark = |side: f32, offset: f32, fill: Rgba| {
-        div()
-            .absolute()
-            .right(px(-offset))
-            .bottom(px(-offset))
-            .size(px(side))
-            .flex()
-            .items_center()
-            .justify_center()
-            .rounded_full()
-            .bg(fill)
-            .shadow(vec![halo(backing, MARK_RING)])
-    };
-    let live = theme.color(ColorToken::StatusLive);
-    let working = agent.status == AgentStatus::Working;
-    let inset = if working { RING_OUTSET } else { 0.0 };
+    let tone = kind.color(theme);
     div()
         .relative()
         .flex_none()
@@ -341,6 +328,28 @@ pub fn avatar(id: impl Into<ElementId>, agent: &Agent, size: AvatarSize, theme: 
                 .rounded_full()
                 .bg(tint(tone, alpha)),
         )
+}
+
+pub fn avatar(id: impl Into<ElementId>, agent: &Agent, size: AvatarSize, theme: &Theme) -> Div {
+    let (side, _, _) = size.metrics();
+    let backing = theme.color(ColorToken::AvatarRing);
+    let mark = |side: f32, offset: f32, fill: Rgba| {
+        div()
+            .absolute()
+            .right(px(-offset))
+            .bottom(px(-offset))
+            .size(px(side))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded_full()
+            .bg(fill)
+            .shadow(vec![halo(backing, MARK_RING)])
+    };
+    let live = theme.color(ColorToken::StatusLive);
+    let working = agent.status == AgentStatus::Working;
+    let inset = if working { RING_OUTSET } else { 0.0 };
+    tinted(agent.kind, size, inset, theme)
         .when(working, |disc| {
             disc.child(div().absolute().inset(px(MARK_BLEED)).child(spinning_arc(
                 id,

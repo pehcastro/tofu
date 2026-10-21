@@ -2,11 +2,7 @@ use chrono::{DateTime, Utc};
 use desk_core::protocol::{BoardyPriority, BoardyStatus as Status};
 use desk_ui::components::priority_icon::Priority;
 use desk_ui::components::status_icon::TicketStatus;
-use gpui::{Div, FontWeight, Rgba, div, prelude::*, px};
 
-const DISC: f32 = 22.0;
-const DISC_TEXT: f32 = 10.5;
-const DISC_FILL: f32 = 0.18;
 const SECONDS_PER_MINUTE: i64 = 60;
 const MINUTES_PER_HOUR: i64 = 60;
 const HOURS_PER_DAY: i64 = 24;
@@ -50,21 +46,6 @@ pub fn parent(id: &str) -> Option<&str> {
     id.rsplit_once('-')
         .map(|(head, _)| head)
         .filter(|head| head.contains('-'))
-}
-
-pub fn disc(letter: &str, color: Rgba) -> Div {
-    div()
-        .flex_none()
-        .flex()
-        .items_center()
-        .justify_center()
-        .size(px(DISC))
-        .rounded_full()
-        .bg(desk_ui::components::paint::tint(color, DISC_FILL))
-        .text_color(color)
-        .text_size(px(DISC_TEXT))
-        .font_weight(FontWeight::SEMIBOLD)
-        .child(letter.to_owned())
 }
 
 pub fn age(at: &str, now: DateTime<Utc>) -> String {
