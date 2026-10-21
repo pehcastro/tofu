@@ -1,4 +1,5 @@
 mod agents;
+mod boardy;
 mod charts;
 mod chat;
 mod chat_markdown;
@@ -14,6 +15,7 @@ mod editor;
 mod empty;
 mod file_edits;
 mod find;
+mod flip;
 mod focus;
 mod foundations;
 mod graph;
@@ -53,6 +55,7 @@ use crate::Launch;
 use crate::catalog::{Group, Page, UNBUILT};
 use crate::themes::{self, Choice};
 use agents::AgentsPage;
+use boardy::BoardyPage;
 use charts::ChartsPage;
 use chat::{AskPage, ChatPage};
 use chat_markdown::ChatMarkdownPage;
@@ -113,6 +116,7 @@ pub struct Book {
     palette: PalettePage,
     find: FindPage,
     settings: SettingsPage,
+    boardy: BoardyPage,
 }
 
 impl Book {
@@ -158,6 +162,7 @@ impl Book {
             palette: PalettePage::new(window, cx),
             find: FindPage::new(window, cx),
             settings: SettingsPage::new(),
+            boardy: BoardyPage::new(cx),
         }
     }
 
@@ -470,7 +475,7 @@ impl Book {
             Page::Focus => self.focus_page.render(theme, window, cx),
             Page::Tooltips => tips::tips(theme, window, cx),
             Page::Empty => empty::empty_page(theme, window, cx),
-            Page::Sidebar => sidebar::sidebar_page(theme, cx),
+            Page::Sidebar => sidebar::sidebar_page(&self.palette, theme, cx),
             Page::Chrome => chrome::chrome_page(theme, cx),
             Page::Composer => self.composer.render(theme, window, cx),
             Page::Shell => self.shell.render(theme, window, cx),
@@ -492,6 +497,16 @@ impl Book {
             Page::Palette => self.palette.render(theme, cx),
             Page::Find => self.find.render(theme, cx),
             Page::Settings => self.settings.render(theme, cx),
+            Page::StatusIcon
+            | Page::PriorityIcon
+            | Page::NavSidebar
+            | Page::PillTabs
+            | Page::DotChip
+            | Page::Board
+            | Page::IssueRow
+            | Page::Breadcrumb
+            | Page::Properties => self.boardy.render(page, theme, window, cx),
+            Page::Flip => flip::flip_page(theme, window, cx),
         }
     }
 }

@@ -4,11 +4,14 @@ use desk_ui::components::agents::{
     AgentBoard, AgentEvent, AgentLine, AgentScreen, AgentStep, AgentTile, DiffLine, DiffSign, ago,
 };
 use desk_ui::components::avatar::{Agent, AgentKind, AgentStatus};
+use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::{Header, inner_card, shell};
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::tabs::{Tab, TabEvent, TabMark, connected_tabs};
 use desk_ui::theme::Theme;
-use gpui::{App, Context, Div, Entity, SharedString, WeakEntity, Window, div, prelude::*, px};
+use gpui::{
+    App, ClickEvent, Context, Div, Entity, SharedString, WeakEntity, Window, div, prelude::*, px,
+};
 
 use super::Book;
 use super::kit::label;
@@ -612,6 +615,7 @@ pub(super) struct AgentsPage {
     picked: Entity<AgentScreen>,
     swapped: bool,
     pending: bool,
+    shut: [bool; 3],
 }
 
 impl AgentsPage {
@@ -653,6 +657,7 @@ impl AgentsPage {
             picked,
             swapped: false,
             pending: false,
+            shut: [false; 3],
         }
     }
 
@@ -677,7 +682,7 @@ impl AgentsPage {
             mark: TabMark::Close,
             flag: None,
         };
-        let tabs = [
+        let all = [
             tab(
                 "Sub-agents",
                 Glyph::Agents,
@@ -686,6 +691,11 @@ impl AgentsPage {
             tab("File edits", Glyph::File, Some(FILE_EDITS)),
             tab("Shells", Glyph::Terminal, Some(SHELLS)),
         ];
+        let (open, tabs): (Vec<usize>, Vec<Tab>) = all
+            .into_iter()
+            .enumerate()
+            .filter(|(at, _)| !self.shut.get(*at).copied().unwrap_or(true))
+            .unzip();
         let book = cx.weak_entity();
         connected_tabs(
             "agents-tabs",
@@ -694,14 +704,24 @@ impl AgentsPage {
             usize::MAX,
             theme,
             move |event, _, cx| {
-                if matches!(event, TabEvent::Select(0)) {
+                let Some(book) = book.upgrade() else {
                     return;
-                }
-                if let Some(book) = book.upgrade() {
-                    book.update(cx, |book, cx| {
+                };
+                book.update(cx, |book, cx| match *event {
+                    TabEvent::Close(at) => {
+                        if let Some(shut) = open
+                            .get(at)
+                            .and_then(|&kept| book.agents.shut.get_mut(kept))
+                        {
+                            *shut = true;
+                            cx.notify();
+                        }
+                    }
+                    TabEvent::Select(at) if open.get(at) != Some(&0) => {
                         book.tell("Only the Sub-agents tab is built on this page", cx)
-                    });
-                }
+                    }
+                    TabEvent::Select(_) | TabEvent::New => {}
+                });
             },
         )
     }
@@ -725,7 +745,24 @@ impl AgentsPage {
         )
         .w(px(TILE_WIDTH))
         .h(px(TILE_HEIGHT))
-        .child(inner_card(theme).child(self.tile.clone()));
+        .child(match self.shut.first().copied().unwrap_or(true) {
+            true => inner_card(theme).p_3().child(label(
+                "The Sub-agents tab is closed. Reset tabs brings it back.",
+                theme,
+            )),
+            false => inner_card(theme).child(self.tile.clone()),
+        });
+        let reset = button(
+            "agents-tabs-reset",
+            "Reset tabs",
+            None,
+            ButtonKind::Plain,
+            theme,
+        )
+        .on_click(cx.listener(|book, _: &ClickEvent, _, cx| {
+            book.agents.shut = [false; 3];
+            cx.notify();
+        }));
         let narrow = shell(
             Header::Title(Some(Glyph::Agents), "Sub-agents".into(), None),
             theme,
@@ -752,6 +789,14 @@ impl AgentsPage {
             .flex()
             .flex_col()
             .gap_4()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .child(reset)
+                    .child(label("Brings back every closed tile tab.", theme)),
+            )
             .child(column(
                 "Tile, IWY-4: the Sub-agents tab of the work card, 538 x 820 as in the 1440 x 900 board. A row opens the drawer over the bottom of the card; click outside it, Escape or Close shuts it, Expand opens the agent in the screen below.",
                 tile,

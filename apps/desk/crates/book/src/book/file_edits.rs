@@ -4,8 +4,8 @@ use desk_ui::components::card::{Header, inner_card, shell};
 use desk_ui::components::chip::GitStatus;
 use desk_ui::components::diff::{FileChange, FileDiff, PatchError};
 use desk_ui::components::file_edits::{
-    ChangeAction, ChangedFile, EditedFile, FileEdit, changed_files, commit_box, file_edits,
-    file_history,
+    ChangeAction, ChangedFile, EditedFile, FileEdit, RowPick, changed_files, commit_box,
+    file_edits, file_history,
 };
 use desk_ui::components::form::TextArea;
 use desk_ui::components::glyph::Glyph;
@@ -205,6 +205,7 @@ fn edit(
     Ok(FileEdit {
         agent: Some(SharedString::from(agent.to_owned())),
         at: SharedString::from(at.to_owned()),
+        line: 1,
         diff: Rc::new(FileDiff::parse(path.to_owned(), change, patch, |_| {
             Vec::new()
         })?),
@@ -358,7 +359,7 @@ impl FileEditsPage {
             Err(problem) => return div().child(label(format!("sample patch: {problem}"), theme)),
         };
         let book = cx.weak_entity();
-        let open = move |ix: usize, _: &mut Window, cx: &mut App| {
+        let open = move |ix: usize, _: RowPick, _: &mut Window, cx: &mut App| {
             if let Some(book) = book.upgrade() {
                 book.update(cx, |book, cx| {
                     book.file_edits.opened = ix;
@@ -378,6 +379,8 @@ impl FileEditsPage {
                 ("file-history", self.opened),
                 file,
                 theme,
+                |_, _| {},
+                |_, _, _| {},
             ))
         });
         div()

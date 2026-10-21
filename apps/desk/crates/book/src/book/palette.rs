@@ -83,8 +83,8 @@ const PROJECTS: [SampleProject; 3] = [
 
 pub(super) struct PalettePage {
     palette: Entity<Palette>,
-    picker: Entity<Palette>,
-    readout: SharedString,
+    pub(super) picker: Entity<Palette>,
+    pub(super) readout: SharedString,
 }
 
 fn picker_entries() -> Vec<PaletteEntry> {

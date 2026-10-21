@@ -5,7 +5,8 @@ use desk_ui::theme::Theme;
 use gpui::{App, Context, Div, Window, div, prelude::*, px};
 
 use super::Book;
-use super::kit::{named, spread};
+use super::kit::{label, named, spread};
+use super::palette::PalettePage;
 
 const SIDEBAR_HEIGHT: f32 = 794.0;
 const RUNNING: [(&str, &str, &str); 1] = [("clear-sable-eagle", "Running", "12m ago")];
@@ -29,12 +30,16 @@ fn told(
     what: &'static str,
     cx: &mut Context<Book>,
 ) -> impl Fn(&SidebarPick, &mut Window, &mut App) + 'static {
-    cx.listener(move |book, pick: &SidebarPick, _, cx| {
-        book.tell(format!("Sidebar, {what}: {pick:?}"), cx)
+    cx.listener(move |book, pick: &SidebarPick, window, cx| match pick {
+        SidebarPick::Project => book
+            .palette
+            .picker
+            .update(cx, |picker, cx| picker.open(window, cx)),
+        _ => book.tell(format!("Sidebar, {what}: {pick:?}"), cx),
     })
 }
 
-pub(super) fn sidebar_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
+pub(super) fn sidebar_page(palette: &PalettePage, theme: &Theme, cx: &mut Context<Book>) -> Div {
     let notes = Project {
         name: "notes-app".into(),
         branch: "main".into(),
@@ -57,29 +62,43 @@ pub(super) fn sidebar_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
             .h(px(SIDEBAR_HEIGHT))
             .child(sidebar)
     };
-    spread(theme)
-        .items_start()
-        .child(named(
-            "Sessions",
+    let projects = div()
+        .flex()
+        .flex_col()
+        .gap_3()
+        .child(label(
+            format!(
+                "The project row opens the projects menu: {}",
+                palette.readout
+            ),
             theme,
-            frame(Sidebar::new(
-                "sidebar-notes",
-                Some(notes),
-                told("notes-app", cx),
+        ))
+        .child(palette.picker.clone());
+    projects.child(
+        spread(theme)
+            .items_start()
+            .child(named(
+                "Sessions",
+                theme,
+                frame(Sidebar::new(
+                    "sidebar-notes",
+                    Some(notes),
+                    told("notes-app", cx),
+                )),
+            ))
+            .child(named(
+                "Empty project",
+                theme,
+                frame(Sidebar::new(
+                    "sidebar-fresh",
+                    Some(fresh),
+                    told("hono-starter", cx),
+                )),
+            ))
+            .child(named(
+                "No project",
+                theme,
+                frame(Sidebar::new("sidebar-empty", None, told("no project", cx))),
             )),
-        ))
-        .child(named(
-            "Empty project",
-            theme,
-            frame(Sidebar::new(
-                "sidebar-fresh",
-                Some(fresh),
-                told("hono-starter", cx),
-            )),
-        ))
-        .child(named(
-            "No project",
-            theme,
-            frame(Sidebar::new("sidebar-empty", None, told("no project", cx))),
-        ))
+    )
 }
