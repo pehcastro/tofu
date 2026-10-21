@@ -76,7 +76,7 @@ Meta's model list accepts it, and prints its last four characters; `tofu run --m
 Run the next task on another model: in the app, type `/models`, pick a
 model. That lasts until tofu restarts. To make it stay, bind the
 orchestrator in the same list, which writes
-`.tofu/roles/orchestrator.yaml` in the project. By hand, for every project:
+`.tofu/roles/orchestrator.yaml` and runs the next turn on it at once. By hand:
 
     model: claude-sub/claude-sonnet-5
 

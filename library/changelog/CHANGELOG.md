@@ -10,6 +10,18 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc12-fix3 - 2026-10-21
+
+### Fixed
+
+- A model you bind to the orchestrator in Models runs the next turn at once, and the footer shows it the moment you pick it; before, a model picked earlier with Ctrl+L, or kept by the session, outranked it and the turn ran on the old subscription. A role bound to any subscription or key chooses its own wire, and a sub-agent role applies whatever the lead runs on. A subscription is the default only when nothing is picked.
+- A switch to another vendor mid-conversation carries the history without the old vendor's thinking signatures, so the new vendor does not refuse it.
+- A refusal from a vendor reads as one sentence: which account, what the vendor said, and what to do next, such as setting up billing, signing in again or picking another model with Ctrl+L. The raw answer stays in the work card, and the every-account-limited note names the limit and its reset.
+
+### Changed
+
+- The board lead's rule asks it to review every ticket in review on its boards each turn, oldest first, close each from its Log, code and commit, and drop or merge tickets that are dead, duplicated or replaced.
+
 ## 0.5.15-rc12-fix2 - 2026-10-18
 
 ### Fixed

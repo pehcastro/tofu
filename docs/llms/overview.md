@@ -52,7 +52,9 @@ without copying the list.
   then type to filter, **Shift+←/→** for the effort, **Enter**. It lasts
   until tofu restarts.
 - **Keep it**: the picker's **Roles** tab binds the lead, which writes
-  `.tofu/roles/orchestrator.yaml`. For every project, write
+  `.tofu/roles/orchestrator.yaml` and runs the next turn on it at once, the
+  footer showing it as you pick; a subscription or a key, either is yours to
+  pick, and a subscription is only the default when nothing is. For every project, write
   `model: <source/model>` in `~/.tofu/roles/orchestrator.yaml`.
 - **Find new models**: **F5** in the picker.
 - **Point a tier**, or the browser, at a model:

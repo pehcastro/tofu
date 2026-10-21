@@ -57,6 +57,12 @@ neither says. At that time the turn goes on with no input. Typing goes on
 at once with what you typed, and `esc` cancels the wait. A cron turn never
 asks: it waits.
 
+**A refusal says what to do.** When a vendor refuses for billing, sign-in,
+an organization rule or an unknown model, the chat shows one sentence: which
+account, what the vendor said, and the next step, such as setting up billing,
+`tofu login llm claude-sub` again, or another model with **Ctrl+L**. The raw
+answer stays in the work card.
+
 ## Reading it
 
 ```sh
