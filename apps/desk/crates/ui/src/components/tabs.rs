@@ -18,9 +18,10 @@ use crate::components::glyph::Glyph;
 use crate::components::overlay::Popover;
 use crate::components::paint::{arrowed, glyph, ink, ms, pressed, ring};
 use crate::components::size::{
-    CAPTION_TEXT, CLOSE_BOX, DIM_TEXT, FONT_BODY, FONT_SMALL, FONT_TAB, HOVER, HTAB_ON, NEW_TAB,
-    RADIUS_ROW, RADIUS_TAB, ROW_PAD_X, ROW_PAD_Y, SCREEN_ON, SCREEN_RING, SHELL_TEXT, T1, TAB,
-    TAB_GAP, TAB_IN_HEADER, TAB_MAX_WIDTH, TAB_PAD_LEFT, TAB_PAD_LINK, TAB_PAD_TAIL, TAB_SEPARATOR,
+    BADGE_PAD_X, BADGE_PAD_Y, CAPTION_TEXT, CLOSE_BOX, DIM_TEXT, FONT_BADGE, FONT_BODY, FONT_SMALL,
+    FONT_TAB, HOVER, HTAB_ON, NEW_TAB, RADIUS_ROW, RADIUS_TAB, ROW_PAD_X, ROW_PAD_Y, SCREEN_ON,
+    SCREEN_RING, SHELL_TEXT, T1, TAB, TAB_GAP, TAB_IN_HEADER, TAB_MAX_WIDTH, TAB_PAD_LEFT,
+    TAB_PAD_LINK, TAB_PAD_TAIL, TAB_SEPARATOR,
 };
 use crate::components::title_bar::named_stop;
 use crate::components::tooltip::{Edge, tooltip};
@@ -35,6 +36,7 @@ const NEW_BUTTON_GAP: f32 = 2.0;
 const MORE_LIST_MIN: f32 = 180.0;
 const DIRTY_DOT: f32 = 7.0;
 const TAB_MIN_WIDTH: f32 = 32.0;
+const BADGE_SHRINK: f32 = 0.01;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TabMark {
@@ -279,12 +281,21 @@ fn unlearned_width(tab: &Tab, font: f32, window: &Window) -> Pixels {
     } else {
         px(0.0)
     };
+    let count = tab.count.map_or(px(0.0), |count| {
+        let digits: SharedString = count.to_string().into();
+        let run = style.to_run(digits.len());
+        window
+            .text_system()
+            .layout_line(&digits, px(FONT_BADGE), &[run], None)
+            .width
+            + px(BADGE_PAD_X * 2.0 + TAB_GAP)
+    });
     let mark = if tab.mark == TabMark::Close {
         px(0.0)
     } else {
         px(CLOSE_BOX)
     };
-    (label + lead + mark + px(TAB_PAD_LEFT + TAB_PAD_LINK + TAB_PAD_TAIL))
+    (label + lead + count + mark + px(TAB_PAD_LEFT + TAB_PAD_LINK + TAB_PAD_TAIL))
         .clamp(px(TAB_MIN_WIDTH), px(TAB_MAX_WIDTH))
 }
 
@@ -884,10 +895,18 @@ fn link(tab: &Tab, image: Option<&Arc<Image>>, font: f32, theme: &Theme, color: 
         )
         .children(lead)
         .child(div().min_w_0().truncate().child(tab.label.clone()))
-        .children(
-            tab.count
-                .map(|count| badge(count.to_string(), theme).flex_none()),
-        )
+        .children(tab.count.map(|count| {
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .min_w_0()
+                .flex_shrink(BADGE_SHRINK)
+                .h(px(FONT_BADGE + BADGE_PAD_Y * 2.0))
+                .overflow_hidden()
+                .child(div().w_0().h_full())
+                .child(badge(count.to_string(), theme))
+        }))
 }
 
 fn tab_frame(
