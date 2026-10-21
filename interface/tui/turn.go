@@ -53,6 +53,7 @@ const (
 	readClock          = "15:04"
 	foldKey            = "f"
 	readBackFailed     = "the folded sub-agents were not all read back from the session: "
+	unreadJoin         = "\n\n"
 )
 
 func gateOffNote(why jev.Why) string {
@@ -127,7 +128,8 @@ func (a *App) send() tea.Cmd {
 		return nil
 	}
 	a.view.Reset()
-	if a.busy {
+	leadIdleBesideSubAgents := !a.leading && a.status.Agents > 0 && !a.view.Stopping
+	if a.busy && !leadIdleBesideSubAgents {
 		a.view.Queue(task, whole, chips)
 		a.steer(whole)
 		return nil
@@ -462,6 +464,7 @@ func (a *App) start(task string) {
 	a.leadTurnBegins()
 	if !a.options.Host.Send(Pick{Wire: a.wire, Model: a.picked, Effort: a.effort}, task) {
 		a.steer(task)
+		a.steeredUnread = append(a.steeredUnread, task)
 	}
 }
 
@@ -617,6 +620,10 @@ func (a *App) absorb(event Event) {
 		a.queueSteeredElsewhere(event.Text)
 		a.steered[event.Text] = event.ID
 	case EventSteered:
+		if at := slices.Index(a.steeredUnread, event.Text); at >= 0 {
+			a.steeredUnread = slices.Delete(a.steeredUnread, at, at+1)
+			break
+		}
 		a.queueSteeredElsewhere(event.Text)
 		a.view.Delivered(event.Text, readHead+strconv.Itoa(event.Step)+" · "+at.Format(readClock))
 		a.sentNow = false

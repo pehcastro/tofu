@@ -264,6 +264,7 @@ type App struct {
 	running        int
 	pressedAt      time.Time
 	steered        map[string]string
+	steeredUnread  []string
 	sentNow        bool
 	stopCommand    context.CancelFunc
 	subAgents      []subagent.Row
@@ -782,7 +783,8 @@ func (a *App) clearDialogs() tea.Cmd {
 }
 
 func (a *App) closed() tea.Cmd {
-	a.busy, a.leading, a.edits.Busy = false, false, false
+	unread := a.steeredUnread
+	a.busy, a.leading, a.edits.Busy, a.steeredUnread = false, false, false, nil
 	a.running, a.pressedAt, a.sentNow = 0, time.Time{}, false
 	clear(a.steered)
 	a.parkSubAgentsTheTurnLeftBehind()
@@ -794,7 +796,10 @@ func (a *App) closed() tea.Cmd {
 	a.carryHeld()
 	next := tea.Batch(a.pollQuota(), a.readPaths(), a.pollShells(), a.listen())
 	if task, queued := a.view.Release(); queued {
-		a.start(task)
+		unread = append(unread, task)
+	}
+	if len(unread) > 0 {
+		a.start(strings.Join(unread, unreadJoin))
 	}
 	return next
 }

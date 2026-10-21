@@ -152,6 +152,37 @@ func TestAMessageQueuedAfterTheLastStepStartsTheNextTurn(t *testing.T) {
 	}
 }
 
+func TestAMessageSentToAnIdleLeadThatNeverReadsItStartsTheNextTurn(t *testing.T) {
+	started, ended := make(chan played, 2), make(chan struct{})
+	app := steerApp(t, func(_ context.Context, _ Pick, task string, live host.Live) {
+		started <- played{task: task, live: live}
+		if task != firstTask {
+			return
+		}
+		live.Emit(Event{Kind: EventRequesting})
+		live.Emit(Event{Kind: EventDone, Text: "finished in", SubAgents: runningSubAgent()})
+		<-ended
+	})
+	typeAndSend(app, firstTask)
+	<-started
+	pumpUntil(t, app, EventDone)
+	typeAndSend(app, secondTask)
+	close(ended)
+	endTurn(t, app)
+
+	select {
+	case next := <-started:
+		if next.task != secondTask {
+			t.Fatalf("the next turn was given %q, want the message the lead never read", next.task)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("a message sent to an idle lead whose loop ended without reading it was dropped")
+	}
+	if headers := youHeaders(app); headers != 2 {
+		t.Errorf("the unread message restarted as a turn is drawn %d times, want once\n%s", headers-1, ansi.Strip(app.View().Content))
+	}
+}
+
 func TestStoppingTheTurnEmptiesTheSteeringChannelToo(t *testing.T) {
 	started, release := make(chan played, 2), make(chan struct{})
 	defer close(release)
@@ -312,7 +343,7 @@ func TestASecondEscBeforeTheLeadReadsTheQueueStopsTheLead(t *testing.T) {
 	endTurn(t, app)
 }
 
-func TestAMessageTypedWhileOnlySubAgentsRunIsQueuedUntilTheLeadTakesIt(t *testing.T) {
+func TestAMessageTypedWhileOnlySubAgentsRunIsSentAndStartsALeadTurnAtOnce(t *testing.T) {
 	release := make(chan struct{})
 	app := steerApp(t, func(_ context.Context, _ Pick, _ string, live host.Live) {
 		live.Emit(Event{Kind: EventRequesting})
@@ -326,20 +357,26 @@ func TestAMessageTypedWhileOnlySubAgentsRunIsQueuedUntilTheLeadTakesIt(t *testin
 	})
 	typeAndSend(app, firstTask)
 	pumpUntil(t, app, EventDone)
+	if row := turnRow(t, app); !strings.Contains(row, "lead idle, free to talk") || !strings.Contains(row, "1 sub-agent running") || strings.Contains(row, "[request#") {
+		t.Fatalf("the idle lead beside a working sub-agent reads %q, want it idle and free to talk with no ended turn's id", row)
+	}
 	typeAndSend(app, secondTask)
 
-	if row := headerOf(t, app, secondTask); !strings.Contains(row, "queued 1") {
-		t.Fatalf("a message the lead has not taken yet is drawn as sent: %q", row)
-	}
-	pumpUntil(t, app, EventText)
 	if queued := app.view.Queued(); len(queued) != 0 {
-		t.Fatalf("the message sits in the queue after the lead took it: %q", queued)
+		t.Fatalf("a message typed to an idle lead was queued: %q", queued)
 	}
 	if row := headerOf(t, app, secondTask); !strings.HasPrefix(strings.TrimSpace(row), "You") {
-		t.Errorf("the message is not drawn as sent after the lead took it: %q", row)
+		t.Fatalf("a message typed to an idle lead is not drawn as sent: %q", row)
 	}
-	if row := turnRow(t, app); !strings.Contains(row, "thinking") && !strings.Contains(row, "requesting") {
-		t.Errorf("the lead turn the message started does not run on the status line: %q", row)
+	if row := turnRow(t, app); !strings.Contains(row, "requesting") {
+		t.Fatalf("a message typed to an idle lead does not start a lead turn on the status line: %q", row)
+	}
+	pumpUntil(t, app, EventText)
+	if headers := youHeaders(app); headers != 2 {
+		t.Errorf("the sent message is drawn %d times after the lead read it, want once\n%s", headers-1, ansi.Strip(app.View().Content))
+	}
+	if plain := ansi.Strip(app.View().Content); strings.Contains(plain, "queued") || strings.Contains(plain, readHead) {
+		t.Errorf("the sent message went through the queue after the lead read it\n%s", plain)
 	}
 	rows := plainRows(app.View())
 	answer := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, "the lead answers") })

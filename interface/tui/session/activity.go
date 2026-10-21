@@ -23,6 +23,7 @@ const (
 	runningWord  = "running"
 	reportHead   = "report"
 	readingWords = "reading the reports"
+	leadIdleHead = "lead idle, free to talk"
 	stalledWord  = "stalled"
 	stopAskTail  = ", press Ctrl+C again to confirm"
 	doneMark     = "✓ "
@@ -94,7 +95,7 @@ func (m *Model) leadIdleWords() string {
 	if m.waitingOn == 0 {
 		return readingWords
 	}
-	return "waiting on " + subAgentCount(m.waitingOn)
+	return leadIdleHead + requestSeparator + subAgentCount(m.waitingOn) + " " + runningWord
 }
 
 func (m *Model) AskToStop(subAgents int, until time.Time) {
@@ -196,7 +197,7 @@ func (m *Model) phaseSince() time.Duration {
 }
 
 func (m *Model) requestLine() string {
-	line, id, work, call := margin, m.cookedID, "", ""
+	line, id, work, call := margin, "", "", ""
 	switch {
 	case m.Busy:
 		word, style := m.phase.drawn()
@@ -209,7 +210,7 @@ func (m *Model) requestLine() string {
 	case !m.leadIdleSince.IsZero():
 		line += look.Accent(progress.Spin(m.frame)) + " " + look.Style(look.Violet).Render(m.leadIdleWords()) + look.Muted(requestSeparator+widget.Until(max(m.now().Sub(m.leadIdleSince), 0))+metaGap)
 	case m.cooked != "":
-		line += look.Muted(m.cooked + metaGap)
+		line, id = line+look.Muted(m.cooked+metaGap), m.cookedID
 	default:
 		return ""
 	}

@@ -1901,19 +1901,22 @@ func leadIdleOnTwo(t *testing.T, at *time.Time) *App {
 	return app
 }
 
-func TestTheTurnLineSaysTheLeadWaitsOnItsWorkingSubAgentsAndNeverCooked(t *testing.T) {
+func TestTheTurnLineSaysTheLeadIsIdleBesideItsRunningSubAgentsAndNeverCooked(t *testing.T) {
 	at := fixedStart()
 	app := leadIdleOnTwo(t, &at)
 	at = at.Add(3 * time.Second)
 	row := turnRow(t, app)
-	if !strings.Contains(row, "waiting on 2 sub-agents") || strings.Contains(row, "cooked") || strings.Contains(row, "thinking") {
+	if !strings.Contains(row, "lead idle, free to talk") || !strings.Contains(row, "2 sub-agents running") || strings.Contains(row, "cooked") || strings.Contains(row, "thinking") {
 		t.Fatalf("the lead is idle while two sub-agents work and the turn line reads %q", row)
+	}
+	if strings.Contains(row, "[request#") {
+		t.Errorf("the idle line carries the id of the turn that already ended: %q", row)
 	}
 	if !strings.Contains(row, "3s") {
 		t.Errorf("the wait began three seconds ago and the turn line reads %q", row)
 	}
 	app.Update(Event{Kind: EventSubAgent, SubAgents: twoWorking(1)})
-	if row := turnRow(t, app); !strings.Contains(row, "waiting on 1 sub-agent") || strings.Contains(row, "sub-agents") {
+	if row := turnRow(t, app); !strings.Contains(row, "1 sub-agent running") || strings.Contains(row, "sub-agents") {
 		t.Fatalf("one sub-agent reported and the turn line reads %q", row)
 	}
 	app.Update(Event{Kind: EventRequesting})
@@ -1922,13 +1925,13 @@ func TestTheTurnLineSaysTheLeadWaitsOnItsWorkingSubAgentsAndNeverCooked(t *testi
 	}
 	app.Update(Event{Kind: EventText, Text: "sub-2 read b, sub-1 still works"})
 	app.Update(Event{Kind: EventDone, Text: "cooked for"})
-	if row := turnRow(t, app); !strings.Contains(row, "waiting on 1 sub-agent") {
+	if row := turnRow(t, app); !strings.Contains(row, "lead idle, free to talk") || !strings.Contains(row, "1 sub-agent running") {
 		t.Fatalf("the lead answered one report while the other sub-agent works and the turn line reads %q", row)
 	}
 	app.Update(Event{Kind: EventSubAgent, SubAgents: twoWorking(0)})
 	app.Update(Closed{})
 	for _, row := range plainRows(app.View()) {
-		if strings.Contains(row, "waiting on") {
+		if strings.Contains(row, "lead idle") {
 			t.Fatalf("the turn closed and a row still says %q", row)
 		}
 	}
