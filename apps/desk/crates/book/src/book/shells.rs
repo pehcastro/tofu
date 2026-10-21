@@ -26,7 +26,7 @@ enum Kept {
 
 type Sample = (&'static str, Kept, &'static str, i64, Option<u16>, u64);
 
-const SAMPLES: [Sample; 5] = [
+const SAMPLES: [Sample; 6] = [
     (
         "shell-1",
         Kept::Running,
@@ -66,6 +66,14 @@ const SAMPLES: [Sample; 5] = [
         47811,
         Some(8765),
         243,
+    ),
+    (
+        "shell-6",
+        Kept::Running,
+        "bun run storybook",
+        48602,
+        Some(6006),
+        95,
     ),
 ];
 
