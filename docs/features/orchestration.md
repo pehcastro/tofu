@@ -2,7 +2,7 @@
 title: Sub-agents
 description: You talk to one lead. It plans, splits the work, and checks it. Sub-agents write the code in the background, each in its own paths and with the rules for its language.
 order: 2
-updated: 2026-10-09
+updated: 2026-10-21
 ---
 
 You talk to one model, the **lead**. The lead does not write the code. It
@@ -41,9 +41,14 @@ checks ran after its last edit and passed: `go vet` and `go test` for go-dev,
 blocked on tests.
 
 # Reports come back to the lead
-Each report says how the work ended: done, done with concerns, blocked, or
-needs context. Its findings are sorted into act on, consider, noted, and
-dismissed. The lead checks the work and answers you.
+Each sub-agent ends by calling `finish` with a typed result: how the work
+ended (done, done with concerns, blocked, or needs context), a summary, the
+files it changed, the checks it ran with their exit codes, its findings
+sorted into act on, consider, noted, and dismissed, its confidence, and its
+open questions. tofu checks the files and exit codes against what it saw
+itself, and a claim it did not see becomes a finding to act on. One that
+ends without `finish` is sent back once, then ends blocked. The lead checks
+the work and answers you.
 ```
 
 ## When the lead writes and when it spawns

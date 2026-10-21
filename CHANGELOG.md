@@ -10,6 +10,17 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc13 - 2026-10-21
+
+### Added
+
+- Every sub-agent ends by calling `finish` with a typed result: a verdict, a summary, the files it changed, the checks it ran with their exit codes, its findings by bucket, its confidence, open questions and asks, and an optional body. tofu checks the files and exit codes against what it saw: a file it never saw written or a wrong exit code is marked unseen, replaced by what tofu saw, and added as a finding to act on. A sub-agent that ends without `finish` is sent back once, then ends blocked. The lead reads the same report as before, now built from the result.
+- Over `tofu serve`, `agent.ended` carries the typed `result` beside the text `report`, and a resumed session replays it; `tofu serve --schema` names it.
+
+### Fixed
+
+- A turn where the model ends with reasoning and no answer, as a cron fire with nothing to report does, ends quietly with a notice quoting that reasoning, instead of failing with invalid_answer. A model that answers twice with nothing at all fails with a sentence saying it answered with nothing.
+
 ## 0.5.15-rc12-fix6 - 2026-10-21
 
 ### Fixed

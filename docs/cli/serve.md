@@ -2,7 +2,7 @@
 title: Serving tofu to another program
 description: tofu serve --stdio runs one project for the desk app or a script of your own, over JSON-RPC on standard input and output, with every board, approval, question and status record the app has.
 order: 2
-updated: 2026-10-10
+updated: 2026-10-21
 ---
 
 `tofu serve --stdio` runs one project for another program: the desk app, an editor, or a script of
@@ -92,6 +92,10 @@ started it.
   `offset`, only while a person holds it. A client that sees a gap in the offsets calls
   `shell.takeover` again for a fresh replay. `shell.started` and `session.state` say `terminal`,
   `holder` and `heldSince`.
+- `agent.ended` when a sub-agent ends, with its typed `result`: `verdict`, `summary`, `files`
+  and `checks` each marked `seen` when tofu saw them, `findings` by bucket, `confidence`,
+  `openQuestions`, `asks`, `body` and what tofu `measured`, beside the text `report`. A resumed
+  session replays it. `tofu serve --schema` has the full type.
 - `turn.account`: the account a turn spends, `picked` as it starts and `moved` off a spent one.
 - `turn.started` and every `message.user` carry the images pasted into the message as
   `images: [{n, path, mime}]`, `n` being the `[Image #N]` in its text, live and in history.
