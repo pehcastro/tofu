@@ -893,7 +893,7 @@ impl Toaster {
             id,
             kind,
             message: message.into(),
-            clock: self.clock(kind),
+            clock: self.clock(kind, cx.background_executor().now()),
             leaving: false,
             lift: Track::at(-TOAST_HEIGHT),
             shift: Track::at(0.0),
@@ -913,7 +913,7 @@ impl Toaster {
         message: impl Into<SharedString>,
         cx: &mut Context<Self>,
     ) {
-        let clock = self.clock(kind);
+        let clock = self.clock(kind, cx.background_executor().now());
         if let Some(toast) = self.live(id) {
             toast.kind = kind;
             toast.message = message.into();
@@ -939,16 +939,16 @@ impl Toaster {
             .find(|toast| toast.id == id && !toast.leaving)
     }
 
-    fn clock(&self, kind: ToastKind) -> Clock {
+    fn clock(&self, kind: ToastKind, now: Instant) -> Clock {
         match (kind, self.expanded) {
             (ToastKind::Loading, _) => Clock::Held,
             (_, true) => Clock::Paused(TOAST_LIFETIME),
-            (_, false) => Clock::Running(Instant::now() + TOAST_LIFETIME),
+            (_, false) => Clock::Running(now + TOAST_LIFETIME),
         }
     }
 
     fn hover(&mut self, inside: bool, cx: &mut Context<Self>) {
-        let now = Instant::now();
+        let now = cx.background_executor().now();
         self.expanded = inside;
         for toast in &mut self.toasts {
             toast.clock = match (toast.clock, inside) {
@@ -963,7 +963,7 @@ impl Toaster {
     }
 
     fn settle(&mut self, cx: &mut Context<Self>) {
-        let now = Instant::now();
+        let now = cx.background_executor().now();
         for toast in &mut self.toasts {
             if matches!(toast.clock, Clock::Running(until) if until <= now) {
                 toast.fall();
@@ -998,8 +998,9 @@ impl Toaster {
             .min();
         self.wake = next.map(|until| {
             cx.spawn(async move |this, cx| {
-                cx.background_executor()
-                    .timer(until.saturating_duration_since(Instant::now()))
+                let executor = cx.background_executor();
+                executor
+                    .timer(until.saturating_duration_since(executor.now()))
                     .await;
                 this.update(cx, |toaster, cx| toaster.settle(cx))
             })
@@ -1055,8 +1056,7 @@ impl Toaster {
         self.settle(cx);
     }
 
-    fn tick(&mut self, reduced: bool) -> bool {
-        let now = Instant::now();
+    fn tick(&mut self, reduced: bool, now: Instant) -> bool {
         let elapsed = self.ticked.map_or(0.0, |ticked| {
             now.saturating_duration_since(ticked).as_secs_f32()
         });
@@ -1174,7 +1174,7 @@ impl Toaster {
 impl Render for Toaster {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
-        if self.tick(reduced_motion(cx)) {
+        if self.tick(reduced_motion(cx), cx.background_executor().now()) {
             window.request_animation_frame();
         }
         if self.toasts.is_empty() {
