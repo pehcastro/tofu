@@ -1,7 +1,8 @@
 use desk_motion::tokens::{EASE_OUT, TOGGLE_MS};
 use gpui::{
-    App, Context, Div, ElementId, FontWeight, ImageSource, Motion, ObjectFit, Rgba, SharedString,
-    StyledImage, Window, div, img, linear_color_stop, linear_gradient, prelude::*, px,
+    App, Context, Div, ElementId, Entity, FontWeight, ImageSource, Motion, ObjectFit, Rgba,
+    SharedString, StyleRefinement, StyledImage, Window, div, img, linear_color_stop,
+    linear_gradient, prelude::*, px,
 };
 
 use crate::components::glyph::{Glyph, MARK_BLEED};
@@ -370,6 +371,37 @@ pub fn avatar(id: impl Into<ElementId>, agent: &Agent, size: AvatarSize, theme: 
                 theme.color(ColorToken::StatusDanger),
             )),
         })
+}
+
+pub struct AvatarView {
+    id: ElementId,
+    agent: Agent,
+    size: AvatarSize,
+}
+
+impl AvatarView {
+    pub fn new(
+        id: impl Into<ElementId>,
+        agent: Agent,
+        size: AvatarSize,
+        cx: &mut App,
+    ) -> Entity<AvatarView> {
+        let id = id.into();
+        cx.new(|_| AvatarView { id, agent, size })
+    }
+
+    pub fn cached(view: &Entity<AvatarView>, cx: &App) -> impl IntoElement + use<> {
+        let (side, _, _) = view.read(cx).size.metrics();
+        view.clone()
+            .cached(StyleRefinement::default().size(px(side)).flex_none())
+    }
+}
+
+impl Render for AvatarView {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = ActiveTheme::theme(cx);
+        avatar(self.id.clone(), &self.agent, self.size, &theme)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

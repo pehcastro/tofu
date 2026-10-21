@@ -45,7 +45,7 @@ use desk_ui::components::size::{
     CAPTION_TEXT, DIM_TEXT, FONT_SMALL, FONT_TITLE, RADIUS_CHIP, RADIUS_ROW, T1, T2,
 };
 use desk_ui::live::ActiveTheme;
-use desk_ui::metrics::TEXT;
+use desk_ui::metrics::{SIDEBAR_WIDTH, TEXT};
 use desk_ui::theme::{ColorToken, Mode, NumberToken, Theme};
 use gpui::{
     App, ClickEvent, Context, Div, Entity, FocusHandle, FontWeight, KeyDownEvent,
@@ -476,6 +476,7 @@ impl Render for Book {
         let staged = self
             .page
             .stage(now, reduced_motion(cx), window, entering, leaving);
+        let page_width = window.viewport_size().width - px(SIDEBAR_WIDTH);
         div()
             .id("book")
             .track_focus(&self.focus)
@@ -496,8 +497,15 @@ impl Render for Book {
                     .flex_col()
                     .child(self.toolbar(&theme, cx))
                     .child(
-                        ScrollArea::new("page")
-                            .child(div().px_4().pb_4().flex().flex_col().child(staged)),
+                        ScrollArea::new("page").child(
+                            div()
+                                .w(page_width)
+                                .px_4()
+                                .pb_4()
+                                .flex()
+                                .flex_col()
+                                .child(staged),
+                        ),
                     ),
             )
             .child(deferred(self.toaster.clone()).priority(1))

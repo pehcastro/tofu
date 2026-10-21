@@ -3,7 +3,7 @@ use std::time::Instant;
 use desk_motion::{Presence, reduced_motion};
 use desk_ui::component::icon_button;
 use desk_ui::components::avatar::{
-    Agent, AgentKind, AgentStatus, AvatarSize, Person, avatar, avatar_stack, spinner,
+    Agent, AgentKind, AgentStatus, AvatarSize, AvatarView, Person, avatar_stack, spinner,
 };
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::{caption, inner_card};
@@ -20,7 +20,8 @@ use desk_ui::icon::Icon;
 use desk_ui::metrics::ICON_SMALL;
 use desk_ui::theme::Theme;
 use gpui::{
-    ClickEvent, Context, Div, Entity, SharedString, Window, deferred, div, prelude::*, px, rems,
+    App, ClickEvent, Context, Div, Entity, SharedString, Window, deferred, div, prelude::*, px,
+    rems,
 };
 
 use super::Book;
@@ -71,6 +72,8 @@ pub(super) struct ControlsState {
     spinner_note: Entity<SelectableText>,
     panel_note: Entity<SelectableText>,
     buttons_note: Entity<SelectableText>,
+    kinds: Vec<Entity<AvatarView>>,
+    sized: Vec<Entity<AvatarView>>,
     branch: Entity<Dropdown>,
     segments: [usize; 3],
     switches: [bool; 3],
@@ -106,6 +109,34 @@ impl ControlsState {
                 });
             })
         });
+        let kinds = AgentKind::ALL
+            .into_iter()
+            .flat_map(|kind| {
+                AgentStatus::ALL.map(|status| Agent {
+                    kind,
+                    instance: 1,
+                    status,
+                })
+            })
+            .enumerate()
+            .map(|(at, agent)| AvatarView::new(("avatar", at), agent, AvatarSize::Row, cx))
+            .collect();
+        let sized = AgentStatus::ALL
+            .into_iter()
+            .zip(AgentKind::ALL)
+            .flat_map(|(status, kind)| {
+                SIZES.map(|(size, _)| {
+                    let agent = Agent {
+                        kind,
+                        instance: 2,
+                        status,
+                    };
+                    (agent, size)
+                })
+            })
+            .enumerate()
+            .map(|(at, (agent, size))| AvatarView::new(("sized", at), agent, size, cx))
+            .collect();
         ControlsState {
             fields,
             area,
@@ -117,6 +148,8 @@ impl ControlsState {
             spinner_note: SelectableText::new(SPINNER_NOTE.into(), cx),
             panel_note: SelectableText::new(PANEL_NOTE.into(), cx),
             buttons_note: SelectableText::new(BUTTONS_NOTE.into(), cx),
+            kinds,
+            sized,
             branch: Dropdown::new(actions(BRANCHES), cx),
             segments: [0, 1, 2],
             switches: [true, true, false],
@@ -136,7 +169,7 @@ impl ControlsState {
         cx: &mut Context<Book>,
     ) -> Div {
         match page {
-            Page::Avatar => avatars(&self.spinner_note, theme),
+            Page::Avatar => avatars(&self.kinds, &self.sized, &self.spinner_note, theme, cx),
             Page::Chip => self.chips(theme, window, cx),
             Page::Button => self.buttons(theme, cx),
             Page::Input => self.inputs(theme, cx),
@@ -155,52 +188,32 @@ impl ControlsState {
     }
 }
 
-fn avatars(spinner_note: &Entity<SelectableText>, theme: &Theme) -> Div {
-    let grid = AgentKind::ALL.into_iter().enumerate().map(|(at, kind)| {
-        spread(theme)
-            .child(div().w(px(KIND_WIDTH)).child(kind.name()))
-            .children(
-                AgentStatus::ALL
-                    .into_iter()
-                    .enumerate()
-                    .map(move |(column, status)| {
-                        let agent = Agent {
-                            kind,
-                            instance: 1,
-                            status,
-                        };
-                        avatar(
-                            ("avatar", at * AgentStatus::ALL.len() + column),
-                            &agent,
-                            AvatarSize::Row,
-                            theme,
-                        )
-                    }),
-            )
-    });
+fn avatars(
+    kinds: &[Entity<AvatarView>],
+    sized: &[Entity<AvatarView>],
+    spinner_note: &Entity<SelectableText>,
+    theme: &Theme,
+    cx: &App,
+) -> Div {
+    let grid = AgentKind::ALL
+        .into_iter()
+        .zip(kinds.chunks(AgentStatus::ALL.len()))
+        .map(|(kind, row)| {
+            spread(theme)
+                .child(div().w(px(KIND_WIDTH)).child(kind.name()))
+                .children(row.iter().map(|view| AvatarView::cached(view, cx)))
+        });
     let sizes = AgentStatus::ALL
         .into_iter()
-        .enumerate()
-        .map(|(at, status)| {
+        .zip(sized.chunks(SIZES.len()))
+        .map(|(status, row)| {
             spread(theme)
                 .gap_4()
                 .child(div().w(px(KIND_WIDTH)).child(status.group()))
                 .children(
-                    SIZES
-                        .into_iter()
-                        .enumerate()
-                        .map(move |(column, (size, name))| {
-                            let agent = Agent {
-                                kind: AgentKind::ALL[at % AgentKind::ALL.len()],
-                                instance: 2,
-                                status,
-                            };
-                            named(
-                                name,
-                                theme,
-                                avatar(("sized", at * SIZES.len() + column), &agent, size, theme),
-                            )
-                        }),
+                    row.iter()
+                        .zip(SIZES)
+                        .map(|(view, (_, name))| named(name, theme, AvatarView::cached(view, cx))),
                 )
         });
     let people = AgentKind::ALL.map(|kind| Person {
