@@ -60,18 +60,23 @@ impl SessionHead {
     }
 
     fn known(&self, store: &Store) -> Option<Known> {
-        match (&store.info.read, &self.row) {
-            (Some(read), _) => Some(Known {
+        let row = self
+            .row
+            .as_ref()
+            .filter(|row| store.open.as_ref().is_none_or(|open| *open == row.id));
+        let wanted = store.open.as_ref().or(row.map(|row| &row.id))?;
+        match (&store.info.read, row) {
+            (Some(read), _) if read.value.id == *wanted => Some(Known {
                 handle: read.value.handle.clone(),
                 generations: read.value.generations,
                 at: read.value.at.clone(),
             }),
-            (None, Some(row)) => Some(Known {
+            (_, Some(row)) => Some(Known {
                 handle: row.handle.clone(),
                 generations: row.generations,
                 at: row.at.clone(),
             }),
-            (None, None) => None,
+            (_, None) => None,
         }
     }
 }
