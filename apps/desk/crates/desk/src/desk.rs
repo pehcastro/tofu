@@ -374,6 +374,7 @@ struct Projects {
     refused: Option<Option<SharedString>>,
     restored: bool,
     restoring: Option<String>,
+    named: Option<SharedString>,
     written: Option<project::Remembered>,
     stopped: Option<TofuStopped>,
     _watch: Vec<gpui::Subscription>,
@@ -799,9 +800,13 @@ fn commands(screens: &[Screen]) -> Vec<PaletteItem> {
 }
 
 impl Desk {
+    #[cfg_attr(
+        not(feature = "screen-work"),
+        expect(unused_variables, reason = "only the work screen restores a project")
+    )]
     pub fn new(
         screens: Vec<Screen>,
-        name: SharedString,
+        (name, named): (SharedString, bool),
         view: AnyView,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -815,6 +820,7 @@ impl Desk {
                 open: git::open,
             }])
             .collect();
+        let named = named.then(|| name.clone());
         let palette = Palette::new(commands(&screens), window, cx);
         let picked = cx.listener(|desk, id: &SharedString, window, cx| {
             eprintln!("desk: palette picked {id}");
@@ -850,7 +856,10 @@ impl Desk {
             marks: title_bar::marks(),
             github: Github::Asking,
             #[cfg(feature = "screen-work")]
-            projects: Projects::default(),
+            projects: Projects {
+                named,
+                ..Projects::default()
+            },
             #[cfg(feature = "screen-work")]
             tabbed: Vec::new(),
             #[cfg(feature = "screen-work")]
@@ -881,6 +890,12 @@ impl Desk {
                 }
                 true
             });
+        }
+        #[cfg(feature = "screen-intro")]
+        if let Body::Whole(view) = &desk.shown.body
+            && let Ok(intro) = view.clone().downcast::<crate::screens::intro::Intro>()
+        {
+            cx.observe(&intro, |_, _, cx| cx.notify()).detach();
         }
         desk.focus_shown(window, cx);
         cx.spawn(async move |this, cx| {
@@ -944,6 +959,8 @@ impl Desk {
                 };
                 let view = (screen.open)(None, window, cx)
                     .map_err(|error| format!("screen {name} did not open: {error}"))?;
+                #[cfg(all(feature = "screen-work", feature = "module-editor"))]
+                Self::lend_chat(&view, cx);
                 #[cfg(feature = "screen-work")]
                 if screen.name != WORK_SCREEN {
                     self.tabbed.push(screen.name);
@@ -983,6 +1000,21 @@ impl Desk {
         self.remember_state(cx);
         cx.notify();
         Ok(())
+    }
+
+    #[cfg(feature = "screen-intro")]
+    fn leave_intro(&mut self, cx: &App) {
+        let Body::Whole(view) = &self.shown.body else {
+            return;
+        };
+        let left = view
+            .clone()
+            .downcast::<crate::screens::intro::Intro>()
+            .is_ok_and(|intro| intro.read(cx).left());
+        if left {
+            self.shown.body = Body::View(view.clone());
+            eprintln!("desk: intro left for work, chrome back");
+        }
     }
 
     fn focus_shown(&self, window: &mut Window, cx: &mut App) {
@@ -1702,6 +1734,20 @@ impl Desk {
         chat.update(cx, |chat, cx| chat.open_session(Some(id), cx));
     }
 
+    #[cfg(feature = "module-editor")]
+    fn lend_chat(view: &AnyView, cx: &mut Context<Self>) {
+        let Ok(editor) = view.clone().downcast::<crate::modules::editor::Editor>() else {
+            return;
+        };
+        let desk = cx.weak_entity();
+        editor.update(cx, |editor, _| {
+            editor.chat_from(move |cx| {
+                let desk = desk.upgrade()?;
+                Some(desk.read(cx).work()?.read(cx).chat().clone())
+            })
+        });
+    }
+
     fn park_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.shown.name != WORK_SCREEN {
             return;
@@ -1715,6 +1761,8 @@ impl Desk {
         };
         match (screen.open)(None, window, cx) {
             Ok(view) => {
+                #[cfg(feature = "module-editor")]
+                Self::lend_chat(&view, cx);
                 self.parked.push(Shown::new(EDITOR_SCREEN.into(), view));
                 self.tabbed.push(EDITOR_SCREEN);
                 eprintln!("desk: screen {EDITOR_SCREEN} parked");
@@ -1778,7 +1826,8 @@ impl Desk {
             })
             .collect();
         let wanted = |name: &str| kept.iter().any(|(kept, _)| *kept == name);
-        if self.shown.name != WORK_SCREEN && !wanted(&self.shown.name) {
+        let named = self.projects.named.take();
+        if named.is_none() && self.shown.name != WORK_SCREEN && !wanted(&self.shown.name) {
             self.show(WORK_SCREEN, window, cx);
         }
         self.parked
@@ -1790,6 +1839,8 @@ impl Desk {
                 || match self.screens.iter().find(|screen| screen.name == *name) {
                     Some(screen) => match (screen.open)(None, window, cx) {
                         Ok(view) => {
+                            #[cfg(feature = "module-editor")]
+                            Self::lend_chat(&view, cx);
                             self.parked.push(Shown::new((*name).into(), view));
                             true
                         }
@@ -1803,6 +1854,15 @@ impl Desk {
             if opened {
                 tabbed.push(*name);
             }
+        }
+        if let Some(name) = self
+            .screens
+            .iter()
+            .map(|screen| screen.name)
+            .find(|name| Some(*name) == named.as_deref() && *name != WORK_SCREEN)
+            && !tabbed.contains(&name)
+        {
+            tabbed.push(name);
         }
         self.held = kept
             .iter()
@@ -1821,14 +1881,19 @@ impl Desk {
             saved.focus,
             saved.session.as_deref().unwrap_or("none")
         );
-        let focus = self
-            .tabbed
-            .iter()
-            .copied()
-            .find(|name| *name == saved.focus)
-            .unwrap_or(WORK_SCREEN);
-        if self.shown.name != focus {
-            self.show(focus, window, cx);
+        match &named {
+            Some(name) => eprintln!("desk: restore kept, --screen {name} focused"),
+            None => {
+                let focus = self
+                    .tabbed
+                    .iter()
+                    .copied()
+                    .find(|name| *name == saved.focus)
+                    .unwrap_or(WORK_SCREEN);
+                if self.shown.name != focus {
+                    self.show(focus, window, cx);
+                }
+            }
         }
         self.projects.written = Some(self.snapshot(cx));
         self.restore_session(cx);
@@ -2699,6 +2764,8 @@ impl Render for Desk {
                     }),
                 ))
         });
+        #[cfg(feature = "screen-intro")]
+        self.leave_intro(cx);
         let whole = matches!(self.shown.body, Body::Whole(_));
         let content = self.content(&theme, cx);
         let content = timed("screen", content).into_any_element();
