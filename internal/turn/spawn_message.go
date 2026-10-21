@@ -12,8 +12,10 @@ import (
 
 	"tofu/internal/boardy"
 	"tofu/internal/llm"
+	"tofu/internal/safe"
 	"tofu/internal/shell"
 	"tofu/internal/subagent"
+	"tofu/internal/sys"
 )
 
 type messageTool struct {
@@ -217,7 +219,9 @@ func (t *SpawnTool) send(ctx context.Context, to, text, from string) (Result, er
 	}
 	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
 	t.Inbox.hold(held, site.log)
-	go t.background(runCtx, cancel, held, opened, site, text, llm.Origin{Source: sourceMessage, PostedAt: time.Now()}, nil)
+	safe.Go(sys.Crashes(t.Project), "sub-agent "+held.agent.ID, func() {
+		t.background(runCtx, cancel, held, opened, site, text, llm.Origin{Source: sourceMessage, PostedAt: time.Now()}, nil)
+	})
 	return Result{Content: to + " resumes in the background with its conversation. its report comes to you as a message when it ends.", Command: "message " + to, SubAgent: to}, nil
 }
 

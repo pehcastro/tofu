@@ -22,6 +22,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/recall"
+	"tofu/internal/safe"
 	"tofu/internal/session"
 	"tofu/internal/shell"
 	"tofu/internal/subagent"
@@ -584,7 +585,11 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	defer func() {
 		if value := recover(); value != nil {
-			ran, runErr = fail(panicked{value: value, stack: debug.Stack()})
+			stack := debug.Stack()
+			if caught, rethrown := value.(safe.Panic); rethrown {
+				value, stack = caught.Value, caught.Stack
+			}
+			ran, runErr = fail(panicked{value: value, stack: stack})
 		}
 	}()
 	endAt := func(outcome Outcome, lead string, history []llm.Message) Row {
@@ -637,20 +642,21 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	if config.Boundary != nil {
 		recordedGrants = config.Boundary.Asked()
 	}
+	crashes := sys.Crashes(config.Project)
 	forkInto := func(fork *Fork, when string, beforeFork, begun []llm.Message, moved *Account) {
 		ended := row
 		ended.Outcome, ended.ForkedInto, ended.EndedInFork, ended.Conversation = OutcomeForked, fork.Into, fork, messages[afterSystem:]
 		ended.WallClockMS = now().Sub(start).Milliseconds()
 		if config.EndedSession != nil {
 			written.Add(1)
-			go func() {
+			safe.Go(crashes, "ended session write", func() {
 				defer written.Done()
-				if err := config.EndedSession(ended); err != nil {
+				if err := safe.Call(crashes, "ended session write", func() error { return config.EndedSession(ended) }); err != nil {
 					forkWrites.Lock()
 					forkWriteErrs = append(forkWriteErrs, err.Error())
 					forkWrites.Unlock()
 				}
-			}()
+			})
 		}
 		row = Row{
 			ID:          fork.Into,
@@ -979,9 +985,13 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 						judged := make(chan shadowVerdict, 1)
 						gated.shadow = judged
 						shadowed.Add(1)
-						go func() {
+						safe.Go(crashes, "shadow gate", func() {
 							defer shadowed.Done()
-							verdict, err := config.Gate.Decide(context.WithoutCancel(ctx), request)
+							var verdict GateDecision
+							err := safe.Call(crashes, "shadow gate", func() (err error) {
+								verdict, err = config.Gate.Decide(context.WithoutCancel(ctx), request)
+								return err
+							})
 							shadows.Lock()
 							defer shadows.Unlock()
 							if verdict.ID != "" {
@@ -993,7 +1003,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 								shadowErrs = append(shadowErrs, "the shadow gate could not judge "+request.Tool+": "+shadow.err)
 							}
 							judged <- shadow
-						}()
+						})
 					default:
 						verdict, err := config.Gate.Decide(ctx, request)
 						gated.verdict = verdict
@@ -1038,14 +1048,18 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				} else {
 					batches++
 					var running sync.WaitGroup
+					crashed := make([]error, len(wave))
 					running.Add(len(wave))
 					for i := range wave {
-						go func() {
+						safe.Go(crashes, "parallel tool call", func() {
 							defer running.Done()
-							runAt(i, batches)
-						}()
+							crashed[i] = safe.Call(nil, "parallel tool call", func() error { runAt(i, batches); return nil })
+						})
 					}
 					running.Wait()
+					if first := slices.IndexFunc(crashed, func(err error) bool { return err != nil }); first >= 0 {
+						panic(crashed[first])
+					}
 				}
 				leadStop = waveEnded()
 				shown := make([]llm.Message, 0, len(answers))

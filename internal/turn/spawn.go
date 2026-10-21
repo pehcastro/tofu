@@ -24,6 +24,7 @@ import (
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/recall"
 	"tofu/internal/rule"
+	"tofu/internal/safe"
 	"tofu/internal/session"
 	"tofu/internal/settings"
 	"tofu/internal/subagent"
@@ -513,7 +514,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	site.notice(site.agent, timing.words(subAgentID))
 	started = true
 	t.Inbox.hold(held, site.log)
-	go t.background(runCtx, cancel, held, opened, site, task, llm.Origin{}, warm)
+	safe.Go(sys.Crashes(t.Project), "sub-agent "+subAgentID, func() { t.background(runCtx, cancel, held, opened, site, task, llm.Origin{}, warm) })
 	said := narrowed + clampedWords(effort, opened) + held.runningWords()
 	if boardSizes != nil {
 		if err := t.base.Board.Fire(rule.WhenAfter, rule.HookAgentSpawn, "", args.Ticket, t.base.Session); err != nil {

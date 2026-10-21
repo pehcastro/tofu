@@ -16,7 +16,9 @@ import (
 	"tofu/internal/learn/repeat"
 	"tofu/internal/learn/words"
 	"tofu/internal/llm"
+	"tofu/internal/safe"
 	"tofu/internal/session"
+	"tofu/internal/sys"
 )
 
 const (
@@ -856,7 +858,8 @@ func (b *Inbox) compactLater(job laterCompaction) bool {
 	superseded := b.queued
 	if b.settling == nil {
 		b.settling = make(chan struct{})
-		go b.compacting(job.run)
+		report := sys.Crashes(".")
+		safe.Go(report, "later compaction", func() { b.compacting(report, job.run) })
 	} else {
 		b.queued = job
 	}
@@ -867,9 +870,9 @@ func (b *Inbox) compactLater(job laterCompaction) bool {
 	return true
 }
 
-func (b *Inbox) compacting(run func()) {
+func (b *Inbox) compacting(report safe.Report, run func()) {
 	for run != nil {
-		run()
+		_ = safe.Call(report, "later compaction", func() error { run(); return nil })
 		b.mu.Lock()
 		run, b.queued = b.queued.run, laterCompaction{}
 		if run == nil {

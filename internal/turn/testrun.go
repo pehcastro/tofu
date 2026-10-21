@@ -16,7 +16,9 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/safe"
 	"tofu/internal/shell"
+	"tofu/internal/sys"
 )
 
 const (
@@ -279,11 +281,12 @@ func startTestRunner(dir string) (*testRunner, error) {
 	}
 	release := sync.OnceFunc(tracked.Release)
 	runner := &testRunner{process: cmd.Process, stop: func() { cancel(); release() }, input: input, answers: map[int]testReply{}, changed: make(chan struct{})}
-	go runner.read(output)
-	go func() {
+	report := sys.Crashes(dir)
+	safe.Go(report, "test runner read", func() { runner.read(output) })
+	safe.Go(report, "test runner wait", func() {
+		defer release()
 		_ = cmd.Wait()
-		release()
-	}()
+	})
 	return runner, nil
 }
 

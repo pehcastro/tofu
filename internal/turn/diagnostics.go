@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/safe"
 	"tofu/internal/shell"
 	"tofu/internal/sys"
 )
@@ -253,10 +254,10 @@ func (c *Typecheckers) watchFor(checker typechecker) *tscWatch {
 		lifetime, cancel := context.WithCancel(context.Background())
 		exited := make(chan struct{})
 		watch := &tscWatch{command: strings.Join(argv, " "), born: time.Now(), stop: func() { cancel(); <-exited }, changed: make(chan struct{})}
-		go func() {
+		safe.Go(sys.Crashes(checker.dir), "typecheck watch", func() {
 			defer close(exited)
 			watch.run(lifetime, checker, argv)
-		}()
+		})
 		c.watching[checker.dir] = watch
 	}
 	return c.watching[checker.dir]
@@ -330,7 +331,10 @@ func (w *tscWatch) run(lifetime context.Context, checker typechecker, argv []str
 	}
 	defer tracked.Release()
 	w.process = cmd.Process
-	go w.read(output)
+	safe.Go(sys.Crashes(checker.dir), "typecheck watch read", func() {
+		defer func() { _ = cmd.Process.Kill() }()
+		w.read(output)
+	})
 	_ = cmd.Wait()
 }
 

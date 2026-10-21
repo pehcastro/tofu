@@ -19,6 +19,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/safe"
 	"tofu/internal/session"
 	"tofu/internal/shell"
 	"tofu/internal/subagent"
@@ -88,10 +89,10 @@ type toolchainProbe struct {
 
 func startToolchainProbe(dir string, run toolchainRunner, timeout time.Duration) *toolchainProbe {
 	probe := &toolchainProbe{done: make(chan struct{})}
-	go func() {
+	safe.Go(sys.Crashes(dir), "toolchain probe", func() {
+		defer close(probe.done)
 		probe.states = probeToolchain(dir, run, timeout)
-		close(probe.done)
-	}()
+	})
 	return probe
 }
 
