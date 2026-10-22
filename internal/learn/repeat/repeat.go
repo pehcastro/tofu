@@ -127,10 +127,6 @@ func thresholdIn(files fs.FS, key string) (float64, error) {
 	return 0, fmt.Errorf("%s names no %s", pointFile, key)
 }
 
-func Decide(standing float64, scores []float64, thresholds Thresholds) (int, float64) {
-	return highest(standing, scores, thresholds.Standing, thresholds.Repeats)
-}
-
 func highest(standing float64, scores []float64, standingAt, at float64) (int, float64) {
 	best, value := -1, 0.0
 	if standing < standingAt {
@@ -195,7 +191,7 @@ func (j *Judge) Repeats(ctx context.Context, said string, earlier []Earlier, kep
 	if found.Kept >= 0 {
 		row.Reason.Comparison, row.Reason.Threshold = ">= "+strconv.FormatFloat(j.thresholds.Kept, 'f', -1, 64), j.thresholds.Kept
 	} else {
-		found.Earlier, row.Reason.Value = Decide(standing, scores[:onEarlier], j.thresholds)
+		found.Earlier, row.Reason.Value = highest(standing, scores[:onEarlier], j.thresholds.Standing, j.thresholds.Repeats)
 		asked = found.Earlier
 	}
 	if found != none {

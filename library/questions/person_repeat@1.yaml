@@ -44,8 +44,8 @@ questions:
         work that way.
       false: >-
         said only gives a new task, describes a defect or a feature, reports
-        news, answers, approves, or asks for a one-off act such as a restart,
-        a go-ahead or carrying on.
+        news, answers, approves, or asks for a one-off act that matters only
+        at this moment.
 
   repeats:
     type: noul
@@ -67,8 +67,7 @@ questions:
       false: >-
         They ask for different things, or said only asks a question, gives a
         new task, reports a problem seen for the first time, answers, approves,
-        or repeats a one-off request about a single moment such as a restart,
-        a status check or a go-ahead.
+        or repeats a one-off request that matters only at a single moment.
 
   kept:
     type: noul
