@@ -85,6 +85,7 @@ type Config struct {
 	Images          []llm.Image
 	History         []llm.Message
 	Wire            string
+	Slug            string
 	SpawnedFrom     string
 	AgentType       string
 	Project         string

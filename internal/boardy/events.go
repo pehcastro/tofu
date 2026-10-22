@@ -165,6 +165,9 @@ func (s Store) Record(key string, event Event) error {
 	if event.Author == nil && event.Actor != "" {
 		event.Author = s.authorOf(event.Actor)
 	}
+	if event.Agent == "" && event.Author != nil && event.Author.Role == AsEngineer {
+		event.Agent = event.Author.Name
+	}
 	line, err := json.Marshal(event)
 	if err != nil {
 		return err

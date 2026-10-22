@@ -13,6 +13,7 @@ import (
 	"tofu/internal/boardy"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/session"
 	"tofu/internal/turn"
 )
 
@@ -106,6 +107,24 @@ func TicketGrant(board boardy.Managed, id, lead, agent string) ([]string, error)
 	return ticket.Owns, nil
 }
 
+func (t ticketTool) spokenBoard() boardy.Managed {
+	seeded := t.board.Store.Speakers[t.actor]
+	if seeded.Handle != "" || t.board.Store.Root == "" {
+		return t.board
+	}
+	sessions, err := session.OpenIn(t.board.Store.Root)
+	if err != nil {
+		return t.board
+	}
+	lead, found := turn.PMAuthor(sessions, t.actor, seeded.Model)
+	if !found {
+		return t.board
+	}
+	board := t.board
+	board.Store.Speakers = map[string]boardy.Author{t.actor: *lead}
+	return board
+}
+
 func (t ticketTool) Name() string { return string(t.verb) }
 
 func (t ticketTool) Definition() llm.Tool {
@@ -172,6 +191,7 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.verb, err)
 	}
+	t.board = t.spokenBoard()
 	return nudged(t.board.Store, string(t.verb), func() (turn.Result, error) {
 		command := string(t.verb) + " " + args.ID
 		var ticket boardy.Ticket

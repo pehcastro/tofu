@@ -401,16 +401,16 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		return Result{}, ReadOnlyError{Tool: t.Name()}
 	}
 	var boardSizes map[string]int64
-	var assignee string
 	if args.Ticket != "" && t.base.Board != nil {
 		boardSizes = t.base.Board.Store.EventSizes()
 		if err := t.base.Board.Fire(rule.WhenBefore, rule.HookAgentSpawn, "", args.Ticket, t.base.Session); err != nil {
 			return Result{}, fmt.Errorf("spawn: %w%s", err, BoardNudges(t.base.Board.Store, boardSizes))
 		}
-		assignee = t.ticketActor(args.Ticket)
-		if args.Owns, err = t.base.TicketGrant(*t.base.Board, args.Ticket, t.base.Session, assignee); err != nil {
+		ticket, err := t.base.Board.Get(args.Ticket)
+		if err != nil {
 			return Result{}, fmt.Errorf("spawn: %w", err)
 		}
+		args.Owns = ticket.Owns
 	}
 	timing.took("ticket grant")
 	limits := t.limits()
@@ -498,8 +498,13 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		return Result{}, fmt.Errorf("spawn: %w", err)
 	}
 	if args.Ticket != "" && t.base.Board != nil {
-		spawned := boardy.Event{Ticket: args.Ticket, Kind: boardy.Spawned, Actor: t.base.Session, Author: t.speaker(), Session: t.base.Session, Agent: subAgentID, Call: site.call,
-			Text: subAgentID + ", " + agent.Mission, Brief: agent.Brief, Assignee: assignee, To: boardy.Doing}
+		lead := t.speaker()
+		if _, err := t.base.TicketGrant(t.boardAs(t.base.Session, lead), args.Ticket, t.base.Session, subAgentID); err != nil {
+			t.roster.Release(subAgentID)
+			return Result{}, fmt.Errorf("spawn: %w", err)
+		}
+		spawned := boardy.Event{Ticket: args.Ticket, Kind: boardy.Spawned, Actor: t.base.Session, Author: lead, Session: t.base.Session, Agent: subAgentID, Call: site.call,
+			Text: subAgentID + ", " + agent.Mission, Brief: agent.Brief, Assignee: subAgentID, To: boardy.Doing}
 		if err := t.base.Board.Store.RecordTicket(spawned); err != nil {
 			t.roster.Release(subAgentID)
 			return Result{}, fmt.Errorf("spawn: %s's spawn was not written to %s's thread: %w", subAgentID, args.Ticket, err)
@@ -672,7 +677,8 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 		owned = append(owned, watchedTool{tool: tool, held: held, definition: definition})
 	}
 	if held.agent.Ticket != "" && t.base.Board != nil {
-		if ticketTools, err := t.base.TicketTools(*t.base.Board, t.ticketActor(held.agent.Ticket)); err == nil {
+		actor := t.ticketActor(held.agent.Ticket)
+		if ticketTools, err := t.base.TicketTools(t.boardAs(actor, t.engineer(held.agent.ID)), actor); err == nil {
 			owned = append(owned, ticketTools...)
 		}
 	}
@@ -821,7 +827,7 @@ func (t *SpawnTool) reportedOnBoard(agent subagent.SubAgent, call string, report
 		}
 	}
 	lastLine, _, _ := strings.Cut(strings.TrimSpace(report.Prose), "\n")
-	reported := boardy.Event{Ticket: agent.Ticket, Kind: boardy.Reported, Actor: actor, Author: boardy.SubAgentAuthor(t.base.Session, agent.ID), Session: t.base.Session, Agent: agent.ID, Call: call,
+	reported := boardy.Event{Ticket: agent.Ticket, Kind: boardy.Reported, Actor: actor, Author: t.engineer(agent.ID), Session: t.base.Session, Agent: agent.ID, Call: call,
 		Text: firstSentences(cmp.Or(said, lastLine, report.State)), Files: report.Wrote, Verdict: verdictOf(report.Completion, stopped, lines), Acceptance: lines}
 	if ticket.Status != boardy.Doing {
 		reported.To = ticket.Status
@@ -865,11 +871,40 @@ func firstSentences(text string) string {
 	return text
 }
 
-func (t *SpawnTool) speaker() *boardy.Author {
-	if t.depth == 0 {
-		return boardy.LeadAuthor(t.base.Session)
+func PMAuthor(sessions *session.Store, id, slug string) (*boardy.Author, bool) {
+	identity, err := sessions.Identity(id)
+	if err != nil {
+		return boardy.LeadAuthor(id, "", "", slug), false
 	}
-	return boardy.SubAgentAuthor(t.base.Session, t.orchestratorID)
+	return boardy.LeadAuthor(id, identity.Handle(), identity.Name, slug), true
+}
+
+func (t *SpawnTool) speaker() *boardy.Author {
+	switch {
+	case t.depth > 0:
+		return t.engineer(t.orchestratorID)
+	case t.base.Sessions == nil:
+		return boardy.LeadAuthor(t.base.Session, "", "", t.base.Slug)
+	}
+	lead, _ := PMAuthor(t.base.Sessions, t.base.Session, t.base.Slug)
+	return lead
+}
+
+func (t *SpawnTool) engineer(id string) *boardy.Author {
+	agent, _ := t.roster.SubAgent(id)
+	handle := ""
+	if t.base.Sessions != nil {
+		if identity, err := t.base.Sessions.Identity(t.base.Session); err == nil {
+			handle = identity.Handle()
+		}
+	}
+	return boardy.EngineerAuthor(t.base.Session, handle, id, agent.Model)
+}
+
+func (t *SpawnTool) boardAs(actor string, author *boardy.Author) boardy.Managed {
+	board := *t.base.Board
+	board.Store.Speakers = map[string]boardy.Author{actor: *author}
+	return board
 }
 
 func (t *SpawnTool) onThread(ticket string, event boardy.Event) string {
@@ -877,6 +912,9 @@ func (t *SpawnTool) onThread(ticket string, event boardy.Event) string {
 		return ""
 	}
 	event.Ticket = ticket
+	if event.Actor == t.ticketActor(ticket) {
+		event.Author = t.engineer(event.Agent)
+	}
 	if err := t.base.Board.Store.RecordTicket(event); err != nil {
 		return "\n\nthis was not written to " + ticket + "'s thread: " + err.Error()
 	}
@@ -884,21 +922,10 @@ func (t *SpawnTool) onThread(ticket string, event boardy.Event) string {
 }
 
 func (t *SpawnTool) ticketActor(ticket string) string {
-	if t.base.Sessions == nil {
-		return t.base.Session + "/" + ticket
-	}
-	familyOf := func(id string) string {
-		if identity, err := t.base.Sessions.Identity(id); err == nil {
-			return identity.Family
-		}
-		return id
-	}
-	family := familyOf(t.base.Session)
-	if t.base.Board != nil {
-		if held, err := t.base.Board.Get(ticket); err == nil {
-			if assigned, bySession := strings.CutSuffix(held.Assignee, "/"+ticket); bySession && assigned != family && familyOf(assigned) == family {
-				return held.Assignee
-			}
+	family := t.base.Session
+	if t.base.Sessions != nil {
+		if identity, err := t.base.Sessions.Identity(t.base.Session); err == nil {
+			family = identity.Family
 		}
 	}
 	return family + "/" + ticket

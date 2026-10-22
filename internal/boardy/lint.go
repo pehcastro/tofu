@@ -74,7 +74,9 @@ func (s Store) lintTicket(ticket Ticket, tickets map[string]Ticket, agents []str
 		say("%s has no title", ticket.ID)
 	}
 	heldBySpawn := strings.HasSuffix(ticket.Assignee, "/"+ticket.ID)
-	if ticket.Status.Live() && ticket.Assignee != "" && !heldBySpawn && !slices.ContainsFunc(agents, func(name string) bool { return strings.EqualFold(name, ticket.Assignee) }) {
+	if ticket.Status.Live() && ticket.Assignee != "" && !heldBySpawn && !slices.ContainsFunc(agents, func(name string) bool {
+		return strings.EqualFold(name, ticket.Assignee) || strings.EqualFold(name, AgentTypeOf(ticket.Assignee))
+	}) {
 		say("%s is assigned %s, which is not a registered agent type, so a spawn for it is refused: the board lead assigns one of %s", ticket.ID, ticket.Assignee, strings.Join(agents, ", "))
 	}
 	if ticket.Status == Blocked && ticket.Reason == "" {

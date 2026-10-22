@@ -86,11 +86,18 @@ func spawnRefusal(root string, source ticketSource, kind, named, prompt string) 
 		return id + " has no owner (assignee on a board), so there is nothing to check this spawn's agent type against.", err
 	}
 	known := knownAgentTypes(root)
-	if !slices.ContainsFunc(known, func(name string) bool { return strings.EqualFold(name, cited.Owner) }) {
+	registered := func(owner string) bool {
+		return slices.ContainsFunc(known, func(name string) bool { return strings.EqualFold(name, owner) })
+	}
+	owner := cited.Owner
+	if !registered(owner) {
+		owner = boardy.AgentTypeOf(owner)
+	}
+	if !registered(owner) {
 		return fmt.Sprintf("%s names owner: %s, which is not a registered agent type. This hook only knows what .claude/agents/ and library/*/agents/ define, plus orchestrator and general-purpose: %s.", id, cited.Owner, strings.Join(known, ", ")), err
 	}
-	allowed := []string{cited.Owner}
-	if strings.EqualFold(cited.Owner, "orchestrator") {
+	allowed := []string{owner}
+	if strings.EqualFold(owner, "orchestrator") {
 		allowed = []string{"orchestrator", "general-purpose"}
 	}
 	if !slices.ContainsFunc(allowed, func(name string) bool { return strings.EqualFold(name, kind) }) {

@@ -16,6 +16,7 @@ import (
 const (
 	claudeCodeEnv        = "CLAUDECODE"
 	claudeCodeSessionEnv = "CLAUDE_CODE_SESSION_ID"
+	codexThreadEnv       = "CODEX_THREAD_ID"
 )
 
 func boardyManageUsage(subcommand string) string {
@@ -41,17 +42,21 @@ func boardyIdentity(as string) (actor, person, lead string) {
 		return session, "", ""
 	}
 	person = string(boardy.RolePerson)
-	claudeSession := os.Getenv(claudeCodeSessionEnv)
-	switch inClaudeCode := claudeSession != "" || os.Getenv(claudeCodeEnv) != ""; {
-	case !inClaudeCode && as == boardy.OrchestratorName:
+	harness, session := boardy.HarnessClaudeCode, os.Getenv(claudeCodeSessionEnv)
+	inHarness := session != "" || os.Getenv(claudeCodeEnv) != ""
+	if thread := os.Getenv(codexThreadEnv); thread != "" {
+		harness, session, inHarness = boardy.HarnessCodex, thread, true
+	}
+	switch {
+	case !inHarness && as == boardy.OrchestratorName:
 		return as, person, as
-	case !inClaudeCode:
+	case !inHarness:
 		return cmp.Or(as, person), person, ""
 	case as == "" || as == boardy.OrchestratorName:
-		actor = boardy.ClaudeCodeActor(claudeSession, "")
+		actor = boardy.HarnessActor(harness, session, "")
 		return actor, person, actor
 	}
-	return boardy.ClaudeCodeActor(claudeSession, as), person, ""
+	return boardy.HarnessActor(harness, session, as), person, ""
 }
 
 func (c boardyCall) manage(subcommand string) int {

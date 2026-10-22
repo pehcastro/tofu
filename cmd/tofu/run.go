@@ -836,6 +836,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		SessionSource: host.SourceStartup,
 		Task:          opts.task,
 		Wire:          opts.wire,
+		Slug:          run.orchestrator.Slug(),
 		System:        composed.Head(),
 		Environment:   composed.WithTaskRules(environment),
 		Instructions:  prompt.files,
@@ -891,6 +892,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		if err != nil {
 			return turn.Config{}, nil, err
 		}
+		store.Speakers = map[string]boardy.Author{sessionID: *boardy.LeadAuthor(sessionID, "", "", config.Slug)}
 		board := boardy.Managed{Local: boardy.Local{Store: store}, Person: string(boardy.RolePerson), Lead: sessionID}
 		config.Board, config.TicketGrant, config.TicketTools = &board, tools.TicketGrant, tools.TicketTools
 		leadTickets, err := tools.TicketTools(board, sessionID)

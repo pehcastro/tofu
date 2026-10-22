@@ -42,8 +42,9 @@ type Board struct {
 func (b Board) Holding(status Status) bool { return slices.Contains(b.Holds, status) }
 
 type Store struct {
-	Dir  string
-	Root string
+	Dir      string
+	Root     string
+	Speakers map[string]Author
 }
 
 func OpenStore(project string) (Store, error) {
