@@ -94,11 +94,17 @@ func (a API) List(request ListRequest) (ListAnswer, error) {
 type Row struct {
 	ID        string    `json:"id"`
 	Title     string    `json:"title"`
+	Type      Kind      `json:"type"`
 	Status    Status    `json:"status"`
+	Reason    string    `json:"reason,omitempty"`
 	Priority  Priority  `json:"priority"`
+	Points    int       `json:"points,omitempty"`
 	Epic      string    `json:"epic,omitempty"`
 	Sprint    string    `json:"sprint,omitempty"`
 	Assignee  string    `json:"assignee,omitempty"`
+	Model     string    `json:"model,omitempty"`
+	Tools     int       `json:"tools,omitempty"`
+	Reads     int       `json:"reads,omitempty"`
 	Labels    []string  `json:"labels,omitempty"`
 	Questions int       `json:"questions,omitempty"`
 	Created   time.Time `json:"created"`
@@ -114,14 +120,17 @@ type RowsAnswer struct {
 
 func (a API) Rows(request ListRequest) (RowsAnswer, error) {
 	listed, err := a.List(request)
+	runs, runsErr := a.Board.Store.runs(listed.Board, listed.Groups)
 	answer := RowsAnswer{Board: listed.Board, Sprint: listed.Sprint, Rows: []Row{}, Words: a.Words}
 	for _, group := range listed.Groups {
 		for _, t := range group.Tickets {
-			answer.Rows = append(answer.Rows, Row{ID: t.ID, Title: t.Title, Status: t.Status, Priority: t.Priority, Epic: t.Epic, Sprint: t.Sprint,
-				Assignee: t.Assignee, Labels: t.Labels, Questions: len(t.Questions), Created: t.Created, Updated: t.Updated})
+			worked := runs[t.ID]
+			answer.Rows = append(answer.Rows, Row{ID: t.ID, Title: t.Title, Type: t.Type, Status: t.Status, Reason: t.Reason, Priority: t.Priority, Points: t.Points,
+				Epic: t.Epic, Sprint: t.Sprint, Assignee: t.Assignee, Model: worked.model, Tools: worked.tools, Reads: worked.reads, Labels: t.Labels,
+				Questions: len(t.Questions), Created: t.Created, Updated: t.Updated})
 		}
 	}
-	return answer, err
+	return answer, errors.Join(err, runsErr)
 }
 
 type PlanRequest struct {
