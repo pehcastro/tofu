@@ -113,7 +113,6 @@ func (t *SpawnTool) watch(held *heldSubAgent, check *checkIn) func() {
 }
 
 const (
-	sourceLeadCheckIn    = "lead check-in"
 	leadCheckInOpening   = "lead check-in: the last turn ended"
 	leadEndedOpening     = "you ended the turn"
 	leadBoardReadFile    = "lead-board.json"
@@ -278,7 +277,7 @@ func (w leadWork) quietBecause(messages []llm.Message, byThePerson bool, said st
 	}
 	asked := w.asks(leadEndedOpening, listed(w.review))
 	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Origin.Source != sourceHandback || !strings.HasPrefix(messages[i].Content, leadEndedOpening+" with ") {
+		if messages[i].Origin.Source != llm.SourceSlots || !strings.HasPrefix(messages[i].Content, leadEndedOpening+" with ") {
 			continue
 		}
 		if messages[i].Content == asked && slices.ContainsFunc(messages[i+1:], func(reply llm.Message) bool {

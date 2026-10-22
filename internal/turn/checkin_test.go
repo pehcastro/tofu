@@ -117,7 +117,7 @@ func TestAnUnreadCheckIsReplacedAndCountsFromTheLastOneRead(t *testing.T) {
 	if len(idle) != 1 || !strings.Contains(idle[0], "steps since the last check: none, and no step for 31m0s") {
 		t.Fatalf("a check after the lead read the last one is %q, want none since then and idle since the step at 3m", idle)
 	}
-	inbox.ended(held, "", sourceReport, false, nil)
+	inbox.ended(held, "", llm.SourceReport, false, nil)
 	inbox.postCheck(held, check, nil, start.Add(64*time.Minute))
 	if after := inbox.Take(); len(after) > 0 {
 		t.Fatalf("a check on an ended sub-agent was posted: %q", after)

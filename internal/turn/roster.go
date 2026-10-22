@@ -67,7 +67,7 @@ func RestoreSubAgents(store *session.Store, id string, roster *subagent.Roster, 
 			continue
 		}
 		if run.undelivered && run.recent {
-			inbox.reportAgain(run.report)
+			inbox.reportAgain(agentID, run.report)
 		}
 		inbox.adopt(restoredHeld(run.agent, run.depth, readBack(store, id, agentID)))
 	}
@@ -231,7 +231,7 @@ func recordedSubAgents(chain []recordedSession) []*recordedSubAgent {
 				if json.Unmarshal(event.Body, &message) != nil {
 					continue
 				}
-				if strings.Contains(message.Origin, sourceReport) {
+				if isReport(OriginOf(message)) {
 					leadReports = append(leadReports, message.Content)
 				}
 				for _, told := range order {

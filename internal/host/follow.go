@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"tofu/internal/cron"
+	"tofu/internal/llm"
 	"tofu/internal/memory"
 	"tofu/internal/safe"
 	"tofu/internal/session"
@@ -364,7 +365,7 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 		if ask.Pick != (Pick{}) {
 			pick = ask.Pick
 		}
-		h.emitter().emit(Event{Kind: EventTask, Text: ask.Text, Origin: Origin{Kind: OriginPerson}, Images: shownPending(ask.Text, ask.Images)})
+		h.emitter().emit(Event{Kind: EventTask, Text: ask.Text, Origin: wireOrigin(llm.Origin{Source: llm.SourceTask}), Images: shownPending(ask.Text, ask.Images)})
 		reply.OK = h.Send(pick, ask.Text)
 	case followStop:
 		h.Stop(ask.Stop)

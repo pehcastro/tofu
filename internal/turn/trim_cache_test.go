@@ -71,7 +71,7 @@ func (m *cachingLead) Ask(_ context.Context, request llm.Request) (llm.Decision,
 		m.cached[keys[mark]] = true
 	}
 	total := tokens[len(tokens)-1]
-	state := conversation[len(conversation)-1].Origin.Source == sourceForkState
+	state := conversation[len(conversation)-1].Origin.Source == llm.SourceForkState
 	m.sent = append(m.sent, cachedRequest{state: state, tokens: total, read: read, write: total - read})
 	if state {
 		return llm.Decision{Build: "m1", Outcome: llm.OutcomeMessage, Content: "goal: rename the parser"}, nil

@@ -85,8 +85,8 @@ func TestAResumedChatDrawsEachSubAgentReportAsAReportAndNeverAsSomethingThePerso
 		{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{spawn("call-2", "read the shaders"), spawn("call-3", "still running at quit")}},
 		{Role: llm.RoleTool, ToolCallID: "call-2", Content: "research-2 is running in the background"},
 		{Role: llm.RoleTool, ToolCallID: "call-3", Content: "research-3 is running in the background"},
-		{Role: llm.RoleUser, Content: joined},
-		{Role: llm.RoleUser, Content: noted},
+		{Role: llm.RoleUser, Content: joined, Origin: llm.LegacyOrigin("sub-agent report and typed by the person")},
+		{Role: llm.RoleUser, Content: noted, Origin: llm.LegacyOrigin("sub-agent report")},
 	}}
 
 	chat := resumedChat(carry, project)
@@ -97,7 +97,9 @@ func TestAResumedChatDrawsEachSubAgentReportAsAReportAndNeverAsSomethingThePerso
 	for _, event := range chat {
 		switch event.Kind {
 		case EventTask:
-			tasks = append(tasks, event.Text)
+			if event.Origin.Kind == OriginPerson {
+				tasks = append(tasks, event.Text)
+			}
 		case EventToolCall:
 			if event.Promote {
 				linked[event.ID] = true

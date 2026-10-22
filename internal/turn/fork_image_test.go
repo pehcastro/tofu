@@ -27,7 +27,7 @@ func TestAForkKeepsTheImageOfTheTaskItCarriesAndNoOther(t *testing.T) {
 		{Role: llm.RoleAssistant, Content: strings.Repeat("an older answer ", 4000)},
 		{Role: llm.RoleUser, Content: "<env>cwd</env>\n\n" + task, Images: []llm.Image{flag}},
 	}
-	_, begun, err := forkHistory(artifacts, budget, task, messages, ForkContinuation, 1, 0)
+	_, begun, err := forkHistory(artifacts, budget, taskOpening(task), messages, ForkContinuation, 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

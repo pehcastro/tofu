@@ -185,9 +185,6 @@ const (
 	recordedFlight     = konst.DriveSettleMillis * time.Millisecond
 	orchestratorCaller = ""
 	subAgentCaller     = "c"
-	memoryViewSource   = "memory view"
-	episodeViewSource  = "episode view"
-	forkTaskSource     = "fork task"
 )
 
 type cassetteReply struct {
@@ -378,17 +375,17 @@ func (c *cassette) take(request llm.Request) (recordedReply, error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.last = request
-	system, opening, opened := "", llm.Message{}, false
-	for _, message := range request.Messages {
+	system, opening, forked := "", llm.Message{}, false
+	for at, message := range request.Messages {
 		if message.Role == llm.RoleSystem && system == "" {
 			system = message.Content
 		}
-		if message.Role == llm.RoleUser && message.Origin.Source != memoryViewSource && message.Origin.Source != episodeViewSource && !opened {
-			opening, opened = message, true
+		if message.Role == llm.RoleUser && message.Origin.Source != llm.SourceMemoryView && message.Origin.Source != llm.SourceEpisodes && opening.Role == llm.RoleUnknown {
+			opening, forked = message, at+1 < len(request.Messages) && request.Messages[at+1].Origin.Source == llm.SourceForkCarry
 		}
 	}
 	conversation := opening.Content
-	if _, known := c.callers[conversation]; !known && opening.Origin.Source == forkTaskSource {
+	if _, known := c.callers[conversation]; !known && forked {
 		conversation = cmp.Or(c.firstOnSystem[system], conversation)
 	}
 	name, known := c.callers[conversation]
@@ -451,7 +448,8 @@ func (c *cassette) requests(form requestsForm, width int) string {
 func (sent sentRequest) lines(form requestsForm, width int, redactor sys.KeyRedactor) []string {
 	lines := []string{sent.summary}
 	for index, message := range sent.messages {
-		line := fmt.Sprintf("  message %d %s: %d bytes", index+1, message.Role, len(message.Content))
+		text := message.Sent()
+		line := fmt.Sprintf("  message %d %s: %d bytes", index+1, message.Role, len(text))
 		if len(message.Images) > 0 {
 			line += fmt.Sprintf(", %d image(s)", len(message.Images))
 		}
@@ -459,8 +457,8 @@ func (sent sentRequest) lines(form requestsForm, width int, redactor sys.KeyReda
 			line += ", result of " + message.ToolCallID
 		}
 		var said []string
-		if message.Content != "" {
-			said = append(said, message.Content)
+		if text != "" {
+			said = append(said, text)
 		}
 		for _, call := range message.ToolCalls {
 			line += ", calls " + call.Name + " " + call.ID

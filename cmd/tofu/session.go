@@ -995,6 +995,7 @@ type requestMessage struct {
 	Index    int                       `json:"index"`
 	Role     string                    `json:"role"`
 	Origin   string                    `json:"origin,omitempty"`
+	From     *session.Origin           `json:"from,omitempty"`
 	PostedAt *time.Time                `json:"posted_at,omitempty"`
 	TakenAt  *time.Time                `json:"taken_at,omitempty"`
 	Calls    []string                  `json:"calls,omitempty"`
@@ -1039,7 +1040,7 @@ func sessionRequest(store *session.Store, handle, request string) (sessionReques
 	report := sessionRequestReport{Session: header.ID, Request: view.Request, Agent: view.Agent, Turn: view.Turn, At: view.At, Why: view.Why, Wire: view.Wire,
 		Model: view.Model, ToolChoice: view.ToolChoice, DurationMS: view.DurationMS, Tools: view.Tools, Response: view.Response, Error: view.Error}
 	for i, message := range view.Messages {
-		shown := requestMessage{Index: i, Role: message.Role, Origin: message.Origin, PostedAt: message.PostedAt, TakenAt: message.TakenAt,
+		shown := requestMessage{Index: i, Role: message.Role, Origin: message.Origin, From: message.From, PostedAt: message.PostedAt, TakenAt: message.TakenAt,
 			Called: message.ToolCalls, Answers: message.ToolCallID, Outcome: message.ToolOutcome, Text: message.Content}
 		for _, call := range message.ToolCalls {
 			shown.Calls = append(shown.Calls, call.ID)
@@ -1118,8 +1119,8 @@ func sessionRequestLines(page cli.Page, report sessionRequestReport) []string {
 		if message.Answers != "" {
 			cells = append(cells, "answers "+message.Answers+" "+message.Outcome)
 		}
-		if message.Origin != "" {
-			cells = append(cells, "added by tofu: "+message.Origin)
+		if origin := turn.OriginOf(session.MessageBody{Role: message.Role, Origin: message.Origin, From: message.From}); message.Origin != "" || message.From != nil {
+			cells = append(cells, "from "+string(origin.Kind())+"/"+string(origin.Source))
 		}
 		rows[i] = cli.Row{Mark: cli.Idle, Cells: cells, Detail: widget.Fit(oneLine(message.Text), page.Width)}
 		if message.Role == session.RoleSystem {

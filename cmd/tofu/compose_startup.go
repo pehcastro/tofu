@@ -152,6 +152,7 @@ func (c *startupClock) record(store *session.Store, id string) error {
 	}
 	head := log.Header().Head
 	_, err = log.Append(session.Event{Kind: session.EventNotice, At: c.asked},
-		session.NoticeBody{Text: "startup took " + c.asked.Sub(c.began).Round(time.Millisecond).String() + " before the first request: " + strings.Join(said, " · ")})
+		session.NoticeBody{Text: "startup took " + c.asked.Sub(c.began).Round(time.Millisecond).String() + " before the first request: " + strings.Join(said, " · "),
+			From: turn.RecordedOrigin(llm.Origin{Source: llm.SourceNotice})})
 	return errors.Join(err, log.Edit(func(header *session.Header) { header.Head = head }), log.Close())
 }

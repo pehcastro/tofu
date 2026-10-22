@@ -15,17 +15,15 @@ import (
 )
 
 const (
-	LookupToolName  = "lookup"
-	sourceForkState = "fork state"
-	forkStateLead   = "where the work stood when the last session ended, as the agent wrote it there:\n"
-	forkLookupLine  = "to see any call named below again, call lookup with its call id instead of reading or running it again: lookup returns that call and its result whole, from session %s or any earlier session of its line.\n"
+	LookupToolName = "lookup"
+	forkStateLead  = "where the work stood when the last session ended, as the agent wrote it there:\n"
+	forkLookupLine = "to see any call named below again, call lookup with its call id instead of reading or running it again: lookup returns that call and its result whole, from session %s or any earlier session of its line.\n"
 )
 
 const (
-	sourceEpisodeView = "episode view"
-	episodeOfPerson   = memtree.KindPerson
-	episodeOfLead     = memtree.KindLead
-	episodeOfReport   = memtree.KindWork
+	episodeOfPerson = memtree.KindPerson
+	episodeOfLead   = memtree.KindLead
+	episodeOfReport = memtree.KindWork
 )
 
 type RecordedAsk func(ctx context.Context, why, wire string, model Model, request llm.Request) (llm.Decision, error)
@@ -37,21 +35,25 @@ type episodeKeeper interface {
 }
 
 func standsAtTheHead(message llm.Message) bool {
-	return message.Role == llm.RoleSystem || message.Origin.Source == sourceMemoryView || message.Origin.Source == sourceEpisodeView
+	return message.Role == llm.RoleSystem || message.Origin.Source == llm.SourceMemoryView || message.Origin.Source == llm.SourceEpisodes
 }
 
-func episodeKind(source string) string {
+func isReport(origin llm.Origin) bool {
+	return origin.Source == llm.SourceReport || origin.Source == llm.SourceReportFor
+}
+
+func episodeKind(origin llm.Origin) string {
 	switch {
-	case strings.Contains(source, sourceReport):
+	case isReport(origin):
 		return episodeOfReport
-	case source == sourceTask || source == sourceTyped || source == sourceSteer:
+	case saidByThePerson(origin):
 		return episodeOfPerson
 	}
 	return ""
 }
 
 func withoutEpisodes(messages []llm.Message) []llm.Message {
-	return slices.DeleteFunc(messages, func(message llm.Message) bool { return message.Origin.Source == sourceEpisodeView })
+	return slices.DeleteFunc(messages, func(message llm.Message) bool { return message.Origin.Source == llm.SourceEpisodes })
 }
 
 func withEpisodes(messages []llm.Message, view string) []llm.Message {
@@ -62,7 +64,7 @@ func withEpisodes(messages []llm.Message, view string) []llm.Message {
 	if at < 0 {
 		at = len(messages)
 	}
-	return slices.Insert(messages, at, llm.Message{Role: llm.RoleUser, Content: view, Origin: llm.Origin{Source: sourceEpisodeView}})
+	return slices.Insert(messages, at, llm.Message{Role: llm.RoleUser, Content: view, Origin: llm.Origin{Source: llm.SourceEpisodes}})
 }
 
 type quietAskKey struct{}
@@ -82,7 +84,7 @@ func forkStateAsk() string {
 
 func carryState(fork *Fork, begun []llm.Message, state, session string) {
 	at := slices.IndexFunc(begun, func(message llm.Message) bool {
-		return message.Origin.Source == sourceForkCarry && message.Content == fork.Carry.Text
+		return message.Origin.Source == llm.SourceForkCarry && message.Content == fork.Carry.Text
 	})
 	counted, rest, _ := strings.Cut(fork.Carry.Text, "\n")
 	text := counted + "\n"

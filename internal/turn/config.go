@@ -82,6 +82,7 @@ type Config struct {
 	GatePromptAsks  func() bool
 	Task            string
 	TaskOrigin      llm.Origin
+	Arrived         []llm.Message
 	Images          []llm.Image
 	History         []llm.Message
 	Wire            string
@@ -169,11 +170,53 @@ func (c Config) FirstUserMessage(notes ...string) string {
 	if c.Environment != "" {
 		first = c.Environment + TheTaskFollows + c.Task
 	}
+	return first + notesOn(notes)
+}
+
+func notesOn(notes []string) string {
 	notes = slices.DeleteFunc(notes, func(note string) bool { return strings.TrimSpace(note) == "" })
 	if len(notes) == 0 {
-		return first
+		return ""
 	}
-	return first + NotesAfterTheTask + strings.Join(notes, "\n\n")
+	return NotesAfterTheTask + strings.Join(notes, "\n\n")
+}
+
+func (c Config) taskOrigin(started time.Time) llm.Origin {
+	task := c.TaskOrigin
+	switch {
+	case task.Source != "" || len(c.Arrived) > 0:
+	case c.SpawnedFrom != "":
+		task.Source = llm.SourceBrief
+	default:
+		task.Source = llm.SourceTask
+	}
+	task.TakenAt = started
+	return task
+}
+
+func (c Config) forkOpening(task llm.Origin) llm.Message {
+	if task.Kind() == llm.OriginPerson {
+		task.Source = llm.SourceForkTask
+	}
+	if len(c.Arrived) == 0 {
+		return llm.Message{Role: llm.RoleUser, Content: c.FirstUserMessage(), Origin: task}
+	}
+	return llm.Message{Role: llm.RoleUser, Content: c.Task, Origin: task}
+}
+
+func (c Config) opening(task llm.Origin, notes ...string) []llm.Message {
+	if len(c.Arrived) == 0 {
+		return []llm.Message{{Role: llm.RoleUser, Content: c.FirstUserMessage(notes...), Images: c.Images, Origin: task}}
+	}
+	var opened []llm.Message
+	if framing := strings.TrimSpace(c.Environment + notesOn(notes)); framing != "" {
+		opened = append(opened, llm.Message{Role: llm.RoleUser, Content: framing, Origin: llm.Origin{Source: llm.SourceEnvironment, TakenAt: task.TakenAt}})
+	}
+	for _, item := range c.Arrived {
+		item.Origin.TakenAt = task.TakenAt
+		opened = append(opened, item)
+	}
+	return opened
 }
 
 type Prefix struct {
@@ -203,13 +246,11 @@ func (c Config) SystemMessage() string {
 	return strings.TrimSpace(c.System + "\n\n" + c.Instructions)
 }
 
-const sourceMemoryView = "memory view"
-
 func (c Config) MemoryMessage() []llm.Message {
 	if strings.TrimSpace(c.Memory) == "" {
 		return nil
 	}
-	return []llm.Message{{Role: llm.RoleUser, Content: c.Memory, Origin: llm.Origin{Source: sourceMemoryView}}}
+	return []llm.Message{{Role: llm.RoleUser, Content: c.Memory, Origin: llm.Origin{Source: llm.SourceMemoryView}}}
 }
 
 func (c Config) opensGeneration() bool {
@@ -217,7 +258,7 @@ func (c Config) opensGeneration() bool {
 }
 
 func withoutMemoryViews(messages []llm.Message) []llm.Message {
-	return slices.DeleteFunc(slices.Clone(messages), func(message llm.Message) bool { return message.Origin.Source == sourceMemoryView })
+	return slices.DeleteFunc(slices.Clone(messages), func(message llm.Message) bool { return message.Origin.Source == llm.SourceMemoryView })
 }
 
 func (c Config) withFreshMemoryView(head []llm.Message) []llm.Message {

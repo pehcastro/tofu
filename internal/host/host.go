@@ -46,12 +46,13 @@ var (
 type Play func(ctx context.Context, pick Pick, task string, live Live)
 
 type Live struct {
-	Turn     string
-	Emit     func(Event)
-	Steering <-chan string
-	LeadStop <-chan struct{}
-	Answers  <-chan Answer
-	Origin   Origin
+	Turn       string
+	Emit       func(Event)
+	Steering   <-chan string
+	LeadStop   <-chan struct{}
+	Answers    <-chan Answer
+	Origin     llm.Origin
+	Unattended bool
 }
 
 type Carry struct {
@@ -281,23 +282,23 @@ func (h *Host) Send(pick Pick, task string) bool {
 		return false
 	}
 	h.settle("", Pick{Wire: pick.Wire, Model: pick.Model, Effort: pick.Effort})
-	h.begin(pick, task, Origin{Kind: OriginPerson})
+	h.begin(pick, task, llm.Origin{Source: llm.SourceTask})
 	return true
 }
 
-func (h *Host) begin(pick Pick, task string, origin Origin) {
+func (h *Host) begin(pick Pick, task string, origin llm.Origin) {
 	h.dropCheckIn()
 	ctx, cancel := context.WithCancel(turn.WithLeadCheckIn(context.Background(), h.keepCheckIn))
 	turnOver := make(chan struct{})
 	h.running, h.stopped, h.cancelled, h.stopBy, h.cancel, h.turn, h.turnOver = true, false, false, "", cancel, turn.NewID(h.now()), turnOver
-	live := Live{Turn: h.turn, Steering: h.steering.ready, LeadStop: h.stopLead, Answers: h.answers, Origin: origin}
+	live := Live{Turn: h.turn, Steering: h.steering.ready, LeadStop: h.stopLead, Answers: h.answers, Origin: origin, Unattended: origin.Source == llm.SourceCronFire}
 	h.recordUnrecorded()
 	images := shownPending(task, h.pending)
 	safe.Go(h.report, "turn", func() {
 		defer close(turnOver)
 		out := h.emitter()
 		live.Emit = out.emit
-		out.emit(Event{Kind: EventTurnStarted, ID: live.Turn, Text: task, Origin: origin, Images: images})
+		out.emit(Event{Kind: EventTurnStarted, ID: live.Turn, Text: task, Origin: wireOrigin(origin), Images: images})
 		crashed := ""
 		_ = safe.Call(func(p safe.Panic) {
 			crashed = p.Saved(h.stateDir())
@@ -357,7 +358,7 @@ func (h *Host) Remembered(note string) {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.inbox.Remembered(note)
+	h.inbox.Remembered("", note)
 }
 
 type StopAsked struct {
@@ -404,7 +405,7 @@ func (h *Host) traceStop(stop session.Stop) {
 	if id == "" {
 		return
 	}
-	event, body := session.Event{Turn: turnID, Kind: session.EventNotice}, session.StopBody{NoticeBody: session.NoticeBody{Text: stop.Said()}, Stop: &stop}
+	event, body := session.Event{Turn: turnID, Kind: session.EventNotice}, session.StopBody{NoticeBody: session.NoticeBody{Text: stop.Said(), From: turn.RecordedOrigin(llm.Origin{Source: llm.SourceNotice})}, Stop: &stop}
 	written, err := inbox.Record(id, event, body)
 	if !written && err == nil {
 		err = appendStop(h.dir, id, event, body)

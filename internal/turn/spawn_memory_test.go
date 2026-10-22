@@ -87,7 +87,7 @@ func TestTheMemoryViewIsOnceInEveryRequestHeldWithinAGenerationAndFreshAtEachFor
 			if system := request.Messages[0]; system.Role != llm.RoleSystem || system.Content != "you are tofu" {
 				t.Errorf("request %d opens on %s %q, want the system message alone and unchanged", number, system.Role, system.Content)
 			}
-			views := slices.DeleteFunc(slices.Clone(request.Messages), func(message llm.Message) bool { return message.Origin.Source != "memory view" })
+			views := slices.DeleteFunc(slices.Clone(request.Messages), func(message llm.Message) bool { return message.Origin.Source != llm.SourceMemoryView })
 			if len(views) != 1 {
 				t.Fatalf("request %d holds %d memory views, want one", number, len(views))
 			}
@@ -167,8 +167,8 @@ func TestASubAgentOpensOnEveryMemoryEntryOnceAndItsBriefCarriesOnlyTheCitedLines
 				t.Fatalf("the sub-agent was never asked; the lead read %q", answered)
 			}
 			opened := script.asked[0].Messages
-			views := slices.DeleteFunc(slices.Clone(opened), func(message llm.Message) bool { return message.Origin.Source != "memory view" })
-			if len(opened) < 2 || len(views) != 1 || opened[0].Origin.Source != "memory view" {
+			views := slices.DeleteFunc(slices.Clone(opened), func(message llm.Message) bool { return message.Origin.Source != llm.SourceMemoryView })
+			if len(opened) < 2 || len(views) != 1 || opened[0].Origin.Source != llm.SourceMemoryView {
 				t.Fatalf("the sub-agent's first request holds %d memory views in %d messages, want one before the brief", len(views), len(opened))
 			}
 			for id, line := range lines {

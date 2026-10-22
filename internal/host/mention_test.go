@@ -129,7 +129,7 @@ func TestEveryRefTheWireHandsOutResolvesToItsItem(t *testing.T) {
 	spawning, at, lead := session.NewEventID(), time.Now(), "turn-spawning"
 	args, _ := json.Marshal(map[string]string{"agent": "research", "task": "read the frame loop"})
 	recordSession(t, store, session.Header{ID: spawning, At: at, Agents: []session.AgentRun{{Agent: "research-1", Definition: "research", SpawnCall: "call-9", SpawnTurn: lead, Status: roster.Finished.String(), StartedAt: at}}},
-		recordedEvent{session.Event{At: at, Turn: lead, Kind: session.EventMessage}, session.MessageBody{Role: session.RoleUser, Content: "read the frame loop through a sub-agent", Origin: taskSource}},
+		recordedEvent{session.Event{At: at, Turn: lead, Kind: session.EventMessage}, session.MessageBody{Role: session.RoleUser, Content: "read the frame loop through a sub-agent", Origin: "task"}},
 		recordedEvent{session.Event{At: at, Turn: lead, Kind: session.EventMessage, Request: "asked-1"}, session.MessageBody{Role: session.RoleAssistant, Content: "spawning"}},
 		recordedEvent{session.Event{ID: session.EventIDFor(lead, "call-9"), At: at, Turn: lead, Kind: session.EventToolCall, Call: "call-9", Request: "asked-1"}, session.CallBody{Tool: "spawn", Args: args}},
 		recordedEvent{session.Event{At: at, Turn: lead, Kind: session.EventSpawn, Call: "call-9"}, session.SpawnBody{Agent: "research-1", Definition: "research", Mission: "read the frame loop"}},

@@ -347,5 +347,5 @@ func (r referenceTool) Run(_ context.Context, raw json.RawMessage) (Result, erro
 	if !held {
 		return Result{}, fmt.Errorf("reference: no reference is named %q; the references are %s", args.Name, strings.Join(slices.Sorted(maps.Keys(r.held)), ", "))
 	}
-	return Result{Content: text, Command: referenceToolName + " " + args.Name}, nil
+	return Result{Content: text, Command: referenceToolName + " " + args.Name, Origin: llm.Origin{Source: llm.SourceReference, Name: args.Name}}, nil
 }

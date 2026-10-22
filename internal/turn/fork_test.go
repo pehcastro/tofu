@@ -15,6 +15,10 @@ import (
 	"tofu/internal/session"
 )
 
+func taskOpening(task string) llm.Message {
+	return llm.Message{Role: llm.RoleUser, Content: task, Origin: llm.Origin{Source: llm.SourceForkTask}}
+}
+
 type sizedRead struct{ bytes map[string]int }
 
 func (sizedRead) Name() string { return "read" }
@@ -47,7 +51,7 @@ const stateCacheRead = 4321
 
 func (m *scriptedLead) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
 	m.asked = append(m.asked, request)
-	if request.Messages[len(request.Messages)-1].Origin.Source == sourceForkState {
+	if request.Messages[len(request.Messages)-1].Origin.Source == llm.SourceForkState {
 		m.stated = append(m.stated, len(m.asked)-1)
 		m.loud = m.loud || !AskedQuietly(ctx)
 		return llm.Decision{Build: "m1", Outcome: llm.OutcomeMessage, Content: m.state, CacheReadTokens: stateCacheRead}, m.stateErr
@@ -167,7 +171,7 @@ func TestAForkCarriesTheLeadsOwnStateAndPointsAtCallsLookupReadsBackFromAnyGener
 			}
 			tasks := 0
 			for _, message := range after.Messages {
-				if strings.Contains(message.Content, config.Task) && message.Origin.Source != sourceForkCarry {
+				if strings.Contains(message.Content, config.Task) && message.Origin.Source != llm.SourceForkCarry {
 					tasks++
 				}
 			}
@@ -250,11 +254,11 @@ func TestAForkKeepsTheTaskOnceCountsOnFromTheChainAndNeverGrows(t *testing.T) {
 		{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: "c0", Name: "read", Arguments: json.RawMessage(`{"path":"old.go"}`)}}},
 		{Role: llm.RoleTool, ToolCallID: "c0", Content: strings.Repeat("a line of the old parser\n", 120)},
 		{Role: llm.RoleAssistant, Content: "the older turn is done"},
-		{Role: llm.RoleUser, Content: task, Origin: llm.Origin{Source: sourceTask}},
+		{Role: llm.RoleUser, Content: task, Origin: llm.Origin{Source: llm.SourceTask}},
 		{Role: llm.RoleAssistant, Thinking: llm.Thinking{Text: "read a.go first", Signature: "signed"}, ToolCalls: []llm.ToolCall{{ID: "c1", Name: "read", Arguments: json.RawMessage(`{"path":"a.go"}`)}}},
 		{Role: llm.RoleTool, ToolCallID: "c1", Content: "package a"},
 	}
-	fork, begun, err := forkHistory(artifacts, recall.Budget{}.At(1800, "a small budget"), task, messages, "", 1, 0)
+	fork, begun, err := forkHistory(artifacts, recall.Budget{}.At(1800, "a small budget"), taskOpening(task), messages, "", 1, 0)
 	if err != nil || fork == nil {
 		t.Fatalf("no fork, %v", err)
 	}
@@ -276,13 +280,13 @@ func TestAForkKeepsTheTaskOnceCountsOnFromTheChainAndNeverGrows(t *testing.T) {
 	if held != 1 || fork.TailMessages == 0 {
 		t.Fatalf("the fork holds the task %d times with a tail of %d", held, fork.TailMessages)
 	}
-	if begun[1].Content != task || begun[2].Origin.Source != sourceForkCarry {
+	if begun[1].Content != task || begun[2].Origin.Source != llm.SourceForkCarry {
 		t.Errorf("the forked conversation opens on %q and then %q, not the task and the carry", begun[1].Content, begun[2].Origin.Source)
 	}
 	tiny := []llm.Message{{Role: llm.RoleSystem, Content: strings.Repeat("you are tofu ", 900)}, {Role: llm.RoleUser, Content: task},
 		{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: "c1", Name: "read", Arguments: json.RawMessage(`{"path":"a.go"}`)}}},
 		{Role: llm.RoleTool, ToolCallID: "c1", Content: "package a"}}
-	if grown, _, err := forkHistory(artifacts, recall.Budget{}.At(3000, "a ceiling under the system prompt"), task, tiny, "", 1, 0); err != nil || grown != nil {
+	if grown, _, err := forkHistory(artifacts, recall.Budget{}.At(3000, "a ceiling under the system prompt"), taskOpening(task), tiny, "", 1, 0); err != nil || grown != nil {
 		t.Errorf("a fork from %d to %d tokens was taken, %v", grown.TokensBefore, grown.TokensAfter, err)
 	}
 }
@@ -363,7 +367,7 @@ func TestAPictureAToolReadsReachesTheModelCountsAndIsTheFirstThingDropped(t *tes
 		t.Errorf("%d pictures go out, want %d", pictures, konst.ImageResultsKept)
 	}
 
-	fork, begun, err := forkHistory(artifacts, recall.Budget{}.At(1800, "a small budget"), "look", slices.Concat(messages[:2], pictureStep("last")), ForkContinuation, 1, 0)
+	fork, begun, err := forkHistory(artifacts, recall.Budget{}.At(1800, "a small budget"), taskOpening("look"), slices.Concat(messages[:2], pictureStep("last")), ForkContinuation, 1, 0)
 	if err != nil || fork == nil {
 		t.Fatalf("no fork, %v", err)
 	}
@@ -400,7 +404,7 @@ func TestTheCarrysLastWordIsWhatTheModelSaidNeverTheArgumentsOfItsCalls(t *testi
 		{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: "w1", Name: "write", Arguments: args}}},
 		{Role: llm.RoleTool, ToolCallID: "w1", Content: "wrote gen.sh"},
 	}
-	fork, _, err := forkHistory(artifacts, recall.Budget{}.At(3000, "a budget the script crosses"), "go on", messages, "", 1, 0)
+	fork, _, err := forkHistory(artifacts, recall.Budget{}.At(3000, "a budget the script crosses"), taskOpening("go on"), messages, "", 1, 0)
 	if err != nil || fork == nil {
 		t.Fatalf("no fork, %v", err)
 	}
@@ -414,7 +418,7 @@ func TestNoRequestOfAResumedConversationGoesPastTheCeiling(t *testing.T) {
 	said := func(bytes int) string {
 		return strings.Repeat("the parser is renamed and every caller follows it. ", bytes/50)
 	}
-	brief := llm.Message{Role: llm.RoleUser, Content: "rename the parser", Origin: llm.Origin{Source: sourceBrief}}
+	brief := llm.Message{Role: llm.RoleUser, Content: "rename the parser", Origin: llm.Origin{Source: llm.SourceBrief}}
 	words, reads := []llm.Message{brief}, []llm.Message{brief}
 	for i := range 6 {
 		id := "read-" + strconv.Itoa(i)

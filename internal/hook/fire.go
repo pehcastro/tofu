@@ -43,11 +43,16 @@ type Input struct {
 	Spawn       *SpawnFacts
 }
 
+type Context struct {
+	File string
+	Text string
+}
+
 type Verdict struct {
 	Block    string
 	Ask      string
 	Args     json.RawMessage
-	Context  string
+	Context  []Context
 	Warnings []string
 	Ran      int
 	Gate     ledger.Verdict
@@ -157,7 +162,7 @@ func (e *Engine) Fire(ctx context.Context, in Input) Verdict {
 	var verdict Verdict
 	for i, result := range results {
 		before := verdict.Gate
-		said, problem := e.apply(in, result, " (a "+string(in.Event)+" hook in "+chosen[i].File+")", &verdict)
+		said, problem := e.apply(in, result, chosen[i].File, &verdict)
 		stderr := strings.TrimSpace(result.stderr)
 		run := Run{Event: in.Event, Command: chosen[i].Command, File: chosen[i].File, Level: chosen[i].Level, Exit: result.Exit,
 			DurationMS: result.DurationMS, Decision: strings.Join(said, "; "), Problem: cmp.Or(result.Problem, problem), Stderr: stderr[:min(len(stderr), konst.HookSaidBytes)]}
@@ -166,10 +171,21 @@ func (e *Engine) Fire(ctx context.Context, in Input) Verdict {
 		}
 		verdict.Runs = append(verdict.Runs, run)
 	}
-	if len(verdict.Context) > konst.HookContextBytes {
-		verdict.Context = verdict.Context[:konst.HookContextBytes]
+	room := konst.HookContextBytes
+	for i := range verdict.Context {
+		verdict.Context[i].Text = verdict.Context[i].Text[:min(len(verdict.Context[i].Text), room)]
+		room -= len(verdict.Context[i].Text)
 	}
+	verdict.Context = slices.DeleteFunc(verdict.Context, func(added Context) bool { return added.Text == "" })
 	return verdict
+}
+
+func (v Verdict) Added() string {
+	var texts []string
+	for _, added := range v.Context {
+		texts = append(texts, added.Text)
+	}
+	return strings.Join(texts, "; ")
 }
 
 func (r *Result) read(event Event) {
@@ -192,7 +208,8 @@ func joined(held, more string) string {
 	return held + "; " + more
 }
 
-func (e *Engine) apply(in Input, result Result, from string, verdict *Verdict) ([]string, string) {
+func (e *Engine) apply(in Input, result Result, file string, verdict *Verdict) ([]string, string) {
+	from := " (a " + string(in.Event) + " hook in " + file + ")"
 	if result.Problem != "" {
 		verdict.Warnings = append(verdict.Warnings, "a hook did not decide: "+result.Problem+from)
 		return nil, ""
@@ -213,7 +230,7 @@ func (e *Engine) apply(in Input, result Result, from string, verdict *Verdict) (
 	reply := result.reply
 	if reply == nil {
 		if out := strings.TrimSpace(result.stdout); result.Exit == 0 && out != "" && (in.Event == UserPromptSubmit || in.Event == SessionStart) {
-			verdict.Context = joined(verdict.Context, out)
+			verdict.Context = append(verdict.Context, Context{File: file, Text: out})
 			return []string{"added context"}, ""
 		}
 		return nil, ""
@@ -247,7 +264,7 @@ func (e *Engine) apply(in Input, result Result, from string, verdict *Verdict) (
 		verdict.Args, said = args, append(said, "rewrote the input")
 	}
 	if reply.Specific.Context != "" {
-		verdict.Context, said = joined(verdict.Context, reply.Specific.Context), append(said, "added context")
+		verdict.Context, said = append(verdict.Context, Context{File: file, Text: reply.Specific.Context}), append(said, "added context")
 	}
 	if owns := reply.Specific.Owns; owns != nil {
 		said = append(said, "owns ["+strings.Join(*owns, ", ")+"]")

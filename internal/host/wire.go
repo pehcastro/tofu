@@ -113,6 +113,18 @@ func (SaidKind) enum() []string {
 	return []string{string(SaidNote), string(SaidGateOff), string(SaidFailure)}
 }
 
+func (k SaidKind) source() llm.Source {
+	switch k {
+	case SaidNote:
+		return llm.SourceNotice
+	case SaidGateOff:
+		return llm.SourceGate
+	case SaidFailure:
+		return llm.SourceFailure
+	}
+	panic("host: unknown said kind " + string(k))
+}
+
 type StepState string
 
 const (
@@ -227,34 +239,44 @@ type Text struct {
 type Steered struct {
 	Identity
 	Text   string    `json:"text"`
+	Origin Origin    `json:"origin"`
 	Step   int       `json:"step"`
 	ReadAt time.Time `json:"readAt"`
 }
 
 type SteerQueued struct {
 	Identity
-	Text string `json:"text"`
+	Text   string `json:"text"`
+	Origin Origin `json:"origin"`
 }
 
-type OriginKind string
+type OriginKind = llm.OriginKind
+
+type OriginSub = llm.Source
 
 const (
-	OriginPerson OriginKind = "person"
-	OriginCron   OriginKind = "cron"
-	OriginAgent  OriginKind = "agent"
-	OriginTofu   OriginKind = "tofu"
+	OriginPerson = llm.OriginPerson
+	OriginCron   = llm.OriginCron
+	OriginAgent  = llm.OriginAgent
+	OriginTofu   = llm.OriginTofu
 )
-
-func (OriginKind) enum() []string {
-	return []string{string(OriginPerson), string(OriginCron), string(OriginAgent), string(OriginTofu)}
-}
 
 type Origin struct {
 	Kind     OriginKind `json:"kind"`
+	Sub      OriginSub  `json:"sub"`
+	Name     string     `json:"name,omitempty"`
+	ID       string     `json:"id,omitempty"`
 	Job      string     `json:"job,omitempty"`
 	Schedule string     `json:"schedule,omitempty"`
-	Name     string     `json:"name,omitempty"`
-	Source   string     `json:"source,omitempty"`
+	Exit     *int       `json:"exit,omitempty"`
+}
+
+func wireOrigin(origin llm.Origin) Origin {
+	wired := Origin{Kind: origin.Kind(), Sub: origin.Source, Name: origin.Name, ID: origin.ID, Schedule: origin.Schedule, Exit: origin.Exit}
+	if origin.Source == llm.SourceCronFire {
+		wired.Job, wired.ID = origin.ID, ""
+	}
+	return wired
 }
 
 type MessageImage struct {
@@ -534,8 +556,9 @@ type DecisionMade struct {
 
 type Said struct {
 	Identity
-	Kind SaidKind `json:"kind"`
-	Text string   `json:"text"`
+	Kind   SaidKind `json:"kind"`
+	Text   string   `json:"text"`
+	Origin Origin   `json:"origin"`
 }
 
 type PlanUpdated struct {

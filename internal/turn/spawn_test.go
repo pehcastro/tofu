@@ -181,7 +181,7 @@ func TestASubAgentThatForksForeverStopsAtTheForkCapAndEachCarrySaysWhatItTried(t
 type forksTwiceThenAnswers struct{ asked int }
 
 func (m *forksTwiceThenAnswers) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
-	if request.Messages[len(request.Messages)-1].Origin.Source == sourceForkState {
+	if request.Messages[len(request.Messages)-1].Origin.Source == llm.SourceForkState {
 		return claimDecision("goal: find a house in Atibaia"), nil
 	}
 	m.asked++
@@ -318,7 +318,7 @@ func TestAResumeReadsEachReportFromItsOwnEventAndFromTheLeadsMessagesOnlyInAnOld
 	for written, dropped := range map[string]func(session.Event) bool{
 		"with report events and no report in the lead's messages": func(event session.Event) bool {
 			var message session.MessageBody
-			return event.Kind == session.EventMessage && json.Unmarshal(event.Body, &message) == nil && strings.Contains(message.Origin, sourceReport)
+			return event.Kind == session.EventMessage && json.Unmarshal(event.Body, &message) == nil && isReport(OriginOf(message))
 		},
 		"before report events": func(event session.Event) bool { return event.Kind == session.EventReport },
 	} {

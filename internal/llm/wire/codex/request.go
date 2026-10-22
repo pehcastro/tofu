@@ -228,9 +228,13 @@ func encodeInput(messages []llm.Message) ([]inputItem, error) {
 			}
 			var parts []inputPart
 			if !llm.BlankText(message.Content) {
-				parts = append(parts, inputPart{Type: "input_text", Text: message.Content})
+				parts = append(parts, inputPart{Type: "input_text", Text: message.Sent()})
 			}
-			items = append(items, inputItem{Role: "user", Content: append(parts, pictureParts(message.Images)...)})
+			role := "user"
+			if message.Origin.Marked() {
+				role = "developer"
+			}
+			items = append(items, inputItem{Role: role, Content: append(parts, pictureParts(message.Images)...)})
 
 		case llm.RoleTool:
 			if message.ToolCallID == "" {

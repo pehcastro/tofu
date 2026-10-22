@@ -7,8 +7,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"tofu/internal/hook"
+	"tofu/internal/llm"
 	"tofu/internal/shell"
 )
 
@@ -16,10 +18,23 @@ type hookEngineKey struct{}
 
 type hookFireKey struct{}
 
-const (
-	sessionSourceCompact   = "compact"
-	sourceSessionStartHook = "session start hook"
-)
+const sessionSourceCompact = "compact"
+
+func hookMessages(source llm.Source, added []hook.Context, at time.Time) []llm.Message {
+	messages := make([]llm.Message, len(added))
+	for i, one := range added {
+		messages[i] = llm.Message{Role: llm.RoleUser, Content: one.Text, Origin: llm.Origin{Source: source, Name: one.File, TakenAt: at}}
+	}
+	return messages
+}
+
+func hookMarked(source llm.Source, added []hook.Context) string {
+	var marked string
+	for _, one := range added {
+		marked += "\n\n" + llm.Origin{Source: source, Name: one.File}.Mark(one.Text)
+	}
+	return marked
+}
 
 func EndSession(ctx context.Context, project, session, reason string) []string {
 	verdict := hook.Load(project, shell.Choice{}).Fire(ctx, hook.Input{Event: hook.SessionEnd, Session: session, Reason: reason})

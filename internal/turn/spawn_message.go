@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 
 	"tofu/internal/boardy"
 	"tofu/internal/llm"
@@ -136,7 +135,7 @@ func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (Result, erro
 				"send text to resume it with your answer, or do release to free its paths", args.To)
 		}
 		if strings.TrimSpace(args.Text) != "" {
-			held.inbox.post(args.Text)
+			held.inbox.post(inboxItem{text: args.Text, origin: postedNow(llm.SourceMessage, t.orchestratorID)})
 		}
 		answered += t.toThread(args.To, boardy.Answered, strings.TrimSpace(args.Answer+" "+args.Text))
 		return Result{Content: answered, Command: args.Answer + " " + args.To, SubAgent: args.To}, nil
@@ -213,14 +212,14 @@ func (t *SpawnTool) send(ctx context.Context, to, text, from string) (Result, er
 		if opened.Close != nil {
 			opened.Close()
 		}
-		t.Inbox.ended(held, "", sourceReport, true, nil)
+		t.Inbox.ended(held, "", llm.SourceReport, true, nil)
 		cancel()
 		return Result{}, fmt.Errorf("message refused: %w", err)
 	}
 	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
 	t.Inbox.hold(held, site.log)
 	safe.Go(sys.Crashes(t.Project), "sub-agent "+held.agent.ID, func() {
-		t.background(runCtx, cancel, held, opened, site, text, llm.Origin{Source: sourceMessage, PostedAt: time.Now()}, nil)
+		t.background(runCtx, cancel, held, opened, site, text, postedNow(llm.SourceMessage, t.orchestratorID), nil)
 	})
 	return Result{Content: to + " resumes in the background with its conversation. its report comes to you as a message when it ends.", Command: "message " + to, SubAgent: to}, nil
 }
@@ -268,7 +267,7 @@ func (t *SpawnTool) regrant(ctx context.Context, args messageArgs) (Result, erro
 	held.kept.Unlock()
 	notice := "the orchestrator " + did + strings.Join(args.Owns, ", ") + ": you now hold " + cmp.Or(strings.Join(after, ", "), "no paths") + "."
 	if args.Do == doRevoke {
-		held.inbox.post(notice + " a write there is refused from now on.")
+		held.inbox.post(inboxItem{text: notice + " a write there is refused from now on.", origin: postedNow(llm.SourceNotice, "")})
 		return Result{Content: args.To + " now holds " + cmp.Or(strings.Join(after, " "), "no paths") + ". it reads this at its next step, or when it next runs.", Command: args.Do + " " + args.To, SubAgent: args.To}, nil
 	}
 	sent, err := t.send(ctx, args.To, strings.TrimSpace(notice+" the write that was refused may run now.\n\n"+args.Text), "")

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/llm"
 	"tofu/internal/session"
 	roster "tofu/internal/subagent"
 	"tofu/internal/turn/tools"
@@ -156,9 +157,9 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 			id.Item = s.mint("steered")
 		}
 		s.awaitLog(id.Item, session.RoleUser, event.Text)
-		return append(out, notify("turn.steered", &Steered{Identity: id, Text: event.Text, Step: event.Step, ReadAt: now}))
+		return append(out, notify("turn.steered", &Steered{Identity: id, Text: event.Text, Origin: event.originOr(llm.SourceSteer), Step: event.Step, ReadAt: now}))
 	case EventSteerQueued:
-		return append(out, notify("turn.steerQueued", &SteerQueued{Identity: id, Text: event.Text}))
+		return append(out, notify("turn.steerQueued", &SteerQueued{Identity: id, Text: event.Text, Origin: event.originOr(llm.SourceSteer)}))
 	case EventToolCall:
 		var args struct {
 			Path  string `json:"path"`
@@ -245,7 +246,14 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 
 func (s *items) said(id Identity, event Event, kind SaidKind) *Said {
 	id.Item = cmp.Or(event.ID, s.mint("said"))
-	return &Said{Identity: id, Kind: kind, Text: event.Text}
+	return &Said{Identity: id, Kind: kind, Text: event.Text, Origin: event.originOr(kind.source())}
+}
+
+func (e Event) originOr(source llm.Source) Origin {
+	if e.Origin.Kind != "" {
+		return e.Origin
+	}
+	return wireOrigin(llm.Origin{Source: source})
 }
 
 func sessionUpdated(id Identity, event Event) outgoing {

@@ -9,6 +9,7 @@ import (
 
 	"tofu/internal/cron"
 	"tofu/internal/konst"
+	"tofu/internal/llm"
 	"tofu/internal/safe"
 	"tofu/internal/session"
 )
@@ -101,7 +102,7 @@ func (h *Host) fire(fires []cron.Fire) {
 			h.note(fired.Line)
 			continue
 		}
-		origin := Origin{Kind: OriginCron, Job: fired.ID}
+		origin := llm.Origin{Source: llm.SourceCronFire, ID: fired.ID}
 		if job, err := h.cron.Job(fired.ID); err == nil {
 			origin.Schedule = job.Spec().Schedule
 		}
@@ -119,8 +120,8 @@ func (h *Host) fire(fires []cron.Fire) {
 		h.unread = append(h.unread, fired)
 		inbox := h.inbox
 		h.mu.Unlock()
-		h.emitter().emit(Event{Kind: EventNote, Text: fired.Line, Detail: fired.Prompt, Origin: origin})
-		inbox.PostFired(fired.Prompt, origin.recorded())
+		h.emitter().emit(Event{Kind: EventNote, Text: fired.Line, Detail: fired.Prompt, Origin: wireOrigin(origin)})
+		inbox.PostFired(fired.Prompt, origin)
 		h.answerNobody()
 	}
 }

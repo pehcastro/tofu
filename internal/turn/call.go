@@ -100,6 +100,7 @@ type gatedCall struct {
 	refusal string
 	fire    func(context.Context, hook.Input) hook.Verdict
 	hooks   []HookRun
+	before  []hook.Context
 }
 
 type shadowVerdict struct {
@@ -115,6 +116,7 @@ func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, 
 	} else if spawner, spawning := tools.byName[g.call.Name].(*SpawnTool); spawning {
 		spawner.refused(g.call.ID)
 	}
+	answer.Content += hookMarked(llm.SourcePreTool, g.before)
 	verdict, gateErr := g.verdict, g.gateErr
 	select {
 	case judged := <-g.shadow:
@@ -210,9 +212,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 	if post.Block != "" {
 		body += "\n\na PostToolUse hook says: " + post.Block
 	}
-	if post.Context != "" {
-		body += "\n\n" + post.Context
-	}
+	body += hookMarked(llm.SourcePostTool, post.Context)
 	return row, llm.Message{
 		Role:            llm.RoleTool,
 		ToolCallID:      call.ID,
@@ -222,6 +222,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		ToolExitCode:    row.ExitCode,
 		ToolHits:        row.Hits,
 		Images:          result.Images,
+		Origin:          result.Origin,
 	}, result.Repeat
 }
 

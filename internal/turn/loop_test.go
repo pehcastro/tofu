@@ -15,7 +15,6 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
-	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/sys"
 )
 
@@ -298,7 +297,7 @@ func TestLoopShowsThePlanAfterTheCachedPrefixOfEveryLaterRequestAndKeepsItOutOfH
 		shown := 0
 		for index, request := range model.requests {
 			last := request.Messages[len(request.Messages)-1]
-			planned := held != "" && strings.HasSuffix(last.Content, held) && last.Origin.Source == anthropic.SourceAfterTheCachedPrefix
+			planned := held != "" && strings.HasSuffix(last.Content, held) && last.Origin.Source == llm.SourcePlan
 			if planned {
 				shown++
 			}

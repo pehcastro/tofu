@@ -79,7 +79,7 @@ func historyOf(messages []llm.Message) recall.Conversation {
 			step++
 		}
 		entry := recall.Entry{Step: step, Text: WithoutToolRef(message.Content), Images: len(message.Images)}
-		if task, found := TaskIn(message.Content); found && message.Role == llm.RoleUser && (message.Origin.Source == "" || SaidByThePerson(message.Origin.Source)) {
+		if task, found := TaskIn(message.Content); found && message.Role == llm.RoleUser && (message.Origin.Source == "" || saidByThePerson(message.Origin)) {
 			entry.Said = task
 		}
 		for _, call := range message.ToolCalls {
@@ -94,11 +94,9 @@ func historyOf(messages []llm.Message) recall.Conversation {
 	return conversation
 }
 
-func (b *Inbox) PostFired(prompt, source string) {
-	b.mu.Lock()
-	b.items = append(b.items, inboxItem{text: prompt, source: source, posted: time.Now()})
-	b.mu.Unlock()
-	b.signal()
+func (b *Inbox) PostFired(prompt string, fired llm.Origin) {
+	fired.PostedAt = time.Now()
+	b.post(inboxItem{text: prompt, origin: fired})
 }
 
 func (b *Inbox) Holds(text string) bool {
@@ -454,7 +452,7 @@ func shrunkHandle(text string) string {
 	return ""
 }
 
-func forkHistory(artifacts Artifacts, budget recall.Budget, task string, messages []llm.Message, forced ForkKind, number, most int) (*Fork, []llm.Message, error) {
+func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message, messages []llm.Message, forced ForkKind, number, most int) (*Fork, []llm.Message, error) {
 	if err := ShrinkPages(artifacts.store, artifacts.preview, messages, ShrinkWhenPaid); err != nil {
 		return nil, nil, err
 	}
@@ -471,20 +469,20 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, task string, message
 	if most > 0 {
 		counted += " of at most " + strconv.Itoa(most) + ", and the turn stops at the cap"
 	}
+	task := opening.Content
 	isTask := func(message llm.Message) bool {
-		return message.Role == llm.RoleUser && message.Origin.Source != sourceForkCarry && task != "" && strings.Contains(message.Content, task)
+		return message.Role == llm.RoleUser && message.Origin.Source != llm.SourceForkCarry && task != "" && strings.Contains(message.Content, task)
 	}
 	var system []llm.Message
-	var shown []llm.Image
 	for _, message := range messages {
 		switch {
 		case standsAtTheHead(message):
 			system = append(system, message)
 		case isTask(message):
-			shown = message.Images
+			opening.Images = message.Images
 		}
 	}
-	opening := llm.Message{Role: llm.RoleUser, Content: task, Images: shown, Origin: llm.Origin{Source: sourceForkTask, TakenAt: started}}
+	opening.Origin.TakenAt = started
 	carried := func(tail []llm.Message) ([]llm.Message, recall.Carry, int, error) {
 		if at := slices.IndexFunc(tail, isTask); at >= 0 {
 			tail = tail[at:]
@@ -496,7 +494,7 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, task string, message
 		ended.HeldWhole = len(tail)
 		carry, err := recall.DistilledCarry(artifacts.store, artifacts.preview, ended)
 		carry.Text = counted + ".\n" + carry.Text
-		said := llm.Message{Role: llm.RoleUser, Content: carry.Text, Origin: llm.Origin{Source: sourceForkCarry, TakenAt: started}}
+		said := llm.Message{Role: llm.RoleUser, Content: carry.Text, Origin: llm.Origin{Source: llm.SourceForkCarry, TakenAt: started}}
 		if len(tail) > 0 && isTask(tail[0]) {
 			return slices.Concat(system, tail[:1], []llm.Message{said}, tail[1:]), carry, len(tail), err
 		}

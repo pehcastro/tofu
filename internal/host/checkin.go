@@ -3,10 +3,9 @@ package host
 import (
 	"time"
 
+	"tofu/internal/llm"
 	"tofu/internal/turn"
 )
-
-const leadCheckInSource = "lead check-in"
 
 func (h *Host) keepCheckIn(armed *turn.LeadCheckIn) {
 	h.mu.Lock()
@@ -44,7 +43,7 @@ func (h *Host) armCheckIn() {
 		}
 		h.dropCheckIn()
 		if due {
-			h.begin(Pick{Wire: h.pick.Wire, Model: h.pick.Model, Effort: h.pick.Effort}, text, Origin{Kind: OriginTofu, Source: leadCheckInSource})
+			h.begin(Pick{Wire: h.pick.Wire, Model: h.pick.Model, Effort: h.pick.Effort}, text, llm.Origin{Source: llm.SourceSlots})
 		}
 	})
 }

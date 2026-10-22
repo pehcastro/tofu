@@ -423,7 +423,7 @@ func localFilePrograms() []string {
 
 func (s spawnSite) notice(agent, text string) {
 	if s.log != nil {
-		_, _ = s.log.Append(session.Event{Turn: s.turn, Agent: agent, Kind: session.EventNotice}, session.NoticeBody{Text: text})
+		_, _ = s.log.Append(session.Event{Turn: s.turn, Agent: agent, Kind: session.EventNotice}, session.NoticeBody{Text: text, From: RecordedOrigin(llm.Origin{Source: llm.SourceGate})})
 	}
 }
 

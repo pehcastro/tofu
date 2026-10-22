@@ -43,7 +43,8 @@ const (
 )
 
 type NoticeBody struct {
-	Text string `json:"text"`
+	Text string  `json:"text"`
+	From *Origin `json:"from,omitempty"`
 }
 
 type ListChangeBody struct {
@@ -66,14 +67,15 @@ type Attachment struct {
 }
 
 type TurnStart struct {
-	Task           string `json:"task"`
-	Wire           string `json:"wire,omitempty"`
-	Spend          string `json:"spend,omitempty"`
-	Account        int64  `json:"account,omitempty"`
-	ContextCeiling int    `json:"context_ceiling,omitempty"`
-	ContextTarget  int    `json:"context_target,omitempty"`
-	AutoCompaction string `json:"auto_compaction,omitempty"`
-	Tofu           string `json:"tofu,omitempty"`
+	Task           string  `json:"task"`
+	From           *Origin `json:"from,omitempty"`
+	Wire           string  `json:"wire,omitempty"`
+	Spend          string  `json:"spend,omitempty"`
+	Account        int64   `json:"account,omitempty"`
+	ContextCeiling int     `json:"context_ceiling,omitempty"`
+	ContextTarget  int     `json:"context_target,omitempty"`
+	AutoCompaction string  `json:"auto_compaction,omitempty"`
+	Tofu           string  `json:"tofu,omitempty"`
 }
 
 type CallBody struct {

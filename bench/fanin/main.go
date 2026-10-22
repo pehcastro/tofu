@@ -18,14 +18,15 @@ import (
 )
 
 const (
-	reportMarker = "fanin report from"
-	sourceReport = "sub-agent report"
-	sourceCheck  = "sub-agent check"
-	sourceAsk    = "sub-agent gate ask"
-	roleUser     = "user"
-	profileLimit = 3 * time.Minute
-	settleSlack  = 3 * time.Second
-	askingHook   = `{"hooks":{"PreToolUse":[{"matcher":"glob","hooks":[{"type":"command","command":"echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"fanin asks the lead\"}}'"}]}]}}`
+	reportMarker      = "fanin report from"
+	sourceReport      = "sub-agent report"
+	sourceCheck       = "sub-agent check"
+	sourceAsk         = "sub-agent gate ask"
+	sourceEnvironment = "environment"
+	roleUser          = "user"
+	profileLimit      = 3 * time.Minute
+	settleSlack       = 3 * time.Second
+	askingHook        = `{"hooks":{"PreToolUse":[{"matcher":"glob","hooks":[{"type":"command","command":"echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"fanin asks the lead\"}}'"}]}]}}`
 )
 
 type profile struct {
@@ -150,7 +151,7 @@ func (m *measured) count(inserted []session.TracedInsert, started time.Time) {
 		if insert.Agent != "" || insert.Role != roleUser {
 			continue
 		}
-		if _, seen := opened[insert.Turn]; !seen {
+		if _, seen := opened[insert.Turn]; !seen && insert.Origin != sourceEnvironment {
 			opened[insert.Turn] = insert.Origin
 		}
 		waited := time.Duration(0)

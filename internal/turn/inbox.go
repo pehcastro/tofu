@@ -24,33 +24,13 @@ import (
 	"tofu/internal/sys"
 )
 
-const (
-	sourceTask          = "task"
-	sourceBrief         = "sub-agent brief"
-	sourceHandback      = "turn end check"
-	sourceTyped         = "typed by the person"
-	sourceSteer         = "steer"
-	sourceMidTurnNote   = "mid-turn message note"
-	sourceStepCapNotice = "step cap notice"
-	sourceStopHook      = "stop hook"
-	sourceLastWord      = "last word"
-	SourceSpawnLine     = "spawn line"
-	sourceForkTask      = "fork task"
-	sourceForkCarry     = "fork carry"
-	sourceCheck         = "sub-agent check"
-	sourceReport        = "sub-agent report"
-	sourceReportForLead = "sub-agent report needing the lead"
-	sourceMessage       = "message to this sub-agent"
-	sourceGateAsk       = "sub-agent gate ask"
-	sourceMemory        = "memory saved"
-	sourceAnswer        = "question answer"
-	sourceShellExit     = "shell exit"
-)
-
 type inboxItem struct {
 	text   string
-	source string
-	posted time.Time
+	origin llm.Origin
+}
+
+func postedNow(source llm.Source, name string) llm.Origin {
+	return llm.Origin{Source: source, Name: name, PostedAt: time.Now()}
 }
 
 type Inbox struct {
@@ -227,7 +207,7 @@ func (b *Inbox) Open(poll string) *Asked {
 
 func (q *Asked) Answer(said string) {
 	q.inbox.mu.Lock()
-	q.inbox.items = append(q.inbox.items, inboxItem{text: said, source: sourceAnswer, posted: time.Now()})
+	q.inbox.items = append(q.inbox.items, inboxItem{text: said, origin: postedNow(llm.SourceAnswer, "")})
 	q.inbox.mu.Unlock()
 	q.inbox.signal()
 }
@@ -375,11 +355,12 @@ func (b *Inbox) watchShell(report safe.Report, registry *shell.Registry, name st
 			ended, err = registry.AwaitEnd(context.Background(), name, konst.ShellWaitMillis*time.Millisecond)
 		}
 		var said string
+		exited := postedNow(llm.SourceShellExit, name)
 		if err == nil && ended.State == shell.Exited {
 			tail, _ := registry.Tail(name, shell.DefaultTail)
 			code := "with an exit code tofu did not see"
 			if ended.ExitCode != nil {
-				code = strconv.Itoa(*ended.ExitCode)
+				code, exited.Exit = strconv.Itoa(*ended.ExitCode), ended.ExitCode
 			}
 			now := time.Now()
 			said = fmt.Sprintf("%s, your command moved to the background, exited %s, %s: %s\nits last lines:\n%s", name, code, registry.Timing(ended, now).Words(now), ended.Command, tail)
@@ -387,7 +368,7 @@ func (b *Inbox) watchShell(report safe.Report, registry *shell.Registry, name st
 		b.mu.Lock()
 		delete(b.watched, name)
 		if said != "" {
-			b.items = append(b.items, inboxItem{text: said, source: sourceShellExit, posted: time.Now()})
+			b.items = append(b.items, inboxItem{text: said, origin: exited})
 		}
 		b.mu.Unlock()
 		b.signal()
@@ -401,15 +382,15 @@ func (b *Inbox) signal() {
 	}
 }
 
-func (b *Inbox) post(item string) {
+func (b *Inbox) post(item inboxItem) {
 	b.mu.Lock()
-	b.items = append(b.items, inboxItem{text: item, source: sourceMessage, posted: time.Now()})
+	b.items = append(b.items, item)
 	b.mu.Unlock()
 	b.signal()
 }
 
-func SaidByThePerson(source string) bool {
-	return source == sourceTask || source == sourceTyped || source == sourceSteer
+func saidByThePerson(origin llm.Origin) bool {
+	return slices.Contains([]llm.Source{llm.SourceTask, llm.SourceTyped, llm.SourceSteer}, origin.Source)
 }
 
 type PersonSaid struct {
@@ -452,7 +433,7 @@ func (b *Inbox) SaidInChain(store *session.Store, id string) ([]PersonSaid, erro
 		}
 		for _, message := range reading.Messages {
 			task, typed := TaskIn(message.Content)
-			if task = beforeCronFire(task); task == "" || !typed || message.Role != session.RoleUser || !SaidByThePerson(message.Origin) {
+			if task = beforeCronFire(task); task == "" || !typed || message.Role != session.RoleUser || !saidByThePerson(OriginOf(message.MessageBody)) {
 				continue
 			}
 			_, notes, _ := strings.Cut(message.Content, NotesAfterTheTask+repeatNoteOpening)
@@ -575,15 +556,17 @@ func beforeCronFire(said string) string {
 	return strings.TrimSpace(said[:strings.LastIndex(said[:marked], "\n")+1])
 }
 
-func (b *Inbox) Remembered(note string) {
+func (b *Inbox) Remembered(entry, note string) {
+	saved := postedNow(llm.SourceMemorySaved, "")
+	saved.ID = entry
 	b.mu.Lock()
-	b.items = append(b.items, inboxItem{text: note, source: sourceMemory, posted: time.Now()})
+	b.items = append(b.items, inboxItem{text: note, origin: saved})
 	b.mu.Unlock()
 }
 
-func (b *Inbox) reportAgain(report string) {
+func (b *Inbox) reportAgain(agent, report string) {
 	b.mu.Lock()
-	b.items = append(b.items, inboxItem{text: report, source: sourceReport, posted: time.Now()})
+	b.items = append(b.items, inboxItem{text: report, origin: postedNow(llm.SourceReport, agent)})
 	b.mu.Unlock()
 }
 
@@ -601,26 +584,16 @@ func (b *Inbox) postCheck(held *heldSubAgent, check *checkIn, gate []string, now
 		return
 	}
 	unread := slices.IndexFunc(b.items, func(item inboxItem) bool { return item.text == check.posted })
-	text := check.compose(unread < 0, gate, now)
+	item := inboxItem{text: check.compose(unread < 0, gate, now), origin: llm.Origin{Source: llm.SourceCheck, Name: held.agent.ID, PostedAt: now}}
 	if unread >= 0 {
-		b.items[unread] = inboxItem{text: text, source: sourceCheck, posted: now}
+		b.items[unread] = item
 		return
 	}
-	b.items = append(b.items, inboxItem{text: text, source: sourceCheck, posted: now})
+	b.items = append(b.items, item)
 }
 
 func (b *Inbox) Take() []string {
 	return textsOf(b.takeItems())
-}
-
-func originOf(items []inboxItem) llm.Origin {
-	var sources []string
-	for _, item := range items {
-		if !slices.Contains(sources, item.source) {
-			sources = append(sources, item.source)
-		}
-	}
-	return llm.Origin{Source: strings.Join(sources, " and "), PostedAt: items[0].posted}
 }
 
 func textsOf(items []inboxItem) []string {
@@ -629,6 +602,14 @@ func textsOf(items []inboxItem) []string {
 		texts = append(texts, item.text)
 	}
 	return texts
+}
+
+func arrived(items []inboxItem) []llm.Message {
+	messages := make([]llm.Message, len(items))
+	for i, item := range items {
+		messages[i] = llm.Message{Role: llm.RoleUser, Content: item.text, Origin: item.origin}
+	}
+	return messages
 }
 
 func (b *Inbox) takeItems() []inboxItem {
@@ -640,7 +621,7 @@ func (b *Inbox) takeItems() []inboxItem {
 }
 
 func gathers(item inboxItem) bool {
-	return item.source == sourceReport || item.source == sourceCheck
+	return item.origin.Source == llm.SourceReport || item.origin.Source == llm.SourceCheck
 }
 
 func (b *Inbox) takeAtOnce() []inboxItem {
@@ -649,8 +630,8 @@ func (b *Inbox) takeAtOnce() []inboxItem {
 	return taken
 }
 
-func (b *Inbox) fold(origin string) []inboxItem {
-	if origin == sourceGateAsk {
+func (b *Inbox) fold(origin llm.Origin) []inboxItem {
+	if origin.Source == llm.SourceAsk {
 		b.mu.Lock()
 		defer b.mu.Unlock()
 		return b.takeAtOnce()
@@ -666,8 +647,8 @@ func (b *Inbox) due(now time.Time) (taken []inboxItem, done bool, closesIn time.
 	}
 	var first, last time.Time
 	for _, item := range b.items {
-		if item.source == sourceReport {
-			first, last = cmp.Or(first, item.posted), item.posted
+		if item.origin.Source == llm.SourceReport {
+			first, last = cmp.Or(first, item.origin.PostedAt), item.origin.PostedAt
 		}
 	}
 	closesIn = min(last.Add(konst.ReportGatherQuietMillis*time.Millisecond).Sub(now), first.Add(konst.ReportGatherCapMillis*time.Millisecond).Sub(now))
@@ -808,7 +789,7 @@ func (b *Inbox) resume(to, text string, limit int, cancel context.CancelFunc) (*
 	case held == nil:
 		return nil, false, nil
 	case held.running:
-		held.inbox.post(text)
+		held.inbox.post(inboxItem{text: text, origin: postedNow(llm.SourceMessage, "")})
 		return held, true, nil
 	case b.running >= limit:
 		return held, false, BreadthLimitError{Running: b.running, Limit: limit}
@@ -833,7 +814,7 @@ func (b *Inbox) ask(held *heldSubAgent, asked string) chan bool {
 	answer := make(chan bool, 1)
 	b.mu.Lock()
 	held.answer = answer
-	b.items = append(b.items, inboxItem{text: asked, source: sourceGateAsk, posted: time.Now()})
+	b.items = append(b.items, inboxItem{text: asked, origin: postedNow(llm.SourceAsk, held.agent.ID)})
 	b.mu.Unlock()
 	b.signal()
 	return answer
@@ -883,11 +864,11 @@ func (b *Inbox) withdraw(held *heldSubAgent, answer chan bool, asked string) boo
 		return false
 	}
 	held.answer = nil
-	b.items = slices.DeleteFunc(b.items, func(item inboxItem) bool { return item.source == sourceGateAsk && item.text == asked })
+	b.items = slices.DeleteFunc(b.items, func(item inboxItem) bool { return item.origin.Source == llm.SourceAsk && item.text == asked })
 	return true
 }
 
-func (b *Inbox) ended(held *heldSubAgent, report, source string, stopping bool, log *session.Log) []inboxItem {
+func (b *Inbox) ended(held *heldSubAgent, report string, source llm.Source, stopping bool, log *session.Log) []inboxItem {
 	b.mu.Lock()
 	defer b.signal()
 	defer b.mu.Unlock()
@@ -897,7 +878,7 @@ func (b *Inbox) ended(held *heldSubAgent, report, source string, stopping bool, 
 	held.running, held.check, held.allowedHere = false, nil, nil
 	b.running--
 	if report != "" {
-		b.items = append(b.items, inboxItem{text: report, source: source, posted: time.Now()})
+		b.items = append(b.items, inboxItem{text: report, origin: postedNow(source, held.agent.ID)})
 	}
 	if report != "" && log != nil {
 		if _, err := log.Append(session.Event{Agent: held.agent.ID, Kind: session.EventReport}, session.ReportBody{State: held.agent.State.String(), Text: report}); err != nil {
@@ -1056,7 +1037,7 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 	config.Inbox.typed = typed
 	config.Inbox.mu.Unlock()
 	config.Inbox.judgeRepeats(config)
-	if SaidByThePerson(cmp.Or(config.TaskOrigin.Source, sourceTask)) {
+	if config.TaskOrigin.Source == "" || saidByThePerson(config.TaskOrigin) {
 		config.Task += config.Inbox.repeatNote(config.Sessions, config.Session, config.Task)
 	}
 	for {
@@ -1078,17 +1059,19 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 			if config.Steering != nil {
 				said = strings.Join(append([]string{said}, config.Steering()...), "\n\n")
 			}
-			next = append(next, inboxItem{text: said, source: sourceTyped, posted: time.Now()})
 		}
-		if len(next) == 0 || ctx.Err() != nil {
+		if (len(next) == 0 && said == "") || ctx.Err() != nil {
 			config.Inbox.compacted()
 			return errors.Join(append(failed, config.Inbox.settle())...)
 		}
 		if row.Conversation != nil {
 			config.History = Sendable(row.Conversation)
 		}
-		config.TaskOrigin = originOf(next)
-		config.Task, config.Images, config.NewID, config.SessionSource = strings.Join(textsOf(next), "\n\n")+note, nil, nil, ""
+		config.TaskOrigin, config.Arrived = postedNow(llm.SourceTyped, ""), nil
+		if said == "" {
+			config.TaskOrigin, config.Arrived = next[0].origin, arrived(next)
+		}
+		config.Task, config.Images, config.NewID, config.SessionSource = cmp.Or(said, strings.Join(textsOf(next), "\n\n"))+note, nil, nil, ""
 		if said != "" && config.ImagesOf != nil {
 			config.Images = config.ImagesOf(said)
 		}

@@ -90,13 +90,14 @@ func (h *Host) runFrom(ctx context.Context, pick Pick, task string, live Live, r
 	if reached.RateLimited == nil {
 		return
 	}
-	if task, resumes := h.waitForTheReset(ctx, reached, live); resumes {
+	if task, origin, resumes := h.waitForTheReset(ctx, reached, live); resumes {
+		live.Origin = origin
 		h.runFrom(ctx, pick, task, live, true)
 	}
 }
 
 func (h *Host) heardTyped(emit func(Event), typed string) {
-	emit(Event{Kind: EventSteered, ID: h.steering.heard(), Text: typed, Step: 1})
+	emit(Event{Kind: EventSteered, ID: h.steering.heard(), Text: typed, Step: 1, Origin: wireOrigin(llm.Origin{Source: llm.SourceTyped})})
 }
 
 func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resumed bool) limitReached {
@@ -127,7 +128,7 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	watch := &watcher{held: h.roster, spent: h.spent, emit: emit, now: h.now, turnID: live.Turn, seen: h.shown, stop: &leadStop{}}
 	var prepared Prepared
 	person, asking := awaitPerson(emit, h.asks, &prepared.Config), turn.WithQuestionsBlock(turn.WithShellRegistry(tools.WithMemoryKept(context.WithValue(ctx, cronFiredKey{}, h.cronFired), keptMemory(emit)), h.shells), h.questionsBlock)
-	if live.Origin.Kind == OriginCron {
+	if live.Unattended {
 		person = unattended
 	} else {
 		asking = turn.WithPersonForm(tools.WithMemoryPick(asking, pickMemory(emit, h.memoryPicks)), askForm(emit, h.questions))
@@ -187,7 +188,7 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	}
 	h.carriedOn = config.Wire
 	config.History, config.Prefix = h.carried, h.prefix
-	config.TaskOrigin.Source = live.Origin.recorded()
+	config.TaskOrigin = live.Origin
 	h.mu.Unlock()
 	var steps atomic.Int64
 	config.Steering = func() []string { return h.steering.take(emit, int(steps.Load())+1) }
@@ -380,7 +381,7 @@ func announcingMoves(accounts turn.Accounts, announce func(turn.Moved)) turn.Acc
 	return accounts
 }
 
-func (h *Host) waitForTheReset(ctx context.Context, reached limitReached, live Live) (string, bool) {
+func (h *Host) waitForTheReset(ctx context.Context, reached limitReached, live Live) (string, llm.Origin, bool) {
 	resumesAt := reached.ResetAt.Local().Format(time.DateTime) + ", in " + reached.ResetAt.Sub(h.now()).Round(time.Second).String()
 	said, _, _ := strings.Cut(reached.Error(), "\n")
 	live.Emit(Event{Kind: EventNote, Text: said + "\nevery " + reached.source + " account is at its limit, so the turn resumes by itself at " + resumesAt +
@@ -390,13 +391,13 @@ func (h *Host) waitForTheReset(ctx context.Context, reached limitReached, live L
 	select {
 	case <-timer.C:
 		live.Emit(Event{Kind: EventNote, Text: "the " + reached.source + " limit has reset, so the turn resumes"})
-		return resumedTask, true
+		return resumedTask, llm.Origin{Source: llm.SourceContinue}, true
 	case typed := <-live.Steering:
 		h.heardTyped(live.Emit, typed)
-		return typed, true
+		return typed, llm.Origin{Source: llm.SourceTyped}, true
 	case <-ctx.Done():
 		live.Emit(Event{Kind: EventNote, Text: "the wait for the " + reached.source + " limit was cancelled, and the turn does not resume"})
-		return "", false
+		return "", llm.Origin{}, false
 	}
 }
 

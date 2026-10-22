@@ -40,6 +40,7 @@ type MessageBody struct {
 	ThinkingSignature string            `json:"thinking_signature,omitempty"`
 	Reasoning         *ReasoningItem    `json:"reasoning,omitempty"`
 	Origin            string            `json:"origin,omitempty"`
+	From              *Origin           `json:"from,omitempty"`
 	PostedAt          *time.Time        `json:"posted_at,omitempty"`
 	TakenAt           *time.Time        `json:"taken_at,omitempty"`
 }

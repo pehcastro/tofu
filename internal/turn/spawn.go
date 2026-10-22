@@ -534,7 +534,9 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	site.notice(site.agent, timing.words(subAgentID))
 	started = true
 	t.Inbox.hold(held, site.log)
-	safe.Go(sys.Crashes(t.Project), "sub-agent "+subAgentID, func() { t.background(runCtx, cancel, held, opened, site, task, llm.Origin{}, warm) })
+	safe.Go(sys.Crashes(t.Project), "sub-agent "+subAgentID, func() {
+		t.background(runCtx, cancel, held, opened, site, task, llm.Origin{Source: llm.SourceBrief, Name: t.orchestratorID}, warm)
+	})
 	said := narrowed + clampedWords(effort, opened) + held.runningWords()
 	if boardSizes != nil {
 		if err := t.base.Board.Fire(rule.WhenAfter, rule.HookAgentSpawn, "", args.Ticket, t.base.Session); err != nil {
@@ -596,21 +598,22 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 			trace := held.trace
 			trace.site = site
 			_ = trace.end(held.agent.ID, subagent.Errored)
-			t.settle(ctx, held, told, sourceReportForLead, false, site.log)
+			t.settle(ctx, held, told, llm.SourceReportFor, false, site.log)
 		}
 	}()
+	var items []llm.Message
 	for {
 		subAgent := opened.onto(t.subAgentConfig(held, site, check, limits))
-		subAgent.Task, subAgent.TaskOrigin, subAgent.NewID = task, taskOrigin, func() string { return held.agent.ID }
+		subAgent.Task, subAgent.TaskOrigin, subAgent.Arrived, subAgent.NewID = task, taskOrigin, items, func() string { return held.agent.ID }
 		report, completion := t.converse(ctx, held, warm.stagger(ctx, site.call, subAgent), site)
 		next, _ := held.inbox.next(ctx, nil)
 		stopping := ctx.Err() != nil
 		if stopping {
 			_ = held.inbox.settle()
 		}
-		source := sourceReportForLead
-		if completion == subagent.Done && taskOrigin.Source == "" {
-			source = sourceReport
+		source := llm.SourceReportFor
+		if completion == subagent.Done && taskOrigin.Source == llm.SourceBrief {
+			source = llm.SourceReport
 		}
 		if stopping || len(next) == 0 {
 			next = t.settle(ctx, held, report, source, stopping, site.log)
@@ -618,12 +621,12 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 		if len(next) == 0 {
 			return
 		}
-		task, taskOrigin, warm = strings.Join(textsOf(next), "\n\n"), originOf(next), nil
+		task, taskOrigin, items, warm = strings.Join(textsOf(next), "\n\n"), next[0].origin, arrived(next), nil
 		t.roster.Reached(held.agent.ID, subagent.Working, resumedWords)
 	}
 }
 
-func (t *SpawnTool) settle(ctx context.Context, held *heldSubAgent, report, source string, stopping bool, log *session.Log) []inboxItem {
+func (t *SpawnTool) settle(ctx context.Context, held *heldSubAgent, report string, source llm.Source, stopping bool, log *session.Log) []inboxItem {
 	stopped := stopShells(ctx, []string{held.agent.ID})
 	told := stopped.told()
 	if stopped.failed != nil {

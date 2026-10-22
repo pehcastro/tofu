@@ -39,7 +39,7 @@ type Request struct {
 	OnRetry             func()
 }
 
-const SourceAfterTheCachedPrefix = "after the cached prefix"
+const SourceAfterTheCachedPrefix = llm.SourceAfterTheCachedPrefix
 
 const CacheTTLFiveMinutes = "5m"
 
@@ -131,7 +131,7 @@ func (r Request) Encode(oauth bool) ([]byte, error) {
 		return nil, transport.Fail("anthropic.Encode", transport.KindBadRequest, nil, "the request has no model")
 	}
 	cached := len(r.Messages)
-	for cached > 0 && r.Messages[cached-1].Origin.Source == SourceAfterTheCachedPrefix {
+	for cached > 0 && r.Messages[cached-1].Origin.Source.AfterTheCachedPrefix() {
 		cached--
 	}
 	messages, err := encodeMessages(r.Messages[:cached], oauth)
@@ -345,7 +345,7 @@ func historyChars(messages []wireMessage) int {
 func firstUserText(messages []llm.Message) string {
 	for _, message := range messages {
 		if message.Role == llm.RoleUser {
-			return message.Content
+			return message.Sent()
 		}
 	}
 	return ""
@@ -401,7 +401,7 @@ func encodeMessages(messages []llm.Message, oauth bool) ([]wireMessage, error) {
 			}
 			var blocks []contentBlock
 			if !llm.BlankText(message.Content) {
-				blocks = append(blocks, contentBlock{Type: "text", Text: message.Content})
+				blocks = append(blocks, contentBlock{Type: "text", Text: message.Sent()})
 			}
 			pictures, err := pictureBlocks(index, message.Images)
 			if err != nil {

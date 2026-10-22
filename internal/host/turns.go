@@ -205,7 +205,7 @@ func (d *turnDigests) note(event session.Event) {
 			return
 		}
 		if said.Role == session.RoleUser && digest.Origin.Kind == "" {
-			digest.Origin = originFrom(said.Origin)
+			digest.Origin = wireOrigin(turn.OriginOf(said))
 		}
 		if text := strings.TrimSpace(said.Content); said.Role == session.RoleAssistant && text != "" {
 			digest.Summary = text

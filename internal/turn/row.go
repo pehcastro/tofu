@@ -86,7 +86,7 @@ func hookRunOf(event hook.Event, verdict hook.Verdict) []HookRun {
 	if verdict.Ran == 0 {
 		return nil
 	}
-	return []HookRun{{Event: string(event), Ran: verdict.Ran, Block: verdict.Block, Ask: verdict.Ask, Context: verdict.Context, Rewrote: verdict.Args != nil}}
+	return []HookRun{{Event: string(event), Ran: verdict.Ran, Block: verdict.Block, Ask: verdict.Ask, Context: verdict.Added(), Rewrote: verdict.Args != nil}}
 }
 
 func (r ToolCallRow) Outcome() llm.ToolOutcome {
@@ -233,6 +233,24 @@ func toolOutcomeName(outcome llm.ToolOutcome) string {
 	panic("turn: unknown tool outcome")
 }
 
+func RecordedOrigin(origin llm.Origin) *session.Origin {
+	if origin.Source == "" {
+		return nil
+	}
+	return &session.Origin{Kind: string(origin.Kind()), Sub: string(origin.Source), Name: origin.Name, ID: origin.ID, Schedule: origin.Schedule, Exit: origin.Exit}
+}
+
+func OriginOf(message MessageRow) llm.Origin {
+	switch {
+	case message.From != nil && llm.Source(message.From.Sub).Known():
+		from := message.From
+		return llm.Origin{Source: llm.Source(from.Sub), Name: from.Name, ID: from.ID, Schedule: from.Schedule, Exit: from.Exit}
+	case message.Role == session.RoleUser:
+		return llm.LegacyOrigin(message.Origin)
+	}
+	return llm.Origin{}
+}
+
 func messageRowOf(message llm.Message) MessageRow {
 	row := MessageRow{
 		Role:            message.Role.String(),
@@ -241,7 +259,10 @@ func messageRowOf(message llm.Message) MessageRow {
 		ToolOutcome:     toolOutcomeName(message.ToolOutcome),
 		ToolResultBytes: message.ToolResultBytes,
 		Thinking:        message.Thinking.Text,
-		Origin:          message.Origin.Source,
+		From:            RecordedOrigin(message.Origin),
+	}
+	if message.Role == llm.RoleUser {
+		row.Origin = message.Origin.Legacy()
 	}
 	if !message.Origin.PostedAt.IsZero() {
 		row.PostedAt = &message.Origin.PostedAt
@@ -266,7 +287,7 @@ func messageOf(m MessageRow) (llm.Message, error) {
 		signature = codex.EncodeReasoning(m.Reasoning.ID, m.Reasoning.EncryptedContent)
 	}
 	message := llm.Message{Content: m.Content, ToolCallID: m.ToolCallID, ToolResultBytes: m.ToolResultBytes,
-		Thinking: llm.Thinking{Text: m.Thinking, Signature: signature}, Origin: llm.Origin{Source: m.Origin}}
+		Thinking: llm.Thinking{Text: m.Thinking, Signature: signature}, Origin: OriginOf(m)}
 	switch m.Role {
 	case session.RoleSystem:
 		message.Role = llm.RoleSystem
@@ -434,6 +455,7 @@ type record struct {
 	undoBegun chan struct{}
 	undoErr   error
 	lastTools toolsKept
+	task      llm.Origin
 }
 
 type toolsKept struct {
@@ -499,11 +521,12 @@ func (r *record) add(event session.Event, body any) {
 	r.note(err)
 }
 
-func (r *record) begin(row Row) {
+func (r *record) begin(row Row, task llm.Origin) {
 	if r == nil {
 		return
 	}
-	start := session.TurnStart{Task: row.Task, Wire: row.Wire, Spend: string(row.Spend), Account: row.Account, Tofu: konst.Version}
+	r.task = task
+	start := session.TurnStart{Task: row.Task, From: RecordedOrigin(task), Wire: row.Wire, Spend: string(row.Spend), Account: row.Account, Tofu: konst.Version}
 	if row.Budget != (recall.Budget{}) {
 		start.ContextCeiling, start.ContextTarget, start.AutoCompaction = row.Budget.CeilingTokens, row.Budget.Bands.Target(), row.Budget.Record()
 	}
@@ -640,10 +663,14 @@ func (r *record) listChange(kind, why string, before, after []llm.Message) {
 }
 
 func (r *record) notice(text string) {
+	r.noted(llm.Origin{Source: llm.SourceNotice}, text)
+}
+
+func (r *record) noted(origin llm.Origin, text string) {
 	if r == nil {
 		return
 	}
-	r.add(session.Event{Kind: session.EventNotice}, session.NoticeBody{Text: text})
+	r.add(session.Event{Kind: session.EventNotice}, session.NoticeBody{Text: text, From: RecordedOrigin(origin)})
 }
 
 func (r *record) step(kind session.EventKind, step StepRow) {
@@ -702,5 +729,5 @@ func (r *record) fork(ended, next Row, fork *Fork, at time.Time) {
 	}
 	r.log, r.turn = log, next.ID
 	r.observe()
-	r.begin(next)
+	r.begin(next, r.task)
 }

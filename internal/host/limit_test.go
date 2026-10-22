@@ -255,7 +255,7 @@ func TestResumeAtTheResetWithNoInputAndEscCancelsTheWait(t *testing.T) {
 		codex := &subAccount{id: 9}
 		r := startLimited(t, &limitedSubscriptions{accounts: []*subAccount{limitedFor(1, time.Hour), limitedFor(2, time.Hour)}, codex: codex})
 		r.h.mu.Lock()
-		r.h.begin(Pick{Wire: "anthropic"}, "check the build", Origin{Kind: OriginCron, Job: "c1"})
+		r.h.begin(Pick{Wire: "anthropic"}, "check the build", llm.Origin{Source: llm.SourceCronFire, ID: "c1"})
 		r.h.mu.Unlock()
 		r.until("note", "continues on codex-sub/gpt-5.6-sol")
 		r.until("turn.completed", `"status":"finished"`)

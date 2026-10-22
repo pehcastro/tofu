@@ -321,6 +321,6 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 	if told, telling := ctx.Value(memoryKeptKey{}).(func(MemoryKept)); telling && !asks {
 		told(MemoryKept{Statement: entry.Text, Offered: offered, Kept: entry.Scope})
 	}
-	r.Inbox.Remembered(entry.Saved())
+	r.Inbox.Remembered(entry.ID, entry.Saved())
 	return turn.Result{Content: entry.Saved(), Command: entry.Ref()}, nil
 }

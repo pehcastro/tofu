@@ -213,7 +213,7 @@ func TestAnActThatListsOnlyChangesShrinksToThePageItActedOnAndErrorsStayWhole(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	fork, _, err := forkHistory(artifacts, budget, "find a stay in Atibaia", forked, ForkContinuation, 1, 0)
+	fork, _, err := forkHistory(artifacts, budget, taskOpening("find a stay in Atibaia"), forked, ForkContinuation, 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,7 @@ func checkedFork(t *testing.T, budget recall.Budget, forced ForkKind, messages [
 	if err != nil {
 		t.Fatal(err)
 	}
-	fork, begun, err := forkHistory(artifacts, budget, "fix the parser", slices.Clone(messages), forced, 1, 0)
+	fork, begun, err := forkHistory(artifacts, budget, taskOpening("fix the parser"), slices.Clone(messages), forced, 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

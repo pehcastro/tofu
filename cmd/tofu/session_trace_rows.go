@@ -11,6 +11,7 @@ import (
 
 	"tofu/internal/hook"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/llm"
 	"tofu/internal/session"
 	"tofu/internal/subagent"
 	"tofu/internal/turn"
@@ -115,10 +116,12 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 				text = said.Content
 			}
 			row.Kind, row.State, row.Text = kindMessage, said.Role, said.Role+": "+oneLine(text)
-			if said.Origin != "" {
-				row.Kind, row.State, row.Text = kindInsert, said.Origin, said.Origin+": "+oneLine(text)
+			origin := turn.OriginOf(said)
+			if said.Origin != "" || said.From != nil {
+				from := string(origin.Kind()) + "/" + string(origin.Source)
+				row.Kind, row.State, row.Text = kindInsert, from, from+": "+oneLine(text)
 			}
-			if strings.HasPrefix(said.Origin, string(kindCron)) {
+			if origin.Source == llm.SourceCronFire {
 				row.Kind = kindCron
 			}
 		case session.EventSpawn:

@@ -36,6 +36,7 @@ type Result struct {
 	Outcome     ResultOutcome
 	SubAgent    string
 	Repeat      bool
+	Origin      llm.Origin
 }
 
 func runeSafeHead(s string, n int) string {

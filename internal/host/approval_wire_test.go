@@ -13,6 +13,7 @@ import (
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
+	"tofu/internal/llm"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
@@ -256,7 +257,7 @@ func TestACronTurnRefusesWhatWouldAskAndNothingWaits(t *testing.T) {
 	caught := make(caughtHooks, 1)
 	h, _ := New(Config{Dir: t.TempDir(), Engine: caught})
 	t.Cleanup(h.Close)
-	for _, origin := range []Origin{{Kind: OriginCron, Job: "c1"}, {Kind: OriginPerson}} {
+	for _, origin := range []llm.Origin{{Source: llm.SourceCronFire, ID: "c1"}, {Source: llm.SourceTask}} {
 		h.mu.Lock()
 		h.begin(Pick{}, "check the build", origin)
 		h.mu.Unlock()
@@ -265,7 +266,7 @@ func TestACronTurnRefusesWhatWouldAskAndNothingWaits(t *testing.T) {
 		answer, err := hooks.Person(ctx, settingsAsk("5"), turn.GateDecision{Verdict: ledger.VerdictAsk, PersonOnly: true})
 		cancel()
 		waited := errors.Is(err, context.DeadlineExceeded)
-		switch origin.Kind {
+		switch origin.Kind() {
 		case OriginCron:
 			if waited || answer != turn.PersonDenied || err == nil || !strings.Contains(err.Error(), "no person") {
 				t.Errorf("a cron turn's ask answered %v, %v, want refused at once with no person", answer, err)

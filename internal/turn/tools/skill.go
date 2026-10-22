@@ -50,5 +50,5 @@ func (s Skill) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) 
 	if args.Path != "" {
 		command += "/" + args.Path
 	}
-	return turn.Result{Content: body, Command: command}, nil
+	return turn.Result{Content: body, Command: command, Origin: llm.Origin{Source: llm.SourceSkillLoad, Name: args.Name, ID: args.Path}}, nil
 }

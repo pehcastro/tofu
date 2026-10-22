@@ -3,9 +3,7 @@ package host
 import (
 	"cmp"
 	"encoding/json"
-	"os"
 	"slices"
-	"strconv"
 	"strings"
 
 	"tofu/internal/llm"
@@ -31,7 +29,6 @@ type resumedLead struct {
 	watch   *watcher
 	calls   map[string]*recordedCall
 	reports []recordedReport
-	origins map[string]string
 	rows    []SubAgentRow
 	said    []recordedMessage
 	loose   []session.Attachment
@@ -47,18 +44,6 @@ type recordedMessage struct {
 	taken  bool
 }
 
-const (
-	typedByThePerson   = "typed by the person"
-	steeredByThePerson = "steer"
-	cronSource         = "cron "
-	firedInProcess     = ", fired in process "
-	reportSource       = "sub-agent report"
-	gateAskSource      = "sub-agent gate ask"
-	taskSource         = "task"
-	forkTaskSource     = "fork task"
-	forkCarrySource    = "fork carry"
-)
-
 func resumedChat(carry Carry, dir string) []Event {
 	if carry.Session == "" {
 		return nil
@@ -70,7 +55,7 @@ func resumedChat(carry Carry, dir string) []Event {
 		keys = &loaded
 	}
 	mask := keys.Redact
-	lead := &resumedLead{calls: map[string]*recordedCall{}, origins: map[string]string{}, worked: map[string][]session.Event{}, runs: map[string]session.AgentRun{}, images: map[string][]session.Attachment{}}
+	lead := &resumedLead{calls: map[string]*recordedCall{}, worked: map[string][]session.Event{}, runs: map[string]session.AgentRun{}, images: map[string][]session.Attachment{}}
 	lead.watch = &watcher{emit: func(event Event) {
 		event.Turn = lead.turn
 		chat = append(chat, redacted(event, mask))
@@ -84,24 +69,27 @@ func resumedChat(carry Carry, dir string) []Event {
 	}
 	lead.watch.emit(labelled)
 	for _, message := range carry.Messages {
-		if message.Origin.Source == turn.SourceSpawnLine {
+		if message.Origin.Source == llm.SourceSpawnLine {
 			continue
 		}
 		said := lead.recorded(message)
-		if said != nil && message.Role == llm.RoleUser && startsATurn(lead.origins[message.Content]) {
+		if said != nil && message.Role == llm.RoleUser && (message.Origin.Source == llm.SourceTask || message.Origin.Source == llm.SourceCronFire) {
 			lead.turn, lead.watch.turnID = said.Turn, cmp.Or(said.Turn, carry.Session)
 		}
 		switch message.Role {
 		case llm.RoleUser:
-			task := carry.taskIn(message.Content)
-			if left, drew := lead.reportsIn(task); !drew {
+			task, origin := carry.taskIn(message.Content), lead.originOf(message)
+			left, drew := lead.reportsIn(task)
+			switch {
+			case origin.Sub == llm.SourceEnvironment:
+			case !drew || origin.Sub == llm.SourceReport || origin.Sub == llm.SourceReportFor:
 				var images []MessageImage
 				if said != nil && store != nil {
 					images = shownAttached(task, lead.images[said.ID], store)
 				}
-				lead.watch.emit(Event{Kind: EventTask, Text: task, Origin: lead.originOf(message.Content), Images: images})
-			} else if left != "" && lead.typed(message.Content) {
-				lead.watch.emit(Event{Kind: EventTask, Text: left, Origin: Origin{Kind: OriginPerson}})
+				lead.watch.emit(Event{Kind: EventTask, Text: task, Origin: origin, Images: images})
+			case left != "" && origin.Kind == OriginPerson:
+				lead.watch.emit(Event{Kind: EventTask, Text: left, Origin: origin})
 			}
 		case llm.RoleAssistant:
 			if text := strings.TrimSpace(message.Content); text != "" {
@@ -169,7 +157,6 @@ func (l *resumedLead) note(event session.Event) {
 			return
 		}
 		if message.Role == session.RoleUser {
-			l.origins[message.Content] = message.Origin
 			l.images[event.ID], l.loose = l.loose, nil
 		}
 		l.said = append(l.said, recordedMessage{logged: event, body: message})
@@ -219,10 +206,6 @@ func resultOf(event session.Event) llm.Message {
 		message.ToolOutcome = llm.ToolOutcomeFailed
 	}
 	return message
-}
-
-func startsATurn(source string) bool {
-	return source == "" || source == taskSource || strings.HasPrefix(source, cronSource)
 }
 
 func (l *resumedLead) spawned(row SubAgentRow) {
@@ -282,40 +265,12 @@ func (l *resumedLead) recorded(message llm.Message) *session.Event {
 	return &l.said[at].logged
 }
 
-func (l *resumedLead) typed(content string) bool { return typedSource(l.origins[content]) }
-
-func typedSource(origin string) bool {
-	return origin == "" || strings.Contains(origin, typedByThePerson) || strings.Contains(origin, steeredByThePerson)
-}
-
-func (o Origin) recorded() string {
-	if o.Kind != OriginCron {
-		return ""
-	}
-	return cronSource + o.Job + " " + o.Schedule + firedInProcess + strconv.Itoa(os.Getpid())
-}
-
-func (l *resumedLead) originOf(content string) Origin {
-	origin := originFrom(l.origins[content])
-	if at := slices.IndexFunc(l.reports, func(report recordedReport) bool { return strings.Contains(content, report.text) }); origin.Kind == OriginAgent && at >= 0 {
+func (l *resumedLead) originOf(message llm.Message) Origin {
+	origin := message.Origin
+	if at := slices.IndexFunc(l.reports, func(report recordedReport) bool { return strings.Contains(message.Content, report.text) }); origin.Kind() == OriginAgent && origin.Name == "" && at >= 0 {
 		origin.Name = l.reports[at].agent
 	}
-	return origin
-}
-
-func originFrom(source string) Origin {
-	if fired, isCron := strings.CutPrefix(source, cronSource); isCron {
-		fired, _, _ = strings.Cut(fired, firedInProcess)
-		job, schedule, _ := strings.Cut(fired, " ")
-		return Origin{Kind: OriginCron, Job: job, Schedule: schedule}
-	}
-	switch {
-	case typedSource(source) || slices.Contains([]string{taskSource, forkTaskSource, forkCarrySource}, source):
-		return Origin{Kind: OriginPerson}
-	case strings.Contains(source, reportSource) || strings.Contains(source, gateAskSource):
-		return Origin{Kind: OriginAgent}
-	}
-	return Origin{Kind: OriginTofu, Source: source}
+	return wireOrigin(origin)
 }
 
 func (l *resumedLead) drawn(agent string) bool {

@@ -138,13 +138,14 @@ func sideSeed(store *session.Store, parent session.Header, events []session.Even
 		return nil, err
 	}
 	artifacts.preview = artifacts.preview.OnWire(parent.Wire)
-	fork, begun, err := forkHistory(artifacts, recall.Budget{Bands: recall.ShippedBands()}, task, messages, ForkContinuation, 0, 0)
+	opening := llm.Message{Role: llm.RoleUser, Content: task, Origin: llm.Origin{Source: llm.SourceForkTask}}
+	fork, begun, err := forkHistory(artifacts, recall.Budget{Bands: recall.ShippedBands()}, opening, messages, ForkContinuation, 0, 0)
 	if err != nil {
 		return nil, err
 	}
 	carryState(fork, begun, "", parent.ID)
 	begun = slices.DeleteFunc(begun, standsAtTheHead)
-	at := slices.IndexFunc(begun, func(message llm.Message) bool { return message.Origin.Source == sourceForkCarry })
+	at := slices.IndexFunc(begun, func(message llm.Message) bool { return message.Origin.Source == llm.SourceForkCarry })
 	_, rest, _ := strings.Cut(begun[at].Content, "\n")
 	begun[at].Content = "this is a side chat beside session " + parent.ID + ", which keeps running and has not ended: " +
 		"the summary below is the one tofu writes when a session forks, and every session it names is that one.\n" + rest

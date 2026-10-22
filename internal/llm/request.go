@@ -1,8 +1,11 @@
 package llm
 
 import (
+	"cmp"
 	"encoding/base64"
 	"encoding/json"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -106,10 +109,208 @@ type Message struct {
 	Origin          Origin `json:"-"`
 }
 
+type OriginKind string
+
+const (
+	OriginPerson  OriginKind = "person"
+	OriginAgent   OriginKind = "agent"
+	OriginTofu    OriginKind = "tofu"
+	OriginCron    OriginKind = "cron"
+	OriginHook    OriginKind = "hook"
+	OriginMemory  OriginKind = "memory"
+	OriginSkill   OriginKind = "skill"
+	OriginLibrary OriginKind = "library"
+	OriginPlugin  OriginKind = "plugin"
+)
+
+func (OriginKind) Enum() []string {
+	return []string{string(OriginPerson), string(OriginAgent), string(OriginTofu), string(OriginCron), string(OriginHook),
+		string(OriginMemory), string(OriginSkill), string(OriginLibrary), string(OriginPlugin)}
+}
+
+type Source string
+
+const (
+	SourceTask      Source = "task"
+	SourceTyped     Source = "typed"
+	SourceSteer     Source = "steer"
+	SourceAnswer    Source = "answer"
+	SourceForkTask  Source = "fork.task"
+	SourceBrief     Source = "brief"
+	SourceReport    Source = "report"
+	SourceReportFor Source = "report.lead"
+	SourceAsk       Source = "ask"
+	SourceMessage   Source = "message"
+
+	SourceShellExit   Source = "shell.exit"
+	SourceAnswerFirst Source = "nudge.answer_first"
+	SourceSlots       Source = "nudge.slots"
+	SourceHandback    Source = "nudge.handback"
+	SourceCheck       Source = "nudge.check"
+	SourceStepCap     Source = "nudge.step_cap"
+	SourceBlankAnswer Source = "nudge.blank_answer"
+	SourceLastWord    Source = "nudge.last_word"
+	SourceContinue    Source = "continue"
+	SourceForkCarry   Source = "fork.carry"
+	SourceForkState   Source = "fork.state"
+	SourcePlan        Source = "plan"
+	SourceReplyCut    Source = "reply_cut"
+	SourceEnvironment Source = "environment"
+	SourceNotice      Source = "notice"
+	SourceFailure     Source = "failure"
+	SourceGate        Source = "gate"
+	SourceSpawnLine   Source = "spawn.line"
+
+	SourceCronFire     Source = "fire"
+	SourceSessionStart Source = "session_start"
+	SourcePromptSubmit Source = "prompt_submit"
+	SourcePreTool      Source = "pre_tool"
+	SourcePostTool     Source = "post_tool"
+	SourceStopHook     Source = "stop"
+	SourceMemoryView   Source = "view"
+	SourceEpisodes     Source = "episodes"
+	SourceMemorySaved  Source = "saved"
+	SourceSkillLoad    Source = "load"
+	SourceReference    Source = "reference"
+
+	SourceAfterTheCachedPrefix Source = "after the cached prefix"
+)
+
+type sourceRow struct {
+	source Source
+	kind   OriginKind
+	legacy string
+}
+
+func sourceRows() []sourceRow {
+	return []sourceRow{
+		{SourceTask, OriginPerson, "task"}, {SourceTyped, OriginPerson, "typed by the person"}, {SourceSteer, OriginPerson, "steer"},
+		{SourceAnswer, OriginPerson, "question answer"}, {SourceForkTask, OriginPerson, "fork task"},
+		{SourceBrief, OriginAgent, "sub-agent brief"}, {SourceReport, OriginAgent, "sub-agent report"},
+		{SourceReportFor, OriginAgent, "sub-agent report needing the lead"}, {SourceAsk, OriginAgent, "sub-agent gate ask"},
+		{SourceMessage, OriginAgent, "message to this sub-agent"},
+		{SourceShellExit, OriginTofu, "shell exit"}, {SourceAnswerFirst, OriginTofu, "mid-turn message note"},
+		{SourceSlots, OriginTofu, "lead check-in"}, {SourceHandback, OriginTofu, "turn end check"}, {SourceCheck, OriginTofu, "sub-agent check"},
+		{SourceStepCap, OriginTofu, "step cap notice"}, {SourceBlankAnswer, OriginTofu, "blank answer"}, {SourceLastWord, OriginTofu, "last word"},
+		{SourceContinue, OriginTofu, "continue"}, {SourceForkCarry, OriginTofu, "fork carry"}, {SourceForkState, OriginTofu, "fork state"},
+		{SourcePlan, OriginTofu, string(SourceAfterTheCachedPrefix)}, {SourceReplyCut, OriginTofu, "reply cut"},
+		{SourceEnvironment, OriginTofu, "environment"}, {SourceNotice, OriginTofu, "notice"}, {SourceFailure, OriginTofu, "failure"},
+		{SourceGate, OriginTofu, "gate"}, {SourceSpawnLine, OriginTofu, "spawn line"},
+		{SourceCronFire, OriginCron, legacyCron},
+		{SourceSessionStart, OriginHook, "session start hook"}, {SourcePromptSubmit, OriginHook, "prompt submit hook"},
+		{SourcePreTool, OriginHook, "pre tool hook"}, {SourcePostTool, OriginHook, "post tool hook"}, {SourceStopHook, OriginHook, "stop hook"},
+		{SourceMemoryView, OriginMemory, "memory view"}, {SourceEpisodes, OriginMemory, "episode view"}, {SourceMemorySaved, OriginMemory, "memory saved"},
+		{SourceSkillLoad, OriginSkill, "skill"}, {SourceReference, OriginLibrary, "reference"},
+	}
+}
+
+func (Source) Enum() []string {
+	var named []string
+	for _, row := range sourceRows() {
+		named = append(named, string(row.source))
+	}
+	return named
+}
+
+func (s Source) row() (sourceRow, bool) {
+	for _, row := range sourceRows() {
+		if row.source == s {
+			return row, true
+		}
+	}
+	return sourceRow{}, false
+}
+
+func (s Source) Known() bool {
+	_, known := s.row()
+	return known
+}
+
+func (s Source) Kind() OriginKind {
+	row, known := s.row()
+	if !known && s != "" && s != SourceAfterTheCachedPrefix {
+		panic("llm: unknown origin source " + string(s))
+	}
+	return row.kind
+}
+
+const (
+	legacyCron    = "cron "
+	legacyFiredIn = ", fired in process "
+	legacyJoin    = " and "
+)
+
+func (o Origin) Legacy() string {
+	row, _ := o.Source.row()
+	if o.Source == SourceCronFire {
+		return row.legacy + o.ID + " " + o.Schedule
+	}
+	return row.legacy
+}
+
+func LegacyOrigin(recorded string) Origin {
+	if fired, isCron := strings.CutPrefix(recorded, legacyCron); isCron {
+		fired, _, _ = strings.Cut(fired, legacyFiredIn)
+		job, schedule, _ := strings.Cut(fired, " ")
+		return Origin{Source: SourceCronFire, ID: job, Schedule: schedule}
+	}
+	var read []Source
+	for part := range strings.SplitSeq(cmp.Or(recorded, string(SourceTask)), legacyJoin) {
+		at := slices.IndexFunc(sourceRows(), func(row sourceRow) bool { return row.legacy == part })
+		source := SourceNotice
+		if at >= 0 {
+			source = sourceRows()[at].source
+		}
+		read = append(read, source)
+	}
+	if person := slices.IndexFunc(read, func(source Source) bool { return source.Kind() == OriginPerson }); person >= 0 {
+		return Origin{Source: read[person]}
+	}
+	return Origin{Source: read[0]}
+}
+
 type Origin struct {
-	Source   string
+	Source   Source
+	Name     string
+	ID       string
+	Schedule string
+	Exit     *int
 	PostedAt time.Time
 	TakenAt  time.Time
+}
+
+func (o Origin) Kind() OriginKind {
+	return o.Source.Kind()
+}
+
+func (o Origin) Marked() bool {
+	kind := o.Kind()
+	return kind != "" && kind != OriginPerson
+}
+
+func (s Source) AfterTheCachedPrefix() bool {
+	return s == SourceAfterTheCachedPrefix || s == SourcePlan
+}
+
+func (o Origin) Mark(text string) string {
+	attributes := [][2]string{{"origin", string(o.Kind()) + "/" + string(o.Source)}, {"name", o.Name}, {"id", o.ID}, {"schedule", o.Schedule}}
+	if o.Exit != nil {
+		attributes = append(attributes, [2]string{"exit", strconv.Itoa(*o.Exit)})
+	}
+	opened := "<from"
+	for _, attribute := range attributes {
+		if attribute[1] != "" {
+			opened += " " + attribute[0] + `="` + strings.ReplaceAll(attribute[1], `"`, "'") + `"`
+		}
+	}
+	return opened + ">\n" + text + "\n</from>"
+}
+
+func (m Message) Sent() string {
+	if m.Role != RoleUser || !m.Origin.Marked() || BlankText(m.Content) {
+		return m.Content
+	}
+	return m.Origin.Mark(m.Content)
 }
 
 type Tool struct {
@@ -229,11 +430,11 @@ func encodeMessage(index int, message Message) (wireMessage, error) {
 	}
 
 	wire := wireMessage{Role: message.Role.String(), ToolCallID: message.ToolCallID, ToolCalls: calls}
-	if message.Content != "" {
-		wire.Content = message.Content
+	if text := message.Sent(); text != "" {
+		wire.Content = text
 	}
 	if message.Role == RoleUser && len(message.Images) > 0 {
-		wire.Content = append([]wirePart{{Type: "text", Text: message.Content}}, pictureParts(message.Images)...)
+		wire.Content = append([]wirePart{{Type: "text", Text: message.Sent()}}, pictureParts(message.Images)...)
 	}
 	return wire, nil
 }
