@@ -101,6 +101,7 @@ type Message struct {
 	ToolOutcome     ToolOutcome
 	ToolResultBytes int
 	ToolExitCode    *int `json:"-"`
+	ToolHits        *int `json:"-"`
 	Thinking        Thinking
 	Origin          Origin `json:"-"`
 }

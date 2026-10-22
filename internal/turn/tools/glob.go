@@ -99,15 +99,15 @@ func (g Glob) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 		}
 	}
 
-	command := args.Pattern + " under " + under
-	if len(found) == 0 {
+	command, matched := args.Pattern+" under "+under, len(found)
+	if matched == 0 {
 		return turn.Result{
 			Content: withNote(fmt.Sprintf("no file under %s matches %q, out of %d files searched. the directory exists and was read: this is an answer, not a failure",
 				under, args.Pattern, len(listed.files)), listed.note),
 			Command: command,
+			Hits:    &matched,
 		}, nil
 	}
-	matched := len(found)
 	note := listed.note
 	header := fmt.Sprintf("%d of %d files under %s match %q", matched, len(listed.files), under, args.Pattern)
 	if first, last := min(args.Skip, matched), min(args.Skip+konst.GlobPathsResultCap, matched); first > 0 || last < matched {
@@ -127,6 +127,7 @@ func (g Glob) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 	return turn.Result{
 		Content: withNote(header+"\n"+strings.Join(found, "\n")+"\n", note),
 		Command: command,
+		Hits:    &matched,
 	}, nil
 }
 

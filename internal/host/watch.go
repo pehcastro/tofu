@@ -284,6 +284,7 @@ func (a *watcher) result(message llm.Message, asker string) {
 		Detail:   message.Content,
 		Bytes:    message.ToolResultBytes,
 		ExitCode: message.ToolExitCode,
+		Hits:     message.ToolHits,
 		Failed:   message.ToolOutcome.Failed(),
 		Agent:    asker,
 	}

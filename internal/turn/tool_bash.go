@@ -314,7 +314,8 @@ func (t *BashTool) Definition() llm.Tool {
 			"the lead gets its exit back as a message on its own and never waits on it: it answers the person, goes on, or ends the turn. a sub-agent reads it back with shell wait, never sleep or poll. "+
 			"timeout_ms at or under that limit kills it there instead. "+
 			"background true is only for a server or watcher that never ends: run the server itself, no & or nohup, and stop it with the shell tool, never kill. "+
-			"check_port names what holds a port",
+			"check_port names what holds a port. "+
+			"title is optional: a few words a person reads for what the command is for, such as rebuilt the desk binary",
 		t.choice.Label, t.softLimit.Milliseconds(), konst.BashSoftLimitMillis)
 	if t.choice.Note != "" {
 		description += " " + t.choice.Note
@@ -326,6 +327,7 @@ func (t *BashTool) Definition() llm.Tool {
 			"type": "object",
 			"properties": map[string]any{
 				"command":    map[string]any{"type": "string"},
+				"title":      map[string]any{"type": "string"},
 				"timeout_ms": map[string]any{"type": "integer"},
 				"background": map[string]any{"type": "boolean"},
 				"check_port": map[string]any{"type": "integer"},

@@ -161,11 +161,12 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		return append(out, notify("turn.steerQueued", &SteerQueued{Identity: id, Text: event.Text}))
 	case EventToolCall:
 		var args struct {
-			Path string `json:"path"`
+			Path  string `json:"path"`
+			Title string `json:"title"`
 		}
 		_ = json.Unmarshal(event.Args, &args)
 		s.tools[event.ID] = openTool{tool: event.Tool, path: args.Path, at: now}
-		return append(out, notify("tool.started", &ToolStarted{Identity: id, Instance: event.Agent, Tool: event.Tool, Args: wholeJSON(event.Args), StartedAt: now}))
+		return append(out, notify("tool.started", &ToolStarted{Identity: id, Instance: event.Agent, Tool: event.Tool, Title: args.Title, Args: wholeJSON(event.Args), StartedAt: now}))
 	case EventToolResult:
 		return append(out, s.toolCompleted(id, event, now)...)
 	case EventDecision:
@@ -286,14 +287,27 @@ func (s *items) toolCompleted(id Identity, event Event, now time.Time) []outgoin
 	if known {
 		completed.DurationMs = now.Sub(opened.at).Milliseconds()
 	}
-	out := []outgoing{notify("tool.completed", completed)}
+	completed.Summary = ToolSummary{Exit: event.ExitCode, DurationMs: completed.DurationMs, Hits: event.Hits}
+	var edit *FileEdit
 	switch {
 	case event.Created != "":
-		return append(out, notify("file.edit", &FileEdit{Identity: id, Instance: event.Agent, Path: opened.path, Op: EditCreate, Hunks: []Hunk{createdHunk(event.Created)}}))
+		edit = &FileEdit{Identity: id, Instance: event.Agent, Path: opened.path, Op: EditCreate, Hunks: []Hunk{createdHunk(event.Created)}}
 	case event.Diff != "":
-		return append(out, notify("file.edit", &FileEdit{Identity: id, Instance: event.Agent, Path: opened.path, Op: EditModify, Hunks: hunksOf(event.Diff)}))
+		edit = &FileEdit{Identity: id, Instance: event.Agent, Path: opened.path, Op: EditModify, Hunks: hunksOf(event.Diff)}
+	default:
+		return []outgoing{notify("tool.completed", completed)}
 	}
-	return out
+	for _, hunk := range edit.Hunks {
+		for _, line := range hunk.Lines {
+			switch line.Kind {
+			case LineAdded:
+				completed.Summary.Added++
+			case LineRemoved:
+				completed.Summary.Removed++
+			}
+		}
+	}
+	return []outgoing{notify("tool.completed", completed), notify("file.edit", edit)}
 }
 
 func lineCount(text string) int {

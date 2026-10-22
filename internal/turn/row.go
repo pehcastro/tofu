@@ -53,6 +53,7 @@ type ToolCallRow struct {
 	Proxy             *ProxyRow       `json:"proxy,omitempty"`
 	SubAgentID        string          `json:"sub_agent_id,omitempty"`
 	ExitCode          *int            `json:"exit_code,omitempty"`
+	Hits              *int            `json:"hits,omitempty"`
 	ResultBytes       int             `json:"result_bytes"`
 	RenderedBytes     int             `json:"rendered_bytes"`
 	ResultHash        string          `json:"result_hash,omitempty"`

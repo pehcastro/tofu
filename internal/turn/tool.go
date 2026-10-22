@@ -31,6 +31,7 @@ type Result struct {
 	Images      []llm.Image
 	Command     string
 	ExitCode    *int
+	Hits        *int
 	FailureText string
 	Outcome     ResultOutcome
 	SubAgent    string

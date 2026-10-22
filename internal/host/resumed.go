@@ -114,6 +114,10 @@ func resumedChat(carry Carry, dir string) []Event {
 				}
 			}
 		case llm.RoleTool:
+			if recorded := lead.calls[message.ToolCallID]; recorded != nil && recorded.result.Call != "" {
+				ran := resultOf(recorded.result)
+				message.ToolExitCode, message.ToolHits = ran.ToolExitCode, ran.ToolHits
+			}
 			lead.watch.result(message, "")
 		case llm.RoleSystem, llm.RoleUnknown:
 		}
@@ -198,9 +202,12 @@ func callOf(event session.Event) llm.ToolCall {
 }
 
 func resultOf(event session.Event) llm.Message {
-	var result session.ResultBody
+	var result struct {
+		session.ResultBody
+		Hits *int `json:"hits"`
+	}
 	_ = json.Unmarshal(event.Body, &result)
-	message := llm.Message{Role: llm.RoleTool, ToolCallID: event.Call, Content: turn.WithoutToolRef(result.Content), ToolResultBytes: result.ResultBytes, ToolExitCode: result.ExitCode}
+	message := llm.Message{Role: llm.RoleTool, ToolCallID: event.Call, Content: turn.WithoutToolRef(result.Content), ToolResultBytes: result.ResultBytes, ToolExitCode: result.ExitCode, ToolHits: result.Hits}
 	switch result.ToolOutcome {
 	case "":
 		message.ToolOutcome = llm.ToolOutcomeUnset

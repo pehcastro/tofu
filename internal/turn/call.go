@@ -178,6 +178,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		Args:           call.Arguments,
 		Command:        result.Command,
 		ExitCode:       result.ExitCode,
+		Hits:           result.Hits,
 		ResultBytes:    len(result.Content),
 		RenderedBytes:  len(rendered),
 		ResultHash:     hex.EncodeToString(sum[:]),
@@ -219,6 +220,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		ToolOutcome:     outcome,
 		ToolResultBytes: row.ResultBytes,
 		ToolExitCode:    row.ExitCode,
+		ToolHits:        row.Hits,
 		Images:          result.Images,
 	}, result.Repeat
 }

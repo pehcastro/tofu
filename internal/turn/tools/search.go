@@ -96,8 +96,13 @@ func (s Search) Run(_ context.Context, raw json.RawMessage) (turn.Result, error)
 	if err != nil {
 		return turn.Result{}, err
 	}
+	hits := 0
+	for _, unit := range result.Units {
+		hits += len(unit.Matches)
+	}
 	return turn.Result{
 		Content: withNote(fmt.Sprintf("search %s under %s\n%s", args.Pattern, under, page), listed.note),
 		Command: args.Pattern + " under " + under,
+		Hits:    &hits,
 	}, nil
 }

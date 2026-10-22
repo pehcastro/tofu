@@ -74,6 +74,7 @@ type Event struct {
 	GateWhy   jev.Why
 	Args      json.RawMessage
 	ExitCode  *int
+	Hits      *int
 	Logged    *session.Event
 	Status    Status
 	Fork      *Fork

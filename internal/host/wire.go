@@ -305,20 +305,30 @@ type ToolStarted struct {
 	Identity
 	Instance  string          `json:"instance,omitempty"`
 	Tool      string          `json:"tool"`
+	Title     string          `json:"title,omitempty"`
 	Args      json.RawMessage `json:"args"`
 	StartedAt time.Time       `json:"startedAt"`
 }
 
 type ToolCompleted struct {
 	Identity
-	Instance   string `json:"instance,omitempty"`
-	Tool       string `json:"tool"`
-	Failed     bool   `json:"failed"`
-	ExitCode   *int   `json:"exitCode,omitempty"`
-	Bytes      int    `json:"bytes"`
-	Lines      int    `json:"lines"`
-	DurationMs int64  `json:"durationMs"`
-	Output     string `json:"output"`
+	Instance   string      `json:"instance,omitempty"`
+	Tool       string      `json:"tool"`
+	Failed     bool        `json:"failed"`
+	ExitCode   *int        `json:"exitCode,omitempty"`
+	Bytes      int         `json:"bytes"`
+	Lines      int         `json:"lines"`
+	DurationMs int64       `json:"durationMs"`
+	Output     string      `json:"output"`
+	Summary    ToolSummary `json:"summary"`
+}
+
+type ToolSummary struct {
+	Exit       *int  `json:"exit,omitempty"`
+	DurationMs int64 `json:"durationMs"`
+	Hits       *int  `json:"hits,omitempty"`
+	Added      int   `json:"added"`
+	Removed    int   `json:"removed"`
 }
 
 type FileEdit struct {
