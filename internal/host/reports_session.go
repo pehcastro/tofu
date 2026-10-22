@@ -63,41 +63,48 @@ type SessionParams struct {
 }
 
 type SessionInfo struct {
-	ID               string    `json:"id"`
-	Name             string    `json:"name,omitempty"`
-	Handle           string    `json:"handle"`
-	Family           string    `json:"family,omitempty"`
-	Generation       int       `json:"generation,omitempty"`
-	Generations      int       `json:"generations,omitempty"`
-	At               time.Time `json:"at"`
-	LastAt           time.Time `json:"lastAt,omitzero"`
-	Task             string    `json:"task,omitempty"`
-	Turns            int       `json:"turns"`
-	Agents           int       `json:"sub_agents"`
-	Steps            int       `json:"steps"`
-	Carried          int       `json:"carried_messages"`
-	Outcome          string    `json:"outcome,omitempty"`
-	Error            string    `json:"error,omitempty"`
-	Wire             string    `json:"wire,omitempty"`
-	Model            string    `json:"model,omitempty"`
-	Parent           string    `json:"parent,omitempty"`
-	Root             string    `json:"root,omitempty"`
-	ForkedInto       string    `json:"forked_into,omitempty"`
-	ForkIntoKind     string    `json:"fork_into_kind,omitempty"`
-	ForkKind         string    `json:"fork_kind,omitempty"`
-	ContextCeiling   int       `json:"context_ceiling,omitempty"`
-	ContextTarget    int       `json:"context_target,omitempty"`
-	AutoCompaction   string    `json:"auto_compaction,omitempty"`
-	ForkTokensBefore int       `json:"fork_tokens_before,omitempty"`
-	ForkTokensAfter  int       `json:"fork_tokens_after,omitempty"`
-	CostUSD          float64   `json:"cost_usd,omitempty"`
-	Head             bool      `json:"head,omitempty"`
+	ID               string       `json:"id"`
+	Name             string       `json:"name,omitempty"`
+	Handle           string       `json:"handle"`
+	Family           string       `json:"family,omitempty"`
+	Generation       int          `json:"generation,omitempty"`
+	Generations      int          `json:"generations,omitempty"`
+	At               time.Time    `json:"at"`
+	LastAt           time.Time    `json:"lastAt,omitzero"`
+	Task             string       `json:"task,omitempty"`
+	Turns            int          `json:"turns"`
+	Agents           int          `json:"sub_agents"`
+	Steps            int          `json:"steps"`
+	Carried          int          `json:"carried_messages"`
+	CarriedFrom      *CarriedFrom `json:"carried_from,omitempty"`
+	Outcome          string       `json:"outcome,omitempty"`
+	Error            string       `json:"error,omitempty"`
+	Wire             string       `json:"wire,omitempty"`
+	Model            string       `json:"model,omitempty"`
+	Parent           string       `json:"parent,omitempty"`
+	Root             string       `json:"root,omitempty"`
+	ForkedInto       string       `json:"forked_into,omitempty"`
+	ForkIntoKind     string       `json:"fork_into_kind,omitempty"`
+	ForkKind         string       `json:"fork_kind,omitempty"`
+	ContextCeiling   int          `json:"context_ceiling,omitempty"`
+	ContextTarget    int          `json:"context_target,omitempty"`
+	AutoCompaction   string       `json:"auto_compaction,omitempty"`
+	ForkTokensBefore int          `json:"fork_tokens_before,omitempty"`
+	ForkTokensAfter  int          `json:"fork_tokens_after,omitempty"`
+	CostUSD          float64      `json:"cost_usd,omitempty"`
+	Head             bool         `json:"head,omitempty"`
 
 	Reads      int               `json:"reads"`
 	Unrecorded int               `json:"unrecorded_reads,omitempty"`
 	EndedAt    *time.Time        `json:"ended_at,omitempty"`
 	EndReason  session.EndReason `json:"end_reason,omitempty"`
 	Expired    bool              `json:"expired,omitempty"`
+}
+
+type CarriedFrom struct {
+	Session  string `json:"session"`
+	Handle   string `json:"handle"`
+	Messages int    `json:"messages"`
 }
 
 type SessionTrace struct {

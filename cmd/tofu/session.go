@@ -40,10 +40,9 @@ type sessionSkip = host.SessionSkip
 
 type sessionRow struct {
 	host.SessionInfo
-	CarriedFrom *carrySource `json:"carried_from,omitempty"`
-	lastAt      time.Time
-	tasks       []string
-	sideOf      string
+	lastAt time.Time
+	tasks  []string
+	sideOf string
 }
 
 type sessionListReport struct {
@@ -70,7 +69,7 @@ type sessionResume struct {
 	Outcome     string             `json:"outcome,omitempty"`
 	Steps       int                `json:"steps"`
 	Carried     int                `json:"carried_messages"`
-	CarriedFrom *carrySource       `json:"carried_from,omitempty"`
+	CarriedFrom *host.CarriedFrom  `json:"carried_from,omitempty"`
 	HeadDerived bool               `json:"head_derived,omitempty"`
 	Fresh       string             `json:"fresh,omitempty"`
 	Busy        *session.BusyError `json:"busy,omitempty"`
@@ -446,7 +445,7 @@ func sessionSummary(store *session.Store, handle string) (sessionRow, []session.
 		if err != nil {
 			return sessionRow{}, nil, err
 		}
-		row.CarriedFrom = &carrySource{Session: header.CarriedFrom.Session, Handle: handleOf(store, header.CarriedFrom.Session), Messages: len(given)}
+		row.CarriedFrom = &host.CarriedFrom{Session: header.CarriedFrom.Session, Handle: handleOf(store, header.CarriedFrom.Session), Messages: len(given)}
 	}
 	row.Handle = sessionShortID(header.ID)
 	if side, found, _ := store.Side(header.ID); found {
@@ -632,13 +631,7 @@ func busyResumeLines(page cli.Page, carry sessionResume) []string {
 	})...)...)
 }
 
-type carrySource struct {
-	Session  string `json:"session"`
-	Handle   string `json:"handle"`
-	Messages int    `json:"messages"`
-}
-
-func heldText(held int, from *carrySource) string {
+func heldText(held int, from *host.CarriedFrom) string {
 	origin := "fresh"
 	if from != nil {
 		origin = plural(from.Messages, "message") + " from " + from.Handle
