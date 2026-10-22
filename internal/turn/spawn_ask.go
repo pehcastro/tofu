@@ -1,6 +1,7 @@
 package turn
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/boardy"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/rule"
@@ -30,6 +32,11 @@ type askArgs struct {
 	Default  string `json:"default"`
 }
 
+const (
+	AskAnswered = "the orchestrator answers: "
+	AskAssumed  = "the orchestrator did not answer, so your default stands, assumed and not confirmed: "
+)
+
 func (askTool) Name() string { return "ask" }
 
 func (askTool) Definition() llm.Tool {
@@ -38,6 +45,7 @@ func (askTool) Definition() llm.Tool {
 		Name: "ask",
 		Description: "asks the orchestrator one question and waits for its answer, which comes back as this result. " +
 			"ask before you start a server or a watcher, bind a port, kill a process you did not start, or change a file outside the paths you hold. " +
+			"question is the question alone, in one or two sentences, and why carries the reasoning and the facts behind it. " +
 			"default is what you would do with no answer: when the orchestrator cannot answer in time it stands, and the result says it was assumed",
 		Parameters: map[string]any{
 			"type":       "object",
@@ -55,15 +63,31 @@ func (a askTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
 	if strings.TrimSpace(args.Question) == "" || strings.TrimSpace(args.Default) == "" {
 		return Result{}, errors.New("ask: question and default are both required")
 	}
-	roster := a.orchestrator.roster
-	roster.Reached(a.asking.ID, subagent.WaitingAnswer, "asks: "+args.Question)
-	answer, err := a.orchestrator.answer(ctx, a.asking, a.conversation, args)
-	roster.Reached(a.asking.ID, subagent.Working, "")
+	t, id := a.orchestrator, a.asking.ID
+	asked := boardy.Event{At: t.clock().UTC().Truncate(time.Second), Kind: boardy.Asked, Author: boardy.SubAgentAuthor(t.base.Session, id), Agent: id,
+		Text: args.Question, Why: args.Why, Default: args.Default}
+	t.roster.Reached(id, subagent.WaitingAnswer, "asks: "+args.Question)
+	answer, err := t.answer(ctx, a.asking, a.conversation, args)
+	t.roster.Reached(id, subagent.Working, "")
 	if err != nil {
-		return Result{Content: "the orchestrator did not answer, so your default stands, assumed and not confirmed: " + args.Default +
-			"\n\nwhy there was no answer: " + err.Error(), Command: "ask assumed: " + args.Question}, nil
+		asked.Unanswered = err.Error()
+		return Result{Content: AskAssumed + args.Default + "\n\nwhy there was no answer: " + err.Error() + a.onThread(asked), Command: "ask assumed: " + args.Question}, nil
 	}
-	return Result{Content: "the orchestrator answers: " + answer, Command: "ask answered: " + args.Question}, nil
+	written := a.onThread(asked, boardy.Event{Kind: boardy.Answered, Actor: t.base.Session, Author: t.speaker(), Agent: id, Text: answer})
+	return Result{Content: AskAnswered + answer + written, Command: "ask answered: " + args.Question}, nil
+}
+
+func (a askTool) onThread(asked boardy.Event, answered ...boardy.Event) string {
+	t, ticket := a.orchestrator, a.asking.Ticket
+	if ticket == "" || t.base.Board == nil {
+		return ""
+	}
+	asked.Actor = t.ticketActor(ticket)
+	written := t.onThread(ticket, asked)
+	for _, event := range answered {
+		written += t.onThread(ticket, event)
+	}
+	return written
 }
 
 func (t *SpawnTool) answer(ctx context.Context, asking subagent.SubAgent, conversation []llm.Message, args askArgs) (string, error) {
@@ -112,15 +136,26 @@ func (t *SpawnTool) answer(ctx context.Context, asking subagent.SubAgent, conver
 		asking.ID, asking.Brief, args.Question, args.Why, args.Default, strings.Join(running, "; "))
 	spoken := slices.DeleteFunc(slices.Clone(conversation), func(message llm.Message) bool { return message.Role == llm.RoleSystem })
 	messages := append([]llm.Message{{Role: llm.RoleSystem, Content: system}}, resumable(spoken)...)
-	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: question})
+	request := llm.Request{Messages: append(messages, llm.Message{Role: llm.RoleUser, Content: question})}
+	if tools := t.base.Tools.Definitions(); len(tools) > 0 {
+		request.Tools, request.ToolChoice = tools, llm.ToolChoiceNone
+	}
 	within, cancel := context.WithTimeout(ctx, konst.SubAgentAskMillis*time.Millisecond)
 	defer cancel()
-	decision, err := model.Ask(within, llm.Request{Messages: messages})
+	decision, err := model.Ask(within, request)
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "", fmt.Errorf("the orchestrator's model gave no answer within %v", konst.SubAgentAskMillis*time.Millisecond)
+	}
 	if err != nil {
 		return "", err
 	}
-	if decision.Outcome != llm.OutcomeMessage || strings.TrimSpace(decision.Content) == "" {
-		return "", errors.New("the orchestrator's model returned no answer text")
+	if answer := strings.TrimSpace(decision.Content); decision.Outcome == llm.OutcomeMessage && answer != "" {
+		return answer, nil
 	}
-	return strings.TrimSpace(decision.Content), nil
+	var called []string
+	for _, call := range decision.ToolCalls {
+		called = append(called, call.Name)
+	}
+	return "", fmt.Errorf("the orchestrator's model returned no answer text: it ended as %s, stop reason %q, calling %s",
+		decision.Outcome, decision.Stop, cmp.Or(strings.Join(called, ", "), "no tool"))
 }

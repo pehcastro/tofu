@@ -40,8 +40,6 @@ const (
 	askTool             = "ask"
 	messageTool         = "message"
 	subAgentsTool       = "subagents"
-	askAnswered         = "the orchestrator answers: "
-	askAssumed          = "the orchestrator did not answer, so your default stands, assumed and not confirmed: "
 	answeredReply       = "orchestrator: "
 	assumedReply        = "orchestrator did not answer, assumed: "
 	envOpen             = "<env>"
@@ -725,10 +723,10 @@ func resultSummary(content string) string {
 
 func answerOf(content string) (string, bool) {
 	first, _, _ := strings.Cut(content, "\n\n")
-	if answer, answered := strings.CutPrefix(first, askAnswered); answered {
+	if answer, answered := strings.CutPrefix(first, turn.AskAnswered); answered {
 		return answeredReply + oneLine(answer), true
 	}
-	if assumed, wasAssumed := strings.CutPrefix(first, askAssumed); wasAssumed {
+	if assumed, wasAssumed := strings.CutPrefix(first, turn.AskAssumed); wasAssumed {
 		return assumedReply + oneLine(assumed), true
 	}
 	return "", false

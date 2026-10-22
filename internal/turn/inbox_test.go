@@ -31,7 +31,7 @@ func newCrew(scripts map[string][]llm.Decision) *crew {
 func holdKey(key string, request int) string { return key + "#" + strconv.Itoa(request) }
 
 func (c *crew) who(request llm.Request) string {
-	if len(request.Tools) == 0 {
+	if len(request.Tools) == 0 || request.ToolChoice == llm.ToolChoiceNone {
 		return sideKey
 	}
 	for _, message := range request.Messages {

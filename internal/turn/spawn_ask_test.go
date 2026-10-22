@@ -23,7 +23,7 @@ type sideCallModel struct {
 }
 
 func (m *sideCallModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
-	if len(request.Tools) == 0 {
+	if len(request.Tools) == 0 || request.ToolChoice == llm.ToolChoiceNone {
 		m.sideRuns++
 		m.sideSaw = request.Messages
 		for _, held := range m.spawn.roster.SubAgents() {

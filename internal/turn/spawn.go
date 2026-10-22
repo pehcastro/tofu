@@ -680,7 +680,7 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 		owned = append(owned, &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: func() SubAgentLimits { return limits }, ChecksWork: t.ChecksWork, Project: t.Project, Inbox: held.inbox, Remembered: t.Remembered,
 			orchestratorID: held.agent.ID, depth: t.depth + 1, writesNothing: len(held.boundary.Owns()) == 0, base: t.base, roster: t.roster, tree: t.tree, built: t.built, writes: t.writes})
 	}
-	ask := threadedAsk{askTool{orchestrator: t, asking: held.agent, conversation: site.conversation}}
+	ask := askTool{orchestrator: t, asking: held.agent, conversation: site.conversation}
 	subAgent := t.base
 	if subAgent.Plan != nil {
 		subAgent.Plan = plan.shown
@@ -881,23 +881,6 @@ func (t *SpawnTool) onThread(ticket string, event boardy.Event) string {
 		return "\n\nthis was not written to " + ticket + "'s thread: " + err.Error()
 	}
 	return ""
-}
-
-type threadedAsk struct{ askTool }
-
-func (a threadedAsk) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
-	var args askArgs
-	t, ticket, id := a.orchestrator, a.asking.Ticket, a.asking.ID
-	if ticket == "" || t.base.Board == nil || json.Unmarshal(raw, &args) != nil {
-		return a.askTool.Run(ctx, raw)
-	}
-	asked := t.onThread(ticket, boardy.Event{Kind: boardy.Asked, Actor: t.ticketActor(ticket), Author: boardy.SubAgentAuthor(t.base.Session, id), Agent: id, Text: args.Question})
-	result, err := a.askTool.Run(ctx, raw)
-	if err != nil {
-		return result, err
-	}
-	result.Content += asked + t.onThread(ticket, boardy.Event{Kind: boardy.Answered, Actor: t.base.Session, Author: t.speaker(), Agent: id, Text: result.Content})
-	return result, nil
 }
 
 func (t *SpawnTool) ticketActor(ticket string) string {

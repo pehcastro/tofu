@@ -41,6 +41,9 @@ type Event struct {
 	From       Status           `json:"from,omitempty"`
 	To         Status           `json:"to,omitempty"`
 	Text       string           `json:"text,omitempty"`
+	Why        string           `json:"why,omitempty"`
+	Default    string           `json:"default,omitempty"`
+	Unanswered string           `json:"unanswered,omitempty"`
 	Session    string           `json:"session,omitempty"`
 	Agent      string           `json:"agent,omitempty"`
 	Call       string           `json:"call,omitempty"`
