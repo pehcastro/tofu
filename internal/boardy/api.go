@@ -295,8 +295,8 @@ func (a API) Get(request GetRequest) (GetAnswer, error) {
 	if err != nil {
 		return GetAnswer{}, err
 	}
-	thread, err := a.Board.Store.Thread(ticket.ID)
-	return GetAnswer{Ticket: ticket, Actual: Actuals(thread, time.Now())[ticket.ID], Events: thread, Words: a.Words}, err
+	events, err := a.Board.Store.ticketEvents(ticket.ID)
+	return GetAnswer{Ticket: ticket, Actual: Actuals(events, time.Now())[ticket.ID], Events: threaded(events), Words: a.Words}, err
 }
 
 type EventsRequest struct {

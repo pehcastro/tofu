@@ -30,18 +30,20 @@ func (EventKind) Enum() []string {
 }
 
 type Event struct {
-	At      time.Time `json:"at"`
-	Ticket  string    `json:"ticket"`
-	Kind    EventKind `json:"kind"`
-	Actor   string    `json:"actor,omitempty"`
-	Author  *Author   `json:"author,omitempty"`
-	From    Status    `json:"from,omitempty"`
-	To      Status    `json:"to,omitempty"`
-	Text    string    `json:"text,omitempty"`
-	Session string    `json:"session,omitempty"`
-	Agent   string    `json:"agent,omitempty"`
-	Call    string    `json:"call,omitempty"`
-	Files   []string  `json:"files,omitempty"`
+	At       time.Time `json:"at"`
+	Ticket   string    `json:"ticket"`
+	Kind     EventKind `json:"kind"`
+	Actor    string    `json:"actor,omitempty"`
+	Author   *Author   `json:"author,omitempty"`
+	From     Status    `json:"from,omitempty"`
+	To       Status    `json:"to,omitempty"`
+	Text     string    `json:"text,omitempty"`
+	Session  string    `json:"session,omitempty"`
+	Agent    string    `json:"agent,omitempty"`
+	Call     string    `json:"call,omitempty"`
+	Files    []string  `json:"files,omitempty"`
+	Brief    string    `json:"brief,omitempty"`
+	Assignee string    `json:"assignee,omitempty"`
 }
 
 func (s Store) RecordTicket(event Event) error {
@@ -53,18 +55,31 @@ func (s Store) RecordTicket(event Event) error {
 }
 
 func (s Store) Thread(id string) ([]Event, error) {
+	events, err := s.ticketEvents(id)
+	return threaded(events), err
+}
+
+func (s Store) ticketEvents(id string) ([]Event, error) {
 	ref, err := SplitID(id)
 	if err != nil {
 		return nil, err
 	}
 	all, err := s.Events(ref.Key, 0)
+	return slices.DeleteFunc(all, func(event Event) bool { return event.Ticket != id }), err
+}
+
+func threaded(events []Event) []Event {
 	thread := []Event{}
-	for _, event := range all {
-		if event.Ticket == id {
-			thread = append(thread, event)
+	for _, event := range events {
+		if event.Kind == Moved && event.Text == "" {
+			continue
 		}
+		if last := len(thread) - 1; event.Kind == Spawned && last >= 0 && thread[last].Kind == Assigned && thread[last].Text == event.Assignee {
+			thread = thread[:last]
+		}
+		thread = append(thread, event)
 	}
-	return thread, err
+	return thread
 }
 
 func (s Store) Record(key string, event Event) error {

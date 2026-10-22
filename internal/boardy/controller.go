@@ -42,9 +42,6 @@ func (l Local) Move(id string, to Status, reason, actor string) (Ticket, error) 
 			return fmt.Errorf("%s is already %s", id, to)
 		}
 		ticket.Status, ticket.Reason = to, reason
-		if to == Doing && from == Review && len(ticket.Acceptance) > 0 {
-			ticket.Acceptance = append(ticket.Acceptance, ticket.Acceptance[len(ticket.Acceptance)-1:]...)
-		}
 		return nil
 	})
 	if err != nil {

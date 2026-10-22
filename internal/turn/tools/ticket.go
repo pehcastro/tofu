@@ -36,14 +36,19 @@ const (
 	logEvidence logKind = "evidence"
 )
 
-func sayable(text string) error {
-	text = strings.TrimSpace(text)
-	sentences, runes := 1, utf8.RuneCountInString(text)
+func sentencesIn(text string) int {
+	sentences := 1
 	for i := 1; i < len(text); i++ {
 		if text[i] == ' ' && strings.ContainsRune(".!?", rune(text[i-1])) {
 			sentences++
 		}
 	}
+	return sentences
+}
+
+func sayable(text string) error {
+	text = strings.TrimSpace(text)
+	sentences, runes := sentencesIn(text), utf8.RuneCountInString(text)
 	switch {
 	case strings.Contains(text, "\n"):
 		return fmt.Errorf("a said entry is one line: put the command and its output in an entry of kind %s", logEvidence)
@@ -143,7 +148,7 @@ func (t ticketTool) Definition() llm.Tool {
 		if t.manager {
 			statuses, describe = boardy.Statuses(), "moves a ticket on a board you manage to a status; blocked needs a reason"
 		}
-		properties["to"], properties["reason"], required = map[string]any{"type": "string", "enum": statuses}, stringParam("why, required for blocked"), append(required, "to")
+		properties["to"], properties["reason"], required = map[string]any{"type": "string", "enum": statuses}, stringParam("why, in one sentence, required for blocked; anything longer goes in ticket_log"), append(required, "to")
 	case ticketAssign:
 		describe = "assigns a ticket on a board you manage to a session or the person, by name"
 		properties["to"], required = stringParam("who the ticket goes to"), append(required, "to")
@@ -209,7 +214,12 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 			}
 		case ticketMove:
 			var to boardy.Status
-			if to, err = boardy.ParseStatus(args.To); err == nil {
+			reason := strings.TrimSpace(args.Reason)
+			switch to, err = boardy.ParseStatus(args.To); {
+			case err != nil:
+			case strings.Contains(reason, "\n") || sentencesIn(reason) > 1:
+				err = fmt.Errorf("a move reason is one sentence on one line: say the rest with ticket_log kind %s, and put what you ran and what it printed in an entry of kind %s", logSay, logEvidence)
+			default:
 				ticket, err = t.board.Move(args.ID, to, args.Reason, t.actor)
 			}
 			said = ticket.ID + " is " + string(ticket.Status)

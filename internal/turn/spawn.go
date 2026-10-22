@@ -360,10 +360,22 @@ func (a spawnArgs) mission() string {
 		return given
 	}
 	first, _, _ := strings.Cut(strings.TrimSpace(a.Task), "\n")
-	if runes := []rune(first); len(runes) > konst.SubAgentMissionChars {
-		return strings.TrimSpace(string(runes[:konst.SubAgentMissionChars])) + "..."
+	for i := 0; i+1 < len(first); i++ {
+		if strings.ContainsRune(".!?", rune(first[i])) && first[i+1] == ' ' {
+			first = first[:i]
+			break
+		}
 	}
-	return first
+	first = strings.TrimRight(first, ".!?")
+	runes := []rune(first)
+	if len(runes) <= konst.SubAgentMissionChars {
+		return first
+	}
+	cut := string(runes[:konst.SubAgentMissionChars])
+	if space := strings.LastIndexByte(cut, ' '); space > 0 {
+		cut = cut[:space]
+	}
+	return strings.TrimRight(cut, " ,;:") + "..."
 }
 
 func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
@@ -389,12 +401,14 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		return Result{}, ReadOnlyError{Tool: t.Name()}
 	}
 	var boardSizes map[string]int64
+	var assignee string
 	if args.Ticket != "" && t.base.Board != nil {
 		boardSizes = t.base.Board.Store.EventSizes()
 		if err := t.base.Board.Fire(rule.WhenBefore, rule.HookAgentSpawn, "", args.Ticket, t.base.Session); err != nil {
 			return Result{}, fmt.Errorf("spawn: %w%s", err, BoardNudges(t.base.Board.Store, boardSizes))
 		}
-		if args.Owns, err = t.base.TicketGrant(*t.base.Board, args.Ticket, t.base.Session, t.ticketActor(args.Ticket)); err != nil {
+		assignee = t.ticketActor(args.Ticket)
+		if args.Owns, err = t.base.TicketGrant(*t.base.Board, args.Ticket, t.base.Session, assignee); err != nil {
 			return Result{}, fmt.Errorf("spawn: %w", err)
 		}
 	}
@@ -484,7 +498,8 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		return Result{}, fmt.Errorf("spawn: %w", err)
 	}
 	if args.Ticket != "" && t.base.Board != nil {
-		spawned := boardy.Event{Ticket: args.Ticket, Kind: boardy.Spawned, Actor: t.base.Session, Author: t.speaker(), Session: t.base.Session, Agent: subAgentID, Call: site.call, Text: agent.Brief}
+		spawned := boardy.Event{Ticket: args.Ticket, Kind: boardy.Spawned, Actor: t.base.Session, Author: t.speaker(), Session: t.base.Session, Agent: subAgentID, Call: site.call,
+			Text: subAgentID + ", " + agent.Mission, Brief: agent.Brief, Assignee: assignee, To: boardy.Doing}
 		if err := t.base.Board.Store.RecordTicket(spawned); err != nil {
 			t.roster.Release(subAgentID)
 			return Result{}, fmt.Errorf("spawn: %s's spawn was not written to %s's thread: %w", subAgentID, args.Ticket, err)
@@ -772,9 +787,13 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 		t.SubAgents.Ended(held.definition, agent.Brief, append(forked, claims...), report, runErr == nil && state != subagent.Errored && !stoppedEarly(state, last.Outcome))
 	}
 	contract := subagent.BuildContract(agent.Brief, report.Prose, stoppedEarly(state, last.Outcome))
+	var movedTo boardy.Status
 	if agent.Ticket != "" && t.base.Board != nil {
 		if ticket, err := t.base.Board.Get(agent.Ticket); err == nil {
 			contract = subagent.TicketContract(ticket.ID, ticket.Acceptance, report.Prose, stoppedEarly(state, last.Outcome))
+			if ticket.Status != boardy.Doing {
+				movedTo = ticket.Status
+			}
 		}
 	}
 	if finished {
@@ -784,7 +803,7 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 	text := report.Text(t.proseStore()) + "\n\n" + contract.Block()
 	if agent.Ticket != "" && t.base.Board != nil {
 		summary, _, _ := strings.Cut(contract.Block(), "\n")
-		reported := boardy.Event{Ticket: agent.Ticket, Kind: boardy.Reported, Actor: t.ticketActor(agent.Ticket), Author: boardy.SubAgentAuthor(t.base.Session, agent.ID), Session: t.base.Session, Agent: agent.ID, Call: site.call, Text: cmp.Or(firstLine(report.Result.Summary), report.State) + "; " + summary, Files: report.Wrote}
+		reported := boardy.Event{Ticket: agent.Ticket, Kind: boardy.Reported, Actor: t.ticketActor(agent.Ticket), Author: boardy.SubAgentAuthor(t.base.Session, agent.ID), Session: t.base.Session, Agent: agent.ID, Call: site.call, Text: cmp.Or(firstLine(report.Result.Summary), report.State) + "; " + summary, Files: report.Wrote, To: movedTo}
 		if err := t.base.Board.Store.RecordTicket(reported); err != nil {
 			text += "\n\nthis report was not written to " + agent.Ticket + "'s thread: " + err.Error()
 		}
