@@ -3,6 +3,9 @@ package turn
 import (
 	"context"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -10,8 +13,11 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/classifier"
 	"tofu/internal/llm"
+	"tofu/internal/llm/models"
 	"tofu/internal/subagent"
+	"tofu/internal/sys"
 )
 
 const leadKey, sideKey, usersRoute = "lead", "side", "add the users route"
@@ -163,6 +169,7 @@ func lastUser(request llm.Request) string {
 }
 
 func TestAPersonsMessageReachesTheLeadAtItsNextStepWhileASubAgentRuns(t *testing.T) {
+	classifierSaysAnswered(t)
 	model := newCrew(map[string][]llm.Decision{
 		leadKey:    {besideARead(spawnCall("call-spawn", usersRoute, "src/users.ts")), claimDecision("noted, sub-1 is on it"), claimDecision("sub-1 is done")},
 		usersRoute: {claimDecision("the users route is added")},
@@ -188,6 +195,26 @@ func TestAPersonsMessageReachesTheLeadAtItsNextStepWhileASubAgentRuns(t *testing
 	}
 	release()
 	led.wait(t)
+}
+
+func classifierSaysAnswered(t *testing.T) {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"model":"jev-1.13.0","answers":{"answered":{"type":"noul","noul":0.9}},"usage":{"input_tokens":10,"output_tokens":2}}`)
+	}))
+	t.Cleanup(server.Close)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv(classifier.EndpointVariable, server.URL)
+	t.Setenv(sys.TypeSafeKeyName, "stub-key-not-a-real-credential")
+	dir, err := sys.HomeConfigDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := models.BindRole(dir, models.RoleClassifier, "typesafe/jev-latest"); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestAPersonsMessageStartsALeadTurnWhenTheLeadIsIdleAndASubAgentRuns(t *testing.T) {

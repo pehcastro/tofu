@@ -522,7 +522,21 @@ func promptKey(in io.Reader, prompts io.Writer, name, variable string) (string, 
 }
 
 func reachesJev(ctx context.Context, provider models.Provider, key string) error {
-	client, err := classifier.Route{Model: models.Model{Provider: provider}, Key: key}.Client(oneCallAtATime)
+	library, err := modelLibrary(".")
+	if err != nil {
+		return err
+	}
+	model, bound := library.Bound(models.RoleClassifier)
+	if !bound || model.Provider != provider {
+		at := slices.IndexFunc(library.Models, func(model models.Model) bool {
+			return model.Kind == models.KindClassifier && model.Provider == provider
+		})
+		if at < 0 {
+			return errors.New(string(provider) + " serves no classifier model in the library or .tofu/models")
+		}
+		model = library.Models[at]
+	}
+	client, err := classifier.Route{Model: model, Key: key}.Client(oneCallAtATime)
 	if err != nil {
 		return err
 	}

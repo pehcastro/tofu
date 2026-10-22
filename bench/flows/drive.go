@@ -203,6 +203,14 @@ func (r request) last() string {
 	return r.messages[len(r.messages)-1]
 }
 
+func (r request) sinceLastReply() string {
+	from := len(r.messages)
+	for from > 0 && !strings.Contains(strings.SplitN(r.messages[from-1], "\n", 2)[0], " assistant: ") {
+		from--
+	}
+	return strings.Join(r.messages[from:], "\n")
+}
+
 func (r request) name() string { return strings.SplitN(r.header, ":", 2)[0] }
 
 func lineWith(out, text string) string {

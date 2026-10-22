@@ -37,7 +37,7 @@ var flows = []flow{
 	{10, "under a holder, an image pasted into a message the lead reads mid-turn reaches its next request", false, steeredImage},
 }
 
-var clockOnScreen = regexp.MustCompile(`(?m)(?:spawning|running) \[&sub-1\][^\n]*?  ((?:\d+h )?(?:\d+m )?\d+s)\s*[│┃]?\s*$`)
+var clockOnScreen = regexp.MustCompile(`(?m)(?:spawning|working) \[&sub-1\][^\n]*?  ((?:\d+h )?(?:\d+m )?\d+s)\s*[│┃]?\s*$`)
 
 func carries(r request, marks ...string) error {
 	for _, mark := range marks {
@@ -94,7 +94,7 @@ func killAndResume(s session) (string, error) {
 	var startedOn []string
 	reached := 0
 	for _, lead := range sent {
-		if carried := strings.Count(lead.last(), "RESUMEDREPORT"); carried > 0 {
+		if carried := strings.Count(lead.sinceLastReply(), "RESUMEDREPORT"); carried > 0 {
 			reached += carried
 			startedOn = append(startedOn, lead.name())
 		}
