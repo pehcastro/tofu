@@ -227,6 +227,7 @@ func TestTheShippedWiresResolveTheModelsTheyResolvedBefore(t *testing.T) {
 		"meta/muse-spark-1.2-contributor":       "muse-spark-1.2-contributor allowed ",
 		"meta/muse-spark-1.3":                   "muse-spark-1.3 allowed ",
 		"meta/muse-spark-1.3-contributor":       "muse-spark-1.3-contributor allowed ",
+		"openrouter/jev-latest":                 "jev-latest allowed ",
 		"typesafe/jev-latest":                   "jev-latest allowed ",
 	}
 	if len(library.Models) != len(frozen) {

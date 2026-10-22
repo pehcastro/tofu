@@ -16,9 +16,9 @@ import (
 	"sync"
 	"time"
 
+	"tofu/internal/classifier"
 	"tofu/internal/hook"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
 	"tofu/internal/konst"
@@ -99,7 +99,7 @@ func newSteerJudge(config Config) (*steerJudge, error) {
 	if err != nil {
 		return nil, err
 	}
-	client, err := typesafe.Judge()
+	client, err := classifier.Open(config.Project, jev.ReadKeyring(), 1)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,7 @@
 package jev
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -77,6 +78,7 @@ const (
 	WhyFileLacksName
 	WhyUnreadable
 	WhyStoreUnreadable
+	WhyUnbound
 )
 
 type MissingKey struct {
@@ -87,6 +89,15 @@ type MissingKey struct {
 func (m MissingKey) Error() string { return m.wrapped.Error() }
 
 func (m MissingKey) Unwrap() error { return m.wrapped }
+
+func Unbound(sentence string) error {
+	return MissingKey{Why: WhyUnbound, wrapped: errors.New(sentence)}
+}
+
+func IsUnbound(err error) bool {
+	var missing MissingKey
+	return errors.As(err, &missing) && missing.Why == WhyUnbound
+}
 
 func noKey(name, path string, why Why, cause error, format string, args ...any) (string, Located, error) {
 	failure := transport.Fail("jev.Key", transport.KindMissingCredential, cause, format, args...)

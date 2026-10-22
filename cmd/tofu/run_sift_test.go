@@ -126,6 +126,7 @@ func TestTheRunAttachesAScorerBuiltOverTheJevClient(t *testing.T) {
 	assumesTheRuleIsOutOfShadow(t)
 	chdirTemp(t)
 	stubRecordedJudgedReplies(t)
+	bindTypeSafe(t)
 
 	sifter, scorer, err := buildShellSift(siftFollowsTheTable, logHere(t))
 	if err != nil {
@@ -171,6 +172,7 @@ func TestABashResultReachesTheModelSmallerThanTheOutputItRan(t *testing.T) {
 	assumesTheRuleIsOutOfShadow(t)
 	dir := chdirTemp(t)
 	stubRecordedJudgedReplies(t)
+	bindTypeSafe(t)
 
 	path := filepath.Join(dir, "recorded-output.txt")
 	if err := os.WriteFile(path, []byte(siftableOutput()), 0o600); err != nil {
@@ -229,6 +231,7 @@ func TestTheThreeStatesOfTheShellSiftCountedInBytes(t *testing.T) {
 	assumesTheRuleIsOutOfShadow(t)
 	chdirTemp(t)
 	stubRecordedJudgedReplies(t)
+	bindTypeSafe(t)
 	shell := siftedShell()
 	whole := len(shell.Stdout)
 
@@ -387,6 +390,7 @@ func TestWhatTheJudgedSiftSavesAndCostsOverEveryRecordedSession(t *testing.T) {
 	assumesTheRuleIsOutOfShadow(t)
 	chdirTemp(t)
 	stubRecordedJudgedReplies(t)
+	bindTypeSafe(t)
 
 	sifter, scorer, err := buildShellSift(siftFollowsTheTable, logHere(t))
 	if err != nil {
@@ -461,6 +465,7 @@ func TestEveryShellSiftDecisionIsWrittenToTheLedger(t *testing.T) {
 	assumesTheRuleIsOutOfShadow(t)
 	chdirTemp(t)
 	stubRecordedJudgedReplies(t)
+	bindTypeSafe(t)
 	sifter, scorer, err := buildShellSift(siftFollowsTheTable, logHere(t))
 	if err != nil {
 		t.Fatalf("buildShellSift: %v", err)

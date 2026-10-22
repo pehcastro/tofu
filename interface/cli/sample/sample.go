@@ -120,8 +120,8 @@ func accountsData(now time.Time) accounts {
 		Keys: []key{
 			{Role: "llm", Service: "Meta", Hint: "tofu login llm meta"},
 			{Role: "llm", Service: "OpenRouter", Hint: "tofu login llm openrouter"},
-			{Role: "classifier", Service: "TypeSafe", Key: widget.Mask("made-up-typesafe-000000003498"), Use: "jev's route, judges tool calls with jev-latest"},
-			{Role: "classifier", Service: "OpenRouter", Key: widget.Mask("made-up-openrouter-00000007711"), Use: "a classifier key, never sent with a prompt"},
+			{Role: "classifier", Service: "TypeSafe", Key: widget.Mask("made-up-typesafe-000000003498"), Use: "bound, judges tool calls with jev-latest"},
+			{Role: "classifier", Service: "OpenRouter", Key: widget.Mask("made-up-openrouter-00000007711"), Use: "unused, the classifier is typesafe/jev-latest"},
 			{Role: "search", Service: "Brave", Hint: "tofu login search brave"},
 		},
 	}

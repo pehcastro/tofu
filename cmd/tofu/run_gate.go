@@ -5,20 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
-	"time"
 
+	"tofu/internal/classifier"
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
-	"tofu/internal/konst"
 	"tofu/internal/llm/models"
 	"tofu/internal/sys"
-	"tofu/internal/transport"
 	"tofu/internal/turn"
 )
 
@@ -26,7 +22,7 @@ const oneCallAtATime = 1
 
 const (
 	runGatePoint       = "tool_gate@3"
-	judgeEndpointEnvar = "TOFU_JUDGE_ENDPOINT"
+	judgeEndpointEnvar = classifier.EndpointVariable
 )
 
 type toolGate struct {
@@ -119,50 +115,24 @@ func thresholdsInRange(r gate.Rule, set battery) error {
 	return nil
 }
 
-func newJevClient(concurrency int) (*jev.Client, error) {
-	return jevClientFrom(jev.ReadKeyring(), concurrency)
+func newJevClient() (*jev.Client, error) {
+	return jevClientFrom(jev.ReadKeyring(), oneCallAtATime)
 }
 
 func jevClientFrom(keys jev.Keyring, concurrency int) (*jev.Client, error) {
-	key, err := gateKeyFrom(keys)
-	if err != nil {
-		return nil, err
-	}
-	return jevClientOn(key, concurrency)
+	return classifier.Open(".", keys, concurrency)
 }
 
 func boundClassifier() (models.Model, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return models.Model{}, err
-	}
-	loaded, err := modelLibrary(dir)
-	var broken *models.BrokenLibrary
-	if err != nil && !errors.As(err, &broken) {
-		return models.Model{}, err
-	}
-	return loaded.Classifier()
-}
-
-func jevConfig(key string, concurrency int) typesafe.Config {
-	return typesafe.Config{
-		Key:      key,
-		Endpoint: os.Getenv(judgeEndpointEnvar),
-		Transport: transport.Config{
-			AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,
-			Retries:        konst.JudgeRetries,
-			Backoff:        time.Duration(konst.JudgeBackoffMillis) * time.Millisecond,
-			Concurrency:    concurrency,
-		},
-	}
+	return classifier.Bound(".", jev.ReadKeyring())
 }
 
 func jevClientOn(key string, concurrency int) (*jev.Client, error) {
-	wire, err := typesafe.New(jevConfig(key, concurrency))
+	model, err := boundClassifier()
 	if err != nil {
 		return nil, err
 	}
-	return jev.NewClient(jev.Config{Wire: wire})
+	return classifier.Route{Model: model, Key: key}.Client(concurrency)
 }
 
 func gateKey() (string, error) {
@@ -170,7 +140,8 @@ func gateKey() (string, error) {
 }
 
 func gateKeyFrom(keys jev.Keyring) (string, error) {
-	return keys.KeyFor(sys.CredentialFileName, jev.TypeSafeVariable)
+	route, err := classifier.Resolve(".", keys)
+	return route.Key, err
 }
 
 func (g *toolGate) Decide(ctx context.Context, request turn.GateRequest) (turn.GateDecision, error) {

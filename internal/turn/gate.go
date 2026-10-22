@@ -36,6 +36,7 @@ type GateRequest struct {
 	Asked  json.RawMessage
 	Call   string
 	Code   *subagent.InlineCode
+	Reason string
 }
 
 func (r GateRequest) written() json.RawMessage {

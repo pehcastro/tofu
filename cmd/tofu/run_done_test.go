@@ -58,6 +58,7 @@ func stubJev(t *testing.T, status int, body string) {
 	t.Cleanup(server.Close)
 	t.Setenv(judgeEndpointEnvar, server.URL)
 	t.Setenv(sys.TypeSafeKeyName, "stub-key-not-a-real-credential")
+	bindTypeSafe(t)
 }
 
 func claimedDoneWithNothing() turn.Row {

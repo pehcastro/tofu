@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"tofu/internal/classifier"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
 	"tofu/internal/sys"
@@ -93,7 +93,7 @@ func (m Managed) askJev(ref string, s subject) (string, string) {
 	if err != nil {
 		return "", err.Error()
 	}
-	client, err := typesafe.Judge()
+	client, err := classifier.Open(m.Store.Root, jev.ReadKeyring(), 1)
 	var decision jev.Decision
 	if err == nil {
 		decision, err = client.Ask(context.Background(), jev.Request{State: state, Questions: []jev.Question{request}})

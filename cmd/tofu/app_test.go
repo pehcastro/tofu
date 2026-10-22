@@ -149,8 +149,15 @@ func TestSetupAsksForBothLoginsAndTheSecondOneStoresTheKey(t *testing.T) {
 	if args := strings.Join(required[0].Choices[0].Run().Args[1:], " "); args != "login llm claude-sub" {
 		t.Fatalf("the claude choice runs %v, want login llm claude-sub", args)
 	}
-	if required[0].Choices[2].Key != sys.MetaMuseKeyName || len(required[1].Choices) != 1 || required[1].Choices[0].Key != sys.TypeSafeKeyName {
-		t.Fatalf("the key choices are %+v and %+v", required[0].Choices, required[1].Choices)
+	if required[0].Choices[2].Key != sys.MetaMuseKeyName {
+		t.Fatalf("the key choices are %+v", required[0].Choices)
+	}
+	var binds []string
+	for _, choice := range required[1].Choices {
+		binds = append(binds, strings.Join(choice.Run().Args[1:], " "))
+	}
+	if !slices.Equal(binds, []string{"models bind classifier openrouter/jev-latest", "models bind classifier typesafe/jev-latest"}) {
+		t.Fatalf("with nothing bound the classifier step offers %q, want a bind for every classifier in the library", binds)
 	}
 	t.Log("\n" + setupScreen(t, required))
 
@@ -261,6 +268,18 @@ func storeCredential(t *testing.T, provider cred.Provider) {
 func storeGateKey(t *testing.T, key string) {
 	t.Helper()
 	if err := sys.SaveKey(jev.TypeSafeVariable, key); err != nil {
+		t.Fatal(err)
+	}
+	bindTypeSafe(t)
+}
+
+func bindTypeSafe(t *testing.T) {
+	t.Helper()
+	home, err := sys.HomeConfigDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := models.BindRole(home, models.RoleClassifier, "typesafe/jev-latest"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -513,13 +532,6 @@ func TestAProviderThatCannotBeReadSaysSo(t *testing.T) {
 		t.Errorf("the anthropic row says %q, want it to start with %q", said, unreadableSource)
 	}
 	t.Log("\n" + settingsScreen(t, providers))
-}
-
-func TestGateOffNoteNamesTheLogin(t *testing.T) {
-	const want = "gate off: no tool call is judged until tofu login classifier typesafe stores the key"
-	if gateOffNote != want {
-		t.Errorf("gateOffNote %q, want %q", gateOffNote, want)
-	}
 }
 
 type appDriver struct {

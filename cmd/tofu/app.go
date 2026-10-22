@@ -24,6 +24,7 @@ import (
 	"tofu/interface/tui/paste"
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/shells"
+	"tofu/internal/classifier"
 	"tofu/internal/host"
 	"tofu/internal/judge/jev"
 	"tofu/internal/keymap"
@@ -45,9 +46,8 @@ import (
 
 const (
 	noTerminal       = "tofu: the app needs a terminal. with input redirected, use tofu run --dir <dir> <task>"
-	gateOffNote      = "gate off: no tool call is judged until tofu login classifier typesafe stores the key"
+	gateOffNote      = "gate off: no tool call is judged until tofu login classifier stores the key of the bound classifier"
 	noCredential     = "no subscription is signed in, so no model can answer"
-	noGateKey        = "there is no typesafe key, so jev judges no tool call"
 	modelStep        = "language model"
 	classifierStep   = "classifier · jev, required"
 	unreadableSource = "unreadable: "
@@ -124,7 +124,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch, he
 	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), Resumed: launch.resumed.hosted(), Detached: wiring.detached, Now: wiring.now})
 	notes := append([]string{launch.note}, troubles...)
 	if _, err := gateKeyFrom(held.keys()); err != nil {
-		notes = append(notes, gateOffNote)
+		notes = append(notes, gateOffSaid(err))
 	}
 	note := strings.Join(slices.DeleteFunc(notes, func(one string) bool { return one == "" }), noteSeparator)
 	*launch.release = func() {
@@ -427,17 +427,43 @@ func (h heldStore) startSteps() []startStep {
 	if wires := h.wires(); len(wires) > 0 {
 		model.done = wires[0].Provider + " · " + wires[0].Model
 	}
-	classifier := startStep{
-		label:   jevName,
-		step:    classifierStep,
-		what:    noGateKey,
-		command: loginHint(typeSafeName),
-		choices: []tui.Choice{{Label: "TypeSafe key", Key: sys.TypeSafeKeyName}},
+	return []startStep{model, classifierStepOf(h.keys())}
+}
+
+func classifierStepOf(keys jev.Keyring) startStep {
+	step := startStep{label: jevName, step: classifierStep}
+	route, err := classifier.Resolve(".", keys)
+	if jev.IsUnbound(err) {
+		step.what, step.command = err.Error(), "tofu models bind classifier <provider/model>"
+		library, _ := modelLibrary(".")
+		for _, model := range library.Models {
+			if model.Kind == models.KindClassifier && model.Use != models.UseExcluded {
+				step.choices = append(step.choices, tui.Choice{Label: "bind " + model.Slug(), Run: func() *exec.Cmd {
+					return exec.Command(os.Args[0], "models", "bind", string(models.RoleClassifier), model.Slug())
+				}})
+			}
+		}
+		return step
 	}
-	if key, err := gateKeyFrom(h.keys()); err == nil {
-		classifier.done = models.TypeSafe.Display() + " key " + widget.Mask(key)
+	provider := route.Model.Provider
+	if provider == "" {
+		step.what = err.Error()
+		return step
 	}
-	return []startStep{model, classifier}
+	step.what = "there is no " + string(provider) + " key, so jev judges no tool call"
+	step.command = commandFor("login", roleClassifier, string(provider))
+	step.choices = []tui.Choice{{Label: provider.Display() + " key", Key: classifier.KeyName(provider)}}
+	if err == nil {
+		step.done = provider.Display() + " key " + widget.Mask(route.Key)
+	}
+	return step
+}
+
+func gateOffSaid(err error) string {
+	if jev.IsUnbound(err) {
+		return err.Error()
+	}
+	return gateOffNote
 }
 
 func (h heldStore) startBlockers() []startStep {
@@ -504,15 +530,16 @@ func jevProvider(keys jev.Keyring) settings.Provider {
 		return settings.Provider{Name: jevName, Fix: unreadableSource + err.Error()}
 	}
 	row := settings.Provider{Name: jevName, Source: dir}
-	if key, err := gateKeyFrom(keys); err == nil {
+	key, keyErr := gateKeyFrom(keys)
+	if keyErr == nil {
 		row.Key = widget.Mask(key)
 	}
 	current, err := currentBuild(dir, "")
 	switch {
 	case err != nil:
 		row.Fix = unreadableSource + err.Error()
-	case row.Key == "":
-		row.Fix = gateOffNote
+	case keyErr != nil:
+		row.Fix = gateOffSaid(keyErr)
 	case current.Known:
 		row.State = current.Build
 	default:
@@ -803,6 +830,14 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 	var unusable unusableRule
 	if errors.As(gateErr, &unusable) {
 		return prepared, fmt.Errorf("no turn starts while the tool gate rule is unusable: %w", unusable)
+	}
+	if jev.IsUnbound(gateErr) {
+		sayEach, unbound := say, gateErr.Error()
+		say = func(note string) {
+			if !strings.HasSuffix(note, unbound) {
+				sayEach(note)
+			}
+		}
 	}
 	sifter, scorer, siftErr := shellSiftOn(opts.siftArm, places.Log, e.warm.keys.keyring())
 	if siftErr != nil {

@@ -47,7 +47,7 @@ func newTypedDoneReview() (typedDoneReview, error) {
 	if err != nil {
 		return typedDoneReview{}, err
 	}
-	client, err := newJevClient(oneCallAtATime)
+	client, err := newJevClient()
 	if err != nil {
 		return typedDoneReview{}, err
 	}

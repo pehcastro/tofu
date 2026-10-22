@@ -10,8 +10,9 @@ const (
 
   ✗ claude-sub  no subscription is signed in, so no model can answer
     → tofu login llm claude-sub
-  ✗ jev         there is no typesafe key, so jev judges no tool call
-    → tofu login classifier typesafe
+  ✗ jev         the gate is off because no classifier is bound: store its key
+    with tofu login classifier and pick it in Models
+    → tofu models bind classifier <provider/model>
 `
 
 	usageWithAKeyAndNothingSignedIn = `Usage                                                           ○ none signed in
@@ -101,6 +102,7 @@ func TestE2EUsageReadsTheKeyOfTheProjectAndTheQuotaHistoryOfTheHome(t *testing.T
 
 	recorded := newProject(t, "recorded")
 	writeFile(t, recorded.dir, ".env", "TYPESAFE_API_KEY=made-up-typesafe-thistestwroteit\n")
+	writeFile(t, recorded.dir, ".tofu/roles/classifier.yaml", "model: typesafe/jev-latest\n")
 	writeFile(t, recorded.home, ".tofu/quota/readings.jsonl", recordedQuotaReadings)
 	sameText(t, "a project carrying its own key",
 		recorded.run(t, exitOK, "usage"), usageWithAKeyAndNothingSignedIn)

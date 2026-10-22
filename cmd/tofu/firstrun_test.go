@@ -69,8 +69,8 @@ func TestACredentialWithoutAKeyLeavesOnlyTheKeyStep(t *testing.T) {
 	scratchProject(t)
 	storeCredential(t, cred.ClaudeSub)
 	frame := plainFrame(firstRunApp(t, 80, 24))
-	if !strings.Contains(frame, noGateKey) || !strings.Contains(frame, "TypeSafe key") {
-		t.Errorf("the key step is not drawn with its choices\n%s", frame)
+	if !strings.Contains(frame, "no classifier is bound") || !strings.Contains(frame, "bind typesafe/jev-latest") {
+		t.Errorf("the classifier step is not drawn with its choices\n%s", frame)
 	}
 	if strings.Contains(frame, noCredential) || !strings.Contains(frame, "✓ 1. "+modelStep+"   claude-sub") {
 		t.Errorf("the language model step is not drawn as done by claude-sub\n%s", frame)
@@ -84,7 +84,7 @@ func TestWithBothStoredNoSetupIsDrawnAndTheComposerHasFocus(t *testing.T) {
 	storeGateKey(t, gateKeyForTests)
 	app := firstRunApp(t, 80, 24)
 	frame := plainFrame(app)
-	for _, absent := range []string{noCredential, noGateKey, "run the fix"} {
+	for _, absent := range []string{noCredential, "jev judges no tool call", "no classifier is bound", "run the fix"} {
 		if strings.Contains(frame, absent) {
 			t.Errorf("setup is still drawn with everything stored: %q\n%s", absent, frame)
 		}
@@ -132,7 +132,7 @@ func TestALoginRunInAnotherTerminalMovesTheAppOnWithoutARestart(t *testing.T) {
 
 	frame := plainFrame(app)
 	t.Logf("the app noticed the logins %s after they were stored, with no restart", time.Since(began).Round(time.Millisecond))
-	for _, absent := range []string{noCredential, noGateKey} {
+	for _, absent := range []string{noCredential, "no classifier is bound"} {
 		if strings.Contains(frame, absent) {
 			t.Errorf("the app still asks for %q after the login ran elsewhere\n%s", absent, frame)
 		}
@@ -277,4 +277,5 @@ func jevStub(t *testing.T, status int, body string, seen *string) {
 	}))
 	t.Cleanup(server.Close)
 	t.Setenv(judgeEndpointEnvar, server.URL)
+	bindTypeSafe(t)
 }

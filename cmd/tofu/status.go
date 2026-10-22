@@ -9,8 +9,9 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/classifier"
 	"tofu/internal/host"
-	"tofu/internal/judge/jev/wire/typesafe"
+	"tofu/internal/judge/jev"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/quota"
@@ -55,20 +56,29 @@ type keyFacts struct {
 
 func (f keyFacts) hint() string { return commandFor("login", f.role, f.provider) }
 
-func jevKeyUse() string {
-	model, err := typesafe.Model()
-	if err != nil {
-		return "jev's route, the pin is unreadable: " + err.Error()
+func classifierKeyUse(bound models.Model, err error, provider models.Provider) string {
+	switch {
+	case jev.IsUnbound(err):
+		return "unused, no classifier is bound: pick one in Models"
+	case err != nil:
+		return "unused, the classifier is unreadable: " + err.Error()
+	case bound.Provider != provider:
+		return "unused, the classifier is " + bound.Slug()
 	}
-	return "jev's route, judges tool calls with " + model
+	model, err := classifier.Route{Model: bound}.Alias()
+	if err != nil {
+		return "bound, the pin is unreadable: " + err.Error()
+	}
+	return "bound, judges tool calls with " + model
 }
 
 func keyTable() []keyFacts {
+	bound, err := boundClassifier()
 	return []keyFacts{
 		{roleLLM, metaName, sys.MetaMuseKeyName, models.Meta.Display(), "serves the meta models"},
 		{roleLLM, openRouterName, sys.OpenRouterKeyName, models.OpenRouter.Display(), "serves the openrouter models on your own key"},
-		{roleClassifier, typeSafeName, sys.TypeSafeKeyName, models.TypeSafe.Display(), jevKeyUse()},
-		{roleClassifier, openRouterName, sys.OpenRouterClassifierKeyName, models.OpenRouter.Display(), "a classifier key, never sent with a prompt"},
+		{roleClassifier, typeSafeName, classifier.KeyName(models.TypeSafe), models.TypeSafe.Display(), classifierKeyUse(bound, err, models.TypeSafe)},
+		{roleClassifier, openRouterName, classifier.KeyName(models.OpenRouter), models.OpenRouter.Display(), classifierKeyUse(bound, err, models.OpenRouter)},
 		{roleSearch, braveName, sys.BraveSearchKeyName, braveDisplay, "backs the web search tool"},
 	}
 }

@@ -19,6 +19,7 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/interface/tui/keyfield"
+	"tofu/internal/classifier"
 	"tofu/internal/host"
 	"tofu/internal/judge/jev"
 	"tofu/internal/llm/cred"
@@ -472,7 +473,7 @@ func storeKey(ctx context.Context, stored keyStatus, key string) (loginReceipt, 
 	case metaName:
 		err = models.StoreMetaKey(ctx, key)
 	default:
-		err = reachesJev(ctx, key)
+		err = reachesJev(ctx, models.Provider(stored.Provider), key)
 	}
 	facts := keyFactsOf(stored.Role, stored.Provider)
 	if err != nil {
@@ -520,13 +521,13 @@ func promptKey(in io.Reader, prompts io.Writer, name, variable string) (string, 
 	return field.Value(), nil
 }
 
-func reachesJev(ctx context.Context, key string) error {
-	client, err := jevClientOn(key, oneCallAtATime)
+func reachesJev(ctx context.Context, provider models.Provider, key string) error {
+	client, err := classifier.Route{Model: models.Model{Provider: provider}, Key: key}.Client(oneCallAtATime)
 	if err != nil {
 		return err
 	}
 	_, err = client.Ask(ctx, jev.Request{
-		State: map[string]any{"check": "tofu login " + typeSafeName},
+		State: map[string]any{"check": "tofu login " + string(provider)},
 		Questions: []jev.Question{{
 			ID:           "reachable",
 			Kind:         jev.QuestionNoul,
@@ -539,7 +540,11 @@ func reachesJev(ctx context.Context, key string) error {
 }
 
 func locateGateKey(keys jev.Keyring) (jev.Located, error) {
-	return keys.LocateFor(sys.CredentialFileName, jev.TypeSafeVariable)
+	bound, err := classifier.Bound(".", keys)
+	if err != nil {
+		return jev.Located{}, err
+	}
+	return keys.LocateFor(sys.CredentialFileName, classifier.KeyName(bound.Provider))
 }
 
 func promptPaste(in io.Reader, prompts io.Writer) (string, error) {

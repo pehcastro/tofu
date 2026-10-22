@@ -358,7 +358,7 @@ func gateOffStates() []gateOffState {
 
 func TestEachGateOffStateGetsItsOwnLine(t *testing.T) {
 	for _, state := range gateOffStates() {
-		if note := gateOffNote(state.why); note != gateOffLine+" "+state.want {
+		if note := gateOffNote(state.why, ""); note != gateOffLine+" "+state.want {
 			t.Errorf("reason %d reads as %q, want the line ending %q", state.why, note, state.want)
 		}
 	}

@@ -325,8 +325,15 @@ func TestATurnCallsRulesCheckThroughTheToolInATreeThatIsNotThisRepository(t *tes
 
 func TestATurnCallsJudgeThroughTheToolAndTheMissingKeyIsAStatedRequirement(t *testing.T) {
 	standInForwardsToARealTofu(t)
-	t.Setenv("OPENROUTER_KEY", "")
+	t.Setenv("TYPESAFE_API_KEY", "")
 	root := t.TempDir()
+	roles := filepath.Join(root, ".tofu", "roles")
+	if err := os.MkdirAll(roles, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(roles, "classifier.yaml"), []byte("model: typesafe/jev-latest\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	model := &recordingModel{calls: []llm.ToolCall{
 		{ID: "c1", Name: "tofu_judge", Arguments: json.RawMessage(`{"state":"the tests pass and the task is done","battery":"stop_check@1"}`)},
@@ -340,7 +347,7 @@ func TestATurnCallsJudgeThroughTheToolAndTheMissingKeyIsAStatedRequirement(t *te
 	}
 	results := model.toolResults()
 	t.Logf("the model was sent: %s", strings.TrimSpace(results))
-	if !strings.Contains(results, "OPENROUTER_KEY") {
+	if !strings.Contains(results, "TYPESAFE_API_KEY") {
 		t.Fatalf("the result does not name what the verb needs: %q", results)
 	}
 	if strings.Contains(results, "unmarshal") {

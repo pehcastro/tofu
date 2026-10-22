@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	modelsFromTheBinaryAlone = `Models · 20 known                                                    ✓ 12 usable
+	modelsFromTheBinaryAlone = `Models · 21 known                                                    ✓ 13 usable
 
 claude-sub
   ✓ claude-sub/claude-haiku-4-5-20251001   allowed   200k
@@ -48,6 +48,7 @@ api key
   ⚠ meta/muse-spark-1.2-contributor  allowed  1.05M
   ✓ meta/muse-spark-1.3              allowed  1.05M
   ⚠ meta/muse-spark-1.3-contributor  allowed  1.05M
+  ✓ openrouter/jev-latest            allowed
   ✓ typesafe/jev-latest              allowed
   ⚠ Meta may train on what you send to this model
 
@@ -63,7 +64,7 @@ windows
   → tofu models reload
 `
 
-	modelsWithAProjectLayerAndAHomeRegistry = `Models · 20 known                                                    ✓ 13 usable
+	modelsWithAProjectLayerAndAHomeRegistry = `Models · 21 known                                                    ✓ 14 usable
 
 claude-sub
   ✓ claude-sub/claude-haiku-4-5-20251001   allowed
@@ -89,6 +90,7 @@ api key
   ⚠ meta/muse-spark-1.2-contributor  allowed  1.05M
   ✓ meta/muse-spark-1.3              allowed  1.05M
   ⚠ meta/muse-spark-1.3-contributor  allowed  1.05M
+  ✓ openrouter/jev-latest            allowed
   ✓ typesafe/jev-latest              allowed
   ⚠ Meta may train on what you send to this model
 
@@ -124,6 +126,7 @@ meta/muse-spark-1.2 allowed 1048576 library
 meta/muse-spark-1.2-contributor allowed 1048576 library
 meta/muse-spark-1.3 allowed 1048576 library
 meta/muse-spark-1.3-contributor allowed 1048576 library
+openrouter/jev-latest allowed 0 library
 typesafe/jev-latest allowed 0 library
 `
 
@@ -237,6 +240,7 @@ func stubbedHome(t *testing.T) {
 	t.Cleanup(typeSafe.Close)
 	t.Setenv(judgeEndpointEnvar, typeSafe.URL)
 	t.Setenv(sys.TypeSafeKeyName, "stub-key-not-a-real-credential")
+	bindTypeSafe(t)
 }
 
 func TestModelsReloadWithNpmDownPassesAndSaysTheVersionCheckWasSkipped(t *testing.T) {

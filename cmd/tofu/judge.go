@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/classifier"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
 	"tofu/internal/transport"
@@ -92,7 +92,11 @@ func judgeVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	jevRequest := jev.Request{State: input.State, Questions: set.Questions}
 
 	if opts.dryRun {
-		model, err := typesafe.Model()
+		bound, err := boundClassifier()
+		if err != nil {
+			return failed(o, err)
+		}
+		model, err := classifier.Route{Model: bound}.Alias()
 		if err != nil {
 			return failed(o, err)
 		}
@@ -103,11 +107,7 @@ func judgeVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		return protocol(o, exitOK, json.RawMessage(body), string(body)+"\n")
 	}
 
-	key, err := gateKey()
-	if err != nil {
-		return failed(o, err)
-	}
-	client, err := jevClientOn(key, oneCallAtATime)
+	client, err := newJevClient()
 	if err != nil {
 		return failed(o, err)
 	}
@@ -195,13 +195,21 @@ func failed(o verbOutput, err error) int {
 	switch {
 	case !errors.As(err, &refused):
 	case refused.Kind == transport.KindMissingCredential:
-		err = problemError{What: refused.Detail, Hint: loginHint(typeSafeName)}
+		err = problemError{What: refused.Detail, Hint: classifierLoginHint()}
 	case refused.Status == 0:
 	case refused.Kind == transport.KindAuth:
-		err = problemError{What: "jev refused the key (" + strconv.Itoa(refused.Status) + ")", Hint: loginHint(typeSafeName)}
+		err = problemError{What: "jev refused the key (" + strconv.Itoa(refused.Status) + ")", Hint: classifierLoginHint()}
 	default:
 		err = problemError{What: "jev refused the call (" + strconv.Itoa(refused.Status) + " " + refused.Kind.String() + ")"}
 	}
 	_ = o.fail(err)
 	return exitUsage
+}
+
+func classifierLoginHint() string {
+	bound, err := boundClassifier()
+	if err != nil {
+		return ""
+	}
+	return commandFor("login", roleClassifier, string(bound.Provider))
 }

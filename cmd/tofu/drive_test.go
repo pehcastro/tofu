@@ -628,7 +628,7 @@ func TestDrivenRequestsPrintEachMessageAndItsTextWithTheKeyMasked(t *testing.T) 
 		"requests text 2",
 	}, "\n"))
 	var out, errOut bytes.Buffer
-	if code := driveVerb([]string{script, "--cassette", deck, "--plain", "--timeout", "60s", "--width", "60"}, strings.NewReader(""), &out, &errOut); code != exitOK {
+	if code := driveVerb([]string{script, "--cassette", deck, "--plain", "--timeout", "60s", "--width", "72"}, strings.NewReader(""), &out, &errOut); code != exitOK {
 		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
 	}
 	printed := out.String()
@@ -648,8 +648,8 @@ func TestDrivenRequestsPrintEachMessageAndItsTextWithTheKeyMasked(t *testing.T) 
 		t.Errorf("the text form printed the key the prompt held:\n%s", printed)
 	}
 	for _, line := range strings.Split(printed, "\n") {
-		if strings.HasPrefix(line, "    ") && len([]rune(line)) > 60 {
-			t.Errorf("a text line runs past the 60 column screen: %q", line)
+		if strings.HasPrefix(line, "    ") && len([]rune(line)) > 72 {
+			t.Errorf("a text line runs past the 72 column screen: %q", line)
 		}
 	}
 	if requests := strings.Count(printed, "the orchestrator request 2:"); requests != 2 {

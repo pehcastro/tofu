@@ -27,13 +27,18 @@
       {
         "role": "llm",
         "provider": "openrouter",
-        "variable": "OPENROUTER_KEY"
+        "variable": "OPENROUTER_LLM_KEY"
       },
       {
         "role": "classifier",
         "provider": "typesafe",
         "variable": "TYPESAFE_API_KEY",
         "key": "····7Qx2"
+      },
+      {
+        "role": "classifier",
+        "provider": "openrouter",
+        "variable": "OPENROUTER_KEY"
       },
       {
         "role": "search",

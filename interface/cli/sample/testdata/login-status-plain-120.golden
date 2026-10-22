@@ -23,8 +23,8 @@ llm keys
   ○ OpenRouter  not set  → tofu login llm openrouter
 
 classifier keys
-  ✓ TypeSafe    ····3498  jev's route, judges tool calls with jev-latest
-  ✓ OpenRouter  ····7711  a classifier key, never sent with a prompt
+  ✓ TypeSafe    ····3498  bound, judges tool calls with jev-latest
+  ✓ OpenRouter  ····7711  unused, the classifier is typesafe/jev-latest
 
 search keys
   ○ Brave  not set  → tofu login search brave

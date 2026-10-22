@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"tofu/internal/classifier"
 	"tofu/internal/sys"
 )
 
@@ -112,6 +113,7 @@ func TestE2ETheCredentialGuardRefusesAPlantedFileWithNoUSERPROFILE(t *testing.T)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(plant) })
 	writeFile(t, plant, ".env", sys.TypeSafeKeyName+"=planted-not-real\n")
+	writeFile(t, plant, ".tofu/roles/classifier.yaml", "model: typesafe/jev-latest\n")
 	plantedEnv, err := filepath.Abs(filepath.Join(plant, ".env"))
 	if err != nil {
 		t.Fatal(err)
@@ -131,15 +133,17 @@ func TestE2ETheCredentialGuardRefusesAPlantedFileWithNoUSERPROFILE(t *testing.T)
 }
 
 func TestModelsLoadAndBindAClassifierWithNoHome(t *testing.T) {
-	t.Chdir(t.TempDir())
+	dir := t.TempDir()
+	writeFile(t, dir, ".tofu/roles/classifier.yaml", "model: typesafe/jev-latest\n")
+	t.Chdir(dir)
 	t.Setenv("USERPROFILE", "")
 	t.Setenv("HOME", "")
-	classifier, err := boundClassifier()
+	bound, err := boundClassifier()
 	if err != nil {
 		t.Fatalf("with no home the model library did not load: %v", err)
 	}
-	if classifier.Provider.KeyName() == "" {
-		t.Fatalf("with no home the classifier %q names no key", classifier.ID)
+	if classifier.KeyName(bound.Provider) == "" {
+		t.Fatalf("with no home the classifier %q names no key", bound.Slug())
 	}
 }
 

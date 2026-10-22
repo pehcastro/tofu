@@ -124,6 +124,7 @@ func gateScratch(t *testing.T, lockBuild string) (string, gate.Thresholds, gate.
 	t.Helper()
 	dir := chdirTemp(t)
 	t.Setenv(envVarName(), fakeSecret("gate"))
+	bindTypeSafe(t)
 	enableGateAsking(t)
 	declared := writeGateRuleFixture(t)
 	writeGateLedgerRowFixture(t)
@@ -185,6 +186,7 @@ func TestADecisionMadeNowCarriesTheFingerprintOfTheCallItJudged(t *testing.T) {
 func TestTheGateReadsTheRuleInTheBinaryWhenTheProjectHasNoLibrary(t *testing.T) {
 	dir := chdirTemp(t)
 	t.Setenv(envVarName(), fakeSecret("gate"))
+	bindTypeSafe(t)
 	shipped, err := gate.LoadFS(library.Files(), runGatePoint)
 	if err != nil {
 		t.Fatalf("gate.LoadFS: %v", err)

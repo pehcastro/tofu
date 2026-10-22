@@ -23,8 +23,8 @@
   [38;2;127;132;147m○[m OpenRouter  not set  [38;2;143;183;204m→ tofu login llm openrouter[m
 
 [1mclassifier keys[m
-  [38;2;64;210;148m✓[m TypeSafe    ····3498  [38;2;127;132;147mjev's route, judges tool calls with jev-latest[m
-  [38;2;64;210;148m✓[m OpenRouter  ····7711  [38;2;127;132;147ma classifier key, never sent with a prompt[m
+  [38;2;64;210;148m✓[m TypeSafe    ····3498  [38;2;127;132;147mbound, judges tool calls with jev-latest[m
+  [38;2;64;210;148m✓[m OpenRouter  ····7711  [38;2;127;132;147munused, the classifier is typesafe/jev-latest[m
 
 [1msearch keys[m
   [38;2;127;132;147m○[m Brave  not set  [38;2;143;183;204m→ tofu login search brave[m

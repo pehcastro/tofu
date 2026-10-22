@@ -57,6 +57,9 @@ type rowLedger struct {
 
 func openRowLedger(log string) (rowLedger, error) {
 	classifier, err := boundClassifier()
+	if jev.IsUnbound(err) {
+		err = nil
+	}
 	return rowLedger{writer: ledger.NewWriter(log), classifier: classifier}, err
 }
 

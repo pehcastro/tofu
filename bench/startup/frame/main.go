@@ -93,6 +93,11 @@ func login(exe, home string, env []string) error {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("mock login in %s: %v: %s", home, err, out)
 	}
+	bind := exec.Command(exe, "models", "bind", "classifier", "typesafe/jev-latest")
+	bind.Env = env
+	if out, err := bind.CombinedOutput(); err != nil {
+		return fmt.Errorf("binding the classifier in %s: %v: %s", home, err, out)
+	}
 	return nil
 }
 

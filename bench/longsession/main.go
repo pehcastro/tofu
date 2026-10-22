@@ -147,6 +147,9 @@ func seed(args []string) error {
 	if err := tofu(*exe, *dir, env, mockLoginCode+"\n", "login", "llm", "claude-sub", "--paste"); err != nil {
 		return err
 	}
+	if err := tofu(*exe, *dir, env, "", "models", "bind", "classifier", "typesafe/jev-latest"); err != nil {
+		return err
+	}
 	if err := tofu(*exe, *dir, env, "", "settings", "set", "subAgentsPerTurn", strconv.Itoa(*batch)); err != nil {
 		return err
 	}

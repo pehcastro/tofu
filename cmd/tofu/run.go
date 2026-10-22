@@ -1491,7 +1491,7 @@ func browserJudge(dir string) (jevloop.Jev, error) {
 	if err != nil {
 		return jevloop.Jev{}, err
 	}
-	client, err := newJevClient(oneCallAtATime)
+	client, err := newJevClient()
 	if err != nil {
 		return jevloop.Jev{}, err
 	}

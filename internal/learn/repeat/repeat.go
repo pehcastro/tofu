@@ -10,8 +10,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"tofu/internal/classifier"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
 	"tofu/library/questions"
@@ -98,7 +98,7 @@ func New(project, log string) (*Judge, error) {
 	if thresholds.Kept, err = thresholdIn(questions.Files(), keptName+"_at:"); err != nil {
 		return nil, err
 	}
-	client, err := typesafe.Judge()
+	client, err := classifier.Open(project, jev.ReadKeyring(), 1)
 	if err != nil {
 		return nil, err
 	}

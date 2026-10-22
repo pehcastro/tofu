@@ -64,5 +64,10 @@ func login(tofu string, env []string) error {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("mock login: %v: %s", err, out)
 	}
+	bind := exec.Command(tofu, "models", "bind", "classifier", "typesafe/jev-latest")
+	bind.Env = env
+	if out, err := bind.CombinedOutput(); err != nil {
+		return fmt.Errorf("binding the classifier: %v: %s", err, out)
+	}
 	return nil
 }

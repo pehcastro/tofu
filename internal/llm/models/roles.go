@@ -11,7 +11,6 @@ const (
 	rolesDir           = "roles"
 	legacyTurnRole     = "turn"
 	legacySubAgentRole = "child"
-	typeSafeClassifier = string(TypeSafe) + "/jev-latest"
 	roleFileNames      = "a role file is orchestrator.yaml, classifier.yaml or sub-agent.yaml"
 )
 
@@ -70,7 +69,7 @@ func (r RoleID) Unbound() string {
 	case RoleOrchestrator:
 		return "nothing is bound, so it runs on the subscription default"
 	case RoleClassifier:
-		return "nothing is bound, so it runs " + typeSafeClassifier + " on the TypeSafe key"
+		return "nothing is bound, so the gate is off and no call is judged"
 	case RoleSubAgent:
 		return "nothing is bound, so it runs on the orchestrator's model"
 	}
@@ -84,13 +83,6 @@ func (c Library) Bound(id RoleID) (Model, bool) {
 		}
 	}
 	return Model{}, false
-}
-
-func (c Library) Classifier() (Model, error) {
-	if model, bound := c.Bound(RoleClassifier); bound {
-		return model, nil
-	}
-	return c.Select(typeSafeClassifier)
 }
 
 type Role struct {
@@ -168,19 +160,34 @@ func buildRole(name string, from *sheet, library Library) (Role, *Broken) {
 	if slug == "" {
 		return Role{}, &Broken{File: from.file, Field: "model", Why: "a role binds one model, written provider/name"}
 	}
-	model, err := library.Select(slug)
+	model, err := library.Fits(id, slug)
 	if err != nil {
 		return Role{}, &Broken{File: from.file, Field: "model", Why: err.Error()}
 	}
-	if model.Kind != id.Takes() {
-		return Role{}, &Broken{File: from.file, Field: "model", Why: "the " + string(id) + " role runs a " + string(id.Takes()) + " model, and " + slug + " is a " + string(model.Kind)}
-	}
 	return Role{ID: id, Model: model, File: from.file}, nil
+}
+
+func (c Library) Fits(id RoleID, slug string) (Model, error) {
+	if !id.valid() {
+		return Model{}, errors.New(roleFileNames + ", not " + string(id) + ".yaml")
+	}
+	model, err := c.Select(slug)
+	if err != nil {
+		return Model{}, err
+	}
+	if model.Kind != id.Takes() {
+		return Model{}, errors.New("the " + string(id) + " role runs a " + string(id.Takes()) + " model, and " + slug + " is a " + string(model.Kind))
+	}
+	return model, nil
+}
+
+func RoleFile(layerDir string, role RoleID) string {
+	return filepath.Join(layerDir, rolesDir, string(role)+".yaml")
 }
 
 func BindRole(layerDir string, role RoleID, slug string) error {
 	if !role.valid() {
 		return errors.New(roleFileNames + ", not " + string(role) + ".yaml")
 	}
-	return sys.WriteFile(filepath.Join(layerDir, rolesDir, string(role)+".yaml"), []byte("model: "+slug+"\n"), 0o644)
+	return sys.WriteFile(RoleFile(layerDir, role), []byte("model: "+slug+"\n"), 0o644)
 }

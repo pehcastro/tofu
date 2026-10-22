@@ -92,7 +92,7 @@ func verbSpecs() []verbSpec {
 			words: []string{"judge"},
 			about: "asks a typed question battery about a state and prints, for every question, the answer with its distribution, and the verdict the policy reached. " +
 				"use it to get a calibrated answer about the state of the work rather than guessing at one in prose",
-			needs:  "it needs the typesafe key, stored by tofu login classifier typesafe, or set as TYPESAFE_API_KEY in the environment or in a .env file at the root of the working tree; without it the verb exits 2 and says so",
+			needs:  "it needs a classifier bound in Models and that classifier's key, stored by tofu login classifier or set in the environment or in a .env file at the root of the working tree; without either the verb exits 2 and says so",
 			params: []verbParam{verbParamState, verbParamBattery},
 		},
 		{

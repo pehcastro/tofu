@@ -17,8 +17,9 @@ const (
 	doctorBodyWithNoKeyAndNoProjectRule = `
   ✗ claude-sub  no subscription is signed in, so no model can answer
     → tofu login llm claude-sub
-  ✗ jev         there is no typesafe key, so jev judges no tool call
-    → tofu login classifier typesafe
+  ✗ jev         the gate is off because no classifier is bound: store its key
+    with tofu login classifier and pick it in Models
+    → tofu models bind classifier <provider/model>
 
 access
   ✓ anthropic   subscription
@@ -32,8 +33,8 @@ rules
   ✓ library       binary · 9 points
   ○ 8 points      shadow · thresholds from the rule
     gate tool_gate@3
-  ✗ shell_sift@1  unusable · jev.Key: missing_credential: TYPESAFE_API_KEY is
-    not set and .env does not exist
+  ✗ shell_sift@1  unusable · the gate is off because no classifier is bound:
+    store its key with tofu login classifier and pick it in Models
 
 state
   calibration  none
@@ -129,6 +130,7 @@ func TestE2EDoctorReadsTheKeyAndTheRuleOfTheProjectItRunsIn(t *testing.T) {
 		if step.env != "" {
 			writeFile(t, p.dir, ".env", step.env)
 			writeFile(t, p.dir, ".tofu/library/general/rules/tool_gate@3.yaml", step.rule)
+			writeFile(t, p.dir, ".tofu/roles/classifier.yaml", "model: typesafe/jev-latest\n")
 		}
 		title, body, _ := strings.Cut(p.run(t, exitVerdict, "doctor"), "\n")
 		if !titleOf.MatchString(title) {
@@ -155,12 +157,15 @@ func TestE2EDoctorAndARunInTheSameHomeAgreeOnWhetherTheShellSiftCuts(t *testing.
 		row  string
 		code int
 	}{
-		{"a fresh home with no key", nil, "  ✗ shell_sift@1  unusable · jev.Key: missing_credential: TYPESAFE_API_KEY is", exitUsage},
+		{"a fresh home with no key", nil, "  ✗ shell_sift@1  unusable · the gate is off because no classifier is bound:", exitUsage},
 		{"a fresh home with a key and a recorded jev", []string{"TYPESAFE_API_KEY=stub-key-not-a-real-credential", judgeEndpointEnvar + "=" + os.Getenv(judgeEndpointEnvar)},
 			"  ● shell_sift@1  enforced · thresholds from the rule\n", exitOK},
 	} {
 		p := newProject(t, "sift")
 		writeFile(t, p.dir, ".tofu/tools/shell/proxy.yaml", "use: off\n")
+		if step.env != nil {
+			writeFile(t, p.dir, ".tofu/roles/classifier.yaml", "model: typesafe/jev-latest\n")
+		}
 		writeFile(t, p.dir, "long.txt", siftableOutput())
 		writeFile(t, p.home, "deck.jsonl", `{"text":"reading it","tools":[{"name":"bash","args":{"command":"cat long.txt"}}]}`+"\n"+`{"text":"done"}`+"\n")
 		env := append([]string{"USERPROFILE=" + p.home, "HOME=" + p.home, "TEMP=" + p.home, "TMP=" + p.home, "SystemRoot=" + os.Getenv("SystemRoot"), "PATH=" + os.Getenv("PATH")}, step.env...)
@@ -239,7 +244,7 @@ func TestE2EDoctorJSONIsOneEnvelopeThatCarriesTheBlockersAsProblems(t *testing.T
 	oneEnvelope(t, newProject(t, "doctor").run(t, exitVerdict, "doctor", "--json"), &envelope)
 	want := []cli.Problem{
 		{What: "claude-sub: no subscription is signed in, so no model can answer", Hint: "tofu login llm claude-sub"},
-		{What: "jev: there is no typesafe key, so jev judges no tool call", Hint: "tofu login classifier typesafe"},
+		{What: "jev: the gate is off because no classifier is bound: store its key with tofu login classifier and pick it in Models", Hint: "tofu models bind classifier <provider/model>"},
 	}
 	if envelope.Tofu != konst.Version || envelope.Verb != "doctor" || envelope.OK || envelope.Data.Verdict != doctorNotReady ||
 		len(envelope.Problems) != len(want) || envelope.Problems[0] != want[0] || envelope.Problems[1] != want[1] || len(envelope.Data.Rules) != 9 {

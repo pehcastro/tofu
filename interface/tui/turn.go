@@ -30,10 +30,10 @@ import (
 
 const (
 	gateOffLine        = "the gate is off, so no call on this session is judged."
-	gateOffNoKey       = "run tofu login classifier typesafe and the next session is judged."
-	gateOffKeyUnnamed  = "the project .env carries no TYPESAFE_API_KEY line: run tofu login classifier typesafe and the next session is judged."
-	gateOffKeyUnread   = "the project .env file that should carry TYPESAFE_API_KEY could not be read."
-	gateOffStoreUnread = "the credential store that holds the typesafe key could not be read."
+	gateOffNoKey       = "store the bound classifier's key with tofu login classifier and the next session is judged."
+	gateOffKeyUnnamed  = "the project .env carries no line for the bound classifier's key: store it with tofu login classifier and the next session is judged."
+	gateOffKeyUnread   = "the project .env file that should carry the bound classifier's key could not be read."
+	gateOffStoreUnread = "the credential store that holds the bound classifier's key could not be read."
 	gateOffUnexplained = "tofu could not open the judge."
 	gateOffHead        = "gate off"
 	stoppingNote       = "stopping the turn"
@@ -56,7 +56,7 @@ const (
 	unreadJoin         = "\n\n"
 )
 
-func gateOffNote(why jev.Why) string {
+func gateOffNote(why jev.Why, said string) string {
 	switch why {
 	case jev.WhyNoFile:
 		return gateOffLine + " " + gateOffNoKey
@@ -68,6 +68,8 @@ func gateOffNote(why jev.Why) string {
 		return gateOffLine + " " + gateOffStoreUnread
 	case jev.WhyUnexplained:
 		return gateOffLine + " " + gateOffUnexplained
+	case jev.WhyUnbound:
+		return said + "."
 	}
 	panic("tui: unknown gate reason")
 }
@@ -595,7 +597,7 @@ func (a *App) absorb(event Event) {
 			id := a.shortOf(full)
 			a.record(feed.Event{ID: id, FullID: full, Actor: orchestrator, Kind: feed.KindNote, State: feed.StateComplete, Title: gateOffHead, Body: event.Text, At: at})
 			a.happenedAtTurn = len(a.happened)
-			a.view.Append(session.Entry{Kind: session.Note, ID: id, Body: gateOffNote(event.GateWhy)})
+			a.view.Append(session.Entry{Kind: session.Note, ID: id, Body: gateOffNote(event.GateWhy, event.Text)})
 		}
 	case EventContext:
 		a.status.Context = event.Context

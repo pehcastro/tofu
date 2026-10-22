@@ -9,7 +9,7 @@
     Context       15      Spacing across lists and panels                                           
     Files         03                                                                                
     Shell         05     Status bar                                     esc           subtle  ▾     
-    Turn          16     Context, quotas, and runtime counters                                      
+    Turn          17     Context, quotas, and runtime counters                                      
     Projects      04                                                                                
     Browser       08       compact                                                  detailed  ▾     
                                                                                                     
@@ -39,7 +39,7 @@
     Context       15      Spacing across lists and panels                                           
     Files         03                                                                                
     Shell         05     Status bar                                     esc           subtle  ▾     
-    Turn          16     Context, quotas, and runtime counters                                      
+    Turn          17     Context, quotas, and runtime counters                                      
     Projects      04                                                                                
     Browser       08       compact                                                    hidden  ▾     
                                                                                                     
@@ -69,7 +69,7 @@
     Context       15      Spacing across lists and panels                                           
     Files         03                                                                                
     Shell         05      Animations                                                  subtle  ▾     
-    Turn          16      Motion for conversational states                                          
+    Turn          17      Motion for conversational states                                          
     Projects      04                                                                                
     Browser       08    › Status bar                                                 compact  ▾     
                           Context, quotas, and runtime counters                                     

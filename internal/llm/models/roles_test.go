@@ -110,19 +110,20 @@ func TestTheClassifierRoleBindsOnlyAClassifierModel(t *testing.T) {
 	}
 }
 
-func TestTheUnboundClassifierIsTypeSafe(t *testing.T) {
-	if model, err := loadWithLayer(t, t.TempDir()).Classifier(); err != nil || model.Slug() != "typesafe/jev-latest" {
-		t.Errorf("the classifier is %q (%v), want typesafe/jev-latest", model.Slug(), err)
+func TestNothingBoundRunsNoClassifierAndEitherRouteBinds(t *testing.T) {
+	if model, bound := loadWithLayer(t, t.TempDir()).Bound(RoleClassifier); bound {
+		t.Errorf("nothing was bound and the classifier is %q", model.Slug())
 	}
-	if said := RoleClassifier.Unbound(); strings.Contains(said, "openrouter") || !strings.Contains(said, "typesafe/jev-latest") {
-		t.Errorf("the unbound classifier says %q", said)
+	if said := RoleClassifier.Unbound(); strings.Contains(said, "typesafe") || strings.Contains(said, "openrouter") {
+		t.Errorf("the unbound classifier names a route: %q", said)
 	}
-	wrong := t.TempDir()
-	if err := BindRole(wrong, RoleClassifier, "openrouter/jev-latest"); err != nil {
-		t.Fatal(err)
-	}
-	shipped := Layer{Name: "library", Origin: "library", FS: os.DirFS("../../../library")}
-	if _, err := Load([]Layer{shipped, sys.DirLayer("project", wrong)}); err == nil {
-		t.Fatal("a classifier bound to openrouter/jev-latest loaded, and jev is reached through typesafe only")
+	for _, slug := range []string{"openrouter/jev-latest", "typesafe/jev-latest"} {
+		dir := t.TempDir()
+		if err := BindRole(dir, RoleClassifier, slug); err != nil {
+			t.Fatal(err)
+		}
+		if model, bound := loadWithLayer(t, dir).Bound(RoleClassifier); !bound || model.Slug() != slug {
+			t.Errorf("bound to %s, the classifier is %q", slug, model.Slug())
+		}
 	}
 }

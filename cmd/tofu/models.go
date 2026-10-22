@@ -15,10 +15,10 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/classifier"
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/konst"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	modelsUsage      = "tofu models [reload] [--json]"
+	modelsUsage      = "tofu models [reload] [--json], or tofu models bind <orchestrator|classifier|sub-agent> <provider/model> [--json]"
 	registryFileName = "model-windows.json"
 	registryDirMode  = 0o755
 	shippedLayer     = "library"
@@ -110,7 +110,36 @@ func verbFailed(out, errOut io.Writer, verb string, asJSON bool, err error) int 
 	return exitVerdict
 }
 
+func bindVerb(args []string, out, errOut io.Writer) int {
+	o := verbOutput{verb: "models bind", usageLine: modelsUsage, asJSON: jsonAsked(args), out: out, errOut: errOut}
+	args = slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return arg == jsonFlag })
+	if len(args) != 2 {
+		return o.usage(errors.New("models bind takes a role and a model written provider/name"))
+	}
+	role, slug := models.RoleID(args[0]), args[1]
+	library, err := modelLibrary("")
+	var broken *models.BrokenLibrary
+	if err != nil && !errors.As(err, &broken) {
+		return o.fail(err)
+	}
+	if _, err := library.Fits(role, slug); err != nil {
+		return o.fail(err)
+	}
+	home, err := sys.HomeConfigDir()
+	if err != nil {
+		return o.fail(err)
+	}
+	if err := models.BindRole(home, role, slug); err != nil {
+		return o.fail(err)
+	}
+	file := models.RoleFile(home, role)
+	return o.receipt(writeReceipt{Changes: []fileChange{{Change: changeChanged, What: string(role) + " now runs " + slug, File: file}}, Undo: "delete " + file})
+}
+
 func modelsVerb(args []string, out, errOut io.Writer) int {
+	if len(args) > 0 && args[0] == "bind" {
+		return bindVerb(args[1:], out, errOut)
+	}
 	reload, asJSON := false, jsonAsked(args)
 	for _, arg := range args {
 		switch arg {
@@ -346,9 +375,12 @@ const (
 	jevPinRaised
 )
 
-func checkJevPin(ctx context.Context, keys jev.Keyring, pinning jevPinning) jev.PinCheck {
-	key, _ := gateKeyFrom(keys)
-	check, newest := typesafe.CheckPin(ctx, jevConfig(key, oneCallAtATime))
+func checkJevPin(ctx context.Context, keys jev.Keyring, listing *transport.Client, pinning jevPinning) jev.PinCheck {
+	route, err := classifier.Resolve(".", keys)
+	if route.Model.Provider == "" {
+		return jev.PinCheck{Skipped: "the pin stays", Error: err.Error()}
+	}
+	check, newest := route.CheckPin(ctx, listing)
 	switch pinning {
 	case jevPinChecked:
 		return check
@@ -376,7 +408,7 @@ func checkJevPin(ctx context.Context, keys jev.Keyring, pinning jevPinning) jev.
 		switch {
 		case err != nil:
 			check.Shadowed = append(check.Shadowed, err.Error())
-		case !typesafe.Serves(newest, lock.Build):
+		case !route.Serves(newest, lock.Build):
 			check.Shadowed = append(check.Shadowed, fmt.Sprintf("%s@%d runs in shadow until %s names a %s build, it names %s", lock.Rule, lock.RuleVersion, path, newest.Model, lock.Build))
 		}
 	}
@@ -392,7 +424,7 @@ func reloadSignedIn(ctx context.Context, held heldStore, pinning jevPinning) (mo
 	if err != nil {
 		return modelReload{}, err
 	}
-	checked, pinned := raiseVersions(ctx, client), checkJevPin(ctx, held.keys(), pinning)
+	checked, pinned := raiseVersions(ctx, client), checkJevPin(ctx, held.keys(), client, pinning)
 	var accounts []models.Account
 	var settled []reloadSource
 	versions, _ := subFingerprint(".")
