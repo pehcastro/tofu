@@ -24,19 +24,42 @@ func pipeOut(report safe.Report, sink io.Writer, from io.Reader) {
 	}
 }
 
+type repaintState int
+
+const (
+	noRepaint repaintState = iota
+	repaintDue
+	repainting
+)
+
 type screenText struct {
-	out    io.Writer
-	held   []byte
-	column int
-	width  int
+	out         io.Writer
+	held        []byte
+	column      int
+	width       int
+	repaint     repaintState
+	repaintLeft int
+}
+
+func (s *screenText) expectRepaint(size Size) {
+	s.repaint, s.repaintLeft = repaintDue, size.rows*(size.cols+1)
 }
 
 func (s *screenText) Write(p []byte) (int, error) {
 	data := slices.Concat(s.held, p)
-	var text bytes.Buffer
+	var text, repainted bytes.Buffer
 	at := 0
 	for at < len(data) {
-		size := s.step(data[at:], &text)
+		into := &text
+		if s.repaint == repainting {
+			into = &repainted
+		}
+		droppedBefore := repainted.Len()
+		size := s.step(data[at:], into)
+		s.repaintLeft -= repainted.Len() - droppedBefore
+		if s.repaint == repainting && s.repaintLeft <= 0 {
+			s.repaint = noRepaint
+		}
 		if size == 0 {
 			break
 		}
@@ -50,6 +73,9 @@ func (s *screenText) Write(p []byte) (int, error) {
 }
 
 func (s *screenText) step(rest []byte, text *bytes.Buffer) int {
+	if s.repaint == repaintDue && rest[0] != '\x1b' {
+		s.repaint = noRepaint
+	}
 	switch rest[0] {
 	case '\x1b':
 		return s.escape(rest, text)
@@ -94,6 +120,12 @@ func (s *screenText) escape(rest []byte, text *bytes.Buffer) int {
 			return 0
 		}
 		end += 2
+		switch cursor := string(rest[2 : end+1]); {
+		case s.repaint == repaintDue && (cursor == "25l" || cursor == "?25l"):
+			s.repaint = repainting
+		case s.repaint == repainting && cursor == "?25h":
+			s.repaint = noRepaint
+		}
 		if rest[end] == 'C' {
 			forward, err := strconv.Atoi(string(rest[2:end]))
 			if err != nil {

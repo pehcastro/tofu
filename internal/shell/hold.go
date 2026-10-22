@@ -82,15 +82,16 @@ func NewSize(cols, rows int) (Size, error) {
 }
 
 type terminal struct {
-	mu     sync.Mutex
-	typing sync.Mutex
-	device device
-	screen *screenText
-	raw    []byte
-	base   int64
-	cols   int
-	ended  bool
-	wrote  chan<- struct{}
+	mu      sync.Mutex
+	typing  sync.Mutex
+	device  device
+	screen  *screenText
+	raw     []byte
+	base    int64
+	size    Size
+	resized bool
+	ended   bool
+	wrote   chan<- struct{}
 }
 
 func readerFor(out io.Writer, typed bool, d device) (io.Writer, *terminal) {
@@ -108,7 +109,11 @@ func (t *terminal) Write(p []byte) (int, error) {
 	if over := len(t.raw) - konst.ShellRawRingBytes; over > 0 {
 		t.raw, t.base = t.raw[over:], t.base+int64(over)
 	}
-	t.screen.width = t.cols
+	t.screen.width = t.size.cols
+	if t.resized && t.screen.repaint != repainting {
+		t.screen.expectRepaint(t.size)
+		t.resized = false
+	}
 	wrote := t.wrote
 	t.mu.Unlock()
 	n, err := t.screen.Write(p)
@@ -141,7 +146,7 @@ func (t *terminal) resize(size Size) error {
 	if err := t.device.resize(size); err != nil {
 		return err
 	}
-	t.cols = size.cols
+	t.size, t.resized = size, true
 	return nil
 }
 

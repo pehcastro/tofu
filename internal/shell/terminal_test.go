@@ -57,6 +57,35 @@ func TestTerminalTextFromTheConsole(t *testing.T) {
 	}
 }
 
+func TestTerminalTextLeavesOutTheRepaintAResizeCauses(t *testing.T) {
+	repaint := "\x1b[25l\x1b[H\x1b[K\x1b[32m\r\nme@host \x1b[33m/project\x1b[K\x1b[m\r\n$ echo typed\x1b[K\r\ntyped\x1b[K\r\n\x1b[K\r\n$\x1b[K\r\n\x1b[K\r\n\x1b[K\x1b[5;3H\x1b[?25h"
+	for name, run := range map[string]struct {
+		resized      Size
+		stream, want string
+	}{
+		"the repaint after a resize":                  {resized: Size{cols: 40, rows: 10}, stream: repaint + "\r$\x1b[K\x1b[1C" + "ls\r\nfile\r\n", want: "\r$ ls\nfile\n"},
+		"a frame nobody resized for":                  {stream: "\x1b[?25l\x1b[Hfull screen\x1b[?25h\r\n", want: "full screen\n"},
+		"text first, so the resize drew no frame":     {resized: Size{cols: 40, rows: 10}, stream: "\r$ \x1b[?25l\x1b[Hlater\x1b[?25h", want: "\r$ later"},
+		"a frame that never shows the cursor, 4 by 2": {resized: Size{cols: 4, rows: 2}, stream: "\x1b[?25l\x1b[Habcd\r\nefgh\r\nafter\r\n", want: "after\n"},
+	} {
+		arm := func(screen *screenText) *screenText {
+			if run.resized != (Size{}) {
+				screen.expectRepaint(run.resized)
+			}
+			return screen
+		}
+		whole, split := &bytes.Buffer{}, &bytes.Buffer{}
+		_, _ = arm(&screenText{out: whole}).Write([]byte(run.stream))
+		screen := arm(&screenText{out: split})
+		for i := range len(run.stream) {
+			_, _ = screen.Write([]byte{run.stream[i]})
+		}
+		if whole.String() != run.want || split.String() != run.want {
+			t.Errorf("%s: in one read %q, one byte a read %q, want %q", name, whole.String(), split.String(), run.want)
+		}
+	}
+}
+
 func onATerminalHost(t *testing.T) {
 	t.Helper()
 	if runtime.GOOS != "windows" && runtime.GOOS != "linux" {
