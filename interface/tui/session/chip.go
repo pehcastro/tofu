@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -61,13 +62,18 @@ func (m *Model) Attached(outcome paste.Outcome) {
 	}
 	held := m.pending[at]
 	m.pending = slices.Delete(m.pending, at, at+1)
+	kept := strings.Contains(m.composer.Value(), held.token)
 	switch outcome.State {
 	case paste.Ready:
-		token := host.ImageToken(outcome.Index)
-		m.replaceToken(held.token, token)
-		m.chips = append(m.chips, Chip{Kind: ImageChip, Name: outcome.Name, Format: outcome.Format(), Bytes: outcome.Bytes, Token: token})
+		if kept {
+			token := host.ImageToken(outcome.Index)
+			m.replaceToken(held.token, token)
+			m.chips = append(m.chips, Chip{Kind: ImageChip, Name: outcome.Name, Format: outcome.Format(), Bytes: outcome.Bytes, Token: token})
+		}
 	case paste.Textual:
-		m.replaceToken(held.token, m.textOrChip(outcome.Text))
+		if kept {
+			m.replaceToken(held.token, m.textOrChip(outcome.Text))
+		}
 	case paste.Failed:
 		m.replaceToken(held.token, "")
 		m.attached = append(m.attached, outcome)
@@ -101,7 +107,78 @@ func Expand(task string, chips []Chip) string {
 }
 
 func (m *Model) replaceToken(token, replacement string) {
-	m.composer.SetValue(strings.Replace(m.composer.Value(), token, replacement, 1))
+	text, at := m.composer.Value(), m.caret()
+	start := strings.Index(text, token)
+	if start < 0 {
+		return
+	}
+	end := start + len(token)
+	if at <= start {
+		m.setDraft(text[:at], text[at:start]+replacement+text[end:])
+		return
+	}
+	at = max(at, end)
+	m.setDraft(text[:start]+replacement+text[end:at], text[at:])
+}
+
+func (m *Model) blocks() []string {
+	tokens := make([]string, 0, len(m.chips)+len(m.pending))
+	for _, chip := range m.chips {
+		tokens = append(tokens, chip.Token)
+	}
+	for _, row := range m.pending {
+		tokens = append(tokens, row.token)
+	}
+	return tokens
+}
+
+func spans(text string, tokens []string) [][2]int {
+	var found [][2]int
+	for _, token := range tokens {
+		for from := 0; ; {
+			at := strings.Index(text[from:], token)
+			if at < 0 {
+				break
+			}
+			from += at + len(token)
+			found = append(found, [2]int{from - len(token), from})
+		}
+	}
+	return found
+}
+
+func (m *Model) deleteWhole(before string) {
+	after, at := m.composer.Value(), m.caret()
+	cut := len(before) - len(after)
+	if cut <= 0 || before[:at] != after[:at] || before[at+cut:] != after[at:] {
+		return
+	}
+	low, high := at, at+cut
+	for _, span := range spans(before, m.blocks()) {
+		if span[0] < at+cut && span[1] > at {
+			low, high = min(low, span[0]), max(high, span[1])
+		}
+	}
+	if low != at || high != at+cut {
+		m.setDraft(before[:low], before[high:])
+	}
+}
+
+func (m *Model) stepOver(fromRow, fromCol int) {
+	row, col := m.composer.Line(), m.composer.Column()
+	line := strings.Split(m.composer.Value(), "\n")[row]
+	at := len(string([]rune(line)[:col]))
+	for _, span := range spans(line, m.blocks()) {
+		if at <= span[0] || at >= span[1] {
+			continue
+		}
+		edge := span[1]
+		if row == fromRow && col < fromCol {
+			edge = span[0]
+		}
+		m.composer.SetCursorColumn(utf8.RuneCountInString(line[:edge]))
+		return
+	}
 }
 
 func (c Chip) label() string {

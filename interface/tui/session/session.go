@@ -446,16 +446,21 @@ func (m *Model) link(matches func(Entry) bool, id string, at time.Time) bool {
 }
 
 func (m *Model) Update(msg tea.Msg) tea.Cmd {
-	before := m.composer.Value()
+	before, row, col := m.composer.Value(), m.composer.Line(), m.composer.Column()
 	composer, cmd := m.composer.Update(msg)
 	m.composer = composer
 	if m.composer.Value() != before {
+		m.deleteWhole(before)
 		m.edited()
+	}
+	if m.composer.Line() != row || m.composer.Column() != col {
+		m.stepOver(row, col)
 	}
 	return cmd
 }
 
 func (m *Model) edited() {
+	m.chips = slices.DeleteFunc(m.chips, func(chip Chip) bool { return !strings.Contains(m.composer.Value(), chip.Token) })
 	m.closed, m.picked = false, 0
 	m.histAt, m.draft = len(m.sent), sentEntry{}
 }
@@ -466,7 +471,6 @@ func (m *Model) Draft() string { return m.composer.Value() }
 
 func (m *Model) Redraft(text string) {
 	m.composer.SetValue(text)
-	m.chips = slices.DeleteFunc(m.chips, func(chip Chip) bool { return !strings.Contains(text, chip.Token) })
 	m.edited()
 }
 
