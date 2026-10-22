@@ -21,9 +21,9 @@ start a server, a watcher or a `sleep` with `background: true`; outside
 the background it sleeps 5 s at most.
 
 A bash call with `timeout_ms` of 30,000 or less is the exception: the
-command is killed there. Its result and the session trace say `bash: hit
-the deadline after 3 s`, and nothing of it stays on the shells screen
-or on disk.
+command is killed there, its result and trace say `bash: hit the deadline
+after 3 s`, and nothing of it stays on the shells screen or on disk. A bash
+call may carry a `title`, a few words saying what the command is for.
 
 A one-shot command, such as a test or a version check that ends inside
 its wait, is never a shell: neither the shells screen nor `tofu shells`
@@ -43,8 +43,7 @@ status line above the composer rather than on a line of their own:
 
 Each row is a running shell: the command, who started it and its latest output. A shell that ends leaves the screen at once and tofu stops reading it;
 its record and log stay on disk for 72 hours, read by name with `tofu shells log`. The screen reads the running shells four times a second while any runs. A line reaches the log as the command writes
-it; a running shell that printed nothing says `nothing printed yet`.
-Python is told not to buffer its output.
+it; a running shell that printed nothing says `nothing printed yet`. Python is told not to buffer its output.
 
 When the command names its own log file, such as `-Log target/build.log`,
 `> build.log` or `tee build.log`, the row also shows the end of that file,
@@ -115,9 +114,6 @@ call that moved a command to a shell, with the shell's name in its result.
 
 ## Undo it
 
-Stop a shell with `tofu shells stop`, and turn `persistentRegistry` off:
-
-    tofu settings set persistentRegistry false
-
-A model that gave up waiting on a shell leaves it running and listed
-until it ends or is stopped.
+Stop a shell with `tofu shells stop`, and turn `persistentRegistry` off
+with `tofu settings set persistentRegistry false`. A model that gave up
+waiting on a shell leaves it running and listed until it ends or is stopped.

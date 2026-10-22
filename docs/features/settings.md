@@ -2,15 +2,17 @@
 title: Settings and reload
 description: Two settings files, the project over yours, read again at every task, searchable in the app.
 order: 8
-updated: 2026-10-12
+updated: 2026-10-22
 ---
 
 A setting is a named switch with a default, like `gatePrompt` or
 `subAgentsPerTurn`. You write only the ones you change, in
 `~/.tofu/settings.json` for every project or `.tofu/settings.json` for one.
-The project wins over yours, and yours over the default. 60 settings sit in
-eight groups: Appearance, Interaction, Context, Files, Shell, Turn, Projects
-and Browser. Projects holds boardy, the ticket board, and the scratchpad.
+The project wins over yours, and yours over the default. 67 settings sit in
+nine groups: Appearance, Models & roles, Interaction, Context, Files, Shell,
+Turn, Projects and Browser. Models & roles holds where work continues when a
+subscription runs out, and Projects holds boardy, the ticket board, and the
+scratchpad.
 
 ![Ctrl+K search over the settings, with browser typed](./media/tui-search.png)
 
@@ -18,7 +20,11 @@ and Browser. Projects holds boardy, the ticket board, and the scratchpad.
 
 **No restart.** tofu reads settings, rules, skills, sub-agents and
 instruction files again when each task starts, so a change counts from your
-next message. Only `persistentRegistry` waits for a restart.
+next message. Only `persistentRegistry` waits for a restart. A setting, a
+role binding or a model file changed in one window, by `tofu settings set`,
+by `tofu models bind` or by hand reaches every open window and the session
+holder on the next turn and the next spawn, with no `/reload`; a cron job
+that fires with no window open runs it too.
 
 **You can see where a value came from.** Every value says `default`,
 `global` or `project`, so a project that behaves differently explains itself.
@@ -97,6 +103,12 @@ minutes, so a pause rewrites only the conversation:
 `tofu settings set leadCache history-5m`. Anthropic's
 [prompt caching](https://docs.claude.com/en/docs/build-with-claude/prompt-caching)
 prices a five minute write at 1.25 times base input and an hour at 2 times.
+
+`continueOnSubscription`, `subscriptionOrder` and `continueOnAPIModel`
+decide where work goes when every account of a subscription is at its limit:
+a model on another subscription, in the order you give, then a model paid by
+your key. With none set the work stops and names them. See
+[Subscription quota](/docs/llms/quota).
 
 `thinkingSummary` decides what a model sends back of its thinking.
 `summarized`, the default, asks for a summary, which streams to the

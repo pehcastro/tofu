@@ -2,7 +2,7 @@
 title: Overview
 description: How models work in tofu, providers and sources, what each model can do, which job each one does, and how the catalog, slugs, tiers, roles and the picker fit together.
 order: 1
-updated: 2026-10-04
+updated: 2026-10-22
 ---
 
 A **provider** builds and serves a model: Anthropic, OpenAI, Meta, and for
@@ -25,10 +25,14 @@ Four jobs take a model:
 
 | Job | Model it runs |
 |---|---|
-| **The lead** (orchestrator) | the `orchestrator` role, else the subscription's default |
-| **Sub-agents** | the agent's own model, or `agent-models.yaml`, or a tier, else the lead's model |
+| **The lead** (orchestrator) | the `orchestrator` role; with nothing bound, setup asks before the first turn |
+| **Sub-agents** | the agent's own model, or `agent-models.yaml`, or a tier, else the `sub-agent` role, else the lead's model |
 | **The browser** | `browserModel`, else `modelTier.dumb`, then `modelTier.worker`, then the turn's model |
-| **The classifier** | the `classifier` role. See [Classifiers](/docs/classifiers/models) |
+| **The classifier** | the `classifier` role; with nothing bound, the gate is off. See [Classifiers](/docs/classifiers/models) |
+
+tofu writes no model, provider or order into its code. Every role runs what
+you bind, and a role with nothing bound says so in one sentence with the
+command that binds it, rather than running a model you never chose.
 
 The catalog comes in layers, each over the last: what tofu ships, then
 models `tofu models reload` found on your accounts, then `~/.tofu/models/`,
@@ -54,8 +58,13 @@ without copying the list.
 - **Keep it**: the picker's **Roles** tab binds the lead, which writes
   `.tofu/roles/orchestrator.yaml` and runs the next turn on it at once, the
   footer showing it as you pick; a subscription or a key, either is yours to
-  pick, and a subscription is only the default when nothing is. For every project, write
-  `model: <source/model>` in `~/.tofu/roles/orchestrator.yaml`.
+  pick. For every project, `tofu models bind orchestrator <source/model>`
+  writes `~/.tofu/roles/orchestrator.yaml`; `classifier` and `sub-agent`
+  bind the same way. A change reaches every open window and the session
+  holder on the next turn and the next spawn, with no `/reload`.
+- **Add a model tofu does not list**: one `.json` file in
+  `.tofu/models/llms` or `.tofu/models/classifiers`, in your home or a
+  project, below.
 - **Find new models**: **F5** in the picker.
 - **Point a tier**, or the browser, at a model:
   `tofu settings set modelTier.smart claude-sub/claude-sonnet-5`,
@@ -65,10 +74,39 @@ without copying the list.
 
 `tofu models reload` also finds the newest build of Jev, the model that judges each tool call, and pins it; when the gate was calibrated on an older build, reload says the gate runs in shadow until it is calibrated on the new one. The app's start-up reload only reports a newer build.
 
+## Custom models
+
+A file in `~/.tofu/models/llms/` or a project's `.tofu/models/llms/` adds a
+chat model, and one in `models/classifiers/` adds a classifier. It is one
+JSON object naming `provider` and `id`, and it may name `subscription`,
+`use`, `reason`, `notice`, `vision`, `plan`, `verbosity`,
+`reasoning_context`, `efforts` and `served_as`:
+
+```json
+{"provider": "openrouter", "id": "acme/coder-2", "efforts": ["low", "high"]}
+```
+
+`tofu models` then lists `openrouter/acme/coder-2` with its layer, and it
+can be bound or picked like any other. A chat model runs on `anthropic` or
+`openai` through a subscription, or on `openrouter` or `meta` with a key; a
+classifier runs on `typesafe` or `openrouter` with a key. A file tofu cannot
+use blocks nothing: `tofu models`, `tofu run` and the picker each show it
+under `refused` with the reason, and every other model still loads:
+
+```
+✗ refused
+  ~/.tofu/models/llms/broken.json:
+  tofu has no llm module for anthropic with a key: an llm runs on anthropic or
+  openai through a subscription, or on openrouter or meta with a key
+```
+
+Delete the file to remove the model.
+
 ## Commands
 
 ```
 tofu models [reload] [--json]
+tofu models bind <orchestrator|classifier|sub-agent> <source/model> [--json]
 tofu agents set [--global] <name> <source/model>
 tofu run --dir . --model <source/model> --effort <level> "<task>"
 ```

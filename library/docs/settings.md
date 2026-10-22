@@ -13,8 +13,9 @@ default, and you only write the ones you want different.
 The settings come in groups:
 
 - Appearance: theme, density, animations, statusBar, colorMode
-- Interaction: composer, gatePrompt, readBeforeEdit, autoUpdate
-- Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images, projectInstructionsCap, contextCeiling, instructionSources, skills, memory, autoMemory, memoryFromAllUsers, learn
+- Models & roles: continueOnSubscription, subscriptionOrder, continueOnAPIModel
+- Interaction: composer, gatePrompt, gateAskWaitSeconds, gateAskTimeout, askPersonWaitSeconds, readBeforeEdit, autoUpdate
+- Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images, projectInstructionsCap, contextCeiling, instructionSources, skills, memory, autoMemory, episodes, memoryFromAllUsers, memoryModel, learn
 - Files: diffContext, hyperlinks, groupByAgent
 - Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell
 - Turn: decisionCap, turnMaySpawn, oneWorkingSessionPerProject, planEveryStep, sideChatAccess, subAgentsPerTurn, subAgentDepth, leadCache, subAgentCache, subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb
@@ -39,6 +40,14 @@ keeps the tools and system prompt an hour and writes the conversation at
 five minutes, so a pause rewrites only the conversation.
 `subAgentCache` is the same choice for a sub-agent, `1h` or `5m`.
 `tofu session trace` shows each request's write at the lifetime it got.
+
+`continueOnSubscription`, `subscriptionOrder` and `continueOnAPIModel` say
+where work goes when every account of a subscription is at its limit: a
+model on another subscription, in that order, then one paid by your key.
+With none set the work stops and names them. `tofu docs usage` has more.
+
+A setting changed in one window, by `tofu settings set` or by hand, reaches
+every open window and the session holder on the next turn, with no reload.
 
 ## Where it lives
 

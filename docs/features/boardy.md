@@ -2,7 +2,7 @@
 title: Boardy
 description: Your own Jira or Linear, kept as markdown files on your disk, with numbered tickets and sub-tickets, statuses, a thread of what happened on each, and a lint that catches two tickets claiming one file.
 order: 18
-updated: 2026-10-13
+updated: 2026-10-22
 ---
 
 Boardy is a ticket board that lives in files. Each project can hold several
@@ -109,8 +109,10 @@ See everything that happened on a ticket, in order:
 tofu boardy show DEMO-1 --thread
 ```
 
-The thread reads as the team talking. A spawn is one handoff line from the
-lead naming the engineer and its mission, with the full brief kept in its
+The thread reads as the team talking, and on a recorded run it is 78%
+shorter than before, with every acceptance line still carrying its evidence.
+A spawn is one handoff line from the lead naming the engineer and its
+mission, with the full brief kept in its
 `brief` field. An engineer says what it decided, found or needs in at most
 three sentences, and logs proof apart with `tofu boardy log --evidence` (or
 `ticket_log` kind evidence), with `--line n` (or `line`) naming the acceptance
@@ -119,8 +121,21 @@ for review. A move to review names the lines left for the lead in `leave`,
 and the `evidence_at_review` hook refuses it while a line is unmet. The report
 is one entry: the engineer's last words in at most two sentences, a `verdict`
 (done, done with concerns, blocked or needs you), and each acceptance line as
-met, unmet or not mine to prove. Questions and answers follow, and empty moves
-stay out of the thread.
+met, unmet or not mine to prove. Empty moves stay out of the thread.
+
+A sub-agent's ask and the lead's answer read as two people. The ask prints
+its question, then `why`, the reasoning behind it, and `default`, what the
+engineer will do without an answer. When the lead's model gives no answer in
+time, the thread says `unanswered, went with the default:` and the reason, so
+an assumption is never mistaken for a decision. `tofu session trace` lists the
+side call that answered it.
+
+Every voice says who it is. Each event's `author` carries a `role` (`pm`,
+`engineer`, `person` or `hook`), the `harness` it ran in (`tofu`,
+`claude-code`, `codex` or `other`), the `model` that spoke, and for an
+engineer its agent type and number, such as `go-dev` and `2`. A
+`tofu boardy` command run from Claude Code or Codex is credited to that
+harness and its session.
 
 ## The ticket file
 

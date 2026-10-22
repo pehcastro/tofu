@@ -2,7 +2,7 @@
 title: Setup
 description: Connect tofu to your subscriptions and your own keys, store the classifier key, and check the result with tofu doctor.
 order: 3
-updated: 2026-10-05
+updated: 2026-10-22
 ---
 
 Setup gives tofu credentials and settings. tofu takes two kinds of
@@ -12,8 +12,13 @@ credential, from any provider you enable:
   browser the way each vendor's own command line does, and calls their models
   on that plan.
 - **Your own keys (BYOK)**: `meta` for Meta's models, `openrouter` for
-  models on OpenRouter, `typesafe` for the classifier, `brave` for web
-  search. A key call is billed by its provider.
+  models on OpenRouter, `typesafe` or `openrouter` for the classifier,
+  `brave` for web search. A key call is billed by its provider, and each
+  key is stored under the model type it pays for.
+
+A credential says who pays. Which model each role runs is a binding you
+make, `tofu models bind <role> <provider/model>`: tofu writes no model or
+provider into its code, so nothing runs that you did not choose.
 
 Credentials live in `~/.tofu/agent.db`. Settings live in
 `~/.tofu/settings.json`, or a project's `.tofu/settings.json`, which wins.
@@ -36,10 +41,11 @@ instead of the chat. It has two steps, and the chat opens once both are
 done:
 
 1. **Language model**: the Claude subscription or the Codex one, which sign
-   in through your browser, or a Meta API key.
-2. **Classifier, jev, required**: a TypeSafe key. jev is reached through
-   TypeSafe, judges every tool call and shapes how tofu works, so a model
-   alone is not enough to start.
+   in through your browser, or a Meta API key, then the model the
+   orchestrator runs: each signed-in model is offered as `bind <model>`.
+2. **Classifier, jev, required**: a TypeSafe or OpenRouter key, then the
+   classifier to bind. jev judges every tool call and shapes how tofu works,
+   so a model alone is not enough to start.
 
 ```
 set up tofu: two steps before the first turn
@@ -76,6 +82,8 @@ tofu login llm claude-sub
 tofu login llm codex-sub
 tofu login llm meta
 tofu login classifier typesafe
+tofu models bind orchestrator claude-sub/claude-opus-5
+tofu models bind classifier typesafe/jev-latest
 tofu doctor
 ```
 

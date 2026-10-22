@@ -171,9 +171,21 @@
   check: tofu models
   topic: models
 - ask: always run the orchestrator on one model
-  do: write model: <source/model> in ~/.tofu/roles/orchestrator.yaml
+  do: tofu models bind orchestrator claude-sub/claude-sonnet-5
   check: tofu models
   topic: models
+- ask: pick the model every sub-agent runs
+  do: tofu models bind sub-agent claude-sub/claude-sonnet-5
+  check: tofu models
+  topic: models
+- ask: add a model tofu does not list
+  do: write a provider and id json file in ~/.tofu/models/llms/
+  check: tofu models
+  topic: models
+- ask: keep working on another subscription when one runs out
+  do: tofu settings set continueOnSubscription codex-sub/gpt-5.6-sol
+  check: tofu settings get continueOnSubscription
+  topic: usage
 - ask: stop tofu from using a model
   do: write use: excluded and a reason in ~/.tofu/models/<provider>/<model>.yaml
   check: tofu models
@@ -213,6 +225,10 @@
 - ask: store the typesafe key the gate needs
   do: tofu login classifier typesafe
   check: tofu doctor
+  topic: gate
+- ask: bind the classifier the gate runs
+  do: tofu models bind classifier typesafe/jev-latest
+  check: tofu models
   topic: gate
 - ask: why was a tool call refused or asked about
   do: tofu why --last

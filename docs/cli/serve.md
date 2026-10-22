@@ -2,7 +2,7 @@
 title: Serving tofu to another program
 description: tofu serve --stdio runs one project for the desk app or a script of your own, over JSON-RPC on standard input and output, with every board, approval, question and status record the app has.
 order: 2
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
 `tofu serve --stdio` runs one project for another program: the desk app, an editor, or a script of
@@ -39,7 +39,8 @@ only with the setting `oneWorkingSessionPerProject` off; while it is on, the def
 
 **No window owns a running session.** A session runs in a background holder; `tofu serve` and the
 terminal follow it, so closing one leaves the other running, and `session.open` names the holder in
-`heldBy`. `turn.send` while a turn runs queues the text as a steer and answers `steered`; pass
+`heldBy`. A second window finds a busy holder wherever its temp folder is; one that cannot reach the
+holder says so, names the process, and only follows, running nothing, until that process closes. `turn.send` while a turn runs queues the text as a steer and answers `steered`; pass
 `expectedTurnId` to be refused instead. `turn.stop` stops the lead and leaves running sub-agents
 working; pass `everything: true` to stop them too. A client that attaches mid-turn gets the
 queued messages, pending approvals and working sub-agents at once, and `turn.steer` takes `images: [{path}]` like `turn.send`, so an image pasted while the lead works reaches it. `session.set` from any
@@ -68,7 +69,7 @@ tofu from a newer one. Beside the session, turn, settings and login methods, the
 | `status` | `status.list`, `status.ack` | every program status record of every open session as it stands, with when it entered its state and the approval or question a blocked one waits on; an acknowledged finished record clears |
 | `mention` | `mention.resolve` | the item a `ref` points at |
 | `takeover` | `shell.takeover`, `shell.input`, `shell.resize`, `shell.release` | a person borrows a kept shell: every bash command runs in a terminal once the client declares `takeover`, the take-over answers the raw output so far with its colours, keystrokes and sizes go in as base64 bytes, and the release hands it back to the agent with an optional note. Neither kills the process. A refusal is `-32000` with `data.reason`, one of `not_declared`, `unknown_shell`, `not_running`, `not_kept`, `not_in_terminal`, `other_process` and `not_held` |
-| `boardy` | `boardy.boards`, `boardy.list`, `boardy.rows` (the list's fields only, 349 KB instead of 11 MB on 1,500 tickets), `boardy.get`, `boardy.events`, `boardy.report`, `boardy.create`, `boardy.move`, `boardy.assign`, `boardy.log`, `boardy.hand`, `boardy.triage` | the project's ticket boards, a view of one, a ticket with its events and actuals, a report, and every ticket change the person may make; see [Boardy views](/docs/features/boardy-views) |
+| `boardy` | `boardy.boards`, `boardy.list`, `boardy.rows` (the list's fields only, 349 KB instead of 11 MB on 1,500 tickets, each row with its `type`, `points`, `reason`, and the `model`, `tools` and `reads` of the sub-agent that worked it), `boardy.get`, `boardy.events`, `boardy.report`, `boardy.create`, `boardy.move`, `boardy.assign`, `boardy.log`, `boardy.hand`, `boardy.triage` | the project's ticket boards, a view of one, a ticket with its events and actuals, a report, and every ticket change the person may make; see [Boardy views](/docs/features/boardy-views) |
 | `scratch` | `scratch.list`, `scratch.clean` | the project's scratchpad folders with their size and when each was last touched, and a cleanup with `session`, `cache` and `dryRun` |
 | `queries` | `query.context`, `query.rules`, `query.usage`, `query.settings`, `query.ledger` and the other `query.*` | the context items, rule text and how often each rule fired, quota with each reading's age, each setting with its label, kind, choices and range, the decisions of one session |
 
@@ -117,6 +118,24 @@ started it.
 - `approval.resolved` and `question.resolved`, naming the answer and who sent it; an `allow_always`
   or `reject_always` says `standing`. A standing answer is kept beside its session and read back
   after a restart or `tofu --continue`, never in another session.
+- `tool.started` carries the `title` the model gave a bash command, a few words a person reads,
+  such as `rebuilt the desk binary`. `tool.completed` carries a typed `summary`: `exit`,
+  `durationMs`, `hits` for a search or glob, and lines `added` and `removed` for an edit, so a
+  frontend draws a result row without parsing the output.
+- `turn.started`, `message.user`, `turn.steered` and `turn.steerQueued` carry a typed `origin`:
+  `kind` (`person`, `agent`, `tofu`, `cron`, `hook`, `memory`, `skill`, `library` or `plugin`) and
+  `sub`, what exactly sent it, such as `typed`, `steer`, `report` or `fire`. Only a message whose
+  kind is `person` is your own words.
+
+## Approvals
+
+A `tofu/requestApproval` carries the agent's own `reason` for the call, cut to one line, and a
+`risk`: `low`, `risky`, `destructive` or `unjudged`, from the gate's verdict on it, `unjudged`
+when Jev could not answer. Besides allowing
+once or always, a client may answer `allow_for`: the call runs, and the same target runs unasked for
+an hour, or for `forSeconds` up to a day. `approval.resolved` says `until`. `session.state` lists
+every grant still standing, and `approval.revoke` with a `target` ends one at once, sending
+`approval.revoked` with who revoked it; a grant that ran out is refused with the reason.
 
 ## Trying it
 

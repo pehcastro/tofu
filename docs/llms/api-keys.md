@@ -2,19 +2,23 @@
 title: API keys
 description: The keys you can bring to tofu, what each one is for, where tofu finds them, and how they stay hidden.
 order: 4
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
 A key is a credential you bring from a provider, billed by that provider.
-tofu takes four, each for one job, and each is stored under the role it
-serves:
+Each key is stored under the model type it pays for, so one provider can
+hold two keys that never mix:
 
-| Role | Key | Job |
-|---|---|---|
-| `llm` | `meta` | Meta's models, `meta/...`, for the lead or a sub-agent |
-| `llm` | `openrouter` | models on OpenRouter, for the lead with `--wire openrouter` |
-| `classifier` | `typesafe` | the classifier, Jev, through TypeSafe |
-| `search` | `brave` | the `web_search` tool |
+| Role | Key | Variable | Job |
+|---|---|---|---|
+| `llm` | `meta` | `META_MUSE_API_KEY` | Meta's models, `meta/...`, for the lead or a sub-agent |
+| `llm` | `openrouter` | `OPENROUTER_LLM_KEY` | a chat model on OpenRouter, for the lead or a sub-agent |
+| `classifier` | `typesafe` | `TYPESAFE_API_KEY` | the classifier, Jev, through TypeSafe |
+| `classifier` | `openrouter` | `OPENROUTER_KEY` | the classifier, Jev, through OpenRouter |
+| `search` | `brave` | `BRAVE_SEARCH_KEY` | the `web_search` tool |
+
+A key decides who pays, never which model runs: the model each role runs is
+the one you bind with `tofu models bind`, see [Overview](/docs/llms/overview).
 
 ## One job per key
 
@@ -54,17 +58,30 @@ terminal shows what you type, tofu warns before reading.
 - Remove a stored key: `tofu logout <role> <name>`. When the same key is
   also set in the environment or an `.env`, tofu says so, because that one
   is still read.
-- Use the environment instead: `OPENROUTER_KEY`, `TYPESAFE_API_KEY` or
-  `BRAVE_SEARCH_KEY`, or that line in an `.env` file in the working
-  directory. The credential store is read first.
+- Use the environment instead: the variable in the table above, or that
+  line in an `.env` file in the working directory. The credential store is
+  read first.
 
 ## Commands
 
 ```
 tofu login llm <meta|openrouter>
-tofu login classifier typesafe
+tofu login classifier <typesafe|openrouter>
 tofu login search brave
 tofu logout <llm|classifier|search> <name>
 tofu login --status
+tofu models bind classifier typesafe/jev-latest
 tofu run --dir . --model meta/muse-spark-1.3 "<task>"
+```
+
+`tofu login --status` lists each key under its role:
+
+```
+language model
+  ○ Meta        not set  → tofu login llm meta
+  ○ OpenRouter  not set  → tofu login llm openrouter
+
+classifier · jev, required
+  ○ TypeSafe    not set  → tofu login classifier typesafe
+  ○ OpenRouter  not set  → tofu login classifier openrouter
 ```

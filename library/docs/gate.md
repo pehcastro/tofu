@@ -1,7 +1,7 @@
 ---
 topic: gate
 title: The gate
-summary: what jev judges before a tool call runs, when tofu asks you first, and where the TypeSafe key lives
+summary: what jev judges before a tool call runs, when tofu asks you first, and which classifier key and binding it runs on
 verbs: check, why, label, replay, judge, login, logout
 ---
 
@@ -40,17 +40,17 @@ call of that kind until the run ends. A call that would wait for you is refused.
 
 ## Where it lives
 
-jev is reached through TypeSafe, which serves it, at `api.typesafe.ai`. There is
-one route and no fallback: a call TypeSafe cannot answer is an ask. tofu reads
-the key from, in order:
+jev runs through the provider bound to the `classifier` role, `typesafe/jev-latest` at `api.typesafe.ai`
+or `openrouter/jev-latest`, and no other: a call it cannot answer is an ask. With nothing bound the gate
+is off. tofu reads the key from, in order:
 
-- the credential store, `~/.tofu/agent.db`, which `tofu login classifier typesafe` writes
-- `TYPESAFE_API_KEY` in the environment
+- the credential store, `~/.tofu/agent.db`, which `tofu login classifier <typesafe|openrouter>` writes
+- `TYPESAFE_API_KEY` or `OPENROUTER_KEY` in the environment
 - an `.env` file in the working directory, as that line
 
-`tofu login --status` names TypeSafe as jev's route and the build it is pinned to.
+`tofu login --status` names jev's route and the build it is pinned to.
 
-tofu never prints more of a key than its last four characters. With no key the
+tofu never prints more of a key than its last four characters. With no key or no binding the
 gate is off and the app says so. A key a tool prints reads `[key redacted]` in
 the model, the session and the ledger, even after `env` or `cat .env`.
 
@@ -64,11 +64,11 @@ Store the key. tofu asks for it, checks it reaches jev, and writes
 nothing if it does not:
 
     tofu login classifier typesafe
+    tofu models bind classifier typesafe/jev-latest
 
 The field shows the key's shape, never the key: its first characters, its
-last four and its length. The key is never an
-argument, so it stays out of your shell history; a pipe works too. Run it
-again to replace the key; `tofu login --status` shows its last four.
+last four and its length. The key is never an argument, so it stays out of
+your shell history; a pipe works too. Run it again to replace the key.
 
 Wait for you before a risky call, everywhere or in one project:
 

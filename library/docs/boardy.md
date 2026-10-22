@@ -93,7 +93,7 @@ commit, drops or merges a dead ticket with a pointer, and batches drives.
 `list` shows the live tickets; `--all` adds done and dropped, and
 `--status review` shows one status. `--fields id,status,assignee,owns`
 prints only those front matter fields, read without the ticket bodies.
-`show --thread` adds the ticket's conversation, one line each: a spawn as one handoff line, what each engineer said in at most three sentences, questions, answers and reports with their verdict and each acceptance line; evidence logged with `log --evidence`, and `--line n` for the line it proves, folds into one count, kept in the Log for review. `held <path>` names the ticket holding a path, on any board of the project,
+`show --thread` adds the ticket's conversation, 78% shorter on a recorded run with every acceptance line still proven: a spawn as one handoff line, what each engineer said in at most three sentences, and reports with their verdict and each acceptance line; evidence logged with `log --evidence`, and `--line n` for the line it proves, folds into one count, kept in the Log for review. A sub-agent's ask and the lead's answer read as two people, the ask followed by `why` and `default`, and by `unanswered, went with the default:` when no answer came. Every voice is an `author` with its `role` (pm, engineer, person, hook), `harness` (tofu, claude-code, codex, other) and `model`. `held <path>` names the ticket holding a path, on any board of the project,
 and the glob that matched, or says it is not held; a hook asks it before a
 write. `lint` reads every ticket on every
 board and exits 1 on a front matter error, a reference to a ticket no board

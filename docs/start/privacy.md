@@ -2,7 +2,7 @@
 title: Privacy and safety
 description: What tofu sends where, what stays on your machine, how keys stay out of records, and what the browser extension can touch.
 order: 5
-updated: 2026-10-04
+updated: 2026-10-22
 ---
 
 tofu keeps every record on your machine, under `~/.tofu`: credentials in
@@ -10,9 +10,9 @@ tofu keeps every record on your machine, under `~/.tofu`: credentials in
 has no telemetry. Text leaves only for the service doing the work:
 
 - the model's provider: Anthropic for `claude-sub/...`, OpenAI for
-  `codex-sub/...`, Meta for `meta/...`
-- the classifier provider, TypeSafe: the state of one decision,
-  such as a tool call and its input
+  `codex-sub/...`, Meta for `meta/...`, OpenRouter for `openrouter/...`
+- the classifier provider you bind, TypeSafe or OpenRouter: the state of
+  one decision, such as a tool call and its input
 - Brave Search for `web_search`, and the page `fetch` reaches
 - `models.dev` on a model reload, and each subscription for its quota
 
@@ -20,7 +20,8 @@ has no telemetry. Text leaves only for the service doing the work:
 
 A model sees whatever its tools print, so tofu redacts keys before anything
 is recorded or sent: every stored key, and any value of `OPENROUTER_KEY`,
-`TYPESAFE_API_KEY` or `BRAVE_SEARCH_KEY`, reads `[key redacted]` in tool
+`OPENROUTER_LLM_KEY`, `TYPESAFE_API_KEY`, `META_MUSE_API_KEY` or
+`BRAVE_SEARCH_KEY`, reads `[key redacted]` in tool
 results, sessions and the ledger, even after `cat .env`. Other secrets are not
 scanned for.
 

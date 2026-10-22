@@ -96,12 +96,13 @@ finds calls across every generation. `--command`, `--file`, `--text`, `--agent`,
 
     tofu session info <name|id>
 
-prints one session: its id, task, counts, whether it ended, its model and cost, why it ended in an
-error, and the command that continues it. `tofu session reads <name|id>` lists every file it read.
+prints one session: its id, task, counts, its `history` (`fresh, holds 40 messages`, or `12 messages from
+<handle>` for one carried over, `nothing to resume` when empty), whether it ended, its model and cost, why
+it ended in an error, and the command that continues it. `tofu session reads <name|id>` lists every file it read.
 
     tofu session trace <name|id>
 
-prints a summary: lead turns and how they ended, each sub-agent with its state, calls and last report, errors by kind, every stop with what it took down, and the commands that drill in.
+prints a summary: lead turns and how they ended, each sub-agent with its state, calls and last report, errors by kind, every stop with what it took down, and the commands that drill in. Every request, call and sub-agent run says `start_ms`, milliseconds from the session's start, and a message tofu added rather than you typed reads `from <kind>/<sub>`, such as `from tofu/shell.exit`: every message carries a typed origin, so only your words show as you.
 `--since 1h`, `--from 04:10 --to 04:20`, `--agent <name>` or `lead`, `--turn <id>`, `--kind stop,error,gate` (a wrong kind names them all), `--grep <text>` and `--last 20` list the rows behind it, one line each, and combine; `--wide` prints each row whole, `--full` every request, call, hook and message, and `--json` the same rows.
 `tofu session request <name|id> <request id>` prints one request exactly as sent, each wire attempt, and the response.
 

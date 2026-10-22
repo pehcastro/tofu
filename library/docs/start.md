@@ -59,11 +59,12 @@ Continue the session you last worked in:
 The first time, the app opens on a setup screen with two steps, and the
 chat opens once both are done:
 
-1. language model: press 1 for the Claude subscription or 2 for the Codex
-   one, which sign in through the browser, or 3 to paste a Meta API key.
-2. classifier, jev, required: press 1 for a TypeSafe key. jev is reached
-   through TypeSafe and judges every tool call, so a model alone is not
-   enough.
+1. language model: sign in to the Claude or Codex subscription through
+   the browser, or paste a Meta API key, then pick `bind <model>` for the
+   orchestrator. tofu runs no model you did not bind.
+2. classifier, jev, required: a TypeSafe or OpenRouter key, then
+   `bind typesafe/jev-latest` or `bind openrouter/jev-latest`. jev judges
+   every tool call, so a model alone is not enough.
 
 A key field shows the key's shape while you paste it, its first
 characters, last four and length, never the key. Enter checks it
@@ -74,6 +75,8 @@ The same two steps from a terminal:
 
     tofu login llm claude-sub
     tofu login classifier typesafe
+    tofu models bind orchestrator claude-sub/claude-opus-5
+    tofu models bind classifier typesafe/jev-latest
 
 Work a task without the app, printing as it goes:
 

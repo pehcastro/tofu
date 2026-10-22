@@ -1,7 +1,7 @@
 ---
 topic: models
 title: Models
-summary: sign in to a subscription, name a model as source/model, choose the model a task runs, and set the tiers
+summary: sign in to a subscription, name a model as source/model, bind the model each role runs, add a custom model, and set the tiers
 verbs: models, login, logout, usage
 ---
 
@@ -11,110 +11,110 @@ A model is named by a slug, `source/model`, where the source is what pays
 for it: `claude-sub/claude-opus-5` is Claude Opus 5 paid by your Claude
 subscription, and `codex-sub/gpt-5.6-sol` is GPT-5.6 Sol paid by your Codex
 subscription. The same model reached two ways bills two ways, so the source
-is always written.
+is always written. A key spends money: `meta` reaches `meta/muse-spark-1.3`,
+`-1.2` and `-1.1`, and the cheaper `-1.3-contributor` and `-1.2-contributor`,
+which Meta may train on; `tofu models` says so beside each contributor model.
 
-tofu speaks through a subscription, with one default model each, or a key,
-which spends money. The `meta` key reaches `meta/muse-spark-1.3`, `-1.2`
-and `-1.1`, and the cheaper `-1.3-contributor` and `-1.2-contributor`, which
-Meta may train on; `tofu models` says so beside each contributor model.
-
-The orchestrator is the model you talk to. A sub-agent runs its own model,
-and a tier is a name for a model a sub-agent file can point at:
-`@genius`, `@smart`, `@worker` and `@dumb`. A file Claude Code also reads,
-in `.claude/agents`, may say `opus`, `sonnet` or `haiku` instead, which
-mean the genius, smart and worker tiers when those are set. The `thinkingSummary` setting picks the thinking a request asks for: `summarized`, the default, asks Claude for a summary for the sub-agents feed, and `omitted` asks for none and sends the thinking body Claude Code sends on `claude-sub` and the one codex sends on `codex-sub`. Either way, Sonnet's thinking tokens are recorded in the session. A spawn asking for an effort the model lacks runs at the nearest one it has.
+Three roles run a model, and each runs what you bind, since tofu writes no
+model, provider or order into its code. The `orchestrator` is the model you
+talk to; with nothing bound, setup asks before the first turn. The
+`classifier` judges the calls; with nothing bound the gate is off and no call
+is judged. `sub-agent` is the model every sub-agent runs that names no model
+of its own; with nothing bound, it runs the orchestrator's. A tier is a name a
+sub-agent file can point at, `@genius`, `@smart`, `@worker` and `@dumb`; a
+file Claude Code also reads may say `opus`, `sonnet` or `haiku` for the first
+three. `thinkingSummary` picks the thinking a request asks for: `summarized`,
+the default, or `omitted`, the body Claude Code and codex send. A spawn asking
+for an effort the model lacks runs at the nearest one it has.
 
 ## Where it lives
 
-- `~/.tofu/agent.db`: the credentials `tofu login` stores, the
-  subscriptions, the openrouter key and the meta key, `META_MUSE_API_KEY`
-- `models/windows/<provider>.yaml`, shipped: the window a vendor publishes
-  for a model models.dev lacks; a reload never erases it
-- `~/.tofu/roles/orchestrator.yaml`, `.tofu/roles/orchestrator.yaml`: the
-  model the orchestrator runs, one line, `model: source/model`. A
-  `sub-agent.yaml` beside it names the model every sub-agent runs that
-  names no model of its own
-- `~/.tofu/catalog/models/<provider>/<model>.yaml`: the models
-  `tofu models reload` found on your accounts that tofu does not ship.
-  Each carries `from`, what listed it, and `found`, the day it was found
-- `~/.tofu/models/<provider>/<model>.yaml`, `.tofu/models/...`: your
-  changes to one model, field by field, over the list tofu ships. `plan: no` takes the plan tool away from a model; `codex-sub/gpt-5.6-sol` ships with it, since GPT spent requests on replies holding only a plan call. `verbosity` (`low`, `medium` or `high`) and `reasoning_context` (`all_turns` or `current_turn`) follow [codex](https://github.com/openai/codex), which sends both for its models: tofu sends them on the codex wire as `text.verbosity` and `reasoning.context`, and a model file that leaves them out sends neither. `codex-sub/gpt-5.6-sol` ships with `verbosity: low` and `reasoning_context: all_turns`, the values codex sends for it
-- the `modelTier.genius`, `modelTier.smart`, `modelTier.worker` and
-  `modelTier.dumb` settings: the model each tier names
-- `~/.tofu/model-windows.json`: the models.dev table `tofu models reload`
-  wrote, with context windows, tool calls, efforts and image input
+- `~/.tofu/agent.db`: what `tofu login` stores, the subscriptions and each
+  key under the model type it pays for
+- `~/.tofu/roles/<role>.yaml`, `.tofu/roles/<role>.yaml`: one line,
+  `model: source/model`, for `orchestrator`, `classifier` or `sub-agent`
+- `~/.tofu/models/llms/*.json`, `~/.tofu/models/classifiers/*.json`, and the
+  same under a project's `.tofu`: a custom model, one JSON object naming
+  `provider` and `id`, and optionally `subscription`, `use`, `reason`,
+  `notice`, `vision`, `plan`, `verbosity`, `reasoning_context`, `efforts` and
+  `served_as`. A chat model runs on anthropic or openai through a
+  subscription, or on openrouter or meta with a key; a classifier on typesafe
+  or openrouter with a key. A file tofu cannot use is listed under `refused`
+  with its reason and blocks nothing
+- `~/.tofu/models/<provider>/<model>.yaml`, `.tofu/models/...`: your changes
+  to one model, field by field. `plan: no` takes the plan tool away;
+  `verbosity` and `reasoning_context` follow [codex](https://github.com/openai/codex)
+  and go out on the codex wire as `text.verbosity` and `reasoning.context`.
+  `codex-sub/gpt-5.6-sol` ships with `plan: no`, `verbosity: low` and
+  `reasoning_context: all_turns`
+- `~/.tofu/catalog/models/<provider>/<model>.yaml`: models `tofu models
+  reload` found on your accounts, with `from` and `found`
+- `models/windows/<provider>.yaml`, shipped, and `~/.tofu/model-windows.json`
+  from models.dev: context windows, tool calls, efforts and image input
+- the `modelTier.*` settings: the model each tier names
 
-The project wins over your home, your home wins over the catalog, and the
-catalog wins over what tofu ships. A role with nothing bound runs the
-subscription's default.
-
-## How a new model reaches tofu
-
-`tofu models reload` asks each signed-in account which models it serves,
-reads models.dev for their facts, and writes each id tofu does not know
-into the catalog, allowed and never the default, and pins the newest Jev build (the gate runs in shadow until calibrated on it). Efforts and image input
-come from the newest allowed model of its family, so `claude-sonnet-5-5`
-follows `claude-sonnet-5`, else from models.dev. A model without tool
-calls, or one the account stopped serving, is excluded. A catalog file
-for a model tofu now ships is deleted, so the shipped file wins. It
-prints a section per account, `✓ <n> served`, or `✗` and the command that
-fixes it, a row per model, `+` new, `~` changed, `-` dropped, and a `✗`
-line per tier that no longer resolves.
+The project wins over your home, your home over the catalog, and the catalog
+over what tofu ships.
 
 ## Change it
 
-Sign in, once per subscription. It opens the browser:
+Sign in, once per subscription, through the browser; add `--paste` when the
+browser cannot reach tofu:
 
     tofu login llm claude-sub
     tofu login llm codex-sub
 
-When the browser cannot reach tofu, add `--paste` and paste the address
-or the code it shows. `tofu login llm meta` asks for a Meta Model API key,
-shows its shape while you paste it, never the key, stores it only when
-Meta's model list accepts it, and prints its last four characters; `tofu run --model meta/muse-spark-1.3` then uses it.
+`tofu login llm meta` and `tofu login llm openrouter` take a key, shown by
+its shape and never the key, stored only once the provider accepts it.
 
-Run the next task on another model: in the app, type `/models`, pick a
-model. That lasts until tofu restarts. To make it stay, bind the
-orchestrator in the same list, which writes
-`.tofu/roles/orchestrator.yaml` and runs the next turn on it at once. By hand:
+Bind a role for every project; it reaches every open window and the session
+holder on the next turn and the next spawn, with no `/reload`:
 
-    model: claude-sub/claude-sonnet-5
+    tofu models bind orchestrator claude-sub/claude-sonnet-5
+    tofu models bind classifier typesafe/jev-latest
+    tofu models bind sub-agent claude-sub/claude-sonnet-5
 
-in `~/.tofu/roles/orchestrator.yaml`. `tofu run` takes `--model` for one run.
-
-Point a tier at a model; a tier left empty runs the sub-agent binding, or the orchestrator's model when none is bound:
+In the app, `/models` picks the model for the next task until tofu
+restarts, and its Roles tab binds the lead for this project.
+`tofu run --model` sets one run. Point a tier at a model; an empty tier runs
+the sub-agent binding:
 
     tofu settings set modelTier.smart claude-sub/claude-sonnet-5
 
-Stop tofu from running a model with a file of your own,
-`~/.tofu/models/anthropic/claude-sonnet-4-6.yaml`:
-
-    use: excluded
-    reason: too slow for me
+Stop a model running with `~/.tofu/models/anthropic/claude-sonnet-4-6.yaml`
+holding `use: excluded` and a `reason:`. When a subscription runs out, work
+moves to the model `continueOnSubscription` or `continueOnAPIModel` names;
+see `tofu docs usage`.
 
 ## Check it
 
     tofu models
 
-prints a section per subscription and keys, a row per model with its use
-and window, `●` default, `✓` allowed, `○` excluded, `⚠` a notice, then
-the roles and where the windows came from. `--json` prints one document
-whose `data` carries every field, the reason a model is excluded among
-them: `layer` is `library`, `catalog`, `global` or `project`, and `from`
-says what listed a catalog model. `--refresh` and `--discover` still run it for one release.
+prints a section per subscription and keys, a row per model with its use,
+window, and the layer of one you added, `●` default, `✓` allowed, `○` excluded, `⚠` a notice, then
+each role and what it is bound to, `unbound` when nothing is, and a `refused`
+line per custom file tofu could not use. `--json` carries every field,
+`layer` (`library`, `catalog`, `global` or `project`) and the reason a model
+is excluded.
+
+`tofu models reload` asks each signed-in account which models it serves,
+writes each new one into the catalog, allowed and never the default, pins
+the newest Jev build, and prints `+` new, `~` changed and `-` dropped, and
+a `✗` line per tier that no longer resolves.
 
     tofu login --status
 
-prints a card per credential with a bar per quota window, then each key, `✓` by its last four characters or `○ not set`. The login line says when the account was last refreshed.
-A signed-in account stays signed in until the provider refuses it: while the app or `tofu serve` runs, it refreshes every account whose token expires within 10 minutes or that has gone 8 days without a refresh, used or not.
-Turns spread over accounts with equal room, least recently used first. "re-login by" shows only when the provider itself set an end date for the sign-in and it is under 7 days away. `tofu usage` prints the quota windows and when they reset. Both take `--json`.
+prints a card per credential with a bar per quota window, then each key by
+its role, `✓` with its last four characters or `○ not set`. While the app or
+`tofu serve` runs, an account whose token expires within 10 minutes, or
+untouched for 8 days, is refreshed. Turns spread over accounts with equal
+room, least recently used first. `tofu usage` prints the quota windows.
 
 ## Undo it
 
-Delete the role file or the model file you wrote; the next layer down
-wins. A reload writes a deleted catalog file again while the account
-serves it, so exclude the model in `~/.tofu/models` to keep it out.
-Delete a `modelTier` line from `settings.json` to empty the tier.
-`tofu login --disable <number>` sets a credential aside without deleting it,
-and `tofu login --enable <number>` brings it back. `tofu logout llm
-claude-sub 2` deletes account 2; `tofu logout llm meta` the Meta key.
+Delete the role file, the custom model or the model file you wrote; the next
+layer down wins, and a role with no file is unbound. Exclude a catalog
+model in `~/.tofu/models` to keep a reload from bringing it back. Delete a
+`modelTier` line from `settings.json` to empty the tier.
+`tofu login --disable <number>` sets a credential aside and `--enable`
+brings it back; `tofu logout llm claude-sub 2` deletes account 2.

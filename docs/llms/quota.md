@@ -2,7 +2,7 @@
 title: Subscription quota
 description: How full each subscription's windows are and when they reset, read from replies tofu already gets, shared by every tofu process, and never blank after a refusal.
 order: 5
-updated: 2026-10-14
+updated: 2026-10-22
 ---
 
 `tofu usage` shows each signed-in subscription account, its quota windows,
@@ -45,17 +45,31 @@ the reason `moved`. Each account is tried at most once per step. The footer
 names the account that served the last request, so it follows a rotation, a
 pick in the model picker and a new login.
 
-**Then you choose, because another source is other money.** When every
-account of the subscription is at its limit and another subscription you
-are signed in to has room, tofu asks: `continue on codex-sub`, or `I'll wait
-for the limit to reset`. Continuing keeps the conversation, so the other
-model picks up where the first stopped.
+**Then the model you chose, because another source is other money.** When
+every account of the subscription is at its limit, the turn moves on its
+own to the model you picked in advance, with one line saying so:
+`every claude-sub account is at its limit, so this turn continues on
+codex-sub/gpt-5.6-sol, as Continue on another subscription says`. The
+conversation goes with it, so the other model picks up where the first
+stopped. The lead, its sub-agents and cron all follow the same choice. Three
+settings make it, in **Settings, Models & roles**:
 
-**Waiting resumes by itself.** The screen says when the turn resumes, from
-the window's reset time, or the reply's `Retry-After`, or 10 minutes when
-neither says. At that time the turn goes on with no input. Typing goes on
-at once with what you typed, and `esc` cancels the wait. A cron turn never
-asks: it waits.
+| Setting | What it takes |
+|---|---|
+| `continueOnSubscription` | one model per other subscription, such as `codex-sub/gpt-5.6-sol`, tried first |
+| `subscriptionOrder` | the order those subscriptions are tried in, as a comma list such as `codex-sub,claude-sub` |
+| `continueOnAPIModel` | a model paid by your key, such as `meta/muse-spark-1.3`, tried once no subscription has room |
+
+The first two show once you are signed in to more than one subscription. A
+candidate that is at its limit, has no account with room, or whose window
+cannot hold the conversation is skipped with its reason. With nothing set,
+the work stops with one sentence naming the fields to set.
+
+**Waiting resumes by itself.** When the work stops at a limit, the screen
+says when the turn resumes, from the window's reset time, or the reply's
+`Retry-After`, or 10 minutes when neither says. At that time the turn goes
+on with no input. Typing goes on at once with what you typed, and `esc`
+cancels the wait.
 
 **A refusal says what to do.** When a vendor refuses for billing, sign-in,
 an organization rule or an unknown model, the chat shows one sentence: which
@@ -89,6 +103,8 @@ There is nothing to set.
 
 ```
 tofu usage [--history] [--json]
+tofu settings set continueOnSubscription codex-sub/gpt-5.6-sol
+tofu settings set continueOnAPIModel meta/muse-spark-1.3
 tofu doctor
 ```
 

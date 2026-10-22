@@ -2,7 +2,7 @@
 title: Sessions
 description: Every session is recorded as it runs, outside your project, and one command reopens it where you left off.
 order: 6
-updated: 2026-10-17
+updated: 2026-10-22
 ---
 
 A session is one conversation with tofu: every message, tool call and
@@ -169,8 +169,18 @@ prints every request, call, hook and message section. A sub-agent that kept
 writing to the session before a continue shows with the session it was
 recorded in.
 
+Every request, call and sub-agent run says when it began as `start_ms`,
+milliseconds from the start of the session, so a timeline lines up without
+reading timestamps. A message tofu added rather than you typed shows where
+it came from as `from <kind>/<sub>`, such as `from tofu/shell.exit` or
+`from cron/fire`: every message carries a typed origin, so only your own
+words read as you, in the trace, the chat and `tofu serve`.
+
 `tofu session info <name>` prints one session with its model, cost,
-context budget and the error it ended on, `tofu session request <name>
-<request id>` one request exactly as it was sent with its response or error
-body, and `tofu session reads <name>` every file it read. Each takes
+context budget, the error it ended on, and its `history`: what it began
+with and what it holds now, such as `fresh, holds 40 messages` or
+`12 messages from brisk-amber-heron#4mhr1.1, holds 52 messages`, and
+`nothing to resume` when it holds none. `tofu session request <name>
+<request id>` prints one request exactly as it was sent with its response or
+error body, and `tofu session reads <name>` every file it read. Each takes
 `--json`, and `tofu session trace --json` with a filter prints the same rows.
