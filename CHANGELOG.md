@@ -10,6 +10,15 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.16-fix2 - 2026-10-22
+
+### Fixed
+
+- A shell-exit notice carries the shell's id, exit code and run time as typed origin fields, so a client draws it without reading the sentence.
+- Every text that enters a session, such as a sub-agent report, a shell exit or a cron prompt, reaches a client live with its origin, the same as on replay; before, a client saw these only after reopening the session.
+- A cron fire that lands mid-turn shows once in the app, and the step-cap warning shows as a note.
+- tofu serve with a cassette passes it to the session holder it starts.
+
 ## 0.5.16-fix1 - 2026-10-22
 
 ### Fixed
