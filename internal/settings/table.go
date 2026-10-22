@@ -11,6 +11,7 @@ import (
 
 	"tofu/internal/boardy"
 	"tofu/internal/konst"
+	"tofu/internal/llm/models"
 	"tofu/internal/subagent"
 )
 
@@ -97,7 +98,12 @@ const (
 	BrowserCursor               = "browserCursor"
 	BrowserProfile              = "browserProfile"
 	BrowserHeadless             = "browserHeadless"
+	ContinueOnSubscription      = "continueOnSubscription"
+	SubscriptionOrder           = "subscriptionOrder"
+	ContinueOnAPIModel          = "continueOnAPIModel"
 )
+
+const ModelsCategory = "Models & roles"
 
 const (
 	BrowserOff   = "off"
@@ -223,6 +229,14 @@ func checkTable(specs []Spec) error {
 	return nil
 }
 
+func subscriptionSources() []string {
+	var sources []string
+	for _, source := range models.AllSubscriptions() {
+		sources = append(sources, string(source))
+	}
+	return sources
+}
+
 func lineCounts(counts ...int) []string {
 	choices := make([]string, len(counts))
 	for i, count := range counts {
@@ -243,6 +257,10 @@ func Default() []Spec {
 			Choices: []string{"compact", "detailed", "hidden"}},
 		{Key: ColorMode, Label: "Color mode", Description: "Terminal color capability", Category: "Appearance", Kind: Text, DefaultText: "auto",
 			Choices: []string{"auto", "truecolor", "256 colors", "ANSI 16"}},
+		{Key: ContinueOnSubscription, Label: "Continue on another subscription", Description: "when every account on the subscription a turn or a sub-agent runs on is at its limit, it continues on the model picked here for another subscription provider, one model per provider, the first in subscription order with an account left; empty stops the work. Shown when you have accounts on more than one subscription provider", Category: ModelsCategory, Kind: Text},
+		{Key: SubscriptionOrder, Label: "Subscription order", Description: "the order continue on another subscription tries its providers in, as a comma list of sources; empty tries them in the order they were picked. Shown when you have accounts on more than one subscription provider", Category: ModelsCategory, Kind: Text,
+			ListOf: subscriptionSources()},
+		{Key: ContinueOnAPIModel, Label: "Continue on an API model", Description: "when no subscription has an account left, a turn or a sub-agent continues on this model, paid by its key; empty stops the work", Category: ModelsCategory, Kind: Text},
 		{Key: Composer, Label: "Composer", Description: "Enter sends; Shift+Enter inserts a line break", Category: "Interaction", Kind: Text, DefaultText: "standard",
 			Choices: []string{"standard", "compact", "expanded"}},
 		{Key: GatePrompt, Label: "Confirmations", Description: "auto lets jev decide at every gate and work never stops for you: only what it denies is refused, and what it would ask about runs and shows its verdict in the chat. ask stops on what jev would ask about until you answer or gateAskWaitSeconds passes. A project hook, a rule override and the model changing a setting ask you in both", Category: "Interaction", Kind: Text, DefaultText: GatePromptAuto,

@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Settings · 2 set                                                     64 declared
+Settings · 2 set                                                     67 declared
 
 Appearance
   ● theme                        Nord                project
@@ -8,6 +8,11 @@ Appearance
     animations                   subtle              default
     statusBar                    compact             default
     colorMode                    auto                default
+
+Models & roles
+    continueOnSubscription       empty               default
+    subscriptionOrder            empty               default
+    continueOnAPIModel           empty               default
 
 Interaction
     composer                     standard            default

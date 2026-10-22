@@ -20,6 +20,7 @@ import (
 	"tofu/internal/llm/quota"
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/llm/wire/codex"
+	"tofu/internal/recall"
 	"tofu/internal/safe"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/sys"
@@ -39,7 +40,9 @@ type accounts struct {
 	effort   llm.Effort
 	urls     map[quota.Provider]string
 	now      func() time.Time
-	wrap     func(turn.Model) (turn.Model, error)
+	wrap     func(turn.Model, recall.Budget) (turn.Model, error)
+	budget   recall.Budget
+	budgetOf func(models.Model) (recall.Budget, error)
 	fixed    turn.Model
 
 	verbosity        models.Verbosity
@@ -51,7 +54,13 @@ type accounts struct {
 }
 
 func (a *accounts) forTurn() turn.Accounts {
-	return turn.Accounts{Pick: a.pick, Next: a.next, Resets: a.resets}
+	if a.fixed != nil {
+		return turn.Accounts{Pick: a.pick, Next: a.next, Resets: a.resets}
+	}
+	moveOn := func(ctx context.Context, left []string, conversationTokens int) (turn.Moved, error) {
+		return a.continuing().move(ctx, left, conversationTokens)
+	}
+	return turn.Accounts{Pick: a.pick, Next: a.next, Resets: a.resets, Elsewhere: moveOn}
 }
 
 func (a *accounts) resets(ctx context.Context, pinned turn.Account) (time.Time, bool) {
@@ -63,27 +72,6 @@ func (a *accounts) resets(ctx context.Context, pinned turn.Account) (time.Time, 
 		return candidates[at].Report.WaitUntil(a.now())
 	}
 	return time.Time{}, false
-}
-
-func (a *accounts) others() []host.OtherSource {
-	library, err := modelLibrary(a.dir)
-	if err != nil || a.store == nil {
-		return nil
-	}
-	var serving []host.OtherSource
-	for _, spec := range library.Subscriptions {
-		provider := cred.Provider(spec.ID)
-		model, err := library.Default(spec.ID)
-		if provider == a.provider || err != nil {
-			continue
-		}
-		other := &accounts{provider: provider, store: a.store, spends: model.Windows, urls: a.urls, now: a.now}
-		candidates, _, err := other.read(context.Background())
-		if err == nil && slices.ContainsFunc(candidates, func(candidate quota.Candidate) bool { return !quota.Spent(candidate.Report, model.Windows, a.now()) }) {
-			serving = append(serving, host.OtherSource{Name: string(provider), Pick: host.Pick{Wire: spec.Wire, Model: model.Slug(), Effort: a.effort}})
-		}
-	}
-	return serving
 }
 
 type standIns struct {
@@ -126,19 +114,8 @@ func (s standIns) forTurn() turn.Accounts {
 			}
 			return time.Time{}, false
 		},
+		Elsewhere: s.continuing().move,
 	}
-}
-
-func (s standIns) others() []host.OtherSource {
-	library, _ := modelLibrary("")
-	var serving []host.OtherSource
-	for _, spec := range library.Subscriptions {
-		source := string(spec.ID)
-		if source != s.source && slices.ContainsFunc(s.readings, func(reading frame.Quota) bool { return reading.Source() == source && reading.Fraction < 1 }) {
-			serving = append(serving, host.OtherSource{Name: source, Pick: host.Pick{Wire: spec.Wire}})
-		}
-	}
-	return serving
 }
 
 func (s standIns) spent(id int64) host.TurnAccount {
@@ -155,7 +132,7 @@ func (a *accounts) wrapped(model turn.Model) (turn.Model, error) {
 	if a.wrap == nil {
 		return model, nil
 	}
-	return a.wrap(model)
+	return a.wrap(model, a.budget)
 }
 
 func (a *accounts) pick(ctx context.Context) (turn.Account, error) {

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"cmp"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -22,7 +23,8 @@ const (
 	animationsOff     = "off"
 	switchOn          = "on"
 	switchOff         = "off"
-	rolesCategory     = "Models & roles"
+	rolesCategory     = isettings.ModelsCategory
+	continuityOff     = "no"
 	roleKeyPrefix     = "role:"
 	agentKeyPrefix    = "agent:"
 	orchestratorLabel = "Orchestrator model"
@@ -223,11 +225,22 @@ func (a *App) refreshSettingsRows() {
 	pending := a.store.RestartPending()
 	var rows []settings.Row
 	rolesPlaced := false
+	subscriptions := a.subscriptionSources()
 	for _, spec := range a.store.Table() {
 		if !rolesPlaced && spec.Category != appearanceGroup {
 			rows, rolesPlaced = append(rows, a.roleRows()...), true
 		}
-		rows = append(rows, a.settingRow(spec, slices.Contains(pending, spec.Key)))
+		switch spec.Key {
+		case isettings.ContinueOnSubscription, isettings.SubscriptionOrder:
+			if len(subscriptions) < 2 {
+				continue
+			}
+		case isettings.ContinueOnAPIModel:
+			if len(subscriptions) == 0 {
+				continue
+			}
+		}
+		rows = append(rows, a.settingRow(spec, slices.Contains(pending, spec.Key), subscriptions))
 		if spec.Key == isettings.Composer {
 			rows = append(rows,
 				settings.Row{Key: keybindingsKey, Category: spec.Category, Label: "Keybindings", Description: "Change shortcuts handled inside tofu", Action: settings.RowKeybindings},
@@ -289,7 +302,30 @@ func (a *App) roleRows() []settings.Row {
 	return rows
 }
 
-func (a *App) settingRow(spec isettings.Spec, pending bool) settings.Row {
+func (a *App) subscriptionSources() []string {
+	var sources []string
+	for _, wire := range a.wires {
+		if slices.Contains(library.AllSubscriptions(), library.Subscription(wire.Provider)) && !slices.Contains(sources, wire.Provider) {
+			sources = append(sources, wire.Provider)
+		}
+	}
+	return sources
+}
+
+func orders(sources []string) []string {
+	if len(sources) < 2 {
+		return sources
+	}
+	var all []string
+	for at, first := range sources {
+		for _, rest := range orders(slices.Delete(slices.Clone(sources), at, at+1)) {
+			all = append(all, first+","+rest)
+		}
+	}
+	return all
+}
+
+func (a *App) settingRow(spec isettings.Spec, pending bool, subscriptions []string) settings.Row {
 	scope, fromFile := a.store.Source(spec.Key)
 	source := defaultSource
 	if fromFile {
@@ -310,6 +346,12 @@ func (a *App) settingRow(spec isettings.Spec, pending bool) settings.Row {
 	}
 	if _, picked := a.pickedSetting(spec.Key); picked {
 		row.Action = settings.RowModel
+	}
+	switch spec.Key {
+	case isettings.ContinueOnSubscription, isettings.ContinueOnAPIModel:
+		row.Value = cmp.Or(row.Value, continuityOff)
+	case isettings.SubscriptionOrder:
+		row.Choices = orders(subscriptions)
 	}
 	switch spec.Kind {
 	case isettings.Bool:

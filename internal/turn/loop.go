@@ -789,6 +789,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	askedAgainAfterBlank, polled, nudged := false, false, false
 	steeredAt := 0
+	var left []string
 	var asked *openQuestion
 	holdFor := func(stepRow *StepRow, why string) {
 		told := why + ", so it was sent back to answer the person's message from step " + strconv.Itoa(asked.step)
@@ -931,22 +932,36 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 		for tried := []Account{account}; transport.KindOf(err) == transport.KindRateLimit; tried = append(tried, account) {
 			next, rotated := config.Accounts.rotate(ctx, account, tried)
-			if !rotated {
-				err = config.Accounts.limited(ctx, config.Wire, tried, lastAttempts, now(), err)
-				break
+			var told, on string
+			if rotated {
+				told, on = rotatedWords(account, next), "account #"+strconv.FormatInt(next.ID, 10)
+				config.tookAccount(AccountTaken{ID: next.ID, From: account.ID, Reason: AccountMoved})
+			} else {
+				moved, unmoved, movedOn := config.Accounts.elsewhere(ctx, left, asSent.Total())
+				if !movedOn {
+					limited := config.Accounts.limited(ctx, config.Wire, tried, lastAttempts, now(), err)
+					limited.Continuity, err = unmoved, limited
+					break
+				}
+				if moved.Wire != config.Wire {
+					messages, artifacts.preview = WithoutThinking(messages), artifacts.preview.OnWire(moved.Wire)
+				}
+				told, on, next, left = moved.words(), moved.To, moved.Account, append(left, moved.From)
+				config.Accounts, config.Wire, config.Spend, row.Wire, row.Spend = moved.Accounts, moved.Wire, moved.Spend, moved.Wire, moved.Spend
+				if moved.Budget != (recall.Budget{}) {
+					budget = moved.Budget
+				}
 			}
-			told := rotatedWords(account, next)
 			row.Warnings = append(row.Warnings, told)
 			recorded.notice(told)
 			if config.Notify != nil {
 				config.Notify(told)
 			}
-			config.tookAccount(AccountTaken{ID: next.ID, From: account.ID, Reason: AccountMoved})
 			account, row.Account = next, next.ID
 			if next.Model != nil {
 				model = next.Model
 			}
-			decision, timing, requestID, err = ask(ctx, "step "+strconv.Itoa(step)+", asked again on account #"+strconv.FormatInt(next.ID, 10)+" after a rate limit",
+			decision, timing, requestID, err = ask(ctx, "step "+strconv.Itoa(step)+", asked again on "+on+" after a rate limit",
 				llm.Request{Messages: withPlan(messages), Tools: definitions})
 		}
 		if err != nil {

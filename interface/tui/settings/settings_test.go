@@ -102,6 +102,7 @@ func TestAChoiceSetToOffDrawsAsAChoiceAndABoolAsASwitch(t *testing.T) {
 	}
 	m.Key("right")
 	m.Key("right")
+	m.Key("right")
 	if view := ansi.Strip(m.View()); !strings.Contains(view, "○ off") {
 		t.Fatalf("readBeforeEdit and the other bools no longer draw as a switch:\n%s", view)
 	}

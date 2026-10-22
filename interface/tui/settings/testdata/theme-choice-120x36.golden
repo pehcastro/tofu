@@ -4,20 +4,20 @@
                                                                                          Theme                          
   CATEGORIES              › Theme                                 Solarized Light  ▾     tofu uses Zed Nu Disco;        
   › Appearance      05      tofu uses Zed Nu Disco; choose a palette                     choose a palette               
-    Interaction     07                                                                                                  
-    Context         15      Densi                                                        CURRENT VALUE                  
-    Files           03      Spaci  Theme                                          esc     Solarized Light               
-    Shell           05             tofu uses Zed Nu Disco; choose a palette                                             
-    Turn            16      Anima                                                        HOW IT WORKS                   
-    Projects        04      Motio    tofu                                                Enter opens a focused          
-    Browser         08                                                                   choice. Changes preview        
-                            Statu    tofu light                                          immediately; Esc keeps the     
-  NAVIGATE                  Conte                                                        prior value.                   
-  ↑↓ setting · ←→                    tofu dusk                                                                          
-  section                   Color                                                        SCOPE                          
-  ctrl+k search · esc       Termi  >  Solarized Light                                    Global · a project value       
-  chat                                                                                   overrides it                   
-                          LIVE PR    Dracula                                             …tester/.tofu/settings.json    
+    Models & roles  03                                                                                                  
+    Interaction     07      Densi                                                        CURRENT VALUE                  
+    Context         15      Spaci  Theme                                          esc     Solarized Light               
+    Files           03             tofu uses Zed Nu Disco; choose a palette                                             
+    Shell           05      Anima                                                        HOW IT WORKS                   
+    Turn            17      Motio    tofu                                                Enter opens a focused          
+    Projects        04                                                                   choice. Changes preview        
+    Browser         08      Statu    tofu light                                          immediately; Esc keeps the     
+                            Conte                                                        prior value.                   
+  NAVIGATE                           tofu dusk                                                                          
+  ↑↓ setting · ←→           Color                                                        SCOPE                          
+  section                   Termi  >  Solarized Light                                    Global · a project value       
+  ctrl+k search · esc                                                                    overrides it                   
+  chat                    LIVE PR    Dracula                                             …tester/.tofu/settings.json    
                                                                                                                         
                              tofu    Nord                                                                               
                             Inter                                                                                       

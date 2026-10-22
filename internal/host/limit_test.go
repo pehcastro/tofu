@@ -3,7 +3,7 @@ package host
 import (
 	"context"
 	"encoding/json"
-	"io"
+	"errors"
 	"slices"
 	"strconv"
 	"strings"
@@ -72,7 +72,7 @@ func (e *limitedSubscriptions) Prepare(start Turn, hooks Hooks) (Prepared, error
 	e.prepared = append(e.prepared, wire)
 	e.mu.Unlock()
 	store, err := session.OpenIn(e.dir)
-	config := turn.Config{Task: start.Task, Caps: turn.Caps{MaxSteps: 6}, Inbox: hooks.Inbox, ResultBytesCap: konst.TurnResultBytesCap, Spend: turn.SpendSubscription, Wire: wire}
+	config := turn.Config{Task: start.Task, Caps: turn.Caps{MaxSteps: 6}, Inbox: hooks.Inbox, ResultBytesCap: konst.TurnResultBytesCap, Spend: turn.SpendSubscription, Wire: wire, Notify: hooks.Say}
 	prepared := Prepared{Config: config, Sessions: store}
 	if wire == "codex" {
 		prepared.Config.Model = e.codex
@@ -103,10 +103,12 @@ func (e *limitedSubscriptions) Prepare(start Turn, hooks Hooks) (Prepared, error
 	prepared.Account = func(id int64) TurnAccount {
 		return TurnAccount{Source: "claude-sub", AccountID: id, Model: "claude-opus-5"}
 	}
-	if e.codex != nil {
-		prepared.Others = func() []OtherSource {
-			return []OtherSource{{Name: "codex-sub", Pick: Pick{Wire: "codex", Model: "gpt-5.6-sol"}}}
+	prepared.Config.Accounts.Elsewhere = func(context.Context, []string, int) (turn.Moved, error) {
+		if e.codex == nil {
+			return turn.Moved{}, errors.New("continuity is not set, so the work stops here")
 		}
+		return turn.Moved{From: "claude-sub", To: "codex-sub/gpt-5.6-sol", Setting: "Continue on another subscription", Account: turn.Account{Model: e.codex},
+			Wire: "codex", Spend: turn.SpendSubscription}, nil
 	}
 	return prepared, err
 }
@@ -160,19 +162,6 @@ func (r *limitRun) until(method, holding string) wireLine {
 	}, method+" holding "+holding)
 }
 
-func (r *limitRun) answerTheQuestion(chosen string) QuestionRequest {
-	r.t.Helper()
-	line := r.until(QuestionMethod, "")
-	var asked QuestionRequest
-	if err := json.Unmarshal(line.Params, &asked); err != nil {
-		r.t.Fatal(err)
-	}
-	if _, err := io.WriteString(r.c.in, `{"jsonrpc":"2.0","id":`+string(line.ID)+`,"result":{"outcome":"submitted","answers":[{"id":"limit","chosen":["`+chosen+`"]}]}}`+"\n"); err != nil {
-		r.t.Fatal(err)
-	}
-	return asked
-}
-
 func (r *limitRun) saw(method string) bool {
 	return slices.ContainsFunc(r.seen, func(frame string) bool { return strings.HasPrefix(frame, method+" ") })
 }
@@ -191,24 +180,21 @@ func TestRotateToTheSecondAccountWithoutAsking(t *testing.T) {
 	}
 }
 
-func TestLimitOnEveryAccountAsksAndContinuesOnCodexFromTheSameConversation(t *testing.T) {
+func TestLimitOnEveryAccountMovesToTheContinuityModelInTheSameTurn(t *testing.T) {
 	thought := llm.Decision{Build: "stub", Outcome: llm.OutcomeToolCalls, Thinking: llm.Thinking{Text: "the note first", Signature: "sig-anthropic"},
 		ToolCalls: []llm.ToolCall{{ID: "call-1", Name: "nothing", Arguments: json.RawMessage(`{}`)}}}
 	codex := &subAccount{id: 9}
 	r := startLimited(t, &limitedSubscriptions{accounts: []*subAccount{limitedFor(1, time.Hour, thought), limitedFor(2, time.Hour)}, codex: codex})
 	r.send()
-	asked := r.answerTheQuestion("continue on codex-sub")
+	moved := r.until("turn.account", `"source":"codex-sub"`)
+	r.until("note", "continues on codex-sub/gpt-5.6-sol")
 	r.until("turn.completed", `"status":"finished"`)
-	var labels []string
-	for _, option := range asked.Questions[0].Options {
-		labels = append(labels, option.Label)
-	}
-	if len(asked.Questions) != 1 || !slices.Equal(labels, []string{"continue on codex-sub", "I'll wait for the limit to reset"}) {
-		t.Fatalf("the question offered %q", labels)
+	if r.saw(QuestionMethod) || !strings.Contains(string(moved.Params), `"model":"gpt-5.6-sol"`) {
+		t.Fatalf("frames %q: want no question and the account frame naming gpt-5.6-sol", r.seen)
 	}
 	requests := codex.requests()
-	if len(requests) != 1 || !slices.Equal(r.engine.wires(), []string{"anthropic", "codex"}) {
-		t.Fatalf("codex was asked %d times and the wires prepared were %v, want once and anthropic then codex", len(requests), r.engine.wires())
+	if len(requests) != 1 || !slices.Equal(r.engine.wires(), []string{"anthropic"}) {
+		t.Fatalf("codex was asked %d times and the wires prepared were %v, want once inside the one anthropic turn", len(requests), r.engine.wires())
 	}
 	var task, call bool
 	for _, message := range requests[0].Messages {
@@ -225,10 +211,12 @@ func TestLimitOnEveryAccountAsksAndContinuesOnCodexFromTheSameConversation(t *te
 
 func TestResumeAtTheResetWithNoInputAndEscCancelsTheWait(t *testing.T) {
 	t.Run("the turn resumes by itself", func(t *testing.T) {
-		r := startLimited(t, &limitedSubscriptions{accounts: []*subAccount{limitedFor(1, 1500*time.Millisecond), limitedFor(2, time.Hour)}, codex: &subAccount{id: 9}})
+		r := startLimited(t, &limitedSubscriptions{accounts: []*subAccount{limitedFor(1, 1500*time.Millisecond), limitedFor(2, time.Hour)}})
 		r.send()
-		r.answerTheQuestion("I'll wait for the limit to reset")
-		r.until("note", "resumes by itself at")
+		resumes := r.until("note", "resumes by itself at")
+		if !strings.Contains(string(resumes.Params), "Continuity is not set") {
+			t.Fatalf("the wait note %s does not say continuity is not set", resumes.Params)
+		}
 		r.until("note", "limit has reset")
 		r.until("turn.completed", `"status":"finished"`)
 		asked := r.engine.accounts[0].requests()
@@ -238,9 +226,8 @@ func TestResumeAtTheResetWithNoInputAndEscCancelsTheWait(t *testing.T) {
 		}
 	})
 	t.Run("esc cancels the wait", func(t *testing.T) {
-		r := startLimited(t, &limitedSubscriptions{accounts: []*subAccount{limitedFor(1, time.Hour), limitedFor(2, time.Hour)}, codex: &subAccount{id: 9}})
+		r := startLimited(t, &limitedSubscriptions{accounts: []*subAccount{limitedFor(1, time.Hour), limitedFor(2, time.Hour)}})
 		r.send()
-		r.answerTheQuestion("I'll wait for the limit to reset")
 		r.until("note", "resumes by itself at")
 		r.c.ask("4", "turn.stop", `{"session":"`+r.session+`","turn":"`+r.turn+`"}`)
 		r.until("note", "was cancelled")
@@ -264,15 +251,16 @@ func TestResumeAtTheResetWithNoInputAndEscCancelsTheWait(t *testing.T) {
 			t.Fatalf("frames %q, last message %q: want no question with no other source, and the typed text as the task", r.seen, last[len(last)-1].Content)
 		}
 	})
-	t.Run("a cron turn waits and never asks", func(t *testing.T) {
-		r := startLimited(t, &limitedSubscriptions{accounts: []*subAccount{limitedFor(1, time.Second), limitedFor(2, time.Hour)}, codex: &subAccount{id: 9}})
+	t.Run("a cron turn follows continuity and never asks", func(t *testing.T) {
+		codex := &subAccount{id: 9}
+		r := startLimited(t, &limitedSubscriptions{accounts: []*subAccount{limitedFor(1, time.Hour), limitedFor(2, time.Hour)}, codex: codex})
 		r.h.mu.Lock()
 		r.h.begin(Pick{Wire: "anthropic"}, "check the build", Origin{Kind: OriginCron, Job: "c1"})
 		r.h.mu.Unlock()
-		r.until("note", "resumes by itself at")
+		r.until("note", "continues on codex-sub/gpt-5.6-sol")
 		r.until("turn.completed", `"status":"finished"`)
-		if r.saw(QuestionMethod) {
-			t.Fatalf("a cron turn asked: %q", r.seen)
+		if r.saw(QuestionMethod) || len(codex.requests()) != 1 {
+			t.Fatalf("frames %q, codex asked %d times: want no question and one request on codex", r.seen, len(codex.requests()))
 		}
 	})
 }

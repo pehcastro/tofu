@@ -652,7 +652,6 @@ func (a *App) followSource(spent *host.TurnAccount) {
 		return
 	}
 	a.wire, a.provider, a.model, a.picked = a.wires[at].Name, spent.Source, spent.Model, spent.Source+"/"+spent.Model
-	a.view.Append(session.Entry{Kind: session.Note, Body: "the turn moved to " + a.picked + ", so the next turn runs there too; pick another model to change it"})
 }
 
 func (a *App) thinkingOf(event Event, at time.Time) feed.Event {

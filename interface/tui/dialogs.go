@@ -343,9 +343,10 @@ func (a *App) choseModel(intent models.Intent) tea.Cmd {
 		a.notify(a.nowRuns(intent.Agent) + ", in the " + isettings.Scope(a.settings.Scope).String() + " " + isubagent.AssignmentFile)
 		return a.pop()
 	case models.Set:
-		a.commit(intent.Setting, intent.Slug)
+		value := a.continueOn(intent.Setting, intent.Slug)
+		a.commit(intent.Setting, value)
 		a.refreshSettingsRows()
-		a.notify(intent.Agent + " now runs " + intent.Slug)
+		a.notify(intent.Agent + " is now " + cmp.Or(value, continuityOff))
 		return a.pop()
 	case models.CheckKey:
 		open, isPicker := a.top().(*modelsDialog)

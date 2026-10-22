@@ -4,20 +4,20 @@
                                                                                 
   CATEGORIES            › Browser                                  drive  ▾     
     Appearance    05      drive lets the model read your Chrome tabs and cl…    
-    Interaction   07                                                            
-    Context       15      Browser driver                        subagent  ▾     
-    Files         03      subagent gives the browser steps to a browser sub…    
-    Shell         05                                                            
-    Turn          16      Browser steps                               30  ▾     
-    Projects      04      how many actions one browser task may take            
-  › Browser       08                                                            
-                          Browser model                          default  ▾     
-  NAVIGATE                the subscription model a browser task asks for th…    
-  ↑↓ setting · ←→                                                               
-  section                 Browser effort                         default  ▾     
-  ctrl+k search ·         the effort the browser sub-agent runs at, when it…    
-  esc chat                                                                      
-                          Browser cursor                                ● on    
+    Models & rol… 03                                                            
+    Interaction   07      Browser driver                        subagent  ▾     
+    Context       15      subagent gives the browser steps to a browser sub…    
+    Files         03                                                            
+    Shell         05      Browser steps                               30  ▾     
+    Turn          17      how many actions one browser task may take            
+    Projects      04                                                            
+  › Browser       08      Browser model                          default  ▾     
+                          the subscription model a browser task asks for th…    
+  NAVIGATE                                                                      
+  ↑↓ setting · ←→         Browser effort                         default  ▾     
+  section                 the effort the browser sub-agent runs at, when it…    
+  ctrl+k search ·                                                               
+  esc chat                Browser cursor                                ● on    
                           a small cursor labelled tofu glides to each click…    
                                                                                 
                         enter change  ·  shift+tab scope  ·  esc chat           

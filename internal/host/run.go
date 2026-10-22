@@ -29,14 +29,11 @@ import (
 )
 
 const (
-	processDir      = "."
-	standingPoint   = "standing"
-	cancelledAt     = "cancelled at"
-	hookTrustTool   = "hooks"
-	resumedTask     = "continue"
-	continueOn      = "continue on "
-	waitForTheLimit = "I'll wait for the limit to reset"
-	limitQuestion   = "limit"
+	processDir    = "."
+	standingPoint = "standing"
+	cancelledAt   = "cancelled at"
+	hookTrustTool = "hooks"
+	resumedTask   = "continue"
 )
 
 type Engine interface {
@@ -77,18 +74,11 @@ type Prepared struct {
 	GateOff   error
 	Close     func()
 	Account   func(id int64) TurnAccount
-	Others    func() []OtherSource
-}
-
-type OtherSource struct {
-	Name string
-	Pick Pick
 }
 
 type limitReached struct {
 	*turn.RateLimited
 	source string
-	others []OtherSource
 }
 
 func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
@@ -100,20 +90,8 @@ func (h *Host) runFrom(ctx context.Context, pick Pick, task string, live Live, r
 	if reached.RateLimited == nil {
 		return
 	}
-	resumesAt := reached.ResetAt.Local().Format(time.DateTime) + ", in " + reached.ResetAt.Sub(h.now()).Round(time.Second).String()
-	other, goesOn := h.anotherSource(ctx, reached, resumesAt, live)
-	switch {
-	case !goesOn:
-	case other != nil:
-		h.mu.Lock()
-		h.pick = other.Pick
-		h.mu.Unlock()
-		live.Emit(Event{Kind: EventNote, Text: "the turn continues on " + other.Name + " from the same conversation"})
-		h.runFrom(ctx, other.Pick, resumedTask, live, true)
-	default:
-		if task, resumes := h.waitForTheReset(ctx, reached, resumesAt, live); resumes {
-			h.runFrom(ctx, pick, task, live, true)
-		}
+	if task, resumes := h.waitForTheReset(ctx, reached, live); resumes {
+		h.runFrom(ctx, pick, task, live, true)
 	}
 }
 
@@ -215,14 +193,28 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	config.Steering = func() []string { return h.steering.take(emit, int(steps.Load())+1) }
 	config.ImagesOf = imagesOf
 	config.ToolResult = func(answered llm.Message) { watch.result(answered, "") }
-	config.AccountTaken = func(taken turn.AccountTaken) {
-		spent := TurnAccount{AccountID: taken.ID}
-		if prepared.Account != nil {
-			spent = prepared.Account(taken.ID)
+	movedTo, ceiling := "", prepared.Ceiling
+	spentOn := func(id int64) TurnAccount {
+		spent := TurnAccount{AccountID: id}
+		if prepared.Account != nil && id != 0 {
+			spent = prepared.Account(id)
 		}
+		if movedTo != "" {
+			spent.Source, spent.Model, _ = strings.Cut(movedTo, "/")
+		}
+		return spent
+	}
+	config.AccountTaken = func(taken turn.AccountTaken) {
+		spent := spentOn(taken.ID)
 		spent.Reason, spent.FromAccount = AccountReason(taken.Reason), taken.From
 		emit(Event{Kind: EventAccount, Account: &spent})
 	}
+	config.Accounts = announcingMoves(config.Accounts, func(moved turn.Moved) {
+		movedTo, ceiling = moved.To, cmp.Or(moved.Budget.CeilingTokens, ceiling)
+		spent := spentOn(moved.Account.ID)
+		spent.Reason = AccountReason(turn.AccountMoved)
+		emit(Event{Kind: EventAccount, Account: &spent})
+	})
 	announce := func(ended turn.Row, agent, into string) {
 		forked := forkOf(ended, into)
 		emit(Event{Kind: EventForkStart, Agent: agent})
@@ -269,7 +261,7 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 			emit(Event{Kind: EventPlan, Plan: statedPlan(prepared.Plan.Items())})
 		}
 		if step.Occupancy != nil {
-			emit(Event{Kind: EventContext, Context: Context{Used: step.Occupancy.Total(), Budget: prepared.Ceiling}})
+			emit(Event{Kind: EventContext, Context: Context{Used: step.Occupancy.Total(), Budget: ceiling}})
 		}
 	}
 	config.EndedSession = func(ended turn.Row) error {
@@ -366,39 +358,30 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	if err != nil {
 		fail(err)
 	}
-	if reached.RateLimited == nil || ctx.Err() != nil {
+	if ctx.Err() != nil {
 		return limitReached{}
-	}
-	if prepared.Others != nil {
-		reached.others = prepared.Others()
 	}
 	return reached
 }
 
-func (h *Host) anotherSource(ctx context.Context, reached limitReached, resumesAt string, live Live) (*OtherSource, bool) {
-	if live.Origin.Kind == OriginCron || len(reached.others) == 0 {
-		return nil, true
+func announcingMoves(accounts turn.Accounts, announce func(turn.Moved)) turn.Accounts {
+	elsewhere := accounts.Elsewhere
+	if elsewhere == nil {
+		return accounts
 	}
-	options := make([]turn.PersonOption, 0, len(reached.others)+1)
-	for _, other := range reached.others {
-		options = append(options, turn.PersonOption{Label: continueOn + other.Name, Description: "another subscription, paid apart from " + reached.source + ": the conversation carries over"})
-	}
-	options = append(options, turn.PersonOption{Label: waitForTheLimit, Description: "the turn resumes by itself at " + resumesAt})
-	replies, err := askForm(live.Emit, h.questions)(ctx, []turn.PersonQuestion{{ID: limitQuestion, Header: reached.source + " limit", Type: turn.QuestionChoice, Options: options,
-		Question: "every " + reached.source + " account is at its limit: go on with another subscription, or wait for the limit to reset?"}}, 0)
-	var undelivered turn.QuestionUndelivered
-	if err != nil && !errors.As(err, &undelivered) {
-		return nil, false
-	}
-	for _, other := range reached.others {
-		if len(replies) > 0 && slices.Contains(replies[0].Chosen, continueOn+other.Name) {
-			return &other, true
+	accounts.Elsewhere = func(ctx context.Context, left []string, conversationTokens int) (turn.Moved, error) {
+		moved, err := elsewhere(ctx, left, conversationTokens)
+		if err == nil {
+			moved.Accounts = announcingMoves(moved.Accounts, announce)
+			announce(moved)
 		}
+		return moved, err
 	}
-	return nil, true
+	return accounts
 }
 
-func (h *Host) waitForTheReset(ctx context.Context, reached limitReached, resumesAt string, live Live) (string, bool) {
+func (h *Host) waitForTheReset(ctx context.Context, reached limitReached, live Live) (string, bool) {
+	resumesAt := reached.ResetAt.Local().Format(time.DateTime) + ", in " + reached.ResetAt.Sub(h.now()).Round(time.Second).String()
 	said, _, _ := strings.Cut(reached.Error(), "\n")
 	live.Emit(Event{Kind: EventNote, Text: said + "\nevery " + reached.source + " account is at its limit, so the turn resumes by itself at " + resumesAt +
 		": type to go on now, or press esc to cancel"})

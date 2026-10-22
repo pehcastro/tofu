@@ -86,6 +86,37 @@ exit 0
         ]
       },
       {
+        "key": "continueOnSubscription",
+        "category": "Models & roles",
+        "value": "",
+        "source": "default",
+        "label": "Continue on another subscription",
+        "description": "when every account on the subscription a turn or a sub-agent runs on is at its limit, it continues on the model picked here for another subscription provider, one model per provider, the first in subscription order with an account left; empty stops the work. Shown when you have accounts on more than one subscription provider",
+        "kind": "text"
+      },
+      {
+        "key": "subscriptionOrder",
+        "category": "Models & roles",
+        "value": "",
+        "source": "default",
+        "label": "Subscription order",
+        "description": "the order continue on another subscription tries its providers in, as a comma list of sources; empty tries them in the order they were picked. Shown when you have accounts on more than one subscription provider",
+        "kind": "list",
+        "choices": [
+          "claude-sub",
+          "codex-sub"
+        ]
+      },
+      {
+        "key": "continueOnAPIModel",
+        "category": "Models & roles",
+        "value": "",
+        "source": "default",
+        "label": "Continue on an API model",
+        "description": "when no subscription has an account left, a turn or a sub-agent continues on this model, paid by its key; empty stops the work",
+        "kind": "text"
+      },
+      {
         "key": "composer",
         "category": "Interaction",
         "value": "standard",

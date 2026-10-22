@@ -12,6 +12,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/recall"
 	"tofu/internal/transport"
 )
 
@@ -23,16 +24,31 @@ type Account struct {
 }
 
 type Accounts struct {
-	Pick   func(context.Context) (Account, error)
-	Next   func(context.Context, Account) (Account, bool, error)
-	Resets func(context.Context, Account) (time.Time, bool)
+	Pick      func(context.Context) (Account, error)
+	Next      func(context.Context, Account) (Account, bool, error)
+	Resets    func(context.Context, Account) (time.Time, bool)
+	Elsewhere func(ctx context.Context, left []string, conversationTokens int) (Moved, error)
+}
+
+type Moved struct {
+	From, To, Setting string
+	Account           Account
+	Accounts          Accounts
+	Wire              string
+	Spend             Spend
+	Budget            recall.Budget
+}
+
+func (m Moved) words() string {
+	return "every " + m.From + " account is at its limit, so this turn continues on " + m.To + ", as " + m.Setting + " says"
 }
 
 type RateLimited struct {
-	Wire    string
-	Tried   []int64
-	ResetAt time.Time
-	Cause   error
+	Wire       string
+	Tried      []int64
+	ResetAt    time.Time
+	Cause      error
+	Continuity string
 }
 
 func (r *RateLimited) Error() string {
@@ -51,6 +67,9 @@ func (r *RateLimited) Error() string {
 			said += " Every account this turn could move to is limited: " + strings.Join(tried, ", ") + "."
 		}
 	}
+	if r.Continuity != "" {
+		said += " " + strings.ToUpper(r.Continuity[:1]) + r.Continuity[1:]
+	}
 	return said + "\n" + r.Cause.Error()
 }
 
@@ -62,6 +81,17 @@ func (a Accounts) rotate(ctx context.Context, limited Account, tried []Account) 
 	}
 	next, moved, err := a.Next(ctx, limited)
 	return next, err == nil && moved && !slices.ContainsFunc(tried, func(spent Account) bool { return spent.ID == next.ID })
+}
+
+func (a Accounts) elsewhere(ctx context.Context, left []string, conversationTokens int) (Moved, string, bool) {
+	if a.Elsewhere == nil {
+		return Moved{}, "", false
+	}
+	moved, err := a.Elsewhere(ctx, left, conversationTokens)
+	if err != nil {
+		return Moved{}, err.Error(), false
+	}
+	return moved, "", true
 }
 
 func (a Accounts) limited(ctx context.Context, wire string, tried []Account, attempts []llm.Attempt, now time.Time, cause error) *RateLimited {

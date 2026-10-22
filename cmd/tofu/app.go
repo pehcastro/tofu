@@ -33,6 +33,7 @@ import (
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
 	"tofu/internal/memory"
+	"tofu/internal/recall"
 	"tofu/internal/safe"
 	sessionstore "tofu/internal/session"
 	settingspkg "tofu/internal/settings"
@@ -849,21 +850,21 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 		return prepared, err
 	}
 	clock.step("model catalogue")
-	opened.held.wrap = func(model turn.Model) (turn.Model, error) {
+	opened.held.wrapping(func(model turn.Model, budget recall.Budget) (turn.Model, error) {
 		asked, guardErr := guarded(model, budget)
 		if guardErr != nil {
 			return nil, guardErr
 		}
 		return hooks.Lead(clock.leading(asked)), nil
-	}
-	wrapSubAgent := func(model turn.Model) (turn.Model, error) {
+	}, budget, opts)
+	wrapSubAgent := func(model turn.Model, budget recall.Budget) (turn.Model, error) {
 		asked, guardErr := guarded(model, budget)
 		return hooks.SubAgent(asked), guardErr
 	}
 	person := hooks.Inbox.LeadAsks(hooks.Person)
-	turnAccounts, others, account := opened.held.forTurn(), opened.held.others, spentAccount(opened.held, opened.selected.ID)
+	turnAccounts, account := opened.held.forTurn(), spentAccount(opened.held, opened.selected.ID)
 	if stand := e.standIns(opened.held, opts.wire); len(stand.mine()) > 0 {
-		turnAccounts, others, account = stand.forTurn(), stand.others, stand.spent
+		turnAccounts, account = stand.forTurn(), stand.spent
 	}
 	config, spawner, err := runConfig(opts, built, runtime{accounts: clock.picking(turnAccounts, opened.held.store), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: say, roster: hooks.Roster, inbox: hooks.Inbox, now: hooks.Now,
 		open: e.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.selected, tabs: e.tabs, leadAsks: person, cron: hooks.Cron, plan: plan, places: places, startup: clock, keys: &e.warm.keys, memory: &e.warm.memory})
@@ -888,7 +889,7 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 	config.Images = images
 	config.Person = person.Asking(config.GatePromptAsks)
 	prepared.Config, prepared.Spawner, prepared.Plan, prepared.Ceiling, prepared.Sessions, prepared.GateOff = config, spawner, plan, budget.CeilingTokens, sessions, gateErr
-	prepared.Account, prepared.Others = account, others
+	prepared.Account = account
 	return prepared, nil
 }
 

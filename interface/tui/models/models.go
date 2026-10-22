@@ -60,6 +60,7 @@ type Target struct {
 	Name, Job, Assigned string
 	Role                library.RoleID
 	Setting             string
+	Pays                library.Pays
 }
 
 func (t Target) subAgent() bool { return t.Role == "" && t.Setting == "" }
@@ -227,8 +228,14 @@ func (m *Model) SetSize(width, height int) {
 }
 
 func (m Model) groups() []Group {
-	if m.assign != nil && m.assign.takes() == library.KindClassifier {
+	switch {
+	case m.assign == nil:
+		return m.Groups
+	case m.assign.takes() == library.KindClassifier:
 		return m.classifiers
+	case m.assign.Pays != "":
+		subscriptions := m.assign.Pays == library.PaysSubscription
+		return slices.DeleteFunc(slices.Clone(m.Groups), func(group Group) bool { return (group.Key == "") != subscriptions })
 	}
 	return m.Groups
 }
@@ -261,14 +268,20 @@ func (m Model) providers() []string {
 func (m Model) visible() []Row {
 	query := strings.ToLower(strings.TrimSpace(m.filter.Value()))
 	var rows []Row
-	if m.assign != nil && m.assign.subAgent() && m.provider == 0 {
-		for _, row := range []Row{
+	var offered []Row
+	switch {
+	case m.assign == nil || m.provider != 0:
+	case m.assign.subAgent():
+		offered = []Row{
 			{Slug: disabledSlug, Label: "none (disabled)", Reason: "the orchestrator is never offered it"},
 			{Slug: inheritSlug, Label: "inherit", Reason: "runs on the orchestrator's model"},
-		} {
-			if strings.Contains(row.Label, query) {
-				rows = append(rows, row)
-			}
+		}
+	case m.assign.Pays != "":
+		offered = []Row{{Label: "no", Reason: "the work stops when its subscription is at its limit"}}
+	}
+	for _, row := range offered {
+		if strings.Contains(row.Label, query) {
+			rows = append(rows, row)
 		}
 	}
 	for i, group := range m.groups() {

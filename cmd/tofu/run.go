@@ -133,7 +133,7 @@ type runtime struct {
 	inbox        *turn.Inbox
 	now          func() time.Time
 	open         func(runOpts) (appWire, error)
-	wrapSubAgent func(turn.Model) (turn.Model, error)
+	wrapSubAgent func(turn.Model, recall.Budget) (turn.Model, error)
 	orchestrator models.Model
 	tabs         *tools.BrowserTabs
 	leadAsks     turn.Person
@@ -181,7 +181,7 @@ func (r runtime) applyThinkingSummary(accounts turn.Accounts) turn.Accounts {
 		}
 		return account
 	}
-	return turn.Accounts{
+	omitting := turn.Accounts{
 		Pick: func(ctx context.Context) (turn.Account, error) {
 			account, err := accounts.Pick(ctx)
 			return omitted(account), err
@@ -192,6 +192,14 @@ func (r runtime) applyThinkingSummary(accounts turn.Accounts) turn.Accounts {
 		},
 		Resets: accounts.Resets,
 	}
+	if accounts.Elsewhere != nil {
+		omitting.Elsewhere = func(ctx context.Context, left []string, conversationTokens int) (turn.Moved, error) {
+			moved, err := accounts.Elsewhere(ctx, left, conversationTokens)
+			moved.Account, moved.Accounts = omitted(moved.Account), r.applyThinkingSummary(moved.Accounts)
+			return moved, err
+		}
+	}
+	return omitting
 }
 
 func boundRoles(wire, dir string) (models.Bindings, error) {
@@ -360,7 +368,7 @@ func (r runtime) subAgentOpener(opts runOpts) func(subagent.Definition, llm.Effo
 			}
 			return turn.SubAgentModel{}, err
 		}
-		opened.held.wrap = r.wrapSubAgent
+		opened.held.wrapping(r.wrapSubAgent, r.budget, subAgent)
 		return turn.SubAgentModel{Slug: asked, Windows: opened.selected.WindowText(), Wire: subAgent.wire, Effort: subAgent.effort, Spend: opened.spend, Accounts: r.applyThinkingSummary(opened.held.forTurn()), Close: opened.held.close}, nil
 	}
 }
@@ -571,11 +579,10 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, plan *tools
 	}
 	defer opened.held.checkUsageAlongside(clock)()
 	clock.step("credentials")
-	wrap := func(model turn.Model) (turn.Model, error) { return guarded(model, budget) }
-	opened.held.wrap = func(model turn.Model) (turn.Model, error) {
-		asked, err := wrap(model)
+	opened.held.wrapping(func(model turn.Model, budget recall.Budget) (turn.Model, error) {
+		asked, err := guarded(model, budget)
 		return clock.leading(asked), err
-	}
+	}, budget, opts)
 	places, err := sys.ResolvePlaces(".")
 	if err != nil {
 		return runFail(errOut, err)
@@ -605,7 +612,7 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, plan *tools
 	clock.step("gate, sift and session store")
 
 	config, spawner, err := runConfig(opts, built, runtime{accounts: clock.picking(opened.held.forTurn(), opened.held.store), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: writeNotice(errOut),
-		open: open, wrapSubAgent: wrap, orchestrator: selected, tabs: warm.tabs, plan: plan, places: places, startup: clock, keys: &warm.keys, memory: &warm.memory})
+		open: open, wrapSubAgent: guarded, orchestrator: selected, tabs: warm.tabs, plan: plan, places: places, startup: clock, keys: &warm.keys, memory: &warm.memory})
 	if err != nil {
 		return runFail(errOut, err)
 	}

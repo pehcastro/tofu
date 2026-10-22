@@ -121,7 +121,7 @@ func (a *App) openPicker(assign string) {
 	}
 	if spec, isSetting := a.pickedSetting(assign); isSetting {
 		rows = append(rows, settings.Row{Key: assign})
-		targets = append(targets, models.Target{Name: spec.Label, Job: spec.Description, Assigned: cmp.Or(a.store.Text(assign), notSet), Setting: assign})
+		targets = append(targets, models.Target{Name: spec.Label, Job: spec.Description, Assigned: cmp.Or(a.store.Text(assign), notSet), Setting: assign, Pays: continuityPays(assign)})
 	}
 	envFile := filepath.Join(a.options.Root, sys.CredentialFileName)
 	keys := models.Keys{
@@ -152,10 +152,34 @@ func (a *App) openPicker(assign string) {
 }
 
 func (a *App) pickedSetting(key string) (isettings.Spec, bool) {
-	if a.store == nil || key != isettings.BrowserModel {
+	if a.store == nil || key != isettings.BrowserModel && continuityPays(key) == "" {
 		return isettings.Spec{}, false
 	}
 	return a.spec(key)
+}
+
+func continuityPays(key string) library.Pays {
+	switch key {
+	case isettings.ContinueOnSubscription:
+		return library.PaysSubscription
+	case isettings.ContinueOnAPIModel:
+		return library.PaysKey
+	}
+	return ""
+}
+
+func (a *App) continueOn(setting, slug string) string {
+	if setting != isettings.ContinueOnSubscription || slug == "" {
+		return slug
+	}
+	source, _, _ := strings.Cut(slug, "/")
+	picks := strings.FieldsFunc(a.store.Text(setting), func(r rune) bool { return r == ',' })
+	at := slices.IndexFunc(picks, func(pick string) bool { return strings.HasPrefix(pick, source+"/") })
+	if at < 0 {
+		return strings.Join(append(picks, slug), ",")
+	}
+	picks[at] = slug
+	return strings.Join(picks, ",")
 }
 
 func (a *App) nowRuns(name string) string {

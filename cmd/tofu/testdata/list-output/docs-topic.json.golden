@@ -52,6 +52,30 @@ exit 0
         "description": "Terminal color capability"
       },
       {
+        "key": "continueOnSubscription",
+        "category": "Models & roles",
+        "default": "empty",
+        "takes": "any text",
+        "restart": false,
+        "description": "when every account on the subscription a turn or a sub-agent runs on is at its limit, it continues on the model picked here for another subscription provider, one model per provider, the first in subscription order with an account left; empty stops the work. Shown when you have accounts on more than one subscription provider"
+      },
+      {
+        "key": "subscriptionOrder",
+        "category": "Models & roles",
+        "default": "empty",
+        "takes": "a comma list of claude-sub, codex-sub",
+        "restart": false,
+        "description": "the order continue on another subscription tries its providers in, as a comma list of sources; empty tries them in the order they were picked. Shown when you have accounts on more than one subscription provider"
+      },
+      {
+        "key": "continueOnAPIModel",
+        "category": "Models & roles",
+        "default": "empty",
+        "takes": "any text",
+        "restart": false,
+        "description": "when no subscription has an account left, a turn or a sub-agent continues on this model, paid by its key; empty stops the work"
+      },
+      {
         "key": "composer",
         "category": "Interaction",
         "default": "standard",
