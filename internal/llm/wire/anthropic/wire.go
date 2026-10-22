@@ -201,7 +201,7 @@ func (w *Wire) send(ctx context.Context, request Request, token string, oauth bo
 }
 
 func (r Request) extraBetas(oauth bool) []string {
-	if !oauth && r.CacheTTL == "1h" {
+	if !oauth && (r.CacheTTL == "1h" || r.CacheTTL == konst.SubscriptionCacheHistory5m) {
 		return []string{ExtendedCacheTTLBeta}
 	}
 	return nil

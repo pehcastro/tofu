@@ -188,16 +188,21 @@ func inCacheOrder(t *testing.T, body []byte) []cachedPiece {
 	return pieces
 }
 
-func assertEveryBreakpointLives(t *testing.T, body []byte, ttl string) []string {
+func assertBreakpointsLive(t *testing.T, body []byte, head, history string) []string {
 	t.Helper()
 	marks := map[bool][]string{}
+	fiveMinutesSeen := false
 	for _, piece := range inCacheOrder(t, body) {
 		if !piece.breakpoint {
 			continue
 		}
-		if piece.ttl != ttl {
-			t.Fatalf("the breakpoint on %s carries ttl %v, want %s", piece.where, piece.ttl, ttl)
+		if want := map[bool]string{false: head, true: history}[piece.history]; piece.ttl != want {
+			t.Fatalf("the breakpoint on %s carries ttl %v, want %s", piece.where, piece.ttl, want)
 		}
+		if piece.ttl == "1h" && fiveMinutesSeen {
+			t.Fatalf("the 1h breakpoint on %s follows a 5m one, which the vendor refuses", piece.where)
+		}
+		fiveMinutesSeen = fiveMinutesSeen || piece.ttl == "5m"
 		marks[piece.history] = append(marks[piece.history], piece.where)
 	}
 	if len(marks[false]) == 0 {
@@ -206,7 +211,7 @@ func assertEveryBreakpointLives(t *testing.T, body []byte, ttl string) []string 
 	if placed := len(marks[false]) + len(marks[true]); placed > 4 {
 		t.Fatalf("the request places %d breakpoints, past the 4 the vendor allows", placed)
 	}
-	t.Logf("%s on %v and %v", ttl, marks[false], marks[true])
+	t.Logf("%s on %v, %s on %v", head, marks[false], history, marks[true])
 	return marks[true]
 }
 
@@ -270,31 +275,43 @@ func TestSiblingSubAgentsFromOneDefinitionShareTheCachedPrefix(t *testing.T) {
 	assertFirstMessageCarries(t, server.bodies[1], "from the rule debug_loop]", "may change: src/routes/orders.ts")
 }
 
-func TestTheNextTurnsFirstRequestReadsTheLastTurnsCachedPrefix(t *testing.T) {
-	config, server := sessionConfig(t, "read", "text", "text", "text")
-	for _, task := range []string{firstTurnTask, secondTurnTask, thirdTurnTask} {
-		composed, err := turn.Compose(sessionSpec(t, task, rule.RoleOrchestrator))
-		if err != nil {
-			t.Fatalf("composing: %v", err)
-		}
-		config.System, config.Environment, config.Task = composed.Head(), composed.WithTaskRules(sessionEnvironment), task
-		row, err := turn.Run(context.Background(), config)
-		if err != nil {
-			t.Fatalf("running %q: %v", task, err)
-		}
-		config.History = turn.Sendable(row.Conversation)
+func TestTheNextTurnsFirstRequestReadsTheLastTurnsCachedPrefixAtTheLifetimeItsSettingNames(t *testing.T) {
+	for _, layout := range []struct{ setting, head, history string }{
+		{"", "1h", "1h"},
+		{"5m", "5m", "5m"},
+		{konst.SubscriptionCacheHistory5m, "1h", "5m"},
+	} {
+		t.Run("setting "+cmp.Or(layout.setting, "unset"), func(t *testing.T) {
+			config, server := sessionConfig(t, "read", "text", "text", "text")
+			ctx := context.Background()
+			if layout.setting != "" {
+				ctx = anthropic.WithCacheTTL(ctx, layout.setting)
+			}
+			for _, task := range []string{firstTurnTask, secondTurnTask, thirdTurnTask} {
+				composed, err := turn.Compose(sessionSpec(t, task, rule.RoleOrchestrator))
+				if err != nil {
+					t.Fatalf("composing: %v", err)
+				}
+				config.System, config.Environment, config.Task = composed.Head(), composed.WithTaskRules(sessionEnvironment), task
+				row, err := turn.Run(ctx, config)
+				if err != nil {
+					t.Fatalf("running %q: %v", task, err)
+				}
+				config.History = turn.Sendable(row.Conversation)
+			}
+			if len(server.bodies) != 4 {
+				t.Fatalf("three turns sent %d requests, want 2, 1 and 1", len(server.bodies))
+			}
+			assertCachedPrefixCarriesOver(t, inCacheOrder(t, server.bodies[1]), inCacheOrder(t, server.bodies[2]))
+			if len(assertBreakpointsLive(t, server.bodies[2], layout.head, layout.history)) == 0 {
+				t.Fatal("the next turn's first request marks nothing in its history")
+			}
+			assertFirstMessageCarries(t, server.bodies[0], "[code_rules, from the rule e2e_first]")
+			assertFirstMessageCarries(t, server.bodies[2], "[process_discipline, from the rule debug_loop]\nbefore you form a theory")
+			assertCachedPrefixCarriesOver(t, inCacheOrder(t, server.bodies[2]), inCacheOrder(t, server.bodies[3]))
+			assertFirstMessageCarries(t, server.bodies[3], "[task_shaping, from the rule design_docs]")
+		})
 	}
-	if len(server.bodies) != 4 {
-		t.Fatalf("three turns sent %d requests, want 2, 1 and 1", len(server.bodies))
-	}
-	assertCachedPrefixCarriesOver(t, inCacheOrder(t, server.bodies[1]), inCacheOrder(t, server.bodies[2]))
-	if len(assertEveryBreakpointLives(t, server.bodies[2], konst.SubscriptionCacheTTL)) == 0 {
-		t.Fatal("the next turn's first request marks nothing in its history")
-	}
-	assertFirstMessageCarries(t, server.bodies[0], "[code_rules, from the rule e2e_first]")
-	assertFirstMessageCarries(t, server.bodies[2], "[process_discipline, from the rule debug_loop]\nbefore you form a theory")
-	assertCachedPrefixCarriesOver(t, inCacheOrder(t, server.bodies[2]), inCacheOrder(t, server.bodies[3]))
-	assertFirstMessageCarries(t, server.bodies[3], "[task_shaping, from the rule design_docs]")
 }
 
 func TestTwoSessionsInOneProjectSendTheSameCachedPrefix(t *testing.T) {
@@ -408,13 +425,14 @@ func TestASubAgentReadsItsBriefFromCacheOnItsSecondRequestAtTheLifetimeItsSettin
 			if len(server.sub) != 2 || len(server.lead) < 2 {
 				t.Fatalf("the sub-agent sent %d requests and the lead %d, want 2 and at least 2", len(server.sub), len(server.lead))
 			}
-			if brief := assertEveryBreakpointLives(t, server.sub[0], cmp.Or(setting, konst.SubscriptionCacheTTL)); len(brief) == 0 {
+			ttl := cmp.Or(setting, konst.SubscriptionCacheTTL)
+			if brief := assertBreakpointsLive(t, server.sub[0], ttl, ttl); len(brief) == 0 {
 				t.Fatal("the sub-agent's first request marks nothing after the head, so its brief is not cached")
 			}
-			assertEveryBreakpointLives(t, server.sub[1], cmp.Or(setting, konst.SubscriptionCacheTTL))
+			assertBreakpointsLive(t, server.sub[1], ttl, ttl)
 			assertCachedPrefixCarriesOver(t, inCacheOrder(t, server.sub[0]), inCacheOrder(t, server.sub[1]))
 			for _, body := range server.lead {
-				assertEveryBreakpointLives(t, body, konst.SubscriptionCacheTTL)
+				assertBreakpointsLive(t, body, konst.SubscriptionCacheTTL, konst.SubscriptionCacheTTL)
 			}
 		})
 	}

@@ -68,6 +68,7 @@ Turn
     sideChatAccess          read                             default
     subAgentsPerTurn        10                               default
     subAgentDepth           2                                default
+    leadCache               1h                               default
     subAgentCache           1h                               default
     subAgentCheckSeconds    1800                             default
     subAgentWatchSeconds    600                              default
@@ -87,6 +88,15 @@ sessions in one repository work at once:
 `tofu settings set oneWorkingSessionPerProject false`. A settings file
 that still holds `oneTurnPerProject` reads as the new key and is
 rewritten under it on the next write.
+
+`leadCache` decides how long the lead's prompt cache lives on a
+subscription. `1h`, the default, writes every cache mark for an hour.
+`5m` writes them at the cheaper five minute rate, and `history-5m` keeps
+the tools and system prompt an hour while the conversation lives five
+minutes, so a pause rewrites only the conversation:
+`tofu settings set leadCache history-5m`. Anthropic's
+[prompt caching](https://docs.claude.com/en/docs/build-with-claude/prompt-caching)
+prices a five minute write at 1.25 times base input and an hour at 2 times.
 
 `thinkingSummary` decides what a model sends back of its thinking.
 `summarized`, the default, asks for a summary, which streams to the

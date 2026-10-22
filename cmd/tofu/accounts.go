@@ -304,7 +304,7 @@ func (a *accounts) modelOn(row cred.Row) (turn.Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	return turn.Subscription{Wire: wire, Effort: a.effort}, nil
+	return turn.Subscription{Wire: wire, Effort: a.effort, CacheTTL: settingText(a.dir, settingspkg.LeadCache, nil)}, nil
 }
 
 func keepAccountsAlive(held heldStore, note, told func(string)) (stop func()) {

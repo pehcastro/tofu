@@ -165,6 +165,7 @@ const (
 	TurnLoopGuardWindow             = 6
 	TurnStepCapNoticeShare          = 0.1
 	SubscriptionCacheTTL            = "1h"
+	SubscriptionCacheHistory5m      = "history-5m"
 	CacheBreakSlackTokens           = 50
 	PromptHistoryEntries            = 1000
 	PromptHistoryEntryBytes         = 16384
@@ -510,4 +511,5 @@ const (
 	BoardAuditStaleDays        = 7
 	BoardAuditSlowPercentile   = 90
 	BoardAuditDuplicateOverlap = 0.8
+
 )

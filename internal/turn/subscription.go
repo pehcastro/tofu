@@ -1,6 +1,7 @@
 package turn
 
 import (
+	"cmp"
 	"context"
 
 	"tofu/internal/konst"
@@ -9,8 +10,9 @@ import (
 )
 
 type Subscription struct {
-	Wire   *anthropic.Wire
-	Effort llm.Effort
+	Wire     *anthropic.Wire
+	Effort   llm.Effort
+	CacheTTL string
 }
 
 func (s Subscription) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
@@ -30,7 +32,7 @@ func (s Subscription) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 		Tools:      request.Tools,
 		ToolChoice: request.ToolChoice,
 		Effort:     s.Effort,
-		CacheTTL:   konst.SubscriptionCacheTTL,
+		CacheTTL:   cmp.Or(s.CacheTTL, konst.SubscriptionCacheTTL),
 		OnDelta:    request.OnDelta,
 		OnThinking: request.OnThinking,
 		OnRetry:    request.OnRetry,

@@ -17,7 +17,7 @@ The settings come in groups:
 - Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images, projectInstructionsCap, contextCeiling, instructionSources, skills, memory, autoMemory, memoryFromAllUsers, learn
 - Files: diffContext, hyperlinks, groupByAgent
 - Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell
-- Turn: decisionCap, turnMaySpawn, oneWorkingSessionPerProject, planEveryStep, sideChatAccess, subAgentsPerTurn, subAgentDepth, subAgentCache, subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb
+- Turn: decisionCap, turnMaySpawn, oneWorkingSessionPerProject, planEveryStep, sideChatAccess, subAgentsPerTurn, subAgentDepth, leadCache, subAgentCache, subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb
 - Projects: projectManagement (boardy, the ticket board), boardFlow (the words boardy uses), scratchCleanupDays and scratchMaxGB (the scratchpad)
 - Browser: browser, browserDriver, browserSteps, browserModel, browserEffort, browserCursor, browserProfile, browserHeadless
 
@@ -32,10 +32,12 @@ the model changing a setting ask you in both modes: no classifier answers
 the first two, and the last could otherwise turn its own gate off.
 `tofu run` has nobody to ask, so there an ask is refused in both modes.
 
-`subAgentCache` is how long a sub-agent's prompt cache lives, `1h` by
-default. `tofu settings set subAgentCache 5m` writes a sub-agent's cache at
-the cheaper five minute rate; a sub-agent idle past five minutes then
-writes its prefix again. The lead keeps one hour either way, and
+`leadCache` is how long the lead's prompt cache lives on a subscription,
+`1h` by default. `5m` writes the whole cache at the cheaper five minute
+rate, and a pause past five minutes then writes it again. `history-5m`
+keeps the tools and system prompt an hour and writes the conversation at
+five minutes, so a pause rewrites only the conversation.
+`subAgentCache` is the same choice for a sub-agent, `1h` or `5m`.
 `tofu session trace` shows each request's write at the lifetime it got.
 
 ## Where it lives

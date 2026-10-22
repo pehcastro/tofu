@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/transport"
 )
@@ -160,10 +161,14 @@ func (r Request) Encode(oauth bool) ([]byte, error) {
 		maxTokens = ClaudeCodeMaxTokens
 	}
 
-	system := systemBlocks(r.System, oauth, BillingSystemBlock(firstUserText(r.Messages), cmp.Or(r.ClaudeCodeVersion, PinnedClaudeCodeVersion)), r.CacheTTL)
-	head := applyHeadCaching(system, tools, r.CacheTTL)
+	headTTL, historyTTL := r.CacheTTL, r.CacheTTL
+	if r.CacheTTL == konst.SubscriptionCacheHistory5m {
+		headTTL, historyTTL = konst.SubscriptionCacheTTL, CacheTTLFiveMinutes
+	}
+	system := systemBlocks(r.System, oauth, BillingSystemBlock(firstUserText(r.Messages), cmp.Or(r.ClaudeCodeVersion, PinnedClaudeCodeVersion)), headTTL)
+	head := applyHeadCaching(system, tools, headTTL)
 	if opensOnStandingContext(history) {
-		markPrefixEnd(history[0].Content, r.CacheTTL)
+		markPrefixEnd(history[0].Content, headTTL)
 		head++
 		if head == cacheBreakpointsPerRequest && !r.HistoryCacheOff && historyChars(history) >= historyCacheMinPrefixChars {
 			tools[len(tools)-1].CacheControl = nil
@@ -171,7 +176,7 @@ func (r Request) Encode(oauth bool) ([]byte, error) {
 		}
 	}
 	if !r.HistoryCacheOff {
-		applyHistoryCaching(history, r.CacheTTL, cacheBreakpointsPerRequest-head)
+		applyHistoryCaching(history, historyTTL, cacheBreakpointsPerRequest-head)
 	}
 
 	userID, err := metadataUserID(r, oauth)
