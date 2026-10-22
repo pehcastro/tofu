@@ -115,7 +115,7 @@ type Contract struct {
 
 func Contracts() []Contract {
 	return []Contract{
-		{Kind: modelsDir, Required: []string{"use"}, Optional: []string{"subscription", "reason", "notice", "window", "kind", "vision", "memory", "plan", "verbosity", "reasoning_context", "efforts", "from", "found"}},
+		{Kind: modelsDir, Required: []string{"use"}, Optional: []string{"subscription", "reason", "notice", "window", "kind", "vision", "memory", "plan", "verbosity", "reasoning_context", "efforts", "served_as", "from", "found"}},
 		{Kind: subscriptionsDir, Required: []string{"provider", "wire", "windows"}, Optional: []string{"not_models"}},
 		{Kind: rolesDir, Required: []string{"model"}},
 	}
@@ -327,6 +327,7 @@ func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpe
 		ReasoningContext: ReasoningContext(from.values["reasoning_context"]),
 		Reason:           from.values["reason"],
 		Notice:           from.values["notice"],
+		ServedAs:         from.values["served_as"],
 		File:             from.file,
 		Layer:            from.layer,
 		From:             from.values["from"],
@@ -388,24 +389,21 @@ func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpe
 
 func (c Library) defaults() []Broken {
 	var refused []Broken
-	chosen := map[Subscription]string{}
+	chosen := map[string]string{}
 	served := map[Subscription]bool{}
 	for _, model := range c.Models {
-		if model.Subscription == "" {
-			continue
-		}
 		served[model.Subscription] = true
 		if model.Use != UseDefault {
 			continue
 		}
-		if first, taken := chosen[model.Subscription]; taken {
-			refused = append(refused, Broken{File: model.File, Field: "use", Why: "the " + string(model.Subscription) + " subscription already has a default in " + first})
+		if first, taken := chosen[model.Source()]; taken {
+			refused = append(refused, Broken{File: model.File, Field: "use", Why: "the " + model.Source() + " source already has a default in " + first})
 			continue
 		}
-		chosen[model.Subscription] = model.File
+		chosen[model.Source()] = model.File
 	}
 	for _, spec := range c.Subscriptions {
-		if served[spec.ID] && chosen[spec.ID] == "" {
+		if served[spec.ID] && chosen[string(spec.ID)] == "" {
 			refused = append(refused, Broken{File: spec.File, Why: "the " + string(spec.ID) + " subscription has models and none of them is the default"})
 		}
 	}

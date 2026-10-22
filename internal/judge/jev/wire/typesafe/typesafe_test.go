@@ -29,6 +29,11 @@ const recordedAnswers = `{"model":"jev-1.13.0","answers":{
  "act":{"type":"choice","choice":"read","probabilities":{"read":0.94,"write":0.03,"network":0.03},"confidence":0.93}},
  "usage":{"input_tokens":454,"output_tokens":73}}`
 
+const (
+	bound     = "jev-named-by-the-model-file"
+	liveAlias = "jev-latest"
+)
+
 func wireConfig(endpoint string) typesafe.Config {
 	return typesafe.Config{
 		Endpoint: endpoint,
@@ -64,7 +69,7 @@ func gateBattery() jev.Request {
 }
 
 func TestTheWireCarriesItsOwnNameAndTheSharedCeilings(t *testing.T) {
-	built, err := typesafe.New(wireConfig("http://example.invalid"))
+	built, err := typesafe.New(bound, wireConfig("http://example.invalid"))
 	if err != nil {
 		t.Fatalf("building the wire: %v", err)
 	}
@@ -72,8 +77,8 @@ func TestTheWireCarriesItsOwnNameAndTheSharedCeilings(t *testing.T) {
 	if caps.Name != typesafe.Name {
 		t.Fatalf("the caps name is %q, a person must be able to tell which wire billed them", caps.Name)
 	}
-	if built.Model() != typesafe.Alias {
-		t.Fatalf("the alias is %q", built.Model())
+	if built.Model() != bound {
+		t.Fatalf("the wire asks for %q, and the model file bound %q", built.Model(), bound)
 	}
 	if caps.MaxStateTokens != konst.JudgeStateTokenCeiling || caps.MaxRequestTokens != konst.JudgeRequestTokenCeiling {
 		t.Fatalf("token ceilings are %d and %d", caps.MaxStateTokens, caps.MaxRequestTokens)
@@ -94,7 +99,7 @@ func TestTheWireCarriesItsOwnNameAndTheSharedCeilings(t *testing.T) {
 func TestTheWireRefusesNoCredentialUnderItsOwnLabel(t *testing.T) {
 	config := wireConfig("http://example.invalid")
 	config.Key = ""
-	_, err := typesafe.New(config)
+	_, err := typesafe.New(bound, config)
 	if transport.KindOf(err) != transport.KindMissingCredential {
 		t.Fatalf("expected kind missing_credential, got %v", err)
 	}
@@ -115,7 +120,7 @@ func TestTheWirePostsTheKeyAndKeepsTheServedRequestID(t *testing.T) {
 	}))
 	defer server.Close()
 
-	built, err := typesafe.New(wireConfig(server.URL))
+	built, err := typesafe.New(bound, wireConfig(server.URL))
 	if err != nil {
 		t.Fatalf("building the wire: %v", err)
 	}
@@ -137,7 +142,7 @@ func TestTheWireValidatesTheAnswersThroughTheClient(t *testing.T) {
 	}))
 	defer server.Close()
 
-	built, err := typesafe.New(wireConfig(server.URL))
+	built, err := typesafe.New(bound, wireConfig(server.URL))
 	if err != nil {
 		t.Fatalf("building the wire: %v", err)
 	}
@@ -165,7 +170,7 @@ func TestTheWireRefusesAnOversizeRequestBeforeTheCall(t *testing.T) {
 	}))
 	defer server.Close()
 
-	built, err := typesafe.New(wireConfig(server.URL))
+	built, err := typesafe.New(bound, wireConfig(server.URL))
 	if err != nil {
 		t.Fatalf("building the wire: %v", err)
 	}
@@ -204,7 +209,7 @@ func TestTheWireWaitsTheRetryAfterHeaderItIsHanded(t *testing.T) {
 		waited = append(waited, wait)
 		return nil
 	}
-	built, err := typesafe.New(config)
+	built, err := typesafe.New(bound, config)
 	if err != nil {
 		t.Fatalf("building the wire: %v", err)
 	}
@@ -231,7 +236,7 @@ func TestLiveGate(t *testing.T) {
 	}
 	config := wireConfig("")
 	config.Key = key
-	built, err := typesafe.New(config)
+	built, err := typesafe.New(liveAlias, config)
 	if err != nil {
 		t.Fatalf("building the wire: %v", err)
 	}
@@ -274,7 +279,7 @@ func TestLiveGate(t *testing.T) {
 	t.Logf("request %d bytes, estimated %d input tokens, billed %d input tokens, %d output tokens, latency %d ms",
 		len(body), estimate, decision.Usage.InputTokens, decision.Usage.OutputTokens, elapsed.Milliseconds())
 
-	if decision.Build == typesafe.Alias {
+	if decision.Build == liveAlias {
 		t.Fatal("the response reported the alias instead of a build id")
 	}
 	if estimate < decision.Usage.InputTokens {

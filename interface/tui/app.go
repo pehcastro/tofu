@@ -144,6 +144,7 @@ type Options struct {
 	Recheck       func() []Requirement
 	SaveKey       func(ctx context.Context, variable, value string) (string, error)
 	Login         func() *exec.Cmd
+	SignIn        func(source string) *exec.Cmd
 	Wires         func() []Wire
 	Models        func() (library.Library, error)
 	Agents        func() isubagent.Found

@@ -159,7 +159,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch, he
 		Note:         note,
 		Requirements: wiring.blockers(),
 		Recheck:      wiring.blockers,
-		Login:        loginCommand(string(cred.ClaudeSub)),
+		SignIn:       func(source string) *exec.Cmd { return loginCommand(source)() },
 		SaveKey:      storeKeyFor,
 		Wires:        wiring.wires,
 		Models:       func() (models.Library, error) { return modelLibrary(dir) },
@@ -358,49 +358,29 @@ func loginCommand(provider string) func() *exec.Cmd {
 	}
 }
 
-type subscriptionSource struct {
-	source cred.Provider
-	wire   string
-}
-
 func (h heldStore) wires() []tui.Wire {
-	if h.err != nil {
+	library, err := modelLibrary("")
+	if h.err != nil || err != nil {
 		return nil
 	}
 	now := time.Now()
 	var wires []tui.Wire
-	for _, known := range []subscriptionSource{{cred.ClaudeSub, wireSubscription}, {cred.CodexSub, wireCodex}} {
-		row, present, err := h.store.RowAt(known.source, now)
+	for _, spec := range library.Subscriptions {
+		row, present, err := h.store.RowAt(cred.Provider(spec.ID), now)
 		if err != nil || !present || row.Unusable(now) != "" {
 			continue
 		}
-		selected, err := selectModel(known.wire, "")
-		if err != nil {
-			continue
+		if selected, err := library.Default(spec.ID); err == nil {
+			wires = append(wires, tui.Wire{Name: spec.Wire, Model: selected.ID, Provider: string(spec.ID), Efforts: wireEfforts(spec.Wire)})
 		}
-		wires = append(wires, tui.Wire{
-			Name:     known.wire,
-			Model:    selected.ID,
-			Provider: string(known.source),
-			Efforts:  wireEfforts(known.wire),
-		})
 	}
-	return append(wires, keyWires(h.keys())...)
-}
-
-func keyWires(keys jev.Keyring) []tui.Wire {
-	if _, err := keys.KeyFor(sys.CredentialFileName, models.Meta.KeyName()); err != nil {
-		return nil
+	if _, err := h.keys().KeyFor(sys.CredentialFileName, models.Meta.KeyName()); err != nil {
+		return wires
 	}
-	library, err := modelLibrary("")
-	if err != nil {
-		return nil
+	if chosen, err := library.Default(models.Subscription(models.Meta)); err == nil {
+		wires = append(wires, tui.Wire{Name: wireMeta, Model: chosen.ID, Provider: string(models.Meta), Efforts: chosen.Efforts})
 	}
-	chosen, err := library.KeyDefault(models.Meta)
-	if err != nil {
-		return nil
-	}
-	return []tui.Wire{{Name: wireMeta, Model: chosen.ID, Provider: string(models.Meta), Efforts: chosen.Efforts}}
+	return wires
 }
 
 type startStep struct {
@@ -413,21 +393,41 @@ type startStep struct {
 }
 
 func (h heldStore) startSteps() []startStep {
-	model := startStep{
-		label:   string(cred.ClaudeSub),
-		step:    modelStep,
-		what:    noCredential,
-		command: loginHint(string(cred.ClaudeSub)),
-		choices: []tui.Choice{
-			{Label: "Claude subscription, signs in through the browser", Run: loginCommand(string(cred.ClaudeSub))},
-			{Label: "Codex subscription, signs in through the browser", Run: loginCommand(string(cred.CodexSub))},
-			{Label: "Meta API key", Key: sys.MetaMuseKeyName},
-		},
+	return []startStep{h.orchestratorStep(), classifierStepOf(h.keys())}
+}
+
+func (h heldStore) orchestratorStep() startStep {
+	step := startStep{label: string(models.RoleOrchestrator), step: modelStep}
+	library, _ := modelLibrary(".")
+	orchestrator, bound := library.Bound(models.RoleOrchestrator)
+	wires := h.wires()
+	signed := slices.ContainsFunc(wires, func(wire tui.Wire) bool { return wire.Provider == orchestrator.Source() })
+	switch {
+	case bound && signed:
+		step.done = orchestrator.Source() + " · " + orchestrator.ID
+		return step
+	case bound:
+		step.what, step.command = "the orchestrator runs "+orchestrator.Slug()+", and "+orchestrator.Source()+" is not signed in", loginHint(orchestrator.Source())
+	case len(wires) == 0:
+		step.what, step.command = noCredential, commandFor("login", roleLLM, "<source>")
+	default:
+		step.what, step.command = models.RoleOrchestrator.Unset().Error(), "tofu models bind orchestrator <provider/model>"
 	}
-	if wires := h.wires(); len(wires) > 0 {
-		model.done = wires[0].Provider + " · " + wires[0].Model
+	for _, wire := range wires {
+		slug := wire.Provider + "/" + wire.Model
+		step.choices = append(step.choices, tui.Choice{Label: "bind " + slug, Run: func() *exec.Cmd {
+			return exec.Command(os.Args[0], "models", "bind", string(models.RoleOrchestrator), slug)
+		}})
 	}
-	return []startStep{model, classifierStepOf(h.keys())}
+	for _, spec := range library.Subscriptions {
+		if !slices.ContainsFunc(wires, func(wire tui.Wire) bool { return wire.Provider == string(spec.ID) }) {
+			step.choices = append(step.choices, tui.Choice{Label: string(spec.ID) + ", signs in through the browser", Run: loginCommand(string(spec.ID))})
+		}
+	}
+	if !slices.ContainsFunc(wires, func(wire tui.Wire) bool { return wire.Name == wireMeta }) {
+		step.choices = append(step.choices, tui.Choice{Label: models.Meta.Display() + " API key", Key: sys.MetaMuseKeyName})
+	}
+	return step
 }
 
 func classifierStepOf(keys jev.Keyring) startStep {
@@ -480,12 +480,12 @@ func (h heldStore) requirements() []tui.Requirement {
 }
 
 func (h heldStore) providers() []settings.Provider {
-	return []settings.Provider{
-		h.subscriptionProvider(cred.ClaudeSub),
-		openRouterProvider(h.keys()),
-		jevProvider(h.keys()),
-		h.subscriptionProvider(cred.CodexSub),
+	library, _ := modelLibrary("")
+	var rows []settings.Provider
+	for _, spec := range library.Subscriptions {
+		rows = append(rows, h.subscriptionProvider(cred.Provider(spec.ID)))
 	}
+	return append(rows, openRouterProvider(h.keys()), jevProvider(h.keys()))
 }
 
 func (h heldStore) subscriptionProvider(provider cred.Provider) settings.Provider {
@@ -733,12 +733,12 @@ func imagesRefused(setting string, model models.Model, attached int) string {
 }
 
 func pickedOpts(dir string, start host.Turn, maxSteps int) runOpts {
-	return onTheBoundKeyWire(runOpts{
+	return onTheBoundWire(runOpts{
 		dir:              dir,
 		task:             start.Task,
 		turnID:           start.ID,
 		session:          start.Session,
-		wire:             cmp.Or(start.Pick.Wire, wireSubscription),
+		wire:             start.Pick.Wire,
 		model:            start.Pick.Model,
 		toolSet:          toolSetFull,
 		effort:           cmp.Or(start.Pick.Effort, llm.EffortDefault),
@@ -896,7 +896,9 @@ func (e *appEngine) standIns(held *accounts, wire string) standIns {
 	if _, recorded := held.fixed.(*cassette); !recorded || e.quota == nil {
 		return standIns{}
 	}
-	return standIns{held: held, source: string(subscriptionOf(wire)), readings: e.quota()}
+	library, _ := modelLibrary(e.dir)
+	spec, _ := library.ForWire(wire)
+	return standIns{held: held, source: string(spec.ID), readings: e.quota()}
 }
 
 func spentAccount(held *accounts, model string) func(int64) host.TurnAccount {

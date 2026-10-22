@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -25,9 +26,9 @@ const (
 
 type provider struct {
 	key      string
-	build    func(wire.Config) (*wire.Wire, error)
-	alias    func() (string, error)
-	checkPin func(context.Context, wire.Config, *transport.Client) (jev.PinCheck, jev.Pin)
+	build    func(string, wire.Config) (*wire.Wire, error)
+	alias    func(string) (string, error)
+	checkPin func(context.Context, string, wire.Config, *transport.Client) (jev.PinCheck, jev.Pin)
 	serves   func(jev.Pin, string) bool
 }
 
@@ -35,14 +36,11 @@ func providerOf(of models.Provider) (provider, bool) {
 	switch of {
 	case models.TypeSafe:
 		return provider{key: sys.TypeSafeKeyName, build: typesafe.New, alias: typesafe.Model, serves: typesafe.Serves,
-			checkPin: func(ctx context.Context, config wire.Config, _ *transport.Client) (jev.PinCheck, jev.Pin) {
-				return typesafe.CheckPin(ctx, config)
+			checkPin: func(ctx context.Context, bound string, config wire.Config, _ *transport.Client) (jev.PinCheck, jev.Pin) {
+				return typesafe.CheckPin(ctx, bound, config)
 			}}, true
 	case models.OpenRouter:
-		return provider{key: sys.OpenRouterClassifierKeyName, build: openrouter.New, alias: openrouter.Model, serves: openrouter.Serves,
-			checkPin: func(ctx context.Context, _ wire.Config, listing *transport.Client) (jev.PinCheck, jev.Pin) {
-				return openrouter.CheckPin(ctx, listing)
-			}}, true
+		return provider{key: sys.OpenRouterClassifierKeyName, build: openrouter.New, alias: openrouter.Model, serves: openrouter.Serves, checkPin: openrouter.CheckPin}, true
 	case models.Anthropic, models.OpenAI, models.Meta:
 		return provider{}, false
 	}
@@ -73,9 +71,13 @@ func Bound(dir string, keys jev.Keyring) (models.Model, error) {
 		return model, nil
 	}
 	var stored []string
-	for _, of := range []models.Provider{models.OpenRouter, models.TypeSafe} {
-		if key, _ := keys.KeyFor(sys.CredentialFileName, KeyName(of)); key != "" {
-			stored = append(stored, KeyName(of))
+	for _, model := range loaded.Models {
+		if model.Kind != models.KindClassifier {
+			continue
+		}
+		name := KeyName(model.Provider)
+		if key, _ := keys.KeyFor(sys.CredentialFileName, name); key != "" && !slices.Contains(stored, name) {
+			stored = append(stored, name)
 		}
 	}
 	if len(stored) == 0 {
@@ -137,7 +139,7 @@ func (r Route) Client(concurrency int) (*jev.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	built, err := served.build(r.config(concurrency))
+	built, err := served.build(r.Model.Requested(), r.config(concurrency))
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +151,7 @@ func (r Route) Alias() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return served.alias()
+	return served.alias(r.Model.Requested())
 }
 
 func (r Route) CheckPin(ctx context.Context, listing *transport.Client) (jev.PinCheck, jev.Pin) {
@@ -157,7 +159,7 @@ func (r Route) CheckPin(ctx context.Context, listing *transport.Client) (jev.Pin
 	if err != nil {
 		return jev.PinCheck{Skipped: "the pin stays", Error: err.Error()}, jev.Pin{}
 	}
-	return served.checkPin(ctx, r.config(1), listing)
+	return served.checkPin(ctx, r.Model.Requested(), r.config(1), listing)
 }
 
 func (r Route) Serves(pin jev.Pin, build string) bool {

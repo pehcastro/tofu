@@ -18,11 +18,9 @@ import (
 const (
 	Name            = "openrouter"
 	Endpoint        = "https://openrouter.ai/api/alpha/decisions"
-	Alias           = "~typesafe/jev-latest"
 	ListingVariable = "TOFU_JEV_LISTING_URL"
 
 	listingURL        = "https://openrouter.ai/api/v1/models"
-	shipped           = "typesafe/jev-1.13"
 	vendorPrefix      = "typesafe/"
 	releasePattern    = "jev-%d.%d"
 	modelPattern      = vendorPrefix + releasePattern
@@ -34,10 +32,10 @@ type (
 	Wire   = wire.Wire
 )
 
-func Model() (string, error) {
+func Model(bound string) (string, error) {
 	pin, err := jev.LoadPin()
 	if err != nil || pin.Model == "" {
-		return Alias, err
+		return bound, err
 	}
 	return listed(pin.Model), nil
 }
@@ -50,22 +48,37 @@ func listed(model string) string {
 	return fmt.Sprintf(modelPattern, major, minor)
 }
 
-func New(config Config) (*Wire, error) {
-	model, err := Model()
+func New(bound string, config Config) (*Wire, error) {
+	model, err := Model(bound)
 	if err != nil {
 		return nil, err
 	}
-	return wire.New(wire.Spec{Name: Name, Endpoint: Endpoint, Alias: model, FailOp: "openrouter.New"}, config)
+	return on(model, config)
 }
 
-func CheckPin(ctx context.Context, client *transport.Client) (jev.PinCheck, jev.Pin) {
+func on(model string, config Config) (*Wire, error) {
+	return wire.New(wire.Spec{Name: Name, Endpoint: Endpoint, Model: model, FailOp: "openrouter.New"}, config)
+}
+
+func CheckPin(ctx context.Context, bound string, config Config, client *transport.Client) (jev.PinCheck, jev.Pin) {
 	pin, err := jev.LoadPin()
 	if err != nil {
-		return jev.PinCheck{From: Alias, Skipped: "the pin is unreadable, it stays", Error: err.Error()}, jev.Pin{}
+		return jev.PinCheck{From: bound, Skipped: "the pin is unreadable, it stays", Error: err.Error()}, jev.Pin{}
 	}
-	check := jev.PinCheck{From: cmp.Or(pin.Model, Alias)}
+	check := jev.PinCheck{From: cmp.Or(pin.Model, bound)}
+	seed := pin.Model
+	if seed == "" {
+		answering, err := on(bound, config)
+		if err == nil {
+			seed, err = wire.AnsweringBuild(ctx, answering)
+		}
+		if err != nil {
+			check.Skipped, check.Error = "nothing is pinned and "+bound+" did not answer, so there is no build to look past", err.Error()
+			return check, jev.Pin{}
+		}
+	}
 	var major, minor int
-	if _, err := fmt.Sscanf(listed(cmp.Or(pin.Model, shipped)), modelPattern, &major, &minor); err != nil {
+	if _, err := fmt.Sscanf(listed(seed), modelPattern, &major, &minor); err != nil {
 		check.Skipped, check.Error = "the pin names no jev version, it stays at "+check.From, err.Error()
 		return check, jev.Pin{}
 	}

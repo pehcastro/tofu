@@ -67,13 +67,17 @@ func (r RoleID) What() string {
 func (r RoleID) Unbound() string {
 	switch r {
 	case RoleOrchestrator:
-		return "nothing is bound, so it runs on the subscription default"
+		return "nothing is bound, so setup asks for it before the first turn"
 	case RoleClassifier:
 		return "nothing is bound, so the gate is off and no call is judged"
 	case RoleSubAgent:
 		return "nothing is bound, so it runs on the orchestrator's model"
 	}
 	panic("models: unknown role " + string(r))
+}
+
+func (r RoleID) Unset() error {
+	return errors.New("the " + r.Label() + " role has nothing bound: pick its model in setup or run tofu models bind " + string(r) + " <provider/model>")
 }
 
 func (c Library) Bound(id RoleID) (Model, bool) {

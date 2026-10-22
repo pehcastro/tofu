@@ -65,7 +65,7 @@ func TestHooksRunFiresSessionStartFirstAndSessionEndWhenItsLeadReturns(t *testin
 	}
 	t.Setenv(cassetteVariable, deck)
 	var out, errOut bytes.Buffer
-	if code := runVerb([]string{"--dir", project, "--no-gate", "--sift", "free", "say hi"}, &out, &errOut); code != exitOK {
+	if code := runVerb([]string{"--dir", project, "--wire", wireSubscription, "--no-gate", "--sift", "free", "say hi"}, &out, &errOut); code != exitOK {
 		t.Fatalf("tofu run exited %d: %s", code, errOut.String())
 	}
 	seen := sessionEvents(t, logged)

@@ -33,13 +33,17 @@ import (
 	"tofu/internal/widget"
 )
 
-const driveUsage = `usage: tofu drive [SCRIPT] [--dir PATH] [--home PATH] [--cassette PATH] [--clipboard PATH] [--source NAME] [--quota PATH] [--width N] [--height N] [--timeout 60s] [--plain] [--fresh | --continue] [--holder] [ARM]
+const driveUsage = `usage: tofu drive [SCRIPT] [--dir PATH] [--home PATH] [--cassette PATH] [--clipboard PATH] [--source NAME] [--quota PATH] [--width N] [--height N] [--timeout 60s] [--plain] [--fresh | --continue] [--holder] [--setup] [ARM]
 
 drives the app the way a person does, with no terminal and no model call.
 SCRIPT is a file of steps, or - for standard input.
 
 --source claude-sub|codex-sub names the subscription the orchestrator's model
 reports, while the cassette still answers. Without it the source is cassette.
+
+--setup reads the sign-ins and model bindings of the home, as tofu does when it
+opens: it asks for what is missing and lists the models the home signed in to,
+while the cassette still answers.
 
 --quota PATH reads the footer's quota readings from a json file instead of
 asking the vendors, which a fresh home cannot do:
@@ -604,20 +608,29 @@ func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePla
 	recorded := appWiring{
 		open: driveWire(deck),
 		wires: func() []tui.Wire {
-			listed := []tui.Wire{{Name: wireSubscription, Model: shown, Provider: cmp.Or(plan.source, cassetteBuild)}}
+			if plan.setup {
+				return held.wires()
+			}
+			library, _ := modelLibrary(dir)
+			listed := []tui.Wire{{Name: library.WireFor(models.Subscription(plan.source)), Model: shown, Provider: cmp.Or(plan.source, cassetteBuild)}}
 			if plan.quota == "" {
 				return listed
 			}
-			for _, wire := range []string{wireSubscription, wireCodex} {
-				source := string(subscriptionOf(wire))
+			for _, spec := range library.Subscriptions {
+				source := string(spec.ID)
 				named := slices.ContainsFunc(quotas(), func(reading frame.Quota) bool { return readingSource(reading) == source })
 				if named && source != listed[0].Provider {
-					listed = append(listed, tui.Wire{Name: wire, Model: shown, Provider: source})
+					listed = append(listed, tui.Wire{Name: spec.Wire, Model: shown, Provider: source})
 				}
 			}
 			return listed
 		},
-		blockers: func() []tui.Requirement { return nil },
+		blockers: func() []tui.Requirement {
+			if plan.setup {
+				return held.requirements()
+			}
+			return nil
+		},
 		clipboard: func() (sys.Clipboard, error) {
 			if plan.clipboard == "" {
 				return sys.Clipboard{Kind: sys.ClipboardEmpty}, nil
@@ -659,6 +672,7 @@ type drivePlan struct {
 	fresh     bool
 	resume    bool
 	holder    bool
+	setup     bool
 	arms      runOpts
 }
 
@@ -695,6 +709,9 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 			continue
 		case "--holder":
 			plan.holder = true
+			continue
+		case "--setup":
+			plan.setup = true
 			continue
 		case "--no-gate":
 			plan.arms.gateArm = gateOff

@@ -1,2 +1,2 @@
-use: allowed
+use: default
 efforts: minimal, low, medium, high, xhigh, max

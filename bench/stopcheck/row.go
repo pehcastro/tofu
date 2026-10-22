@@ -6,7 +6,6 @@ import (
 
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
 )
 
@@ -72,6 +71,7 @@ type rowInput struct {
 	state        any
 	stateBuilder string
 	wording      int
+	model        string
 	answers      []ledger.Answer
 	pol          gate.Rule
 	mode         gate.Mode
@@ -94,17 +94,13 @@ func appendRow(writer *ledger.Writer, in rowInput) (ledger.Row, error) {
 		return ledger.Row{}, err
 	}
 	reason.Mode = in.mode
-	model, err := typesafe.Model()
-	if err != nil {
-		return ledger.Row{}, err
-	}
 	row := ledger.Row{
 		Bench:         in.bench,
 		Point:         in.pol.Name,
 		Questions:     in.pol.Questions,
 		Version:       in.wording,
 		Build:         in.build,
-		Model:         model,
+		Model:         in.model,
 		StateHash:     hash,
 		StateBuilder:  in.stateBuilder,
 		Answers:       in.answers,

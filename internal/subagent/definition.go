@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
@@ -25,7 +24,6 @@ const (
 	libraryOrigin  = "library"
 	inheritModel   = "inherit"
 	disabledModel  = "none"
-	dateInID       = "20060102"
 )
 
 type Runs string
@@ -438,31 +436,16 @@ func (s Scan) runsOn(definition *Definition, written string, tofuFile bool) erro
 		return fmt.Errorf("names the tier %s, and a tier is one of @%s", written, strings.Join(tierNames(), ", @"))
 	case isTier && !tofuFile:
 		return fmt.Errorf("names the tier %s in a shared file, which Claude Code cannot open with it: assign the tier in %s instead", written, AssignmentFile)
-	case !isTier && !tofuFile && s.Tiers[aliasTier(written)] != "":
+	case !isTier && aliasTier(written) != "":
 		tier, isTier = aliasTier(written), true
 	}
-	slug, unresolved := written, ""
-	switch {
-	case isTier:
+	slug := written
+	if isTier {
 		definition.From, slug = "tier "+string(tier), s.Tiers[tier]
-		if slug == "" {
-			unresolved = fmt.Sprintf("the tier @%s is not set, so %s runs on the orchestrator's model: tofu settings set %s <slug>", tier, definition.Name, tier.Setting())
-		}
-	case aliasTier(written) != "":
-		var family []models.Model
-		for _, model := range s.Catalog.Models {
-			if model.Subscription == models.ClaudeSub && model.Use != models.UseExcluded && strings.HasPrefix(model.ID, "claude-"+written+"-") {
-				family = append(family, model)
-			}
-		}
-		if len(family) == 0 {
-			unresolved = fmt.Sprintf("the alias %s names no allowed claude-sub model, so %s runs on the orchestrator's model", written, definition.Name)
-			break
-		}
-		slug = slices.MaxFunc(family, func(a, b models.Model) int { return slices.Compare(versionOf(a.ID), versionOf(b.ID)) }).Slug()
 	}
-	if unresolved != "" {
-		definition.Runs, definition.Notices = RunsInherit, append(definition.Notices, unresolved)
+	if isTier && slug == "" {
+		definition.Runs = RunsInherit
+		definition.Notices = append(definition.Notices, fmt.Sprintf("the tier @%s is not set, so %s runs on the orchestrator's model: tofu settings set %s <slug>", tier, definition.Name, tier.Setting()))
 		return nil
 	}
 	model, err := s.Catalog.Select(slug)
@@ -474,17 +457,4 @@ func (s Scan) runsOn(definition *Definition, written string, tofuFile bool) erro
 	}
 	definition.Runs, definition.Model = RunsModel, model.Slug()
 	return nil
-}
-
-func versionOf(id string) []int {
-	var version []int
-	for _, part := range strings.Split(id, "-") {
-		if _, err := time.Parse(dateInID, part); err == nil {
-			continue
-		}
-		if number, err := strconv.Atoi(part); err == nil {
-			version = append(version, number)
-		}
-	}
-	return version
 }

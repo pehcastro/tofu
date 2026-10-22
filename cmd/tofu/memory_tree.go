@@ -11,11 +11,9 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
-	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/memtree"
@@ -103,7 +101,7 @@ func memoryTree(o verbOutput, store *memtree.Store, budget int) int {
 		return o.fail(err)
 	}
 	var asked, hits, fresh, read, written, writtenForAnHour atomic.Int64
-	session, err := chooseModel(runOpts{dir: dir, wire: wireSubscription})
+	session, err := chooseModel(onTheBoundWire(runOpts{dir: dir}))
 	if err != nil {
 		return o.fail(err)
 	}
@@ -153,9 +151,9 @@ type memoryModel struct {
 func openMemoryModel(dir string, session models.Model) memoryModel {
 	set := settingText(dir, settingspkg.MemoryModel, nil)
 	deck, err := readCassette(os.Getenv(cassetteVariable))
-	open, signedIn := openAppWire, storedLogin
+	open := openAppWire
 	if deck != nil {
-		open, signedIn = driveWire(deck), func(models.Subscription) bool { return true }
+		open = driveWire(deck)
 	}
 	var library models.Library
 	if err == nil {
@@ -167,7 +165,7 @@ func openMemoryModel(dir string, session models.Model) memoryModel {
 	case set != "":
 		model, err = library.Select(set)
 	default:
-		model, err = sessionMemoryWriter(library, session, signedIn)
+		model, err = sessionMemoryWriter(library, session)
 	}
 	opened := memoryModel{slug: cmp.Or(set, model.Slug())}
 	if err == nil && library.WireOf(model) == wireKey {
@@ -187,27 +185,12 @@ func openMemoryModel(dir string, session models.Model) memoryModel {
 	return opened
 }
 
-func sessionMemoryWriter(library models.Library, session models.Model, signedIn func(models.Subscription) bool) (models.Model, error) {
+func sessionMemoryWriter(library models.Library, session models.Model) (models.Model, error) {
 	if model, marked := library.MemoryWriter(session.Source()); marked {
 		return model, nil
 	}
-	for _, source := range models.AllSubscriptions() {
-		if model, marked := library.MemoryWriter(string(source)); marked && signedIn(source) {
-			return model, nil
-		}
-	}
-	return models.Model{}, fmt.Errorf("no model of %s is marked memory: %s and no signed-in subscription has one, so the session writes no memory summaries: sign in with tofu login llm %s, or set %s",
-		session.Source(), models.MemoryWrites, models.ClaudeSub, settingspkg.MemoryModel)
-}
-
-func storedLogin(source models.Subscription) bool {
-	store, err := openStoredCredentials()
-	if err != nil || store == nil {
-		return false
-	}
-	defer func() { _ = store.Close() }()
-	row, found, err := store.Row(cred.Provider(source))
-	return err == nil && found && row.Unusable(time.Now()) == ""
+	return models.Model{}, fmt.Errorf("no model of %s is marked memory: %s, so the session writes no memory summaries: set %s to the model that writes them",
+		session.Source(), models.MemoryWrites, settingspkg.MemoryModel)
 }
 
 func (m memoryModel) release() {

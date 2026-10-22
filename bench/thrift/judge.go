@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"tofu/bench/api"
 	"tofu/bench/corpus"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/typesafe"
@@ -49,7 +50,11 @@ func NewJevClient(envPath string) (*jev.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	wire, err := typesafe.New(typesafe.Config{
+	bound, err := api.JudgeModel()
+	if err != nil {
+		return nil, err
+	}
+	wire, err := typesafe.New(bound, typesafe.Config{
 		Key: key,
 		Transport: transport.Config{
 			AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,

@@ -834,7 +834,7 @@ func toolNames(t *testing.T, opts runOpts) []string {
 
 func chosenFor(t *testing.T) models.Model {
 	t.Helper()
-	opts, err := parseRunArgs([]string{"--dir", t.TempDir(), "a task"})
+	opts, err := parseRunArgs([]string{"--dir", t.TempDir(), "--wire", wireSubscription, "a task"})
 	if err != nil {
 		t.Fatalf("parseRunArgs returned an error: %v", err)
 	}
@@ -1012,7 +1012,7 @@ func TestTheLeadTakesACleanReportUncheckedOnlyWithTheCheckOff(t *testing.T) {
 			}
 			t.Setenv(cassetteVariable, deck)
 			var out, errOut bytes.Buffer
-			if code := runVerb([]string{"--dir", dir, "--no-gate", "--sift", "free", "add Extra to package stats"}, &out, &errOut); code != exitOK {
+			if code := runVerb([]string{"--dir", dir, "--wire", wireSubscription, "--no-gate", "--sift", "free", "add Extra to package stats"}, &out, &errOut); code != exitOK {
 				t.Fatalf("tofu run exited %d: %s", code, errOut.String())
 			}
 			t.Logf("tofu run printed:\n%s", out.String())

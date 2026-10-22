@@ -2,12 +2,15 @@ package api
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/konst"
+	"tofu/internal/llm/models"
 	"tofu/internal/transport"
+	shipped "tofu/library"
 )
 
 func judgeTransport() transport.Config {
@@ -20,7 +23,31 @@ func judgeTransport() transport.Config {
 }
 
 func NewWire(key string) (*typesafe.Wire, error) {
-	return typesafe.New(typesafe.Config{Key: key, Transport: judgeTransport()})
+	model, err := JudgeModel()
+	if err != nil {
+		return nil, err
+	}
+	return typesafe.New(model, typesafe.Config{Key: key, Transport: judgeTransport()})
+}
+
+func JudgeModel() (string, error) {
+	layers, err := models.Layers(shipped.Files(), "")
+	if err != nil {
+		return "", err
+	}
+	library, err := models.Load(layers)
+	if err != nil {
+		return "", err
+	}
+	if bound, ok := library.Bound(models.RoleClassifier); ok && bound.Provider == models.TypeSafe {
+		return bound.Requested(), nil
+	}
+	for _, model := range library.Models {
+		if model.Provider == models.TypeSafe && model.Kind == models.KindClassifier && model.Use != models.UseExcluded {
+			return model.Requested(), nil
+		}
+	}
+	return "", errors.New("the model library has no typesafe classifier file, so the bench has no model to ask for")
 }
 
 type Call struct {

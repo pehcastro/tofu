@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"tofu/bench/api"
 	"tofu/bench/corpus"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
@@ -68,6 +69,7 @@ type Result struct {
 
 type Battery struct {
 	client   *jev.Client
+	model    string
 	battery  []jev.Question
 	wording  int
 	pol      gate.Rule
@@ -98,7 +100,11 @@ func New(root, key string) (Battery, error) {
 	resolution := gate.Resolve(pol, gate.LockLookup{}, gate.Current{})
 	pol = resolution.Rule
 
-	wire, err := typesafe.New(typesafe.Config{
+	bound, err := api.JudgeModel()
+	if err != nil {
+		return Battery{}, err
+	}
+	wire, err := typesafe.New(bound, typesafe.Config{
 		Key: key,
 		Transport: transport.Config{
 			AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,
@@ -126,6 +132,7 @@ func New(root, key string) (Battery, error) {
 	}
 	return Battery{
 		client:   client,
+		model:    wire.Model(),
 		battery:  questions,
 		wording:  set.QuestionsVersion,
 		pol:      pol,
@@ -183,7 +190,7 @@ func (b Battery) decide(ctx context.Context, turn Turn, at int) (StepResult, err
 		return StepResult{}, err
 	}
 	raw := json.RawMessage(built)
-	request := ledger.Request{State: raw, Questions: b.pol.Questions, Model: typesafe.Alias, Version: b.wording}
+	request := ledger.Request{State: raw, Questions: b.pol.Questions, Model: b.model, Version: b.wording}
 	key, err := b.cache.Key(request)
 	if err != nil {
 		return StepResult{}, err
@@ -195,7 +202,7 @@ func (b Battery) decide(ctx context.Context, turn Turn, at int) (StepResult, err
 
 	in := rowInput{
 		bench: BenchName,
-		state: raw, stateBuilder: builder, wording: b.wording,
+		state: raw, stateBuilder: builder, wording: b.wording, model: b.model,
 		pol: b.pol, mode: b.mode, modeReason: b.reason, turnID: turn.ID,
 	}
 	out := StepResult{Turn: turn.ID, Step: turn.Steps[at].Index, Replayed: hit}

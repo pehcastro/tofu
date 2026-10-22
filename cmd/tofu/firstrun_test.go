@@ -43,7 +43,7 @@ func plainFrame(app *tui.App) string { return ansi.Strip(app.View().Content) }
 func TestAFirstRunWithNothingStoredDrawsTheSetupAndNotAnError(t *testing.T) {
 	scratchProject(t)
 	narrow, wide := plainFrame(firstRunApp(t, 80, 24)), plainFrame(firstRunApp(t, 120, 36))
-	for _, want := range []string{noCredential, "1. " + modelStep, "2. " + classifierStep, "tofu login llm " + string(cred.ClaudeSub)} {
+	for _, want := range []string{noCredential, "1. " + modelStep, "2. " + classifierStep, "tofu login llm <source>"} {
 		if !strings.Contains(narrow, want) {
 			t.Errorf("the first frame at 80 columns does not say %q\n%s", want, narrow)
 		}
@@ -68,6 +68,7 @@ func TestAFirstRunWithNothingStoredDrawsTheSetupAndNotAnError(t *testing.T) {
 func TestACredentialWithoutAKeyLeavesOnlyTheKeyStep(t *testing.T) {
 	scratchProject(t)
 	storeCredential(t, cred.ClaudeSub)
+	bindOrchestrator(t, "claude-sub/claude-opus-5")
 	frame := plainFrame(firstRunApp(t, 80, 24))
 	if !strings.Contains(frame, "no classifier is bound") || !strings.Contains(frame, "bind typesafe/jev-latest") {
 		t.Errorf("the classifier step is not drawn with its choices\n%s", frame)
@@ -81,6 +82,7 @@ func TestACredentialWithoutAKeyLeavesOnlyTheKeyStep(t *testing.T) {
 func TestWithBothStoredNoSetupIsDrawnAndTheComposerHasFocus(t *testing.T) {
 	scratchProject(t)
 	storeCredential(t, cred.ClaudeSub)
+	bindOrchestrator(t, "claude-sub/claude-opus-5")
 	storeGateKey(t, gateKeyForTests)
 	app := firstRunApp(t, 80, 24)
 	frame := plainFrame(app)
@@ -126,6 +128,7 @@ func TestALoginRunInAnotherTerminalMovesTheAppOnWithoutARestart(t *testing.T) {
 	}
 
 	storeCredential(t, cred.ClaudeSub)
+	bindOrchestrator(t, "claude-sub/claude-opus-5")
 	storeGateKey(t, gateKeyForTests)
 	began := time.Now()
 	drive(t, app, start)
@@ -152,6 +155,7 @@ func TestTheAppAndDoctorCallTheSameStateReady(t *testing.T) {
 		{"nothing stored", func() {}},
 		{"the key alone", func() { storeGateKey(t, gateKeyForTests) }},
 		{"the credential too", func() { storeCredential(t, cred.ClaudeSub) }},
+		{"the orchestrator bound", func() { bindOrchestrator(t, "claude-sub/claude-opus-5") }},
 	} {
 		step.store()
 		required := slices.DeleteFunc(heldForTest(t).requirements(), func(step tui.Requirement) bool { return step.Done != "" })

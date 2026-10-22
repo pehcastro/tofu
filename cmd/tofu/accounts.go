@@ -66,30 +66,24 @@ func (a *accounts) resets(ctx context.Context, pinned turn.Account) (time.Time, 
 }
 
 func (a *accounts) others() []host.OtherSource {
+	library, err := modelLibrary(a.dir)
+	if err != nil || a.store == nil {
+		return nil
+	}
 	var serving []host.OtherSource
-	for _, wire := range []string{wireSubscription, wireCodex} {
-		provider := subscriptionOf(wire)
-		if provider == a.provider || a.store == nil {
-			continue
-		}
-		model, err := selectModel(wire, "")
-		if err != nil {
+	for _, spec := range library.Subscriptions {
+		provider := cred.Provider(spec.ID)
+		model, err := library.Default(spec.ID)
+		if provider == a.provider || err != nil {
 			continue
 		}
 		other := &accounts{provider: provider, store: a.store, spends: model.Windows, urls: a.urls, now: a.now}
 		candidates, _, err := other.read(context.Background())
 		if err == nil && slices.ContainsFunc(candidates, func(candidate quota.Candidate) bool { return !quota.Spent(candidate.Report, model.Windows, a.now()) }) {
-			serving = append(serving, host.OtherSource{Name: string(provider), Pick: host.Pick{Wire: wire, Model: model.Slug(), Effort: a.effort}})
+			serving = append(serving, host.OtherSource{Name: string(provider), Pick: host.Pick{Wire: spec.Wire, Model: model.Slug(), Effort: a.effort}})
 		}
 	}
 	return serving
-}
-
-func subscriptionOf(wire string) cred.Provider {
-	if wire == wireCodex {
-		return cred.CodexSub
-	}
-	return cred.ClaudeSub
 }
 
 type standIns struct {
@@ -136,11 +130,12 @@ func (s standIns) forTurn() turn.Accounts {
 }
 
 func (s standIns) others() []host.OtherSource {
+	library, _ := modelLibrary("")
 	var serving []host.OtherSource
-	for _, wire := range []string{wireSubscription, wireCodex} {
-		source := string(subscriptionOf(wire))
+	for _, spec := range library.Subscriptions {
+		source := string(spec.ID)
 		if source != s.source && slices.ContainsFunc(s.readings, func(reading frame.Quota) bool { return reading.Source() == source && reading.Fraction < 1 }) {
-			serving = append(serving, host.OtherSource{Name: source, Pick: host.Pick{Wire: wire}})
+			serving = append(serving, host.OtherSource{Name: source, Pick: host.Pick{Wire: spec.Wire}})
 		}
 	}
 	return serving
@@ -367,10 +362,7 @@ func openAccounts(opts runOpts, selected models.Model) (*accounts, turn.Spend, e
 		model, err := metaModel(selected, opts.effort)
 		return &accounts{modelID: modelID, now: time.Now, fixed: model}, spend, err
 	}
-	provider := cred.ClaudeSub
-	if opts.wire == wireCodex {
-		provider = cred.CodexSub
-	}
+	provider := cred.Provider(selected.Subscription)
 	spec, err := cred.Lookup(string(provider))
 	if err != nil {
 		return nil, spend, err

@@ -200,7 +200,7 @@ func TestAMetaTurnSendsTheKeyAndTheModelAndRunsTheStreamedToolCall(t *testing.T)
 
 func TestABoundMetaOrchestratorRunsOnMetaWithNoModelAndTheAppListsItsWire(t *testing.T) {
 	_, project := metaHome(t)
-	if wires := keyWires(heldForTest(t).keys()); len(wires) != 0 {
+	if wires := heldForTest(t).wires(); len(wires) != 0 {
 		t.Errorf("with no meta key the app lists %+v", wires)
 	}
 	if err := sys.SaveKey(sys.MetaMuseKeyName, madeUpMetaKey); err != nil {
@@ -220,10 +220,10 @@ func TestABoundMetaOrchestratorRunsOnMetaWithNoModelAndTheAppListsItsWire(t *tes
 	if len(*heard) == 0 || !strings.Contains((*heard)[0].body, `"model":"muse-spark-1.3-contributor"`) {
 		t.Errorf("the bound meta model was not what the run asked for: %d requests", len(*heard))
 	}
-	if opts := pickedOpts(project, host.Turn{Task: "say ok", Pick: host.Pick{Wire: wireSubscription}}, 1); opts.wire != wireMeta || opts.model != "meta/muse-spark-1.3-contributor" {
+	if opts := pickedOpts(project, host.Turn{Task: "say ok"}, 1); opts.wire != wireMeta || opts.model != "meta/muse-spark-1.3-contributor" {
 		t.Errorf("the app runs a bound meta orchestrator on wire %q model %q", opts.wire, opts.model)
 	}
-	wires := keyWires(heldForTest(t).keys())
+	wires := heldForTest(t).wires()
 	if len(wires) != 1 || wires[0].Name != wireMeta || wires[0].Model != "muse-spark-1.3" {
 		t.Errorf("with a meta key the app lists %+v, want the meta wire on muse-spark-1.3", wires)
 	}
@@ -336,11 +336,14 @@ func TestModelsListsTheFiveMetaModelsWithTheirWindowAndTheContributorNotice(t *t
 			t.Fatalf("%s: tofu models --json lists %d meta models", when, len(meta))
 		}
 		for slug, model := range meta {
-			wantNotice := ""
+			wantNotice, wantUse := "", "allowed"
 			if strings.HasSuffix(slug, "-contributor") {
 				wantNotice = metaNotice
 			}
-			if model.Notice != wantNotice || model.Pays != "key" || model.Use != "allowed" || model.ContextTokens != 1048576 {
+			if slug == "meta/muse-spark-1.3" {
+				wantUse = "default"
+			}
+			if model.Notice != wantNotice || model.Pays != "key" || model.Use != wantUse || model.ContextTokens != 1048576 {
 				t.Errorf("%s: %s notice %q pays %s use %s window %d from %q", when, slug, model.Notice, model.Pays, model.Use, model.ContextTokens, model.WindowFrom)
 			}
 		}

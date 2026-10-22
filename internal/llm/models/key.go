@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -67,21 +66,4 @@ func (e *KeyRefused) Brief() string {
 
 func (e *KeyRefused) Error() string {
 	return e.Brief() + ", so nothing was written: " + e.Detail
-}
-
-func (c Library) KeyDefault(provider Provider) (Model, error) {
-	var offered []Model
-	for _, model := range c.Models {
-		if model.Provider == provider && model.Pays() == PaysKey && model.Kind == KindLLM && model.Use != UseExcluded && model.Notice == "" {
-			offered = append(offered, model)
-		}
-	}
-	if len(offered) == 0 {
-		return Model{}, errors.New("the model library has no " + string(provider) + " model to run without a --model")
-	}
-	return slices.MaxFunc(offered, func(a, b Model) int {
-		_, aVersion := familyOf(a.ID)
-		_, bVersion := familyOf(b.ID)
-		return slices.Compare(aVersion, bVersion)
-	}), nil
 }

@@ -362,10 +362,11 @@ func (a *App) choseModel(intent models.Intent) tea.Cmd {
 		}
 		return nil
 	case models.Login:
-		if a.options.Login == nil {
+		source, _, _ := strings.Cut(intent.Slug, "/")
+		if a.options.SignIn == nil || source == "" {
 			return nil
 		}
-		return tea.ExecProcess(a.options.Login(), nil)
+		return tea.ExecProcess(a.options.SignIn(source), nil)
 	case models.Reload:
 		reload := a.options.ReloadModels
 		if reload == nil {

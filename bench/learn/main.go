@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/bench/api"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/konst"
@@ -150,7 +151,11 @@ func askJev(windows []window) ([]labels, float64, string, error) {
 	if err != nil {
 		return nil, 0, "", err
 	}
-	wire, err := typesafe.New(typesafe.Config{Key: key, Transport: transport.Config{AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,
+	bound, err := api.JudgeModel()
+	if err != nil {
+		return nil, 0, "", err
+	}
+	wire, err := typesafe.New(bound, typesafe.Config{Key: key, Transport: transport.Config{AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,
 		Retries: konst.JudgeRetries, Backoff: time.Duration(konst.JudgeBackoffMillis) * time.Millisecond, Concurrency: 1}})
 	if err != nil {
 		return nil, 0, "", err

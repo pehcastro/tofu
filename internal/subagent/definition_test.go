@@ -60,8 +60,8 @@ func TestDiscoveryFailures(t *testing.T) {
 
 	t.Run("a .claude file with model opus", func(t *testing.T) {
 		reviewer := definitionNamed(t, all, "reviewer")
-		if reviewer.Runs != RunsModel || reviewer.Model != "claude-sub/claude-opus-5" {
-			t.Fatalf("opus should resolve through the catalog, got %+v", reviewer)
+		if reviewer.Runs != RunsInherit || reviewer.Model != "" || reviewer.From != "tier genius" || len(reviewer.Notices) != 1 || !strings.Contains(reviewer.Notices[0], "modelTier.genius") {
+			t.Fatalf("opus stands for the genius tier, which is unset, so it inherits with a notice naming the setting, got %+v", reviewer)
 		}
 		if !slices.Equal(reviewer.Ignored, []string{"color", "permissionMode"}) {
 			t.Fatalf("color and permissionMode should be named as ignored, got %q", reviewer.Ignored)
@@ -70,7 +70,7 @@ func TestDiscoveryFailures(t *testing.T) {
 
 	t.Run("a .claude file naming Claude tools", func(t *testing.T) {
 		reviewer := definitionNamed(t, all, "reviewer")
-		if reviewer.Runs != RunsModel || !slices.Equal(reviewer.Tools, []string{"read", "search", "glob", "bash", "edit"}) {
+		if reviewer.Runs == RunsRefused || !slices.Equal(reviewer.Tools, []string{"read", "search", "glob", "bash", "edit"}) {
 			t.Fatalf("Claude tools should translate to tofu tools once each, got %+v", reviewer)
 		}
 		if !slices.Equal(reviewer.IgnoredTools, []string{"NotebookEdit"}) {
@@ -184,13 +184,10 @@ func TestModelTiers(t *testing.T) {
 
 	t.Run("no tier set", func(t *testing.T) {
 		found := scan(nil)
-		if writer := definitionNamed(t, found, "writer"); writer.Model != "claude-sub/claude-sonnet-5" || writer.From != "file" {
-			t.Fatalf("with no tier, sonnet resolves through the catalog from the file, got %+v", writer)
-		}
-		for _, name := range []string{"thinker", "planner"} {
+		for name, tier := range map[string]Tier{"thinker": TierGenius, "planner": TierGenius, "writer": TierSmart, "assigned": TierSmart} {
 			one := definitionNamed(t, found, name)
-			if one.Runs != RunsInherit || one.From != "tier genius" || len(one.Notices) != 1 || !strings.Contains(one.Notices[0], "modelTier.genius") {
-				t.Fatalf("%s: an unset tier inherits with a notice naming the setting, got %+v", name, one)
+			if one.Runs != RunsInherit || one.Model != "" || one.From != "tier "+string(tier) || len(one.Notices) != 1 || !strings.Contains(one.Notices[0], tier.Setting()) {
+				t.Fatalf("%s: an unset tier inherits with a notice naming %s, and no model is picked by its name, got %+v", name, tier.Setting(), one)
 			}
 		}
 		if planner := definitionNamed(t, found, "planner"); planner.AssignedIn == "" {
@@ -212,8 +209,8 @@ func TestModelTiers(t *testing.T) {
 		if thinker := definitionNamed(t, found, "thinker"); thinker.Runs != RunsModel || thinker.Model != "claude-sub/claude-opus-5" || len(thinker.Notices) != 0 {
 			t.Fatalf("@genius resolves to the genius tier, got %+v", thinker)
 		}
-		if assigned := definitionNamed(t, found, "assigned"); assigned.Model != "claude-sub/claude-sonnet-5" || assigned.From != "agent-models.yaml" {
-			t.Fatalf("sonnet in tofu's own agent-models.yaml is the catalog alias, not a tier, got %+v", assigned)
+		if assigned := definitionNamed(t, found, "assigned"); assigned.Model != "codex-sub/gpt-5.6-sol" || assigned.From != "tier smart" || assigned.AssignedIn == "" {
+			t.Fatalf("sonnet in tofu's own agent-models.yaml is the smart tier too, got %+v", assigned)
 		}
 	})
 
@@ -224,28 +221,12 @@ func TestModelTiers(t *testing.T) {
 		}
 	})
 
-	t.Run("an alias picks the newest allowed model of its family", func(t *testing.T) {
-		sonnet := func(id string, use models.Use) models.Model {
-			return models.Model{Provider: models.Anthropic, ID: id, Subscription: models.ClaudeSub, Use: use, Kind: models.KindLLM}
-		}
-		for _, c := range []struct {
-			name  string
-			first []models.Model
-			last  []models.Model
-			want  string
-		}{
-			{"a newer point release", nil, []models.Model{sonnet("claude-sonnet-5-5", models.UseAllowed)}, "claude-sub/claude-sonnet-5-5"},
-			{"the newer one listed first", []models.Model{sonnet("claude-sonnet-5-5", models.UseAllowed)}, nil, "claude-sub/claude-sonnet-5-5"},
-			{"ten after nine", nil, []models.Model{sonnet("claude-sonnet-5-10", models.UseAllowed), sonnet("claude-sonnet-5-9", models.UseAllowed)}, "claude-sub/claude-sonnet-5-10"},
-			{"a date is not a version", nil, []models.Model{sonnet("claude-sonnet-5-20990101", models.UseAllowed), sonnet("claude-sonnet-5-5", models.UseAllowed)}, "claude-sub/claude-sonnet-5-5"},
-			{"an excluded newer one", nil, []models.Model{sonnet("claude-sonnet-6", models.UseExcluded), sonnet("claude-sonnet-5-5", models.UseAllowed)}, "claude-sub/claude-sonnet-5-5"},
-		} {
-			s := scanOf(t, "", "claude")
-			s.Project = project
-			s.Catalog.Models = slices.Concat(c.first, s.Catalog.Models, c.last)
-			if writer := definitionNamed(t, Definitions(s), "writer"); writer.Runs != RunsModel || writer.Model != c.want || len(writer.Notices) != 0 {
-				t.Fatalf("%s: sonnet should run on %s, got %+v", c.name, c.want, writer)
-			}
+	t.Run("an alias never picks a model by its name", func(t *testing.T) {
+		s := scanOf(t, "", "claude")
+		s.Project = project
+		s.Catalog.Models = append(s.Catalog.Models, models.Model{Provider: models.Anthropic, ID: "claude-sonnet-5-5", Subscription: models.ClaudeSub, Use: models.UseAllowed, Kind: models.KindLLM})
+		if writer := definitionNamed(t, Definitions(s), "writer"); writer.Runs != RunsInherit || writer.Model != "" || len(writer.Notices) != 1 || !strings.Contains(writer.Notices[0], TierSmart.Setting()) {
+			t.Fatalf("with a newer sonnet in the catalog and the smart tier unset, sonnet still inherits and names the setting, got %+v", writer)
 		}
 	})
 

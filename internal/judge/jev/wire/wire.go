@@ -13,7 +13,7 @@ import (
 type Spec struct {
 	Name            string
 	Endpoint        string
-	Alias           string
+	Model           string
 	FailOp          string
 	RequestIDHeader string
 }
@@ -42,7 +42,20 @@ func New(spec Spec, config Config) (*Wire, error) {
 	return &Wire{spec: spec, key: config.Key, client: client}, nil
 }
 
-func (w *Wire) Model() string { return w.spec.Alias }
+func (w *Wire) Model() string { return w.spec.Model }
+
+func AnsweringBuild(ctx context.Context, w *Wire) (string, error) {
+	client, err := jev.NewClient(jev.Config{Wire: w})
+	if err != nil {
+		return "", err
+	}
+	decision, err := client.Ask(ctx, jev.Request{
+		State: "tofu asks which jev build answers " + w.Model(),
+		Questions: []jev.Question{{ID: "answered", Kind: jev.QuestionNoul, Instructions: "is `state` a question about a build",
+			True: "it asks about a build", False: "it asks about something else"}},
+	})
+	return decision.Build, err
+}
 
 func (w *Wire) Caps() jev.WireCaps {
 	return jev.WireCaps{

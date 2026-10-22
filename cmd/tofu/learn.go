@@ -270,7 +270,7 @@ func labelWindows(run *learn.Run, errOut io.Writer) error {
 }
 
 func groupByMeaning(run *learn.Run, known learn.Known, dir string, errOut io.Writer) {
-	opts := onTheBoundKeyWire(runOpts{dir: dir, wire: wireSubscription, effort: llm.EffortDefault})
+	opts := onTheBoundWire(runOpts{dir: dir, effort: llm.EffortDefault})
 	if opts.wire == wireKey {
 		run.Sent.Kept = "the lead model is reached through the OpenRouter key, which learning never spends"
 		return

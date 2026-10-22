@@ -8,17 +8,17 @@ import (
 const (
 	usageWithNothingSignedIn = `Usage                                                           ○ none signed in
 
-  ✗ claude-sub  no subscription is signed in, so no model can answer
-    → tofu login llm claude-sub
-  ✗ jev         the gate is off because no classifier is bound: store its key
-    with tofu login classifier and pick it in Models
+  ✗ orchestrator  no subscription is signed in, so no model can answer
+    → tofu login llm <source>
+  ✗ jev           the gate is off because no classifier is bound: store its
+    key with tofu login classifier and pick it in Models
     → tofu models bind classifier <provider/model>
 `
 
 	usageWithAKeyAndNothingSignedIn = `Usage                                                           ○ none signed in
 
-  ✗ claude-sub  no subscription is signed in, so no model can answer
-    → tofu login llm claude-sub
+  ✗ orchestrator  no subscription is signed in, so no model can answer
+    → tofu login llm <source>
 `
 
 	usageEnvelopeWithAKeyAndNothingSignedIn = `{
@@ -32,9 +32,9 @@ const (
     "spend_limit": "spend limit: tofu sets none, an api key's spending limit is the provider's, set on the account that issued the key",
     "missing": [
       {
-        "label": "claude-sub",
+        "label": "orchestrator",
         "what": "no subscription is signed in, so no model can answer",
-        "command": "tofu login llm claude-sub"
+        "command": "tofu login llm <source>"
       }
     ]
   },

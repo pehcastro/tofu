@@ -143,11 +143,15 @@ func TestSetupAsksForBothLoginsAndTheSecondOneStoresTheKey(t *testing.T) {
 	if len(required) != 2 || required[0].Done != "" || required[1].Done != "" {
 		t.Fatalf("requirements %+v, want two steps, neither done", required)
 	}
-	if required[0].Step != modelStep || required[0].Fix != "tofu login llm claude-sub" || len(required[0].Choices) != 3 {
+	if required[0].Step != modelStep || required[0].What != noCredential || required[0].Fix != "tofu login llm <source>" || len(required[0].Choices) != 3 {
 		t.Fatalf("step 1 is %+v", required[0])
 	}
-	if args := strings.Join(required[0].Choices[0].Run().Args[1:], " "); args != "login llm claude-sub" {
-		t.Fatalf("the claude choice runs %v, want login llm claude-sub", args)
+	var logins []string
+	for _, choice := range required[0].Choices[:2] {
+		logins = append(logins, strings.Join(choice.Run().Args[1:], " "))
+	}
+	if !slices.Equal(logins, []string{"login llm claude-sub", "login llm codex-sub"}) {
+		t.Fatalf("with nothing signed in step 1 offers %q, want a login for every subscription in the library", logins)
 	}
 	if required[0].Choices[2].Key != sys.MetaMuseKeyName {
 		t.Fatalf("the key choices are %+v", required[0].Choices)
@@ -166,10 +170,50 @@ func TestSetupAsksForBothLoginsAndTheSecondOneStoresTheKey(t *testing.T) {
 	if left[0].Done != "" || !strings.HasSuffix(left[1].Done, "····Q9W4") {
 		t.Fatalf("after the key was stored the steps are %+v, want step 2 done by the key's last four", left)
 	}
-	if blockers := heldForTest(t).startBlockers(); len(blockers) != 1 || blockers[0].label != string(cred.ClaudeSub) {
-		t.Fatalf("doctor's blockers are %+v, want the language model step alone", blockers)
+	if blockers := heldForTest(t).startBlockers(); len(blockers) != 1 || blockers[0].label != string(models.RoleOrchestrator) {
+		t.Fatalf("doctor's blockers are %+v, want the orchestrator step alone", blockers)
 	}
 	t.Log("\n" + setupScreen(t, left))
+}
+
+func TestASignInWithNothingBoundAsksForTheOrchestratorAndBindingItClearsTheStep(t *testing.T) {
+	emptyHome(t)
+	storeCredential(t, cred.CodexSub)
+	asked := heldForTest(t).requirements()[0]
+	if asked.Done != "" || asked.What != models.RoleOrchestrator.Unset().Error() || asked.Fix != "tofu models bind orchestrator <provider/model>" {
+		t.Fatalf("with codex signed in and nothing bound step 1 is %+v, want it to ask for the orchestrator", asked)
+	}
+	if args := strings.Join(asked.Choices[0].Run().Args[1:], " "); args != "models bind orchestrator codex-sub/gpt-5.6-sol" {
+		t.Fatalf("the first choice runs %q, want the bind of the signed-in subscription's marked default", args)
+	}
+	for _, choice := range asked.Choices {
+		if choice.Run != nil && strings.Contains(strings.Join(choice.Run().Args, " "), "bind orchestrator claude-sub") {
+			t.Fatalf("a subscription nobody signed in to is offered as the orchestrator: %+v", asked.Choices)
+		}
+	}
+	t.Log("\n" + setupScreen(t, []tui.Requirement{asked}))
+
+	bindOrchestrator(t, "claude-sub/claude-opus-5")
+	elsewhere := heldForTest(t).requirements()[0]
+	if elsewhere.Done != "" || elsewhere.Fix != "tofu login llm claude-sub" {
+		t.Fatalf("bound to claude-sub with codex alone signed in, step 1 is %+v, want it to ask for the claude-sub sign-in", elsewhere)
+	}
+
+	bindOrchestrator(t, "codex-sub/gpt-5.6-sol")
+	if done := heldForTest(t).requirements()[0].Done; done != "codex-sub · gpt-5.6-sol" {
+		t.Fatalf("bound to codex with codex signed in, step 1 reads done %q", done)
+	}
+}
+
+func bindOrchestrator(t *testing.T, slug string) {
+	t.Helper()
+	home, err := sys.HomeConfigDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := models.BindRole(home, models.RoleOrchestrator, slug); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestAWireWithNoCredentialIsNeverOffered(t *testing.T) {

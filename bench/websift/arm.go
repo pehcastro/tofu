@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/question"
 	"tofu/internal/sift"
 )
@@ -79,12 +78,12 @@ type Answered struct {
 	Failed    int
 }
 
-func chunkCandidates(template jev.Question, candidates []sift.PageUnit, task, pageURL string, budget int) [][]sift.PageUnit {
+func chunkCandidates(model string, template jev.Question, candidates []sift.PageUnit, task, pageURL string, budget int) [][]sift.PageUnit {
 	var chunks [][]sift.PageUnit
 	var current []sift.PageUnit
 	for _, unit := range candidates {
 		trial := append(append([]sift.PageUnit{}, current...), unit)
-		if len(current) > 0 && requestSize(template, trial, task, pageURL) > budget {
+		if len(current) > 0 && requestSize(model, template, trial, task, pageURL) > budget {
 			chunks = append(chunks, current)
 			current = []sift.PageUnit{unit}
 			continue
@@ -97,7 +96,7 @@ func chunkCandidates(template jev.Question, candidates []sift.PageUnit, task, pa
 	return chunks
 }
 
-func requestSize(template jev.Question, units []sift.PageUnit, task, pageURL string) int {
+func requestSize(model string, template jev.Question, units []sift.PageUnit, task, pageURL string) int {
 	state, err := json.Marshal(sift.BuildPageState(units, task, pageURL))
 	if err != nil {
 		return 0
@@ -108,7 +107,7 @@ func requestSize(template jev.Question, units []sift.PageUnit, task, pageURL str
 		q.ID = sift.PageQuestionID(unit.Index)
 		questions[i] = q
 	}
-	body, err := (jev.Request{State: json.RawMessage(state), Questions: questions}).Encode(typesafe.Alias)
+	body, err := (jev.Request{State: json.RawMessage(state), Questions: questions}).Encode(model)
 	if err != nil {
 		return 0
 	}
@@ -129,7 +128,7 @@ func Ask(ctx context.Context, client *jev.Client, set question.Set, row Row, pla
 	}
 
 	budget := client.Caps().MaxRequestBytes
-	for _, chunk := range chunkCandidates(template, candidates, row.Task, planted.URL, budget) {
+	for _, chunk := range chunkCandidates(client.Model(), template, candidates, row.Task, planted.URL, budget) {
 		out.Chunks++
 		state, err := json.Marshal(sift.BuildPageState(chunk, row.Task, planted.URL))
 		if err != nil {

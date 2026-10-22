@@ -15,10 +15,10 @@ import (
 
 const (
 	doctorBodyWithNoKeyAndNoProjectRule = `
-  ✗ claude-sub  no subscription is signed in, so no model can answer
-    → tofu login llm claude-sub
-  ✗ jev         the gate is off because no classifier is bound: store its key
-    with tofu login classifier and pick it in Models
+  ✗ orchestrator  no subscription is signed in, so no model can answer
+    → tofu login llm <source>
+  ✗ jev           the gate is off because no classifier is bound: store its
+    key with tofu login classifier and pick it in Models
     → tofu models bind classifier <provider/model>
 
 access
@@ -42,8 +42,8 @@ state
 `
 
 	doctorBodyWithAKeyAndAProjectRule = `
-  ✗ claude-sub  no subscription is signed in, so no model can answer
-    → tofu login llm claude-sub
+  ✗ orchestrator  no subscription is signed in, so no model can answer
+    → tofu login llm <source>
 
 access
   ✓ jev         key · .env
@@ -179,7 +179,7 @@ func TestE2EDoctorAndARunInTheSameHomeAgreeOnWhetherTheShellSiftCuts(t *testing.
 				said = rule
 			}
 		}
-		ran, code := runBinary(t, p.dir, append(env, cassetteVariable+"="+filepath.Join(p.home, "deck.jsonl")), "run", "--dir", ".", "--no-gate", "read long.txt")
+		ran, code := runBinary(t, p.dir, append(env, cassetteVariable+"="+filepath.Join(p.home, "deck.jsonl")), "run", "--dir", ".", "--wire", wireSubscription, "--no-gate", "read long.txt")
 		events, _ := filepath.Glob(filepath.Join(p.home, ".tofu", "projects", "*", "sessions", "*", "events.jsonl"))
 		session := ""
 		for _, path := range events {
@@ -243,7 +243,7 @@ func TestE2EDoctorJSONIsOneEnvelopeThatCarriesTheBlockersAsProblems(t *testing.T
 	}
 	oneEnvelope(t, newProject(t, "doctor").run(t, exitVerdict, "doctor", "--json"), &envelope)
 	want := []cli.Problem{
-		{What: "claude-sub: no subscription is signed in, so no model can answer", Hint: "tofu login llm claude-sub"},
+		{What: "orchestrator: no subscription is signed in, so no model can answer", Hint: "tofu login llm <source>"},
 		{What: "jev: the gate is off because no classifier is bound: store its key with tofu login classifier and pick it in Models", Hint: "tofu models bind classifier <provider/model>"},
 	}
 	if envelope.Tofu != konst.Version || envelope.Verb != "doctor" || envelope.OK || envelope.Data.Verdict != doctorNotReady ||

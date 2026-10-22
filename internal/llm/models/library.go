@@ -1,6 +1,7 @@
 package models
 
 import (
+	"cmp"
 	"fmt"
 	"strings"
 
@@ -228,6 +229,7 @@ type Model struct {
 	Efforts          []llm.Effort
 	Reason           string
 	Notice           string
+	ServedAs         string
 	File             string
 	Layer            string
 	From             string
@@ -263,6 +265,8 @@ func (m Model) Source() string {
 }
 
 func (m Model) VendorSlug() string { return string(m.Provider) + "/" + m.ID }
+
+func (m Model) Requested() string { return cmp.Or(m.ServedAs, m.ID) }
 
 func (m Model) Pays() Pays {
 	if m.Subscription != "" {
@@ -376,13 +380,13 @@ func (c Library) Resolve(recorded string) (Model, bool) {
 	return bare, bareMatches == 1
 }
 
-func (c Library) Default(subscription Subscription) (Model, error) {
+func (c Library) Default(source Subscription) (Model, error) {
 	for _, model := range c.Models {
-		if model.Subscription == subscription && model.Use == UseDefault {
+		if model.Source() == string(source) && model.Use == UseDefault {
 			return model, nil
 		}
 	}
-	return Model{}, fmt.Errorf("the model library has no default for the %s subscription", subscription)
+	return Model{}, fmt.Errorf("no %s model file is marked use: default, so name the model or bind the orchestrator to one", source)
 }
 
 func (c Library) MemoryWriter(source string) (Model, bool) {

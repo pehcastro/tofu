@@ -19,6 +19,8 @@ import (
 	"tofu/internal/transport"
 )
 
+const liveModel = "jev-latest"
+
 type metered struct {
 	jev.Wire
 	tokens *int
@@ -58,7 +60,7 @@ func TestEvalCorpus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wire, err := typesafe.New(typesafe.Config{Key: key, Transport: transport.Config{
+	wire, err := typesafe.New(liveModel, typesafe.Config{Key: key, Transport: transport.Config{
 		AttemptTimeout: konst.JudgeTimeoutMillis * time.Millisecond,
 		Retries:        konst.JudgeRetries,
 		Backoff:        konst.JudgeBackoffMillis * time.Millisecond,

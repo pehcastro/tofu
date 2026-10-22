@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
 )
@@ -46,7 +45,7 @@ func primeCache(t *testing.T, b Battery, turn Turn) {
 	if err != nil {
 		t.Fatalf("BuildStopCheck: %v", err)
 	}
-	request := ledger.Request{State: json.RawMessage(built), Questions: b.pol.Questions, Model: typesafe.Alias, Version: b.wording}
+	request := ledger.Request{State: json.RawMessage(built), Questions: b.pol.Questions, Model: b.model, Version: b.wording}
 	key, err := b.cache.Key(request)
 	if err != nil {
 		t.Fatalf("cache.Key: %v", err)

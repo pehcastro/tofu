@@ -65,7 +65,6 @@ const (
 	gateShadow         = "shadow"
 	gateEnforce        = "enforce"
 
-	openRouterDefaultModel     = "anthropic/claude-opus-5"
 	openRouterEndpointVariable = "TOFU_OPENROUTER_ENDPOINT"
 )
 
@@ -208,16 +207,21 @@ func boundRoles(wire, dir string) (models.Bindings, error) {
 }
 
 func chooseModel(opts runOpts) (models.Model, error) {
-	if opts.wire == wireKey {
-		return models.Model{ID: cmp.Or(opts.model, openRouterDefaultModel)}, nil
-	}
-	if opts.wire == wireMeta {
+	switch opts.wire {
+	case "":
+		return models.Model{}, models.RoleOrchestrator.Unset()
+	case wireKey:
+		if opts.model == "" {
+			return models.Model{}, errors.New("--wire openrouter names no model: pass --model, or bind the orchestrator to an openrouter model")
+		}
+		return models.Model{ID: opts.model}, nil
+	case wireMeta:
 		library, err := modelLibrary(opts.dir)
 		if err != nil {
 			return models.Model{}, err
 		}
 		if opts.model == "" {
-			return library.KeyDefault(models.Meta)
+			return library.Default(models.Subscription(models.Meta))
 		}
 		return library.Select(opts.model)
 	}
@@ -237,15 +241,21 @@ func chooseModel(opts runOpts) (models.Model, error) {
 	return orchestrator.Model, nil
 }
 
-func onTheBoundKeyWire(opts runOpts) runOpts {
-	if opts.model != "" || opts.wire == wireKey {
+func onTheBoundWire(opts runOpts) runOpts {
+	if opts.wire != "" && opts.model != "" {
 		return opts
 	}
 	library, err := modelLibrary(opts.dir)
 	if err != nil {
 		return opts
 	}
-	if orchestrator, bound := library.Bound(models.RoleOrchestrator); bound {
+	if opts.model != "" {
+		if named, err := library.Select(opts.model); err == nil {
+			opts.wire = library.WireOf(named)
+		}
+		return opts
+	}
+	if orchestrator, bound := library.Bound(models.RoleOrchestrator); bound && (opts.wire == "" || opts.wire == library.WireOf(orchestrator)) {
 		opts.wire, opts.model = library.WireOf(orchestrator), orchestrator.Slug()
 	}
 	return opts
@@ -419,7 +429,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return runFail(errOut, err)
 	}
-	opts = onTheBoundKeyWire(opts)
+	opts = onTheBoundWire(opts)
 	clock.step("model roles")
 	dir := cmp.Or(opts.dir, ".")
 	say := func(unreadable string) { _, _ = fmt.Fprintln(errOut, "tofu run: "+unreadable) }
@@ -1590,7 +1600,6 @@ func runFail(errOut io.Writer, err error) int {
 
 func parseRunArgs(args []string) (runOpts, error) {
 	opts := runOpts{
-		wire:             wireSubscription,
 		toolSet:          toolSetFull,
 		doneArm:          doneArmOff,
 		loopGuardRepeats: konst.TurnLoopGuardRepeats,
@@ -1672,7 +1681,7 @@ func parseRunArgs(args []string) (runOpts, error) {
 	if opts.agent != "" && !opts.showPrompt {
 		return runOpts{}, errors.New("--agent prints the prompt a spawn of that sub-agent composes and runs nothing, so it needs --show-prompt")
 	}
-	if !slices.Contains(runWires(), opts.wire) {
+	if opts.wire != "" && !slices.Contains(runWires(), opts.wire) {
 		return runOpts{}, fmt.Errorf("--wire %q is none of %s", opts.wire, strings.Join(runWires(), ", "))
 	}
 	source, _, _ := strings.Cut(opts.model, "/")

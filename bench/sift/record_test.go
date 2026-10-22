@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
 	"tofu/internal/konst"
@@ -19,14 +18,17 @@ import (
 	libraryquestions "tofu/library/questions"
 )
 
-const replyFile = "testdata/judged-replies.jsonl"
+const (
+	replyFile     = "testdata/judged-replies.jsonl"
+	recordedModel = "jev-latest"
+)
 
 type replayWire struct {
 	replies [][]byte
 	served  atomic.Int64
 }
 
-func (w *replayWire) Model() string { return typesafe.Alias }
+func (w *replayWire) Model() string { return recordedModel }
 
 func (w *replayWire) Caps() jev.WireCaps {
 	return jev.WireCaps{
