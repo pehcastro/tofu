@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"sync"
@@ -135,6 +136,7 @@ func (l *link) leave() {
 func (h *Host) openAudience(store *session.Store, id string, a *audience) {
 	path := store.Channel(id)
 	_ = os.Remove(path)
+	_ = os.MkdirAll(filepath.Dir(path), 0o700)
 	listener, err := net.Listen(followNetwork, path)
 	if err != nil {
 		if a != nil {

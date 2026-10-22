@@ -26,12 +26,23 @@ var (
 )
 
 func startHolder(dir string, store *session.Store, id string) error {
-	path := store.Channel(id)
-	if answers(path) {
-		return nil
-	}
-	if store.Busy(id) == nil {
-		_ = os.Remove(path)
+	ready := konst.HolderReadyMillis * time.Millisecond
+	for deadline := time.Now().Add(ready); ; time.Sleep(followRetry) {
+		path := store.Channel(id)
+		if answers(path) {
+			return nil
+		}
+		held := store.Busy(id)
+		var busy session.BusyError
+		if !errors.As(held, &busy) || !busy.Live() {
+			if held == nil {
+				_ = os.Remove(path)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			return nil
+		}
 	}
 	exe, err := os.Executable()
 	if err != nil {
@@ -53,13 +64,12 @@ func startHolder(dir string, store *session.Store, id string) error {
 	}); err != nil {
 		return err
 	}
-	wait := konst.HolderReadyMillis * time.Millisecond
-	for deadline := time.Now().Add(wait); time.Now().Before(deadline); time.Sleep(followRetry) {
-		if answers(path) {
+	for deadline := time.Now().Add(ready); time.Now().Before(deadline); time.Sleep(followRetry) {
+		if answers(store.Channel(id)) {
 			return nil
 		}
 	}
-	return fmt.Errorf("the holder of session %s did not answer within %s, its log is %s", id, wait, logPath)
+	return fmt.Errorf("the holder of session %s did not answer within %s, its log is %s", id, ready, logPath)
 }
 
 func answers(path string) bool {

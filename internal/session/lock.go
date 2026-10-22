@@ -10,12 +10,15 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"tofu/internal/sys"
 )
 
 const (
 	lockName                       = "lock"
 	turnLockName                   = "turn.lock"
 	channelName                    = "follow.sock"
+	channelDirName                 = "sock"
 	channelPathLimit               = 100
 	channelHashBytes               = 8
 	lockStaleGrace   time.Duration = 3 * time.Second
@@ -31,6 +34,8 @@ type BusyError struct {
 func (e BusyError) Error() string {
 	return fmt.Sprintf("session: %s is open for writing in process %d since %s, so it reads here and takes no second writer", e.ID, e.PID, e.Since.Format(time.TimeOnly))
 }
+
+func (e BusyError) Live() bool { return e.PID > 0 && alive(e.PID) }
 
 type lockHolder struct {
 	PID   int       `json:"pid"`
@@ -86,8 +91,14 @@ func (s *Store) Channel(id string) string {
 	if beside := filepath.Join(s.Dir(id), channelName); len(beside) < channelPathLimit {
 		return beside
 	}
-	sum := sha256.Sum256([]byte(s.Dir(id)))
-	return filepath.Join(os.TempDir(), "tofu-"+hex.EncodeToString(sum[:channelHashBytes])+".sock")
+	sum := sha256.Sum256([]byte(id))
+	named := "tofu-" + hex.EncodeToString(sum[:channelHashBytes]) + ".sock"
+	if home, err := sys.HomeConfigDir(); err == nil {
+		if under := filepath.Join(home, channelDirName, named); len(under) < channelPathLimit {
+			return under
+		}
+	}
+	return filepath.Join(os.TempDir(), named)
 }
 
 func takeLock(path string) (*os.File, *lockHolder, error) {
