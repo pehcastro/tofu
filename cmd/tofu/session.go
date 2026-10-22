@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	sessionSubcommands = "tofu session <name|id>, or tofu session list [--all], or tofu session info|trace|reads|resume|rename|request|find|branch <name|id> [--json]"
+	sessionSubcommands = "tofu session <name|id>, or tofu session list [--all], or tofu session info|trace|drain|reads|resume|rename|request|find|branch <name|id> [--json]"
 	sessionFresh       = "no session recorded here"
 	sessionDay         = 24 * time.Hour
 	sessionWeek        = 7 * sessionDay
@@ -114,6 +114,9 @@ func sessionVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	}
 	if args[0] == "trace" {
 		return sessionTraceVerb(o, args[1:], now)
+	}
+	if args[0] == "drain" {
+		return sessionDrainVerb(o, args[1:])
 	}
 	if args[0] == "find" {
 		o.verb, o.usageLine = "session find", sessionFindUsage
