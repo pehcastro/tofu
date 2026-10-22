@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                           67 matches
+Docs · "change the colours"                                           69 matches
 
   change the colours
     → tofu settings set theme Nord
@@ -75,13 +75,17 @@ Docs · "change the colours"                                           67 matche
   run the next task on another model
     → /models in the app, then pick a model
   always run the orchestrator on one model
-    → write model: <source/model> in ~/.tofu/roles/orchestrator.yaml
+    → tofu models bind orchestrator claude-sub/claude-sonnet-5
+  pick the model every sub-agent runs
+    → tofu models bind sub-agent claude-sub/claude-sonnet-5
   why the quota reading is stale or how old it is
     → tofu usage
   see which skills the model is offered
     → tofu run --dir . --show-prompt "anything"
   store the typesafe key the gate needs
     → tofu login classifier typesafe
+  bind the classifier the gate runs
+    → tofu models bind classifier typesafe/jev-latest
   work one task with the gate off
     → tofu run --dir . --no-gate "<task>"
   see how full the context window got

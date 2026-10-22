@@ -154,7 +154,11 @@ exit 0
       },
       {
         "text": "always run the orchestrator on one model",
-        "do": "write model: <source/model> in ~/.tofu/roles/orchestrator.yaml"
+        "do": "tofu models bind orchestrator claude-sub/claude-sonnet-5"
+      },
+      {
+        "text": "pick the model every sub-agent runs",
+        "do": "tofu models bind sub-agent claude-sub/claude-sonnet-5"
       },
       {
         "text": "why the quota reading is stale or how old it is",
@@ -167,6 +171,10 @@ exit 0
       {
         "text": "store the typesafe key the gate needs",
         "do": "tofu login classifier typesafe"
+      },
+      {
+        "text": "bind the classifier the gate runs",
+        "do": "tofu models bind classifier typesafe/jev-latest"
       },
       {
         "text": "work one task with the gate off",

@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · 101 asks                                                        32 topics
+Docs · 105 asks                                                        32 topics
 
 agents  add a sub-agent for every project or for one, choose the model it
   runs, and remove it
@@ -98,9 +98,11 @@ files  every path tofu uses in your home and in a project, and which one wins
     → tofu docs files
 
 gate  what jev judges before a tool call runs, when tofu asks you first, and
-  where the TypeSafe key lives
+  which classifier key and binding it runs on
   store the typesafe key the gate needs
     → tofu login classifier typesafe
+  bind the classifier the gate runs
+    → tofu models bind classifier typesafe/jev-latest
   why was a tool call refused or asked about
     → tofu why --last
   tell tofu a verdict was wrong
@@ -160,8 +162,8 @@ memory  what tofu remembers for you across sessions, in four scopes from you
   forget something tofu remembers
     → tofu memory remove <id>
 
-models  sign in to a subscription, name a model as source/model, choose the
-  model a task runs, and set the tiers
+models  sign in to a subscription, name a model as source/model, bind the
+  model each role runs, add a custom model, and set the tiers
   sign in with a subscription
     → tofu login llm claude-sub
   see which models I can use
@@ -171,7 +173,11 @@ models  sign in to a subscription, name a model as source/model, choose the
   run the next task on another model
     → /models in the app, then pick a model
   always run the orchestrator on one model
-    → write model: <source/model> in ~/.tofu/roles/orchestrator.yaml
+    → tofu models bind orchestrator claude-sub/claude-sonnet-5
+  pick the model every sub-agent runs
+    → tofu models bind sub-agent claude-sub/claude-sonnet-5
+  add a model tofu does not list
+    → write a provider and id json file in ~/.tofu/models/llms/
   stop tofu from using a model
     → write use: excluded and a reason in ~/.tofu/models/<provider>/<model>.yaml
 
@@ -297,7 +303,9 @@ update  how tofu finds the latest release, installs it in the background or
 
 usage  how tofu reads each subscription's 5 hour and 7 day windows, shares one
   reading between every tofu process, and keeps the last one when the vendor
-  says no
+  says no, and where work continues when a subscription runs out
+  keep working on another subscription when one runs out
+    → tofu settings set continueOnSubscription codex-sub/gpt-5.6-sol
   how much subscription quota is left
     → tofu usage
   why the quota reading is stale or how old it is

@@ -70,7 +70,7 @@ exit 0
       {
         "topic": "gate",
         "title": "The gate",
-        "summary": "what jev judges before a tool call runs, when tofu asks you first, and where the TypeSafe key lives"
+        "summary": "what jev judges before a tool call runs, when tofu asks you first, and which classifier key and binding it runs on"
       },
       {
         "topic": "guard",
@@ -105,7 +105,7 @@ exit 0
       {
         "topic": "models",
         "title": "Models",
-        "summary": "sign in to a subscription, name a model as source/model, choose the model a task runs, and set the tiers"
+        "summary": "sign in to a subscription, name a model as source/model, bind the model each role runs, add a custom model, and set the tiers"
       },
       {
         "topic": "rules",
@@ -165,7 +165,7 @@ exit 0
       {
         "topic": "usage",
         "title": "Subscription quota",
-        "summary": "how tofu reads each subscription's 5 hour and 7 day windows, shares one reading between every tofu process, and keeps the last one when the vendor says no"
+        "summary": "how tofu reads each subscription's 5 hour and 7 day windows, shares one reading between every tofu process, and keeps the last one when the vendor says no, and where work continues when a subscription runs out"
       }
     ],
     "entries": [
@@ -429,9 +429,27 @@ exit 0
       },
       {
         "ask": "always run the orchestrator on one model",
-        "do": "write model: <source/model> in ~/.tofu/roles/orchestrator.yaml",
+        "do": "tofu models bind orchestrator claude-sub/claude-sonnet-5",
         "check": "tofu models",
         "topic": "models"
+      },
+      {
+        "ask": "pick the model every sub-agent runs",
+        "do": "tofu models bind sub-agent claude-sub/claude-sonnet-5",
+        "check": "tofu models",
+        "topic": "models"
+      },
+      {
+        "ask": "add a model tofu does not list",
+        "do": "write a provider and id json file in ~/.tofu/models/llms/",
+        "check": "tofu models",
+        "topic": "models"
+      },
+      {
+        "ask": "keep working on another subscription when one runs out",
+        "do": "tofu settings set continueOnSubscription codex-sub/gpt-5.6-sol",
+        "check": "tofu settings get continueOnSubscription",
+        "topic": "usage"
       },
       {
         "ask": "stop tofu from using a model",
@@ -491,6 +509,12 @@ exit 0
         "ask": "store the typesafe key the gate needs",
         "do": "tofu login classifier typesafe",
         "check": "tofu doctor",
+        "topic": "gate"
+      },
+      {
+        "ask": "bind the classifier the gate runs",
+        "do": "tofu models bind classifier typesafe/jev-latest",
+        "check": "tofu models",
         "topic": "gate"
       },
       {
