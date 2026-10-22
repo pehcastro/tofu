@@ -10,6 +10,13 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.16-fix1 - 2026-10-22
+
+### Fixed
+
+- A reopened session shows each tool call's real start time and duration, the same on every replay, instead of zero.
+- Taking over a shell from the desk: the release answer gives the offset where the held output ended, so nothing shows twice; output reaches you as it is written instead of every 250 ms; a shell the agent started under the session holder can be taken over; a resize while holding no longer writes the screen twice into the shell's log; and keys typed right after a takeover are no longer lost on Windows.
+
 ## 0.5.16 - 2026-10-22
 
 Your settings choose every model and provider, work keeps going when a subscription runs out, and a ticket's thread reads as the team talking.
