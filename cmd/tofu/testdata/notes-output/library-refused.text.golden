@@ -4,14 +4,14 @@ Library · 4 layers                                                   ✗ 1 refu
 
   models         21
   subscriptions  2
-  questions      21
+  questions      22
   docs           32 pages · 101 index entries
   proxy          rtk · library
 
 layers
   library   library
   catalog   ~/.tofu/catalog
-  global    ~/.tofu
+  home      ~/.tofu
   project   refused\.tofu
 
 domains · the binary

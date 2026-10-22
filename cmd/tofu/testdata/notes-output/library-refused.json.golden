@@ -16,7 +16,7 @@ exit 1
         "origin": "HOME/.tofu/catalog"
       },
       {
-        "name": "global",
+        "name": "home",
         "origin": "HOME/.tofu"
       },
       {
@@ -27,7 +27,7 @@ exit 1
     "models": 21,
     "subscriptions": 2,
     "roles": 0,
-    "questions": 21,
+    "questions": 22,
     "doc_pages": 32,
     "doc_entries": 101,
     "proxy": "rtk",
