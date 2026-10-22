@@ -48,6 +48,7 @@ type Entry struct {
 	Said         string
 	Images       int
 	Calls        string
+	Memory       bool
 }
 
 func (e Entry) tokens(cfg Config) int {

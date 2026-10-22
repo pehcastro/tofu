@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 
 	"tofu/interface/cli"
 	"tofu/internal/host"
@@ -94,6 +95,10 @@ func contextOf(store *session.Store, handle string, build recall.Bands, nextCeil
 	if err != nil {
 		return contextReport{}, err
 	}
+	conversation, err := turn.RecordedContext(events)
+	if err != nil {
+		return contextReport{}, err
+	}
 	report := contextReport{
 		Session:                header.ID,
 		Task:                   header.Task,
@@ -106,12 +111,14 @@ func contextOf(store *session.Store, handle string, build recall.Bands, nextCeil
 	if header.Name != nil {
 		report.Name = *header.Name
 	}
+	itemBands := build
 	for _, step := range steps {
 		if step.Occupancy != nil {
 			caps, recorded := build, step.Bands != nil
 			if recorded {
 				caps = *step.Bands
 			}
+			itemBands = caps
 			measured := recall.Occupancy{
 				Bands:      caps,
 				Identity:   step.Occupancy.Identity,
@@ -142,6 +149,7 @@ func contextOf(store *session.Store, handle string, build recall.Bands, nextCeil
 	if report.Fork == nil && header.ForkedInto != "" {
 		report.Fork = &contextForkReport{Into: header.ForkedInto}
 	}
+	report.Items = recall.Items(cfg.OnWire(header.Wire), itemBands, conversation)
 	return report, nil
 }
 
@@ -199,6 +207,11 @@ func contextLines(page cli.Page, r contextReport) []string {
 		facts = append(facts, cli.Fact{Label: "caps", Text: caps})
 	} else {
 		facts = append(facts, cli.Fact{Label: "occupancy", Text: r.Unmeasured})
+	}
+	for _, item := range r.Items {
+		if item.Band == recall.BandIdentity || item.Kind == recall.ItemMemory {
+			facts = append(facts, cli.Fact{Label: item.Name, Text: strconv.Itoa(item.Tokens) + " tokens of " + strings.ReplaceAll(string(item.Band), "_", " ")})
+		}
 	}
 	facts = append(facts,
 		cli.Fact{Label: "bytes", Text: strconv.Itoa(r.BytesPerThousandTokens) + " per thousand tokens"},

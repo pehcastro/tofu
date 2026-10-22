@@ -60,8 +60,9 @@ func RecordedContext(events []session.Event) (recall.Conversation, error) {
 		return recall.Conversation{}, err
 	}
 	conversation := historyOf(messages)
-	if reading.Prompt != nil {
-		conversation.Instructions = reading.Prompt.System + conversation.Instructions
+	if prompt := reading.Prompt; prompt != nil {
+		sent := Config{System: prompt.System, Instructions: prompt.Instructions}.SystemMessage()
+		conversation.Instructions, conversation.ToolSchemas = sent+conversation.Instructions, prompt.ToolSchemas
 	}
 	return conversation, nil
 }
@@ -78,7 +79,7 @@ func historyOf(messages []llm.Message) recall.Conversation {
 		if message.Role == llm.RoleAssistant {
 			step++
 		}
-		entry := recall.Entry{Step: step, Text: WithoutToolRef(message.Content), Images: len(message.Images)}
+		entry := recall.Entry{Step: step, Text: WithoutToolRef(message.Content), Images: len(message.Images), Memory: message.Origin.Source == llm.SourceMemoryView}
 		if task, found := TaskIn(message.Content); found && message.Role == llm.RoleUser && (message.Origin.Source == "" || saidByThePerson(message.Origin)) {
 			entry.Said = task
 		}

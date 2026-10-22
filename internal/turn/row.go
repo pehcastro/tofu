@@ -207,6 +207,7 @@ type Row struct {
 	Conversation []llm.Message `json:"-"`
 	System       string        `json:"-"`
 	Tools        []string      `json:"-"`
+	ToolSchemas  string        `json:"-"`
 }
 
 type LoopGuardStop struct {
@@ -424,7 +425,7 @@ func (r Row) Record() (session.Header, []session.Event, error) {
 		last = id
 	}
 	if r.System != "" || len(r.Tools) > 0 {
-		record(session.EventPrompt, session.FirstAttempt, session.PromptBody{System: r.System, Tools: r.Tools})
+		record(session.EventPrompt, session.FirstAttempt, session.PromptBody{System: r.System, Tools: r.Tools, ToolSchemas: r.ToolSchemas})
 	}
 	for _, message := range r.Conversation {
 		record(session.EventMessage, session.FirstAttempt, messageRowOf(message))
@@ -440,22 +441,23 @@ func (r Row) Record() (session.Header, []session.Event, error) {
 }
 
 type record struct {
-	store     *session.Store
-	inbox     *Inbox
-	log       *session.Log
-	own       bool
-	scope     string
-	turn      string
-	agent     string
-	spawnedBy string
-	appended  func(session.Event)
-	said      map[string]string
-	failed    []string
-	undo      *snapshot.Repo
-	undoBegun chan struct{}
-	undoErr   error
-	lastTools toolsKept
-	task      llm.Origin
+	store            *session.Store
+	inbox            *Inbox
+	log              *session.Log
+	own              bool
+	scope            string
+	turn             string
+	agent            string
+	spawnedBy        string
+	appended         func(session.Event)
+	said             map[string]string
+	failed           []string
+	undo             *snapshot.Repo
+	undoBegun        chan struct{}
+	undoErr          error
+	lastTools        toolsKept
+	task             llm.Origin
+	instructionFiles string
 }
 
 type toolsKept struct {
@@ -476,7 +478,7 @@ type compactionRow struct {
 }
 
 func openRecord(config Config, row Row) (*record, error) {
-	opened := &record{store: config.Sessions, inbox: config.Inbox, log: config.Log, scope: row.ID, turn: row.ID, appended: config.Appended, said: map[string]string{}}
+	opened := &record{store: config.Sessions, inbox: config.Inbox, log: config.Log, scope: row.ID, turn: row.ID, appended: config.Appended, said: map[string]string{}, instructionFiles: config.Instructions}
 	switch {
 	case config.Log != nil:
 		opened.turn, opened.agent, opened.spawnedBy = config.Turn, row.ID, config.SpawnedBy
@@ -531,7 +533,7 @@ func (r *record) begin(row Row, task llm.Origin) {
 		start.ContextCeiling, start.ContextTarget, start.AutoCompaction = row.Budget.CeilingTokens, row.Budget.Bands.Target(), row.Budget.Record()
 	}
 	r.add(session.Event{Kind: session.EventTurnStart}, start)
-	if prompt := (session.PromptBody{System: row.System, Tools: row.Tools}); !r.log.Prompted(r.agent, prompt) {
+	if prompt := (session.PromptBody{System: row.System, Tools: row.Tools, Instructions: r.instructionFiles, ToolSchemas: row.ToolSchemas}); !r.log.Prompted(r.agent, prompt) {
 		r.add(session.Event{Kind: session.EventPrompt}, prompt)
 	}
 	if !r.own {

@@ -43,7 +43,33 @@ exit 0
       }
     ],
     "ceiling": 450000,
-    "bytes_per_thousand_tokens": 2310
+    "bytes_per_thousand_tokens": 2310,
+    "items": [
+      {
+        "band": "recent",
+        "kind": "said",
+        "name": "explain the session store",
+        "tokens": 50,
+        "fate": "held",
+        "step": 0
+      },
+      {
+        "band": "recent",
+        "kind": "message",
+        "name": "",
+        "tokens": 40,
+        "fate": "held",
+        "step": 0
+      },
+      {
+        "band": "recent",
+        "kind": "message",
+        "name": "it keeps one log per session",
+        "tokens": 52,
+        "fate": "held",
+        "step": 1
+      }
+    ]
   },
   "problems": []
 }

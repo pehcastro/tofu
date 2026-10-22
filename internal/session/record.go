@@ -55,8 +55,10 @@ type ListChangeBody struct {
 }
 
 type PromptBody struct {
-	System string   `json:"system"`
-	Tools  []string `json:"tools,omitempty"`
+	System       string   `json:"system"`
+	Tools        []string `json:"tools,omitempty"`
+	Instructions string   `json:"instructions,omitempty"`
+	ToolSchemas  string   `json:"tool_schemas,omitempty"`
 }
 
 type Attachment struct {

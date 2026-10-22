@@ -2,6 +2,7 @@ package recall
 
 import (
 	"cmp"
+	"slices"
 	"strings"
 
 	"tofu/internal/konst"
@@ -25,6 +26,7 @@ const (
 	ItemSaid    ItemKind = "said"
 	ItemMessage ItemKind = "message"
 	ItemResult  ItemKind = "result"
+	ItemMemory  ItemKind = "memory"
 )
 
 type ItemFate string
@@ -46,14 +48,58 @@ type Item struct {
 	Step   int      `json:"step"`
 }
 
-func Items(cfg Config, bands Bands, c Conversation) []Item {
-	var items []Item
-	if c.Instructions != "" {
-		items = append(items, Item{Band: BandIdentity, Kind: ItemSystem, Name: "instructions", Tokens: cfg.Tokens(c.Instructions), Fate: FateFixed})
+const instructionFiles = "instruction files"
+
+func promptPartOf(line string) string {
+	line = strings.TrimSpace(line)
+	concern, from, named := strings.Cut(line, ", from ")
+	concern, opens := strings.CutPrefix(concern, "[")
+	from, closes := strings.CutSuffix(from, "]")
+	switch {
+	case strings.HasPrefix(line, "instructions from ") && strings.HasSuffix(line, ", which outrank anything above them that disagrees:"):
+		return instructionFiles
+	case !named || !opens || !closes:
+		return ""
+	case concern == "skills":
+		return "skills"
+	case strings.HasPrefix(from, "the rule "):
+		return "rules"
+	case strings.HasPrefix(from, "the sub-agent "):
+		return "sub-agent"
 	}
+	return "tofu's prompt"
+}
+
+func identityItems(cfg Config, c Conversation) []Item {
+	var items []Item
+	part, from, at := "instructions", 0, 0
+	addPart := func(to int) {
+		if to <= from {
+			return
+		}
+		tokens := cfg.Tokens(c.Instructions[:to]) - cfg.Tokens(c.Instructions[:from])
+		if i := slices.IndexFunc(items, func(item Item) bool { return item.Name == part }); i >= 0 {
+			items[i].Tokens += tokens
+			return
+		}
+		items = append(items, Item{Band: BandIdentity, Kind: ItemSystem, Name: part, Tokens: tokens, Fate: FateFixed})
+	}
+	for line := range strings.Lines(c.Instructions) {
+		if named := promptPartOf(line); named != "" && part != instructionFiles {
+			addPart(at)
+			part, from = named, at
+		}
+		at += len(line)
+	}
+	addPart(len(c.Instructions))
 	if c.ToolSchemas != "" {
 		items = append(items, Item{Band: BandIdentity, Kind: ItemTools, Name: "tool schemas", Tokens: cfg.Tokens(c.ToolSchemas), Fate: FateFixed})
 	}
+	return items
+}
+
+func Items(cfg Config, bands Bands, c Conversation) []Item {
+	items := identityItems(cfg, c)
 	for _, fact := range c.Facts {
 		items = append(items, Item{Band: BandFacts, Kind: ItemFact, Name: factSource(fact), Tokens: cfg.Tokens(fact), Fate: FateCarried})
 	}
@@ -76,6 +122,8 @@ func Items(cfg Config, bands Bands, c Conversation) []Item {
 			if becomesFact[carriedCall{entry.Tool, entry.Call, len(entry.Text)}] {
 				item.Fate = FateFact
 			}
+		case entry.Memory:
+			item.Kind, item.Name = ItemMemory, "memory"
 		case entry.Said != "":
 			item.Kind, item.Name, item.Fate = ItemSaid, oneLine(entry.Said, konst.CarrySignpostBytes), FateCarried
 		}

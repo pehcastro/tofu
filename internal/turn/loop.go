@@ -299,7 +299,11 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	for i, tool := range sentTools {
 		usedTools[i] = tool.Name()
 	}
-	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, Account: account.ID, SpawnedFrom: config.SpawnedFrom, SpawnedBy: config.SpawnedBy, Budget: budget, System: config.System, Tools: usedTools}
+	sentSchemas, err := json.Marshal(NewRegistry(sentTools...).Definitions())
+	if err != nil {
+		return Row{}, err
+	}
+	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, Account: account.ID, SpawnedFrom: config.SpawnedFrom, SpawnedBy: config.SpawnedBy, Budget: budget, System: config.System, Tools: usedTools, ToolSchemas: string(sentSchemas)}
 
 	upgraded := config.upgradeNote()
 	recorded, err = openRecord(config, row)
@@ -751,6 +755,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			Budget:      budget,
 			System:      row.System,
 			Tools:       row.Tools,
+			ToolSchemas: row.ToolSchemas,
 		}
 		if moved != nil {
 			row.Account = moved.ID

@@ -244,6 +244,19 @@ func TestAMessageRecordedWithThinkingAndReasoningReadsBackWithBoth(t *testing.T)
 	}
 }
 
+func TestAPromptRecordedBeforeTheInstructionFilesWereKeptStillReadsAndALaterOneCarriesThem(t *testing.T) {
+	old := Event{ID: "prompt-1", Kind: EventPrompt, Body: json.RawMessage(`{"system":"be brief","tools":["read"]}`)}
+	reading, err := ReadEvents([]Event{old})
+	if err != nil || reading.Prompt == nil || reading.Prompt.System != "be brief" || reading.Prompt.Instructions != "" || reading.Prompt.ToolSchemas != "" {
+		t.Fatalf("a prompt from before the instruction files were kept reads as %+v, %v", reading.Prompt, err)
+	}
+	later := Event{ID: "prompt-2", Kind: EventPrompt, Body: json.RawMessage(`{"system":"be brief","instructions":"instructions from AGENTS.md","tool_schemas":"[{\"name\":\"read\"}]"}`)}
+	reading, err = ReadEvents([]Event{old, later})
+	if err != nil || reading.Prompt == nil || reading.Prompt.Instructions != "instructions from AGENTS.md" || reading.Prompt.ToolSchemas != `[{"name":"read"}]` {
+		t.Fatalf("the later prompt reads as %+v, %v", reading.Prompt, err)
+	}
+}
+
 func TestAKnownKindWithABodyThatDoesNotParseNamesTheEvent(t *testing.T) {
 	_, err := ReadEvents([]Event{{Kind: EventStep, Body: json.RawMessage(`"not a step"`)}})
 	if err == nil {
