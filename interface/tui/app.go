@@ -302,6 +302,7 @@ type App struct {
 	listening      atomic.Bool
 	statusWatch    statusWatch
 	serving        map[string]string
+	firesDrawn     []string
 }
 
 type resolvedModel struct {

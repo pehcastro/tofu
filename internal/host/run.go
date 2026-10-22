@@ -100,6 +100,20 @@ func (h *Host) heardTyped(emit func(Event), typed string) {
 	emit(Event{Kind: EventSteered, ID: h.steering.heard(), Text: typed, Step: 1, Origin: wireOrigin(llm.Origin{Source: llm.SourceTyped})})
 }
 
+func enteredUnshown(logged session.Event) (Event, bool) {
+	var said session.MessageBody
+	if logged.Agent != "" || logged.Kind != session.EventMessage || json.Unmarshal(logged.Body, &said) != nil || said.Role != session.RoleUser {
+		return Event{}, false
+	}
+	origin := turn.OriginOf(said)
+	switch origin.Source {
+	case llm.SourceTyped, llm.SourceSteer, llm.SourceEnvironment, llm.SourceSpawnLine:
+		return Event{}, false
+	}
+	task, _ := turn.TaskIn(said.Content)
+	return Event{Kind: EventTask, Text: task, Origin: wireOrigin(origin)}, true
+}
+
 func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resumed bool) limitReached {
 	emit := live.Emit
 	fail := func(err error) { emit(Event{Kind: EventFailure, Text: err.Error()}) }
@@ -248,7 +262,12 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 		}
 		announceIntoSession(ended, reached)
 	}
+	var opened atomic.Bool
+	opened.Store(resumed)
 	config.Appended = func(logged session.Event) {
+		if entered, unshown := enteredUnshown(logged); unshown && (entered.Origin.Sub != live.Origin.Source || opened.Swap(true)) {
+			emit(entered)
+		}
 		emit(Event{Kind: EventPersisted, ID: logged.ID, Agent: logged.Agent, Logged: &logged})
 		forking.Lock()
 		defer forking.Unlock()

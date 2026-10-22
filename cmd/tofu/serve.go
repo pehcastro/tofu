@@ -119,6 +119,7 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	polled, accounts := serveQuota(kept)
 	open, wires, stopKeeping := openAppWire, signedInWires, func() {}
 	if deck != nil {
+		_ = os.Setenv(cassetteVariable, plan.cassette)
 		open, wires = driveWire(deck), func() []string { return append(runWires(), wireMeta) }
 		if os.Getenv(quota.ClaudeUsageURLVariable) == "" && os.Getenv(quota.CodexUsageURLVariable) == "" {
 			polled = nil

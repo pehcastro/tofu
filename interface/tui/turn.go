@@ -522,6 +522,7 @@ func (a *App) absorb(event Event) {
 			a.leadTurnBegins()
 		}
 		a.countCrons()
+		a.firesDrawn = nil
 		if event.Origin.Kind == host.OriginCron {
 			a.cronFired(event.Text)
 		}
@@ -531,12 +532,15 @@ func (a *App) absorb(event Event) {
 		}
 		a.view.Requesting()
 	case EventTask:
+		drawnWhenFired := slices.Index(a.firesDrawn, event.Text)
 		switch {
+		case event.Origin.Kind == host.OriginCron && drawnWhenFired >= 0:
+			a.firesDrawn = slices.Delete(a.firesDrawn, drawnWhenFired, drawnWhenFired+1)
 		case event.Origin.Kind == host.OriginCron:
 			a.cronFired(event.Text)
 		case event.Origin.Kind == host.OriginPerson:
 			a.view.Append(session.Entry{Kind: session.User, Body: event.Text})
-		case event.Origin.Sub == llm.SourceReplyCut || event.Origin.Sub == llm.SourceShellExit:
+		case event.Origin.Sub == llm.SourceReplyCut || event.Origin.Sub == llm.SourceShellExit || event.Origin.Sub == llm.SourceStepCap:
 			a.view.Append(session.Entry{Kind: session.Note, Body: event.Text})
 		}
 	case EventText:
@@ -562,6 +566,7 @@ func (a *App) absorb(event Event) {
 	case EventNote:
 		if event.Origin.Kind == host.OriginCron {
 			a.cronFired(event.Detail)
+			a.firesDrawn = append(a.firesDrawn, event.Detail)
 		} else {
 			a.view.Append(session.Entry{Kind: session.Note, Body: event.Text})
 		}
