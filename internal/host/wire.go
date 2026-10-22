@@ -507,6 +507,7 @@ type ShellHeld struct {
 	Shell  string      `json:"shell"`
 	Holder ShellHolder `json:"holder"`
 	Since  time.Time   `json:"since"`
+	Offset int         `json:"offset"`
 }
 
 type ShellTakenOver struct {

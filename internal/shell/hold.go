@@ -90,6 +90,7 @@ type terminal struct {
 	base   int64
 	cols   int
 	ended  bool
+	wrote  chan<- struct{}
 }
 
 func readerFor(out io.Writer, typed bool, d device) (io.Writer, *terminal) {
@@ -108,8 +109,20 @@ func (t *terminal) Write(p []byte) (int, error) {
 		t.raw, t.base = t.raw[over:], t.base+int64(over)
 	}
 	t.screen.width = t.cols
+	wrote := t.wrote
 	t.mu.Unlock()
-	return t.screen.Write(p)
+	n, err := t.screen.Write(p)
+	select {
+	case wrote <- struct{}{}:
+	default:
+	}
+	return n, err
+}
+
+func (t *terminal) tell(wrote chan<- struct{}) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.wrote = wrote
 }
 
 func (t *terminal) since(from int64) ([]byte, int64) {
@@ -205,6 +218,7 @@ func (r *Registry) TakeOver(name string, size Size) (Hold, error) {
 	if err := term.resize(size); err != nil {
 		return Hold{}, err
 	}
+	term.tell(r.wrote)
 	if !entry.HeldByPerson() {
 		now := time.Now()
 		entry.Holder, entry.HeldSince = HolderPerson, &now
@@ -247,8 +261,11 @@ func (r *Registry) HandBack(name string) (Shell, error) {
 		return entry, err
 	}
 	entry.Holder, entry.HeldSince = "", nil
-	return entry, errors.Join(term.resize(Size{cols: konst.ShellConsoleColumns, rows: konst.ShellConsoleRows}), r.writeLocked(entry))
+	term.tell(nil)
+	return entry, r.writeLocked(entry)
 }
+
+func (r *Registry) Wrote() <-chan struct{} { return r.wrote }
 
 func (r *Registry) Raw(name string, from int64) ([]byte, int64) {
 	r.mu.Lock()

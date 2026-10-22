@@ -97,10 +97,11 @@ type Registry struct {
 	self      int
 	mu        sync.Mutex
 	running   map[string]*live
+	wrote     chan struct{}
 }
 
 func OpenAt(dir string) *Registry {
-	return &Registry{dir: dir, self: os.Getpid(), running: map[string]*live{}}
+	return &Registry{dir: dir, self: os.Getpid(), running: map[string]*live{}, wrote: make(chan struct{}, 1)}
 }
 
 func (s Shell) LeftOver() bool {

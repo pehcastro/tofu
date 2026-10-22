@@ -652,8 +652,8 @@ func (s *server) shellTakeOver(p ShellSizeParams) (any, error) {
 	if err != nil {
 		return nil, shellRefusal(p.Shell, err)
 	}
-	held := ShellHeld{Shell: p.Shell, Holder: ShellHolder(shell.HolderPerson), Since: *hold.Shell.HeldSince}
-	watched := s.watched(p.Shell)
+	watched := s.caughtUp(p.Shell)
+	held := ShellHeld{Shell: p.Shell, Holder: ShellHolder(shell.HolderPerson), Since: *hold.Shell.HeldSince, Offset: watched.next()}
 	if watched.holder != shell.HolderPerson {
 		s.changeHolder(hold.Shell.Owner, held, "", "The person took over "+p.Shell+" ("+sys.LoadKeyRedactor().Redact(hold.Shell.Command)+"). Do not read, wait on, stop or restart it until it is handed back.")
 	}
@@ -696,7 +696,7 @@ func (s *server) shellRelease(p ShellReleaseParams) (any, error) {
 	if p.Note != "" {
 		notice += " Note from them: " + strconv.Quote(p.Note) + "."
 	}
-	held := ShellHeld{Shell: p.Shell, Holder: ShellHolder(shell.HolderAgent), Since: time.Now()}
+	held := ShellHeld{Shell: p.Shell, Holder: ShellHolder(shell.HolderAgent), Since: time.Now(), Offset: s.caughtUp(p.Shell).next()}
 	s.changeHolder(entry.Owner, held, p.Note, notice+" It is running. Its output while they held it is in shell logs.")
 	return held, nil
 }
@@ -952,6 +952,12 @@ func (s *server) watched(name string) *watchedShell {
 	return s.shells[name]
 }
 
+func (s *server) caughtUp(name string) *watchedShell {
+	watched := s.watched(name)
+	_ = s.follow(name, watched, sys.LoadKeyRedactor().Redact)
+	return watched
+}
+
 func (s *server) follow(name string, watched *watchedShell, mask func(string) string) error {
 	text, err := s.Shells.Follow(name, &watched.cursor)
 	text, reports := watched.status.stream.Take(text)
@@ -968,14 +974,35 @@ func (s *server) watchShells(quit <-chan struct{}) {
 	}
 	every := time.NewTicker(konst.ServeShellPollMillis * time.Millisecond)
 	defer every.Stop()
-	for first := true; ; first = false {
-		s.scanShells(first)
+	s.scanShells(true)
+	for {
 		select {
 		case <-quit:
 			s.scanShells(false)
 			return
 		case <-every.C:
+			s.scanShells(false)
+		case <-s.Shells.Wrote():
+			s.sendHeldRaw()
 		}
+	}
+}
+
+func (s *server) sendHeldRaw() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	focus := s.focus()
+	for name, watched := range s.shells {
+		if watched.holder == shell.HolderPerson {
+			s.sendRaw(focus.items.identity(watched.owner, name), name, watched)
+		}
+	}
+}
+
+func (s *server) sendRaw(id Identity, name string, watched *watchedShell) {
+	if data, from := s.Shells.Raw(name, watched.raw); len(data) > 0 {
+		s.box.push(merged("shell.raw", name, &ShellRaw{Identity: id, Shell: name, Offset: from, Data: data}))
+		watched.raw = from + int64(len(data))
 	}
 }
 
@@ -1041,12 +1068,9 @@ func (s *server) scanShells(first bool) {
 		}
 		watched.keepTail()
 		if watched.holder == shell.HolderPerson {
-			if data, from := s.Shells.Raw(one.Name, watched.raw); len(data) > 0 {
-				s.box.push(merged("shell.raw", one.Name, &ShellRaw{Identity: id, Shell: one.Name, Offset: from, Data: data}))
-				watched.raw = from + int64(len(data))
-			}
+			s.sendRaw(id, one.Name, watched)
 			if one.State != shell.Running {
-				s.changeHolder(one.Owner, ShellHeld{Shell: one.Name, Holder: ShellHolder(shell.HolderAgent), Since: time.Now()}, "", endedWhileHeld(one))
+				s.changeHolder(one.Owner, ShellHeld{Shell: one.Name, Holder: ShellHolder(shell.HolderAgent), Since: time.Now(), Offset: watched.next()}, "", endedWhileHeld(one))
 			}
 		}
 		if one.State != shell.Running {
