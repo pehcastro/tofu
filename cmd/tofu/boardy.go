@@ -489,6 +489,15 @@ func threadLine(event boardy.Event) string {
 	if len(event.Files) > 0 {
 		line += " (wrote " + strings.Join(event.Files, ", ") + ")"
 	}
+	if event.Why != "" {
+		line += "\n  why " + event.Why
+	}
+	if event.Default != "" {
+		line += "\n  default " + event.Default
+	}
+	if event.Unanswered != "" {
+		line += "\n  unanswered, went with the default: " + event.Unanswered
+	}
 	if event.Verdict != "" {
 		line += "\n  verdict " + string(event.Verdict)
 	}

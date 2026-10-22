@@ -15,6 +15,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/rule"
+	"tofu/internal/session"
 	"tofu/internal/shell"
 	"tofu/internal/subagent"
 	shipped "tofu/library"
@@ -142,10 +143,13 @@ func (t *SpawnTool) answer(ctx context.Context, asking subagent.SubAgent, conver
 	}
 	within, cancel := context.WithTimeout(ctx, konst.SubAgentAskMillis*time.Millisecond)
 	defer cancel()
-	decision, err := model.Ask(within, request)
+	tapped, tap := llm.Tapped(within)
+	started := time.Now()
+	decision, err := model.Ask(tapped, request)
 	if errors.Is(err, context.DeadlineExceeded) {
-		return "", fmt.Errorf("the orchestrator's model gave no answer within %v", konst.SubAgentAskMillis*time.Millisecond)
+		err = fmt.Errorf("the orchestrator's model gave no answer within %v", konst.SubAgentAskMillis*time.Millisecond)
 	}
+	t.traceAnswer(ctx, asking.ID, request, started, tap.Attempts(), decision, err)
 	if err != nil {
 		return "", err
 	}
@@ -158,4 +162,25 @@ func (t *SpawnTool) answer(ctx context.Context, asking subagent.SubAgent, conver
 	}
 	return "", fmt.Errorf("the orchestrator's model returned no answer text: it ended as %s, stop reason %q, calling %s",
 		decision.Outcome, decision.Stop, cmp.Or(strings.Join(called, ", "), "no tool"))
+}
+
+func (t *SpawnTool) traceAnswer(ctx context.Context, asking string, request llm.Request, started time.Time, attempts []llm.Attempt, decision llm.Decision, failed error) {
+	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
+	if site.log == nil {
+		return
+	}
+	runs := site.log.Header().Agents
+	at := slices.IndexFunc(runs, func(run session.AgentRun) bool { return run.Agent == asking })
+	if at < 0 {
+		return
+	}
+	answering := &record{log: site.log, scope: site.turn, turn: site.turn, agent: runs[at].ParentAgent, said: map[string]string{}}
+	id, why := session.NewEventID(), "answers "+asking+"'s ask"
+	if failed == nil {
+		why += fmt.Sprintf(": ended as %s, stop reason %q", decision.Outcome, decision.Stop)
+	}
+	answering.exchange(id, why, t.base.Wire, request, started, attempts, decision, failed)
+	if failed == nil {
+		answering.step(session.EventRequest, stepFrom(id, 0, requestTiming{attempt: len(attempts), durationMS: time.Since(started).Milliseconds()}, decision))
+	}
 }
