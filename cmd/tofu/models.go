@@ -18,7 +18,7 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/openrouter"
+	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/konst"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
@@ -346,8 +346,9 @@ const (
 	jevPinRaised
 )
 
-func checkJevPin(ctx context.Context, client *transport.Client, pinning jevPinning) jev.PinCheck {
-	check, newest := openrouter.CheckPin(ctx, client)
+func checkJevPin(ctx context.Context, keys jev.Keyring, pinning jevPinning) jev.PinCheck {
+	key, _ := gateKeyFrom(keys)
+	check, newest := typesafe.CheckPin(ctx, jevConfig(key, oneCallAtATime))
 	switch pinning {
 	case jevPinChecked:
 		return check
@@ -375,7 +376,7 @@ func checkJevPin(ctx context.Context, client *transport.Client, pinning jevPinni
 		switch {
 		case err != nil:
 			check.Shadowed = append(check.Shadowed, err.Error())
-		case !openrouter.Serves(newest, lock.Build):
+		case !typesafe.Serves(newest, lock.Build):
 			check.Shadowed = append(check.Shadowed, fmt.Sprintf("%s@%d runs in shadow until %s names a %s build, it names %s", lock.Rule, lock.RuleVersion, path, newest.Model, lock.Build))
 		}
 	}
@@ -391,7 +392,7 @@ func reloadSignedIn(ctx context.Context, held heldStore, pinning jevPinning) (mo
 	if err != nil {
 		return modelReload{}, err
 	}
-	checked, pinned := raiseVersions(ctx, client), checkJevPin(ctx, client, pinning)
+	checked, pinned := raiseVersions(ctx, client), checkJevPin(ctx, held.keys(), pinning)
 	var accounts []models.Account
 	var settled []reloadSource
 	versions, _ := subFingerprint(".")

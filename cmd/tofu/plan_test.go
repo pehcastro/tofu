@@ -15,7 +15,7 @@ import (
 )
 
 func TestADryRunListsThePlanToolAndTheOffArmDoesNot(t *testing.T) {
-	t.Setenv("OPENROUTER_KEY", "")
+	t.Setenv("TYPESAFE_API_KEY", "")
 	var out, errOut bytes.Buffer
 	if code := runVerb([]string{"--dir", t.TempDir(), "--dry-run", "write hello.txt"}, &out, &errOut); code != exitOK {
 		t.Fatalf("tofu run --dry-run exited %d: %s", code, errOut.String())

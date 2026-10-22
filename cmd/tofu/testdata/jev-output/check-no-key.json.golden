@@ -8,8 +8,8 @@ exit 2
   "data": null,
   "problems": [
     {
-      "what": "OPENROUTER_KEY is not set and .env does not exist",
-      "hint": "tofu login classifier openrouter"
+      "what": "TYPESAFE_API_KEY is not set and .env does not exist",
+      "hint": "tofu login classifier typesafe"
     }
   ]
 }

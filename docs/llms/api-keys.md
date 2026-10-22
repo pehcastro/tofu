@@ -2,7 +2,7 @@
 title: API keys
 description: The keys you can bring to tofu, what each one is for, where tofu finds them, and how they stay hidden.
 order: 4
-updated: 2026-10-05
+updated: 2026-10-21
 ---
 
 A key is a credential you bring from a provider, billed by that provider.
@@ -12,8 +12,8 @@ serves:
 | Role | Key | Job |
 |---|---|---|
 | `llm` | `meta` | Meta's models, `meta/...`, for the lead or a sub-agent |
-| `classifier` | `openrouter` | the classifier, through OpenRouter |
-| `classifier` | `typesafe` | the classifier, through TypeSafe |
+| `llm` | `openrouter` | models on OpenRouter, for the lead with `--wire openrouter` |
+| `classifier` | `typesafe` | the classifier, Jev, through TypeSafe |
 | `search` | `brave` | the `web_search` tool |
 
 ## One job per key
@@ -34,8 +34,8 @@ is not known, then its last four, its length, and whether the prefix is the
 one that provider uses.
 
 ```
-paste the OpenRouter key, then press enter:
-› sk-or-v1-…3f9a  73 chars  prefix ok
+paste the TypeSafe key, then press enter:
+› tsk-…3f9a  51 chars  prefix not checked
 ```
 
 A pasted line break is dropped. A key that does not start with the
@@ -48,7 +48,7 @@ terminal shows what you type, tofu warns before reading.
 ## Storing, replacing and removing a key
 
 - Store a key: `tofu login <role> <name>`, or pipe it in:
-  `tofu login classifier openrouter < key.txt`. A classifier or Meta key is
+  `tofu login classifier typesafe < key.txt`. A classifier or Meta key is
   checked before it is written.
 - Replace it: run the same `tofu login` again.
 - Remove a stored key: `tofu logout <role> <name>`. When the same key is
@@ -61,8 +61,8 @@ terminal shows what you type, tofu warns before reading.
 ## Commands
 
 ```
-tofu login llm meta
-tofu login classifier <openrouter|typesafe>
+tofu login llm <meta|openrouter>
+tofu login classifier typesafe
 tofu login search brave
 tofu logout <llm|classifier|search> <name>
 tofu login --status

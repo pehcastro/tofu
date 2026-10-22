@@ -45,9 +45,9 @@ import (
 
 const (
 	noTerminal       = "tofu: the app needs a terminal. with input redirected, use tofu run --dir <dir> <task>"
-	gateOffNote      = "gate off: no tool call is judged until tofu login classifier openrouter stores the key"
+	gateOffNote      = "gate off: no tool call is judged until tofu login classifier typesafe stores the key"
 	noCredential     = "no subscription is signed in, so no model can answer"
-	noGateKey        = "there is no openrouter key, so jev judges no tool call"
+	noGateKey        = "there is no typesafe key, so jev judges no tool call"
 	modelStep        = "language model"
 	classifierStep   = "classifier · jev, required"
 	unreadableSource = "unreadable: "
@@ -431,16 +431,11 @@ func (h heldStore) startSteps() []startStep {
 		label:   jevName,
 		step:    classifierStep,
 		what:    noGateKey,
-		command: loginHint(openRouterName),
-		choices: []tui.Choice{
-			{Label: "OpenRouter key", Key: sys.OpenRouterKeyName},
-			{Label: "TypeSafe key", Key: sys.TypeSafeKeyName},
-		},
+		command: loginHint(typeSafeName),
+		choices: []tui.Choice{{Label: "TypeSafe key", Key: sys.TypeSafeKeyName}},
 	}
-	keys := h.keys()
-	if key, err := gateKeyFrom(keys); err == nil {
-		bound, _ := classifierFrom(keys)
-		classifier.done = bound.Provider.Display() + " key " + widget.Mask(key)
+	if key, err := gateKeyFrom(h.keys()); err == nil {
+		classifier.done = models.TypeSafe.Display() + " key " + widget.Mask(key)
 	}
 	return []startStep{model, classifier}
 }
@@ -462,7 +457,7 @@ func (h heldStore) providers() []settings.Provider {
 	return []settings.Provider{
 		h.subscriptionProvider(cred.ClaudeSub),
 		openRouterProvider(h.keys()),
-		jevProvider(),
+		jevProvider(h.keys()),
 		h.subscriptionProvider(cred.CodexSub),
 	}
 }
@@ -489,7 +484,7 @@ func (h heldStore) subscriptionProvider(provider cred.Provider) settings.Provide
 }
 
 func openRouterProvider(keys jev.Keyring) settings.Provider {
-	located, err := locateGateKey(keys)
+	located, err := keys.LocateFor(sys.CredentialFileName, jev.OpenRouterVariable)
 	row := settings.Provider{Name: openRouterName, Source: located.Path}
 	if located.Source == jev.SourceEnvironment {
 		row.Source = located.Name + " in the environment"
@@ -503,16 +498,21 @@ func openRouterProvider(keys jev.Keyring) settings.Provider {
 	return row
 }
 
-func jevProvider() settings.Provider {
+func jevProvider(keys jev.Keyring) settings.Provider {
 	dir, err := sys.LogDir()
 	if err != nil {
 		return settings.Provider{Name: jevName, Fix: unreadableSource + err.Error()}
 	}
 	row := settings.Provider{Name: jevName, Source: dir}
+	if key, err := gateKeyFrom(keys); err == nil {
+		row.Key = widget.Mask(key)
+	}
 	current, err := currentBuild(dir, "")
 	switch {
 	case err != nil:
 		row.Fix = unreadableSource + err.Error()
+	case row.Key == "":
+		row.Fix = gateOffNote
 	case current.Known:
 		row.State = current.Build
 	default:

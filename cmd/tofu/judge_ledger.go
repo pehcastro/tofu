@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"sort"
@@ -133,7 +134,7 @@ func (l rowLedger) append(state any, set battery, in rowInput) (ledger.Row, erro
 		row.Build = in.decision.Build
 		row.LatencyMS = in.decision.Latency.Milliseconds()
 		row.Cost = in.decision.Usage.Cost
-		row.RequestID = in.decision.RequestID
+		row.RequestID = cmp.Or(in.decision.RequestID, in.decision.TransportID)
 	} else {
 		row.Build = in.build
 		row.RequestID = in.requestID
@@ -179,7 +180,7 @@ func (a *judgeAsker) Ask(ctx context.Context, _ ledger.Request) (ledger.Entry, e
 		return ledger.Entry{}, err
 	}
 	a.verdict = row.Verdict
-	return ledger.Entry{RowID: row.ID, Build: decision.Build, RequestID: decision.RequestID, Answers: answers}, nil
+	return ledger.Entry{RowID: row.ID, Build: decision.Build, RequestID: cmp.Or(decision.RequestID, decision.TransportID), Answers: answers}, nil
 }
 
 func (a *judgeAsker) recordUnavailable(cause error) error {

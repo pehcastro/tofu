@@ -16,7 +16,7 @@ import (
 	benchturn "tofu/bench/turn"
 	benchwording "tofu/bench/wording"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/openrouter"
+	"tofu/internal/judge/jev/wire/typesafe"
 )
 
 const (
@@ -128,7 +128,7 @@ func reportOf(target string) producer {
 }
 
 func writeReport(out, errOut io.Writer, target string, produce producer) int {
-	key, err := jev.Key(".env")
+	key, err := jev.TypeSafeKey(".env")
 	if err != nil {
 		return fail(errOut, target, err)
 	}
@@ -154,7 +154,7 @@ func conditions(generatedAt time.Time) report.Conditions {
 	return report.Conditions{
 		Machine:        host,
 		CredentialKind: "key",
-		Wire:           openrouter.Name,
+		Wire:           typesafe.Name,
 		Date:           generatedAt.Format("2006-01-02"),
 	}
 }

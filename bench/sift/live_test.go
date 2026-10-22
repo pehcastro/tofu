@@ -13,7 +13,6 @@ import (
 
 	"tofu/bench/api"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/sift"
@@ -21,20 +20,16 @@ import (
 )
 
 func liveClient(t *testing.T) Asker {
-	return liveClientOn(t, jev.OpenRouterVariable, api.NewWire)
-}
-
-func liveClientOn(t *testing.T, variable string, newWire func(string) (*wire.Wire, error)) Asker {
 	t.Helper()
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to put the question to the real jev route")
 	}
 	sys.AllowLiveCredential(t)
-	key, err := jev.KeyFor(filepath.Join(repoRoot, ".env"), variable)
+	key, err := jev.TypeSafeKey(filepath.Join(repoRoot, ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
-	wire, err := newWire(key)
+	wire, err := api.NewWire(key)
 	if err != nil {
 		t.Fatalf("NewWire: %v", err)
 	}

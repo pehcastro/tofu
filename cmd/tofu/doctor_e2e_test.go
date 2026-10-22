@@ -17,8 +17,8 @@ const (
 	doctorBodyWithNoKeyAndNoProjectRule = `
   ✗ claude-sub  no subscription is signed in, so no model can answer
     → tofu login llm claude-sub
-  ✗ jev         there is no openrouter key, so jev judges no tool call
-    → tofu login classifier openrouter
+  ✗ jev         there is no typesafe key, so jev judges no tool call
+    → tofu login classifier typesafe
 
 access
   ✓ anthropic   subscription
@@ -32,7 +32,7 @@ rules
   ✓ library       binary · 9 points
   ○ 8 points      shadow · thresholds from the rule
     gate tool_gate@3
-  ✗ shell_sift@1  unusable · jev.Key: missing_credential: OPENROUTER_KEY is
+  ✗ shell_sift@1  unusable · jev.Key: missing_credential: TYPESAFE_API_KEY is
     not set and .env does not exist
 
 state
@@ -123,7 +123,7 @@ func TestE2EDoctorReadsTheKeyAndTheRuleOfTheProjectItRunsIn(t *testing.T) {
 		body string
 	}{
 		{"a project with no key and no rule of its own", "", "", doctorBodyWithNoKeyAndNoProjectRule},
-		{"a project carrying its own key and its own tool_gate@3", "OPENROUTER_KEY=sk-or-v1-thistestwroteit\n", projectToolGateRule, doctorBodyWithAKeyAndAProjectRule},
+		{"a project carrying its own key and its own tool_gate@3", "TYPESAFE_API_KEY=sk-or-v1-thistestwroteit\n", projectToolGateRule, doctorBodyWithAKeyAndAProjectRule},
 	} {
 		p := newProject(t, "doctor")
 		if step.env != "" {
@@ -155,8 +155,8 @@ func TestE2EDoctorAndARunInTheSameHomeAgreeOnWhetherTheShellSiftCuts(t *testing.
 		row  string
 		code int
 	}{
-		{"a fresh home with no key", nil, "  ✗ shell_sift@1  unusable · jev.Key: missing_credential: OPENROUTER_KEY is", exitUsage},
-		{"a fresh home with a key and a recorded jev", []string{"OPENROUTER_KEY=stub-key-not-a-real-credential", judgeEndpointEnvar + "=" + os.Getenv(judgeEndpointEnvar)},
+		{"a fresh home with no key", nil, "  ✗ shell_sift@1  unusable · jev.Key: missing_credential: TYPESAFE_API_KEY is", exitUsage},
+		{"a fresh home with a key and a recorded jev", []string{"TYPESAFE_API_KEY=stub-key-not-a-real-credential", judgeEndpointEnvar + "=" + os.Getenv(judgeEndpointEnvar)},
 			"  ● shell_sift@1  enforced · thresholds from the rule\n", exitOK},
 	} {
 		p := newProject(t, "sift")
@@ -239,7 +239,7 @@ func TestE2EDoctorJSONIsOneEnvelopeThatCarriesTheBlockersAsProblems(t *testing.T
 	oneEnvelope(t, newProject(t, "doctor").run(t, exitVerdict, "doctor", "--json"), &envelope)
 	want := []cli.Problem{
 		{What: "claude-sub: no subscription is signed in, so no model can answer", Hint: "tofu login llm claude-sub"},
-		{What: "jev: there is no openrouter key, so jev judges no tool call", Hint: "tofu login classifier openrouter"},
+		{What: "jev: there is no typesafe key, so jev judges no tool call", Hint: "tofu login classifier typesafe"},
 	}
 	if envelope.Tofu != konst.Version || envelope.Verb != "doctor" || envelope.OK || envelope.Data.Verdict != doctorNotReady ||
 		len(envelope.Problems) != len(want) || envelope.Problems[0] != want[0] || envelope.Problems[1] != want[1] || len(envelope.Data.Rules) != 9 {

@@ -8,12 +8,11 @@ import (
 )
 
 const (
-	rolesDir             = "roles"
-	legacyTurnRole       = "turn"
-	legacySubAgentRole   = "child"
-	openRouterClassifier = string(OpenRouter) + "/jev-latest"
-	typeSafeClassifier   = string(TypeSafe) + "/jev-latest"
-	roleFileNames        = "a role file is orchestrator.yaml, classifier.yaml or sub-agent.yaml"
+	rolesDir           = "roles"
+	legacyTurnRole     = "turn"
+	legacySubAgentRole = "child"
+	typeSafeClassifier = string(TypeSafe) + "/jev-latest"
+	roleFileNames      = "a role file is orchestrator.yaml, classifier.yaml or sub-agent.yaml"
 )
 
 type RoleID string
@@ -71,7 +70,7 @@ func (r RoleID) Unbound() string {
 	case RoleOrchestrator:
 		return "nothing is bound, so it runs on the subscription default"
 	case RoleClassifier:
-		return "nothing is bound, so it runs " + openRouterClassifier + " when an OpenRouter key is set, else " + typeSafeClassifier + ", and with both keys set either one answers when the other's account cannot"
+		return "nothing is bound, so it runs " + typeSafeClassifier + " on the TypeSafe key"
 	case RoleSubAgent:
 		return "nothing is bound, so it runs on the orchestrator's model"
 	}
@@ -87,14 +86,11 @@ func (c Library) Bound(id RoleID) (Model, bool) {
 	return Model{}, false
 }
 
-func (c Library) Classifier(keys map[string]string) (Model, error) {
+func (c Library) Classifier() (Model, error) {
 	if model, bound := c.Bound(RoleClassifier); bound {
 		return model, nil
 	}
-	if keys[sys.OpenRouterKeyName] == "" && keys[sys.TypeSafeKeyName] != "" {
-		return c.Select(typeSafeClassifier)
-	}
-	return c.Select(openRouterClassifier)
+	return c.Select(typeSafeClassifier)
 }
 
 type Role struct {

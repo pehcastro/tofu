@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/konst"
 	"tofu/internal/transport"
@@ -20,11 +19,7 @@ func judgeTransport() transport.Config {
 	}
 }
 
-func NewWire(key string) (*openrouter.Wire, error) {
-	return openrouter.New(openrouter.Config{Key: key, Transport: judgeTransport()})
-}
-
-func NewTypeSafeWire(key string) (*typesafe.Wire, error) {
+func NewWire(key string) (*typesafe.Wire, error) {
 	return typesafe.New(typesafe.Config{Key: key, Transport: judgeTransport()})
 }
 

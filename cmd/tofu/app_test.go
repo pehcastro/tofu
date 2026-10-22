@@ -70,7 +70,8 @@ func TestVerbTableIsUnchanged(t *testing.T) {
 		{[]string{"version"}, exitOK, "version  "},
 		{[]string{"doctor", "--nope"}, exitUsage, "tofu doctor: unknown argument"},
 		{[]string{"login", "--nope"}, exitUsage, "unknown role --nope"},
-		{[]string{"login", "openrouter"}, exitUsage, "tofu login openrouter is now tofu login classifier openrouter"},
+		{[]string{"login", "openrouter"}, exitUsage, "tofu login openrouter is now tofu login llm openrouter"},
+		{[]string{"login", "classifier", "openrouter"}, exitUsage, "openrouter is under llm, not classifier"},
 		{[]string{"login", "claude-sub"}, exitUsage, "tofu login claude-sub is now tofu login llm claude-sub"},
 		{[]string{"login", "classifier", "meta"}, exitUsage, "meta is under llm, not classifier"},
 		{[]string{"logout", "--nope"}, exitUsage, "unknown role --nope"},
@@ -115,7 +116,7 @@ func TestBareTofuWithoutATerminalSaysSo(t *testing.T) {
 	}
 }
 
-const gateKeyForTests = "sk-or-v1-000000000000000000Q9W4"
+const gateKeyForTests = "tsk-7f3k9x2m4q8w1z5v6b0nj3hQ9W4"
 
 func heldForTest(t *testing.T) heldStore {
 	t.Helper()
@@ -148,7 +149,7 @@ func TestSetupAsksForBothLoginsAndTheSecondOneStoresTheKey(t *testing.T) {
 	if args := strings.Join(required[0].Choices[0].Run().Args[1:], " "); args != "login llm claude-sub" {
 		t.Fatalf("the claude choice runs %v, want login llm claude-sub", args)
 	}
-	if required[0].Choices[2].Key != sys.MetaMuseKeyName || required[1].Choices[0].Key != sys.OpenRouterKeyName || required[1].Choices[1].Key != sys.TypeSafeKeyName {
+	if required[0].Choices[2].Key != sys.MetaMuseKeyName || len(required[1].Choices) != 1 || required[1].Choices[0].Key != sys.TypeSafeKeyName {
 		t.Fatalf("the key choices are %+v and %+v", required[0].Choices, required[1].Choices)
 	}
 	t.Log("\n" + setupScreen(t, required))
@@ -189,8 +190,8 @@ func TestLiveAppRunsATurnOnEachWire(t *testing.T) {
 		t.Skip("set TOFU_LIVE=1 to spend the subscription quota")
 	}
 	sys.AllowLiveCredential(t)
-	if key, err := jev.Key("../../.env"); err == nil {
-		t.Setenv("OPENROUTER_KEY", key)
+	if key, err := jev.TypeSafeKey("../../.env"); err == nil {
+		t.Setenv(sys.TypeSafeKeyName, key)
 	}
 	offered := heldForTest(t).wires()
 	if len(offered) != 2 {
@@ -259,13 +260,12 @@ func storeCredential(t *testing.T, provider cred.Provider) {
 
 func storeGateKey(t *testing.T, key string) {
 	t.Helper()
-	if err := sys.SaveKey(jev.OpenRouterVariable, key); err != nil {
+	if err := sys.SaveKey(jev.TypeSafeVariable, key); err != nil {
 		t.Fatal(err)
 	}
 }
 
-const loginReachableReply = `{"model":"typesafe/jev-1.13-20260917","provider":"TypeSafe","id":"gen-stub-login",` +
-	`"answers":{"reachable":{"type":"noul","noul":0.9}},"usage":{"input_tokens":10,"output_tokens":2,"cost":0.00002}}`
+const loginReachableReply = `{"model":"jev-1.13.0","answers":{"reachable":{"type":"noul","noul":0.9}},"usage":{"input_tokens":10,"output_tokens":2}}`
 
 func assertOnlyTheTail(t *testing.T, where, body, key string) {
 	t.Helper()
@@ -277,22 +277,22 @@ func assertOnlyTheTail(t *testing.T, where, body, key string) {
 	}
 }
 
-func TestLoginOpenRouterStoresTheKeyInTheDatabaseAndPrintsNoMoreThanItsTail(t *testing.T) {
+func TestLoginTypeSafeStoresTheKeyInTheDatabaseAndPrintsNoMoreThanItsTail(t *testing.T) {
 	scratchProject(t)
 	home, err := sys.HomeConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}
-	const key = "sk-or-v1-made-up-for-this-test-7Qx2"
+	const key = "made-up-typesafe-key-for-this-test-7Qx2"
 	jevStub(t, http.StatusOK, loginReachableReply, nil)
 
 	var out, errOut bytes.Buffer
-	if code := loginVerb([]string{"classifier", openRouterName}, strings.NewReader(key+"\r\n"), &out, &errOut); code != exitOK {
-		t.Fatalf("login openrouter exited %d: %s", code, errOut.String())
+	if code := loginVerb([]string{"classifier", typeSafeName}, strings.NewReader(key+"\r\n"), &out, &errOut); code != exitOK {
+		t.Fatalf("login typesafe exited %d: %s", code, errOut.String())
 	}
 	stored, err := sys.StoredKeys()
-	if err != nil || stored[jev.OpenRouterVariable] != key {
-		t.Fatalf("the database holds a value of length %d for the key, and %v", len(stored[jev.OpenRouterVariable]), err)
+	if err != nil || stored[jev.TypeSafeVariable] != key {
+		t.Fatalf("the database holds a value of length %d for the key, and %v", len(stored[jev.TypeSafeVariable]), err)
 	}
 	if _, err := os.Stat(filepath.Join(home, sys.CredentialFileName)); !os.IsNotExist(err) {
 		t.Fatalf("login left a .env under %s: %v", home, err)
@@ -502,7 +502,7 @@ func TestAProviderThatCannotBeReadSaysSo(t *testing.T) {
 	}
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv("OPENROUTER_KEY", "")
+	t.Setenv(sys.TypeSafeKeyName, "")
 
 	providers := heldForTest(t).providers()
 	if len(providers) != 4 {
@@ -516,7 +516,7 @@ func TestAProviderThatCannotBeReadSaysSo(t *testing.T) {
 }
 
 func TestGateOffNoteNamesTheLogin(t *testing.T) {
-	const want = "gate off: no tool call is judged until tofu login classifier openrouter stores the key"
+	const want = "gate off: no tool call is judged until tofu login classifier typesafe stores the key"
 	if gateOffNote != want {
 		t.Errorf("gateOffNote %q, want %q", gateOffNote, want)
 	}
@@ -2433,7 +2433,7 @@ func emptyHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("HOME", home)
-	t.Setenv("OPENROUTER_KEY", "")
+	t.Setenv(sys.TypeSafeKeyName, "")
 }
 
 func TestABrowserModelWhoseLowestEffortIsMinimalRunsAtLow(t *testing.T) {

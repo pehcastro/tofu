@@ -10,8 +10,8 @@ const (
 
   ✗ claude-sub  no subscription is signed in, so no model can answer
     → tofu login llm claude-sub
-  ✗ jev         there is no openrouter key, so jev judges no tool call
-    → tofu login classifier openrouter
+  ✗ jev         there is no typesafe key, so jev judges no tool call
+    → tofu login classifier typesafe
 `
 
 	usageWithAKeyAndNothingSignedIn = `Usage                                                           ○ none signed in
@@ -100,7 +100,7 @@ func TestE2EUsageReadsTheKeyOfTheProjectAndTheQuotaHistoryOfTheHome(t *testing.T
 		"Usage history                                                    ○ none recorded\n")
 
 	recorded := newProject(t, "recorded")
-	writeFile(t, recorded.dir, ".env", "OPENROUTER_KEY=sk-or-v1-thistestwroteit\n")
+	writeFile(t, recorded.dir, ".env", "TYPESAFE_API_KEY=made-up-typesafe-thistestwroteit\n")
 	writeFile(t, recorded.home, ".tofu/quota/readings.jsonl", recordedQuotaReadings)
 	sameText(t, "a project carrying its own key",
 		recorded.run(t, exitOK, "usage"), usageWithAKeyAndNothingSignedIn)

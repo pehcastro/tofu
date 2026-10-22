@@ -11,9 +11,9 @@ credential, from any provider you enable:
 - **Subscriptions**: `claude-sub` and `codex-sub`. tofu signs in through your
   browser the way each vendor's own command line does, and calls their models
   on that plan.
-- **Your own keys (BYOK)**: `meta` for Meta's models, `openrouter` or
-  `typesafe` for the classifier, `brave` for web search. A key call is billed
-  by its provider.
+- **Your own keys (BYOK)**: `meta` for Meta's models, `openrouter` for
+  models on OpenRouter, `typesafe` for the classifier, `brave` for web
+  search. A key call is billed by its provider.
 
 Credentials live in `~/.tofu/agent.db`. Settings live in
 `~/.tofu/settings.json`, or a project's `.tofu/settings.json`, which wins.
@@ -25,7 +25,7 @@ key-paid model never look alike in the picker or the bill. `tofu login`
 names the role a credential serves, `llm`, `classifier` or `search`, so a
 key is never stored without saying what it is for. A key is never taken as
 an argument, so it never lands in your shell history; while you paste it,
-tofu shows its shape, `sk-or-v1-…3f9a  73 chars  prefix ok`, never the key,
+tofu shows its shape, `tsk-…3f9a  51 chars`, never the key,
 so you can see the paste worked. A classifier or Meta key is checked
 against its provider before it is written. `tofu doctor` reads exactly what a run reads, so what it reports is what a turn will meet.
 
@@ -37,9 +37,9 @@ done:
 
 1. **Language model**: the Claude subscription or the Codex one, which sign
    in through your browser, or a Meta API key.
-2. **Classifier, jev, required**: an OpenRouter key or a TypeSafe key. jev
-   judges every tool call and shapes how tofu works, so a model alone is
-   not enough to start.
+2. **Classifier, jev, required**: a TypeSafe key. jev is reached through
+   TypeSafe, judges every tool call and shapes how tofu works, so a model
+   alone is not enough to start.
 
 ```
 set up tofu: two steps before the first turn
@@ -47,10 +47,10 @@ set up tofu: two steps before the first turn
 ✓ 1. language model   meta · muse-spark-1.3
 
 › 2. classifier · jev, required
-   there is no openrouter key, so jev judges no tool call
+   there is no typesafe key, so jev judges no tool call
 
-   OpenRouter key
-   › sk-or-v1-…3f9a  50 chars  prefix ok
+   TypeSafe key
+   › tsk-…3f9a  51 chars  prefix not checked
 
 [enter] check and store   [esc] back
 ```
@@ -75,7 +75,7 @@ the keys you want, then check:
 tofu login llm claude-sub
 tofu login llm codex-sub
 tofu login llm meta
-tofu login classifier openrouter
+tofu login classifier typesafe
 tofu doctor
 ```
 
@@ -99,8 +99,8 @@ the command that fixes each problem. On a fresh machine:
 ```
   ✗ claude-sub  no subscription is signed in, so no model can answer
     → tofu login llm claude-sub
-  ✗ jev         there is no openrouter key, so jev judges no tool call
-    → tofu login classifier openrouter
+  ✗ jev         there is no typesafe key, so jev judges no tool call
+    → tofu login classifier typesafe
 ```
 
 Signed in, its `access` section reads:

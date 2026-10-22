@@ -53,7 +53,7 @@ func stubEnv(home idleHome, url string) ([]string, error) {
 	case homeStub:
 		return urls, nil
 	case homeLogin:
-		return append(urls, "OPENROUTER_KEY=mock-not-a-key"), nil
+		return append(urls, "TYPESAFE_API_KEY=mock-not-a-key"), nil
 	}
 	return nil, fmt.Errorf("-home is fresh, stub or login, not %q", home)
 }

@@ -71,7 +71,7 @@ func stubRecordedJudgedReplies(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 	t.Setenv(judgeEndpointEnvar, server.URL)
-	t.Setenv("OPENROUTER_KEY", "stub-key-not-a-real-credential")
+	t.Setenv(sys.TypeSafeKeyName, "stub-key-not-a-real-credential")
 }
 
 func chunkAsked(t *testing.T, id, request string) int {

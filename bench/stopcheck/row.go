@@ -6,7 +6,7 @@ import (
 
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/openrouter"
+	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
 )
 
@@ -94,7 +94,7 @@ func appendRow(writer *ledger.Writer, in rowInput) (ledger.Row, error) {
 		return ledger.Row{}, err
 	}
 	reason.Mode = in.mode
-	model, err := openrouter.Model()
+	model, err := typesafe.Model()
 	if err != nil {
 		return ledger.Row{}, err
 	}

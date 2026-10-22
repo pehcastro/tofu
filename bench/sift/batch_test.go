@@ -5,8 +5,6 @@ import (
 	"os"
 	"testing"
 
-	"tofu/bench/api"
-	"tofu/internal/judge/jev"
 	"tofu/internal/sift"
 )
 
@@ -40,7 +38,7 @@ func TestEveryBatchFitsTheCeilingsBeforeAnythingIsSent(t *testing.T) {
 }
 
 func TestEveryChunkInOneRequestAgainstOneRequestPerChunk(t *testing.T) {
-	asker := liveClientOn(t, jev.TypeSafeVariable, api.NewTypeSafeWire)
+	asker := liveClient(t)
 	asker.Ledger = nil
 	rows := corpusRows(t)
 	var asked []Asked

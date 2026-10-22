@@ -34,7 +34,7 @@ Topics:
 - models: sign in, name a model, and choose the model a task runs
 - skills: where skills are found, and how to add or turn them off
 - instructions: which AGENTS.md and CLAUDE.md files are sent with every task
-- gate: what jev judges before a tool call, and the OpenRouter key
+- gate: what jev judges before a tool call, and the TypeSafe key
 - sessions: continue a session, find an old one, and running shells
 - commands: every slash command in the app, and /compact
 - browser: share a Chrome tab so tofu can read it or act in it
@@ -61,19 +61,19 @@ chat opens once both are done:
 
 1. language model: press 1 for the Claude subscription or 2 for the Codex
    one, which sign in through the browser, or 3 to paste a Meta API key.
-2. classifier, jev, required: press 1 for an OpenRouter key or 2 for a
-   TypeSafe key. jev judges every tool call, so a model alone is not
+2. classifier, jev, required: press 1 for a TypeSafe key. jev is reached
+   through TypeSafe and judges every tool call, so a model alone is not
    enough.
 
-A key field shows the key's shape while you paste it, such as
-`sk-or-v1-…3f9a  73 chars  prefix ok`, never the key. Enter checks it
+A key field shows the key's shape while you paste it, its first
+characters, last four and length, never the key. Enter checks it
 with its provider and stores it; a refused key stays in the field with
 the reason, and esc goes back. A step already set, by a login, the
 environment or the project's `.env`, shows as done. Esc or q leaves.
 The same two steps from a terminal:
 
     tofu login llm claude-sub
-    tofu login classifier openrouter
+    tofu login classifier typesafe
 
 Work a task without the app, printing as it goes:
 

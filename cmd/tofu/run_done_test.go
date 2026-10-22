@@ -57,7 +57,7 @@ func stubJev(t *testing.T, status int, body string) {
 	}))
 	t.Cleanup(server.Close)
 	t.Setenv(judgeEndpointEnvar, server.URL)
-	t.Setenv("OPENROUTER_KEY", "stub-key-not-a-real-credential")
+	t.Setenv(sys.TypeSafeKeyName, "stub-key-not-a-real-credential")
 }
 
 func claimedDoneWithNothing() turn.Row {
@@ -323,11 +323,11 @@ func TestLiveTheTypedDoneReviewReadsTwoRecordedSubAgents(t *testing.T) {
 		t.Skip("set TOFU_LIVE=1 to spend a fraction of a cent on two live stop_check@1 decisions")
 	}
 	sys.AllowLiveCredential(t)
-	key, err := jev.Key(filepath.Join("..", "..", ".env"))
+	key, err := jev.TypeSafeKey(filepath.Join("..", "..", ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
-	t.Setenv("OPENROUTER_KEY", key)
+	t.Setenv(sys.TypeSafeKeyName, key)
 
 	review, err := newTypedDoneReview()
 	if err != nil {

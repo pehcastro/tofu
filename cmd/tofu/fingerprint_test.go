@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/openrouter"
+	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
 	"tofu/internal/judge/state"
@@ -144,7 +144,7 @@ func TestAReplayedRowCarriesTheFingerprintOfTheRowItReplays(t *testing.T) {
 		t.Fatalf("ledger.CacheDir: %v", err)
 	}
 	cache := ledger.NewCache(cacheDir)
-	cacheReq := ledger.Request{State: req.State, Questions: set.SetName, Model: openrouter.Alias, Version: set.QuestionsVersion}
+	cacheReq := ledger.Request{State: req.State, Questions: set.SetName, Model: typesafe.Alias, Version: set.QuestionsVersion}
 	key, err := cache.Key(cacheReq)
 	if err != nil {
 		t.Fatalf("cache key: %v", err)
@@ -234,7 +234,7 @@ func (s *stubWire) Caps() jev.WireCaps {
 	return jev.WireCaps{MaxRequestBytes: 90000, MaxChoiceOptions: 255, MaxScoreLevels: 10, ReturnsConfidence: true}
 }
 
-func (s *stubWire) Model() string { return "~typesafe/jev-latest" }
+func (s *stubWire) Model() string { return typesafe.Alias }
 
 func (s *stubWire) Post(_ context.Context, _ []byte) (jev.Raw, error) {
 	s.calls++

@@ -19,7 +19,7 @@ import (
 const (
 	fixtureHome      = "/home/sample"
 	fixtureMaxCells  = 100
-	madeUpGateKey    = "sk-or-v1-made-up-for-the-receipt-7Qx2"
+	madeUpGateKey    = "made-up-typesafe-for-the-receipt-7Qx2"
 	madeUpVendorBody = `{"error":{"message":"No auth credentials found for sk-or-v1-made-up"}}`
 )
 
@@ -84,27 +84,27 @@ func TestNoColourStatusWritesNoEscapeAndAColourTerminalDoes(t *testing.T) {
 	}
 }
 
-func TestLoginOpenRouterAgainstAStubPrintsOneReceiptLine(t *testing.T) {
+func TestLoginTypeSafeAgainstAStubPrintsOneReceiptLine(t *testing.T) {
 	scratchProject(t)
 	jevStub(t, http.StatusOK, loginReachableReply, nil)
 	var out, errOut bytes.Buffer
-	if code := loginVerb([]string{"classifier", openRouterName}, strings.NewReader(madeUpGateKey+"\n"), &out, &errOut); code != exitOK {
-		t.Fatalf("login openrouter exited %d:\n%s", code, errOut.String())
+	if code := loginVerb([]string{"classifier", typeSafeName}, strings.NewReader(madeUpGateKey+"\n"), &out, &errOut); code != exitOK {
+		t.Fatalf("login typesafe exited %d:\n%s", code, errOut.String())
 	}
-	if want := "✓ OpenRouter key ····7Qx2 checked and stored  ~/.tofu/agent.db\n"; out.String() != want {
-		t.Fatalf("login openrouter printed\n%q\nwant\n%q", out.String(), want)
+	if want := "✓ TypeSafe key ····7Qx2 checked and stored  ~/.tofu/agent.db\n"; out.String() != want {
+		t.Fatalf("login typesafe printed\n%q\nwant\n%q", out.String(), want)
 	}
 }
 
-func TestLoginOpenRouterRefusedWithA401PrintsOneErrorLineAndNoVendorBody(t *testing.T) {
+func TestLoginTypeSafeRefusedWithA401PrintsOneErrorLineAndNoVendorBody(t *testing.T) {
 	scratchProject(t)
 	jevStub(t, http.StatusUnauthorized, madeUpVendorBody, nil)
 	var out, errOut bytes.Buffer
-	if code := loginVerb([]string{"classifier", openRouterName}, strings.NewReader(madeUpGateKey+"\n"), &out, &errOut); code != exitVerdict {
+	if code := loginVerb([]string{"classifier", typeSafeName}, strings.NewReader(madeUpGateKey+"\n"), &out, &errOut); code != exitVerdict {
 		t.Fatalf("a refused key exited %d, want %d", code, exitVerdict)
 	}
 	lines := strings.Split(strings.TrimSuffix(errOut.String(), "\n"), "\n")
-	want := []string{"paste the OpenRouter key, then press enter:", "› sk-or-v1-…7Qx2  37 chars  prefix ok", "✗ OpenRouter refused the key (401)", "  → tofu login classifier openrouter"}
+	want := []string{"paste the TypeSafe key, then press enter:", "› made…7Qx2  37 chars  prefix not checked", "✗ TypeSafe refused the key (401)", "  → tofu login classifier typesafe"}
 	if out.String() != "" || strings.Join(lines, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("a 401 printed out %q and err\n%s\nwant err\n%s", out.String(), errOut.String(), strings.Join(want, "\n"))
 	}

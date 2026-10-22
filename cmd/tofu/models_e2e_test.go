@@ -14,15 +14,15 @@ import (
 	"testing"
 
 	"tofu/interface/cli"
-	jevwire "tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/llm/wire/codex"
 	settingspkg "tofu/internal/settings"
+	"tofu/internal/sys"
 )
 
 const (
-	modelsFromTheBinaryAlone = `Models · 21 known                                                    ✓ 13 usable
+	modelsFromTheBinaryAlone = `Models · 20 known                                                    ✓ 12 usable
 
 claude-sub
   ✓ claude-sub/claude-haiku-4-5-20251001   allowed   200k
@@ -48,7 +48,6 @@ api key
   ⚠ meta/muse-spark-1.2-contributor  allowed  1.05M
   ✓ meta/muse-spark-1.3              allowed  1.05M
   ⚠ meta/muse-spark-1.3-contributor  allowed  1.05M
-  ✓ openrouter/jev-latest            allowed
   ✓ typesafe/jev-latest              allowed
   ⚠ Meta may train on what you send to this model
 
@@ -64,7 +63,7 @@ windows
   → tofu models reload
 `
 
-	modelsWithAProjectLayerAndAHomeRegistry = `Models · 21 known                                                    ✓ 14 usable
+	modelsWithAProjectLayerAndAHomeRegistry = `Models · 20 known                                                    ✓ 13 usable
 
 claude-sub
   ✓ claude-sub/claude-haiku-4-5-20251001   allowed
@@ -90,7 +89,6 @@ api key
   ⚠ meta/muse-spark-1.2-contributor  allowed  1.05M
   ✓ meta/muse-spark-1.3              allowed  1.05M
   ⚠ meta/muse-spark-1.3-contributor  allowed  1.05M
-  ✓ openrouter/jev-latest            allowed
   ✓ typesafe/jev-latest              allowed
   ⚠ Meta may train on what you send to this model
 
@@ -126,7 +124,6 @@ meta/muse-spark-1.2 allowed 1048576 library
 meta/muse-spark-1.2-contributor allowed 1048576 library
 meta/muse-spark-1.3 allowed 1048576 library
 meta/muse-spark-1.3-contributor allowed 1048576 library
-openrouter/jev-latest allowed 0 library
 typesafe/jev-latest allowed 0 library
 `
 
@@ -148,8 +145,7 @@ codex-sub       ✗ model list refused (403)
 
   models.dev    ✓ 2 context windows
   npm           ✓ claudeCode raised from PIN to NPM
-  jev           ✓ found typesafe/jev-1.14-20261014, pin raised from
-    ~typesafe/jev-latest to typesafe/jev-1.14
+  jev           ✓ found jev-1.14.0, pin raised from jev-latest to jev-1.14.0
 
 claude-sub      ○ not signed in
   → tofu login llm claude-sub
@@ -235,16 +231,12 @@ func stubbedHome(t *testing.T) {
 	}))
 	t.Cleanup(npm.Close)
 	t.Setenv(settingspkg.NpmRegistryVariable, npm.URL)
-	listing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		model := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/"), "/endpoints")
-		if model != "typesafe/jev-1.13" && model != "typesafe/jev-1.14" {
-			http.NotFound(w, r)
-			return
-		}
-		_, _ = w.Write([]byte(`{"data":{"endpoints":[{"name":"TypeSafe | ` + model + `-20261014"}]}}`))
+	typeSafe := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"model":"jev-1.14.0","answers":{"answered":{"type":"noul","noul":0.9}},"usage":{"input_tokens":30,"output_tokens":1}}`))
 	}))
-	t.Cleanup(listing.Close)
-	t.Setenv(jevwire.ListingVariable, listing.URL)
+	t.Cleanup(typeSafe.Close)
+	t.Setenv(judgeEndpointEnvar, typeSafe.URL)
+	t.Setenv(sys.TypeSafeKeyName, "stub-key-not-a-real-credential")
 }
 
 func TestModelsReloadWithNpmDownPassesAndSaysTheVersionCheckWasSkipped(t *testing.T) {

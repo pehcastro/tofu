@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/openrouter"
+	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/question"
 	"tofu/internal/sift"
 )
@@ -108,7 +108,7 @@ func requestSize(template jev.Question, units []sift.PageUnit, task, pageURL str
 		q.ID = sift.PageQuestionID(unit.Index)
 		questions[i] = q
 	}
-	body, err := (jev.Request{State: json.RawMessage(state), Questions: questions}).Encode(openrouter.Alias)
+	body, err := (jev.Request{State: json.RawMessage(state), Questions: questions}).Encode(typesafe.Alias)
 	if err != nil {
 		return 0
 	}

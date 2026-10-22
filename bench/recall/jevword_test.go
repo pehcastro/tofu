@@ -19,9 +19,9 @@ func liveJevWire(t *testing.T) jev.Wire {
 		t.Skip("set TOFU_LIVE=1 to put the last word to the real jev route")
 	}
 	sys.AllowLiveCredential(t)
-	key, err := jev.Key(filepath.Join(forkRepoRoot, ".env"))
+	key, err := jev.TypeSafeKey(filepath.Join(forkRepoRoot, ".env"))
 	if err != nil {
-		t.Skipf("no OPENROUTER_KEY reachable: %v", err)
+		t.Skipf("no TYPESAFE_API_KEY reachable: %v", err)
 	}
 	wire, err := benchapi.NewWire(key)
 	if err != nil {

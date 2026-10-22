@@ -323,7 +323,7 @@ func TestAWriteToTofusOwnSettingsAsksThePersonInAutoModeAndASubAgentsIsRefused(t
 	})
 }
 
-func envVarName() string { return "OPENROUTER" + "_KEY" }
+func envVarName() string { return "TYPESAFE" + "_API_KEY" }
 
 func fakeSecret(tag string) string { return "fake-test-secret-" + tag }
 

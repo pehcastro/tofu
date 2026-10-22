@@ -248,8 +248,7 @@ func (a *App) readRoles() {
 		for _, role := range loaded.Roles {
 			a.roles[role.ID] = role
 		}
-		stored, _ := sys.StoredKeys()
-		if classifier, err := loaded.Classifier(stored); err == nil && a.roles[library.RoleClassifier].File == "" {
+		if classifier, err := loaded.Classifier(); err == nil && a.roles[library.RoleClassifier].File == "" {
 			a.roles[library.RoleClassifier] = library.Role{ID: library.RoleClassifier, Model: classifier}
 		}
 	}

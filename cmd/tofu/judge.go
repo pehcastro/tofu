@@ -12,7 +12,7 @@ import (
 	"tofu/interface/cli"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/openrouter"
+	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
 	"tofu/internal/transport"
@@ -92,7 +92,7 @@ func judgeVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	jevRequest := jev.Request{State: input.State, Questions: set.Questions}
 
 	if opts.dryRun {
-		model, err := openrouter.Model()
+		model, err := typesafe.Model()
 		if err != nil {
 			return failed(o, err)
 		}
@@ -195,10 +195,10 @@ func failed(o verbOutput, err error) int {
 	switch {
 	case !errors.As(err, &refused):
 	case refused.Kind == transport.KindMissingCredential:
-		err = problemError{What: refused.Detail, Hint: loginHint(openRouterName)}
+		err = problemError{What: refused.Detail, Hint: loginHint(typeSafeName)}
 	case refused.Status == 0:
 	case refused.Kind == transport.KindAuth:
-		err = problemError{What: "jev refused the key (" + strconv.Itoa(refused.Status) + ")", Hint: loginHint(openRouterName)}
+		err = problemError{What: "jev refused the key (" + strconv.Itoa(refused.Status) + ")", Hint: loginHint(typeSafeName)}
 	default:
 		err = problemError{What: "jev refused the call (" + strconv.Itoa(refused.Status) + " " + refused.Kind.String() + ")"}
 	}

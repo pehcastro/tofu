@@ -58,7 +58,7 @@ func (s *stub) env() []string {
 	return []string{"TOFU_CLAUDE_TOKEN_URL=" + s.url + "/token", "TOFU_CLAUDE_USAGE_URL=" + s.url + "/usage", "TOFU_CLAUDE_BASE_URL=" + s.url,
 		"TOFU_CODEX_TOKEN_URL=" + s.url + "/token", "TOFU_CODEX_USAGE_URL=" + s.url + "/usage", "TOFU_UPDATE_API=" + s.url + "/update",
 		"TOFU_MODELS_REGISTRY_URL=" + s.url + "/models", "TOFU_NPM_REGISTRY_URL=" + s.url + "/npm", "TOFU_JUDGE_ENDPOINT=" + s.url + "/judge",
-		"TOFU_META_BASE_URL=" + s.url + "/meta", "OPENROUTER_KEY=mock-not-a-key"}
+		"TOFU_META_BASE_URL=" + s.url + "/meta", "TYPESAFE_API_KEY=mock-not-a-key"}
 }
 
 func (s *stub) between(from, to time.Time) []string {

@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	loginUsage       = "tofu login llm <claude-sub|codex-sub> [--paste], tofu login llm meta, tofu login classifier <openrouter|typesafe>, tofu login search brave"
+	loginUsage       = "tofu login llm <claude-sub|codex-sub> [--paste], tofu login llm <meta|openrouter>, tofu login classifier typesafe, tofu login search brave"
 	logoutUsage      = "tofu logout <llm|classifier|search> <provider> [number from tofu login --status]"
 	asideUsage       = "tofu login --disable|--enable <number from tofu login --status>"
 	setAsideCause    = "set aside by hand, run tofu login --enable to bring it back"
@@ -38,7 +38,7 @@ const (
 	metaName         = string(models.Meta)
 	braveName        = "brave"
 	braveDisplay     = "Brave"
-	openRouterFix    = "run tofu login classifier openrouter and paste the key when it asks"
+	openRouterFix    = "run tofu login llm openrouter and paste the key when it asks"
 	minttyEchoes     = "this terminal shows what is typed, so the key will stay on screen: pipe it in instead, tofu login <role> <provider> < key.txt"
 	stillResolved    = ", and the one in use is still set in the environment or a .env, which tofu does not change"
 	accountMarkBytes = 2
@@ -58,7 +58,7 @@ const (
 
 func roleOf(provider string) role {
 	switch provider {
-	case openRouterName, typeSafeName:
+	case typeSafeName:
 		return roleClassifier
 	case braveName:
 		return roleSearch
@@ -463,21 +463,18 @@ func storeKey(ctx context.Context, stored keyStatus, key string) (loginReceipt, 
 	done := " checked and stored"
 	var err error
 	switch stored.Provider {
-	case braveName:
+	case braveName, openRouterName:
 		done = " stored"
 	case metaName:
 		err = models.StoreMetaKey(ctx, key)
 	default:
-		err = reachesJev(ctx, models.Provider(stored.Provider), key)
+		err = reachesJev(ctx, key)
 	}
 	if err != nil {
 		return loginReceipt{}, refusedBy(keyFactsOf(stored.Provider).name, stored.Provider, err)
 	}
 	if err := sys.SaveKey(stored.Variable, key); err != nil {
 		return loginReceipt{}, failure(err.Error(), loginHint(stored.Provider))
-	}
-	if classifier, err := boundClassifier(); err == nil && stored.Role == roleClassifier && string(classifier.Provider) != stored.Provider {
-		done += ", but " + classifier.Provider.Display() + " stays the classifier while its key is stored"
 	}
 	return loginReceipt{text: keyFactsOf(stored.Provider).name + " key " + stored.Key + done, data: stored}, nil
 }
@@ -518,13 +515,13 @@ func promptKey(in io.Reader, prompts io.Writer, name, variable string) (string, 
 	return field.Value(), nil
 }
 
-func reachesJev(ctx context.Context, provider models.Provider, key string) error {
-	client, err := jevClientFor(provider, key, oneCallAtATime)
+func reachesJev(ctx context.Context, key string) error {
+	client, err := jevClientOn(key, oneCallAtATime)
 	if err != nil {
 		return err
 	}
 	_, err = client.Ask(ctx, jev.Request{
-		State: map[string]any{"check": "tofu login " + string(provider)},
+		State: map[string]any{"check": "tofu login " + typeSafeName},
 		Questions: []jev.Question{{
 			ID:           "reachable",
 			Kind:         jev.QuestionNoul,
@@ -537,11 +534,7 @@ func reachesJev(ctx context.Context, provider models.Provider, key string) error
 }
 
 func locateGateKey(keys jev.Keyring) (jev.Located, error) {
-	classifier, err := classifierFrom(keys)
-	if err != nil {
-		return jev.Located{}, err
-	}
-	return keys.LocateFor(sys.CredentialFileName, classifier.Provider.KeyName())
+	return keys.LocateFor(sys.CredentialFileName, jev.TypeSafeVariable)
 }
 
 func promptPaste(in io.Reader, prompts io.Writer) (string, error) {

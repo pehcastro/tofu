@@ -82,8 +82,8 @@ tofu memory recall <log.jsonl> <regex>
 
 ```
 tofu login llm <claude-sub|codex-sub> [--paste] [--json]
-tofu login llm meta [--json]
-tofu login classifier <openrouter|typesafe> [--json]
+tofu login llm <meta|openrouter> [--json]
+tofu login classifier typesafe [--json]
 tofu login search brave [--json]
 tofu logout <llm|classifier|search> <provider> [number] [--json]
 tofu login --status [--json] [--redact]

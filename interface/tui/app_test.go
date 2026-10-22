@@ -308,7 +308,7 @@ func keyEnvPath() string {
 }
 
 func noKeyAtAll() string {
-	return `jev.Key: missing_credential: OPENROUTER_KEY is not set and ` + keyEnvPath() + ` does not exist`
+	return `jev.Key: missing_credential: TYPESAFE_API_KEY is not set and ` + keyEnvPath() + ` does not exist`
 }
 
 func gateOffApp(t *testing.T, width, height int) *App {
@@ -365,7 +365,7 @@ func TestEachGateOffStateGetsItsOwnLine(t *testing.T) {
 }
 
 func TestARewordedKeyErrorStillPicksTheSentenceTheReasonAsksFor(t *testing.T) {
-	reworded := `jev.Key: missing_credential: nothing anywhere holds OPENROUTER_KEY, looked at ` + keyEnvPath()
+	reworded := `jev.Key: missing_credential: nothing anywhere holds TYPESAFE_API_KEY, looked at ` + keyEnvPath()
 	for _, state := range gateOffStates() {
 		app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: anthropicAlone})
 		app.Init()

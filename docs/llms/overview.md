@@ -6,7 +6,7 @@ updated: 2026-10-04
 ---
 
 A **provider** builds and serves a model: Anthropic, OpenAI, Meta, and for
-the classifier OpenRouter or TypeSafe. A **source** is what pays for a call:
+the classifier TypeSafe. A **source** is what pays for a call:
 a subscription, `claude-sub` or `codex-sub`, or a provider's key you bring,
 such as `meta`. A model is named `source/model`:
 
@@ -88,12 +88,12 @@ codex-sub
 api key
   ✓ meta/muse-spark-1.3              allowed  1.05M
   ⚠ meta/muse-spark-1.3-contributor  allowed  1.05M
-  ✓ openrouter/jev-latest            allowed         classifier
+  ✓ typesafe/jev-latest              allowed         classifier
   ⚠ Meta may train on what you send to this model
 
 roles
   ● orchestrator         claude-sub/claude-opus-5-5
-  ● classifier           openrouter/jev-latest
+  ● classifier           typesafe/jev-latest
   ○ (unnamed sub-agent)  unbound
 ```
 

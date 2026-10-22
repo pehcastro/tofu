@@ -10,7 +10,7 @@ import (
 	benchapi "tofu/bench/api"
 	"tofu/bench/report"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/openrouter"
+	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/sys"
 )
 
@@ -22,7 +22,7 @@ func liveKey(t *testing.T, gate string) string {
 		t.Skipf("set %s=1 to spend money on the jev, opus and fable arms", gate)
 	}
 	sys.AllowLiveCredential(t)
-	key, err := jev.Key(filepath.Join(repoRoot, ".env"))
+	key, err := jev.TypeSafeKey(filepath.Join(repoRoot, ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestLiveEveryArmOverTheHeldOutHalf(t *testing.T) {
 	body := Render(result, report.Conditions{
 		Machine:        host,
 		CredentialKind: "key",
-		Wire:           openrouter.Name,
+		Wire:           typesafe.Name,
 		Date:           result.GeneratedAt.Format("2006-01-02"),
 	})
 	path := filepath.Join("bench", "cost", report.Filename("report", result.GeneratedAt))

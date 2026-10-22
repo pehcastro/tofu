@@ -442,7 +442,7 @@ Commit first, then discard. If a single file must go, name it and run the narrow
 
 const openrouterRefusal = `tofu run --wire openrouter spends real money and is refused.
 
-OpenRouter is for Jev and nothing else. The owner's ruling, 2026-09-18, after the model spend reached $1.08 on Claude Fable and $0.07 on Opus through it, against $0.08 for every Jev call this project has ever made.
+The OpenRouter key in this repository is not spent on a model. The owner's ruling, 2026-09-18, after the model spend reached $1.08 on Claude Fable and $0.07 on Opus through it; since 2026-10-21 Jev goes through TypeSafe, so nothing in tofu's own work needs that key.
 
 The default arm is the subscription and it is allowed: it spends quota the owner already pays for. This refusal is only the off arm, which exists so the subscription has something to be measured against, and running it needs the owner to say so in the turn that runs it.
 

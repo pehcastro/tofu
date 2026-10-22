@@ -186,7 +186,7 @@ func BuildPlan(root string, arm Arm, name string, version int) (Plan, error) {
 			"--max-steps", strconv.Itoa(caps.TurnCap),
 			"--no-instructions",
 		}
-		plan.Env = []string{"OPENROUTER_KEY for the jev gate, the anthropic subscription credential for the model"}
+		plan.Env = []string{"TYPESAFE_API_KEY for the jev gate, the anthropic subscription credential for the model"}
 	default:
 		panic("harness: unknown arm " + string(arm))
 	}

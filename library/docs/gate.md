@@ -1,7 +1,7 @@
 ---
 topic: gate
 title: The gate
-summary: what jev judges before a tool call runs, when tofu asks you first, and where the OpenRouter and TypeSafe keys live
+summary: what jev judges before a tool call runs, when tofu asks you first, and where the TypeSafe key lives
 verbs: check, why, label, replay, judge, login, logout
 ---
 
@@ -40,15 +40,15 @@ call of that kind until the run ends. A call that would wait for you is refused.
 
 ## Where it lives
 
-jev is reached through OpenRouter, or through TypeSafe, which serves jev
-directly. tofu reads each key from, in order:
+jev is reached through TypeSafe, which serves it, at `api.typesafe.ai`. There is
+one route and no fallback: a call TypeSafe cannot answer is an ask. tofu reads
+the key from, in order:
 
-- the credential store, `~/.tofu/agent.db`, which `tofu login classifier openrouter` or `typesafe` writes
-- `OPENROUTER_KEY` or `TYPESAFE_API_KEY` in the environment
-- an `.env` file in the working directory, as one of those two lines
+- the credential store, `~/.tofu/agent.db`, which `tofu login classifier typesafe` writes
+- `TYPESAFE_API_KEY` in the environment
+- an `.env` file in the working directory, as that line
 
-OpenRouter judges when its key is found, TypeSafe when only its key is. With both,
-a call the first fails on a timeout, a rate limit or a refused key goes to the other.
+`tofu login --status` names TypeSafe as jev's route and the build it is pinned to.
 
 tofu never prints more of a key than its last four characters. With no key the
 gate is off and the app says so. A key a tool prints reads `[key redacted]` in
@@ -63,10 +63,10 @@ The ledger is `~/.tofu/projects/<project>/log`, one folder per project.
 Store the key. tofu asks for it, checks it reaches jev, and writes
 nothing if it does not:
 
-    tofu login classifier openrouter
+    tofu login classifier typesafe
 
-The field shows the key's shape, never the key: `sk-or-v1-…3f9a  73 chars
-prefix ok`. A wrong prefix needs a second enter. The key is never an
+The field shows the key's shape, never the key: its first characters, its
+last four and its length. The key is never an
 argument, so it stays out of your shell history; a pipe works too. Run it
 again to replace the key; `tofu login --status` shows its last four.
 
@@ -117,4 +117,4 @@ it should have been onto its row in the ledger:
     tofu label <id> deny
 
 To take away a key set in the environment or an `.env`, delete its line;
-`tofu logout classifier openrouter` or `typesafe` removes a stored one.
+`tofu logout classifier typesafe` removes a stored one.

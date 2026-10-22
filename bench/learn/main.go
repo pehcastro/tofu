@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/openrouter"
+	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/konst"
 	"tofu/internal/learn"
 	"tofu/internal/session"
@@ -146,11 +146,11 @@ func askJev(windows []window) ([]labels, float64, string, error) {
 	for _, q := range set.Questions {
 		questions = append(questions, q.ToJev())
 	}
-	key, err := jev.KeyFor(sys.CredentialFileName, jev.OpenRouterVariable)
+	key, err := jev.TypeSafeKey(sys.CredentialFileName)
 	if err != nil {
 		return nil, 0, "", err
 	}
-	wire, err := openrouter.New(openrouter.Config{Key: key, Transport: transport.Config{AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,
+	wire, err := typesafe.New(typesafe.Config{Key: key, Transport: transport.Config{AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,
 		Retries: konst.JudgeRetries, Backoff: time.Duration(konst.JudgeBackoffMillis) * time.Millisecond, Concurrency: 1}})
 	if err != nil {
 		return nil, 0, "", err

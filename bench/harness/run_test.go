@@ -501,7 +501,7 @@ func TestMeasureTofuFillsTheRowFromAStoredTurnRowAndLedger(t *testing.T) {
 	}
 	row, gaps := MeasureTofu(session, src, meta)
 
-	t.Logf("%d turns, %+v, %d tokens in and %d out, %.6f openrouter dollars on jev, wall clock %d ms, gaps %v",
+	t.Logf("%d turns, %+v, %d tokens in and %d out, %.6f typesafe dollars on jev, wall clock %d ms, gaps %v",
 		row.Turns, row.ToolCalls, row.BilledInput, row.BilledOutput, row.JudgeDollars, row.WallClockMS, gaps)
 
 	if row.JudgeDollars <= 0 {

@@ -196,7 +196,7 @@ func TestTheKeyIsNeverInAFrameALogOrARecordedSession(t *testing.T) {
 	dir := scratchProject(t)
 	const key = "sk-or-v1-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd"
 	storeGateKey(t, key)
-	t.Setenv("OPENROUTER_KEY", key)
+	t.Setenv(sys.TypeSafeKeyName, key)
 	storeCredential(t, cred.ClaudeSub)
 	var authorization string
 	jevStub(t, http.StatusOK, untrustedDenyReply, &authorization)

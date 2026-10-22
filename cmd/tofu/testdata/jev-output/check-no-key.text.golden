@@ -1,5 +1,5 @@
 exit 2
 --- stdout
 --- stderr
-✗ tofu check: OPENROUTER_KEY is not set and .env does not exist
-  → tofu login classifier openrouter
+✗ tofu check: TYPESAFE_API_KEY is not set and .env does not exist
+  → tofu login classifier typesafe

@@ -46,6 +46,10 @@ func Key(envPath string) (string, error) {
 	return KeyFor(envPath, OpenRouterVariable)
 }
 
+func TypeSafeKey(envPath string) (string, error) {
+	return KeyFor(envPath, TypeSafeVariable)
+}
+
 func KeyFor(envPath, variable string) (string, error) {
 	return ReadKeyring().KeyFor(envPath, variable)
 }

@@ -11,6 +11,10 @@ methods:
     method: judged
     why: jev picks the epic a new ticket belongs to from the board's open epics, or none, on a fresh board driven through tofu boardy init; a word match cannot tell two epics that share words
     cost: one jev request per ticket created without an epic, 263 ms in the driven run
+  steer_answered:
+    method: judged
+    why: jev keeps 18 of 18 unanswered questions open with 0 of 12 false, against 5 of 18 with 3 false for the phrase list, on a 30-pair corpus
+    cost: one jev call per assistant text while a question is open, p50 about 240 ms
   person_repeat:
     method: judged
     why: jev catches 7 of 14 hand-labelled repeats with 2 false notes over 13 generations of one long session, against 1 of 14 with 3 false for the local stem matcher; the same request also asks whether a kept memory entry already covers the message, so the lead says it is in force rather than promising it again

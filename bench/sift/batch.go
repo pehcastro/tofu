@@ -12,7 +12,6 @@ import (
 
 	"tofu/bench/stat"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/konst"
 	"tofu/internal/sift"
@@ -34,6 +33,8 @@ const (
 	beforeFreeNeedles     = 18
 	beforeDollars         = 0.00027
 	beforeWallMS          = 838
+
+	recordedOpenRouterWire = "openrouter"
 )
 
 type BatchChunk struct {
@@ -299,7 +300,7 @@ func BatchTable(rows []Row, asked []Asked, keepAt float64) (string, error) {
 
 func billed(a Asked) (float64, error) {
 	switch a.Wire {
-	case openrouter.Name:
+	case recordedOpenRouterWire:
 		return a.Cost, nil
 	case typesafe.Name:
 		return float64(a.InputTokens) * typesafe.DollarsPerInputToken, nil

@@ -15,7 +15,7 @@ first line names the version, Go and the system, and ends `✓ ready` or
 ## Where it lives
 
 The doctor reads what tofu would read to start: your credentials in
-`~/.tofu/agent.db`, the OpenRouter key, the decision points tofu ships or
+`~/.tofu/agent.db`, the TypeSafe key, the decision points tofu ships or
 a `library/` folder in the working directory, and this project's ledger
 under `~/.tofu/projects/`. It writes one thing, the quota reading it takes
 from each subscription, under `~/.tofu/quota/`.
@@ -29,8 +29,8 @@ What stops tofu, printed first:
 
     ✗ claude-sub  no subscription is signed in, so no model can answer
       → tofu login llm claude-sub
-    ✗ jev  there is no openrouter key, so jev judges no tool call
-      → tofu login classifier openrouter
+    ✗ jev  there is no typesafe key, so jev judges no tool call
+      → tofu login classifier typesafe
 
 `tofu login llm codex-sub` also clears the first. `tofu docs gate` says more
 about the second.

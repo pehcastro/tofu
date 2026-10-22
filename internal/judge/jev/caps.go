@@ -44,20 +44,20 @@ func (w WireCaps) Accepts(kind CriteriaKind) bool {
 }
 
 var (
-	openRouterCurveBytes  = []int{1689, 4799, 18326, 54392, 90411}
-	openRouterCurveTokens = []int{920, 1982, 6748, 19446, 32086}
+	measuredCurveBytes  = []int{1689, 4799, 18326, 54392, 90411}
+	measuredCurveTokens = []int{920, 1982, 6748, 19446, 32086}
 )
 
 func EstimateTokens(bytes int) int {
 	switch {
 	case bytes <= 0:
 		return 0
-	case bytes <= openRouterCurveBytes[0]:
-		return openRouterCurveTokens[0]
-	case bytes <= openRouterCurveBytes[len(openRouterCurveBytes)-1]:
-		return interpolate(bytes, openRouterCurveBytes, openRouterCurveTokens, ceilDiv)
+	case bytes <= measuredCurveBytes[0]:
+		return measuredCurveTokens[0]
+	case bytes <= measuredCurveBytes[len(measuredCurveBytes)-1]:
+		return interpolate(bytes, measuredCurveBytes, measuredCurveTokens, ceilDiv)
 	default:
-		return extrapolate(bytes, openRouterCurveBytes, openRouterCurveTokens, ceilDiv)
+		return extrapolate(bytes, measuredCurveBytes, measuredCurveTokens, ceilDiv)
 	}
 }
 
@@ -65,12 +65,12 @@ func EstimateBytes(tokens int) int {
 	switch {
 	case tokens <= 0:
 		return 0
-	case tokens <= openRouterCurveTokens[0]:
+	case tokens <= measuredCurveTokens[0]:
 		return 0
-	case tokens <= openRouterCurveTokens[len(openRouterCurveTokens)-1]:
-		return interpolate(tokens, openRouterCurveTokens, openRouterCurveBytes, floorDiv)
+	case tokens <= measuredCurveTokens[len(measuredCurveTokens)-1]:
+		return interpolate(tokens, measuredCurveTokens, measuredCurveBytes, floorDiv)
 	default:
-		return extrapolate(tokens, openRouterCurveTokens, openRouterCurveBytes, floorDiv)
+		return extrapolate(tokens, measuredCurveTokens, measuredCurveBytes, floorDiv)
 	}
 }
 

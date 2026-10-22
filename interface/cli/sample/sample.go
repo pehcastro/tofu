@@ -118,8 +118,8 @@ func accountsData(now time.Time) accounts {
 			}},
 		},
 		Keys: []key{
-			{Role: "classifier", Service: "OpenRouter", Key: widget.Mask("sk-or-v1-made-up-000000003498"), Use: "judges tool calls with jev-latest"},
-			{Role: "classifier", Service: "TypeSafe", Use: "used only without OpenRouter"},
+			{Role: "classifier", Service: "TypeSafe", Key: widget.Mask("made-up-typesafe-000000003498"), Use: "jev's route, judges tool calls with jev-latest"},
+			{Role: "llm", Service: "OpenRouter", Hint: "tofu login llm openrouter"},
 			{Role: "search", Service: "Brave", Hint: "tofu login search brave"},
 			{Role: "llm", Service: "Meta", Hint: "tofu login llm meta"},
 		},

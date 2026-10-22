@@ -171,7 +171,7 @@ func openMemoryModel(dir string, session models.Model) memoryModel {
 	}
 	opened := memoryModel{slug: cmp.Or(set, model.Slug())}
 	if err == nil && library.WireOf(model) == wireKey {
-		err = fmt.Errorf("%s is reached through the OpenRouter key, which is for Jev only: set %s to a subscription model", opened.slug, settingspkg.MemoryModel)
+		err = fmt.Errorf("%s is reached through the OpenRouter key, which the memory tree never spends: set %s to a subscription model", opened.slug, settingspkg.MemoryModel)
 	}
 	if err != nil {
 		opened.err = err

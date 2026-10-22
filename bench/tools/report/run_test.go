@@ -29,7 +29,7 @@ func liveClient(t *testing.T) *jev.Client {
 		t.Skip("set TOFU_LIVE=1 to put the pattern writing versions to the real jev route")
 	}
 	sys.AllowLiveCredential(t)
-	key, err := jev.Key(tofuRoot + "/.env")
+	key, err := jev.TypeSafeKey(tofuRoot + "/.env")
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}

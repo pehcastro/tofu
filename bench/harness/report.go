@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/judge/jev/wire/openrouter"
+	"tofu/internal/judge/jev/wire/typesafe"
 )
 
 //go:embed entitlement.txt
@@ -36,12 +36,12 @@ func Detail(row Row, gaps []string, execution Execution, ledgerDir, source strin
 	fmt.Fprintf(b, "source: %s\n", source)
 	fmt.Fprintf(b, "machine: %s. model credential kind: %s. date: %s. commit: %s. cli: %s\n",
 		host, row.CredentialKind, row.Start.Format("2006-01-02"), row.Commit, row.CLIVersion)
-	fmt.Fprintf(b, "model: %s. judge wire: %s. judge ledger: %s\n", row.Model, openrouter.Name, ledgerDir)
+	fmt.Fprintf(b, "model: %s. judge wire: %s. judge ledger: %s\n", row.Model, typesafe.Name, ledgerDir)
 	fmt.Fprintf(b, "setup %s: %s\n", row.Setup.Name, row.Setup.Line())
 	fmt.Fprintf(b, "seed: %s\n", row.Seed.Line())
 	fmt.Fprintf(b, "effort: %s, %s\n", row.Effort, execution.Plan.EffortSetBy)
 	fmt.Fprintf(b, "checklist: %d/%d graded items\n", passed, total)
-	fmt.Fprintf(b, "model spend: %s. jev decisions: $%.6f on the openrouter key\n", modelSpend, row.JudgeDollars)
+	fmt.Fprintf(b, "model spend: %s. jev decisions: $%.6f on the typesafe key\n", modelSpend, row.JudgeDollars)
 	fmt.Fprintf(b, "wall clock: %d ms. turns: %d. end reason: %s\n", row.WallClockMS, row.Turns, row.EndReason)
 	fmt.Fprintf(b, "tokens: %d in, %d out\n", row.BilledInput, row.BilledOutput)
 	fmt.Fprintf(b, "tool calls: read %d, write %d, shell %d, other %d, failed %d\n",
@@ -312,7 +312,7 @@ func renderDollarsRatio(b *strings.Builder, task string, full []Row) {
 		rows := byArm[a]
 		judge := SpreadOf(judgeDollarsOf(rows))
 		if rows[0].CredentialKind == CredentialKindSubscription {
-			fmt.Fprintf(b, "%s: model n/a, spent as subscription quota. jev decisions $%.4f on the openrouter key\n", a, judge.Median)
+			fmt.Fprintf(b, "%s: model n/a, spent as subscription quota. jev decisions $%.4f on the typesafe key\n", a, judge.Median)
 			continue
 		}
 		spread[a] = SpreadOf(dollarsOf(rows))

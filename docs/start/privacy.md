@@ -11,7 +11,7 @@ has no telemetry. Text leaves only for the service doing the work:
 
 - the model's provider: Anthropic for `claude-sub/...`, OpenAI for
   `codex-sub/...`, Meta for `meta/...`
-- the classifier provider, OpenRouter or TypeSafe: the state of one decision,
+- the classifier provider, TypeSafe: the state of one decision,
   such as a tool call and its input
 - Brave Search for `web_search`, and the page `fetch` reaches
 - `models.dev` on a model reload, and each subscription for its quota

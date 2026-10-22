@@ -48,8 +48,8 @@ Verbs:
   docs      print what you can ask tofu and the command that does it,
             a page with docs <topic>, or the closest answers with docs "a few words"
   doctor    say whether tofu can run here, and what is wrong if it cannot
-  login     sign in or store a key by role: login llm claude-sub|codex-sub|meta,
-            login classifier openrouter|typesafe, login search brave
+  login     sign in or store a key by role: login llm claude-sub|codex-sub|meta|openrouter,
+            login classifier typesafe, login search brave
   logout    remove what login stored: logout <role> <provider> [number]
   usage     print every credential's quota windows and when each resets,
             or --history for the readings already recorded, each with its moment

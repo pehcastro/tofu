@@ -5,14 +5,12 @@ import (
 	"context"
 	"io"
 	"os"
-	"path"
 	"slices"
 	"time"
 
 	"tofu/interface/cli"
 	"tofu/internal/host"
-	jevwire "tofu/internal/judge/jev/wire/openrouter"
-	typesafewire "tofu/internal/judge/jev/wire/typesafe"
+	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/quota"
@@ -52,35 +50,19 @@ const (
 
 type keyFacts struct{ provider, variable, name, use, hint string }
 
-func jevKeyUse(provider models.Provider) string {
-	serving, err := boundClassifier()
-	switch {
-	case err != nil:
-		return "jev, the classifier is unreadable: " + err.Error()
-	case serving.Provider == provider:
-		model, err := jevwire.Model()
-		if provider == models.TypeSafe {
-			model, err = typesafewire.Model()
-		}
-		if err != nil {
-			return "jev, the pin is unreadable: " + err.Error()
-		}
-		use := "judges tool calls with " + path.Base(model)
-		if failover := jevFailoverLine(time.Now()); failover != "" {
-			return use + "; " + failover
-		}
-		return use
-	case serving.Provider == failoverOf(provider):
-		return "answers for jev when " + serving.Provider.Display() + " cannot"
+func jevKeyUse() string {
+	model, err := typesafe.Model()
+	if err != nil {
+		return "jev's route, the pin is unreadable: " + err.Error()
 	}
-	return "unused, the classifier is " + serving.Slug()
+	return "jev's route, judges tool calls with " + model
 }
 
 func keyTable() []keyFacts {
 	return []keyFacts{
 		{metaName, sys.MetaMuseKeyName, models.Meta.Display(), "serves the meta models", loginHint(metaName)},
-		{openRouterName, sys.OpenRouterKeyName, models.OpenRouter.Display(), jevKeyUse(models.OpenRouter), loginHint(openRouterName)},
-		{typeSafeName, sys.TypeSafeKeyName, models.TypeSafe.Display(), jevKeyUse(models.TypeSafe), ""},
+		{openRouterName, sys.OpenRouterKeyName, models.OpenRouter.Display(), "serves the openrouter models on your own key", loginHint(openRouterName)},
+		{typeSafeName, sys.TypeSafeKeyName, models.TypeSafe.Display(), jevKeyUse(), loginHint(typeSafeName)},
 		{braveName, sys.BraveSearchKeyName, braveDisplay, "backs the web search tool", loginHint(braveName)},
 	}
 }

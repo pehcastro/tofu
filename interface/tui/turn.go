@@ -30,10 +30,10 @@ import (
 
 const (
 	gateOffLine        = "the gate is off, so no call on this session is judged."
-	gateOffNoKey       = "run tofu login classifier openrouter and the next session is judged."
-	gateOffKeyUnnamed  = "the project .env carries no OPENROUTER_KEY line: run tofu login classifier openrouter and the next session is judged."
-	gateOffKeyUnread   = "the project .env file that should carry OPENROUTER_KEY could not be read."
-	gateOffStoreUnread = "the credential store that holds the openrouter key could not be read."
+	gateOffNoKey       = "run tofu login classifier typesafe and the next session is judged."
+	gateOffKeyUnnamed  = "the project .env carries no TYPESAFE_API_KEY line: run tofu login classifier typesafe and the next session is judged."
+	gateOffKeyUnread   = "the project .env file that should carry TYPESAFE_API_KEY could not be read."
+	gateOffStoreUnread = "the credential store that holds the typesafe key could not be read."
 	gateOffUnexplained = "tofu could not open the judge."
 	gateOffHead        = "gate off"
 	stoppingNote       = "stopping the turn"

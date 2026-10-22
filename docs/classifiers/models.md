@@ -2,29 +2,24 @@
 title: Models and providers
 description: The classifier models tofu can use, the providers that serve them, how each is paid for, and how a build is pinned.
 order: 3
-updated: 2026-10-09
+updated: 2026-10-21
 ---
 
 The classifier is a role, `classifier`, bound to one model the way the lead
 is. A classifier model has kind `classifier` in the catalog and is reached
 through a provider on your key. Today tofu ships one classifier model, Jev,
-from two providers:
+from TypeSafe, the lab that trains it:
 
 | Model | Provider | Key |
 |---|---|---|
-| `openrouter/jev-latest` | OpenRouter's decisions endpoint | `OPENROUTER_KEY` |
-| `typesafe/jev-latest` | TypeSafe directly | `TYPESAFE_API_KEY` |
+| `typesafe/jev-latest` | TypeSafe, `api.typesafe.ai/v1/systemone` | `TYPESAFE_API_KEY` |
 
-Unbound, the role runs OpenRouter when that key is set, else TypeSafe. A key
-counts whether it is stored, in the environment or in `.env`. With both keys
-set, the other provider answers when the serving one cannot: a 402, a 429, a
-spent key, an auth failure or a provider outage. A request the provider
-refuses as malformed does not move, and fails closed. When neither provider
-can answer, a tool call Jev would have judged is never run on a guess: under
+The role runs it unbound. The key counts whether it is stored, in the
+environment or in `.env`. Jev has one route: when TypeSafe cannot answer, a
+tool call Jev would have judged is never run on a guess: under
 `gatePrompt auto` it is refused with the reason, and under `ask` it is put
-to you. The decision's row
-names the provider that answered, and `tofu doctor` and `tofu login
---status` show the last failover.
+to you. `tofu login --status` names TypeSafe as Jev's route and the build it
+is pinned to.
 
 ## Why the classifier is a role
 
@@ -38,22 +33,20 @@ does not stall a turn.
 
 ## Pinning a build
 
-`jev-latest` is an alias. Each answer names the dated build that served it,
-such as `typesafe/jev-1.13-20260917`, and a live point's calibration lock
-names the build it was fitted on. When the build changes, the point drops to
-shadow until it is fitted again, so a new build never changes a live verdict
+`jev-latest` is an alias. Each answer names the versioned build that served
+it, such as `jev-1.13.0`, and a live point's calibration lock names the
+build it was fitted on. `tofu models reload` asks TypeSafe which build answers
+`jev-latest` and pins it. When the build changes, the point drops to shadow
+until it is fitted again, so a new build never changes a live verdict
 unmeasured.
 
-## Choosing the provider
+## Storing the key
 
-- Store a key: `tofu login classifier openrouter` or
-  `tofu login classifier typesafe`. Remove it with `tofu logout classifier`
-  and the same name.
-- Choose the provider: **Ctrl+K**, type `classifier`, and pick under
-  **Models & roles / Classifier model**. Or write
-  `model: typesafe/jev-latest` in `~/.tofu/roles/classifier.yaml`, or the
-  project's `.tofu/roles/classifier.yaml`.
-- Go back to the default: delete that file.
+- Store it: `tofu login classifier typesafe`. Remove it with
+  `tofu logout classifier typesafe`.
+- See the role: **Ctrl+K**, type `classifier`, under
+  **Models & roles / Classifier model**, or
+  `~/.tofu/roles/classifier.yaml`.
 
 ![Ctrl+K search showing Models & roles / Classifier model](./media/tui-search.png)
 
@@ -71,5 +64,5 @@ echo '{"state":{"tool":"bash","input":"rm -rf build"},"library":"tool_gate@6"}' 
 ```
 
 ```
-{"model":"~typesafe/jev-latest","state":{...},"questions":{"risk":{"type":"score", ...
+{"model":"jev-latest","state":{...},"questions":{"risk":{"type":"score", ...
 ```

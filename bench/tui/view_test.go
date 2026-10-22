@@ -451,8 +451,8 @@ func setupApp(t *testing.T, width, height int) *app.App {
 	required := []app.Requirement{
 		{What: "no subscription is signed in, so no model can answer",
 			Fix: "tofu login anthropic, which opens the browser; tofu login codex signs in the other subscription"},
-		{What: "there is no openrouter key, so jev judges no tool call",
-			Fix: "tofu login openrouter, which asks for the key and checks it reaches jev"},
+		{What: "there is no typesafe key, so jev judges no tool call",
+			Fix: "tofu login classifier typesafe, which asks for the key and checks it reaches jev"},
 	}
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	built := app.New(app.Options{
@@ -465,7 +465,7 @@ func setupApp(t *testing.T, width, height int) *app.App {
 	})
 	built.Init()
 	built.Update(tea.WindowSizeMsg{Width: width, Height: height})
-	if !strings.Contains(built.View().Content, "openrouter") {
+	if !strings.Contains(built.View().Content, "typesafe") {
 		t.Fatal("this is not the setup screen")
 	}
 	return built

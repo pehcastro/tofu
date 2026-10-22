@@ -10,7 +10,7 @@ import (
 
 	"tofu/bench/corpus"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/openrouter"
+	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/question"
 	"tofu/internal/judge/thrift"
 	"tofu/internal/konst"
@@ -45,11 +45,11 @@ type Judged struct {
 }
 
 func NewJevClient(envPath string) (*jev.Client, error) {
-	key, err := jev.Key(envPath)
+	key, err := jev.TypeSafeKey(envPath)
 	if err != nil {
 		return nil, err
 	}
-	wire, err := openrouter.New(openrouter.Config{
+	wire, err := typesafe.New(typesafe.Config{
 		Key: key,
 		Transport: transport.Config{
 			AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,

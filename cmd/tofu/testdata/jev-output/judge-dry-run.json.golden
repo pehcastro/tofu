@@ -6,7 +6,7 @@ exit 0
   "ok": true,
   "at": "AT",
   "data": {
-    "model": "~typesafe/jev-latest",
+    "model": "jev-latest",
     "state": {
       "command": "git push --force origin main"
     },

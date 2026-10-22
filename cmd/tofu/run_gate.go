@@ -6,15 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
-	jevwire "tofu/internal/judge/jev/wire/openrouter"
-	typesafewire "tofu/internal/judge/jev/wire/typesafe"
+	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
 	"tofu/internal/konst"
@@ -22,7 +20,6 @@ import (
 	"tofu/internal/sys"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
-	"tofu/internal/widget"
 )
 
 const oneCallAtATime = 1
@@ -131,14 +128,10 @@ func jevClientFrom(keys jev.Keyring, concurrency int) (*jev.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return jevClientWith(keys, key, concurrency)
+	return jevClientOn(key, concurrency)
 }
 
 func boundClassifier() (models.Model, error) {
-	return classifierFrom(jev.ReadKeyring())
-}
-
-func classifierFrom(keys jev.Keyring) (models.Model, error) {
 	dir, err := os.Getwd()
 	if err != nil {
 		return models.Model{}, err
@@ -148,53 +141,11 @@ func classifierFrom(keys jev.Keyring) (models.Model, error) {
 	if err != nil && !errors.As(err, &broken) {
 		return models.Model{}, err
 	}
-	found := map[string]string{}
-	for _, provider := range []models.Provider{models.OpenRouter, models.TypeSafe} {
-		found[provider.KeyName()], _ = keys.KeyFor(sys.CredentialFileName, provider.KeyName())
-	}
-	return loaded.Classifier(found)
+	return loaded.Classifier()
 }
 
-func failoverOf(provider models.Provider) models.Provider {
-	if provider == models.OpenRouter {
-		return models.TypeSafe
-	}
-	return models.OpenRouter
-}
-
-func jevClientOn(key string, concurrency int) (*jev.Client, error) {
-	return jevClientWith(jev.ReadKeyring(), key, concurrency)
-}
-
-func jevClientWith(keys jev.Keyring, key string, concurrency int) (*jev.Client, error) {
-	classifier, err := classifierFrom(keys)
-	if err != nil {
-		return nil, err
-	}
-	primary, err := jevWire(classifier.Provider, key, concurrency)
-	if err != nil {
-		return nil, err
-	}
-	config := jev.Config{Wire: primary, OnFailover: recordFailover}
-	other := failoverOf(classifier.Provider)
-	if otherKey, keyErr := keys.KeyFor(sys.CredentialFileName, other.KeyName()); keyErr == nil {
-		if config.Fallback, err = jevWire(other, otherKey, concurrency); err != nil {
-			return nil, err
-		}
-	}
-	return jev.NewClient(config)
-}
-
-func jevClientFor(provider models.Provider, key string, concurrency int) (*jev.Client, error) {
-	wire, err := jevWire(provider, key, concurrency)
-	if err != nil {
-		return nil, err
-	}
-	return jev.NewClient(jev.Config{Wire: wire})
-}
-
-func jevWire(provider models.Provider, key string, concurrency int) (*jevwire.Wire, error) {
-	config := jevwire.Config{
+func jevConfig(key string, concurrency int) typesafe.Config {
+	return typesafe.Config{
 		Key:      key,
 		Endpoint: os.Getenv(judgeEndpointEnvar),
 		Transport: transport.Config{
@@ -204,15 +155,14 @@ func jevWire(provider models.Provider, key string, concurrency int) (*jevwire.Wi
 			Concurrency:    concurrency,
 		},
 	}
-	switch provider {
-	case models.OpenRouter:
-		return jevwire.New(config)
-	case models.TypeSafe:
-		return typesafewire.New(config)
-	case models.Anthropic, models.OpenAI, models.Meta:
-		return nil, fmt.Errorf("the classifier is served by %s, and jev is reached through %s or %s", provider, models.OpenRouter, models.TypeSafe)
+}
+
+func jevClientOn(key string, concurrency int) (*jev.Client, error) {
+	wire, err := typesafe.New(jevConfig(key, concurrency))
+	if err != nil {
+		return nil, err
 	}
-	panic("tofu: unknown provider " + string(provider))
+	return jev.NewClient(jev.Config{Wire: wire})
 }
 
 func gateKey() (string, error) {
@@ -220,50 +170,7 @@ func gateKey() (string, error) {
 }
 
 func gateKeyFrom(keys jev.Keyring) (string, error) {
-	classifier, err := classifierFrom(keys)
-	if err != nil {
-		return "", err
-	}
-	return keys.KeyFor(sys.CredentialFileName, classifier.Provider.KeyName())
-}
-
-const jevFailoverFile = "jev-failover.json"
-
-type lastFailover struct {
-	At    time.Time `json:"at"`
-	From  string    `json:"from"`
-	To    string    `json:"to"`
-	Cause string    `json:"cause"`
-}
-
-func jevFailoverPath() (string, error) {
-	home, err := sys.HomeConfigDir()
-	return filepath.Join(home, jevFailoverFile), err
-}
-
-func recordFailover(failover jev.Failover) {
-	path, err := jevFailoverPath()
-	if err != nil {
-		return
-	}
-	body, _ := json.Marshal(lastFailover{At: time.Now().UTC(), From: failover.From, To: failover.To, Cause: failover.Cause.Error()})
-	_ = sys.WriteFile(path, body, 0o600)
-}
-
-func jevFailoverLine(now time.Time) string {
-	path, err := jevFailoverPath()
-	if err != nil {
-		return ""
-	}
-	body, err := sys.ReadFile(path)
-	if err != nil {
-		return ""
-	}
-	var last lastFailover
-	if json.Unmarshal(body, &last) != nil {
-		return "the last failover record at " + path + " is unreadable"
-	}
-	return "last failover " + widget.Until(now.Sub(last.At)) + " ago, " + last.From + " to " + last.To + ": " + last.Cause
+	return keys.KeyFor(sys.CredentialFileName, jev.TypeSafeVariable)
 }
 
 func (g *toolGate) Decide(ctx context.Context, request turn.GateRequest) (turn.GateDecision, error) {

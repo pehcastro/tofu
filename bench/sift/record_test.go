@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/openrouter"
+	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
 	"tofu/internal/konst"
@@ -26,7 +26,7 @@ type replayWire struct {
 	served  atomic.Int64
 }
 
-func (w *replayWire) Model() string { return openrouter.Alias }
+func (w *replayWire) Model() string { return typesafe.Alias }
 
 func (w *replayWire) Caps() jev.WireCaps {
 	return jev.WireCaps{

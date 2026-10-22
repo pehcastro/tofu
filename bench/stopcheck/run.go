@@ -11,7 +11,7 @@ import (
 	"tofu/bench/corpus"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/openrouter"
+	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
 	"tofu/internal/judge/state"
@@ -98,7 +98,7 @@ func New(root, key string) (Battery, error) {
 	resolution := gate.Resolve(pol, gate.LockLookup{}, gate.Current{})
 	pol = resolution.Rule
 
-	wire, err := openrouter.New(openrouter.Config{
+	wire, err := typesafe.New(typesafe.Config{
 		Key: key,
 		Transport: transport.Config{
 			AttemptTimeout: time.Duration(konst.JudgeTimeoutMillis) * time.Millisecond,
@@ -183,7 +183,7 @@ func (b Battery) decide(ctx context.Context, turn Turn, at int) (StepResult, err
 		return StepResult{}, err
 	}
 	raw := json.RawMessage(built)
-	request := ledger.Request{State: raw, Questions: b.pol.Questions, Model: openrouter.Alias, Version: b.wording}
+	request := ledger.Request{State: raw, Questions: b.pol.Questions, Model: typesafe.Alias, Version: b.wording}
 	key, err := b.cache.Key(request)
 	if err != nil {
 		return StepResult{}, err
