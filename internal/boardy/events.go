@@ -10,7 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
+
+	"tofu/internal/subagent"
 )
 
 type EventKind string
@@ -30,20 +33,87 @@ func (EventKind) Enum() []string {
 }
 
 type Event struct {
-	At       time.Time `json:"at"`
-	Ticket   string    `json:"ticket"`
-	Kind     EventKind `json:"kind"`
-	Actor    string    `json:"actor,omitempty"`
-	Author   *Author   `json:"author,omitempty"`
-	From     Status    `json:"from,omitempty"`
-	To       Status    `json:"to,omitempty"`
-	Text     string    `json:"text,omitempty"`
-	Session  string    `json:"session,omitempty"`
-	Agent    string    `json:"agent,omitempty"`
-	Call     string    `json:"call,omitempty"`
-	Files    []string  `json:"files,omitempty"`
-	Brief    string    `json:"brief,omitempty"`
-	Assignee string    `json:"assignee,omitempty"`
+	At         time.Time        `json:"at"`
+	Ticket     string           `json:"ticket"`
+	Kind       EventKind        `json:"kind"`
+	Actor      string           `json:"actor,omitempty"`
+	Author     *Author          `json:"author,omitempty"`
+	From       Status           `json:"from,omitempty"`
+	To         Status           `json:"to,omitempty"`
+	Text       string           `json:"text,omitempty"`
+	Session    string           `json:"session,omitempty"`
+	Agent      string           `json:"agent,omitempty"`
+	Call       string           `json:"call,omitempty"`
+	Files      []string         `json:"files,omitempty"`
+	Brief      string           `json:"brief,omitempty"`
+	Assignee   string           `json:"assignee,omitempty"`
+	Line       int              `json:"line,omitempty"`
+	Leave      []int            `json:"leave,omitempty"`
+	Verdict    Verdict          `json:"verdict,omitempty"`
+	Acceptance []AcceptanceLine `json:"acceptance,omitempty"`
+}
+
+type Verdict string
+
+const (
+	VerdictDone     Verdict = "done"
+	VerdictConcerns Verdict = "done with concerns"
+	VerdictBlocked  Verdict = "blocked"
+	VerdictNeedsYou Verdict = "needs you"
+)
+
+func (Verdict) Enum() []string {
+	return enum(VerdictDone, VerdictConcerns, VerdictBlocked, VerdictNeedsYou)
+}
+
+type LineState string
+
+const (
+	LineMet     LineState = "met"
+	LineUnmet   LineState = "unmet"
+	LineNotMine LineState = "not mine to prove"
+)
+
+func (LineState) Enum() []string { return enum(LineMet, LineUnmet, LineNotMine) }
+
+type AcceptanceLine struct {
+	Line  string    `json:"line"`
+	State LineState `json:"state"`
+}
+
+func (s Store) Acceptance(ticket Ticket, leave []int) ([]AcceptanceLine, error) {
+	events, err := s.ticketEvents(ticket.ID)
+	if err != nil {
+		return nil, err
+	}
+	return Accounted(subagent.InForce(ticket.Acceptance), events, leave), nil
+}
+
+func Accounted(lines []string, events []Event, leave []int) []AcceptanceLine {
+	proved, unnamed, left := map[int]bool{}, 0, leave
+	for _, event := range events {
+		switch {
+		case event.Kind == Evidence && event.Line > 0:
+			proved[event.Line] = true
+		case event.Kind == Evidence:
+			unnamed++
+		case event.Kind == Moved && event.To == Review && leave == nil:
+			left = event.Leave
+		}
+	}
+	accounted := make([]AcceptanceLine, len(lines))
+	for i, line := range lines {
+		accounted[i] = AcceptanceLine{Line: line, State: LineUnmet}
+		switch {
+		case proved[i+1]:
+			accounted[i].State = LineMet
+		case slices.Contains(left, i+1):
+			accounted[i].State = LineNotMine
+		case unnamed > 0:
+			accounted[i].State, unnamed = LineMet, unnamed-1
+		}
+	}
+	return accounted
 }
 
 func (s Store) RecordTicket(event Event) error {
@@ -76,6 +146,11 @@ func threaded(events []Event) []Event {
 		}
 		if last := len(thread) - 1; event.Kind == Spawned && last >= 0 && thread[last].Kind == Assigned && thread[last].Text == event.Assignee {
 			thread = thread[:last]
+		}
+		if event.Kind == Reported {
+			thread = slices.DeleteFunc(thread, func(said Event) bool {
+				return said.Kind == Commented && said.Actor == event.Actor && event.Text != "" && strings.HasPrefix(said.Text, event.Text)
+			})
 		}
 		thread = append(thread, event)
 	}

@@ -99,9 +99,9 @@ func TestAnAllowHereStandsForThatSubAgentAndThatKindOfCallOnlyAndNeedsNoProse(t 
 		subAgent: []llm.Decision{
 			shellCall("s1-a", "echo hello > mine/a.txt"),
 			shellCall("s1-b", "echo hello > mine/b.txt"),
-			finishDecision("wrote mine/a.txt and mine/b.txt"),
+			claimDecision("wrote mine/a.txt and mine/b.txt"),
 			shellCall("s2-a", "echo hello > yours/a.txt"),
-			finishDecision("wrote yours/a.txt"),
+			claimDecision("wrote yours/a.txt"),
 		},
 	}
 	lead := crewOn(t, model, asksForSubAgents{})
@@ -136,9 +136,9 @@ func TestAStandingAllowEndsWhenTheSubAgentEnds(t *testing.T) {
 		},
 		subAgent: []llm.Decision{
 			shellCall("s1-a", "echo hello > mine/a.txt"),
-			finishDecision("wrote mine/a.txt"),
+			claimDecision("wrote mine/a.txt"),
 			shellCall("s1-b", "echo hello > mine/b.txt"),
-			finishDecision("wrote mine/b.txt"),
+			claimDecision("wrote mine/b.txt"),
 		},
 	}
 	lead := crewOn(t, model, asksForSubAgents{})
@@ -156,7 +156,7 @@ func TestACallTheReadListRefusesNeverReachesTheGateOrTheLead(t *testing.T) {
 		},
 		subAgent: []llm.Decision{
 			shellCall("s1-a", "node /tmp/peek.mjs"),
-			finishDecision("node was refused"),
+			claimDecision("node was refused"),
 		},
 	}
 	gate := &gateSeeing{}

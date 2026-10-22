@@ -68,7 +68,6 @@ type SubAgent struct {
 	Owns         []string
 	State        State
 	Report       string
-	Result       *Result
 	Round        int
 	Started      time.Time
 	Active       time.Time
@@ -336,17 +335,6 @@ func (r *Roster) Reached(id string, state State, report string) {
 	for i := range r.agents {
 		if r.agents[i].ID == id {
 			r.agents[i].State, r.agents[i].Report = state, report
-			return
-		}
-	}
-}
-
-func (r *Roster) Concluded(id string, result Result) {
-	r.held.Lock()
-	defer r.held.Unlock()
-	for i := range r.agents {
-		if r.agents[i].ID == id {
-			r.agents[i].Result = &result
 			return
 		}
 	}

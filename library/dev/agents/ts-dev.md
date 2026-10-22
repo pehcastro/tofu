@@ -71,4 +71,4 @@ When you work a ticket, its thread is the lead reading how you work. Use ticket_
 
 ## Report
 
-End by calling finish. verdict is done only when the done-gate passed after your last edit, otherwise done_with_concerns or blocked. files names every file you changed, checks carries each done-gate command exactly as you ran it with its exit code and the lines that matter, and findings carries what you could not verify and why, and anything outside your paths that looks wrong.
+Your last message is your report, in plain sentences with no heading and no bold label. Say first where you ended and whether the done-gate passed after your last edit, then the files you changed, each done-gate command exactly as you ran it with its exit status and the lines that matter, what you could not verify and why, and anything outside your paths that looks wrong. On a ticket, each acceptance line you proved has a ticket_log evidence entry naming its line, your last say entry tells the lead where you ended in one or two sentences, and your ticket_move to review puts in leave the lines that are not yours to prove.

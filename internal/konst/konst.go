@@ -1,10 +1,12 @@
 package konst
 
-const Version = "0.5.15-rc14"
+const Version = "0.5.15-rc15"
 
 const GateAskArgsBytes = 4096
 
 const LeadBashSoftLimitMillis = 10000
+
+const BoardReportedSentencesMost = 2
 
 const (
 	DocsPageLinesMin = 60

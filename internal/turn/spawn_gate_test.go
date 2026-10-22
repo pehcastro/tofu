@@ -12,19 +12,19 @@ import (
 var goDev = subagent.Definition{Name: "go-dev", Language: "go", Gate: []string{"go vet", "go test"}}
 
 func TestAGateRunThroughRtkCountsAsTheCommandItWraps(t *testing.T) {
-	reopenedFor(t, gatedRun(t, "", goDev, edited("src/x.go"), bashed("rtk go test ./pkg/", 0), bashed("rtk go vet ./pkg/", 0), finishDecision("done")).rows, 1)
-	reopenedFor(t, gatedRun(t, "", pyDev, edited("src/x.py"), bashed("uv run rtk pytest -q", 0), bashed("rtk proxy uv run ruff check .", 0), finishDecision("done")).rows, 1)
+	reopenedFor(t, gatedRun(t, "", goDev, edited("src/x.go"), bashed("rtk go test ./pkg/", 0), bashed("rtk go vet ./pkg/", 0), claimDecision("done")).rows, 1)
+	reopenedFor(t, gatedRun(t, "", pyDev, edited("src/x.py"), bashed("uv run rtk pytest -q", 0), bashed("rtk proxy uv run ruff check .", 0), claimDecision("done")).rows, 1)
 	reopenedFor(t, gatedRun(t, "", goDev,
-		edited("src/x.go"), bashed("rtk go test ./pkg/", 1), bashed("rtk go vet ./pkg/", 0), finishDecision("done"),
-		bashed("rtk go test ./pkg/", 0), finishDecision("done")).rows, 2, "go test exited 1")
+		edited("src/x.go"), bashed("rtk go test ./pkg/", 1), bashed("rtk go vet ./pkg/", 0), claimDecision("done"),
+		bashed("rtk go test ./pkg/", 0), claimDecision("done")).rows, 2, "go test exited 1")
 }
 
 func TestTheProjectsOwnTypecheckAndTestScriptsCountThroughBash(t *testing.T) {
 	scripted := tsProjectHolding(t, map[string]string{"package.json": `{"scripts":{"typecheck":"vue-tsc --noEmit","test":"vitest run"}}`})
-	reopenedFor(t, gatedRun(t, scripted, tsDev, edited("src/a.ts"), bashed("rtk npm run typecheck", 0), bashed("pnpm test", 0), finishDecision("done")).rows, 1)
+	reopenedFor(t, gatedRun(t, scripted, tsDev, edited("src/a.ts"), bashed("rtk npm run typecheck", 0), bashed("pnpm test", 0), claimDecision("done")).rows, 1)
 	reopenedFor(t, gatedRun(t, scripted, tsDev,
-		edited("src/a.ts"), bashed("npm run typecheck", 2), bashed("bun test", 0), bashed("npx vue-tsc --noEmit", 0), finishDecision("done"),
-		called("typecheck", map[string]any{}), called("test", map[string]any{}), finishDecision("done")).rows, 2, "typecheck exited 2", "test did not run")
+		edited("src/a.ts"), bashed("npm run typecheck", 2), bashed("bun test", 0), bashed("npx vue-tsc --noEmit", 0), claimDecision("done"),
+		called("typecheck", map[string]any{}), called("test", map[string]any{}), claimDecision("done")).rows, 2, "typecheck exited 2", "test did not run")
 }
 
 func TestAGateCheckerThatIsNotInstalledIsNotAPass(t *testing.T) {

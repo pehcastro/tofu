@@ -73,7 +73,7 @@ Sub-agents · 13 defined                                               ✗ 1 bro
     brief names. Spawn several at once for independent questions.
     tools      read, glob, search, symbols, bash, fetch, write
     from       tier worker
-    reference  research-report  1.7 KB
+    reference  research-report  1.6 KB
     notice     the tier @worker is not set, so research runs on the
       orchestrator's model: tofu settings set modelTier.worker <slug>
   ○ qa        inherit                   library  Verifies that a change does

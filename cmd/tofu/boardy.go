@@ -36,7 +36,7 @@ func boardyUsageOf(subcommand string) string {
 	case "move":
 		return "tofu boardy move <ticket> <status> [--reason text] [--as name] [--json]"
 	case "log":
-		return "tofu boardy log <ticket> <text> [--evidence] [--as name] [--json]"
+		return "tofu boardy log <ticket> <text> [--evidence [--line n]] [--as name] [--json]"
 	case "lint":
 		return "tofu boardy lint [--board KEY] [--json]"
 	case "boards":
@@ -489,6 +489,12 @@ func threadLine(event boardy.Event) string {
 	if len(event.Files) > 0 {
 		line += " (wrote " + strings.Join(event.Files, ", ") + ")"
 	}
+	if event.Verdict != "" {
+		line += "\n  verdict " + string(event.Verdict)
+	}
+	for i, accepted := range event.Acceptance {
+		line += fmt.Sprintf("\n  line %d %s: %s", i+1, accepted.State, accepted.Line)
+	}
 	return line
 }
 
@@ -513,11 +519,23 @@ func (c boardyCall) log() int {
 	if len(c.args) < 2 {
 		return c.o.usage(errors.New("name a " + c.words.Ticket + " and the text to log"))
 	}
-	entry := c.managed.Comment
-	if c.flags["evidence"] != "" {
-		entry = c.managed.Evidence
+	text := strings.Join(c.args[1:], " ")
+	var ticket boardy.Ticket
+	var err error
+	switch line := c.flags["line"]; {
+	case c.flags["evidence"] == "" && line != "":
+		return c.o.usage(errors.New("--line names the acceptance line an --evidence entry proves"))
+	case c.flags["evidence"] == "":
+		ticket, err = c.managed.Comment(c.args[0], text, c.actor)
+	default:
+		number := 0
+		if line != "" {
+			if number, err = strconv.Atoi(line); err != nil {
+				return c.o.usage(fmt.Errorf("--line is a number counted from 1: %w", err))
+			}
+		}
+		ticket, err = c.managed.Evidence(c.args[0], text, c.actor, number)
 	}
-	ticket, err := entry(c.args[0], strings.Join(c.args[1:], " "), c.actor)
 	return c.receipt(ticket, err, cli.Changed, "logged on "+ticket.ID)
 }
 

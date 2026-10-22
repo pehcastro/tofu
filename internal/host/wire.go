@@ -358,12 +358,11 @@ func (a *AgentUpdated) absorb(older any) {
 
 type AgentEnded struct {
 	Identity
-	Instance   string         `json:"instance"`
-	State      AgentState     `json:"state"`
-	Report     string         `json:"report"`
-	Result     *roster.Result `json:"result,omitempty"`
-	EndedAt    time.Time      `json:"endedAt"`
-	DurationMs int64          `json:"durationMs"`
+	Instance   string     `json:"instance"`
+	State      AgentState `json:"state"`
+	Report     string     `json:"report"`
+	EndedAt    time.Time  `json:"endedAt"`
+	DurationMs int64      `json:"durationMs"`
 }
 
 type ShellStarted struct {

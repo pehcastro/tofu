@@ -1,14 +1,14 @@
 # three workers finishing close together and a fourth asking the lead between them; nobody answers the ask
 {"text":"spawning 4 workers","tools":[{"name":"spawn","args":{"task":"fan-in worker 1: run the one command you are given, then report","owns":["w1/**"]}},{"name":"spawn","args":{"task":"fan-in worker 2: run the one command you are given, then report","owns":["w2/**"]}},{"name":"spawn","args":{"task":"fan-in worker 3: run the one command you are given, then report","owns":["w3/**"]}},{"name":"spawn","args":{"task":"fan-in worker 4: run the one command you are given, then report","owns":["w4/**"]}}]}
 {"agent":"c1","tools":[{"name":"bash","args":{"command":"sleep 0.5"}}]}
-{"agent":"c1","text":"fanin report from c1 after 0.5 s","tools":[{"name":"finish","args":{"verdict":"done","summary":"fanin report from c1 after 0.5 s","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"the cassette says so"}}}]}
+{"agent":"c1","text":"fanin report from c1 after 0.5 s"}
 {"agent":"c2","tools":[{"name":"bash","args":{"command":"sleep 1"}}]}
 {"agent":"c2","tools":[{"name":"glob","args":{"pattern":"**/*.go"}}]}
-{"agent":"c2","text":"fanin asker c2 was answered","tools":[{"name":"finish","args":{"verdict":"done","summary":"fanin asker c2 was answered","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"the cassette says so"}}}]}
+{"agent":"c2","text":"fanin asker c2 was answered"}
 {"agent":"c3","tools":[{"name":"bash","args":{"command":"sleep 1.5"}}]}
-{"agent":"c3","text":"fanin report from c3 after 1.5 s","tools":[{"name":"finish","args":{"verdict":"done","summary":"fanin report from c3 after 1.5 s","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"the cassette says so"}}}]}
+{"agent":"c3","text":"fanin report from c3 after 1.5 s"}
 {"agent":"c4","tools":[{"name":"bash","args":{"command":"sleep 2"}}]}
-{"agent":"c4","text":"fanin report from c4 after 2 s","tools":[{"name":"finish","args":{"verdict":"done","summary":"fanin report from c4 after 2 s","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"the cassette says so"}}}]}
+{"agent":"c4","text":"fanin report from c4 after 2 s"}
 {"text":"lead turn reply 1"}
 {"text":"lead turn reply 2"}
 {"text":"lead turn reply 3"}

@@ -95,10 +95,6 @@ func names[T named](past T) []string {
 	return all
 }
 
-func (Completion) Enum() []string { return names(completionCount) }
-
-func (Bucket) Enum() []string { return names(bucketCount) }
-
 func (c Completion) MarshalJSON() ([]byte, error) { return json.Marshal(c.String()) }
 
 func (c *Completion) UnmarshalJSON(data []byte) error {

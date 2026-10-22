@@ -33,19 +33,6 @@ func TestTheSubAgentViewShowsTheStepsASubAgentHasTakenWhileItIsStillRunning(t *t
 	t.Logf("the running sub-agent was drawn %d times with the steps it had taken, first %+v", len(stepping), stepping[0])
 }
 
-func finishing(summary string, files ...string) llm.Decision {
-	changed := []map[string]string{}
-	for _, path := range files {
-		changed = append(changed, map[string]string{"path": path, "change": "written"})
-	}
-	args, err := json.Marshal(map[string]any{"verdict": "done", "summary": summary, "files": changed, "checks": []any{}, "findings": []any{},
-		"confidence": map[string]string{"level": "high", "reason": "the fixture says so"}})
-	if err != nil {
-		panic(err)
-	}
-	return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, Content: summary, ToolCalls: []llm.ToolCall{{ID: "call-finish", Name: "finish", Arguments: args}}}
-}
-
 func noteSubAgent(write llm.ToolCall) *queuedModel {
 	spawnCall := llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}
 	return &queuedModel{
@@ -55,7 +42,7 @@ func noteSubAgent(write llm.ToolCall) *queuedModel {
 		},
 		subAgents: []llm.Decision{
 			{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{write}},
-			finishing("the sub-agent wrote it", "note.txt"),
+			{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent wrote it"},
 		},
 	}
 }

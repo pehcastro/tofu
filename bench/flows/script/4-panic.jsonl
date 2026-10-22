@@ -1,6 +1,6 @@
 {"text":"spawning two","tools":[{"name":"spawn","args":{"task":"first worker: report at once","owns":["one/**"]}},{"name":"spawn","args":{"task":"second worker: report at once","owns":["two/**"]}}]}
 {"text":"LEADGOESON one worker reported and one broke"}
-{"agent":"c1","text":"FLOWS-PANIC forced inside a sub-agent's model call","tools":[{"name":"finish","args":{"verdict":"done","summary":"FLOWS-PANIC forced inside a sub-agent's model call","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"the cassette says so"}}}]}
-{"agent":"c2","text":"SIBLINGREPORT the other worker is done","tools":[{"name":"finish","args":{"verdict":"done","summary":"SIBLINGREPORT the other worker is done","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"the cassette says so"}}}]}
+{"agent":"c1","text":"FLOWS-PANIC forced inside a sub-agent's model call"}
+{"agent":"c2","text":"SIBLINGREPORT the other worker is done"}
 {"text":"spare reply one"}
 {"text":"spare reply two"}

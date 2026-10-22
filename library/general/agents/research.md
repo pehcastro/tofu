@@ -54,4 +54,4 @@ When you work a ticket, its thread is the lead reading how you work. Use ticket_
 
 ## Report
 
-Your finish call is all your caller reads. It stands alone: no reference to what you said earlier, no "as above", and no file the caller has to open to understand the verdict. Follow research-report exactly.
+Your final message is all your caller reads. It stands alone: no reference to what you said earlier, no "as above", and no file the caller has to open to understand the verdict. Follow research-report exactly.

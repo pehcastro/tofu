@@ -1,18 +1,18 @@
 # three workers finishing far apart, outside the window, which is what batching costs
 {"text":"spawning 3 workers","tools":[{"name":"spawn","args":{"task":"fan-in worker 1: run the one command you are given, then report","owns":["w1/**"]}},{"name":"spawn","args":{"task":"fan-in worker 2: run the one command you are given, then report","owns":["w2/**"]}},{"name":"spawn","args":{"task":"fan-in worker 3: run the one command you are given, then report","owns":["w3/**"]}}]}
 {"agent":"c1","tools":[{"name":"bash","args":{"command":"sleep 0.5"}}]}
-{"agent":"c1","text":"fanin report from c1 after 0.5 s","tools":[{"name":"finish","args":{"verdict":"done","summary":"fanin report from c1 after 0.5 s","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"the cassette says so"}}}]}
+{"agent":"c1","text":"fanin report from c1 after 0.5 s"}
 {"agent":"c2","tools":[{"name":"bash","args":{"command":"sleep 4.5"}}]}
 {"agent":"c2","tools":[{"name":"bash","args":{"command":"sleep 4.4"}}]}
 {"agent":"c2","tools":[{"name":"bash","args":{"command":"sleep 4.1"}}]}
-{"agent":"c2","text":"fanin report from c2 after 13 s","tools":[{"name":"finish","args":{"verdict":"done","summary":"fanin report from c2 after 13 s","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"the cassette says so"}}}]}
+{"agent":"c2","text":"fanin report from c2 after 13 s"}
 {"agent":"c3","tools":[{"name":"bash","args":{"command":"sleep 5"}}]}
 {"agent":"c3","tools":[{"name":"bash","args":{"command":"sleep 4.9"}}]}
 {"agent":"c3","tools":[{"name":"bash","args":{"command":"sleep 4.8"}}]}
 {"agent":"c3","tools":[{"name":"bash","args":{"command":"sleep 4.7"}}]}
 {"agent":"c3","tools":[{"name":"bash","args":{"command":"sleep 4.6"}}]}
 {"agent":"c3","tools":[{"name":"bash","args":{"command":"sleep 2"}}]}
-{"agent":"c3","text":"fanin report from c3 after 26 s","tools":[{"name":"finish","args":{"verdict":"done","summary":"fanin report from c3 after 26 s","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"the cassette says so"}}}]}
+{"agent":"c3","text":"fanin report from c3 after 26 s"}
 {"text":"lead turn reply 1"}
 {"text":"lead turn reply 2"}
 {"text":"lead turn reply 3"}

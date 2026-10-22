@@ -1,45 +1,37 @@
 ---
 id: contract
 domain: general
-document: internal/subagent/contract.go, internal/subagent/finish.go and internal/turn/finish.go, read in this repository
+document: internal/boardy/events.go, internal/boardy/hook.go and internal/turn/spawn.go, read in this repository
 ---
 
 # What a sub-agent hands back at the end of its work
 
-A spawned sub-agent ends by calling finish. The call is its report: the lead reads it in place of the sub-agent's last message, and the desk draws it. A sub-agent that ends its turn without calling finish is sent back once to call it; one that ends without it again is reported blocked, with its last message as the report and a finding saying nothing checked it. A sub-agent stopped by a cap is not sent back.
+A spawned sub-agent's last message is its report to the lead: where it ended, in plain sentences, with no heading and no bold label. On a ticket, the report on the board is built from the sub-agent's own entries on that ticket, not from its last message.
 
-## The call
+## On a ticket: three entries
+
+1. `ticket_log` kind evidence, once for each acceptance line it proves, with `line` set to that line counted from 1 in the revision in force, and the text holding the command exactly as it ran and the output lines that matter.
+2. `ticket_log` kind say, one or two sentences in the first person: where it ended and what the lead needs to know.
+3. `ticket_move` to review, with `leave` holding the lines that are not its to prove, such as a line that needs the installed binary the lead drives.
 
 ```json
-{"verdict": "done", "summary": "the outcome in one to three sentences",
- "files": [{"path": "src/users.ts", "change": "adds the users route"}],
- "checks": [{"command": "go test ./internal/x/", "exit": 0, "excerpt": "ok"}],
- "claims": [{"line": "the exact acceptance line", "command": "the command run for it", "output": "what that command printed", "met": true}],
- "findings": [{"bucket": "consider", "text": "what to look at", "cite": "path:line"}],
- "confidence": {"level": "high", "reason": "why"},
- "openQuestions": [{"question": "what is unknown", "settleBy": "what would settle it"}],
- "asks": [{"kind": "deferred", "ask": "what the lead should decide"}],
- "consulted": ["a file or command"], "body": "markdown for what the fields cannot hold"}
+{"id": "DEMO-1", "kind": "evidence", "line": 1, "text": "go test ./internal/parse\nok  demo/internal/parse 0.21s"}
+{"id": "DEMO-1", "kind": "say", "text": "The reader decodes UTF-8 and lines 1 and 2 are proved. Lines 3 to 5 need the installed binary, so I leave them to you."}
+{"id": "DEMO-1", "to": "review", "leave": [3, 4, 5]}
 ```
 
-verdict is one of done, done_with_concerns, blocked and needs_context. A field the call names but leaves empty, or a field it does not know, refuses the call with the field named, and the turn goes on until a call is accepted.
+## Each line is met, unmet or not mine to prove
 
-## What tofu checks
+A line is met when an evidence entry names it, not mine to prove when the last move to review put it in `leave`, and unmet otherwise. An evidence entry with no `line`, such as one logged before this field existed, counts for the first line nothing else covers. A command that ran and printed nothing, such as a formatter that found no complaint, is still evidence.
 
-tofu compares files with the writes and edits it saw the sub-agent make, and each check's exit code with the command it saw run. A claimed file it never saw written is flagged act_on. A file it saw written that the report does not name is added and flagged consider. A check whose exit code differs takes the exit code tofu saw, and is flagged act_on. A check tofu never saw run is flagged consider. Any concern turns done into done_with_concerns, and a run that ended blocked or waiting on a question keeps that verdict whatever the call says.
+The `evidence_at_review` hook refuses a move to review while any line is unmet, and names each one.
 
-## Claims, when the brief names a ticket
+## The reported entry
 
-A sub-agent given a ticket with an ## Acceptance section puts one claim per acceptance line in claims. `line` has to match an acceptance line's own text once both sides are trimmed of surrounding whitespace, or it is never matched to anything and the claim is thrown away. A paraphrase credits nothing.
+When the sub-agent ends, tofu writes one reported entry on the ticket. Its text is the sub-agent's last say entry, cut to two sentences, or the first line of its last message when it said nothing. It carries three fields: `verdict`, one of done, done with concerns, blocked and needs you; `acceptance`, each line with its state; and `files`, what tofu saw it write. A run stopped by a cap or an error is blocked, a run waiting on an answer needs you, and an unmet line or a concern turns done into done with concerns. The lead reads the same verdict and lines under the sub-agent's report.
 
-A claim counts as omitted when both `command` and `output` are empty after trimming, whatever `met` says. `met` is the sub-agent's own belief and is never treated as a verdict. A command that ran and printed nothing, such as a formatter that found no complaint, is not an omission: the command field is filled and that is enough.
-
-A sub-agent given no ticket, or a ticket whose brief carries no `## Acceptance` section, has no contract rather than an empty one. A sub-agent stopped mid-run by a cap is marked partial, and every line it never reached counts as neither met nor omitted.
-
-With `projectManagement` set to `boardy`, a spawn names its ticket by id, such as `DEMO-2`, and the contract reads that ticket from the board rather than searching the brief. The acceptance lines are the revision in force, the last `## Acceptance` section of the ticket file. With the setting `off` the contract reads the brief: the first ticket-shaped id in it and its `## Acceptance` section.
-
-A sub-agent that ends without finish can still carry its claims as the last fenced json block of its last message, in the shape `{"claims": [...], "blocked": [...]}`, and the contract reads them from there.
+A sub-agent given no ticket, or a ticket with no acceptance lines, has no acceptance and reports through its last message alone.
 
 ## What it does not check
 
-A clean claim, with a real command and real output behind it, is evidence that something ran. It is not a verdict that the output satisfies the line. That reading is done by whoever evaluates the contract.
+An evidence entry is proof that something ran. It is not a verdict that the output satisfies the line: that reading is done by whoever reviews the ticket.

@@ -42,8 +42,8 @@ func TestAMessageToASubAgentSpawnedInAnEarlierTurnReachesIt(t *testing.T) {
 		},
 		usersRoute: {
 			toolCallDecision(llm.ToolCall{ID: "call-read", Name: "read", Arguments: json.RawMessage(`{"path":"plan.md"}`)}),
-			finishDecision("the users route is added on 3003"),
-			finishDecision("the health route is added"),
+			claimDecision("the users route is added on 3003"),
+			claimDecision("the health route is added"),
 		},
 	})
 	release, again := model.hold(usersRoute, 1), model.hold(usersRoute, 3)
@@ -89,8 +89,8 @@ func TestTheLeadStopsOneOfTwoRunningSubAgentsAndTheOtherKeepsRunning(t *testing.
 	}
 	model := newCrew(map[string][]llm.Decision{
 		leadKey:     {besideARead(spawnCall("call-users", usersRoute, "src/users.ts")), spawnCall("call-orders", ordersRoute, "src/orders.ts"), toolCallDecision(llm.ToolCall{ID: "call-stop", Name: "message", Arguments: stop}), claimDecision("sub-1 is stopped"), claimDecision("noted"), claimDecision("done")},
-		usersRoute:  {finishDecision("the users route is added")},
-		ordersRoute: {finishDecision("the orders route is added")},
+		usersRoute:  {claimDecision("the users route is added")},
+		ordersRoute: {claimDecision("the orders route is added")},
 	})
 	users, orders := model.hold(usersRoute, 1), model.hold(ordersRoute, 1)
 	defer users()
@@ -127,7 +127,7 @@ func TestAMessageToAnUnknownNameIsRefusedListingTheNames(t *testing.T) {
 	model := newCrew(map[string][]llm.Decision{
 		leadKey: {toolCallDecision(llm.ToolCall{ID: "call-spawn", Name: "spawn", Arguments: brief}), messageTo("call-message", "ts-dev-9", "also add /health"),
 			claimDecision("ts-dev-9 is no one"), claimDecision("done")},
-		usersRoute: {finishDecision("the users route is added")},
+		usersRoute: {claimDecision("the users route is added")},
 	})
 	lead := crewLead(t, model)
 	startLead(context.Background(), lead, nil).wait(t)

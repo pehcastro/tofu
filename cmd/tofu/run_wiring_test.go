@@ -373,7 +373,7 @@ func TestATsDevSpawnIsOfferedTypecheck(t *testing.T) {
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
 			{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"agent":"ts-dev","task":"check the project","owns":["src/**"]}`)}}},
 		reply("ts-dev is on it"), reply("done"),
-	}, subAgents: []llm.Decision{finishing("checked")}}
+	}, subAgents: []llm.Decision{reply("checked")}}
 	stubbedTurn(scratchProject(t), model)(t.Context(), onTheSubscription, "have ts-dev check the project", driveAppOn(t, nil).emit)
 	if len(model.subAgentAsked) == 0 {
 		t.Fatal("the ts-dev sub-agent never asked its model")
@@ -722,7 +722,7 @@ func oneNoteSubAgent() *queuedModel {
 			{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
 				{ID: "call-2", Name: "write", Arguments: json.RawMessage(`{"path":"note.txt","content":"a note"}`)},
 			}},
-			finishing("the sub-agent wrote it", "note.txt"),
+			{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent wrote it"},
 		},
 	}
 }
@@ -904,7 +904,7 @@ func TestOnAReactProjectTheLeadCarriesTheDesignRulesAndNoWritingRuleAndItsTsDevC
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
 			{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"agent":"ts-dev","task":"` + task + `","owns":["src/**"]}`)}}},
 		reply("ts-dev is on it"), reply("done"),
-	}, subAgents: []llm.Decision{finishing("saved")}}}
+	}, subAgents: []llm.Decision{reply("saved")}}}
 	stubbedTurn(dir, model)(t.Context(), onTheSubscription, task, driveAppOn(t, nil).emit)
 	if len(model.leadAsked) == 0 || len(model.subAgentAsked) == 0 {
 		t.Fatalf("the lead asked %d times and the sub-agent %d, and both must ask once", len(model.leadAsked), len(model.subAgentAsked))
@@ -977,9 +977,7 @@ func TestTheLeadTakesACleanReportUncheckedOnlyWithTheCheckOff(t *testing.T) {
 		`{"agent":"c1","tools":[{"name":"write","args":{"path":"stats/extra.go","content":"package stats\n\nfunc Extra() int { return 1 }\n"}}]}`,
 		`{"agent":"c1","tools":[{"name":"bash","args":{"command":"go vet ./stats/"}}]}`,
 		`{"agent":"c1","tools":[{"name":"bash","args":{"command":"go test ./stats/"}}]}`,
-		`{"agent":"c1","text":"VERIFIED. go vet and go test passed after the edit.","tools":[{"name":"finish","args":{"verdict":"done","summary":"VERIFIED. go vet and go test passed after the edit.",` +
-			`"files":[{"path":"stats/extra.go","change":"adds Extra"}],"checks":[{"command":"go vet ./stats/","exit":0},{"command":"go test ./stats/","exit":0}],"findings":[],` +
-			`"confidence":{"level":"high","reason":"both gate commands ran after the edit"}}}]}`,
+		`{"agent":"c1","text":"VERIFIED. go vet and go test passed after the edit."}`,
 	}
 	leadChecks := []string{`{"tools":[{"name":"bash","args":{"command":"go vet ./stats/"}}]}`, `{"text":"go-dev added stats.Extra."}`}
 	ran := `step 1: tool_call tool=bash command="[^"]*go vet \./stats/" sub_agent="" exit_code=0`

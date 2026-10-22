@@ -55,22 +55,6 @@ func runTicket(tool turn.Tool, args string) (string, error) {
 	return result.Content, err
 }
 
-func TestTicketContractReadsTheBoardKeyAndTheRevisionInForce(t *testing.T) {
-	ticket, err := ticketBoard(t).Store.Get("DEMO-2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	report := "UTF-8 is fine\n```json\n{\"claims\":[{\"line\":\"the test passes\",\"command\":\"go test\",\"output\":\"ok\",\"met\":true}]}\n```"
-	contract := subagent.TicketContract(ticket.ID, ticket.Acceptance, report, false)
-	lines := make([]string, len(contract.Claims))
-	for i, claim := range contract.Claims {
-		lines[i] = claim.Line
-	}
-	if contract.TicketID != "DEMO-2" || !slices.Equal(lines, []string{"UTF-8 input parses", "the test passes"}) || contract.Omissions() != 1 {
-		t.Errorf("contract reads %s with lines %q and %d omissions, want DEMO-2, the revision in force and 1", contract.TicketID, lines, contract.Omissions())
-	}
-}
-
 func TestTicketGrantAssignsMovesAndRefuses(t *testing.T) {
 	board := ticketBoard(t)
 	if _, err := tools.TicketGrant(board, "DEMO-1", "lead", "go-dev-1"); err == nil {

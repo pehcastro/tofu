@@ -70,6 +70,7 @@ the ticket by that id and its last acceptance revision, never the first
 ticket-shaped word in the brief. The spawn and the report, with the files
 the sub-agent wrote, land on the ticket's thread, and so does a
 `ticket_ask`. `ticket_create` takes `parent` to make a sub-ticket.
+Evidence names the line it proves with `line`, a move to review names lines left for the lead with `leave`, and `evidence_at_review` refuses review while a line is unmet. The report is one entry: the engineer's last words in two sentences at most, a `verdict` (done, done with concerns, blocked or needs you), and each line as met, unmet or not mine to prove.
 
 With no managers the lead manages the board as the lead, never as you, with
 `board_rule`, `epic`, `sprint`, `milestone`, `triage`, and `epic` and `sprint` on `ticket_create`.
@@ -92,8 +93,7 @@ commit, drops or merges a dead ticket with a pointer, and batches drives.
 `list` shows the live tickets; `--all` adds done and dropped, and
 `--status review` shows one status. `--fields id,status,assignee,owns`
 prints only those front matter fields, read without the ticket bodies.
-`show --thread` adds an Activity section: every event on the ticket in
-order, one line each. `held <path>` names the ticket holding a path, on any board of the project,
+`show --thread` adds the ticket's conversation, one line each: a spawn as one handoff line, what each engineer said in at most three sentences, questions, answers and reports with their verdict and each acceptance line; evidence logged with `log --evidence`, and `--line n` for the line it proves, folds into one count, kept in the Log for review. `held <path>` names the ticket holding a path, on any board of the project,
 and the glob that matched, or says it is not held; a hook asks it before a
 write. `lint` reads every ticket on every
 board and exits 1 on a front matter error, a reference to a ticket no board

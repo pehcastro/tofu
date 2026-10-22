@@ -41,14 +41,14 @@ checks ran after its last edit and passed: `go vet` and `go test` for go-dev,
 blocked on tests.
 
 # Reports come back to the lead
-Each sub-agent ends by calling `finish` with a typed result: how the work
-ended (done, done with concerns, blocked, or needs context), a summary, the
-files it changed, the checks it ran with their exit codes, its findings
-sorted into act on, consider, noted, and dismissed, its confidence, and its
-open questions. tofu checks the files and exit codes against what it saw
-itself, and a claim it did not see becomes a finding to act on. One that
-ends without `finish` is sent back once, then ends blocked. The lead checks
-the work and answers you.
+Each sub-agent's last message is its report, in plain sentences. On a
+ticket it proves each acceptance line with an evidence entry naming that
+line, says where it ended in one or two sentences, and moves the ticket to
+review, leaving the lines that are not its to prove. tofu writes one
+reported entry from those: a verdict (done, done with concerns, blocked, or
+needs you), each acceptance line as met, unmet, or not mine to prove, and
+the files it saw written. A move to review with an unmet line is refused,
+naming it. The lead checks the work and answers you.
 ```
 
 ## When the lead writes and when it spawns
@@ -95,7 +95,9 @@ The lead has one inbox. Your messages, finished reports, asks and checks
 all go into it. In the middle of a turn, the lead reads it at its next step,
 and answers you first, before any other call, board work or spawn, from what
 it knows then; a step that skips the answer, or a turn that would end on a
-promise to answer later, is sent back. While only sub-agents or the lead's
+promise to answer later, is sent back. Jev decides whether a reply answered
+you: on 30 written cases it kept every unanswered reply open with no real
+answer held back, where a phrase list kept 5 of 18. While only sub-agents or the lead's
 background commands run, the lead is idle and a message you type starts its
 turn at once.
 When idle, each kind wakes it differently:

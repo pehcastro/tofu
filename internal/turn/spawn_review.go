@@ -2,11 +2,13 @@ package turn
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"slices"
 	"strings"
 
+	"tofu/internal/boardy"
 	"tofu/internal/judge/method"
 	"tofu/internal/judge/state"
 	"tofu/internal/rule"
@@ -47,38 +49,55 @@ func (CheapDoneReview) Review(_ context.Context, subAgent Row) (DoneDecision, er
 type ContractDoneReview struct{}
 
 func (ContractDoneReview) Review(_ context.Context, subAgent Row) (DoneDecision, error) {
-	contract := ContractOf(subAgent)
-	switch {
-	case contract.NoTicket:
-		return DoneDecision{Verdict: DoneAccepted, Reason: "no ticket, so no acceptance lines and nothing to evaluate"}, nil
-	case contract.Omissions() > 0:
-		var missing []string
-		for _, claim := range contract.Claims {
-			if claim.Omitted() {
-				missing = append(missing, claim.Line)
-			}
+	lines := acceptanceOf(subAgent)
+	var unmet []string
+	for i, line := range lines {
+		if line.State == boardy.LineUnmet {
+			unmet = append(unmet, fmt.Sprintf("line %d, %s", i+1, line.Line))
 		}
-		reason := fmt.Sprintf("%d of %d acceptance lines carry no command and no output: %s",
-			len(missing), len(contract.Claims), strings.Join(missing, "; "))
-		return DoneDecision{Verdict: DoneReopen, Reason: reason}, nil
-	default:
-		return DoneDecision{Verdict: DoneAccepted, Reason: fmt.Sprintf("all %d acceptance lines carry a command and its output", len(contract.Claims))}, nil
 	}
+	switch {
+	case lines == nil:
+		return DoneDecision{Verdict: DoneAccepted, Reason: "no ticket, so no acceptance lines and nothing to evaluate"}, nil
+	case outcomeStoppedEarly(subAgent.Outcome):
+		return DoneDecision{Verdict: DoneAccepted, Reason: "the sub-agent was stopped before it finished, so its unmet lines are not held against it"}, nil
+	case len(unmet) > 0:
+		return DoneDecision{Verdict: DoneReopen, Reason: fmt.Sprintf("%d of %d acceptance lines have no evidence entry naming them and are not left for the lead: %s",
+			len(unmet), len(lines), strings.Join(unmet, "; "))}, nil
+	}
+	return DoneDecision{Verdict: DoneAccepted, Reason: fmt.Sprintf("all %d acceptance lines are met or left for the lead", len(lines))}, nil
 }
 
-func ContractOf(subAgent Row) subagent.Contract {
-	prose := ""
-	for i := len(subAgent.Steps) - 1; i >= 0; i-- {
-		if spoken := strings.TrimSpace(subAgent.Steps[i].AssistantText); spoken != "" {
-			prose = spoken
-			break
+const (
+	TicketLogToolName  = "ticket_log"
+	TicketMoveToolName = "ticket_move"
+)
+
+func acceptanceOf(subAgent Row) []boardy.AcceptanceLine {
+	lines := subagent.AcceptanceLines(subAgent.Task)
+	if subagent.TicketID(subAgent.Task) == "" || len(lines) == 0 {
+		return nil
+	}
+	var entries []boardy.Event
+	for _, step := range subAgent.Steps {
+		for _, call := range step.ToolCalls {
+			var args struct {
+				Kind, To string
+				Line     int
+				Leave    []int
+			}
+			if call.Error != "" || json.Unmarshal(call.Args, &args) != nil {
+				continue
+			}
+			switch {
+			case call.Tool == TicketLogToolName && args.Kind == string(boardy.Evidence):
+				entries = append(entries, boardy.Event{Kind: boardy.Evidence, Line: args.Line})
+			case call.Tool == TicketMoveToolName && args.To == string(boardy.Review):
+				entries = append(entries, boardy.Event{Kind: boardy.Moved, To: boardy.Review, Leave: args.Leave})
+			}
 		}
 	}
-	contract := subagent.BuildContract(subAgent.Task, prose, outcomeStoppedEarly(subAgent.Outcome))
-	if result, finished := finishedWith(subAgent); finished {
-		return contract.Answered(result.Claims)
-	}
-	return contract
+	return boardy.Accounted(lines, entries, nil)
 }
 
 func (t *SpawnTool) decided(ctx context.Context, first Row) (DoneDecision, error) {
@@ -137,13 +156,10 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 	held.remember(first)
 	var sentBack []string
 	recipes := projectRecipes(t.Project)
-	askedToFinish := false
 	for state == subagent.Finished {
 		last := &claims[len(claims)-1]
-		var why, task string
-		if endedWithoutFinish(*last) && !askedToFinish {
-			askedToFinish, why, task = true, "it ended without calling finish", youEndedWithoutFinish
-		} else if why, task = t.doneReview(subAgentCtx, held, claims, recipes); why == "" {
+		why, task := t.doneReview(subAgentCtx, held, claims, recipes)
+		if why == "" {
 			break
 		}
 		if _, err := t.roster.Reopen(agent.ID, why); err != nil {

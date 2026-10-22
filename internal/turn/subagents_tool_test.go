@@ -30,9 +30,9 @@ func TestTheLeadListsARunningAndAFinishedSubAgentWithoutWaitingForTheRunningOne(
 		},
 		usersRoute: {
 			toolCallDecision(llm.ToolCall{ID: "call-read", Name: "read", Arguments: json.RawMessage(`{"path":"plan.md"}`)}),
-			finishDecision("the users route is added"),
+			claimDecision("the users route is added"),
 		},
-		ordersRoute: {finishDecision("the orders route is added")},
+		ordersRoute: {claimDecision("the orders route is added")},
 	})
 	midRequest, listing := model.hold(usersRoute, 2), model.hold(leadKey, 2)
 	defer midRequest()

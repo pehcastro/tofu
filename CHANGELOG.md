@@ -10,6 +10,19 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc15 - 2026-10-22
+
+### Changed
+
+- A ticket's thread reads as the team talking: a spawn is one handoff line naming the engineer and its mission, with the full `brief` kept apart; an engineer's said entry is at most three sentences; proof goes in evidence entries, logged with `tofu boardy log --evidence` or `ticket_log` kind evidence, which `show --thread` folds into one count and the Log keeps for review; empty moves leave the thread. On a recorded run the thread is 77% shorter with every acceptance line still carrying its evidence.
+- Jev goes through TypeSafe only. `tofu login classifier` takes `typesafe`, and an OpenRouter key serves only a chat model of your own, set with `tofu login llm`.
+- Jev decides whether the lead's reply answered a message you sent mid-turn, instead of a list of phrases.
+- `leadCache` sets how long the lead's subscription prompt cache lives: `1h` by default, `5m`, or `history-5m`.
+
+### Fixed
+
+- `tofu session` says what history a session holds, fresh or carried and from where, instead of a count that read as if it took the app's messages.
+
 ## 0.5.15-rc14 - 2026-10-21
 
 ### Changed

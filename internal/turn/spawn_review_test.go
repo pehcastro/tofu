@@ -145,21 +145,21 @@ func reopenedFor(t *testing.T, rows []Row, want int, named ...string) {
 
 func TestARustDevThatRanOnlyFmtIsReopenedNamingClippyAndTest(t *testing.T) {
 	rows := gatedRun(t, "", rustDev,
-		edited("src/lib.rs"), bashed("cargo fmt", 0), finishDecision("done"),
-		bashed("cargo clippy --all-targets -- -D warnings", 0), bashed("cargo test -p parser", 0), finishDecision("done")).rows
+		edited("src/lib.rs"), bashed("cargo fmt", 0), claimDecision("done"),
+		bashed("cargo clippy --all-targets -- -D warnings", 0), bashed("cargo test -p parser", 0), claimDecision("done")).rows
 	reopenedFor(t, rows, 2, "cargo clippy did not run", "cargo test did not run")
 }
 
 func TestARustDevThatRanClippyAndTestAfterItsLastEditIsAccepted(t *testing.T) {
 	rows := gatedRun(t, "", rustDev,
-		bashed("cargo test", 0), edited("src/lib.rs"), bashed("cargo clippy -p parser", 0), bashed("cd crates/parser && cargo test status", 0), finishDecision("done")).rows
+		bashed("cargo test", 0), edited("src/lib.rs"), bashed("cargo clippy -p parser", 0), bashed("cd crates/parser && cargo test status", 0), claimDecision("done")).rows
 	reopenedFor(t, rows, 1)
 }
 
 func TestARustDevWhoseClippyExits101IsReopenedAndARoundOfClippyAloneThenPasses(t *testing.T) {
 	rows := gatedRun(t, "", rustDev,
-		edited("src/lib.rs"), bashed("cargo clippy", 101), bashed("cargo test", 0), finishDecision("done"),
-		bashed("cargo clippy", 0), finishDecision("done")).rows
+		edited("src/lib.rs"), bashed("cargo clippy", 101), bashed("cargo test", 0), claimDecision("done"),
+		bashed("cargo clippy", 0), claimDecision("done")).rows
 	reopenedFor(t, rows, 2, "cargo clippy exited 101")
 	if strings.Contains(rows[1].Task, "cargo test did not run") {
 		t.Fatalf("cargo test passed after the last edit and is still named: %q", rows[1].Task)
@@ -168,17 +168,17 @@ func TestARustDevWhoseClippyExits101IsReopenedAndARoundOfClippyAloneThenPasses(t
 
 func TestAGateRunBeforeTheLastEditDoesNotCount(t *testing.T) {
 	rows := gatedRun(t, "", rustDev,
-		edited("src/lib.rs"), bashed("cargo clippy", 0), bashed("cargo test", 0), edited("src/main.rs"), finishDecision("done"),
-		bashed("cargo clippy", 0), bashed("cargo test", 0), finishDecision("done")).rows
+		edited("src/lib.rs"), bashed("cargo clippy", 0), bashed("cargo test", 0), edited("src/main.rs"), claimDecision("done"),
+		bashed("cargo clippy", 0), bashed("cargo test", 0), claimDecision("done")).rows
 	reopenedFor(t, rows, 2, "cargo clippy did not run", "cargo test did not run")
 }
 
 func TestASubAgentWithNoGateOrNoChangeInItsLanguageIsUnaffected(t *testing.T) {
 	for name, run := range map[string]*gated{
-		"no gate":                 gatedRun(t, "", subagent.Definition{Name: "rust-dev", Language: "rust"}, edited("src/lib.rs"), bashed("cargo fmt", 0), finishDecision("done")),
-		"only markdown and toml":  gatedRun(t, "", rustDev, edited("README.md"), edited("Cargo.toml"), finishDecision("done")),
-		"a refused edit":          gatedRun(t, "", rustDev, edited("elsewhere/lib.rs"), finishDecision("done")),
-		"no language on the file": gatedRun(t, "", subagent.Definition{Name: "rust-dev", Gate: rustDev.Gate}, edited("src/lib.rs"), finishDecision("done")),
+		"no gate":                 gatedRun(t, "", subagent.Definition{Name: "rust-dev", Language: "rust"}, edited("src/lib.rs"), bashed("cargo fmt", 0), claimDecision("done")),
+		"only markdown and toml":  gatedRun(t, "", rustDev, edited("README.md"), edited("Cargo.toml"), claimDecision("done")),
+		"a refused edit":          gatedRun(t, "", rustDev, edited("elsewhere/lib.rs"), claimDecision("done")),
+		"no language on the file": gatedRun(t, "", subagent.Definition{Name: "rust-dev", Gate: rustDev.Gate}, edited("src/lib.rs"), claimDecision("done")),
 	} {
 		if rows := run.rows; len(rows) != 1 {
 			t.Errorf("%s: %d rounds, want 1: %q", name, len(rows), rows[len(rows)-1].Task)
@@ -188,15 +188,15 @@ func TestASubAgentWithNoGateOrNoChangeInItsLanguageIsUnaffected(t *testing.T) {
 
 func TestATsDevGateNamesToolsAndAShellLookalikeDoesNotCount(t *testing.T) {
 	rows := gatedRun(t, "", tsDev,
-		edited("src/users.ts"), bashed("bun test", 0), bashed("test -f src/users.ts", 0), called("typecheck", map[string]any{"fail": "TS2322"}), finishDecision("done"),
-		called("typecheck", map[string]any{}), called("test", map[string]any{}), finishDecision("done")).rows
+		edited("src/users.ts"), bashed("bun test", 0), bashed("test -f src/users.ts", 0), called("typecheck", map[string]any{"fail": "TS2322"}), claimDecision("done"),
+		called("typecheck", map[string]any{}), called("test", map[string]any{}), claimDecision("done")).rows
 	reopenedFor(t, rows, 2, "typecheck failed", "test did not run")
 }
 
 func TestASubAgentSentBackOnceByItsGateIsOneSubAgentInTheLogTheRosterAndTheReport(t *testing.T) {
 	run := gatedRun(t, "", rustDev,
-		edited("src/lib.rs"), bashed("cargo clippy", 0), finishDecision("done"),
-		bashed("cargo test", 0), finishDecision("done"))
+		edited("src/lib.rs"), bashed("cargo clippy", 0), claimDecision("done"),
+		bashed("cargo test", 0), claimDecision("done"))
 	reopenedFor(t, run.rows, 2, "cargo test did not run")
 	agents := agentsByKind(t, run.events)
 	if spawned := agents[session.EventSpawn]; !slices.Equal(spawned, []string{"rust-dev-1"}) {
@@ -239,20 +239,20 @@ func TestAPyDevGateIsMetThroughARunnerAndNotByRuffFormat(t *testing.T) {
 		"python -m":       "CI=1 ruff check . ; uv run --frozen python -m pytest -q",
 	} {
 		t.Log(name)
-		reopenedFor(t, gatedRun(t, "", pyDev, bashed("pytest", 0), edited("src/x.py"), bashed(command, 0), finishDecision("done")).rows, 1)
+		reopenedFor(t, gatedRun(t, "", pyDev, bashed("pytest", 0), edited("src/x.py"), bashed(command, 0), claimDecision("done")).rows, 1)
 	}
 	reopenedFor(t, gatedRun(t, "", pyDev,
-		edited("src/x.py"), bashed("uv run ruff format src", 0), bashed("uv run pytest", 1), finishDecision("done"),
-		bashed("python -m pytest", 0), bashed("ruff check", 0), finishDecision("done")).rows, 2, "ruff check did not run", "pytest exited 1")
+		edited("src/x.py"), bashed("uv run ruff format src", 0), bashed("uv run pytest", 1), claimDecision("done"),
+		bashed("python -m pytest", 0), bashed("ruff check", 0), claimDecision("done")).rows, 2, "ruff check did not run", "pytest exited 1")
 }
 
 func TestAGoDevGateIsMetByMakeTargetsWhoseRecipesRunIt(t *testing.T) {
 	project := tsProjectHolding(t, map[string]string{"Makefile": "testall:\n\t@echo all\ntest:\n\t@go test ./...\nvet:\n\t-go vet ./...\n"})
 	goDev := subagent.Definition{Name: "go-dev", Language: "go", Gate: []string{"go vet", "go test"}}
-	reopenedFor(t, gatedRun(t, project, goDev, edited("src/x.go"), bashed("make vet && make test", 0), finishDecision("done")).rows, 1)
+	reopenedFor(t, gatedRun(t, project, goDev, edited("src/x.go"), bashed("make vet && make test", 0), claimDecision("done")).rows, 1)
 	reopenedFor(t, gatedRun(t, project, goDev,
-		edited("src/x.go"), bashed("make testall", 0), bashed("make vet", 2), finishDecision("done"),
-		bashed("make test vet", 0), finishDecision("done")).rows, 2, "go test did not run", "go vet exited 2")
+		edited("src/x.go"), bashed("make testall", 0), bashed("make vet", 2), claimDecision("done"),
+		bashed("make test vet", 0), claimDecision("done")).rows, 2, "go test did not run", "go vet exited 2")
 }
 
 var tsDev = subagent.Definition{Name: "ts-dev", Language: "typescript", Gate: []string{"typecheck", "test"}}
@@ -273,7 +273,7 @@ func tsProjectHolding(t *testing.T, files map[string]string) string {
 }
 
 func TestATsDevThatNeverCallsTestInAProjectWithNoTestsFinishesInOneRound(t *testing.T) {
-	typechecked := []llm.Decision{edited("src/users.ts"), called("typecheck", map[string]any{}), finishDecision("done"), called("test", map[string]any{}), finishDecision("done")}
+	typechecked := []llm.Decision{edited("src/users.ts"), called("typecheck", map[string]any{}), claimDecision("done"), called("test", map[string]any{}), claimDecision("done")}
 	bare := map[string]string{"package.json": `{"name":"bare"}`, "src/users.ts": "export {};\n"}
 	if rows := gatedRun(t, tsProjectHolding(t, bare), tsDev, typechecked...).rows; len(rows) != 1 {
 		t.Errorf("a project with no tests: %d rounds, want 1: %q", len(rows), rows[len(rows)-1].Task)
@@ -288,7 +288,7 @@ func TestATsDevThatNeverCallsTestInAProjectWithNoTestsFinishesInOneRound(t *test
 }
 
 func TestAResumedSubAgentIsOneSubAgentInTheLogAndItsChatLineSaysSo(t *testing.T) {
-	run := gatedRun(t, "", subagent.Definition{Name: "go-dev"}, finishDecision("done"), called("bash", map[string]any{"command": "go vet"}), finishDecision("vetted"))
+	run := gatedRun(t, "", subagent.Definition{Name: "go-dev"}, claimDecision("done"), called("bash", map[string]any{"command": "go vet"}), claimDecision("vetted"))
 	if _, err := (messageTool{orchestrator: run.spawn}).Run(run.ctx, json.RawMessage(`{"to":"go-dev-1","text":"run go vet too"}`)); err != nil {
 		t.Fatal(err)
 	}
@@ -313,14 +313,14 @@ func TestAResumedSubAgentIsOneSubAgentInTheLogAndItsChatLineSaysSo(t *testing.T)
 
 func TestATestToolAnsweringNoTestsAfterTheEditIsNotAFailure(t *testing.T) {
 	rows := gatedRun(t, "", tsDev,
-		edited("src/users.ts"), called("typecheck", map[string]any{}), called("test", map[string]any{"fail": testNoTests + "\npackage.json names no test runner"}), finishDecision("done")).rows
+		edited("src/users.ts"), called("typecheck", map[string]any{}), called("test", map[string]any{"fail": testNoTests + "\npackage.json names no test runner"}), claimDecision("done")).rows
 	reopenedFor(t, rows, 1)
 }
 
 func TestATypecheckStillWarmingIsNotRunRatherThanFailed(t *testing.T) {
 	rows := gatedRun(t, "", tsDev,
-		edited("src/users.ts"), called("test", map[string]any{}), called("typecheck", map[string]any{"fail": typecheckUnanswered}), finishDecision("done"),
-		called("typecheck", map[string]any{}), finishDecision("done")).rows
+		edited("src/users.ts"), called("test", map[string]any{}), called("typecheck", map[string]any{"fail": typecheckUnanswered}), claimDecision("done"),
+		called("typecheck", map[string]any{}), claimDecision("done")).rows
 	reopenedFor(t, rows, 2, "typecheck did not run")
 	if strings.Contains(rows[1].Task, "typecheck failed") {
 		t.Fatalf("a typecheck that had not answered is named as failed: %q", rows[1].Task)

@@ -20,11 +20,11 @@ type ticketVerb string
 
 const (
 	ticketRead    ticketVerb = "ticket_read"
-	ticketLog     ticketVerb = "ticket_log"
+	ticketLog     ticketVerb = turn.TicketLogToolName
 	ticketAsk     ticketVerb = "ticket_ask"
 	ticketRequest ticketVerb = "ticket_request"
 	ticketCreate  ticketVerb = "ticket_create"
-	ticketMove    ticketVerb = "ticket_move"
+	ticketMove    ticketVerb = turn.TicketMoveToolName
 	ticketAssign  ticketVerb = "ticket_assign"
 	ticketList    ticketVerb = "ticket_list"
 )
@@ -33,7 +33,7 @@ type logKind string
 
 const (
 	logSay      logKind = "say"
-	logEvidence logKind = "evidence"
+	logEvidence logKind = logKind(boardy.Evidence)
 )
 
 func sentencesIn(text string) int {
@@ -114,8 +114,9 @@ func (t ticketTool) Definition() llm.Tool {
 	case ticketRead:
 		describe = "reads a ticket by its id from any board of this project: front matter, Problem, Scope, every Acceptance revision (the last one is in force) and Log"
 	case ticketLog:
-		describe = fmt.Sprintf("adds one entry to your own ticket, under your name, so never start it with your name. kind say is you talking to the lead in the first person, at most %d sentences on one line and no command output: a decision and why, a finding that changes the plan, what stops you, what you need, or that you are done. kind evidence proves an acceptance line: the command exactly as you ran it and the output lines that matter; the lead reads it at review and it stays out of the conversation. progress nobody acts on is not an entry", konst.BoardSaidSentencesMost)
+		describe = fmt.Sprintf("adds one entry to your own ticket, under your name, so never start it with your name. kind say is you talking to the lead in the first person, at most %d sentences on one line and no command output: a decision and why, a finding that changes the plan, what stops you, what you need, or that you are done. kind evidence proves one acceptance line, named by line: the command exactly as you ran it and the output lines that matter; the lead reads it at review and it stays out of the conversation. your last say entry is where you ended, and the lead reads it as your report: say it plainly, with no heading and no bold label. progress nobody acts on is not an entry", konst.BoardSaidSentencesMost)
 		properties["kind"] = map[string]any{"type": "string", "enum": []logKind{logSay, logEvidence}}
+		properties["line"] = map[string]any{"type": "integer", "description": "for kind evidence, the acceptance line in force it proves, counted from 1"}
 		properties["text"], required = stringParam("what you say, or the evidence"), append(required, "kind", "text")
 	case ticketAsk:
 		describe = "puts a question to the board's managers by writing it into your own ticket's Log; a manager answers there, so read the ticket again with ticket_read before you act on the answer"
@@ -144,11 +145,12 @@ func (t ticketTool) Definition() llm.Tool {
 		}
 	case ticketMove:
 		statuses := []boardy.Status{boardy.Review}
-		describe = "moves your own ticket from doing to review once every acceptance line in force has an entry of kind evidence"
+		describe = "moves your own ticket from doing to review once every acceptance line in force has an entry of kind evidence naming it, or is in leave"
 		if t.manager {
 			statuses, describe = boardy.Statuses(), "moves a ticket on a board you manage to a status; blocked needs a reason"
 		}
 		properties["to"], properties["reason"], required = map[string]any{"type": "string", "enum": statuses}, stringParam("why, in one sentence, required for blocked; anything longer goes in ticket_log"), append(required, "to")
+		properties["leave"] = map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "on a move to review, the acceptance lines, counted from 1, that are not yours to prove and that the lead proves"}
 	case ticketAssign:
 		describe = "assigns a ticket on a board you manage to a session or the person, by name"
 		properties["to"], required = stringParam("who the ticket goes to"), append(required, "to")
@@ -164,7 +166,8 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 		ID, Text, Question, ELI5, Why, Board, Title, Problem, Scope, Acceptance, To, Reason, Parent, Epic, Sprint, Status string
 		Kind                                                                                                              logKind
 		Owns, Options                                                                                                     []string
-		Recommend                                                                                                         int
+		Recommend, Line                                                                                                   int
+		Leave                                                                                                             []int
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.verb, err)
@@ -186,7 +189,7 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 					ticket, err = t.board.Comment(args.ID, args.Text, t.actor)
 				}
 			case logEvidence:
-				ticket, err = t.board.Evidence(args.ID, args.Text, t.actor)
+				ticket, err = t.board.Evidence(args.ID, args.Text, t.actor, args.Line)
 			default:
 				err = fmt.Errorf("kind is %s or %s, not %q", logSay, logEvidence, args.Kind)
 			}
@@ -220,7 +223,7 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 			case strings.Contains(reason, "\n") || sentencesIn(reason) > 1:
 				err = fmt.Errorf("a move reason is one sentence on one line: say the rest with ticket_log kind %s, and put what you ran and what it printed in an entry of kind %s", logSay, logEvidence)
 			default:
-				ticket, err = t.board.Move(args.ID, to, args.Reason, t.actor)
+				ticket, err = t.board.MoveLeaving(args.ID, to, args.Reason, t.actor, args.Leave)
 			}
 			said = ticket.ID + " is " + string(ticket.Status)
 		case ticketAssign:

@@ -109,9 +109,18 @@ See everything that happened on a ticket, in order:
 tofu boardy show DEMO-1 --thread
 ```
 
-The Activity section lists each create, move, log line, question and answer,
-each sub-agent spawned on the ticket with its call, and each report it gave
-back with the files it wrote.
+The thread reads as the team talking. A spawn is one handoff line from the
+lead naming the engineer and its mission, with the full brief kept in its
+`brief` field. An engineer says what it decided, found or needs in at most
+three sentences, and logs proof apart with `tofu boardy log --evidence` (or
+`ticket_log` kind evidence), with `--line n` (or `line`) naming the acceptance
+line it proves, which `show --thread` folds into one count and the Log keeps
+for review. A move to review names the lines left for the lead in `leave`,
+and the `evidence_at_review` hook refuses it while a line is unmet. The report
+is one entry: the engineer's last words in at most two sentences, a `verdict`
+(done, done with concerns, blocked or needs you), and each acceptance line as
+met, unmet or not mine to prove. Questions and answers follow, and empty moves
+stay out of the thread.
 
 ## The ticket file
 
@@ -204,7 +213,7 @@ the lead gives it.
 | `tofu boardy held <path>` | names the ticket holding a path on any board, and the glob, or says it is not held |
 | `tofu boardy show <ticket> [--thread]` | prints one ticket; `--thread` adds its Activity in order |
 | `tofu boardy move <ticket> <status> [--reason text]` | changes its status |
-| `tofu boardy log <ticket> <text>` | appends a dated line to its Log |
+| `tofu boardy log <ticket> <text> [--evidence [--line n]]` | appends a dated line to its Log; `--evidence` marks it as proof, and `--line` names the acceptance line it proves |
 | `tofu boardy ask <ticket> --tldr t --eli5 e --options "a \| b" --recommend n --why w` | puts a question on a ticket |
 | `tofu boardy catchup [--board KEY] [--answers]` | lists open questions and writes `catchup.md`; `--answers` applies what the person wrote |
 | `tofu boardy lint [--board KEY]` | checks every ticket, exits 1 on a finding |

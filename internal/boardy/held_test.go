@@ -134,7 +134,7 @@ func TestBoardRulesLogAndSource(t *testing.T) {
 	})
 	_, err := m.Move(ticket.ID, Review, "", manager)
 	refused(t, err, "200")
-	if _, err := m.Evidence(ticket.ID, strings.Repeat("evidence ", 25), manager); err != nil {
+	if _, err := m.Evidence(ticket.ID, strings.Repeat("evidence ", 25), manager, 0); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := m.Check(rule.EventMove, ticket.ID, Review, manager); err != nil {

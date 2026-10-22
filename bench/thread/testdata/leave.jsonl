@@ -1,0 +1,11 @@
+# one engineer proves two of five lines, is refused review once for the three it has not proved, and leaves them for the lead
+{"text":"handing DEMO-1 to go-dev","tools":[{"name":"spawn","args":{"agent":"go-dev","ticket":"DEMO-1","mission":"parse UTF-8 config names","task":"DEMO-1: the config parser reads every name as Latin-1. Make internal/parse decode UTF-8. Lines 3 to 5 need the release build and the installed binary, which the lead drives. Your paths are internal/parse/**."}}]}
+{"agent":"c1","tools":[{"name":"ticket_log","args":{"id":"DEMO-1","kind":"evidence","line":1,"text":"go test -run TestReadUTF8Name ./internal/parse\nok  \tdemo/internal/parse\t0.214s"}}]}
+{"agent":"c1","tools":[{"name":"ticket_log","args":{"id":"DEMO-1","kind":"evidence","line":2,"text":"go test ./internal/parse\nok  \tdemo/internal/parse\t0.388s"}}]}
+{"agent":"c1","tools":[{"name":"ticket_move","args":{"id":"DEMO-1","to":"review"}}]}
+{"agent":"c1","tools":[{"name":"ticket_log","args":{"id":"DEMO-1","kind":"say","text":"The reader decodes UTF-8 and lines 1 and 2 are proved. Lines 3 to 5 need the installed binary, so I leave them to you."}}]}
+{"agent":"c1","tools":[{"name":"ticket_move","args":{"id":"DEMO-1","to":"review","leave":[3,4,5]}}]}
+{"agent":"c1","text":"DEMO-1 is in review with lines 3 to 5 left for the lead."}
+{"text":"DEMO-1 is in review"}
+{"text":"ok"}
+{"text":"ok"}

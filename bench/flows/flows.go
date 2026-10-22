@@ -248,7 +248,7 @@ func crowdCassette(dir string) (string, error) {
 		map[string]any{"text": "the forked lead waits on the crowd"},
 	}
 	for n := 1; n <= crowd; n++ {
-		replies = append(replies, map[string]any{"agent": fmt.Sprintf("c%d", n), "text": fmt.Sprintf("crowd report %d", n), "tools": []map[string]any{{"name": "finish", "args": map[string]any{"verdict": "done", "summary": fmt.Sprintf("crowd report %d", n), "files": []any{}, "checks": []any{}, "findings": []any{}, "confidence": map[string]any{"level": "high", "reason": "read the note"}}}}})
+		replies = append(replies, map[string]any{"agent": fmt.Sprintf("c%d", n), "text": fmt.Sprintf("crowd report %d", n)})
 	}
 	var body bytes.Buffer
 	encoder := json.NewEncoder(&body)

@@ -23,7 +23,7 @@ When you work a ticket, its thread is the lead reading how you work. Use ticket_
 
 ## Report
 
-End by calling finish. Each confirmed finding is one entry in findings, act_on, and body holds one block per finding, with the hunter's number, and nothing else:
+One block per finding, with the hunter's number, and nothing else:
 
 ```
 H1
@@ -33,4 +33,4 @@ shown by: the failing test, the command and its output, or the input and path
 fix direction: one line, when confirmed
 ```
 
-summary names the confirmed numbers ordered by severity.
+End with the confirmed numbers ordered by severity.

@@ -205,7 +205,7 @@ func TestAJevErrorLeavesTheSubAgentsClaimStandingAndSaysSoOnTheRow(t *testing.T)
 		t.Fatalf("newTypedDoneReview: %v", err)
 	}
 	spawned := spawnOneSubAgent(t, review, []llm.Decision{
-		finishing("I finished the task."),
+		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "I finished the task."},
 	})
 
 	if len(spawned) != 1 {
@@ -248,7 +248,8 @@ func TestTheTypedDoneReviewReopensTheSubAgentInsideARunAndWhyPrintsTheChain(t *t
 	rounds := konst.SubAgentMaxRounds
 	queued := make([]llm.Decision, 0, rounds)
 	for round := 1; round <= rounds; round++ {
-		queued = append(queued, finishing(fmt.Sprintf("attempt %d, I finished the task.", round)))
+		queued = append(queued, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage,
+			Content: fmt.Sprintf("attempt %d, I finished the task.", round)})
 	}
 	spawned := spawnOneSubAgent(t, review, queued)
 

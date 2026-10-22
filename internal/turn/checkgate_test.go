@@ -31,7 +31,7 @@ func TestATsDevWhoseLastTypecheckFoundAnErrorIsReopened(t *testing.T) {
 	t.Cleanup(checkers.Close)
 	base := Config{
 		Model: &stubModel{decisions: []llm.Decision{
-			edited("src/users.ts"), called("test", map[string]any{}), called("typecheck", map[string]any{}), finishDecision("done"),
+			edited("src/users.ts"), called("test", map[string]any{}), called("typecheck", map[string]any{}), claimDecision("done"),
 		}},
 		Spend:          SpendAPIKey,
 		Tools:          NewRegistry(scriptedCheck("edit"), scriptedCheck("test"), typecheckIn{dir: dir, checkers: checkers}),

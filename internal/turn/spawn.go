@@ -685,8 +685,7 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 	if subAgent.Plan != nil {
 		subAgent.Plan = plan.shown
 	}
-	finish := finishTool{}
-	owned = append(owned, watchedTool{tool: ask, held: held, definition: ask.Definition()}, watchedTool{tool: finish, held: held, definition: finish.Definition()})
+	owned = append(owned, watchedTool{tool: ask, held: held, definition: ask.Definition()})
 	subAgent.Tools = claimedTools(NewRegistry(owned...), t.base.Sessions, t.base.Session)
 	subAgent.Caps.MaxSteps, subAgent.Caps.MaxForks = cmp.Or(subAgent.Caps.MaxSteps, konst.SubAgentMaxSteps), konst.SubAgentMaxForks
 	subAgent.Caps.WallClock = cmp.Or(limits.WallClock, konst.SubAgentWallClockSeconds*time.Second)
@@ -772,11 +771,6 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 		}
 		report.Findings = append(report.Findings, subagent.Finding{Bucket: subagent.Noted, Text: "sent back " + times + ": " + strings.Join(sentBack, "; then ")})
 	}
-	result, finished := finishedWith(*last)
-	if state == subagent.Finished && endedWithoutFinish(*last) {
-		report.Findings, report.Completion = append(report.Findings, subagent.Finding{Bucket: subagent.ActOn, Text: itEndedWithoutFinish}), subagent.Blocked
-	}
-	report.conclude(result, finished, t.Project)
 	t.tree.mu.Lock()
 	t.tree.retain(claims)
 	for _, claim := range append(slices.Clone(forked), claims...) {
@@ -786,54 +780,89 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 	if t.SubAgents.Ended != nil {
 		t.SubAgents.Ended(held.definition, agent.Brief, append(forked, claims...), report, runErr == nil && state != subagent.Errored && !stoppedEarly(state, last.Outcome))
 	}
-	contract := subagent.BuildContract(agent.Brief, report.Prose, stoppedEarly(state, last.Outcome))
-	var movedTo boardy.Status
+	text := report.Text(t.proseStore())
 	if agent.Ticket != "" && t.base.Board != nil {
-		if ticket, err := t.base.Board.Get(agent.Ticket); err == nil {
-			contract = subagent.TicketContract(ticket.ID, ticket.Acceptance, report.Prose, stoppedEarly(state, last.Outcome))
-			if ticket.Status != boardy.Doing {
-				movedTo = ticket.Status
-			}
-		}
-	}
-	if finished {
-		contract = contract.Answered(result.Claims)
-	}
-	contract.Wrote = report.Wrote
-	text := report.Text(t.proseStore()) + "\n\n" + contract.Block()
-	if agent.Ticket != "" && t.base.Board != nil {
-		summary, _, _ := strings.Cut(contract.Block(), "\n")
-		reported := boardy.Event{Ticket: agent.Ticket, Kind: boardy.Reported, Actor: t.ticketActor(agent.Ticket), Author: boardy.SubAgentAuthor(t.base.Session, agent.ID), Session: t.base.Session, Agent: agent.ID, Call: site.call, Text: cmp.Or(firstLine(report.Result.Summary), report.State) + "; " + summary, Files: report.Wrote, To: movedTo}
-		if err := t.base.Board.Store.RecordTicket(reported); err != nil {
-			text += "\n\nthis report was not written to " + agent.Ticket + "'s thread: " + err.Error()
-		}
-		text += t.reportedOnBoard(agent.Ticket, reported.Actor, reported.Text)
+		text += t.reportedOnBoard(agent, site.call, report, stoppedEarly(state, last.Outcome))
 	}
 	if runs := held.runsAs(); runs != "" {
 		text = agent.ID + " ran" + runs + "\n\n" + text
 	}
-	t.roster.Concluded(agent.ID, *report.Result)
 	t.roster.Reached(agent.ID, state, text)
-	held.agent.State, held.agent.Result = state, report.Result
+	held.agent.State = state
 	if runErr != nil && state != subagent.Parked {
 		return fmt.Sprintf("sub-agent %s is %s: %v\n\n%s", agent.ID, state, runErr, text), report.Completion
 	}
 	return text, report.Completion
 }
 
-func (t *SpawnTool) reportedOnBoard(id, actor, report string) string {
+func (t *SpawnTool) reportedOnBoard(agent subagent.SubAgent, call string, report SubAgentReport, stopped bool) string {
 	board := t.base.Board
 	sizes := board.Store.EventSizes()
-	var said string
-	if ticket, err := board.Get(id); err == nil && ticket.Status == boardy.Doing {
-		if _, err := board.Comment(id, "report: "+report, actor); err != nil {
-			said += "\n\nthis report was not written to " + id + "'s Log: " + err.Error()
+	ticket, err := board.Get(agent.Ticket)
+	var lines []boardy.AcceptanceLine
+	var thread []boardy.Event
+	if err == nil {
+		lines, err = board.Store.Acceptance(ticket, nil)
+	}
+	if err == nil {
+		thread, err = board.Store.Thread(ticket.ID)
+	}
+	if err != nil {
+		return "\n\nthis report was not written to " + agent.Ticket + "'s thread: " + err.Error()
+	}
+	actor := t.ticketActor(agent.Ticket)
+	said := ""
+	for _, event := range thread {
+		switch {
+		case event.Kind == boardy.Spawned && event.Agent == agent.ID:
+			said = ""
+		case event.Kind == boardy.Commented && event.Actor == actor:
+			said = event.Text
 		}
 	}
-	if err := board.Fire(rule.WhenAfter, rule.HookAgentReport, "", id, actor); err != nil {
-		said += "\n\na board hook after agent.report failed: " + err.Error()
+	lastLine, _, _ := strings.Cut(strings.TrimSpace(report.Prose), "\n")
+	reported := boardy.Event{Ticket: agent.Ticket, Kind: boardy.Reported, Actor: actor, Author: boardy.SubAgentAuthor(t.base.Session, agent.ID), Session: t.base.Session, Agent: agent.ID, Call: call,
+		Text: firstSentences(cmp.Or(said, lastLine, report.State)), Files: report.Wrote, Verdict: verdictOf(report.Completion, stopped, lines), Acceptance: lines}
+	if ticket.Status != boardy.Doing {
+		reported.To = ticket.Status
 	}
-	return said + BoardNudges(board.Store, sizes)
+	written := "\n\n" + acceptancePrefix + ticket.ID + ", " + string(reported.Verdict) + ":"
+	for i, line := range lines {
+		written += fmt.Sprintf("\nline %d %s: %s", i+1, line.State, line.Line)
+	}
+	if err := board.Store.RecordTicket(reported); err != nil {
+		written += "\n\nthis report was not written to " + agent.Ticket + "'s thread: " + err.Error()
+	}
+	if err := board.Fire(rule.WhenAfter, rule.HookAgentReport, "", agent.Ticket, actor); err != nil {
+		written += "\n\na board hook after agent.report failed: " + err.Error()
+	}
+	return written + BoardNudges(board.Store, sizes)
+}
+
+func verdictOf(completion subagent.Completion, stopped bool, lines []boardy.AcceptanceLine) boardy.Verdict {
+	switch {
+	case stopped || completion == subagent.Blocked:
+		return boardy.VerdictBlocked
+	case completion == subagent.NeedsContext:
+		return boardy.VerdictNeedsYou
+	case completion == subagent.DoneWithConcerns || slices.ContainsFunc(lines, func(line boardy.AcceptanceLine) bool { return line.State == boardy.LineUnmet }):
+		return boardy.VerdictConcerns
+	}
+	return boardy.VerdictDone
+}
+
+const acceptancePrefix = "acceptance "
+
+func firstSentences(text string) string {
+	text, most := strings.TrimSpace(text), konst.BoardReportedSentencesMost
+	for i := 1; i < len(text); i++ {
+		if text[i] == ' ' && strings.ContainsRune(".!?", rune(text[i-1])) {
+			if most--; most == 0 {
+				return text[:i]
+			}
+		}
+	}
+	return text
 }
 
 func (t *SpawnTool) speaker() *boardy.Author {

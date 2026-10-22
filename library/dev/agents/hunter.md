@@ -26,7 +26,7 @@ When you work a ticket, its thread is the lead reading how you work. Use ticket_
 
 ## Report
 
-End by calling finish. Each finding is one entry in findings, with path:line as its cite, and body holds one block per finding, numbered, and nothing else:
+One block per finding, numbered, and nothing else:
 
 ```
 H1
@@ -37,4 +37,4 @@ trigger: the input or sequence that reaches it
 why: what the code does there, quoting the line
 ```
 
-consulted lists the files you read. With no finding, say so in summary.
+End with the files you read. With no finding, say so and list the files.

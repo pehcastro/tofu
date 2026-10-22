@@ -22,9 +22,10 @@ const SpawnAddendum = "spawn hands one piece of work to a sub-agent with its own
 	"and returns what the sub-agent did rather than its transcript: give each separable piece its own sub-agent, with paths that do not overlap another sub-agent's. " +
 	ContractAddendum
 
-const ContractAddendum = "if you were spawned as a sub-agent, end your work by calling finish: it carries your report to the lead, and a turn that ends without it is sent back once and then reported blocked. " +
-	"when your own brief names a ticket with an ## Acceptance section, finish's claims carry every acceptance line, copied exactly as given, with the real command that proved it and the real output it printed, whatever met says: " +
-	"a line with no command and no output behind it is counted as omitted, not as met. " +
+const ContractAddendum = "if you were spawned as a sub-agent, your last message is your report to the lead: where you ended, in plain sentences, with no heading and no bold label. " +
+	"when your brief names a ticket with an ## Acceptance section, prove each line you can with ticket_log kind evidence naming that line, the real command and the output it printed, " +
+	"say where you ended with ticket_log kind say in one or two sentences, and move the ticket to review with ticket_move, putting in leave the lines that are not yours to prove. " +
+	"a line with no evidence entry naming it and not in leave is unmet, and the move to review is refused while one is. " +
 	"an empty output is still a pass when the command ran and printed nothing, such as a formatter finding nothing to complain about. " +
 	"the shape is at library/general/references/contract.md."
 

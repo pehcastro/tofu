@@ -40,7 +40,6 @@ type SubAgentReport struct {
 	Asked      []subagent.Question `json:"asked,omitempty"`
 	Prose      string              `json:"prose,omitempty"`
 	ProseStep  int                 `json:"prose_step,omitempty"`
-	Result     *subagent.Result    `json:"result,omitempty"`
 }
 
 func reportOf(agent subagent.SubAgent, forked, attempts []Row, state subagent.State) SubAgentReport {
@@ -67,9 +66,6 @@ func reportOf(agent subagent.SubAgent, forked, attempts []Row, state subagent.St
 		report.Steps, report.CostUSD = report.Steps+len(segment.Steps), report.CostUSD+segment.TotalCostUSD
 		for _, step := range segment.Steps {
 			for _, call := range step.ToolCalls {
-				if call.Tool == FinishToolName {
-					continue
-				}
 				ran := SubAgentCommand{Tool: call.Tool, Command: call.Command, ExitCode: call.ExitCode, Error: call.Error}
 				if call.Proxy != nil {
 					ran.Asked = call.Proxy.Asked
@@ -213,8 +209,7 @@ func (r SubAgentReport) Text(store *recall.Store) string {
 			fmt.Fprintf(body, "  attempt %d, %s, tried %s, ended %s\n", i+1, attempt.ID, attempt.Tried, attempt.Outcome)
 		}
 	}
-	finished := r.Result != nil && r.Result.Measured.Finished
-	if len(r.Wrote) > 0 && !finished {
+	if len(r.Wrote) > 0 {
 		fmt.Fprintf(body, "wrote %s\n", strings.Join(r.Wrote, ", "))
 	}
 	for _, finding := range r.Findings {
@@ -227,11 +222,7 @@ func (r SubAgentReport) Text(store *recall.Store) string {
 		fmt.Fprintf(body, "asks a %s: %s\n", question.Kind, question.Ask)
 	}
 	prose, spoke := r.Prose, "its last message"
-	switch {
-	case finished:
-		body.WriteString(r.Result.Text())
-		prose, spoke = r.Result.Body, "its body"
-	case r.ProseStep > 0 && r.ProseStep < r.Steps:
+	if r.ProseStep > 0 && r.ProseStep < r.Steps {
 		spoke = fmt.Sprintf("it last spoke at step %d of %d", r.ProseStep, r.Steps)
 	}
 	if prose == "" {
@@ -264,7 +255,7 @@ func (t *SpawnTool) boardLine(reports string) string {
 	}
 	line := fmt.Sprintf("board: %d of %d sub-agents running", w.running, w.limit)
 	for _, said := range strings.Split(reports, "\n") {
-		if !strings.HasPrefix(said, "contract ") {
+		if !strings.HasPrefix(said, acceptancePrefix) {
 			continue
 		}
 		if id := subagent.TicketID(said); w.status[id] != "" {

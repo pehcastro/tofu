@@ -7,5 +7,5 @@
 {"text":"CRONLEAD the worker still runs"}
 {"text":"spare reply one"}
 {"text":"spare reply two"}
-{"agent":"c1","text":"FIRSTREPORT the first part is done","tools":[{"name":"finish","args":{"verdict":"done","summary":"FIRSTREPORT the first part is done","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"the cassette says so"}}}]}
+{"agent":"c1","text":"FIRSTREPORT the first part is done"}
 {"agent":"c1","thinking":"SUBWORKING the worker keeps working","text":"the worker keeps writing","unfinished":true}

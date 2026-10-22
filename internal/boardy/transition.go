@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"tofu/internal/rule"
+	"tofu/internal/subagent"
 )
 
 func (m Managed) Create(key string, ticket Ticket, actor string) (Ticket, error) {
@@ -91,6 +92,10 @@ func (m Managed) created(key string, ticket Ticket, actor, replaces string, dept
 }
 
 func (m Managed) Move(id string, to Status, reason, actor string) (Ticket, error) {
+	return m.MoveLeaving(id, to, reason, actor, nil)
+}
+
+func (m Managed) MoveLeaving(id string, to Status, reason, actor string, leave []int) (Ticket, error) {
 	ticket, board, err := m.ticketOnBoard(id)
 	if err != nil {
 		return ticket, err
@@ -98,18 +103,19 @@ func (m Managed) Move(id string, to Status, reason, actor string) (Ticket, error
 	if err := m.mayMove(m.role(board, actor), ticket, to, actor); err != nil || ticket.Status == to {
 		return ticket, err
 	}
-	return m.move(board, ticket, to, reason, actor, 0)
+	return m.move(board, ticket, to, reason, actor, 0, leave)
 }
 
-func (m Managed) move(board Board, ticket Ticket, to Status, reason, actor string, depth int) (Ticket, error) {
+func (m Managed) move(board Board, ticket Ticket, to Status, reason, actor string, depth int, leave []int) (Ticket, error) {
 	if err := m.validMove(board, ticket, to); err != nil {
 		return ticket, err
 	}
 	s := m.subjectOf(moveEvent(to), board.Key, ticket, to, actor, depth)
+	s.leave = leave
 	if err := m.gate(&s); err != nil {
 		return ticket, err
 	}
-	moved, err := m.Local.Move(ticket.ID, to, reason, actor)
+	moved, err := m.Local.Move(ticket.ID, to, reason, actor, leave)
 	if err != nil {
 		return moved, err
 	}
@@ -176,8 +182,15 @@ func (m Managed) Comment(id, text, actor string) (Ticket, error) {
 	return m.appended(id, Commented, text, actor)
 }
 
-func (m Managed) Evidence(id, text, actor string) (Ticket, error) {
-	return m.appended(id, Evidence, text, actor)
+func (m Managed) Evidence(id, text, actor string, line int) (Ticket, error) {
+	ticket, board, err := m.mayAppend(id, actor)
+	if err != nil {
+		return ticket, err
+	}
+	if lines := len(subagent.InForce(ticket.Acceptance)); line < 0 || line > lines {
+		return ticket, fmt.Errorf("line counts %s's acceptance lines from 1, and it has %d", id, lines)
+	}
+	return m.entry(board, ticket, Event{Kind: Evidence, Text: text, Line: line}, actor, 0)
 }
 
 func (m Managed) appended(id string, kind EventKind, text, actor string) (Ticket, error) {
@@ -185,30 +198,30 @@ func (m Managed) appended(id string, kind EventKind, text, actor string) (Ticket
 	if err != nil {
 		return ticket, err
 	}
-	return m.entry(board, ticket, kind, text, actor, 0)
+	return m.entry(board, ticket, Event{Kind: kind, Text: text}, actor, 0)
 }
 
-func (m Managed) evidenceOf(id string) (int, int, error) {
+func (m Managed) evidenceRunes(id string) (int, error) {
 	thread, err := m.Store.Thread(id)
-	entries, runes := 0, 0
+	runes := 0
 	for _, event := range thread {
 		if event.Kind == Evidence {
-			entries, runes = entries+1, runes+utf8.RuneCountInString(event.Text)
+			runes += utf8.RuneCountInString(event.Text)
 		}
 	}
-	return entries, runes, err
+	return runes, err
 }
 
 func (m Managed) comment(board Board, ticket Ticket, text, actor string, depth int) (Ticket, error) {
-	return m.entry(board, ticket, Commented, text, actor, depth)
+	return m.entry(board, ticket, Event{Kind: Commented, Text: text}, actor, depth)
 }
 
-func (m Managed) entry(board Board, ticket Ticket, kind EventKind, text, actor string, depth int) (Ticket, error) {
+func (m Managed) entry(board Board, ticket Ticket, event Event, actor string, depth int) (Ticket, error) {
 	s := m.subjectOf(rule.HookTicketLog, board.Key, ticket, ticket.Status, actor, depth)
 	if err := m.gate(&s); err != nil {
 		return ticket, err
 	}
-	logged, err := m.appendLog(ticket.ID, text, actor, Event{Kind: kind, Text: text})
+	logged, err := m.appendLog(ticket.ID, event.Text, actor, event)
 	if err != nil {
 		return logged, err
 	}
@@ -305,7 +318,7 @@ func (m Managed) validMove(board Board, ticket Ticket, to Status) error {
 		return RefusedError{Ticket: ticket.ID, Why: "its Log is empty, and a ticket reaches review with at least one entry"}
 	}
 	if to == Review && board.LogToReview > 0 {
-		_, runes, err := m.evidenceOf(ticket.ID)
+		runes, err := m.evidenceRunes(ticket.ID)
 		if err != nil {
 			return err
 		}

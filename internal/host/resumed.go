@@ -21,11 +21,10 @@ type recordedCall struct {
 }
 
 type recordedReport struct {
-	agent  string
-	state  roster.State
-	text   string
-	result *roster.Result
-	drawn  bool
+	agent string
+	state roster.State
+	text  string
+	drawn bool
 }
 
 type resumedLead struct {
@@ -140,10 +139,10 @@ func (l *resumedLead) read(store *session.Store, id string) {
 
 func (l *resumedLead) note(event session.Event) {
 	if event.Kind == session.EventReport {
-		var report turn.ReportBody
+		var report session.ReportBody
 		_ = json.Unmarshal(event.Body, &report)
 		if at := slices.IndexFunc(roster.States(), func(state roster.State) bool { return state.String() == report.State }); at >= 0 && report.Text != "" {
-			l.reports = append(l.reports, recordedReport{agent: event.Agent, state: roster.States()[at], text: report.Text, result: report.Result})
+			l.reports = append(l.reports, recordedReport{agent: event.Agent, state: roster.States()[at], text: report.Text})
 		}
 		return
 	}
@@ -254,7 +253,7 @@ func (l *resumedLead) reportsIn(task string) (string, bool) {
 			continue
 		}
 		at := slices.IndexFunc(l.rows, func(row SubAgentRow) bool { return row.Name == report.agent })
-		l.rows[at].State, l.rows[at].Report, l.rows[at].Result, report.drawn = report.state, report.text, report.result, true
+		l.rows[at].State, l.rows[at].Report, report.drawn = report.state, report.text, true
 		l.rows[at].endedAs(l.runs[report.agent])
 		l.show()
 		task, drew = strings.Replace(task, report.text, "", 1), true
@@ -365,7 +364,7 @@ func (l *resumedLead) settleTheRunning(store *session.Store, id string) {
 		}
 		for _, report := range l.reports {
 			if report.agent == row.Name {
-				row.Report, row.Result = report.text, report.result
+				row.Report = report.text
 			}
 		}
 	}

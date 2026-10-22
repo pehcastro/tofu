@@ -900,7 +900,7 @@ func (b *Inbox) ended(held *heldSubAgent, report, source string, stopping bool, 
 		b.items = append(b.items, inboxItem{text: report, source: source, posted: time.Now()})
 	}
 	if report != "" && log != nil {
-		if _, err := log.Append(session.Event{Agent: held.agent.ID, Kind: session.EventReport}, ReportBody{ReportBody: session.ReportBody{State: held.agent.State.String(), Text: report}, Result: held.agent.Result}); err != nil {
+		if _, err := log.Append(session.Event{Agent: held.agent.ID, Kind: session.EventReport}, session.ReportBody{State: held.agent.State.String(), Text: report}); err != nil {
 			b.unclosed = append(b.unclosed, err)
 		}
 	}

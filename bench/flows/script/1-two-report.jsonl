@@ -1,6 +1,6 @@
 {"text":"spawning two","tools":[{"name":"spawn","args":{"task":"alpha worker: write the alpha note","owns":["alpha/**"]}},{"name":"spawn","args":{"task":"beta worker: write the beta note","owns":["beta/**"]}}]}
 {"text":"LEADANSWER both workers reported"}
-{"agent":"c1","text":"FIRSTREPORT the first worker is done","tools":[{"name":"finish","args":{"verdict":"done","summary":"FIRSTREPORT the first worker is done","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"the cassette says so"}}}]}
-{"agent":"c2","text":"SECONDREPORT the second worker is done","tools":[{"name":"finish","args":{"verdict":"done","summary":"SECONDREPORT the second worker is done","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"the cassette says so"}}}]}
+{"agent":"c1","text":"FIRSTREPORT the first worker is done"}
+{"agent":"c2","text":"SECONDREPORT the second worker is done"}
 {"text":"spare reply one"}
 {"text":"spare reply two"}

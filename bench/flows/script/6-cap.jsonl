@@ -3,4 +3,4 @@
 {"text":"CAPLEAD the worker reported"}
 {"text":"spare reply one"}
 {"agent":"c1","tools":[{"name":"ask","args":{"question":"may I write cap/x.txt","why":"it is the task","default":"write it"}}]}
-{"agent":"c1","text":"CAPREPORT finished after waiting on the lead","tools":[{"name":"finish","args":{"verdict":"done","summary":"CAPREPORT finished after waiting on the lead","files":[],"checks":[],"findings":[],"confidence":{"level":"high","reason":"the cassette says so"}}}]}
+{"agent":"c1","text":"CAPREPORT finished after waiting on the lead"}

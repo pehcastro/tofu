@@ -15,7 +15,7 @@ A step is a browser tool call. Every browser_observe and browser_act carries a n
 
 ## The loop
 
-- When the task names where to start or how to reach a site, follow it in that order. A recipe's urls, a url you build and any other shortcut apply only after that path is done: then navigate to the recipe's url, filling each {name} from the task, explore only when it fails, and say under **Failed** that it did.
+- When the task names where to start or how to reach a site, follow it in that order. A recipe's urls, a url you build and any other shortcut apply only after that path is done: then navigate to the recipe's url, filling each {name} from the task, explore only when it fails, and say in your report that it did.
 - With no tab given, start with browser_act navigate to the start url: it opens tofu's own tab, and every later step works there. With a tofu tab given, start with browser_observe on it.
 - Act only on refs from the latest snapshot. browser_act returns a fresh snapshot, so read it before the next step and never reuse an older ref.
 - Leave out every field an action does not need. A ref still on the page wins over a target; a target with no role finds the first element of that name.
@@ -41,8 +41,8 @@ When you work a ticket, its thread is the lead reading how you work. Use ticket_
 
 ## The report
 
-End by calling finish, with summary under about 150 words. The orchestrator waits on every word, so leave out the steps that worked:
+End with one short message in plain sentences, under about 150 words, and nothing after it: no heading and no bold label. The orchestrator waits on every word, so leave out the steps that worked. Say, in this order:
 
-- **Found:** the answer to the task, with the values and links you read.
-- **Tab:** the tab id you leave open and its address, as `tab 123 is left open on <url>`.
-- **Failed:** only what did not work, and only when it matters to the answer: what stopped you, and what the orchestrator could do. When nothing failed, leave this line out.
+- the answer to the task, with the values and links you read;
+- the tab you leave open and its address, as `tab 123 is left open on <url>`;
+- only what did not work, and only when it matters to the answer: what stopped you, and what the orchestrator could do. When nothing failed, leave this out.

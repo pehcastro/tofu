@@ -23,7 +23,7 @@ When you work a ticket, its thread is the lead reading how you work. Use ticket_
 
 ## Report
 
-End by calling finish. body holds one block per finding, with the hunter's number, and nothing else:
+One block per finding, with the hunter's number, and nothing else:
 
 ```
 H1
@@ -32,4 +32,4 @@ confidence: 0-100
 evidence: the quoted line and its path:line that decides it
 ```
 
-summary names the numbers you accepted.
+End with the numbers you accepted.

@@ -17,7 +17,6 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/rule"
-	"tofu/internal/subagent"
 	"tofu/internal/sys"
 )
 
@@ -36,6 +35,7 @@ type subject struct {
 	actor    string
 	depth    int
 	entered  time.Time
+	leave    []int
 }
 
 func (m Managed) subjectOf(event rule.HookEvent, key string, ticket Ticket, to Status, actor string, depth int) subject {
@@ -227,37 +227,23 @@ func (m Managed) check(h rule.Hook, s subject) (string, bool, error) {
 }
 
 func (m Managed) unevidenced(s subject) string {
-	lines := len(subagent.TicketContract(s.ticket.ID, s.ticket.Acceptance, "", false).Claims)
-	if lines == 0 {
-		return s.ticket.ID + " has no acceptance lines to evidence"
-	}
-	events, err := m.Store.Events(s.key, 0)
-	if err != nil {
-		return "its reports could not be read: " + err.Error()
-	}
-	var last subagent.Summary
-	found := false
-	for _, event := range events {
-		if summary, ok := subagent.ReadSummary(event.Text); ok && event.Ticket == s.ticket.ID && event.Kind == Reported {
-			last, found = summary, true
-		}
-	}
-	logged, _, err := m.evidenceOf(s.ticket.ID)
+	lines, err := m.Store.Acceptance(s.ticket, s.leave)
 	switch {
 	case err != nil:
 		return "its evidence could not be read: " + err.Error()
-	case !found && logged < lines:
-		return fmt.Sprintf("no sub-agent report on %s carries a contract, and it has %d evidence entries for %d acceptance lines", s.ticket.ID, logged, lines)
-	case !found:
-		return ""
-	case last.Partial:
-		return "its last report is partial: the sub-agent was stopped before it finished"
-	case last.Lines != lines:
-		return fmt.Sprintf("its last contract covers %d acceptance lines and Acceptance now has %d", last.Lines, lines)
-	case last.Omitted > 0:
-		return fmt.Sprintf("its last contract omits %d of %d acceptance lines", last.Omitted, last.Lines)
+	case len(lines) == 0:
+		return s.ticket.ID + " has no acceptance lines to evidence"
 	}
-	return ""
+	var unmet []string
+	for i, line := range lines {
+		if line.State == LineUnmet {
+			unmet = append(unmet, fmt.Sprintf("line %d, %s", i+1, line.Line))
+		}
+	}
+	if len(unmet) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d of %d acceptance lines are unmet, with no evidence entry naming them and not left for the lead: %s", len(unmet), len(lines), strings.Join(unmet, "; "))
 }
 
 type trial struct {
@@ -457,7 +443,7 @@ func (m Managed) effect(h rule.Hook, s subject) error {
 		}
 		switch h.Action.Do {
 		case rule.DoMove:
-			_, err = m.move(board, ticket, Status(arg), "hook "+h.ID, actor, depth)
+			_, err = m.move(board, ticket, Status(arg), "hook "+h.ID, actor, depth, nil)
 		case rule.DoAssign:
 			_, err = m.assign(board, ticket, arg, actor, depth)
 		case rule.DoLog:
