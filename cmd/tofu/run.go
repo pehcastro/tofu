@@ -26,7 +26,6 @@ import (
 	"tofu/internal/judge/question"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
-	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/llm/wire/codex"
@@ -66,7 +65,8 @@ const (
 	gateShadow         = "shadow"
 	gateEnforce        = "enforce"
 
-	openRouterDefaultModel = "anthropic/claude-opus-5"
+	openRouterDefaultModel     = "anthropic/claude-opus-5"
+	openRouterEndpointVariable = "TOFU_OPENROUTER_ENDPOINT"
 )
 
 func runWires() []string { return []string{wireSubscription, wireCodex, wireKey} }
@@ -1082,17 +1082,15 @@ func turnTransportConfig() transport.Config {
 }
 
 func keyModel(model string) (turn.Model, error) {
-	key, err := jev.Key(".env")
+	facts := keyFactsOf(roleLLM, openRouterName)
+	key, err := jev.KeyFor(sys.CredentialFileName, facts.variable)
 	if err != nil {
-		return nil, err
-	}
-	prompting, err := cred.NewLLMKey(cred.OpenRouter, key)
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("no %s %s key, run %s: %w", facts.name, facts.role, facts.hint(), err)
 	}
 	wire, err := openrouter.New(openrouter.Config{
+		Endpoint:  os.Getenv(openRouterEndpointVariable),
 		Model:     model,
-		Key:       prompting.Prompt(),
+		Key:       key,
 		Transport: turnTransportConfig(),
 	})
 	if err != nil {

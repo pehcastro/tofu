@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	loginUsage       = "tofu login llm <claude-sub|codex-sub> [--paste], tofu login llm <meta|openrouter>, tofu login classifier typesafe, tofu login search brave"
+	loginUsage       = "tofu login llm <claude-sub|codex-sub> [--paste], tofu login llm <meta|openrouter>, tofu login classifier <openrouter|typesafe>, tofu login search brave"
 	logoutUsage      = "tofu logout <llm|classifier|search> <provider> [number from tofu login --status]"
 	asideUsage       = "tofu login --disable|--enable <number from tofu login --status>"
 	setAsideCause    = "set aside by hand, run tofu login --enable to bring it back"
@@ -38,7 +38,7 @@ const (
 	metaName         = string(models.Meta)
 	braveName        = "brave"
 	braveDisplay     = "Brave"
-	openRouterFix    = "run tofu login llm openrouter and paste the key when it asks"
+	openRouterFix    = "run tofu login classifier openrouter and paste the key when it asks"
 	minttyEchoes     = "this terminal shows what is typed, so the key will stay on screen: pipe it in instead, tofu login <role> <provider> < key.txt"
 	stillResolved    = ", and the one in use is still set in the environment or a .env, which tofu does not change"
 	accountMarkBytes = 2
@@ -56,12 +56,10 @@ const (
 	roleSearch     = host.RoleSearch
 )
 
-func roleOf(provider string) role {
-	switch provider {
-	case typeSafeName:
-		return roleClassifier
-	case braveName:
-		return roleSearch
+func firstRoleOf(provider string) role {
+	table := keyTable()
+	if at := slices.IndexFunc(table, func(fact keyFacts) bool { return fact.provider == provider }); at >= 0 {
+		return table[at].role
 	}
 	return roleLLM
 }
@@ -70,16 +68,20 @@ func isRole(word string) bool {
 	return slices.Contains([]role{roleLLM, roleClassifier, roleSearch}, role(word))
 }
 
-func loginWords(provider string) []string { return []string{string(roleOf(provider)), provider} }
+func loginWords(provider string) []string { return []string{string(firstRoleOf(provider)), provider} }
 
-func commandFor(verb, provider string) string {
-	return "tofu " + verb + " " + strings.Join(loginWords(provider), " ")
+func commandFor(verb string, of role, provider string) string {
+	return "tofu " + verb + " " + string(of) + " " + provider
 }
 
-func loginHint(provider string) string { return commandFor("login", provider) }
+func loginHint(provider string) string { return commandFor("login", firstRoleOf(provider), provider) }
 
 func keyedProvider(provider string) bool {
-	return slices.Contains([]string{openRouterName, typeSafeName, metaName, braveName}, provider)
+	return slices.ContainsFunc(keyTable(), func(fact keyFacts) bool { return fact.provider == provider })
+}
+
+func keyedUnder(of role, provider string) bool {
+	return slices.ContainsFunc(keyTable(), func(fact keyFacts) bool { return fact.role == of && fact.provider == provider })
 }
 
 type loginRefusal struct {
@@ -107,7 +109,7 @@ func failure(what, hint string) *loginRefusal {
 	return &loginRefusal{cli.Problem{What: what, Hint: hint}, exitVerdict}
 }
 
-func refusedBy(display, name string, err error) *loginRefusal {
+func refusedBy(display, hint string, err error) *loginRefusal {
 	var refused *models.KeyRefused
 	var answered *transport.Error
 	what := err.Error()
@@ -119,7 +121,7 @@ func refusedBy(display, name string, err error) *loginRefusal {
 	case errors.As(err, &answered):
 		what = "could not reach " + display
 	}
-	return failure(what, loginHint(name))
+	return failure(what, hint)
 }
 
 func loginVerb(args []string, in io.Reader, out, errOut io.Writer) int {
@@ -175,10 +177,11 @@ func login(args []string, in io.Reader, prompts io.Writer, now time.Time) (login
 		return loginReceipt{}, refusal
 	}
 	if spec.Provider == "" {
+		facts := keyFactsOf(role(args[0]), args[1])
 		if len(args) > 2 {
-			return loginReceipt{}, usageRefusal("a key is read from a prompt, never from an argument", loginHint(args[1]))
+			return loginReceipt{}, usageRefusal("a key is read from a prompt, never from an argument", facts.hint())
 		}
-		return loginKey(args[1], in, prompts)
+		return loginKey(facts, in, prompts)
 	}
 	paste := false
 	for _, arg := range args[2:] {
@@ -210,11 +213,13 @@ func providerFor(verb string, want role, args []string) (cred.Spec, *loginRefusa
 	spec, err := cred.Lookup(provider)
 	switch {
 	case err == nil && string(spec.Provider) != provider:
-		return cred.Spec{}, usageRefusal(provider+" is now "+string(spec.Provider), commandFor(verb, string(spec.Provider)))
+		return cred.Spec{}, usageRefusal(provider+" is now "+string(spec.Provider), commandFor(verb, roleLLM, string(spec.Provider)))
+	case err == nil && want != roleLLM:
+		return cred.Spec{}, usageRefusal(provider+" is under "+string(roleLLM)+", not "+string(want), commandFor(verb, roleLLM, provider))
 	case err != nil && !keyedProvider(provider):
 		return cred.Spec{}, usageRefusal("unknown provider "+provider, loginUsage)
-	case roleOf(provider) != want:
-		return cred.Spec{}, usageRefusal(provider+" is under "+string(roleOf(provider))+", not "+string(want), commandFor(verb, provider))
+	case err != nil && !keyedUnder(want, provider):
+		return cred.Spec{}, usageRefusal(provider+" has no "+string(want)+" key", loginHint(provider))
 	}
 	return spec, nil
 }
@@ -231,9 +236,9 @@ func logout(args []string) (loginReceipt, *loginRefusal) {
 	case refusal != nil:
 		return loginReceipt{}, refusal
 	case spec.Provider == "" && len(args) > 2:
-		return loginReceipt{}, usageRefusal("a key has no number", commandFor("logout", args[1]))
+		return loginReceipt{}, usageRefusal("a key has no number", commandFor("logout", role(args[0]), args[1]))
 	case spec.Provider == "":
-		return removeKey(args[1])
+		return removeKey(keyFactsOf(role(args[0]), args[1]))
 	case len(args) > 3:
 		return loginReceipt{}, usageRefusal("want at most one credential number", logoutUsage)
 	}
@@ -245,21 +250,21 @@ func resolvedKey(variable string) string {
 	return key
 }
 
-func removeKey(provider string) (loginReceipt, *loginRefusal) {
-	before := keyStatusOf(provider, resolvedKey)
-	removed, err := sys.RemoveKey(before.Variable)
+func removeKey(facts keyFacts) (loginReceipt, *loginRefusal) {
+	before := facts.status(resolvedKey)
+	removed, err := sys.RemoveKey(facts.variable)
 	if err != nil {
 		return loginReceipt{}, failure(err.Error(), "")
 	}
-	after := keyStatusOf(provider, resolvedKey)
+	after := facts.status(resolvedKey)
 	tail := ""
 	if after.Key != "" {
 		tail = stillResolved
 	}
 	if !removed {
-		return loginReceipt{}, failure("no "+keyFactsOf(provider).name+" key is stored"+tail, "tofu login --status")
+		return loginReceipt{}, failure("no "+facts.name+" key is stored"+tail, "tofu login --status")
 	}
-	return loginReceipt{text: keyFactsOf(provider).name + " key " + before.Key + " removed" + tail, data: after}, nil
+	return loginReceipt{text: facts.name + " key " + before.Key + " removed" + tail, data: after}, nil
 }
 
 func removeAccount(provider cred.Provider, number []string) (loginReceipt, *loginRefusal) {
@@ -277,7 +282,7 @@ func removeAccount(provider cred.Provider, number []string) (loginReceipt, *logi
 		return loginReceipt{}, failure(err.Error(), "")
 	}
 	rows = slices.DeleteFunc(rows, func(row cred.Row) bool { return row.Credential.Provider != provider })
-	hint := commandFor("logout", string(provider)) + " <number>"
+	hint := commandFor("logout", roleLLM, string(provider)) + " <number>"
 	switch {
 	case len(rows) == 0:
 		return loginReceipt{}, none
@@ -429,7 +434,7 @@ func signIn(spec cred.Spec, paste bool, in io.Reader, prompts io.Writer, now tim
 	}
 	credential, err := cred.Login(context.Background(), options)
 	if err != nil {
-		return loginReceipt{}, refusedBy(name, name, err)
+		return loginReceipt{}, refusedBy(name, loginHint(name), err)
 	}
 	if err := store.Save(credential, now); err != nil {
 		return loginReceipt{}, failure(err.Error(), "")
@@ -446,16 +451,15 @@ func signIn(spec cred.Spec, paste bool, in io.Reader, prompts io.Writer, now tim
 	return loginReceipt{}, failure("the sign-in was stored and then not found", "tofu login --status")
 }
 
-func loginKey(name string, in io.Reader, prompts io.Writer) (loginReceipt, *loginRefusal) {
-	stored := keyStatusOf(name, func(string) string { return "" })
-	key, err := promptKey(in, prompts, keyFactsOf(name).name, stored.Variable)
+func loginKey(facts keyFacts, in io.Reader, prompts io.Writer) (loginReceipt, *loginRefusal) {
+	key, err := promptKey(in, prompts, facts.name, facts.variable)
 	if errors.As(err, &keyfield.Cancelled{}) {
-		return loginReceipt{}, usageRefusal(err.Error(), loginHint(name))
+		return loginReceipt{}, usageRefusal(err.Error(), facts.hint())
 	}
 	if err != nil {
-		return loginReceipt{}, failure(err.Error(), loginHint(name))
+		return loginReceipt{}, failure(err.Error(), facts.hint())
 	}
-	return storeKey(context.Background(), stored, key)
+	return storeKey(context.Background(), facts.status(func(string) string { return "" }), key)
 }
 
 func storeKey(ctx context.Context, stored keyStatus, key string) (loginReceipt, *loginRefusal) {
@@ -470,13 +474,14 @@ func storeKey(ctx context.Context, stored keyStatus, key string) (loginReceipt, 
 	default:
 		err = reachesJev(ctx, key)
 	}
+	facts := keyFactsOf(stored.Role, stored.Provider)
 	if err != nil {
-		return loginReceipt{}, refusedBy(keyFactsOf(stored.Provider).name, stored.Provider, err)
+		return loginReceipt{}, refusedBy(facts.name, facts.hint(), err)
 	}
 	if err := sys.SaveKey(stored.Variable, key); err != nil {
-		return loginReceipt{}, failure(err.Error(), loginHint(stored.Provider))
+		return loginReceipt{}, failure(err.Error(), facts.hint())
 	}
-	return loginReceipt{text: keyFactsOf(stored.Provider).name + " key " + stored.Key + done, data: stored}, nil
+	return loginReceipt{text: facts.name + " key " + stored.Key + done, data: stored}, nil
 }
 
 func storeKeyFor(ctx context.Context, variable, key string) (string, error) {

@@ -26,7 +26,7 @@ type Located struct {
 }
 
 const (
-	OpenRouterVariable = sys.OpenRouterKeyName
+	OpenRouterVariable = sys.OpenRouterClassifierKeyName
 	TypeSafeVariable   = sys.TypeSafeKeyName
 )
 

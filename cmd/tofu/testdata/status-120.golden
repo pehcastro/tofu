@@ -30,7 +30,8 @@ language model
   ✓ OpenRouter  ····3498  serves the openrouter models on your own key
 
 classifier · jev, required
-  ○ TypeSafe  not set  → tofu login classifier typesafe
+  ○ TypeSafe    not set  → tofu login classifier typesafe
+  ○ OpenRouter  not set  → tofu login classifier openrouter
 
 search
   ○ Brave  not set  → tofu login search brave

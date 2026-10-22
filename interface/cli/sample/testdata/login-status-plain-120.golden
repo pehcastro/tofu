@@ -18,8 +18,13 @@ claude-sub
   │ → tofu login llm claude-sub
   └─────────────────────────────────────────────────────────────────────────────────────────────────
 
-keys
-  ✓ classifier  TypeSafe    ····3498  jev's route, judges tool calls with jev-latest
-  ○ llm         OpenRouter  not set   → tofu login llm openrouter
-  ○ search      Brave       not set   → tofu login search brave
-  ○ llm         Meta        not set   → tofu login llm meta
+llm keys
+  ○ Meta        not set  → tofu login llm meta
+  ○ OpenRouter  not set  → tofu login llm openrouter
+
+classifier keys
+  ✓ TypeSafe    ····3498  jev's route, judges tool calls with jev-latest
+  ✓ OpenRouter  ····7711  a classifier key, never sent with a prompt
+
+search keys
+  ○ Brave  not set  → tofu login search brave

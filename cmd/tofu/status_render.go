@@ -83,10 +83,10 @@ func keyRows(page cli.Page, keys []keyStatus, of role) []string {
 		if key.Role != of {
 			continue
 		}
-		facts := keyFactsOf(key.Provider)
+		facts := keyFactsOf(key.Role, key.Provider)
 		row := cli.Row{Mark: cli.Done, Cells: []string{facts.name, key.Key}, Detail: facts.use}
 		if key.Key == "" {
-			row.Mark, row.Cells[1], row.Hint = cli.Idle, "not set", facts.hint
+			row.Mark, row.Cells[1], row.Hint = cli.Idle, "not set", facts.hint()
 		}
 		rows = append(rows, row)
 	}

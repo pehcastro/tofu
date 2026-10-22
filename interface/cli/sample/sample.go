@@ -118,10 +118,11 @@ func accountsData(now time.Time) accounts {
 			}},
 		},
 		Keys: []key{
-			{Role: "classifier", Service: "TypeSafe", Key: widget.Mask("made-up-typesafe-000000003498"), Use: "jev's route, judges tool calls with jev-latest"},
-			{Role: "llm", Service: "OpenRouter", Hint: "tofu login llm openrouter"},
-			{Role: "search", Service: "Brave", Hint: "tofu login search brave"},
 			{Role: "llm", Service: "Meta", Hint: "tofu login llm meta"},
+			{Role: "llm", Service: "OpenRouter", Hint: "tofu login llm openrouter"},
+			{Role: "classifier", Service: "TypeSafe", Key: widget.Mask("made-up-typesafe-000000003498"), Use: "jev's route, judges tool calls with jev-latest"},
+			{Role: "classifier", Service: "OpenRouter", Key: widget.Mask("made-up-openrouter-00000007711"), Use: "a classifier key, never sent with a prompt"},
+			{Role: "search", Service: "Brave", Hint: "tofu login search brave"},
 		},
 	}
 }
@@ -240,19 +241,23 @@ func accountsPage(page cli.Page, data accounts, now time.Time) []string {
 			body = append(body, page.Card(page.Label("#"+strconv.Itoa(account.ID))+cli.Gap+page.Subject(account.Email), verdict, lines)...)
 		}
 	}
-	rows := make([]cli.Row, len(data.Keys))
-	for i, k := range data.Keys {
-		rows[i] = cli.Row{Mark: cli.Done, Cells: []string{k.Role, k.Service, k.Key}, Detail: k.Use, Hint: k.Hint}
-		if k.Key == "" {
-			rows[i].Mark, rows[i].Cells[2] = cli.Idle, "not set"
-		}
-	}
 	verdict := cli.Verdict{Mark: cli.Done, Text: "all ready"}
 	if attention > 0 {
 		verdict = cli.Verdict{Mark: cli.Warn, Text: strconv.Itoa(attention) + " needs attention"}
 	}
 	lines := append(page.Title("Accounts", []string{strconv.Itoa(signedIn) + " signed in"}, verdict), body...)
-	lines = append(lines, "", page.Section("keys", cli.Verdict{}))
+	var rows []cli.Row
+	for i, k := range data.Keys {
+		if i == 0 || data.Keys[i-1].Role != k.Role {
+			lines = append(append(lines, cli.Indent(page.Rows(rows)...)...), "", page.Section(k.Role+" keys", cli.Verdict{}))
+			rows = nil
+		}
+		row := cli.Row{Mark: cli.Done, Cells: []string{k.Service, k.Key}, Detail: k.Use, Hint: k.Hint}
+		if k.Key == "" {
+			row.Mark, row.Cells[1] = cli.Idle, "not set"
+		}
+		rows = append(rows, row)
+	}
 	return append(lines, cli.Indent(page.Rows(rows)...)...)
 }
 

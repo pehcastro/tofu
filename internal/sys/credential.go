@@ -16,19 +16,20 @@ import (
 )
 
 const (
-	CredentialFileName     = ".env"
-	CredentialStoreName    = "agent.db"
-	OpenRouterKeyName      = "OPENROUTER_KEY"
-	TypeSafeKeyName        = "TYPESAFE_API_KEY"
-	BraveSearchKeyName     = "BRAVE_SEARCH_KEY"
-	MetaMuseKeyName        = "META_MUSE_API_KEY"
-	KeyRedactedMark        = "[key redacted]"
-	liveCredentialOptIn    = "TOFU_TEST_LIVE_CREDENTIAL"
-	credentialStoreMode    = 0o600
-	credentialStoreDirMode = 0o700
-	credentialStorePragmas = "?_txlock=immediate&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)"
-	keyTableSchema         = `CREATE TABLE IF NOT EXISTS api_keys (name TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at INTEGER NOT NULL)`
-	shortestRedactedKey    = 8
+	CredentialFileName          = ".env"
+	CredentialStoreName         = "agent.db"
+	OpenRouterKeyName           = "OPENROUTER_LLM_KEY"
+	OpenRouterClassifierKeyName = "OPENROUTER_KEY"
+	TypeSafeKeyName             = "TYPESAFE_API_KEY"
+	BraveSearchKeyName          = "BRAVE_SEARCH_KEY"
+	MetaMuseKeyName             = "META_MUSE_API_KEY"
+	KeyRedactedMark             = "[key redacted]"
+	liveCredentialOptIn         = "TOFU_TEST_LIVE_CREDENTIAL"
+	credentialStoreMode         = 0o600
+	credentialStoreDirMode      = 0o700
+	credentialStorePragmas      = "?_txlock=immediate&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)"
+	keyTableSchema              = `CREATE TABLE IF NOT EXISTS api_keys (name TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at INTEGER NOT NULL)`
+	shortestRedactedKey         = 8
 )
 
 var builtGuarded string
@@ -121,7 +122,7 @@ func assignedTo(line, name string) string {
 }
 
 func KeyNames() []string {
-	return []string{OpenRouterKeyName, TypeSafeKeyName, BraveSearchKeyName, MetaMuseKeyName}
+	return []string{OpenRouterKeyName, OpenRouterClassifierKeyName, TypeSafeKeyName, BraveSearchKeyName, MetaMuseKeyName}
 }
 
 func CredentialStorePath() (string, error) {

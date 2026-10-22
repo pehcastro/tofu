@@ -48,7 +48,12 @@ const (
 	stateUnchecked     = host.AccountUnchecked
 )
 
-type keyFacts struct{ provider, variable, name, use, hint string }
+type keyFacts struct {
+	role                          role
+	provider, variable, name, use string
+}
+
+func (f keyFacts) hint() string { return commandFor("login", f.role, f.provider) }
 
 func jevKeyUse() string {
 	model, err := typesafe.Model()
@@ -60,33 +65,33 @@ func jevKeyUse() string {
 
 func keyTable() []keyFacts {
 	return []keyFacts{
-		{metaName, sys.MetaMuseKeyName, models.Meta.Display(), "serves the meta models", loginHint(metaName)},
-		{openRouterName, sys.OpenRouterKeyName, models.OpenRouter.Display(), "serves the openrouter models on your own key", loginHint(openRouterName)},
-		{typeSafeName, sys.TypeSafeKeyName, models.TypeSafe.Display(), jevKeyUse(), loginHint(typeSafeName)},
-		{braveName, sys.BraveSearchKeyName, braveDisplay, "backs the web search tool", loginHint(braveName)},
+		{roleLLM, metaName, sys.MetaMuseKeyName, models.Meta.Display(), "serves the meta models"},
+		{roleLLM, openRouterName, sys.OpenRouterKeyName, models.OpenRouter.Display(), "serves the openrouter models on your own key"},
+		{roleClassifier, typeSafeName, sys.TypeSafeKeyName, models.TypeSafe.Display(), jevKeyUse()},
+		{roleClassifier, openRouterName, sys.OpenRouterClassifierKeyName, models.OpenRouter.Display(), "a classifier key, never sent with a prompt"},
+		{roleSearch, braveName, sys.BraveSearchKeyName, braveDisplay, "backs the web search tool"},
 	}
 }
 
-func keyFactsOf(provider string) keyFacts {
+func keyFactsOf(of role, provider string) keyFacts {
 	table := keyTable()
-	return table[slices.IndexFunc(table, func(fact keyFacts) bool { return fact.provider == provider })]
+	return table[slices.IndexFunc(table, func(fact keyFacts) bool { return fact.role == of && fact.provider == provider })]
 }
 
 func keyStatuses(resolve func(variable string) string) []keyStatus {
 	var keys []keyStatus
 	for _, fact := range keyTable() {
-		key := keyStatus{Role: roleOf(fact.provider), Provider: fact.provider, Variable: fact.variable}
-		if value := resolve(fact.variable); value != "" {
-			key.Key = widget.Mask(value)
-		}
-		keys = append(keys, key)
+		keys = append(keys, fact.status(resolve))
 	}
 	return keys
 }
 
-func keyStatusOf(provider string, resolve func(variable string) string) keyStatus {
-	keys := keyStatuses(resolve)
-	return keys[slices.IndexFunc(keys, func(key keyStatus) bool { return key.Provider == provider })]
+func (f keyFacts) status(resolve func(variable string) string) keyStatus {
+	key := keyStatus{Role: f.role, Provider: f.provider, Variable: f.variable}
+	if value := resolve(f.variable); value != "" {
+		key.Key = widget.Mask(value)
+	}
+	return key
 }
 
 func statusVerb(args []string, out, errOut io.Writer, now time.Time, urls map[quota.Provider]string) int {
