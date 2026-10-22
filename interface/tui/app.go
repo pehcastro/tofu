@@ -395,6 +395,9 @@ func New(options Options) *App {
 	app.options.Resumed = nil
 	app.view.Stop()
 	app.readWires()
+	if loaded, err := app.options.Models(); err == nil {
+		app.noteRefused(loaded)
+	}
 	app.ownPick = app.pick()
 	app.flushFeed()
 	app.syncFeed()

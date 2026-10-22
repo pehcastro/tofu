@@ -46,7 +46,7 @@ api key
   ✓ meta/muse-spark-1.1              allowed  1.05M
   ✓ meta/muse-spark-1.2              allowed  1.05M
   ⚠ meta/muse-spark-1.2-contributor  allowed  1.05M
-  ✓ meta/muse-spark-1.3              allowed  1.05M
+  ● meta/muse-spark-1.3              default  1.05M
   ⚠ meta/muse-spark-1.3-contributor  allowed  1.05M
   ✓ openrouter/jev-latest            allowed
   ✓ typesafe/jev-latest              allowed
@@ -88,7 +88,7 @@ api key
   ✓ meta/muse-spark-1.1              allowed  1.05M
   ✓ meta/muse-spark-1.2              allowed  1.05M
   ⚠ meta/muse-spark-1.2-contributor  allowed  1.05M
-  ✓ meta/muse-spark-1.3              allowed  1.05M
+  ● meta/muse-spark-1.3              default  1.05M
   ⚠ meta/muse-spark-1.3-contributor  allowed  1.05M
   ✓ openrouter/jev-latest            allowed
   ✓ typesafe/jev-latest              allowed
@@ -124,7 +124,7 @@ codex-sub/gpt-reserve excluded 0 library
 meta/muse-spark-1.1 allowed 1048576 library
 meta/muse-spark-1.2 allowed 1048576 library
 meta/muse-spark-1.2-contributor allowed 1048576 library
-meta/muse-spark-1.3 allowed 1048576 library
+meta/muse-spark-1.3 default 1048576 library
 meta/muse-spark-1.3-contributor allowed 1048576 library
 openrouter/jev-latest allowed 0 library
 typesafe/jev-latest allowed 0 library

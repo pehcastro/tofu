@@ -89,7 +89,14 @@ func layeredModels(root string) func() (library.Library, error) {
 		if err != nil {
 			return library.Library{}, err
 		}
-		return library.Load(layers)
+		loaded, _ := library.Load(layers)
+		return loaded, nil
+	}
+}
+
+func (a *App) noteRefused(loaded library.Library) {
+	if len(loaded.Broken) > 0 {
+		a.notify((&library.BrokenLibrary{Refused: loaded.Broken}).Error())
 	}
 }
 
@@ -99,6 +106,7 @@ func (a *App) openPicker(assign string) {
 		a.notify(err.Error())
 		return
 	}
+	a.noteRefused(loaded)
 	sources := make([]models.Source, 0, len(a.wires))
 	for _, wire := range a.wires {
 		sources = append(sources, models.Source{ID: library.Subscription(wire.Provider), Efforts: wire.Efforts})

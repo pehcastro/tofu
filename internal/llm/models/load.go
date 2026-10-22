@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"io/fs"
+	"maps"
 	"slices"
 	"sort"
 	"strconv"
@@ -18,6 +19,7 @@ const (
 	subscriptionsDir = "subscriptions"
 	windowsDir       = "windows"
 	pricesDir        = "prices"
+	homeLayer        = "home"
 )
 
 type Layer = sys.Layer
@@ -27,11 +29,12 @@ func Layers(shipped fs.FS, dir string) ([]Layer, error) {
 	if err != nil {
 		return nil, err
 	}
-	catalog, homeless := CatalogDir()
+	home, homeless := sys.HomeConfigDir()
 	if homeless != nil {
 		return layers, nil
 	}
-	return slices.Insert(layers, 1, sys.DirLayer(catalogLayer, catalog)), nil
+	shippedFiles, project := layers[0], layers[len(layers)-1]
+	return []Layer{shippedFiles, sys.DirLayer(catalogLayer, sys.Join(home, catalogLayer)), sys.DirLayer(homeLayer, home), project}, nil
 }
 
 type Broken struct {
@@ -75,16 +78,18 @@ func (m *merged) take(key, layer, file, body string, allowed map[string]bool) *B
 	if bad != nil {
 		return bad
 	}
+	into := m.sheetOf(key)
+	into.file, into.layer = file, layer
+	maps.Copy(into.values, values)
+	return nil
+}
+
+func (m *merged) sheetOf(key string) *sheet {
 	if m.sheets[key] == nil {
 		m.sheets[key] = &sheet{values: map[string]string{}}
 		m.order = append(m.order, key)
 	}
-	into := m.sheets[key]
-	into.file, into.layer = file, layer
-	for field, value := range values {
-		into.values[field] = value
-	}
-	return nil
+	return m.sheets[key]
 }
 
 func fieldsOf(file, body string, allowed map[string]bool) (map[string]string, *Broken) {
@@ -144,6 +149,7 @@ func Load(layers []Layer) (Library, error) {
 	for _, layer := range layers {
 		refused = append(refused, readFlat(layer, subscriptionsDir, "a subscription is one yaml file named after itself", subscriptionFields, subscriptions)...)
 		refused = append(refused, readModels(layer, modelFields, models)...)
+		refused = append(refused, readCustom(layer, models)...)
 		refused = append(refused, readFlat(layer, modelsDir+"/"+windowsDir, "a window table is one yaml file named after the vendor, a model id and its tokens per line", nil, windows)...)
 		refused = append(refused, readFlat(layer, rolesDir, "a role is one yaml file named after the role", roleFields, roles)...)
 	}
@@ -223,7 +229,8 @@ func readFlat(layer Layer, dir, why string, allowed map[string]bool, into *merge
 func readModels(layer Layer, allowed map[string]bool, into *merged) []Broken {
 	var refused []Broken
 	for _, provider := range entriesOf(layer.FS, modelsDir) {
-		if provider.Name() == windowsDir || provider.Name() == pricesDir {
+		switch provider.Name() {
+		case windowsDir, pricesDir, KindLLM.customDir(), KindClassifier.customDir():
 			continue
 		}
 		if !provider.IsDir() {

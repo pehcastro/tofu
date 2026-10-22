@@ -214,6 +214,13 @@ func chooseModel(opts runOpts) (models.Model, error) {
 		if opts.model == "" {
 			return models.Model{}, errors.New("--wire openrouter names no model: pass --model, or bind the orchestrator to an openrouter model")
 		}
+		library, err := modelLibrary(opts.dir)
+		if err != nil {
+			return models.Model{}, err
+		}
+		if listed, known := library.Resolve(opts.model); known && listed.Provider == models.OpenRouter {
+			return library.Select(listed.Slug())
+		}
 		return models.Model{ID: opts.model}, nil
 	case wireMeta:
 		library, err := modelLibrary(opts.dir)
@@ -433,6 +440,11 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	clock.step("model roles")
 	dir := cmp.Or(opts.dir, ".")
 	say := func(unreadable string) { _, _ = fmt.Fprintln(errOut, "tofu run: "+unreadable) }
+	if library, err := modelLibrary(opts.dir); err == nil {
+		for _, refused := range library.Broken {
+			say("refused " + refused.Error())
+		}
+	}
 	if opts.maxSteps == 0 {
 		opts.maxSteps = settingInt(dir, settingspkg.DecisionCap, say)
 	}

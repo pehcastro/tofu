@@ -343,7 +343,7 @@ func TestLayersPutTheCatalogBetweenTheShippedFilesAndTheHome(t *testing.T) {
 	for i, layer := range layers {
 		names[i] = layer.Name
 	}
-	if !slices.Equal(names, []string{"library", catalogLayer, "global", "project"}) {
+	if !slices.Equal(names, []string{"library", catalogLayer, homeLayer, "project"}) {
 		t.Fatalf("the layers are %v", names)
 	}
 }

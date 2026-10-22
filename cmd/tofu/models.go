@@ -97,7 +97,8 @@ func modelLibrary(dir string) (models.Library, error) {
 	if err != nil {
 		return models.Library{}, err
 	}
-	return models.Load(layers)
+	library, _ := models.Load(layers)
+	return library, nil
 }
 
 func verbFailed(out, errOut io.Writer, verb string, asJSON bool, err error) int {
@@ -118,8 +119,7 @@ func bindVerb(args []string, out, errOut io.Writer) int {
 	}
 	role, slug := models.RoleID(args[0]), args[1]
 	library, err := modelLibrary("")
-	var broken *models.BrokenLibrary
-	if err != nil && !errors.As(err, &broken) {
+	if err != nil {
 		return o.fail(err)
 	}
 	if _, err := library.Fits(role, slug); err != nil {
@@ -170,8 +170,18 @@ func modelsVerb(args []string, out, errOut io.Writer) int {
 		return verbFailed(out, errOut, "models", asJSON, err)
 	}
 	report := modelsOf(library, registry)
-	return show(out, asJSON, cli.Envelope{Verb: "models", OK: true, At: time.Now(), Data: report},
-		func(page cli.Page) []string { return modelsLines(page, report) })
+	problems := make([]cli.Problem, len(library.Broken))
+	for i, refused := range library.Broken {
+		problems[i] = cli.Problem{What: "refused " + refused.Error()}
+	}
+	return show(out, asJSON, cli.Envelope{Verb: "models", OK: len(problems) == 0, At: time.Now(), Data: report, Problems: problems},
+		func(page cli.Page) []string {
+			lines := modelsLines(page, report)
+			for _, problem := range problems {
+				lines = append(lines, page.ErrorLine(problem.What, "")...)
+			}
+			return lines
+		})
 }
 
 func show(out io.Writer, asJSON bool, envelope cli.Envelope, lines func(cli.Page) []string) int {
