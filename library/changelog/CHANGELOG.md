@@ -10,18 +10,37 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
-## 0.5.15-rc15 - 2026-10-22
+## 0.5.16 - 2026-10-22
+
+Your settings choose every model and provider, work keeps going when a subscription runs out, and a ticket's thread reads as the team talking.
 
 ### Changed
 
-- A ticket's thread reads as the team talking: a spawn is one handoff line naming the engineer and its mission, with the full `brief` kept apart; an engineer's said entry is at most three sentences; proof goes in evidence entries, logged with `tofu boardy log --evidence` or `ticket_log` kind evidence, which `show --thread` folds into one count and the Log keeps for review; empty moves leave the thread. On a recorded run the thread is 77% shorter with every acceptance line still carrying its evidence.
-- Jev goes through TypeSafe only. `tofu login classifier` takes `typesafe`, and an OpenRouter key serves only a chat model of your own, set with `tofu login llm`.
-- Jev decides whether the lead's reply answered a message you sent mid-turn, instead of a list of phrases.
+- tofu writes no model, provider or order into its code. Every role (orchestrator, sub-agent, classifier) runs what you bind with `tofu models bind <role> <provider/model>` or in Models; with nothing bound it says so in one sentence and setup asks. Keys are stored per model type: `tofu login classifier typesafe` or `openrouter`, and `tofu login llm openrouter` for a chat model on your own key. Every classifier call goes through the provider you bind.
+- When a subscription runs out, the turn moves on its own to the model you chose, with a one-line notice: `continueOnSubscription`, `subscriptionOrder` and `continueOnAPIModel` in Settings, Models & roles. With nothing set, the work stops and names the fields. The lead, its sub-agents and cron all follow it.
+- Your sub-agent binding is the model every sub-agent runs that names no model of its own; a per-agent model still wins.
+- A model or settings change reaches every open window and the session holder on the next turn, with no `/reload`.
 - `leadCache` sets how long the lead's subscription prompt cache lives: `1h` by default, `5m`, or `history-5m`.
+- A ticket's thread reads as the team talking: a spawn is one handoff line naming the engineer and its mission, with the full `brief` kept apart; an engineer says what it decided or needs in at most three sentences; proof goes in evidence entries (`tofu boardy log --evidence`) that `show --thread` folds into one count; a report says where the work ended, with a verdict and each acceptance line's state; a question and its answer read as two people; every voice names its role, harness and model. On a recorded run the thread is 78% shorter with every acceptance line still carrying its evidence.
+- Jev decides whether the lead's reply answered a message you sent mid-turn.
+- A permission request carries the agent's reason and a risk level, can be allowed for an hour, and can be revoked.
+- Every message in a session carries a typed origin, so only your own words show as you.
+- While sub-agents work and the lead waits, its status is one line: waiting, the sub-agents, and how many are in bash.
+
+### Added
+
+- Custom models: a `.json` file in `.tofu/models/llms` or `.tofu/models/classifiers`, in your home or a project, adds a model; a file tofu cannot use shows its reason and blocks nothing.
+- Over `tofu serve`: tool results carry a typed summary (exit, duration, hits, lines added and removed) and bash takes a title; Boardy rows carry type, points, reason, model and tool counts; the session trace gives every call, request and sub-agent run a start offset; `models.changed` reports a binding or model change.
 
 ### Fixed
 
-- `tofu session` says what history a session holds, fresh or carried and from where, instead of a count that read as if it took the app's messages.
+- A second window finds a busy session holder wherever its temp folder is, instead of taking the session over; one that cannot reach the holder says it only follows.
+- `tofu session` says what history a session holds, fresh or carried and from where.
+
+### Upgrading
+
+- Close every tofu window and its session holder before installing, since an older holder and this build do not find each other.
+- A home that ran the lead or Jev with nothing bound now asks for a binding: run `tofu models bind orchestrator <source/model>` and `tofu models bind classifier <provider/model>` with what you used before.
 
 ## 0.5.15-rc14 - 2026-10-21
 
