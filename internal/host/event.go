@@ -80,6 +80,7 @@ type Event struct {
 	Fork      *Fork
 	Origin    Origin
 	LastAt    time.Time
+	At        time.Time
 	Step      int
 	Turn      string
 	Questions []turn.PersonQuestion

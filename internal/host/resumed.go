@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"slices"
 	"strings"
+	"time"
 
 	"tofu/internal/llm"
 	"tofu/internal/session"
@@ -36,6 +37,7 @@ type resumedLead struct {
 	runs    map[string]session.AgentRun
 	worked  map[string][]session.Event
 	turn    string
+	at      time.Time
 }
 
 type recordedMessage struct {
@@ -57,7 +59,7 @@ func resumedChat(carry Carry, dir string) []Event {
 	mask := keys.Redact
 	lead := &resumedLead{calls: map[string]*recordedCall{}, worked: map[string][]session.Event{}, runs: map[string]session.AgentRun{}, images: map[string][]session.Attachment{}}
 	lead.watch = &watcher{emit: func(event Event) {
-		event.Turn = lead.turn
+		event.Turn, event.At = lead.turn, lead.at
 		chat = append(chat, redacted(event, mask))
 	}, turnID: carry.Session, seen: map[string]bool{}, spawner: &turn.SpawnTool{}}
 	labelled := Event{Kind: EventSession, Text: carry.Name, ID: carry.Session, Root: carry.Session}
@@ -73,6 +75,9 @@ func resumedChat(carry Carry, dir string) []Event {
 			continue
 		}
 		said := lead.recorded(message)
+		if said != nil {
+			lead.at = said.At
+		}
 		if said != nil && message.Role == llm.RoleUser && (message.Origin.Source == llm.SourceTask || message.Origin.Source == llm.SourceCronFire) {
 			lead.turn, lead.watch.turnID = said.Turn, cmp.Or(said.Turn, carry.Session)
 		}
@@ -96,15 +101,19 @@ func resumedChat(carry Carry, dir string) []Event {
 				lead.watch.emit(Event{Kind: EventText, Text: text})
 			}
 			for _, call := range message.ToolCalls {
+				recorded := lead.calls[call.ID]
+				if recorded != nil && recorded.call.Call != "" {
+					lead.at = recorded.call.At
+				}
 				lead.watch.called(call, "")
-				if recorded := lead.calls[call.ID]; recorded != nil && recorded.spawn.Name != "" && !lead.drawn(recorded.spawn.Name) {
+				if recorded != nil && recorded.spawn.Name != "" && !lead.drawn(recorded.spawn.Name) {
 					lead.spawned(recorded.spawn)
 				}
 			}
 		case llm.RoleTool:
 			if recorded := lead.calls[message.ToolCallID]; recorded != nil && recorded.result.Call != "" {
 				ran := resultOf(recorded.result)
-				message.ToolExitCode, message.ToolHits = ran.ToolExitCode, ran.ToolHits
+				message.ToolExitCode, message.ToolHits, lead.at = ran.ToolExitCode, ran.ToolHits, recorded.result.At
 			}
 			lead.watch.result(message, "")
 		case llm.RoleSystem, llm.RoleUnknown:
@@ -211,6 +220,7 @@ func resultOf(event session.Event) llm.Message {
 func (l *resumedLead) spawned(row SubAgentRow) {
 	l.show(row)
 	for _, event := range l.worked[row.Name] {
+		l.at = event.At
 		if event.Kind == session.EventToolCall {
 			l.watch.called(callOf(event), event.Agent)
 		} else {
@@ -283,7 +293,9 @@ func (l *resumedLead) linked(agent string) bool {
 	}
 	for _, recorded := range l.calls {
 		if recorded.spawn.Name == agent && recorded.call.Call != "" {
+			l.at = recorded.call.At
 			l.watch.called(callOf(recorded.call), "")
+			l.at = recorded.result.At
 			l.watch.result(resultOf(recorded.result), "")
 			l.spawned(recorded.spawn)
 			return true

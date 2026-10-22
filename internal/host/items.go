@@ -93,7 +93,7 @@ func (s *items) loggedAs(ref string) (item, asked string) {
 func (s *items) all(chat []Event) []outgoing {
 	var lines []outgoing
 	for _, event := range chat {
-		lines = append(lines, s.translate(event, time.Now())...)
+		lines = append(lines, s.translate(event, event.At)...)
 	}
 	return lines
 }
