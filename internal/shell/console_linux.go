@@ -16,6 +16,8 @@ import (
 	"tofu/internal/safe"
 )
 
+const resizeLosesKeys = false
+
 type device struct{ leader *os.File }
 
 func (d device) write(data []byte) error {

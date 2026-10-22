@@ -23,6 +23,8 @@ func closeHandles(handles ...windows.Handle) {
 	}
 }
 
+const resizeLosesKeys = true
+
 type device struct{ input, console windows.Handle }
 
 func (d device) write(data []byte) error {

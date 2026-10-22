@@ -82,16 +82,17 @@ func NewSize(cols, rows int) (Size, error) {
 }
 
 type terminal struct {
-	mu      sync.Mutex
-	typing  sync.Mutex
-	device  device
-	screen  *screenText
-	raw     []byte
-	base    int64
-	size    Size
-	resized bool
-	ended   bool
-	wrote   chan<- struct{}
+	mu       sync.Mutex
+	typing   sync.Mutex
+	device   device
+	screen   *screenText
+	raw      []byte
+	base     int64
+	size     Size
+	resized  bool
+	answered chan struct{}
+	ended    bool
+	wrote    chan<- struct{}
 }
 
 func readerFor(out io.Writer, typed bool, d device) (io.Writer, *terminal) {
@@ -117,6 +118,14 @@ func (t *terminal) Write(p []byte) (int, error) {
 	wrote := t.wrote
 	t.mu.Unlock()
 	n, err := t.screen.Write(p)
+	if t.screen.printed {
+		t.mu.Lock()
+		if t.answered != nil {
+			close(t.answered)
+			t.answered = nil
+		}
+		t.mu.Unlock()
+	}
 	select {
 	case wrote <- struct{}{}:
 	default:
@@ -147,12 +156,50 @@ func (t *terminal) resize(size Size) error {
 		return err
 	}
 	t.size, t.resized = size, true
+	if resizeLosesKeys {
+		t.answered = make(chan struct{})
+	}
 	return nil
+}
+
+func (t *terminal) awaitResizeAnswer() error {
+	for try := 1; ; try++ {
+		t.mu.Lock()
+		answered, size := t.answered, t.size
+		t.mu.Unlock()
+		if answered == nil {
+			return nil
+		}
+		select {
+		case <-answered:
+			return nil
+		case <-time.After(konst.ShellResizeAckMillis * time.Millisecond):
+		}
+		if try == konst.ShellResizeTries {
+			t.mu.Lock()
+			t.answered = nil
+			t.mu.Unlock()
+			return nil
+		}
+		neighbour := Size{cols: size.cols, rows: size.rows + 1}
+		if size.rows == konst.ShellMaxRows {
+			neighbour.rows = size.rows - 1
+		}
+		if err := t.resize(neighbour); err != nil {
+			return err
+		}
+		if err := t.resize(size); err != nil {
+			return err
+		}
+	}
 }
 
 func (t *terminal) input(data []byte) error {
 	t.typing.Lock()
 	defer t.typing.Unlock()
+	if err := t.awaitResizeAnswer(); err != nil {
+		return err
+	}
 	t.mu.Lock()
 	ended := t.ended
 	t.mu.Unlock()

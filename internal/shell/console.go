@@ -39,6 +39,7 @@ type screenText struct {
 	width       int
 	repaint     repaintState
 	repaintLeft int
+	printed     bool
 }
 
 func (s *screenText) expectRepaint(size Size) {
@@ -65,7 +66,7 @@ func (s *screenText) Write(p []byte) (int, error) {
 		}
 		at += size
 	}
-	s.held = slices.Clone(data[at:])
+	s.held, s.printed = slices.Clone(data[at:]), text.Len() > 0
 	if _, err := s.out.Write(text.Bytes()); err != nil {
 		return 0, err
 	}

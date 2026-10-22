@@ -206,6 +206,8 @@ const (
 	ShellRawRingBytes        = 1048576
 	ShellInputMaxBytes       = 65536
 	ShellHandBackNoteChars   = 500
+	ShellResizeAckMillis     = 150
+	ShellResizeTries         = 3
 
 	TypecheckDeadlineMillis    = 15000
 	TypecheckFirstCheckMillis  = 240000
