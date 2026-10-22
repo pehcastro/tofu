@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"tofu/internal/drain"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/safe"
@@ -60,6 +61,9 @@ type watcher struct {
 	in        int
 	out       int
 	cacheRead int
+	write5m   int
+	write1h   int
+	costUSD   float64
 	marks     sync.Mutex
 	shows     sync.Mutex
 	spent     *tokenTally
@@ -231,7 +235,10 @@ func (a *watcher) askThrough(ctx context.Context, inner turn.Model, request llm.
 	a.in += fresh
 	a.out += decision.Usage.OutputTokens
 	a.cacheRead += decision.CacheReadTokens
-	stats := Event{Kind: EventStats, Agent: asker, Model: decision.Build, TokensIn: a.in, TokensOut: a.out, CacheRead: a.cacheRead}
+	a.write5m += drain.FiveMinuteWrites(decision.CacheWriteTokens, decision.CacheWrite5m, decision.CacheWrite1h)
+	a.write1h += decision.CacheWrite1h
+	a.costUSD += decision.Usage.Cost
+	stats := Event{Kind: EventStats, Agent: asker, Model: decision.Build, TokensIn: a.in, TokensOut: a.out, CacheRead: a.cacheRead, CacheWrite5m: a.write5m, CacheWrite1h: a.write1h, CostUSD: a.costUSD}
 	a.marks.Unlock()
 	a.noteSubAgentsAsk(asker, fresh+decision.Usage.OutputTokens, decision.ToolCalls)
 	if a.decisions != nil {

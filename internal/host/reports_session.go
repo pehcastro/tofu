@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"tofu/internal/drain"
 	"tofu/internal/hook"
 	"tofu/internal/recall"
 	"tofu/internal/session"
@@ -203,6 +204,11 @@ type TraceCacheBreak struct {
 	Read    int    `json:"cache_read_tokens"`
 	Cached  int    `json:"after_cached_tokens"`
 	Differs string `json:"first_difference"`
+}
+
+type DrainReport struct {
+	Handle string `json:"handle"`
+	drain.Report
 }
 
 type SessionFindParams struct {

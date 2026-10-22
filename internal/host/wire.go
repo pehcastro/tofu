@@ -586,11 +586,14 @@ type ContextUse struct {
 
 type UsageUpdated struct {
 	Identity
-	Model     string `json:"model"`
-	TokensIn  int    `json:"tokensIn"`
-	TokensOut int    `json:"tokensOut"`
-	CacheRead int    `json:"cacheRead"`
-	Decisions int    `json:"decisions"`
+	Model        string  `json:"model"`
+	TokensIn     int     `json:"tokensIn"`
+	TokensOut    int     `json:"tokensOut"`
+	CacheRead    int     `json:"cacheRead"`
+	CacheWrite5m int     `json:"cacheWrite5m"`
+	CacheWrite1h int     `json:"cacheWrite1h"`
+	CostUSD      float64 `json:"costUsd"`
+	Decisions    int     `json:"decisions"`
 }
 
 type QuotaUpdated struct {
@@ -1304,6 +1307,7 @@ func requests() []method {
 		{name: "session.info", params: SessionParams{}, result: SessionInfo{}},
 		{name: "session.find", params: SessionFindParams{}, result: SessionFind{}},
 		{name: "session.trace", params: SessionParams{}, result: SessionTrace{}},
+		{name: queryPrefix + "drain", params: SessionParams{}, result: DrainReport{}},
 		{name: "mention.resolve", params: MentionParams{}, result: MentionResolved{}},
 		{name: queryPrefix + "accounts", params: NoParams{}, result: Accounts{}},
 		{name: queryPrefix + "session", params: SessionParams{}, result: SessionDetail{}},
@@ -1327,7 +1331,7 @@ func requests() []method {
 
 func capabilities() []string {
 	return []string{"approvals", "revoke", "questions", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "sendNow", "run", "compact", "history", "ledger",
-		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "accounts", "writes", "status", "mention", "boards", "side", "commands", "boardy", "scratch", "sessions", "takeover"}
+		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "drain", "accounts", "writes", "status", "mention", "boards", "side", "commands", "boardy", "scratch", "sessions", "takeover"}
 }
 
 const queryPrefix = "query."

@@ -188,7 +188,8 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		return append(out, kept("failure", s.said(id, event, SaidFailure)))
 	case EventStats:
 		id.Item = session.EventIDFor(s.turn, "usage "+event.Agent)
-		return append(out, merged("usage.updated", event.Agent, &UsageUpdated{Identity: id, Model: event.Model, TokensIn: event.TokensIn, TokensOut: event.TokensOut, CacheRead: event.CacheRead, Decisions: event.Decisions}))
+		return append(out, merged("usage.updated", event.Agent, &UsageUpdated{Identity: id, Model: event.Model, TokensIn: event.TokensIn, TokensOut: event.TokensOut, CacheRead: event.CacheRead,
+			CacheWrite5m: event.CacheWrite5m, CacheWrite1h: event.CacheWrite1h, CostUSD: event.CostUSD, Decisions: event.Decisions}))
 	case EventContext:
 		id.Item = session.EventIDFor(s.turn, "context")
 		s.context = &ContextUse{Used: event.Context.Used, Budget: event.Context.Budget}

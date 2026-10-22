@@ -361,13 +361,17 @@ func (p *pass) block(kind string, tokens int) {
 	resident.Blocks, resident.Tokens = resident.Blocks+1, resident.Tokens+tokens
 }
 
+func FiveMinuteWrites(written, split5m, split1h int) int {
+	return max(split5m, written-split1h)
+}
+
 func (p *pass) request(event session.Event, body requestBody) {
 	weights := p.Weights(body.Model)
 	input, write1h := body.Prompt, body.Write1h
 	if p.inclusive {
 		input = max(0, body.Prompt-body.Read)
 	}
-	write5m := max(body.Write5m, body.Write-body.Write1h)
+	write5m := FiveMinuteWrites(body.Write, body.Write5m, body.Write1h)
 	written := weights.Write5m*float64(write5m) + weights.Write1h*float64(write1h)
 	spend := Spend{Calls: 1, USD: body.CostUSD,
 		Weighted: weights.Input*float64(input) + written + weights.Read*float64(body.Read) + weights.Output*float64(body.Completion)}
