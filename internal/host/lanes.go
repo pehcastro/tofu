@@ -284,6 +284,8 @@ func (s *server) pumpOn(l *lane) {
 				select {
 				case event := <-l.host.Events():
 					deliver(event)
+				case raw := <-l.host.shellRaw:
+					s.rawCame(l, raw)
 				case <-l.host.cronMove:
 					s.mu.Lock()
 					id := l.items.identity("", "cron")

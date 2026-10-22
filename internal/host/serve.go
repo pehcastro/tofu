@@ -650,6 +650,9 @@ func (s *server) shellTakeOver(p ShellSizeParams) (any, error) {
 	}
 	hold, err := s.Shells.TakeOver(p.Shell, size)
 	if err != nil {
+		hold, err = s.elsewhere(p.Shell, err, followAsk{Op: followTakeOver, Cols: p.Cols, Rows: p.Rows})
+	}
+	if err != nil {
 		return nil, shellRefusal(p.Shell, err)
 	}
 	watched := s.caughtUp(p.Shell)
@@ -668,7 +671,11 @@ func (s *server) shellInput(p ShellInputParams) (any, error) {
 	case len(p.Data) == 0 || len(p.Data) > konst.ShellInputMaxBytes:
 		return nil, &Refusal{Code: CodeBadParams, Message: "data is the base64 of 1 to " + strconv.Itoa(konst.ShellInputMaxBytes) + " bytes, and this decoded to " + strconv.Itoa(len(p.Data))}
 	}
-	return Ack{OK: true}, shellRefusal(p.Shell, s.Shells.Input(p.Shell, p.Data))
+	err := s.Shells.Input(p.Shell, p.Data)
+	if err != nil {
+		_, err = s.elsewhere(p.Shell, err, followAsk{Op: followInput, Data: p.Data})
+	}
+	return Ack{OK: true}, shellRefusal(p.Shell, err)
 }
 
 func (s *server) shellResize(p ShellSizeParams) (any, error) {
@@ -676,7 +683,33 @@ func (s *server) shellResize(p ShellSizeParams) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return Ack{OK: true}, shellRefusal(p.Shell, s.Shells.Resize(p.Shell, size))
+	if err = s.Shells.Resize(p.Shell, size); err != nil {
+		_, err = s.elsewhere(p.Shell, err, followAsk{Op: followResize, Cols: p.Cols, Rows: p.Rows})
+	}
+	return Ack{OK: true}, shellRefusal(p.Shell, err)
+}
+
+func (s *server) elsewhere(name string, refused error, ask followAsk) (shell.Hold, error) {
+	entry, err := s.Shells.Read(name)
+	if err != nil {
+		return shell.Hold{}, refused
+	}
+	for _, l := range s.tracked() {
+		if held := l.host.heldBy(); held != nil && held.PID == entry.TofuPID {
+			ask.Shell = name
+			return l.host.heldShell(ask)
+		}
+	}
+	return shell.Hold{}, refused
+}
+
+func (s *server) rawCame(l *lane, raw ShellRaw) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	watched := s.watched(raw.Shell)
+	raw.Identity = l.items.identity(watched.owner, raw.Shell)
+	s.box.push(merged("shell.raw", raw.Shell, &raw))
+	watched.raw = raw.Offset + int64(len(raw.Data))
 }
 
 func (s *server) shellRelease(p ShellReleaseParams) (any, error) {
@@ -689,6 +722,11 @@ func (s *server) shellRelease(p ShellReleaseParams) (any, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	entry, err := s.Shells.HandBack(p.Shell)
+	if err != nil {
+		var hold shell.Hold
+		hold, err = s.elsewhere(p.Shell, err, followAsk{Op: followRelease})
+		entry = hold.Shell
+	}
 	if err != nil {
 		return nil, shellRefusal(p.Shell, err)
 	}

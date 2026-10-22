@@ -99,6 +99,8 @@ type Host struct {
 
 	audience  atomic.Pointer[audience]
 	following atomic.Pointer[following]
+	shellRaw  chan ShellRaw
+	held      heldShells
 
 	mu        sync.Mutex
 	closed    bool
@@ -159,6 +161,7 @@ func New(cfg Config) (*Host, []string) {
 		now:         cfg.Now,
 		shells:      cfg.Shells,
 		events:      make(chan Event, konst.HostEventBuffer),
+		shellRaw:    make(chan ShellRaw, followQueue),
 		answers:     make(chan Answer, 1),
 		steering:    steerQueue{ready: make(chan string, konst.HostSteeringQueue)},
 		stopLead:    make(chan struct{}, 1),

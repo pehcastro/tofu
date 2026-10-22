@@ -16,6 +16,7 @@ import (
 	"tofu/internal/memory"
 	"tofu/internal/safe"
 	"tofu/internal/session"
+	"tofu/internal/shell"
 	"tofu/internal/turn"
 )
 
@@ -51,24 +52,33 @@ const (
 	followCron      followOp = "cron"
 	followRoster    followOp = "roster"
 	followSettings  followOp = "settings"
+	followTakeOver  followOp = "takeover"
+	followInput     followOp = "input"
+	followResize    followOp = "resize"
+	followRelease   followOp = "release"
 )
 
 type followAsk struct {
-	ID       int
-	Op       followOp
-	Text     string
-	Asked    string
-	Answer   Answer
-	Question QuestionAnswer
-	Scope    memory.Scope `json:",omitempty"`
-	By       string
-	Pick     Pick
-	Asking   AskingMode     `json:",omitempty"`
-	Images   []pendingImage `json:",omitempty"`
-	Command  string         `json:",omitempty"`
-	Stopped  bool           `json:",omitempty"`
-	Stop     StopAsked      `json:",omitzero"`
-	Until    time.Time      `json:",omitzero"`
+	ID        int
+	Op        followOp
+	Text      string
+	Asked     string
+	Answer    Answer
+	Question  QuestionAnswer
+	Scope     memory.Scope `json:",omitempty"`
+	By        string
+	Pick      Pick
+	Asking    AskingMode     `json:",omitempty"`
+	Images    []pendingImage `json:",omitempty"`
+	Command   string         `json:",omitempty"`
+	Stopped   bool           `json:",omitempty"`
+	Stop      StopAsked      `json:",omitzero"`
+	Until     time.Time      `json:",omitzero"`
+	Shell     string         `json:",omitempty"`
+	Cols      int            `json:",omitempty"`
+	Rows      int            `json:",omitempty"`
+	Data      []byte         `json:",omitempty"`
+	Terminals bool           `json:",omitempty"`
 }
 
 type followReply struct {
@@ -81,12 +91,15 @@ type followReply struct {
 	Failed   string           `json:",omitempty"`
 	Agents   []SubAgentRow    `json:",omitempty"`
 	Standing []StandingAnswer `json:",omitempty"`
+	Hold     shell.Hold       `json:",omitzero"`
+	Shell    shell.Refused    `json:",omitempty"`
 }
 
 type followLine struct {
 	Event    *Event        `json:",omitempty"`
 	Reply    *followReply  `json:",omitempty"`
 	Settings *heldSettings `json:",omitempty"`
+	Raw      *ShellRaw     `json:",omitempty"`
 }
 
 type heldSettings struct {
@@ -115,8 +128,9 @@ type link struct {
 
 type seat struct {
 	link
-	out      chan []byte
-	attached bool
+	out       chan []byte
+	attached  bool
+	terminals bool
 }
 
 type following struct {
@@ -265,9 +279,10 @@ func (a *audience) unseat(s *seat) {
 	}
 }
 
-func (a *audience) attach(s *seat) {
+func (a *audience) attach(s *seat, terminals bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	s.terminals = terminals
 	if _, seated := a.seats[s]; seated && !s.attached {
 		s.attached = true
 		a.attached++
@@ -286,6 +301,17 @@ func (a *audience) attachedNow() int {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.attached
+}
+
+func (a *audience) wantsTerminals() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for s := range a.seats {
+		if s.attached && s.terminals {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *audience) drop(s *seat) {
@@ -331,7 +357,11 @@ func (s *seat) write() {
 }
 
 func (h *Host) serveSeat(a *audience, s *seat) {
-	defer a.drop(s)
+	defer func() {
+		a.drop(s)
+		h.useTerminals(a)
+		h.handBackHeld(s)
+	}()
 	asks := json.NewDecoder(s.conn)
 	for {
 		var raw json.RawMessage
@@ -396,7 +426,10 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 	case followUnqueue:
 		h.DropSteering()
 	case followAttach:
-		a.attach(s)
+		a.attach(s, ask.Terminals)
+		h.useTerminals(a)
+	case followTakeOver, followInput, followResize, followRelease:
+		reply = h.servedShell(s, ask)
 	case followSettings:
 		h.Settle(ask.Asking, ask.Pick)
 	case followRan:
@@ -449,7 +482,7 @@ func (h *Host) follow(f *following, id string) {
 	_ = h.loadCron(id)
 	if os.Getenv(HolderVariable) != id {
 		safe.Go(h.report, "follow attach", func() {
-			f.ask(followAsk{Op: followAttach})
+			f.ask(followAsk{Op: followAttach, Terminals: h.shells != nil && h.shells.Terminals.Load()})
 			f.ask(settled)
 		})
 	}
@@ -583,6 +616,12 @@ func (h *Host) heed(f *following) {
 			f.mu.Unlock()
 			if waiting != nil {
 				waiting <- *line.Reply
+			}
+		}
+		if line.Raw != nil {
+			select {
+			case h.shellRaw <- *line.Raw:
+			case <-f.gone:
 			}
 		}
 		if line.Event != nil && !f.echoes(*line.Event) {
