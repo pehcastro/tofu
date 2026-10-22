@@ -195,7 +195,7 @@ func New(cfg Config) (*Host, []string) {
 	switch {
 	case err != nil:
 		h.readOnly = err
-		return h, append(troubles, err.Error())
+		return h, append(troubles, cmp.Or(unreached(h.id, err), err.Error()))
 	case leader != nil:
 		return h, append(troubles, leader.note(h.id))
 	}
@@ -766,10 +766,25 @@ func (h *Host) Resume(carry Carry) ([]Event, error) {
 
 func (h *Host) Opening(carry Carry) []Event {
 	chat := resumedChat(carry, h.dir)
+	h.mu.Lock()
+	note := unreached(carry.Session, h.readOnly)
+	h.mu.Unlock()
 	if f := h.following.Load(); f != nil {
-		chat = append(chat, Event{Kind: EventNote, Text: f.note(carry.Session)})
+		note = f.note(carry.Session)
 	}
-	return chat
+	if note == "" {
+		return chat
+	}
+	return append(chat, Event{Kind: EventNote, Text: note})
+}
+
+func unreached(id string, readOnly error) string {
+	var busy session.BusyError
+	if !errors.As(readOnly, &busy) || !busy.Live() {
+		return ""
+	}
+	pid := strconv.Itoa(busy.PID)
+	return "process " + pid + " has held session " + id + " since " + busy.Since.Format(time.TimeOnly) + " and does not answer, so this window only follows it and runs nothing: close process " + pid + " to take the session over"
 }
 
 func (h *Host) Compacted(into string, messages []llm.Message) error {
