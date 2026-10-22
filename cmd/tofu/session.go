@@ -708,6 +708,7 @@ func tracedRequests(steps []traceRequest, exchanges []session.Exchange) []traceR
 	for _, exchange := range exchanges {
 		request := used[exchange.Request]
 		request.Request, request.Agent, request.Turn, request.Model = exchange.Request, exchange.Agent, exchange.Turn, cmp.Or(request.Model, exchange.Model)
+		request.StartMS = exchange.At.UnixMilli()
 		request.Why, request.Messages, request.Attempts, request.DurationMS, request.Error = strings.Trim(exchange.Why+" · "+request.Why, " ·"), len(exchange.Messages), len(exchange.Attempts), exchange.DurationMS, exchange.Error
 		sent, added := before[exchange.Agent], exchange.Messages
 		extends := sent.set != nil && len(sent.hashes) <= len(added) && slices.Equal(sent.hashes, added[:len(sent.hashes)])
@@ -774,22 +775,42 @@ func sessionTrace(store *session.Store, handle string) (sessionTraceReport, erro
 	report.Session, report.Name, report.Handle, report.Error, report.Events = header.ID, header.Named(), handleOf(store, header.ID), header.Error, len(events)
 	report.Messages = slices.DeleteFunc(report.Messages, func(said traceMessage) bool { return header.CarriedFrom != nil && said.Turn == header.ID })
 	report.Agents, report.Outlived = append([]session.AgentRun{}, header.Agents...), callsAfterTheLeadLeft(store, header, events)
-	return withAncestors(store, header, report)
+	report, err = withAncestors(store, header, report)
+	return fromSessionStart(report, header.At), err
 }
+
+func fromSessionStart(report sessionTraceReport, began time.Time) sessionTraceReport {
+	for i := range report.Requests {
+		report.Requests[i].StartMS -= began.UnixMilli()
+	}
+	for i := range report.Calls {
+		report.Calls[i].StartMS -= began.UnixMilli()
+	}
+	for i, run := range report.Agents {
+		if !run.StartedAt.IsZero() {
+			report.Agents[i].StartMS = run.StartedAt.Sub(began).Milliseconds()
+		}
+	}
+	return report
+}
+
+func startedAfter(ms int64) string { return "start_ms " + strconv.FormatInt(ms, 10) }
 
 func traceBody(store *session.Store, id string, events []session.Event, keep func(agent string, at time.Time) bool) (sessionTraceReport, error) {
 	report := sessionTraceReport{Requests: []traceRequest{}, Calls: []traceCall{}}
 	events = slices.DeleteFunc(slices.Clone(events), func(event session.Event) bool { return !keep(event.Agent, event.At) })
-	placed := map[string]int{}
+	placed, firstCallOf := map[string]int{}, map[string]time.Time{}
 	for _, event := range events {
 		switch event.Kind {
 		case session.EventRequest:
 			var step struct {
 				session.StepBody
-				Phase turn.Phase `json:"phase"`
+				Phase      turn.Phase `json:"phase"`
+				DurationMS int64      `json:"duration_ms"`
 			}
 			_ = json.Unmarshal(event.Body, &step)
-			request := traceRequest{Request: event.ID, Agent: event.Agent, Turn: event.Turn, Model: step.Model, CostUSD: step.CostUSD,
+			answered := cmp.Or(firstCallOf[event.ID], event.At)
+			request := traceRequest{Request: event.ID, Agent: event.Agent, Turn: event.Turn, Model: step.Model, CostUSD: step.CostUSD, StartMS: answered.UnixMilli() - step.DurationMS,
 				Usage: session.Usage{InputTokens: step.PromptTokens, OutputTokens: step.CompletionTokens, CacheReadTokens: step.CacheReadTokens, CacheWriteTokens: step.CacheWriteTokens}}
 			if step.Phase != "" {
 				request.Why = "phase " + string(step.Phase)
@@ -799,7 +820,10 @@ func traceBody(store *session.Store, id string, events []session.Event, keep fun
 			var call session.CallBody
 			_ = json.Unmarshal(event.Body, &call)
 			placed[event.Call] = len(report.Calls)
-			report.Calls = append(report.Calls, traceCall{Call: event.Call, Agent: event.Agent, Turn: event.Turn, Request: event.Request, Tool: call.Tool, Args: call.Args})
+			if _, seen := firstCallOf[event.Request]; !seen {
+				firstCallOf[event.Request] = event.At
+			}
+			report.Calls = append(report.Calls, traceCall{Call: event.Call, Agent: event.Agent, Turn: event.Turn, Request: event.Request, Tool: call.Tool, Args: call.Args, StartMS: event.At.UnixMilli()})
 		case session.EventToolResult:
 			var result traceResult
 			_ = json.Unmarshal(event.Body, &result)
@@ -859,12 +883,12 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 				calls++
 			}
 		}
-		agents[i] = cli.Row{Mark: cli.Idle, Cells: []string{run.Agent, cmp.Or(run.Definition, "unnamed"), cmp.Or(run.Model, "orchestrator's model"), run.Status, plural(calls, "call"), dollars(run.CostUSD)},
+		agents[i] = cli.Row{Mark: cli.Idle, Cells: []string{run.Agent, cmp.Or(run.Definition, "unnamed"), cmp.Or(run.Model, "orchestrator's model"), run.Status, plural(calls, "call"), dollars(run.CostUSD), startedAfter(run.StartMS)},
 			Detail: "spawned by " + run.SpawnCall + " in " + run.SpawnTurn}
 	}
 	requests := make([]cli.Row, len(report.Requests))
 	for i, request := range report.Requests {
-		cells := []string{cmp.Or(request.Agent, session.AuthorOrchestrator), request.Request, request.Model}
+		cells := []string{cmp.Or(request.Agent, session.AuthorOrchestrator), request.Request, request.Model, startedAfter(request.StartMS)}
 		if request.Messages > 0 {
 			cells = append(cells, plural(request.Messages, "message")+", "+strconv.Itoa(request.New)+" new")
 		}
@@ -885,7 +909,7 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 	}
 	calls := make([]cli.Row, len(report.Calls))
 	for i, call := range report.Calls {
-		calls[i] = cli.Row{Mark: cli.Done, Cells: []string{cmp.Or(call.Agent, session.AuthorOrchestrator), call.Call, call.Tool, call.Outcome, widget.Size(call.Bytes)},
+		calls[i] = cli.Row{Mark: cli.Done, Cells: []string{cmp.Or(call.Agent, session.AuthorOrchestrator), call.Call, call.Tool, call.Outcome, widget.Size(call.Bytes), startedAfter(call.StartMS)},
 			Detail: strings.TrimSpace(call.Gate + " " + oneLine(string(call.Args)))}
 		switch {
 		case call.Result == "":

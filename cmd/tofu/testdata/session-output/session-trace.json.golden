@@ -40,7 +40,8 @@ exit 0
           "cache_read_tokens": 0,
           "cache_write_tokens": 0
         },
-        "cost_usd": 0.0042
+        "cost_usd": 0.0042,
+        "start_ms": 0
       }
     ],
     "calls": [
@@ -54,14 +55,16 @@ exit 0
         "result_bytes": 2048,
         "args": {
           "path": "internal/session/store.go"
-        }
+        },
+        "start_ms": 120000
       },
       {
         "call": "call-3",
         "agent": "agent-1",
         "turn": "turn-one",
         "tool": "search",
-        "result_bytes": 0
+        "result_bytes": 0,
+        "start_ms": 240000
       }
     ],
     "messages": [

@@ -135,6 +135,7 @@ type TraceRequest struct {
 	Attempts          int    `json:"attempts,omitempty"`
 	Status            int    `json:"status,omitempty"`
 	ProviderRequestID string `json:"provider_request_id,omitempty"`
+	StartMS           int64  `json:"start_ms"`
 	DurationMS        int64  `json:"duration_ms,omitempty"`
 	Error             string `json:"error,omitempty"`
 	RecordedIn        string `json:"recorded_in,omitempty"`
@@ -152,6 +153,7 @@ type TraceCall struct {
 	Reason  string `json:"reason,omitempty"`
 
 	Args       json.RawMessage `json:"args,omitempty"`
+	StartMS    int64           `json:"start_ms"`
 	DurationMS int64           `json:"duration_ms,omitempty"`
 	Refused    bool            `json:"refused,omitempty"`
 	Gate       string          `json:"gate,omitempty"`

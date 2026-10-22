@@ -136,6 +136,7 @@ type AgentRun struct {
 	Depth       int        `json:"depth"`
 	Status      string     `json:"status"`
 	StartedAt   time.Time  `json:"started_at"`
+	StartMS     int64      `json:"start_ms,omitempty"`
 	EndedAt     *time.Time `json:"ended_at,omitempty"`
 	Usage       Usage      `json:"usage"`
 	CostUSD     float64    `json:"cost_usd"`
