@@ -13,15 +13,6 @@ const (
 	ManagementBoardy Management = "boardy"
 )
 
-type Controller interface {
-	List(board string) ([]Ticket, error)
-	Get(id string) (Ticket, error)
-	Create(board string, ticket Ticket, actor string) (Ticket, error)
-	Move(id string, to Status, reason, actor string) (Ticket, error)
-	Comment(id, text, actor string) (Ticket, error)
-	Watch(board string, fromLine int) ([]Event, error)
-}
-
 type Local struct{ Store Store }
 
 func (l Local) List(board string) ([]Ticket, error) { return l.Store.Tickets(board) }
@@ -72,10 +63,19 @@ func (l Local) appendLog(id, text, actor string, event Event) (Ticket, error) {
 	}
 	who := ""
 	if actor != "" {
-		who = actor + ": "
+		event.Author = l.Store.authorOf(actor)
+		name := event.Author.Name
+		if event.Author.Kind == AuthorPerson {
+			name = string(RolePerson)
+		}
+		text, event.Text = strings.TrimPrefix(text, name+": "), strings.TrimPrefix(event.Text, name+": ")
+		who = name + ": "
+		if event.Kind == Evidence {
+			who = name + " (evidence): "
+		}
 	}
 	logged, err := l.Store.Edit(id, func(ticket *Ticket) error {
-		ticket.Log = strings.TrimSpace(ticket.Log + "\n- " + time.Now().Format(time.DateOnly) + " " + who + text)
+		ticket.Log = strings.TrimSpace(ticket.Log + "\n- " + time.Now().Format(time.DateOnly) + " " + who + strings.ReplaceAll(strings.TrimSpace(text), "\n", "\n  "))
 		return nil
 	})
 	if err != nil {

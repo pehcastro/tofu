@@ -36,7 +36,7 @@ func boardyUsageOf(subcommand string) string {
 	case "move":
 		return "tofu boardy move <ticket> <status> [--reason text] [--as name] [--json]"
 	case "log":
-		return "tofu boardy log <ticket> <text> [--as name] [--json]"
+		return "tofu boardy log <ticket> <text> [--evidence] [--as name] [--json]"
 	case "lint":
 		return "tofu boardy lint [--board KEY] [--json]"
 	case "boards":
@@ -160,7 +160,7 @@ func boardyFlags(args []string) (map[string]string, []string, error) {
 		switch {
 		case !isFlag:
 			rest = append(rest, args[i])
-		case name == "all" || name == "answers" || name == "thread":
+		case name == "all" || name == "answers" || name == "thread" || name == "evidence":
 			flags[name] = "true"
 		case i+1 == len(args):
 			return nil, nil, fmt.Errorf("--%s needs a value", name)
@@ -444,9 +444,17 @@ func (c boardyCall) show() int {
 		}
 		section("Log", ticket.Log)
 		if c.flags["thread"] != "" {
-			activity := make([]string, len(shown.Thread))
-			for i, event := range shown.Thread {
-				activity[i] = threadLine(event)
+			var activity []string
+			evidence := 0
+			for _, event := range shown.Thread {
+				if event.Kind == boardy.Evidence {
+					evidence++
+					continue
+				}
+				activity = append(activity, threadLine(event))
+			}
+			if evidence > 0 {
+				activity = append(activity, fmt.Sprintf("%d evidence entries, kept in the Log for review", evidence))
 			}
 			section("Activity", strings.Join(activity, "\n"))
 		}
@@ -467,7 +475,11 @@ func threadLine(event boardy.Event) string {
 			who += " to " + event.Agent
 		}
 	}
-	line := event.At.Local().Format(time.DateTime) + " " + string(event.Kind) + " " + dash(who)
+	kind := string(event.Kind)
+	if event.Kind == boardy.Commented {
+		kind = "said"
+	}
+	line := event.At.Local().Format(time.DateTime) + " " + kind + " " + dash(who)
 	if event.From != "" || event.To != "" {
 		line += " " + dash(string(event.From)) + " to " + string(event.To)
 	}
@@ -501,7 +513,11 @@ func (c boardyCall) log() int {
 	if len(c.args) < 2 {
 		return c.o.usage(errors.New("name a " + c.words.Ticket + " and the text to log"))
 	}
-	ticket, err := c.managed.Comment(c.args[0], strings.Join(c.args[1:], " "), c.actor)
+	entry := c.managed.Comment
+	if c.flags["evidence"] != "" {
+		entry = c.managed.Evidence
+	}
+	ticket, err := entry(c.args[0], strings.Join(c.args[1:], " "), c.actor)
 	return c.receipt(ticket, err, cli.Changed, "logged on "+ticket.ID)
 }
 

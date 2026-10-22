@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"tofu/internal/boardy"
 	"tofu/internal/konst"
@@ -27,6 +28,30 @@ const (
 	ticketAssign  ticketVerb = "ticket_assign"
 	ticketList    ticketVerb = "ticket_list"
 )
+
+type logKind string
+
+const (
+	logSay      logKind = "say"
+	logEvidence logKind = "evidence"
+)
+
+func sayable(text string) error {
+	text = strings.TrimSpace(text)
+	sentences, runes := 1, utf8.RuneCountInString(text)
+	for i := 1; i < len(text); i++ {
+		if text[i] == ' ' && strings.ContainsRune(".!?", rune(text[i-1])) {
+			sentences++
+		}
+	}
+	switch {
+	case strings.Contains(text, "\n"):
+		return fmt.Errorf("a said entry is one line: put the command and its output in an entry of kind %s", logEvidence)
+	case sentences > konst.BoardSaidSentencesMost || runes > konst.BoardSaidRunesMost:
+		return fmt.Errorf("a said entry is at most %d sentences and %d characters, and this one is %d and %d: say what you decided, found or need, and put the proof in an entry of kind %s", konst.BoardSaidSentencesMost, konst.BoardSaidRunesMost, sentences, runes, logEvidence)
+	}
+	return nil
+}
 
 type ticketTool struct {
 	verb    ticketVerb
@@ -84,8 +109,9 @@ func (t ticketTool) Definition() llm.Tool {
 	case ticketRead:
 		describe = "reads a ticket by its id from any board of this project: front matter, Problem, Scope, every Acceptance revision (the last one is in force) and Log"
 	case ticketLog:
-		describe = "appends one line of evidence to the Log of your own ticket: what you ran and what it printed"
-		properties["text"], required = stringParam("the evidence line"), append(required, "text")
+		describe = fmt.Sprintf("adds one entry to your own ticket, under your name, so never start it with your name. kind say is you talking to the lead in the first person, at most %d sentences on one line and no command output: a decision and why, a finding that changes the plan, what stops you, what you need, or that you are done. kind evidence proves an acceptance line: the command exactly as you ran it and the output lines that matter; the lead reads it at review and it stays out of the conversation. progress nobody acts on is not an entry", konst.BoardSaidSentencesMost)
+		properties["kind"] = map[string]any{"type": "string", "enum": []logKind{logSay, logEvidence}}
+		properties["text"], required = stringParam("what you say, or the evidence"), append(required, "kind", "text")
 	case ticketAsk:
 		describe = "puts a question to the board's managers by writing it into your own ticket's Log; a manager answers there, so read the ticket again with ticket_read before you act on the answer"
 		properties["question"], required = stringParam("the question"), append(required, "question")
@@ -113,7 +139,7 @@ func (t ticketTool) Definition() llm.Tool {
 		}
 	case ticketMove:
 		statuses := []boardy.Status{boardy.Review}
-		describe = "moves your own ticket from doing to review once its Log holds the evidence for every acceptance line in force"
+		describe = "moves your own ticket from doing to review once every acceptance line in force has an entry of kind evidence"
 		if t.manager {
 			statuses, describe = boardy.Statuses(), "moves a ticket on a board you manage to a status; blocked needs a reason"
 		}
@@ -131,6 +157,7 @@ func (t ticketTool) Definition() llm.Tool {
 func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 	var args struct {
 		ID, Text, Question, ELI5, Why, Board, Title, Problem, Scope, Acceptance, To, Reason, Parent, Epic, Sprint, Status string
+		Kind                                                                                                              logKind
 		Owns, Options                                                                                                     []string
 		Recommend                                                                                                         int
 	}
@@ -148,7 +175,16 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 				said = string(ticket.Markdown())
 			}
 		case ticketLog:
-			ticket, err = t.board.Comment(args.ID, args.Text, t.actor)
+			switch args.Kind {
+			case logSay, "":
+				if err = sayable(args.Text); err == nil {
+					ticket, err = t.board.Comment(args.ID, args.Text, t.actor)
+				}
+			case logEvidence:
+				ticket, err = t.board.Evidence(args.ID, args.Text, t.actor)
+			default:
+				err = fmt.Errorf("kind is %s or %s, not %q", logSay, logEvidence, args.Kind)
+			}
 			said = "logged on " + ticket.ID
 		case ticketAsk:
 			if t.manager {

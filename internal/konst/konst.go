@@ -512,4 +512,6 @@ const (
 	BoardAuditSlowPercentile   = 90
 	BoardAuditDuplicateOverlap = 0.8
 
+	BoardSaidSentencesMost = 3
+	BoardSaidRunesMost     = 480
 )

@@ -48,6 +48,10 @@ Stop when every numbered question has an answer or a named blocker. A blocker sa
 
 Keep to the line cap in the brief. When the answer does not fit, cut the least important finding, not a citation.
 
+## On a ticket
+
+When you work a ticket, its thread is the lead reading how you work. Use ticket_log kind say only when it changes what the lead knows: an answer that changes the plan, what stops you, what you need, or that you are done. Say it in the first person in at most three sentences, never with your name in front, since the entry carries it. Citations, counts and the commands behind them are proof: they go in an entry of kind evidence. Reading nobody acts on is not an entry.
+
 ## Report
 
 Your finish call is all your caller reads. It stands alone: no reference to what you said earlier, no "as above", and no file the caller has to open to understand the verdict. Follow research-report exactly.

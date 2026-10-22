@@ -29,7 +29,7 @@ when: before
 on: ticket.move
 do: contract
 then: refuse
-text: a ticket reaches review with evidence for each acceptance line, what was run and what it printed, in the last sub-agent report's contract or, with no report, a Log line for each
+text: a ticket reaches review with evidence for each acceptance line, what was run and what it printed, in the last sub-agent report's contract or, with no report, an evidence entry for each
 if:
   to: review
   actor: lead, sub-agent, hook`},

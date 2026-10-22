@@ -496,12 +496,26 @@ exit 0
         "unit": "levels of sub-agents"
       },
       {
+        "key": "leadCache",
+        "category": "Turn",
+        "value": "1h",
+        "source": "default",
+        "label": "Lead cache",
+        "description": "how long the lead's prompt cache lives on a subscription; 5m writes cost less and expire after five idle minutes, 1h writes cost more and last an hour, and history-5m keeps tools and system an hour and the conversation five minutes",
+        "kind": "choice",
+        "choices": [
+          "1h",
+          "5m",
+          "history-5m"
+        ]
+      },
+      {
         "key": "subAgentCache",
         "category": "Turn",
         "value": "1h",
         "source": "default",
         "label": "Sub-agent cache",
-        "description": "how long a sub-agent's prompt cache lives; 5m writes cost less and expire after five idle minutes, 1h writes cost more and last an hour. the lead always keeps 1h, and the next spawn reads the new value",
+        "description": "how long a sub-agent's prompt cache lives; 5m writes cost less and expire after five idle minutes, 1h writes cost more and last an hour. the lead follows lead cache, and the next spawn reads the new value",
         "kind": "choice",
         "choices": [
           "1h",

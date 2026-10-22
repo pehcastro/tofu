@@ -242,15 +242,12 @@ func (m Managed) unevidenced(s subject) string {
 			last, found = summary, true
 		}
 	}
-	logged := 0
-	for line := range strings.Lines(s.ticket.Log) {
-		if strings.HasPrefix(line, "- ") {
-			logged++
-		}
-	}
+	logged, _, err := m.evidenceOf(s.ticket.ID)
 	switch {
+	case err != nil:
+		return "its evidence could not be read: " + err.Error()
 	case !found && logged < lines:
-		return fmt.Sprintf("no sub-agent report on %s carries a contract, and its Log has %d lines for %d acceptance lines", s.ticket.ID, logged, lines)
+		return fmt.Sprintf("no sub-agent report on %s carries a contract, and it has %d evidence entries for %d acceptance lines", s.ticket.ID, logged, lines)
 	case !found:
 		return ""
 	case last.Partial:

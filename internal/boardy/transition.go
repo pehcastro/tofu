@@ -173,19 +173,42 @@ func (m Managed) mayWiden(board Board, ticket Ticket, actor string) error {
 }
 
 func (m Managed) Comment(id, text, actor string) (Ticket, error) {
+	return m.appended(id, Commented, text, actor)
+}
+
+func (m Managed) Evidence(id, text, actor string) (Ticket, error) {
+	return m.appended(id, Evidence, text, actor)
+}
+
+func (m Managed) appended(id string, kind EventKind, text, actor string) (Ticket, error) {
 	ticket, board, err := m.mayAppend(id, actor)
 	if err != nil {
 		return ticket, err
 	}
-	return m.comment(board, ticket, text, actor, 0)
+	return m.entry(board, ticket, kind, text, actor, 0)
+}
+
+func (m Managed) evidenceOf(id string) (int, int, error) {
+	thread, err := m.Store.Thread(id)
+	entries, runes := 0, 0
+	for _, event := range thread {
+		if event.Kind == Evidence {
+			entries, runes = entries+1, runes+utf8.RuneCountInString(event.Text)
+		}
+	}
+	return entries, runes, err
 }
 
 func (m Managed) comment(board Board, ticket Ticket, text, actor string, depth int) (Ticket, error) {
+	return m.entry(board, ticket, Commented, text, actor, depth)
+}
+
+func (m Managed) entry(board Board, ticket Ticket, kind EventKind, text, actor string, depth int) (Ticket, error) {
 	s := m.subjectOf(rule.HookTicketLog, board.Key, ticket, ticket.Status, actor, depth)
 	if err := m.gate(&s); err != nil {
 		return ticket, err
 	}
-	logged, err := m.appendLog(ticket.ID, text, actor, Event{Kind: Commented, Text: text})
+	logged, err := m.appendLog(ticket.ID, text, actor, Event{Kind: kind, Text: text})
 	if err != nil {
 		return logged, err
 	}
@@ -278,8 +301,17 @@ func (m Managed) validMove(board Board, ticket Ticket, to Status) error {
 	if slices.Contains([]Status{Doing, Review, Done}, to) && !slices.ContainsFunc(ticket.Acceptance, func(lines string) bool { return strings.TrimSpace(lines) != "" }) {
 		return RefusedError{Ticket: ticket.ID, Why: fmt.Sprintf("it has no Acceptance, and a ticket reaches %s only with one", to)}
 	}
-	if need, have := max(board.LogToReview, 1), utf8.RuneCountInString(strings.TrimSpace(ticket.Log)); to == Review && have < need {
-		return RefusedError{Ticket: ticket.ID, Why: fmt.Sprintf("its Log has %d characters of evidence, and a ticket reaches review on %s with at least %d", have, board.Key, need)}
+	if to == Review && strings.TrimSpace(ticket.Log) == "" {
+		return RefusedError{Ticket: ticket.ID, Why: "its Log is empty, and a ticket reaches review with at least one entry"}
+	}
+	if to == Review && board.LogToReview > 0 {
+		_, runes, err := m.evidenceOf(ticket.ID)
+		if err != nil {
+			return err
+		}
+		if runes < board.LogToReview {
+			return RefusedError{Ticket: ticket.ID, Why: fmt.Sprintf("its evidence entries have %d characters, and a ticket reaches review on %s with at least %d: log them with ticket_log kind evidence or tofu boardy log --evidence", runes, board.Key, board.LogToReview)}
+		}
 	}
 	if to == NeedsDecision {
 		if err := decidable(ticket); err != nil {

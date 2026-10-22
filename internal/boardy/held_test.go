@@ -122,7 +122,7 @@ func boardSetting(t *testing.T, m Managed, key string, change func(*Board)) {
 func TestBoardRulesLogAndSource(t *testing.T) {
 	m := managedBoard(t, "DEMO")
 	ticket := holding(t, m, "DEMO", "x", Doing)
-	if _, err := m.Comment(ticket.ID, "ok", manager); err != nil {
+	if _, err := m.Comment(ticket.ID, strings.Repeat("said ", 50), manager); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := m.Check(rule.EventMove, ticket.ID, Review, manager); err != nil {
@@ -134,11 +134,11 @@ func TestBoardRulesLogAndSource(t *testing.T) {
 	})
 	_, err := m.Move(ticket.ID, Review, "", manager)
 	refused(t, err, "200")
-	if _, err := m.Comment(ticket.ID, strings.Repeat("evidence ", 25), manager); err != nil {
+	if _, err := m.Evidence(ticket.ID, strings.Repeat("evidence ", 25), manager); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := m.Check(rule.EventMove, ticket.ID, Review, manager); err != nil {
-		t.Fatalf("a long Log reaches review: %v", err)
+		t.Fatalf("200 characters of evidence reach review: %v", err)
 	}
 
 	_, err = m.Create("DEMO", ticketWith("no source"), manager)
