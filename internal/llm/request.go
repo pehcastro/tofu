@@ -275,6 +275,7 @@ type Origin struct {
 	ID       string
 	Schedule string
 	Exit     *int
+	Ran      time.Duration
 	PostedAt time.Time
 	TakenAt  time.Time
 }

@@ -363,7 +363,9 @@ func (b *Inbox) watchShell(report safe.Report, registry *shell.Registry, name st
 				code, exited.Exit = strconv.Itoa(*ended.ExitCode), ended.ExitCode
 			}
 			now := time.Now()
-			said = fmt.Sprintf("%s, your command moved to the background, exited %s, %s: %s\nits last lines:\n%s", name, code, registry.Timing(ended, now).Words(now), ended.Command, tail)
+			timing := registry.Timing(ended, now)
+			exited.ID, exited.Ran = name, timing.Ran
+			said = fmt.Sprintf("%s, your command moved to the background, exited %s, %s: %s\nits last lines:\n%s", name, code, timing.Words(now), ended.Command, tail)
 		}
 		b.mu.Lock()
 		delete(b.watched, name)

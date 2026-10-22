@@ -237,14 +237,14 @@ func RecordedOrigin(origin llm.Origin) *session.Origin {
 	if origin.Source == "" {
 		return nil
 	}
-	return &session.Origin{Kind: string(origin.Kind()), Sub: string(origin.Source), Name: origin.Name, ID: origin.ID, Schedule: origin.Schedule, Exit: origin.Exit}
+	return &session.Origin{Kind: string(origin.Kind()), Sub: string(origin.Source), Name: origin.Name, ID: origin.ID, Schedule: origin.Schedule, Exit: origin.Exit, DurationMs: origin.Ran.Milliseconds()}
 }
 
 func OriginOf(message MessageRow) llm.Origin {
 	switch {
 	case message.From != nil && llm.Source(message.From.Sub).Known():
 		from := message.From
-		return llm.Origin{Source: llm.Source(from.Sub), Name: from.Name, ID: from.ID, Schedule: from.Schedule, Exit: from.Exit}
+		return llm.Origin{Source: llm.Source(from.Sub), Name: from.Name, ID: from.ID, Schedule: from.Schedule, Exit: from.Exit, Ran: time.Duration(from.DurationMs) * time.Millisecond}
 	case message.Role == session.RoleUser:
 		return llm.LegacyOrigin(message.Origin)
 	}

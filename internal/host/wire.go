@@ -262,17 +262,18 @@ const (
 )
 
 type Origin struct {
-	Kind     OriginKind `json:"kind"`
-	Sub      OriginSub  `json:"sub"`
-	Name     string     `json:"name,omitempty"`
-	ID       string     `json:"id,omitempty"`
-	Job      string     `json:"job,omitempty"`
-	Schedule string     `json:"schedule,omitempty"`
-	Exit     *int       `json:"exit,omitempty"`
+	Kind       OriginKind `json:"kind"`
+	Sub        OriginSub  `json:"sub"`
+	Name       string     `json:"name,omitempty"`
+	ID         string     `json:"id,omitempty"`
+	Job        string     `json:"job,omitempty"`
+	Schedule   string     `json:"schedule,omitempty"`
+	Exit       *int       `json:"exit,omitempty"`
+	DurationMs int64      `json:"durationMs,omitempty"`
 }
 
 func wireOrigin(origin llm.Origin) Origin {
-	wired := Origin{Kind: origin.Kind(), Sub: origin.Source, Name: origin.Name, ID: origin.ID, Schedule: origin.Schedule, Exit: origin.Exit}
+	wired := Origin{Kind: origin.Kind(), Sub: origin.Source, Name: origin.Name, ID: origin.ID, Schedule: origin.Schedule, Exit: origin.Exit, DurationMs: origin.Ran.Milliseconds()}
 	if origin.Source == llm.SourceCronFire {
 		wired.Job, wired.ID = origin.ID, ""
 	}
