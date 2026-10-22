@@ -169,7 +169,7 @@ func New(cfg Config) (*Host, []string) {
 		detached:    cfg.Detached,
 		id:          cfg.Resumed.Session,
 		started:     SourceStartup,
-		asks:        &asks{standing: map[string]Answer{}},
+		asks:        &asks{standing: map[string]Answer{}, until: map[string]time.Time{}},
 		questions:   &replies[answeredQuestion]{},
 		memoryPicks: &replies[memory.Scope]{},
 	}
@@ -481,7 +481,31 @@ func (h *Host) AnswerAsk(id string, answer Answer) (answered, stands bool) {
 	return h.asks.answer(id, answer)
 }
 
-func (h *Host) Standing() []StandingAnswer { return h.asks.standingNow() }
+func (h *Host) AllowAskFor(id string, until time.Time) (answered, stands bool) {
+	if f := h.following.Load(); f != nil {
+		reply := f.ask(followAsk{Op: followAllowFor, Asked: id, Until: until})
+		return reply.OK, reply.Stands
+	}
+	return h.asks.grant(id, AllowedAWhile, until)
+}
+
+func (h *Host) Revoke(target string) (StandingAnswer, bool) {
+	if f := h.following.Load(); f != nil {
+		reply := f.ask(followAsk{Op: followRevoke, Asked: target})
+		if !reply.OK || len(reply.Standing) == 0 {
+			return StandingAnswer{}, false
+		}
+		return reply.Standing[0], true
+	}
+	return h.asks.revoke(target)
+}
+
+func (h *Host) Standing() []StandingAnswer {
+	if f := h.following.Load(); f != nil {
+		return append([]StandingAnswer{}, f.ask(followAsk{Op: followStanding}).Standing...)
+	}
+	return h.asks.standingNow()
+}
 
 func (h *Host) ClosingBy(by string) {
 	h.mu.Lock()

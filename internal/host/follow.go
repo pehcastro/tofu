@@ -35,6 +35,9 @@ const (
 	followStopLead  followOp = "stopLead"
 	followAnswer    followOp = "answer"
 	followAnswerAsk followOp = "answerAsk"
+	followAllowFor  followOp = "allowFor"
+	followRevoke    followOp = "revoke"
+	followStanding  followOp = "standing"
 	followQuestion  followOp = "question"
 	followMemory    followOp = "memory"
 	followSteer     followOp = "steer"
@@ -64,17 +67,19 @@ type followAsk struct {
 	Command  string         `json:",omitempty"`
 	Stopped  bool           `json:",omitempty"`
 	Stop     StopAsked      `json:",omitzero"`
+	Until    time.Time      `json:",omitzero"`
 }
 
 type followReply struct {
-	ID      int
-	OK      bool
-	Stands  bool
-	Steered string
-	Refused string `json:",omitempty"`
-	Cron    cron.Reply
-	Failed  string        `json:",omitempty"`
-	Agents  []SubAgentRow `json:",omitempty"`
+	ID       int
+	OK       bool
+	Stands   bool
+	Steered  string
+	Refused  string `json:",omitempty"`
+	Cron     cron.Reply
+	Failed   string           `json:",omitempty"`
+	Agents   []SubAgentRow    `json:",omitempty"`
+	Standing []StandingAnswer `json:",omitempty"`
 }
 
 type followLine struct {
@@ -369,6 +374,13 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 		reply.OK = h.Answer(ask.Asked, ask.Answer)
 	case followAnswerAsk:
 		reply.OK, reply.Stands = h.AnswerAsk(ask.Asked, ask.Answer)
+	case followAllowFor:
+		reply.OK, reply.Stands = h.AllowAskFor(ask.Asked, ask.Until)
+	case followRevoke:
+		gone, revoked := h.Revoke(ask.Asked)
+		reply.OK, reply.Standing = revoked, []StandingAnswer{gone}
+	case followStanding:
+		reply.Standing = h.Standing()
 	case followQuestion:
 		reply.OK = h.AnswerQuestion(ask.Asked, ask.Question, ask.By)
 	case followMemory:

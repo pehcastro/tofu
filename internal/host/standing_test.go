@@ -16,6 +16,16 @@ import (
 
 func answeredStanding(t *testing.T, h *Host, request turn.GateRequest, given Answer) turn.PersonAnswer {
 	t.Helper()
+	return answeredWith(t, h, request, func(id string) { h.AnswerAsk(id, given) })
+}
+
+func answeredFor(t *testing.T, h *Host, request turn.GateRequest, until time.Time) {
+	t.Helper()
+	answeredWith(t, h, request, func(id string) { h.AllowAskFor(id, until) })
+}
+
+func answeredWith(t *testing.T, h *Host, request turn.GateRequest, answer func(id string)) turn.PersonAnswer {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	asked := make(chan string, 1)
@@ -31,7 +41,7 @@ func answeredStanding(t *testing.T, h *Host, request turn.GateRequest, given Ans
 	}()
 	select {
 	case id := <-asked:
-		h.AnswerAsk(id, given)
+		answer(id)
 	case answer := <-got:
 		return answer
 	case <-ctx.Done():
@@ -100,6 +110,56 @@ func TestAStandingAnswerOutlivesTheHostAndNeverLeavesItsSession(t *testing.T) {
 	}
 	if got := second.Standing(); !slices.Equal(got, want) {
 		t.Errorf("back in the first session it stands on %v, want %v", got, want)
+	}
+}
+
+func TestATimedAllowEndsOnTimeOutlivesARestartAndAnyGrantIsRevoked(t *testing.T) {
+	home, project := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	first, _ := New(Config{Dir: project})
+	here, err := first.OpenFresh()
+	if err != nil {
+		t.Fatal(err)
+	}
+	until := time.Now().Add(time.Hour).Truncate(time.Second)
+	answeredFor(t, first, settingsAsk("3"), until)
+	answeredFor(t, first, settingsAsk("4"), time.Now().Add(-time.Second))
+	answeredFor(t, first, pythonAsk("import os; print(1)"), until)
+	if answer := unasked(t, first, settingsAsk("3")); answer != turn.PersonAllowedOnce {
+		t.Errorf("within its hour the allow_for call answered %v, want it run unasked", answer)
+	}
+	if answer := answeredStanding(t, first, settingsAsk("4"), Denied); answer != turn.PersonDenied {
+		t.Errorf("an allow_for already over answered %v without asking", answer)
+	}
+	first.Close()
+
+	second, _ := New(Config{Dir: project, Resumed: Carry{Session: here}})
+	defer second.Close()
+	if got := second.Standing(); len(got) != 1 || got[0].Decision != AllowFor || !got[0].Until.Equal(until) {
+		t.Fatalf("after a restart it stands on %+v, want the one allow_for until %s, not the ended one and not the one on code", got, until)
+	}
+	if answer := unasked(t, second, settingsAsk("3")); answer != turn.PersonAllowedOnce {
+		t.Errorf("after a restart the allow_for call answered %v, want it run unasked", answer)
+	}
+	answeredStanding(t, second, settingsAsk("5"), AlwaysHere)
+	answeredStanding(t, second, settingsAsk("6"), NeverHere)
+	for _, value := range []string{"3", "5", "6"} {
+		if _, revoked := second.Revoke(askedPlace(settingsAsk(value))); !revoked {
+			t.Errorf("the grant on %s was not revoked", value)
+		}
+		if answer := answeredStanding(t, second, settingsAsk(value), Denied); answer != turn.PersonDenied {
+			t.Errorf("after a revoke the call on %s answered %v without asking", value, answer)
+		}
+	}
+	if _, revoked := second.Revoke(askedPlace(settingsAsk("3"))); revoked {
+		t.Error("a second revoke found a grant standing")
+	}
+	second.Close()
+	third, _ := New(Config{Dir: project, Resumed: Carry{Session: here}})
+	defer third.Close()
+	if got := third.Standing(); len(got) != 0 {
+		t.Errorf("revoked grants came back after a restart: %+v", got)
 	}
 }
 

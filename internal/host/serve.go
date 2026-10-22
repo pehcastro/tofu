@@ -221,6 +221,8 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 		return handle(raw, func(NoParams) (any, error) { return s.state(), nil })
 	case "session.set":
 		return handle(raw, s.set)
+	case "approval.revoke":
+		return handle(raw, s.revoke)
 	case "session.open":
 		result, err := handle(raw, s.open)
 		if err == nil {
@@ -726,8 +728,14 @@ func (s *server) answered(id, result json.RawMessage) error {
 		}
 		return &Refusal{Code: CodeBadParams, Message: "approval " + approval + " takes a decision of " + strings.Join(accepted, ", ")}
 	}
-	answered, stands := true, false
+	if answer.ForSeconds < 0 || answer.ForSeconds > konst.ApprovalAllowForMostSeconds || answer.ForSeconds > 0 && answer.Decision != AllowFor {
+		return &Refusal{Code: CodeBadParams, Message: "approval " + approval + " takes forSeconds only with allow_for, from 1 to " + strconv.Itoa(konst.ApprovalAllowForMostSeconds)}
+	}
+	answered, stands, until := true, false, time.Time{}
 	switch {
+	case answer.Decision == AllowFor:
+		until = time.Now().Add(time.Duration(cmp.Or(answer.ForSeconds, konst.ApprovalAllowForSeconds)) * time.Second)
+		answered, stands = l.host.AllowAskFor(approval, until)
 	case answer.Decision == Cancelled:
 		l.host.Stop(StopAsked{By: s.asker("approval " + approval + " answered cancelled"), Why: "the person cancelled the ask about " + asked.Tool})
 	case asked.Tool == turn.RememberToolName:
@@ -739,8 +747,18 @@ func (s *server) answered(id, result json.RawMessage) error {
 		return &Refusal{Code: CodeInvalid, Message: "approval " + approval + " was withdrawn before this answer arrived"}
 	}
 	delete(l.pending, approval)
-	s.box.push(kept("approval.resolved", &ApprovalResolved{Identity: asked.Identity, Approval: approval, Decision: answer.Decision, By: s.client, Standing: stands}))
+	s.box.push(kept("approval.resolved", &ApprovalResolved{Identity: asked.Identity, Approval: approval, Decision: answer.Decision, By: s.client, Standing: stands, Until: until}))
 	return nil
+}
+
+func (s *server) revoke(p ApprovalRevokeParams) (any, error) {
+	focus := s.focus()
+	gone, revoked := focus.host.Revoke(p.Target)
+	if !revoked {
+		return nil, &Refusal{Code: CodeInvalid, Message: "no grant stands on " + p.Target + ": it was revoked, it ran out, or it was never given"}
+	}
+	s.box.push(kept("approval.revoked", &ApprovalRevoked{Identity: Identity{Session: focus.host.ID(), Item: session.NewEventID()}, StandingAnswer: gone, By: s.client}))
+	return gone, nil
 }
 
 func (s *server) questionAnswered(l *lane, asked QuestionRequest, result json.RawMessage) error {

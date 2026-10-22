@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/session"
 	roster "tofu/internal/subagent"
 	"tofu/internal/turn/tools"
@@ -255,7 +256,10 @@ func sessionUpdated(id Identity, event Event) outgoing {
 }
 
 func approvalRequest(id Identity, event Event) ApprovalRequest {
-	asked := ApprovalRequest{Identity: id, Approval: event.ID, Tool: event.Tool, Target: event.Text, Args: wholeJSON(event.Args), Decisions: event.Accepts}
+	asked := ApprovalRequest{Identity: id, Approval: event.ID, Tool: event.Tool, Target: event.Text, Args: wholeJSON(event.Args), Reason: event.Reason, Risk: cmp.Or(event.Risk, RiskUnjudged), Decisions: event.Accepts}
+	if slices.Contains(event.Accepts, AllowFor) {
+		asked.ForSeconds = konst.ApprovalAllowForSeconds
+	}
 	if event.Decision != nil {
 		judged := judgementOf(*event.Decision)
 		asked.Judged = &judged

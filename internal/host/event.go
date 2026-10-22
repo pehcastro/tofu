@@ -84,6 +84,8 @@ type Event struct {
 	Questions []turn.PersonQuestion
 	Wait      time.Duration
 	Accepts   []ApprovalDecision
+	Reason    string
+	Risk      Risk
 	Scoped    *MemoryScoped
 	Account   *TurnAccount
 	Images    []MessageImage
@@ -271,4 +273,5 @@ const (
 	AllowedOnce
 	AlwaysHere
 	NeverHere
+	AllowedAWhile
 )

@@ -6,11 +6,13 @@ import (
 	"errors"
 	"io"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"tofu/internal/judge/ledger"
+	"tofu/internal/konst"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
@@ -40,6 +42,7 @@ func TestAnApprovalNamesItsAnswersRefusesAWrongOneAndAStandingRefusalIsARow(t *t
 	type request struct {
 		Approval  string   `json:"approval"`
 		Target    string   `json:"target"`
+		Risk      string   `json:"risk"`
 		Decisions []string `json:"decisions"`
 	}
 	requested := func() request {
@@ -60,8 +63,11 @@ func TestAnApprovalNamesItsAnswersRefusesAWrongOneAndAStandingRefusalIsARow(t *t
 	}
 
 	first := requested()
-	if want := []string{"allow_once", "allow_always", "reject_once", "reject_always", "cancelled"}; !slices.Equal(first.Decisions, want) {
+	if want := []string{"allow_once", "allow_for", "allow_always", "reject_once", "reject_always", "cancelled"}; !slices.Equal(first.Decisions, want) {
 		t.Errorf("a settings approval lists %v, want %v", first.Decisions, want)
+	}
+	if first.Risk != "destructive" {
+		t.Errorf("a call only a person may allow is %q, want destructive", first.Risk)
 	}
 	reply("no-such-approval", `"result":{"decision":"allow_once"}`)
 	if line := refusedOrState("no-such-approval"); line.Error == nil {
@@ -130,6 +136,73 @@ func TestAnApprovalNamesItsAnswersRefusesAWrongOneAndAStandingRefusalIsARow(t *t
 	if len(rows) != 1 || json.Unmarshal(rows[0].State, &refused) != nil || refused.Target != never.Target || rows[0].Point != standingPoint {
 		t.Errorf("the ledger holds %d deny rows %+v, want one for the call never here refused unasked", len(rows), rows)
 	}
+}
+
+func TestATimedAllowStandsUntilRevokedAndTheRequestSaysWhyAndHowRisky(t *testing.T) {
+	var h *Host
+	answers, revoked := make(chan turn.PersonAnswer, 4), make(chan struct{})
+	play := func(ctx context.Context, _ Pick, _ string, live Live) {
+		person := awaitPerson(live.Emit, h.asks, &turn.Config{})
+		asked := settingsAsk("3")
+		asked.Reason = "I need   three sub-agents\nto split the work."
+		judged := turn.GateDecision{Verdict: ledger.VerdictAsk, Reason: &ledger.Reason{Question: "risky", Comparison: ">=", Threshold: 0.5, Value: 0.7}}
+		for round := range 3 {
+			if round == 2 {
+				<-revoked
+			}
+			answer, _ := person(ctx, asked, judged)
+			answers <- answer
+		}
+	}
+	c, live, _ := serving(t, play, ServeConfig{})
+	h = live
+	c.ask("1", "initialize", `{"client":"scratch"}`)
+	c.ask("2", "session.open", `{}`)
+	var opened SessionOpenResult
+	c.answer("2", &opened)
+	c.ask("3", "turn.send", `{"session":"`+opened.Session+`","text":"change a setting"}`)
+
+	var asked ApprovalRequest
+	c.until(func(line wireLine) bool {
+		return line.Method == ApprovalMethod && json.Unmarshal(line.Params, &asked) == nil
+	}, "an approval request")
+	if asked.Reason != "I need three sub-agents to split the work." || asked.Risk != RiskRisky || asked.ForSeconds != konst.ApprovalAllowForSeconds {
+		t.Errorf("the request carries reason %q, risk %q, forSeconds %d, want the agent's sentence, risky and %d", asked.Reason, asked.Risk, asked.ForSeconds, konst.ApprovalAllowForSeconds)
+	}
+	reply := func(body string) {
+		if _, err := io.WriteString(c.in, `{"jsonrpc":"2.0","id":"`+asked.Approval+`","result":`+body+"}\n"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	reply(`{"decision":"allow_for","forSeconds":` + strconv.Itoa(konst.ApprovalAllowForMostSeconds+1) + `}`)
+	c.ask("4", "session.state", `{}`)
+	if line := c.until(func(line wireLine) bool { return string(line.ID) == `"`+asked.Approval+`"` || string(line.ID) == `"4"` }, "a reply"); line.Error == nil {
+		t.Errorf("an allow_for longer than %d seconds got %s rather than an error reply", konst.ApprovalAllowForMostSeconds, line.ID)
+	}
+	reply(`{"decision":"allow_for"}`)
+	var resolved ApprovalResolved
+	c.until(func(line wireLine) bool {
+		return line.Method == "approval.resolved" && json.Unmarshal(line.Params, &resolved) == nil
+	}, "approval.resolved")
+	if left := time.Until(resolved.Until); resolved.Decision != AllowFor || !resolved.Standing || left <= 0 || left > konst.ApprovalAllowForSeconds*time.Second {
+		t.Errorf("approval.resolved = %+v, want allow_for standing until about an hour from now", resolved)
+	}
+	if got := []turn.PersonAnswer{<-answers, <-answers}; !slices.Equal(got, []turn.PersonAnswer{turn.PersonAllowedOnce, turn.PersonAllowedOnce}) {
+		t.Fatalf("the allowed call and its repeat answered %v, want both run, the repeat unasked", got)
+	}
+	target, _ := json.Marshal(ApprovalRevokeParams{Target: asked.Target})
+	c.ask("5", "approval.revoke", string(target))
+	var gone StandingAnswer
+	c.answer("5", &gone)
+	if gone.Decision != AllowFor || gone.Target != asked.Target {
+		t.Errorf("approval.revoke answered %+v, want the allow_for on %s", gone, asked.Target)
+	}
+	c.ask("6", "approval.revoke", string(target))
+	if line := c.until(func(line wireLine) bool { return string(line.ID) == `"6"` }, "the second revoke"); line.Error == nil {
+		t.Error("revoking a grant twice was answered as if something stood")
+	}
+	close(revoked)
+	c.until(func(line wireLine) bool { return line.Method == ApprovalMethod }, "the approval asked again after the revoke")
 }
 
 func TestStoppingTheLeadResolvesItsWaitingApprovalCancelled(t *testing.T) {

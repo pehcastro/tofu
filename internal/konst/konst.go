@@ -4,6 +4,12 @@ const Version = "0.5.15-rc15"
 
 const GateAskArgsBytes = 4096
 
+const (
+	ApprovalAllowForSeconds     = 3600
+	ApprovalAllowForMostSeconds = 86400
+	ApprovalReasonRunes         = 280
+)
+
 const LeadBashSoftLimitMillis = 10000
 
 const BoardReportedSentencesMost = 2

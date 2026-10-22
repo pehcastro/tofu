@@ -1108,7 +1108,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 					if pre.Args != nil {
 						call.Arguments = pre.Args
 					}
-					request := GateRequest{TurnID: row.ID, Task: config.Task, Tool: call.Name, Args: call.Arguments, Call: call.ID}
+					request := GateRequest{TurnID: row.ID, Task: config.Task, Tool: call.Name, Args: call.Arguments, Call: call.ID, Reason: decision.Content}
 					if pre.Args == nil {
 						request.Asked = asked.Arguments
 					}

@@ -18,6 +18,7 @@ import (
 	"tofu/internal/cron"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/session"
 	"tofu/internal/settings"
@@ -517,7 +518,7 @@ func awaitPerson(emit func(Event), book *asks, config *turn.Config) turn.Person 
 		if request.Tool == (tools.RuleOverride{}).Name() {
 			_ = json.Unmarshal(request.Args, &overriding)
 		}
-		standsAt, accepts := place, []ApprovalDecision{AllowOnce, AllowAlways, RejectOnce, RejectAlways, Cancelled}
+		standsAt, accepts := place, []ApprovalDecision{AllowOnce, AllowFor, AllowAlways, RejectOnce, RejectAlways, Cancelled}
 		if overriding.Question != "" || request.Tool == hookTrustTool {
 			standsAt, accepts = "", []ApprovalDecision{AllowOnce, AllowAlways, RejectOnce, Cancelled}
 		}
@@ -536,7 +537,8 @@ func awaitPerson(emit func(Event), book *asks, config *turn.Config) turn.Person 
 		case turn.StandingOnly(ctx):
 			return turn.PersonDenied, turn.NotStanding{}
 		}
-		asked := Event{Kind: EventAwaitPerson, ID: id, Tool: request.Tool, Text: place, Args: request.Args, Agent: turn.SubAgentAsking(ctx), Accepts: accepts}
+		asked := Event{Kind: EventAwaitPerson, ID: id, Tool: request.Tool, Text: place, Args: request.Args, Agent: turn.SubAgentAsking(ctx), Accepts: accepts,
+			Reason: agentReason(request.Reason), Risk: riskOf(decision)}
 		if request.Code != nil {
 			emit(Event{Kind: EventNote, Text: asked.Agent + " asks you to run this inline code:\n" + turn.CodeShown(*request.Code)})
 		}
@@ -580,6 +582,28 @@ func awaitPerson(emit func(Event), book *asks, config *turn.Config) turn.Person 
 }
 
 const unattendedNow Answer = -1
+
+func agentReason(said string) string {
+	runes := []rune(strings.Join(strings.Fields(said), " "))
+	if len(runes) <= konst.ApprovalReasonRunes {
+		return string(runes)
+	}
+	return string(runes[:konst.ApprovalReasonRunes-1]) + "…"
+}
+
+func riskOf(decision turn.GateDecision) Risk {
+	switch {
+	case decision.PersonOnly, decision.Verdict == ledger.VerdictDeny, decision.Reason != nil && decision.Reason.Blocked:
+		return RiskDestructive
+	case decision.Failure != "", decision.Reason == nil:
+		return RiskUnjudged
+	case decision.Verdict == ledger.VerdictAsk:
+		return RiskRisky
+	case decision.Verdict == ledger.VerdictAllow:
+		return RiskLow
+	}
+	return RiskUnjudged
+}
 
 type unansweredAsk struct {
 	waited    time.Duration
@@ -625,7 +649,7 @@ func personAnswer(answered Answer) turn.PersonAnswer {
 	switch answered {
 	case AlwaysHere:
 		return turn.PersonAlwaysHere
-	case AllowedOnce:
+	case AllowedOnce, AllowedAWhile:
 		return turn.PersonAllowedOnce
 	case Denied, NeverHere:
 		return turn.PersonDenied
@@ -637,7 +661,7 @@ func codeAnswer(answered Answer) turn.CodeAnswer {
 	switch answered {
 	case AlwaysHere:
 		return turn.CodeAllowAlways
-	case AllowedOnce:
+	case AllowedOnce, AllowedAWhile:
 		return turn.CodeAllowOnce
 	case Denied:
 		return turn.CodeDeny
@@ -663,7 +687,7 @@ func recordStanding(log string, request turn.GateRequest, place string, stood An
 		return
 	}
 	verdict := ledger.VerdictDeny
-	if stood == AlwaysHere {
+	if stood == AlwaysHere || stood == AllowedAWhile {
 		verdict = ledger.VerdictAllow
 	}
 	_, _ = ledger.NewWriter(log).Append(ledger.Row{Point: standingPoint, StateHash: ledger.HashOf(body), State: body, Verdict: verdict, TurnID: request.TurnID})

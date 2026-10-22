@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"slices"
 	"sync"
+	"time"
 )
 
 type waitingAsk struct {
@@ -17,6 +18,7 @@ type asks struct {
 	mu       sync.Mutex
 	waiting  []waitingAsk
 	standing map[string]Answer
+	until    map[string]time.Time
 	held     standingIn
 	session  func() standingIn
 	unkept   func(error)
@@ -34,12 +36,12 @@ func (a *asks) follow() {
 	}
 	before := a.held
 	a.held = now
-	read, err := now.read()
+	read, until, err := now.read()
 	var keepErr error
 	if errors.Is(err, fs.ErrNotExist) && before.forkedInto(now.id) {
-		keepErr = now.keep(a.standing)
+		keepErr = now.keep(a.standing, a.until)
 	} else {
-		a.standing = read
+		a.standing, a.until = read, until
 	}
 	a.mu.Unlock()
 	a.report(keepErr)
@@ -56,6 +58,9 @@ func (a *asks) stood(place string) (Answer, bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	answer, stands := a.standing[place]
+	if answer == AllowedAWhile && !time.Now().Before(a.until[place]) {
+		return Denied, false
+	}
 	return answer, stands
 }
 
@@ -63,7 +68,7 @@ func (a *asks) standingNow() []StandingAnswer {
 	a.follow()
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return listed(a.standing)
+	return listed(a.standing, a.until)
 }
 
 func (a *asks) wait(id, standsAt string) (<-chan Answer, func()) {
@@ -79,6 +84,10 @@ func (a *asks) wait(id, standsAt string) (<-chan Answer, func()) {
 }
 
 func (a *asks) answer(id string, given Answer) (answered, stands bool) {
+	return a.grant(id, given, time.Time{})
+}
+
+func (a *asks) grant(id string, given Answer, until time.Time) (answered, stands bool) {
 	a.follow()
 	a.mu.Lock()
 	asked, waiting := a.take(id)
@@ -86,16 +95,37 @@ func (a *asks) answer(id string, given Answer) (answered, stands bool) {
 		a.mu.Unlock()
 		return false, false
 	}
-	stands = asked.place != "" && (given == AlwaysHere || given == NeverHere)
+	stands = asked.place != "" && (given == AlwaysHere || given == NeverHere || given == AllowedAWhile)
 	var keepErr error
 	if stands {
 		a.standing[asked.place] = given
-		keepErr = a.held.keep(a.standing)
+		if given == AllowedAWhile {
+			a.until[asked.place] = until
+		}
+		keepErr = a.held.keep(a.standing, a.until)
 	}
 	asked.reply <- given
 	a.mu.Unlock()
 	a.report(keepErr)
 	return true, stands
+}
+
+func (a *asks) revoke(place string) (StandingAnswer, bool) {
+	a.follow()
+	a.mu.Lock()
+	now := listed(a.standing, a.until)
+	at := slices.IndexFunc(now, func(one StandingAnswer) bool { return one.Target == place })
+	if at < 0 {
+		a.mu.Unlock()
+		return StandingAnswer{}, false
+	}
+	gone := now[at]
+	delete(a.standing, place)
+	delete(a.until, place)
+	keepErr := a.held.keep(a.standing, a.until)
+	a.mu.Unlock()
+	a.report(keepErr)
+	return gone, true
 }
 
 func (a *asks) take(id string) (waitingAsk, bool) {

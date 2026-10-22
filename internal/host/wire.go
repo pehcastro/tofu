@@ -134,6 +134,7 @@ type ApprovalDecision string
 
 const (
 	AllowOnce            ApprovalDecision = "allow_once"
+	AllowFor             ApprovalDecision = "allow_for"
 	AllowAlways          ApprovalDecision = "allow_always"
 	RejectOnce           ApprovalDecision = "reject_once"
 	RejectAlways         ApprovalDecision = "reject_always"
@@ -145,7 +146,7 @@ const (
 )
 
 func (ApprovalDecision) enum() []string {
-	return []string{string(AllowOnce), string(AllowAlways), string(RejectOnce), string(RejectAlways), string(Cancelled), string(RememberProject), string(RememberGlobal), string(RememberUserLocal), string(RememberProjectLocal)}
+	return []string{string(AllowOnce), string(AllowFor), string(AllowAlways), string(RejectOnce), string(RejectAlways), string(Cancelled), string(RememberProject), string(RememberGlobal), string(RememberUserLocal), string(RememberProjectLocal)}
 }
 
 func keptAs(decision ApprovalDecision) memory.Scope {
@@ -180,6 +181,8 @@ func personAnswerOf(decision ApprovalDecision) Answer {
 	switch decision {
 	case AllowOnce:
 		return AllowedOnce
+	case AllowFor:
+		return AllowedAWhile
 	case AllowAlways:
 		return AlwaysHere
 	case RejectOnce:
@@ -188,6 +191,19 @@ func personAnswerOf(decision ApprovalDecision) Answer {
 		return NeverHere
 	}
 	panic("host: no answer for the decision " + string(decision))
+}
+
+type Risk string
+
+const (
+	RiskLow         Risk = "low"
+	RiskRisky       Risk = "risky"
+	RiskDestructive Risk = "destructive"
+	RiskUnjudged    Risk = "unjudged"
+)
+
+func (Risk) enum() []string {
+	return []string{string(RiskLow), string(RiskRisky), string(RiskDestructive), string(RiskUnjudged)}
 }
 
 type AskingMode string
@@ -633,21 +649,36 @@ type SessionUpdated struct {
 
 type ApprovalRequest struct {
 	Identity
-	Approval  string             `json:"approval"`
-	Tool      string             `json:"tool"`
-	Target    string             `json:"target"`
-	Args      json.RawMessage    `json:"args"`
-	Judged    *Judgement         `json:"judged,omitempty"`
-	Decisions []ApprovalDecision `json:"decisions"`
+	Approval   string             `json:"approval"`
+	Tool       string             `json:"tool"`
+	Target     string             `json:"target"`
+	Args       json.RawMessage    `json:"args"`
+	Reason     string             `json:"reason,omitempty"`
+	Risk       Risk               `json:"risk"`
+	Judged     *Judgement         `json:"judged,omitempty"`
+	Decisions  []ApprovalDecision `json:"decisions"`
+	ForSeconds int                `json:"forSeconds,omitempty"`
 }
 
 type StandingAnswer struct {
 	Target   string           `json:"target"`
 	Decision ApprovalDecision `json:"decision"`
+	Until    time.Time        `json:"until,omitzero"`
 }
 
 type ApprovalAnswer struct {
-	Decision ApprovalDecision `json:"decision"`
+	Decision   ApprovalDecision `json:"decision"`
+	ForSeconds int              `json:"forSeconds,omitempty"`
+}
+
+type ApprovalRevokeParams struct {
+	Target string `json:"target"`
+}
+
+type ApprovalRevoked struct {
+	Identity
+	StandingAnswer
+	By string `json:"by"`
 }
 
 type QuestionOutcome string
@@ -688,6 +719,7 @@ type ApprovalResolved struct {
 	Decision ApprovalDecision `json:"decision"`
 	By       string           `json:"by"`
 	Standing bool             `json:"standing,omitempty"`
+	Until    time.Time        `json:"until,omitzero"`
 }
 
 type Persisted struct {
@@ -1160,6 +1192,7 @@ func notifications() []method {
 		{name: "session.settings", params: SessionSettings{}},
 		{name: "settings.changed", params: SettingsChanged{}},
 		{name: "approval.resolved", params: ApprovalResolved{}},
+		{name: "approval.revoked", params: ApprovalRevoked{}},
 		{name: "question.resolved", params: QuestionResolved{}},
 		{name: "memory.scoped", params: MemoryScopedEvent{}},
 		{name: "item.persisted", params: Persisted{}},
@@ -1177,6 +1210,7 @@ func requests() []method {
 		{name: "session.open", params: SessionOpenParams{}, result: SessionOpenResult{}},
 		{name: "session.close", params: SessionCloseParams{}, result: Ack{}},
 		{name: "session.state", params: NoParams{}, result: SessionState{}},
+		{name: "approval.revoke", params: ApprovalRevokeParams{}, result: StandingAnswer{}},
 		{name: "session.set", params: SessionSetParams{}, result: Ack{}},
 		{name: "session.rename", params: SessionRenameParams{}, result: Ack{}},
 		{name: "session.branch", params: SessionBranchParams{}, result: SessionBranchResult{}},
@@ -1256,7 +1290,7 @@ func requests() []method {
 }
 
 func capabilities() []string {
-	return []string{"approvals", "questions", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "sendNow", "run", "compact", "history", "ledger",
+	return []string{"approvals", "revoke", "questions", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "sendNow", "run", "compact", "history", "ledger",
 		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "accounts", "writes", "status", "mention", "boards", "side", "commands", "boardy", "scratch", "sessions", "takeover"}
 }
 

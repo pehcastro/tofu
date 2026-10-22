@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"time"
 
 	"tofu/internal/session"
 	"tofu/internal/turn"
@@ -40,18 +41,18 @@ func (in standingIn) forkedInto(id string) bool {
 	return err == nil && header.ForkedInto == id
 }
 
-func (in standingIn) read() (map[string]Answer, error) {
-	standing := map[string]Answer{}
+func (in standingIn) read() (map[string]Answer, map[string]time.Time, error) {
+	standing, until := map[string]Answer{}, map[string]time.Time{}
 	if in.id == "" {
-		return standing, nil
+		return standing, until, nil
 	}
 	body, err := os.ReadFile(in.file())
 	if err != nil {
-		return standing, err
+		return standing, until, err
 	}
 	var kept []StandingAnswer
 	if json.Unmarshal(body, &kept) != nil {
-		return standing, nil
+		return standing, until, nil
 	}
 	for _, one := range slices.DeleteFunc(kept, heldInMemoryOnly) {
 		switch one.Decision {
@@ -59,16 +60,20 @@ func (in standingIn) read() (map[string]Answer, error) {
 			standing[one.Target] = AlwaysHere
 		case RejectAlways:
 			standing[one.Target] = NeverHere
+		case AllowFor:
+			if time.Now().Before(one.Until) {
+				standing[one.Target], until[one.Target] = AllowedAWhile, one.Until
+			}
 		}
 	}
-	return standing, nil
+	return standing, until, nil
 }
 
-func (in standingIn) keep(standing map[string]Answer) error {
+func (in standingIn) keep(standing map[string]Answer, until map[string]time.Time) error {
 	if in.id == "" {
 		return nil
 	}
-	body, err := json.MarshalIndent(slices.DeleteFunc(listed(standing), heldInMemoryOnly), "", "  ")
+	body, err := json.MarshalIndent(slices.DeleteFunc(listed(standing, until), heldInMemoryOnly), "", "  ")
 	if err != nil {
 		return err
 	}
@@ -83,17 +88,22 @@ func (in standingIn) keep(standing map[string]Answer) error {
 }
 
 func heldInMemoryOnly(one StandingAnswer) bool {
-	return one.Decision == AllowAlways && turn.PlacesCode(one.Target)
+	return one.Decision != RejectAlways && turn.PlacesCode(one.Target)
 }
 
-func listed(standing map[string]Answer) []StandingAnswer {
+func listed(standing map[string]Answer, until map[string]time.Time) []StandingAnswer {
 	now := []StandingAnswer{}
 	for _, place := range slices.Sorted(maps.Keys(standing)) {
-		decision := AllowAlways
-		if standing[place] == NeverHere {
-			decision = RejectAlways
+		switch standing[place] {
+		case AlwaysHere:
+			now = append(now, StandingAnswer{Target: place, Decision: AllowAlways})
+		case NeverHere:
+			now = append(now, StandingAnswer{Target: place, Decision: RejectAlways})
+		case AllowedAWhile:
+			if time.Now().Before(until[place]) {
+				now = append(now, StandingAnswer{Target: place, Decision: AllowFor, Until: until[place]})
+			}
 		}
-		now = append(now, StandingAnswer{Target: place, Decision: decision})
 	}
 	return now
 }
