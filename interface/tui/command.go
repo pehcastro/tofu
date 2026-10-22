@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -228,6 +227,8 @@ func (a *App) quoteDialog() *recordedDialog {
 	}
 }
 
+const settingsUnread = "the settings file could not be read again: "
+
 func troubleOr(trouble, hint string) string {
 	if trouble != "" {
 		return trouble
@@ -242,15 +243,18 @@ func (a *App) reload() {
 	}
 	if a.store != nil {
 		if err := a.store.Reread(); err != nil {
-			said = append(said, "the settings file could not be read again: "+err.Error())
+			said = append(said, settingsUnread+err.Error())
 		}
 		a.refreshSettingsRows()
 	}
 	a.shortcuts = keymap.LoadShortcuts(a.options.Keymap)
 	a.settings.SetSearchKey(a.shortcuts[searchAction])
-	picked := a.picked
+	picked, bound := a.picked, a.bound
 	a.readWires()
 	a.picked, a.chosen = "", resolvedModel{}
+	if picked == bound {
+		picked = a.bound
+	}
 	if refused := a.repick(picked); refused != "" {
 		said = append(said, refused)
 	}
@@ -265,12 +269,9 @@ func (a *App) repick(slug string) string {
 	if _, err := loaded.Select(slug); err != nil {
 		return "the model picked for the next turn, " + slug + ", is now refused, so the next turn runs " + a.slug() + ": " + err.Error()
 	}
-	source, model, _ := strings.Cut(slug, "/")
-	at := slices.IndexFunc(a.wires, func(wire Wire) bool { return wire.Provider == source })
-	if at < 0 {
+	if !a.runOn(slug, a.effort) {
 		return "the model picked for the next turn, " + slug + ", has no signed-in subscription now, so the next turn runs " + a.slug()
 	}
-	a.wire, a.provider, a.model, a.picked = a.wires[at].Name, source, model, slug
 	return ""
 }
 

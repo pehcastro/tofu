@@ -4,7 +4,7 @@
                                                                                                     
   CATEGORIES            › Diff context                                                     3  ▾     
     Appearance    05      Lines around changed hunks, at most the 3 each diff carries               
-    Models & rol… 02                                                                                
+    Models & rol… 03                                                                                
     Interaction   09      Hyperlinks                                                     off  ▾     
     Context       15      OSC 8 terminal file links; off prints the bare path                       
   › Files         03                                                                                

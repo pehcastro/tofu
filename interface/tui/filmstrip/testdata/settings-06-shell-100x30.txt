@@ -4,7 +4,7 @@
                                                                                                     
   CATEGORIES            › Persistent registry                                              ○ off    
     Appearance    05      a running shell outlives tofu and the next launch lists it; off stops…    
-    Models & rol… 02                                                                                
+    Models & rol… 03                                                                                
     Interaction   09      Log tail                                                       500  ▾     
     Context       15      Lines retained per shell                                                  
     Files         03                                                                                

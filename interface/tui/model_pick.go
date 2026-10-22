@@ -3,6 +3,7 @@ package tui
 import (
 	"cmp"
 	"context"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"tofu/interface/tui/models"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/settings"
+	"tofu/internal/host"
 	"tofu/internal/judge/jev"
 	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
@@ -26,6 +28,8 @@ const (
 	pickedHead    = "the next turn runs "
 	pickedEffort  = " at effort "
 	pickedOnce    = ", and a restart starts again on the bound model"
+	reboundHead   = "the orchestrator is now bound to "
+	reboundTail   = ", so the next turn runs it"
 	noWireToPick  = "no subscription is signed in, so there is no model to pick"
 	noWireForPick = " has no signed-in subscription or stored key, so the next turn keeps its model"
 	notSet        = "not set"
@@ -203,22 +207,56 @@ func (a *App) nowRuns(name string) string {
 }
 
 func (a *App) runNextTurnOn(slug string, effort llm.Effort) {
-	source, model, _ := strings.Cut(slug, "/")
-	if !slices.ContainsFunc(a.wires, func(wire Wire) bool { return wire.Provider == source }) {
-		a.readWires()
-	}
-	for _, wire := range a.wires {
-		if wire.Provider != source {
-			continue
-		}
-		a.wire, a.provider, a.model = wire.Name, wire.Provider, model
-		a.picked, a.effort = slug, effort
-		note := pickedHead + slug
-		if effort != "" {
-			note += pickedEffort + string(effort)
-		}
-		a.view.Append(session.Entry{Kind: session.Note, Body: note + pickedOnce})
+	if !a.runOn(slug, effort) {
+		a.notify(slug + noWireForPick)
 		return
 	}
-	a.notify(slug + noWireForPick)
+	note := pickedHead + slug
+	if effort != "" {
+		note += pickedEffort + string(effort)
+	}
+	a.view.Append(session.Entry{Kind: session.Note, Body: note + pickedOnce})
+}
+
+func (a *App) runOn(slug string, effort llm.Effort) bool {
+	source, model, _ := strings.Cut(slug, "/")
+	serves := func(wire Wire) bool { return wire.Provider == source }
+	if !slices.ContainsFunc(a.wires, serves) {
+		a.readWires()
+	}
+	at := slices.IndexFunc(a.wires, serves)
+	if at < 0 {
+		return false
+	}
+	a.wire, a.provider, a.model = a.wires[at].Name, source, model
+	a.picked, a.effort = slug, effort
+	return true
+}
+
+func (a *App) followConfig() {
+	seen := host.ConfigSeen(a.options.Root)
+	if maps.Equal(seen, a.configSeen) {
+		return
+	}
+	a.configSeen, a.roles = seen, nil
+	if a.store != nil {
+		if err := a.store.Reread(); err != nil {
+			a.notify(settingsUnread + err.Error())
+		}
+	}
+	a.refreshSettingsRows()
+	if a.options.Models == nil {
+		return
+	}
+	loaded, err := a.options.Models()
+	orchestrator, bound := loaded.Bound(library.RoleOrchestrator)
+	if err != nil || !bound || orchestrator.Slug() == a.bound {
+		return
+	}
+	a.bound = orchestrator.Slug()
+	if !a.runOn(a.bound, "") {
+		a.notify(a.bound + noWireForPick)
+		return
+	}
+	a.view.Append(session.Entry{Kind: session.Note, Body: reboundHead + a.bound + reboundTail})
 }

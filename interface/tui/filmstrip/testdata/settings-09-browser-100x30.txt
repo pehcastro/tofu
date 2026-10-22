@@ -4,7 +4,7 @@
                                                                                                     
   CATEGORIES            › Browser                                                      drive  ▾     
     Appearance    05      drive lets the model read your Chrome tabs and click and type in them…    
-    Models & rol… 02                                                                                
+    Models & rol… 03                                                                                
     Interaction   09      Browser driver                                            subagent  ▾     
     Context       15      subagent gives the browser steps to a browser sub-agent on browserMod…    
     Files         03                                                                                

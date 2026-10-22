@@ -4,14 +4,14 @@
                                                                                                     
   CATEGORIES            › Orchestrator model                                                  ▾     
     Appearance    05      the model that plans and hands work to sub-agents                         
-  › Models & rol… 02                                                                                
+  › Models & rol… 03                                                                                
     Interaction   09      Classifier model                                                    ▾     
     Context       15      the typed model that judges the model's calls, shell results, browser…    
     Files         03                                                                                
-    Shell         05    enter change  ·  shift+tab scope  ·  esc chat                               
-    Turn          17                                                                                
+    Shell         05      Continue on an API model                                        no  ▾     
+    Turn          17      when no subscription has an account left, a turn or a sub-agent conti…    
     Projects      04                                                                                
-    Browser       08                                                                                
+    Browser       08    enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     
   NAVIGATE                                                                                          
   ↑↓ setting · ←→                                                                                   
@@ -94,14 +94,14 @@
                                                                                                     
   CATEGORIES              Orchestrator model                                                  ▾     
     Appearance    05      the model that plans and hands work to sub-agents                         
-  › Models & rol… 02                                                                                
+  › Models & rol… 03                                                                                
     Interaction   09    › Classifier model                               typesafe/jev-latest  ▾     
     Context       15      the typed model that judges the model's calls, shell results, browser…    
     Files         03                                                                                
-    Shell         05    enter change  ·  shift+tab scope  ·  esc chat                               
-    Turn          17                                                                                
+    Shell         05      Continue on an API model                                        no  ▾     
+    Turn          17      when no subscription has an account left, a turn or a sub-agent conti…    
     Projects      04                                                                                
-    Browser       08                                                                                
+    Browser       08    enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     
   NAVIGATE                                                                                          
   ↑↓ setting · ←→                                                                                   

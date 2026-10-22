@@ -64,7 +64,7 @@
                                                                                                     
   CATEGORIES              Browser                                                      drive  ▾     
     Appearance    05      drive lets the model read your Chrome tabs and click and type in them…    
-    Models & rol… 02                                                                                
+    Models & rol… 03                                                                                
     Interaction   09      Browser driver                                            subagent  ▾     
     Context       15      subagent gives the browser steps to a browser sub-agent on browserMod…    
     Files         03                                                                                
@@ -87,4 +87,4 @@
                           a Chrome tofu starts on a browser profile runs with no window; false …    
                                                                                                     
                         enter change  ·  shift+tab scope  ·  esc chat                               
- Browser model now runs meta/muse-spark-1.3                                                         
+ Browser model is now meta/muse-spark-1.3                                                           

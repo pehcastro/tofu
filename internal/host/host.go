@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -200,11 +201,36 @@ func New(cfg Config) (*Host, []string) {
 	case leader != nil:
 		return h, append(troubles, leader.note(h.id))
 	}
+	safe.Go(h.report, "follow binding", h.followBinding)
 	if err := h.loadCron(h.id); err != nil {
 		return h, append(troubles, err.Error())
 	}
 	h.armCron()
 	return h, troubles
+}
+
+func (h *Host) followBinding() {
+	seen, bound := ConfigSeen(h.dir), boundOrchestrator(h.dir)
+	every := time.NewTicker(konst.ServeShellPollMillis * time.Millisecond)
+	defer every.Stop()
+	for {
+		select {
+		case <-h.done:
+			return
+		case <-every.C:
+		}
+		now := ConfigSeen(h.dir)
+		if maps.Equal(now, seen) {
+			continue
+		}
+		seen = now
+		if moved := boundOrchestrator(h.dir); moved != bound {
+			bound = moved
+			h.mu.Lock()
+			h.settle("", bound)
+			h.mu.Unlock()
+		}
+	}
 }
 
 func (h *Host) Events() <-chan Event { return h.events }

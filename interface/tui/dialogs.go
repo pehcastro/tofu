@@ -331,6 +331,7 @@ func (a *App) choseModel(intent models.Intent) tea.Cmd {
 		a.refreshSettingsRows()
 		a.notify(string(intent.Role) + " now runs " + intent.Slug)
 		if intent.Role == library.RoleOrchestrator {
+			a.bound = intent.Slug
 			a.runNextTurnOn(intent.Slug, intent.Effort)
 		}
 		return a.pop()

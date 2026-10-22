@@ -4,7 +4,7 @@
                                                                                                     
   CATEGORIES            › Decision cap                                                     0  ▾     
     Appearance    05      decision cap per turn, zero means no cap                                  
-    Models & rol… 02                                                                                
+    Models & rol… 03                                                                                
     Interaction   09      Sub-agents                                                        ● on    
     Context       15      a turn may spawn a sub-agent                                              
     Files         03                                                                                

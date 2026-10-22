@@ -462,6 +462,7 @@ func (a *App) start(task string) {
 		a.view.Append(session.Entry{Kind: session.Failure, Body: noEngine})
 		return
 	}
+	a.followConfig()
 	a.busy, a.edits.Busy = true, true
 	a.leadTurnBegins()
 	if !a.options.Host.Send(Pick{Wire: a.wire, Model: a.picked, Effort: a.effort}, task) {

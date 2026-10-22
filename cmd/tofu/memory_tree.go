@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -148,17 +150,9 @@ type memoryModel struct {
 	err        error
 }
 
-func openMemoryModel(dir string, session models.Model) memoryModel {
+func chooseMemoryModel(dir string, session models.Model) (memoryModel, models.Model) {
 	set := settingText(dir, settingspkg.MemoryModel, nil)
-	deck, err := readCassette(os.Getenv(cassetteVariable))
-	open := openAppWire
-	if deck != nil {
-		open = driveWire(deck)
-	}
-	var library models.Library
-	if err == nil {
-		library, err = modelLibrary(dir)
-	}
+	library, err := modelLibrary(dir)
 	var model models.Model
 	switch {
 	case err != nil:
@@ -167,22 +161,34 @@ func openMemoryModel(dir string, session models.Model) memoryModel {
 	default:
 		model, err = sessionMemoryWriter(library, session)
 	}
-	opened := memoryModel{slug: cmp.Or(set, model.Slug())}
-	if err == nil && library.WireOf(model) == wireKey {
-		err = fmt.Errorf("%s is reached through the OpenRouter key, which the memory tree never spends: set %s to a subscription model", opened.slug, settingspkg.MemoryModel)
+	chosen := memoryModel{slug: cmp.Or(set, model.Slug()), wire: library.WireOf(model), err: err}
+	if err == nil && chosen.wire == wireKey {
+		chosen.err = fmt.Errorf("%s is reached through the OpenRouter key, which the memory tree never spends: set %s to a subscription model", chosen.slug, settingspkg.MemoryModel)
 	}
-	if err != nil {
-		opened.err = err
-		return opened
+	return chosen, model
+}
+
+func openMemoryModel(dir string, session models.Model) memoryModel {
+	chosen, model := chooseMemoryModel(dir, session)
+	return chosen.open(dir, model)
+}
+
+func (m memoryModel) open(dir string, model models.Model) memoryModel {
+	deck, err := readCassette(os.Getenv(cassetteVariable))
+	if m.err = cmp.Or(m.err, err); m.err != nil {
+		return m
 	}
-	opened.wire = library.WireOf(model)
-	opts := runOpts{dir: dir, wire: opened.wire, model: opened.slug}
+	open := openAppWire
+	if deck != nil {
+		open = driveWire(deck)
+	}
+	opts := runOpts{dir: dir, wire: m.wire, model: m.slug}
 	if len(model.Efforts) > 0 {
 		opts.effort = defaultEffort(model.Efforts)
 	}
 	wire, err := open(opts)
-	opened.held, opened.err = wire.held, err
-	return opened
+	m.held, m.err = wire.held, err
+	return m
 }
 
 func sessionMemoryWriter(library models.Library, session models.Model) (models.Model, error) {
@@ -202,6 +208,7 @@ func (m memoryModel) release() {
 type sessionMemoryModel struct {
 	mu       sync.Mutex
 	bySource map[string]memoryModel
+	retired  []memoryModel
 	closed   bool
 }
 
@@ -213,10 +220,16 @@ func (s *sessionMemoryModel) model(dir string, session models.Model) memoryModel
 	if s.closed {
 		return memoryModel{err: errMemoryModelClosed}
 	}
-	if opened, held := s.bySource[session.Source()]; held {
-		return opened
+	chosen, model := chooseMemoryModel(dir, session)
+	held, open := s.bySource[session.Source()]
+	if open && held.slug == chosen.slug {
+		return held
 	}
-	opened := openMemoryModel(dir, session)
+	if open {
+		s.retired = append(s.retired, held)
+		delete(s.bySource, session.Source())
+	}
+	opened := chosen.open(dir, model)
 	if opened.err != nil {
 		opened.release()
 		return opened
@@ -232,7 +245,7 @@ func (s *sessionMemoryModel) close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.closed = true
-	for _, opened := range s.bySource {
+	for _, opened := range append(slices.Collect(maps.Values(s.bySource)), s.retired...) {
 		opened.release()
 	}
 }

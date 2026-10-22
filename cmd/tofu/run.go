@@ -142,6 +142,7 @@ type runtime struct {
 	startup      *startupClock
 	keys         *storedKeys
 	memory       *sessionMemoryModel
+	current      func(subagent.Definition) subagent.Definition
 
 	omitThinkingSummary bool
 }
@@ -294,6 +295,9 @@ type subAgentTarget struct {
 }
 
 func (r runtime) subAgentTarget(opts runOpts, definition subagent.Definition) (subAgentTarget, error) {
+	if r.current != nil {
+		definition = r.current(definition)
+	}
 	target := subAgentTarget{named: definition.Model, wire: opts.wire, offered: r.orchestrator.Efforts}
 	if definition.Model == "" {
 		bound, err := boundSubAgent(opts)
@@ -949,6 +953,16 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	subAgentBase.Instructions, subAgentBase.Memory = "", ""
 	spawner := turn.NewSpawnTool(orchestratorID, subAgentBase, cmp.Or(run.roster, &subagent.Roster{}))
 	spawner.Inbox, spawner.SubAgents, spawner.Project, spawner.ChecksWork = config.Inbox, prompt.subAgents, dir, prompt.checksWork
+	run.current = func(held subagent.Definition) subagent.Definition {
+		now := scanSubAgents(dir, built).Definitions
+		runs := func(one subagent.Definition) bool {
+			return one.Name == held.Name && (one.Runs == subagent.RunsModel || one.Runs == subagent.RunsInherit)
+		}
+		if at := slices.IndexFunc(now, runs); at >= 0 {
+			held.Model, held.Effort = now[at].Model, now[at].Effort
+		}
+		return held
+	}
 	spawner.SubAgents.Open, spawner.SubAgents.Takes = run.subAgentOpener(opts), run.subAgentTakes(opts)
 	if opts.agent == "" && memoryOn(dir) {
 		spawner.Remembered = func() (map[string]string, error) {

@@ -242,6 +242,8 @@ type App struct {
 	model          string
 	provider       string
 	picked         string
+	bound          string
+	configSeen     host.ConfigFiles
 	chosen         resolvedModel
 	effort         llm.Effort
 	heldPick       Pick
@@ -395,6 +397,7 @@ func New(options Options) *App {
 	app.options.Resumed = nil
 	app.view.Stop()
 	app.readWires()
+	app.configSeen = host.ConfigSeen(options.Root)
 	if loaded, err := app.options.Models(); err == nil {
 		app.noteRefused(loaded)
 	}
@@ -422,7 +425,8 @@ func (a *App) readWires() {
 	if err != nil || !bound {
 		return
 	}
-	source, model, _ := strings.Cut(orchestrator.Slug(), "/")
+	a.bound = orchestrator.Slug()
+	source, model, _ := strings.Cut(a.bound, "/")
 	if at := slices.IndexFunc(signed, func(wire Wire) bool { return wire.Provider == source }); at >= 0 {
 		a.wire, a.model, a.provider, a.picked = signed[at].Name, model, source, orchestrator.Slug()
 	}
@@ -708,6 +712,7 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 		return a.pickerReloaded(string(msg))
 	case pickPollMsg:
 		a.pickWatching = false
+		a.followConfig()
 		a.offerDefaultPick()
 		return a.watchPick()
 	case noticeMsg:

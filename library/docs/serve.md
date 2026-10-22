@@ -49,6 +49,11 @@ context. `tofu docs serve-methods` lists every request; this page is what serve 
 - `settings.changed` `{key, value, scope, source}`: a setting changed by `settings.set`, by `tofu settings
   set` in another process or by hand; `scope` is the file that changed, `source` where the value now
   resolves from, `default` once the key left both files
+- `models.changed` `{what, name, model, scope, file}`: one per change to a role file, `agent-models.yaml`, or a
+  file under `models/` or `catalog/`, in the home or the project, from any process or by hand. `what` is
+  `role` (`name` the role, `model` what it is bound to now, empty once unbound), `agent` (`name` the
+  sub-agent, `model` what that file now assigns it, empty once removed) or `model` (`name` the file);
+  every client and the session's holder read the change before the next turn and the next spawn
 - `item.persisted`: every line of `events.jsonl` with its `logSeq`, so history
   after a seq is a read of the log; a tool call's names its `tool.started`
 - `decision`: every gate, with `at` and `call`, the `tool.started` it judged

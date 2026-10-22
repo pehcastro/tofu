@@ -1224,6 +1224,7 @@ func notifications() []method {
 		{name: "session.turns.updated", params: SessionTurnUpdated{}},
 		{name: "session.settings", params: SessionSettings{}},
 		{name: "settings.changed", params: SettingsChanged{}},
+		{name: "models.changed", params: ModelsChanged{}},
 		{name: "approval.resolved", params: ApprovalResolved{}},
 		{name: "approval.revoked", params: ApprovalRevoked{}},
 		{name: "question.resolved", params: QuestionResolved{}},

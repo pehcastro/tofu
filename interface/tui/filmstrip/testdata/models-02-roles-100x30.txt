@@ -11,9 +11,9 @@
                              the model that plans and hands work to …  hands work to sub-agents   
    PROVIDERS                 Classifier model                                                     
      all                     the typed model that judges the model's…  ASSIGNED MODEL             
-     claude-sub                                                        nothing is bound, so it    
-     Meta · no key                                                     runs on the subscription   
-                                                                       default                    
+     claude-sub                                                        nothing is bound, so setup 
+     Meta · no key                                                     asks for it before the     
+                                                                       first turn                 
    f5 reloads models                                                                              
                                                                        enter chooses a new model  
                                                                                                   

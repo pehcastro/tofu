@@ -4,7 +4,7 @@
                                                                                                     
   CATEGORIES            › Boardy                                                         off  ▾     
     Appearance    05      boardy runs the lead and its sub-agents from board tickets: a spawn n…    
-    Models & rol… 02                                                                                
+    Models & rol… 03                                                                                
     Interaction   09      Boardy flow                                                   jira  ▾     
     Context       15      the words tofu boardy uses: jira says ticket, board, epic, sprint and…    
     Files         03                                                                                

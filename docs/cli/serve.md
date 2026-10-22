@@ -109,6 +109,10 @@ started it.
 - `settings.changed` when a setting changes, through `settings.set`, through `tofu settings set` in
   another window, or by hand in the file, with the new value, the file that changed and where the
   value now comes from.
+- `models.changed` when a role is rebound, a sub-agent's model is set or removed, or a model file changes,
+  through `tofu models bind`, `tofu agents set`, the app's Settings or by hand: what changed, its name, the
+  model it runs now, the scope and the file. The next turn and the next spawn run the new model in every
+  window, and a cron that fires with no window open runs it too.
 - `memory.scoped` when a remember card is answered: the rule, the scope offered and picked, and by whom.
 - `approval.resolved` and `question.resolved`, naming the answer and who sent it; an `allow_always`
   or `reject_always` says `standing`. A standing answer is kept beside its session and read back
