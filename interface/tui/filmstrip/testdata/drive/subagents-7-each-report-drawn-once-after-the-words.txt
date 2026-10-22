@@ -1,7 +1,7 @@
 # moment 7: both reports are drawn once each, after the lead's words.
 type subagents-7-each-report-drawn-once-after-the-words
 key enter
-wait 2 sub-agents running
+wait waiting  |  2 sub-agents
 release
 wait both are in
 once [&c1] finished

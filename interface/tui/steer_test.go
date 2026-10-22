@@ -357,8 +357,8 @@ func TestAMessageTypedWhileOnlySubAgentsRunIsSentAndStartsALeadTurnAtOnce(t *tes
 	})
 	typeAndSend(app, firstTask)
 	pumpUntil(t, app, EventDone)
-	if row := turnRow(t, app); !strings.Contains(row, "lead idle, free to talk") || !strings.Contains(row, "1 sub-agent running") || strings.Contains(row, "[request#") {
-		t.Fatalf("the idle lead beside a working sub-agent reads %q, want it idle and free to talk with no ended turn's id", row)
+	if row := turnRow(t, app); !strings.Contains(row, "waiting  |  1 sub-agent  |") || strings.Contains(row, "[request#") {
+		t.Fatalf("the idle lead beside a working sub-agent reads %q, want it waiting with no ended turn's id", row)
 	}
 	typeAndSend(app, secondTask)
 

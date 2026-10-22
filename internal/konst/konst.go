@@ -123,6 +123,7 @@ const (
 	ComposerContentRows  = 10000
 
 	SettledSubAgentFoldMinutes = 120
+	WorkingSubAgentNamesShown  = 7
 
 	DriveTimeoutMillis = 60000
 	DriveSettleMillis  = ProgressTickMillis / 2

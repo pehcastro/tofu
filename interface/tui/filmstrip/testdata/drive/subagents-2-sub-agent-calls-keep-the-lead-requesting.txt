@@ -1,7 +1,7 @@
 # moment 2: a sub-agent runs tool calls while the lead's own request is in flight. The lead's line stays requesting and its count keeps going.
 type subagents-2-sub-agent-calls-keep-the-lead-requesting
 key enter
-wait 2 sub-agents running
+wait waiting  |  2 sub-agents
 release
 wait requesting  |  0s
 clock 1s

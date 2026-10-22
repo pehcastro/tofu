@@ -1,6 +1,6 @@
 type hand a long call to a sub-agent
 key enter
-wait 1 sub-agent running
+wait waiting  |  1 sub-agent
 wait 20s [settings]
 screen
 wait 45s [settings]

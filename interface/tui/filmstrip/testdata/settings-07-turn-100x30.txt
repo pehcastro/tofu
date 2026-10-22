@@ -9,7 +9,7 @@
     Context       15      a turn may spawn a sub-agent                                              
     Files         03                                                                                
     Shell         05      One working session per project                                   ● on    
-  › Turn          16      while one session in this project is working, any other session waits…    
+  › Turn          17      while one session in this project is working, any other session waits…    
     Projects      04                                                                                
     Browser       08      Plan every step                                                   ● on    
                           the lead sees its plan, with each step's status, before every step of…    
@@ -23,8 +23,8 @@
                           Sub-agent depth                                                  2  ▾     
                           how deep a sub-agent may spawn its own sub-agents; the next spawn rea…    
                                                                                                     
-                          Sub-agent cache                                                 1h  ▾     
-                          how long a sub-agent's prompt cache lives; 5m writes cost less and ex…    
+                          Lead cache                                                      1h  ▾     
+                          how long the lead's prompt cache lives on a subscription; 5m writes c…    
                                                                                                     
                         enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     

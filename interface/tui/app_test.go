@@ -1906,7 +1906,7 @@ func TestTheTurnLineSaysTheLeadIsIdleBesideItsRunningSubAgentsAndNeverCooked(t *
 	app := leadIdleOnTwo(t, &at)
 	at = at.Add(3 * time.Second)
 	row := turnRow(t, app)
-	if !strings.Contains(row, "lead idle, free to talk") || !strings.Contains(row, "2 sub-agents running") || strings.Contains(row, "cooked") || strings.Contains(row, "thinking") {
+	if !strings.Contains(row, "waiting  |  2 sub-agents  |") || strings.Contains(row, "cooked") || strings.Contains(row, "thinking") {
 		t.Fatalf("the lead is idle while two sub-agents work and the turn line reads %q", row)
 	}
 	if strings.Contains(row, "[request#") {
@@ -1916,7 +1916,7 @@ func TestTheTurnLineSaysTheLeadIsIdleBesideItsRunningSubAgentsAndNeverCooked(t *
 		t.Errorf("the wait began three seconds ago and the turn line reads %q", row)
 	}
 	app.Update(Event{Kind: EventSubAgent, SubAgents: twoWorking(1)})
-	if row := turnRow(t, app); !strings.Contains(row, "1 sub-agent running") || strings.Contains(row, "sub-agents") {
+	if row := turnRow(t, app); !strings.Contains(row, "1 sub-agent  |") || strings.Contains(row, "sub-agents") {
 		t.Fatalf("one sub-agent reported and the turn line reads %q", row)
 	}
 	app.Update(Event{Kind: EventRequesting})
@@ -1925,13 +1925,13 @@ func TestTheTurnLineSaysTheLeadIsIdleBesideItsRunningSubAgentsAndNeverCooked(t *
 	}
 	app.Update(Event{Kind: EventText, Text: "sub-2 read b, sub-1 still works"})
 	app.Update(Event{Kind: EventDone, Text: "cooked for"})
-	if row := turnRow(t, app); !strings.Contains(row, "lead idle, free to talk") || !strings.Contains(row, "1 sub-agent running") {
+	if row := turnRow(t, app); !strings.Contains(row, "waiting  |  1 sub-agent  |") {
 		t.Fatalf("the lead answered one report while the other sub-agent works and the turn line reads %q", row)
 	}
 	app.Update(Event{Kind: EventSubAgent, SubAgents: twoWorking(0)})
 	app.Update(Closed{})
 	for _, row := range plainRows(app.View()) {
-		if strings.Contains(row, "lead idle") {
+		if strings.Contains(row, "waiting  |") {
 			t.Fatalf("the turn closed and a row still says %q", row)
 		}
 	}
@@ -2005,7 +2005,7 @@ func TestOnlyTheSubAgentWithNoStepForTheWatchTimeIsStalledAndAnOldCallSeenFreshI
 	rows[1].Calls = append(slices.Clone(rows[1].Calls), subagent.Call{ID: "k3", At: at, Tool: "read", Text: "ledger.go"})
 	app.Update(Event{Kind: EventSubAgent, SubAgents: rows})
 	chat := ansi.Strip(app.View().Content)
-	if !strings.Contains(chat, "(1) agent stalled") || strings.Count(chat, "stalled") != 1 {
+	if !strings.Contains(chat, "waiting  |  2 sub-agents · 1 stalled") || strings.Count(chat, "stalled") != 1 {
 		t.Fatalf("chat does not flag sub-1 alone, with its call and how long nothing moved\n%s", chat)
 	}
 	if at := app.happenedAt("k1"); at < 0 || !slices.Contains(app.happened[at].Detail, stalledDetail) {

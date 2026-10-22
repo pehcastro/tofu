@@ -13,6 +13,7 @@ import (
 	"tofu/interface/tui/progress"
 	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/trace"
+	"tofu/internal/konst"
 	roster "tofu/internal/subagent"
 	"tofu/internal/widget"
 )
@@ -20,10 +21,10 @@ import (
 const (
 	stoppingWord = "stopping"
 	spawningWord = "spawning"
-	runningWord  = "running"
+	workingWord  = "working"
 	reportHead   = "report"
 	readingWords = "reading the reports"
-	leadIdleHead = "lead idle, free to talk"
+	leadIdleHead = "waiting"
 	stalledWord  = "stalled"
 	stopAskTail  = ", press Ctrl+C again to confirm"
 	doneMark     = "✓ "
@@ -95,8 +96,20 @@ func (m *Model) leadIdleWords() string {
 	if m.waitingOn == 0 {
 		return readingWords
 	}
-	return leadIdleHead + requestSeparator + subAgentCount(m.waitingOn) + " " + runningWord
+	words := leadIdleHead + requestSeparator + subAgentCount(m.waitingOn)
+	for index, count := range m.activityCounts() {
+		doing, phrase := Doing(index), Doing(index).words()
+		if doing == RunningBash {
+			phrase = "in bash"
+		}
+		if count > 0 && doing != RunningTool {
+			words += foldSeparator + strconv.Itoa(count) + " " + phrase
+		}
+	}
+	return words
 }
+
+func (m *Model) leadIdle() bool { return !m.Busy && !m.leadIdleSince.IsZero() }
 
 func (m *Model) AskToStop(subAgents int, until time.Time) {
 	m.stopAsked, m.stopAskedUntil = subAgents, until
@@ -124,29 +137,40 @@ func (d Doing) drawn(count int) string {
 	if count == 1 {
 		agents = "(1) agent "
 	}
-	working := look.Style(look.Violet)
+	style := look.Style(look.Violet)
+	if d == NoProgress {
+		style = look.Style(look.Amber)
+	}
+	return style.Render(agents + d.words())
+}
+
+func (d Doing) words() string {
 	switch d {
 	case WaitingOnLead:
-		return working.Render(agents + "waiting for an answer")
+		return "waiting for an answer"
 	case NoProgress:
-		return look.Style(look.Amber).Render(agents + stalledWord)
+		return stalledWord
 	case Building:
-		return working.Render(agents + "building")
+		return "building"
 	case RunningBash:
-		return working.Render(agents + "running bash")
+		return "running bash"
 	case RunningTool:
-		return working.Render(agents + "working")
+		return workingWord
 	}
 	panic("session: unknown sub-agent activity")
 }
 
-func (m *Model) activityLine() string {
+func (m *Model) activityCounts() [RunningTool + 1]int {
 	var counts [RunningTool + 1]int
 	for _, row := range m.Activity {
 		counts[row.Doing]++
 	}
+	return counts
+}
+
+func (m *Model) activityLine() string {
 	var parts []string
-	for doing, count := range counts {
+	for doing, count := range m.activityCounts() {
 		if count > 0 {
 			parts = append(parts, Doing(doing).drawn(count))
 		}
@@ -162,7 +186,7 @@ func (m *Model) turnLines() []string {
 	if m.AskedToStop() {
 		lines = append(lines, margin+look.Style(look.Amber).Render("this will stop "+subAgentCount(m.stopAsked)+stopAskTail))
 	}
-	if len(m.Activity) > 0 {
+	if len(m.Activity) > 0 && !m.leadIdle() {
 		lines = append(lines, m.activityLine())
 	}
 	return lines
@@ -207,7 +231,7 @@ func (m *Model) requestLine() string {
 		line += look.Accent(progress.Spin(m.frame)) + " " + style.Render(word) + look.Muted(requestSeparator+widget.Until(m.phaseSince())+metaGap)
 		id = m.turnID
 		work, call = m.turnWork()
-	case !m.leadIdleSince.IsZero():
+	case m.leadIdle():
 		line += look.Accent(progress.Spin(m.frame)) + " " + look.Style(look.Violet).Render(m.leadIdleWords()) + look.Muted(requestSeparator+widget.Until(max(m.now().Sub(m.leadIdleSince), 0))+metaGap)
 	case m.cooked != "":
 		line, id = line+look.Muted(m.cooked+metaGap), m.cookedID
@@ -312,12 +336,15 @@ func settledMark(state roster.State) string {
 func (m *Model) batchLines(batch spawnBatch) []string {
 	var lines []string
 	if len(batch.running) > 0 {
-		word, since, names := runningWord, time.Duration(0), []string(nil)
-		for _, row := range batch.running {
+		word, since, names := workingWord, time.Duration(0), []string(nil)
+		for index, row := range batch.running {
 			if len(row.Calls) == 0 {
 				word = spawningWord
 			}
 			since = max(since, row.Since)
+			if index >= konst.WorkingSubAgentNamesShown {
+				continue
+			}
 			names = append(names, look.AgentRef(row.Name))
 			what := ""
 			switch {
@@ -329,6 +356,9 @@ func (m *Model) batchLines(batch spawnBatch) []string {
 			if what != "" {
 				names = append(names, look.Muted(widget.Fit(oneLine(what), m.textWidth()-widget.Cells(wrapIndent))))
 			}
+		}
+		if hidden := len(batch.running) - konst.WorkingSubAgentNamesShown; hidden > 0 {
+			names = append(names, look.Muted("+"+strconv.Itoa(hidden)+" more"))
 		}
 		head := look.Style(look.Violet).Render(progress.Work(m.frame) + " " + word)
 		lines = m.wordRows(slices.Concat([]string{head}, names, []string{" " + look.Muted(widget.Until(since))}))

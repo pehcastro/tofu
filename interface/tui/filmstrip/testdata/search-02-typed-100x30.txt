@@ -1,6 +1,6 @@
  tofu  ./tofu/                   chat   agents (1)   edits   shells                   0s [settings] 
 
-    ⠁ running [&c1] read the policy loader  1m 34s
+    ⠁ working [&c1] read the policy loader  1m 34s
     ✓ [&c2]  ✗ [&c3]
 
     [&orchestrator]                                                      14:32  [message#9d4f11]
@@ -22,7 +22,7 @@
 
 
 
-  ⠋ lead idle, free to talk  |  1 sub-agent running  |  0s  
+  ⠋ waiting  |  1 sub-agent  |  0s  
 
                                                                                                     
   ▯ Ask tofu to build, inspect, or delegate                                                         

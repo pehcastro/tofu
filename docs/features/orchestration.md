@@ -199,13 +199,16 @@ The chat stays on the conversation with the lead. The lead's own reads,
 edits and shell calls are not rows in the chat: they sit under the
 orchestrator in the sub-agents tab and in All activity, and one status line
 above the composer names the newest call by its `[tool#id]`, such as
-`working | 1s bash sleep 3 · (2) tools · shell (1) [tool#100bad]`. A running
-sub-agent shows as one line saying what it works on, such as
-`running [&go-dev-1] TOFU-12 read the note`, and its report reads as a
+`working | 1s bash sleep 3 · (2) tools · shell (1) [tool#100bad]`. Working
+sub-agents share one line saying what they work on, such as
+`working [&go-dev-1] TOFU-12 read the note`; past seven names it ends in
+`+3 more`. A report reads as a
 sentence, such as `[&go-dev-1] finished TOFU-12 and waits for your review`.
-One that has been on a call for
-`subAgentWatchSeconds` says what it is doing, such as `building, 12m`, and
-reads `stalled` only when nothing has moved for that long.
+While the lead waits on its sub-agents the status line is one line,
+`waiting | 5 sub-agents · 1 in bash | 6m 1s`. A sub-agent that has been on a
+call for `subAgentWatchSeconds` is counted there by what it is doing, such as
+`1 building` or `1 waiting for an answer`, and as `1 stalled` only when
+nothing has moved for that long; a count of none is left out.
 
 ![The finished answer, with go-dev's report folded under it](./media/tui-task-answer.png)
 

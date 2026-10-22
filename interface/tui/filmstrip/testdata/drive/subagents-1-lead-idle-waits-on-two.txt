@@ -1,8 +1,8 @@
-# moment 1: the lead spawned two background sub-agents and its turn ended. While they work the lead reads idle and free to talk beside 2 running, and never says cooked or thinking.
+# moment 1: the lead spawned two background sub-agents and its turn ended. While they work the lead reads waiting beside 2 sub-agents on one line, and never says cooked or thinking.
 type subagents-1-lead-idle-waits-on-two
 key enter
-wait 2 sub-agents running
+wait waiting  |  2 sub-agents
 clock 2s
 absent cooked
 absent thinking
-wait 2 sub-agents running
+wait waiting  |  2 sub-agents

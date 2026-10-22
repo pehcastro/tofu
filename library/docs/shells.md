@@ -36,6 +36,11 @@ under the working line:
 
     [&orchestrator] running bash, 3s  |  fg 3
 
+While the lead waits on its sub-agents, the ones in bash are counted on the
+status line above the composer rather than on a line of their own:
+
+    waiting  |  5 sub-agents · 1 in bash  |  6m 1s
+
 Each row is a running shell: the command, who started it and its latest output. A shell that ends leaves the screen at once and tofu stops reading it;
 its record and log stay on disk for 72 hours, read by name with `tofu shells log`. The screen reads the running shells four times a second while any runs. A line reaches the log as the command writes
 it; a running shell that printed nothing says `nothing printed yet`.

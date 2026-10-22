@@ -1,6 +1,6 @@
 type add the users route and model
 key enter
-wait 2 sub-agents running
+wait waiting  |  2 sub-agents
 key alt+2
 wait KILLEDMIDWAY
 requests

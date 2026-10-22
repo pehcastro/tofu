@@ -21,8 +21,8 @@
                                                                                                     
                                                                                                     
                                                                                                     
-  ⠞ lead idle, free to talk  |  2 sub-agents running  |  30s                                        
-  (13) agents waiting for an answer · (2) agents running bash                                       
+                                                                                                    
+  ⠖ waiting  |  2 sub-agents · 13 waiting for an answer · 2 in bash  |  30s                         
                                                                                                     
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         

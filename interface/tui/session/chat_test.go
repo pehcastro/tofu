@@ -130,7 +130,7 @@ func TestThreeRunningSubAgentsShareOneBatchLineAndLeaveTheStatusLineToTheLead(t 
 		t.Fatalf("the rows above the composer are %q, want one status line saying what the lead does and nothing of its sub-agents\n%s", above, strings.Join(rows, "\n"))
 	}
 	spawn := slices.IndexFunc(rows[:model.transcriptRows()], func(row string) bool {
-		return strings.Contains(row, "running [&ts-dev-1] [&ts-dev-2] [&ts-dev-3]")
+		return strings.Contains(row, "working [&ts-dev-1] [&ts-dev-2] [&ts-dev-3]")
 	})
 	if spawn < 0 || !strings.HasPrefix(strings.TrimSpace(rows[spawn]), "⠁ ") || !strings.HasSuffix(strings.TrimSpace(rows[spawn]), "3m") || strings.Contains(rows[spawn], "products.ts") {
 		t.Errorf("the chat does not spin one Dots8 line naming all three sub-agents under the longest clock\n%s", strings.Join(rows, "\n"))
@@ -185,7 +185,7 @@ func TestASubAgentRowSaysWhatItWorksOnAndWhoItsReportWaitsFor(t *testing.T) {
 		t.Fatalf("no row holds %q\n%s", text, ansi.Strip(model.View()))
 		return ""
 	}
-	if row := rowWith("running [&rust-dev-173]"); !strings.Contains(row, "DESK-366 port the canvas to gpui") {
+	if row := rowWith("working [&rust-dev-173]"); !strings.Contains(row, "DESK-366 port the canvas to gpui") {
 		t.Fatalf("a running sub-agent does not say what it works on: %q", row)
 	}
 	model.Stop()
