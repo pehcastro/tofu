@@ -444,8 +444,12 @@ func (s Scan) runsOn(definition *Definition, written string, tofuFile bool) erro
 		definition.From, slug = "tier "+string(tier), s.Tiers[tier]
 	}
 	if isTier && slug == "" {
+		runs := "the orchestrator's model"
+		if bound, ok := s.Catalog.Bound(models.RoleSubAgent); ok {
+			runs = "the sub-agent binding " + bound.Slug()
+		}
 		definition.Runs = RunsInherit
-		definition.Notices = append(definition.Notices, fmt.Sprintf("the tier @%s is not set, so %s runs on the orchestrator's model: tofu settings set %s <slug>", tier, definition.Name, tier.Setting()))
+		definition.Notices = append(definition.Notices, fmt.Sprintf("the tier @%s is not set, so %s runs on %s: tofu settings set %s <slug>", tier, definition.Name, runs, tier.Setting()))
 		return nil
 	}
 	model, err := s.Catalog.Select(slug)

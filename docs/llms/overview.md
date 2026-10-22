@@ -92,9 +92,9 @@ api key
   ⚠ Meta may train on what you send to this model
 
 roles
-  ● orchestrator         claude-sub/claude-opus-5-5
-  ● classifier           typesafe/jev-latest
-  ○ (unnamed sub-agent)  unbound
+  ● orchestrator                           claude-sub/claude-opus-5-5
+  ● classifier                             typesafe/jev-latest
+  ○ sub-agents with no model of their own  unbound
 ```
 
 `●` default or bound, `✓` allowed, `○` excluded or unbound, `⚠` a notice.

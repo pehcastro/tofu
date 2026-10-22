@@ -47,7 +47,7 @@ func (r RoleID) Label() string {
 	case RoleOrchestrator, RoleClassifier:
 		return string(r)
 	case RoleSubAgent:
-		return "(unnamed sub-agent)"
+		return "sub-agents with no model of their own"
 	}
 	panic("models: unknown role " + string(r))
 }
@@ -59,7 +59,7 @@ func (r RoleID) What() string {
 	case RoleClassifier:
 		return "the typed model that judges the model's calls, shell results, browser steps and stop checks"
 	case RoleSubAgent:
-		return "a spawn that names no sub-agent"
+		return "every sub-agent that names no model of its own"
 	}
 	panic("models: unknown role " + string(r))
 }

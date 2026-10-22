@@ -53,9 +53,9 @@ api key
   ⚠ Meta may train on what you send to this model
 
 roles
-  ○ orchestrator         unbound
-  ○ classifier           unbound
-  ○ (unnamed sub-agent)  unbound
+  ○ orchestrator                           unbound
+  ○ classifier                             unbound
+  ○ sub-agents with no model of their own  unbound
 
 windows
   table      the snapshot of models.dev taken on 2026-09-21
@@ -95,9 +95,9 @@ api key
   ⚠ Meta may train on what you send to this model
 
 roles
-  ● orchestrator         claude-sub/claude-sonnet-5
-  ○ classifier           unbound
-  ○ (unnamed sub-agent)  unbound
+  ● orchestrator                           claude-sub/claude-sonnet-5
+  ○ classifier                             unbound
+  ○ sub-agents with no model of their own  unbound
 
 windows
   table      the table this test wrote

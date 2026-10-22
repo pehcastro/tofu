@@ -287,7 +287,7 @@ type subAgentTarget struct {
 
 func (r runtime) subAgentTarget(opts runOpts, definition subagent.Definition) (subAgentTarget, error) {
 	target := subAgentTarget{named: definition.Model, wire: opts.wire, offered: r.orchestrator.Efforts}
-	if definition.Name == "" {
+	if definition.Model == "" {
 		bound, err := boundSubAgent(opts)
 		if err != nil {
 			return subAgentTarget{}, err

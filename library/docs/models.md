@@ -32,8 +32,8 @@ mean the genius, smart and worker tiers when those are set. The `thinkingSummary
   for a model models.dev lacks; a reload never erases it
 - `~/.tofu/roles/orchestrator.yaml`, `.tofu/roles/orchestrator.yaml`: the
   model the orchestrator runs, one line, `model: source/model`. A
-  `sub-agent.yaml` beside it names the model a spawn that names no
-  sub-agent runs
+  `sub-agent.yaml` beside it names the model every sub-agent runs that
+  names no model of its own
 - `~/.tofu/catalog/models/<provider>/<model>.yaml`: the models
   `tofu models reload` found on your accounts that tofu does not ship.
   Each carries `from`, what listed it, and `found`, the day it was found
@@ -82,7 +82,7 @@ orchestrator in the same list, which writes
 
 in `~/.tofu/roles/orchestrator.yaml`. `tofu run` takes `--model` for one run.
 
-Point a tier at a model; a tier left empty runs the orchestrator's model:
+Point a tier at a model; a tier left empty runs the sub-agent binding, or the orchestrator's model when none is bound:
 
     tofu settings set modelTier.smart claude-sub/claude-sonnet-5
 
