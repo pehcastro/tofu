@@ -3,6 +3,7 @@ package toolcard
 import (
 	"path"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -152,6 +153,10 @@ func ofSegment(words []string) (Card, rank) {
 		return card(Explored, kindSearch, "searching", "searched", ""), rankExplore
 	case "ls", "dir", "tree", "find", "get-childitem":
 		return card(Explored, kindList, "listing", "listed", base(lastOperand(words[1:]))), rankExplore
+	case "exit":
+		if _, err := strconv.Atoi(sub); err == nil {
+			return card(Ran, kindRan, "running", "ran", named+" "+sub), rankRan
+		}
 	}
 	return card(Ran, kindRan, "running", "ran", spoken(named, sub)), rankRan
 }

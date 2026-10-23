@@ -16,7 +16,7 @@ import (
 	roster "tofu/internal/subagent"
 )
 
-func TestTheLeadsToolCallsDrawNoChatRowAndTheTurnLineNamesTheLatest(t *testing.T) {
+func TestTheLeadsToolCallsFoldIntoOneChatRowAndTheTurnLineNamesTheLatest(t *testing.T) {
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	app := startTurn(t, &at, 120, runHeight)
 
@@ -27,14 +27,17 @@ func TestTheLeadsToolCallsDrawNoChatRowAndTheTurnLineNamesTheLatest(t *testing.T
 	at = at.Add(callStep)
 
 	row := turnRow(t, app)
-	for _, want := range []string{"(2) tools", "jev 1", "shell (1)", "bash go test ./internal/turn/...", "[tool#"} {
+	for _, want := range []string{"jev 1", "shell (1)", "bash go test ./internal/turn/...", "[tool#"} {
 		if !strings.Contains(row, want) {
 			t.Fatalf("the turn line does not say %q while the lead works\n%s", want, row)
 		}
 	}
+	if strings.Contains(row, ") tools") {
+		t.Fatalf("the turn line repeats the call count the chat's running row already shows\n%s", row)
+	}
 	running := ansi.Strip(app.View().Content)
-	if strings.Contains(running, "loop.go") || strings.Count(running, "go test") != 1 {
-		t.Fatalf("a lead tool call drew a row of its own in the chat\n%s", running)
+	if strings.Contains(running, "loop.go") || strings.Count(running, "go test") != 1 || strings.Count(running, "2 calls") != 1 {
+		t.Fatalf("the lead's two calls did not fold into one running row in the chat\n%s", running)
 	}
 
 	at = at.Add(callStep)
@@ -42,10 +45,13 @@ func TestTheLeadsToolCallsDrawNoChatRowAndTheTurnLineNamesTheLatest(t *testing.T
 	app.Update(Event{Kind: EventText, Text: runAnswer})
 	finishTurn(app)
 	ended := ansi.Strip(app.View().Content)
-	for _, gone := range []string{"loop.go", "go test", "(2) tools", "[expand]"} {
+	for _, gone := range []string{"loop.go", "go test", ") tools", "[expand]"} {
 		if strings.Contains(ended, gone) {
 			t.Fatalf("the chat still carries %q once the turn has ended\n%s", gone, ended)
 		}
+	}
+	if strings.Count(ended, "2 calls") != 1 {
+		t.Fatalf("the ended turn lost its one row for the two calls\n%s", ended)
 	}
 	if !strings.Contains(ended, runTask) || !strings.Contains(ended, "the gate reads the policy") {
 		t.Fatalf("the person's words or the lead's answer left the chat with the tool rows\n%s", ended)
@@ -53,7 +59,7 @@ func TestTheLeadsToolCallsDrawNoChatRowAndTheTurnLineNamesTheLatest(t *testing.T
 	golden.Assert(t, "session-lead-tools-out-of-chat-120x24.golden", app.View().Content)
 }
 
-func TestTheLeadsToolCallsLeaveNoExtraRowBetweenTwoMessages(t *testing.T) {
+func TestTheLeadsToolCallsBetweenTwoMessagesTakeOneRowWithAGapEachSide(t *testing.T) {
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	app := startTurn(t, &at, runWidth, runHeight)
 	app.Update(Event{Kind: EventText, Text: "first note"})
@@ -66,8 +72,8 @@ func TestTheLeadsToolCallsLeaveNoExtraRowBetweenTwoMessages(t *testing.T) {
 	rows := plainRows(app.View())
 	first := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, "first note") })
 	second := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, "second note") })
-	if first < 0 || second-first != 3 {
-		t.Fatalf("two messages around three folded calls sit %d rows apart, want 3: the words, one gap, the head\n%s", second-first, strings.Join(rows, "\n"))
+	if first < 0 || second-first != 5 || !strings.Contains(rows[first+2], "3 calls") {
+		t.Fatalf("two messages around three calls sit %d rows apart, want 5: the words, a gap, the one 3 calls row, a gap, the head\n%s", second-first, strings.Join(rows, "\n"))
 	}
 }
 

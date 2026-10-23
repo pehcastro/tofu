@@ -5,8 +5,8 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-    ⟩ read internal/turn/loop.go                                      84 lines, 2.1 KB  [expand]    
-    ⟩ bash go test ./...                                   ok tofu/internal/turn 0.42s  [expand]    
+      read internal/turn/loop.go                                      84 lines, 2.1 KB  [expand]    
+      bash go test ./...                                   ok tofu/internal/turn 0.42s  [expand]    
     · stopping the model, and letting the running tools finish                                      
     · stopping the turn                                                                             
                                                                                                     

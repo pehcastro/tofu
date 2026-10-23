@@ -5,6 +5,8 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
+      1 call                                                                                  1s    
+                                                                                                    
     [&orchestrator]                                                                        14:32    
     the loop reads the policy first, then the wire, because a locked                                
                                                                                                     
@@ -20,9 +22,7 @@
                                                                                                     
                                                                                                     
                                                                                                     
-                                                                                                    
-                                                                                                    
-  ⠋ working  |  3s  read internal/turn/loop.go · (1) tools  [tool#c1]  [request#91ccaf]             
+  ⠋ working  |  3s  read internal/turn/loop.go  [tool#c1]  [request#91ccaf]                         
                                                                                                     
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         

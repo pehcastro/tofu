@@ -1,6 +1,7 @@
 package session
 
 import (
+	"cmp"
 	"hash/fnv"
 	"slices"
 	"strconv"
@@ -17,6 +18,7 @@ import (
 	"tofu/interface/tui/paste"
 	"tofu/interface/tui/progress"
 	"tofu/interface/tui/subagent"
+	"tofu/internal/host"
 	"tofu/internal/konst"
 	isession "tofu/internal/session"
 	"tofu/internal/turn/tools"
@@ -62,6 +64,9 @@ type Entry struct {
 	Ended     time.Time
 	Decision  *Decision
 	SubAgents []string
+	Card      *host.ToolCard
+	Group     string
+	Summary   *host.GroupSummary
 	recorded  string
 	askID     string
 	turn      int
@@ -80,10 +85,13 @@ type Entry struct {
 }
 
 type Result struct {
-	Status string
-	Output string
-	Bytes  int
-	Failed bool
+	Status  string
+	Output  string
+	Bytes   int
+	Failed  bool
+	At      time.Time
+	Card    *host.ToolCard
+	Summary *host.GroupSummary
 }
 
 func (e Entry) assistant() bool { return e.Kind == Assistant }
@@ -109,10 +117,6 @@ func blank(line string) bool { return strings.TrimSpace(ansi.Strip(line)) == "" 
 func (e Entry) returned() bool { return e.Status != "" }
 
 func (e Entry) running() bool { return e.Kind == Tool && e.ID != "" && !e.returned() }
-
-func (e Entry) sticky() bool {
-	return e.Promoted || e.verdictShown() != ""
-}
 
 func (e Entry) label() string { return strings.TrimSpace(e.Head + " " + e.Body) }
 
@@ -173,6 +177,7 @@ type Model struct {
 	frame              int
 	revision           int
 	rows               rowTable
+	opened             map[string]bool
 	ChatShowsTools     bool
 	FoldHidesShell     bool
 	Welcome            func(width, rows int) []string
@@ -195,7 +200,7 @@ func New(now func() time.Time, prose Prose) Model {
 	styles := look.ComposerStyles()
 	styles.Cursor.Shape = tea.CursorBar
 	composer.SetStyles(styles)
-	return Model{now: now, prose: prose, composer: composer, following: true, began: now(), unshown: map[string]bool{}, FeedID: tools.ShortID}
+	return Model{now: now, prose: prose, composer: composer, following: true, began: now(), unshown: map[string]bool{}, opened: map[string]bool{}, FeedID: tools.ShortID}
 }
 
 func (m *Model) Focus() tea.Cmd { return m.composer.Focus() }
@@ -322,7 +327,7 @@ func (m *Model) Append(entry Entry) {
 	}
 	m.seal()
 	m.revision++
-	entry.Started, entry.turn = m.now(), m.turns
+	entry.Started, entry.turn = cmp.Or(entry.Started, m.now()), m.turns
 	if entry.Kind == User && entry.ID == "" {
 		entry.ID = m.mint()
 	}
@@ -353,7 +358,8 @@ func (m *Model) Finish(id string, result Result) {
 	for index := len(m.entries) - 1; index >= 0; index-- {
 		entry := &m.entries[index]
 		if entry.running() && entry.ID == id {
-			entry.Status, entry.Output, entry.Bytes, entry.Failed, entry.Ended = result.Status, result.Output, result.Bytes, result.Failed, ended
+			entry.Status, entry.Output, entry.Bytes, entry.Failed, entry.Ended = result.Status, result.Output, result.Bytes, result.Failed, cmp.Or(result.At, ended)
+			entry.Card, entry.Summary = cmp.Or(result.Card, entry.Card), result.Summary
 			m.revision++
 			return
 		}
@@ -564,7 +570,7 @@ func (m *Model) Stop() {
 		if entry.running() {
 			entry.Status, entry.Ended = noResult, m.now()
 		}
-		if interrupted && entry.Kind == Tool && entry.turn == m.turns {
+		if interrupted && entry.Kind == Tool && entry.Group == "" && entry.turn == m.turns {
 			entry.Promoted = true
 		}
 	}

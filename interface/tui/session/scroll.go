@@ -19,16 +19,11 @@ func (a anchor) before(other anchor) bool {
 
 func (m *Model) folds(index int) bool {
 	entry := &m.entries[index]
-	return !m.ChatShowsTools && entry.Kind == Tool && !entry.sticky()
+	return !m.ChatShowsTools && entry.Kind == Tool && !entry.Promoted
 }
 
-func (m *Model) FoldedOutOfChat(id string) bool {
-	for index, entry := range m.entries {
-		if entry.ID == id {
-			return m.folds(index)
-		}
-	}
-	return false
+func (m *Model) sameGroup(index, other int) bool {
+	return m.folds(index) && m.folds(other) && m.entries[index].Group == m.entries[other].Group
 }
 
 func (m *Model) blockAt(index int) (int, int) {
@@ -36,10 +31,10 @@ func (m *Model) blockAt(index int) (int, int) {
 		return index, index + 1
 	}
 	start, end := index, index+1
-	for start > 0 && m.folds(start-1) {
+	for start > 0 && m.sameGroup(start-1, index) {
 		start--
 	}
-	for end < len(m.entries) && m.folds(end) {
+	for end < len(m.entries) && m.sameGroup(end, index) {
 		end++
 	}
 	return start, end

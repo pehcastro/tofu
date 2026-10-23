@@ -2,14 +2,14 @@
 
     ⠁ working [&c1] read the policy loader  1m 34s
     ✓ [&c2]  ✗ [&c3]
+      1 call                                                                                  0s
 
-    [&orchestrator]                                                      14:32  [message#9d4f11]
-    three sub-ag                                                                    d its suite.
-    [tool#9d4f10  Search                                                       esc  
-                  Screens, agents and events · enter opens                          
-    ⟩ [&c2] fini                                                                        [expand]
-    ⟩ [&c3] fail  > Type to filter                                                      [expand]
+    [&orchestrat                                                                    sage#9d4f11]
+    three sub-ag  Search                                                       esc  d its suite.
+    [tool#9d4f10  Screens, agents and events · enter opens                          
                                                                                     
+      [&c2] fini  > Type to filter                                                      [expand]
+      [&c3] fail                                                                        [expand]
                   › chat                                                            
                     sub-agents                                                      
                     file edits                                                      

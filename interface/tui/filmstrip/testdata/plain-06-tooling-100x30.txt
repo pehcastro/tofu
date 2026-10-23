@@ -5,6 +5,7 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
+    ● 1 call   read                                                                           1s    
                                                                                                     
                                                                                                     
                                                                                                     
@@ -21,8 +22,7 @@
                                                                                                     
                                                                                                     
                                                                                                     
-                                                                                                    
-  ⠋ working  |  4s  read internal/judge/policy/toolgate.go · (1) too…  [tool#c1]  [request#91ccaf]  
+  ⠋ working  |  4s  read internal/judge/policy/toolgate.go · jev 1  [tool#c1]  [request#91ccaf]     
                                                                                                     
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         

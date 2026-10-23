@@ -17,6 +17,10 @@ func (e Entry) expandable() bool { return e.Kind == Tool && e.ID != "" || e.Head
 
 func (m *Model) LastExpandable() (id string, call bool) {
 	for index := len(m.entries) - 1; index >= 0; index-- {
+		if m.folds(index) {
+			start, _ := m.blockAt(index)
+			return m.entries[start].ID, true
+		}
 		if entry := m.entries[index]; entry.expandable() {
 			return entry.ID, entry.Kind == Tool
 		}
@@ -84,6 +88,9 @@ func (m *Model) ExpandAt(x, row int) (id string, call bool) {
 		start, end := m.blockAt(index)
 		lines := m.blockLines(start)
 		if row < len(lines) {
+			if m.folds(start) && row >= m.lead(start) {
+				return m.entries[start].ID, true
+			}
 			if last := m.entries[end-1]; last.expandable() && pointer.TextHit(ansi.Strip(lines[row]), expandLabel, x) {
 				return last.ID, last.Kind == Tool
 			}

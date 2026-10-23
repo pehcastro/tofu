@@ -5,6 +5,7 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
+    ● 4 calls   read                                                                          5s    
                                                                                                     
                                                                                                     
                                                                                                     
@@ -21,8 +22,7 @@
                                                                                                     
                                                                                                     
                                                                                                     
-                                                                                                    
-  ⠋ working  |  6s  read internal/turn/step4.go · (4) tools  [tool#c4]  [request#91ccaf]            
+  ⠋ working  |  6s  read internal/turn/step4.go  [tool#c4]  [request#91ccaf]                        
                                                                                                     
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         

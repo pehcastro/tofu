@@ -5,6 +5,7 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
+      bash   failed   1 of 1                                                                        
                                                                                                     
                                                                                                     
                                                                                                     
@@ -21,8 +22,7 @@
                                                                                                     
                                                                                                     
                                                                                                     
-                                                                                                    
-  ⠋ working  |  3s  bash git push origin develop · (1) tools · shell…  [tool#c1]  [request#91ccaf]  
+  ⠋ working  |  3s  bash git push origin develop · shell (1)  [tool#c1]  [request#91ccaf]           
                                                                                                     
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         

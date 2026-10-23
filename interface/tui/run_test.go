@@ -134,7 +134,7 @@ func TestARunOfFourteenCallsDrawsNothingButTheTurnLineWhileItRuns(t *testing.T) 
 		t.Errorf("the turn line at eighty columns does not name the running call by its id: %q", row)
 	}
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: runHeight})
-	if row := turnRow(t, app); !strings.Contains(row, "(14) tools · shell (7)") {
+	if row := turnRow(t, app); !strings.Contains(row, "shell (7)") || strings.Contains(row, ") tools") || !strings.Contains(ansi.Strip(app.View().Content), "14 calls") {
 		t.Errorf("the turn line does not count the fourteen calls and the seven shell calls: %q", row)
 	}
 	app.Update(tea.WindowSizeMsg{Width: runWidth, Height: runHeight})
@@ -334,7 +334,7 @@ func TestTheCountsOnTheTurnLineAreRight(t *testing.T) {
 	last := runCall{tool: "edit", text: "internal/turn/loop.go", result: "1 hunk applied", bytes: 240}
 	startCall(app, len(calls), last)
 	endCall(app, len(calls), last)
-	if row := turnRow(t, app); !strings.Contains(row, "(13) tools · shell (4)") {
+	if row := turnRow(t, app); !strings.Contains(row, "shell (4)") || strings.Contains(row, ") tools") || !strings.Contains(ansi.Strip(app.View().Content), "13 calls") {
 		t.Errorf("the turn line does not count the tools and the shell calls: %q", row)
 	}
 }

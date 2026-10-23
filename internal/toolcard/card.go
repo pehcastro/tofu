@@ -227,8 +227,8 @@ func (c Card) Settled(content string, failed bool, exit int) Card {
 	default:
 		panic("toolcard: unknown kind " + strconv.Itoa(int(c.kind)))
 	}
-	if c.Tone == Fail && exit != 0 && c.Meta == "" {
-		c.Meta = "exit " + strconv.Itoa(exit)
+	if said := "exit " + strconv.Itoa(exit); c.Tone == Fail && exit != 0 && c.Meta == "" && c.Object != said {
+		c.Meta = said
 	}
 	if c.Tone == Fail && c.failedVerb != "" {
 		c.Verb = c.failedVerb

@@ -5,7 +5,7 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-    ⟩ bash git push --force origin develop                  ask  everything up to date  [expand]    
+      bash git push --force origin develop                  ask  everything up to date  [expand]    
                                                                                                     
     [&orchestrator]                                                      14:32  [message#b7e201]    
     the force push was the only way to move the branch, and it is done.                             

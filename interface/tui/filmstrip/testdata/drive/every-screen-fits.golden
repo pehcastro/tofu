@@ -1,12 +1,12 @@
  tofu        chat   agents   edits   shells   0s [settings] 
                                                             
-    ⟩ [&c3] failed                              [expand]   │
-                                                           │
                                                            │
                                                            │
     You                                            14:32   │
     edits                                                  │
-                                                           ┃
+                                                           │
+                                                           │
+      2 calls                                         0s   │
                                                            ┃
     [&orchestrator]              14:32  [message#e5a103]   ┃
     the resolver checks the lock now, and [edit#e5a102]    ┃
@@ -100,17 +100,17 @@ Select an edit reference to read every changed line.
   esc chat                                                  
  tofu  ./tofu/         chat   agents   edits   shells (1)         0s [settings] 
                                                                                 
-    three sub-agents run: [&c1] reads the loader, [&c2] waits on review,       │
-    [&c3] failed its suite. [tool#9d4f10] is the loop I read.                  │
                                                                                │
-    ⟩ [&c2] finished and waits for its done review                  [expand]   │
-    ⟩ [&c3] failed                                                  [expand]   │
-                                                                               ┃
-                                                                               ┃
-                                                                               ┃
+      [&c2] finished and waits for its done review                  [expand]   │
+      [&c3] failed                                                  [expand]   │
+                                                                               │
+                                                                               │
+                                                                               │
     You                                                                14:32   ┃
     edits                                                                      ┃
                                                                                ┃
+                                                                               ┃
+      2 calls                                                             0s   ┃
                                                                                ┃
     [&orchestrator]                                  14:32  [message#e5a103]   ┃
     the resolver checks the lock now, and [edit#e5a102] holds the 1200 floor   ┃
@@ -224,13 +224,14 @@ Select an edit reference to read every changed line.
     agents                                                                                              
                                                                                                         
     ✓ [&c2]  ✗ [&c3]  ○ [&c1]                                                                           
+      1 call                                                                                      0s    
                                                                                                         
     [&orchestrator]                                                          14:32  [message#9d4f11]    
     three sub-agents run: [&c1] reads the loader, [&c2] waits on review, [&c3] failed its suite.        
     [tool#9d4f10] is the loop I read.                                                                   
                                                                                                         
-    ⟩ [&c2] finished and waits for its done review                                          [expand]    
-    ⟩ [&c3] failed                                                                          [expand]    
+      [&c2] finished and waits for its done review                                          [expand]    
+      [&c3] failed                                                                          [expand]    
                                                                                                         
                                                                                                         
                                                                                                         
@@ -238,11 +239,10 @@ Select an edit reference to read every changed line.
     edits                                                                                               
                                                                                                         
                                                                                                         
+      2 calls                                                                                     0s    
+                                                                                                        
     [&orchestrator]                                                          14:32  [message#e5a103]    
     the resolver checks the lock now, and [edit#e5a102] holds the 1200 floor rows.                      
-                                                                                                        
-                                                                                                        
-                                                                                                        
                                                                                                         
   cooked for 0s  |  waited 0s  [request#e5a102]                                                         
                                                                                                         
@@ -384,12 +384,13 @@ Select an edit reference to read every changed line.
     agents                                                                                                                                  
                                                                                                                                             
     ✓ [&c2]  ✗ [&c3]  ○ [&c1]                                                                                                               
+      1 call                                                                                                                          0s    
                                                                                                                                             
     [&orchestrator]                                                                                              14:32  [message#9d4f11]    
     three sub-agents run: [&c1] reads the loader, [&c2] waits on review, [&c3] failed its suite. [tool#9d4f10] is the loop I read.          
                                                                                                                                             
-    ⟩ [&c2] finished and waits for its done review                                                                              [expand]    
-    ⟩ [&c3] failed                                                                                                              [expand]    
+      [&c2] finished and waits for its done review                                                                              [expand]    
+      [&c3] failed                                                                                                              [expand]    
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             
@@ -397,11 +398,10 @@ Select an edit reference to read every changed line.
     edits                                                                                                                                   
                                                                                                                                             
                                                                                                                                             
+      2 calls                                                                                                                         0s    
+                                                                                                                                            
     [&orchestrator]                                                                                              14:32  [message#e5a103]    
     the resolver checks the lock now, and [edit#e5a102] holds the 1200 floor rows.                                                          
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             

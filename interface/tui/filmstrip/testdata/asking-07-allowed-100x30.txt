@@ -5,7 +5,7 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-    ⟩ bash git push --force origin develop                  ask  everything up to date  [expand]    
+      bash git push --force origin develop                  ask  everything up to date  [expand]    
                                                                                                     
                                                                                                     
                                                                                                     

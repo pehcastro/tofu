@@ -5,7 +5,7 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-    ⟩ read internal/turn/loop.go                                      84 lines, 2.1 KB  [expand]    
+      read internal/turn/loop.go                                      84 lines, 2.1 KB  [expand]    
     · stopping the turn                                                                             
     · 64 characters were written and kept in sub-agents [note#a27001]                               
                                                                                                     

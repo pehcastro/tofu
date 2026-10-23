@@ -110,7 +110,7 @@ func TestACallShorterThanTheDwellNeverTakesTheRowAndIsStillCounted(t *testing.T)
 	if strings.Contains(row, "CLAUDE.md") || !strings.Contains(row, "read internal/turn/loop.go") {
 		t.Errorf("a 20 ms call took the row from the call before it: %q", row)
 	}
-	if !strings.Contains(row, "(2) tools") {
+	if strings.Contains(row, ") tools") || !strings.Contains(ansi.Strip(app.View().Content), "2 calls") {
 		t.Errorf("the turn line does not count the short call: %q", row)
 	}
 }

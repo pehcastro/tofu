@@ -715,7 +715,7 @@ func (a *App) called(event Event, at time.Time) {
 		a.view.Spawn(event.ID, event.Tool, event.Text)
 		return
 	}
-	a.view.Append(session.Entry{Kind: session.Tool, ID: event.ID, Head: event.Tool, Body: event.Text, Detail: event.Detail})
+	a.view.Append(session.Entry{Kind: session.Tool, ID: event.ID, Head: event.Tool, Body: event.Text, Detail: event.Detail, Card: event.Card, Group: event.Group, Started: event.At})
 }
 
 func (a *App) answered(event Event, at time.Time) {
@@ -741,7 +741,7 @@ func (a *App) answered(event Event, at time.Time) {
 		return
 	}
 	if done.Kind != feed.KindSpawn {
-		a.view.Finish(event.ID, session.Result{Status: status, Output: event.Detail, Bytes: event.Bytes, Failed: event.Failed})
+		a.view.Finish(event.ID, session.Result{Status: status, Output: event.Detail, Bytes: event.Bytes, Failed: event.Failed, At: event.At, Card: event.Card, Summary: event.GroupSummary})
 	}
 	a.rememberedByTheLead(event.Detail)
 	a.running = max(a.running-1, 0)

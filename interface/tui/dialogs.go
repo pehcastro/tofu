@@ -450,6 +450,9 @@ type callDialog struct {
 }
 
 func (a *App) expand(id string) tea.Cmd {
+	if a.view.Toggle(id) {
+		return nil
+	}
 	if _, _, found := a.view.Expansion(id, a.width); !found {
 		return nil
 	}

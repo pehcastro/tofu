@@ -11,6 +11,7 @@ import (
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/progress"
 	"tofu/interface/tui/trace"
+	"tofu/internal/host"
 	"tofu/internal/transport"
 	"tofu/internal/widget"
 )
@@ -30,7 +31,6 @@ const (
 	toolKind         = "tool"
 	spawnKind        = "spawn"
 	requestKind      = "request"
-	toolMarker       = "⟩ "
 	noteMarker       = "· "
 	failureMarker    = "! "
 	continuation     = "    "
@@ -43,6 +43,9 @@ type drawKey struct {
 	width, lead, body                   int
 	status, verdict, spawn              string
 	latest, streaming, failed, promoted bool
+	calls                               int
+	open                                bool
+	summary                             *host.GroupSummary
 }
 
 type drawn struct {
@@ -85,9 +88,6 @@ func (m *Model) scrollMetrics(rows int) (int, int, anchor) {
 }
 
 func (m *Model) blockLines(start int) []string {
-	if m.folds(start) {
-		return nil
-	}
 	key, live := m.drawKey(start)
 	cached := &m.entries[start].drawn
 	if !live && cached.lines != nil && cached.key == key {
@@ -109,6 +109,9 @@ func (m *Model) drawKey(start int) (drawKey, bool) {
 		width: m.width, lead: m.lead(start), body: len(entry.Body), status: entry.Status, verdict: entry.verdictShown(),
 		streaming: entry.streaming, failed: entry.Failed, promoted: entry.Promoted, latest: m.latestUser(start),
 	}
+	if m.folds(start) {
+		return m.groupKey(key, start)
+	}
 	if len(entry.SubAgents) == 0 {
 		return key, entry.running()
 	}
@@ -121,9 +124,6 @@ func (m *Model) drawKey(start int) (drawKey, bool) {
 
 func (m *Model) lead(start int) int {
 	before := start - 1
-	for before >= 0 && m.folds(before) {
-		before--
-	}
 	switch {
 	case before < 0:
 		return 0
@@ -152,7 +152,7 @@ func (m *Model) turnWork() (string, string) {
 	var named *Entry
 	for index := len(m.entries) - 1; index >= 0 && m.entries[index].turn == m.turns; index-- {
 		entry := &m.entries[index]
-		if !m.folds(index) {
+		if !m.folds(index) || entry.verdictShown() != "" {
 			continue
 		}
 		if named == nil && cmp.Or(entry.Ended, m.now()).Sub(entry.Started) >= PhaseDwell {
@@ -181,9 +181,6 @@ func (m *Model) turnWork() (string, string) {
 		if short := m.FeedID(named.ID); short != "" {
 			tag = look.TypedID(kind, short)
 		}
-	}
-	if tools > 0 {
-		fields = append(fields, "("+strconv.Itoa(tools)+") tools")
 	}
 	if jev > 0 {
 		fields = append(fields, "jev "+strconv.Itoa(jev))
@@ -225,6 +222,9 @@ func (m *Model) render(index int) []string {
 	case Assistant:
 		return m.message(entry, look.AgentRef(orchestrator), entry.displayLines(), false)
 	case Tool:
+		if m.folds(index) {
+			return m.groupLines(index)
+		}
 		return []string{continuation + m.toolLine(entry)}
 	case Note:
 		if len(entry.SubAgents) > 0 {
@@ -318,16 +318,12 @@ func (m *Model) failureLines(entry Entry) []string {
 }
 
 func (m *Model) toolLine(entry Entry) string {
-	style := look.Style(look.Blue)
-	if entry.Head == shellTool {
-		style = look.Style(look.Amber)
-	}
 	status, statusStyle := m.callStatus(entry)
 	label := entry.label()
 	if entry.Head == reportHead {
 		label, status = entry.Body, ""
 	}
-	marker := toolMarker
+	marker := callIndent
 	if entry.running() {
 		marker = progress.Work(m.frame) + " "
 	}
@@ -342,5 +338,5 @@ func (m *Model) toolLine(entry Entry) string {
 		right = gap + verdictStyle(entry.Decision.Verdict).Render(word) + right
 	}
 	room := max(m.textWidth()-widget.Cells(right), 1)
-	return style.Render(widget.Pad(widget.Fit(marker+oneLine(label), room), room)) + right
+	return look.Style(look.Blue).Render(widget.Pad(widget.Fit(marker+oneLine(label), room), room)) + right
 }
