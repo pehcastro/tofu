@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -96,6 +95,8 @@ type followReply struct {
 }
 
 type followLine struct {
+	Seq      uint64        `json:",omitempty"`
+	Snapshot *picture      `json:",omitempty"`
 	Event    *Event        `json:",omitempty"`
 	Reply    *followReply  `json:",omitempty"`
 	Settings *heldSettings `json:",omitempty"`
@@ -113,11 +114,6 @@ type audience struct {
 	seats    map[*seat]struct{}
 	attached int
 	changed  chan struct{}
-	started  *Event
-	partial  string
-	asks     []Event
-	steers   []Event
-	held     heldSettings
 }
 
 type link struct {
@@ -128,7 +124,8 @@ type link struct {
 
 type seat struct {
 	link
-	out       chan []byte
+	stream    chan []byte
+	kept      chan []byte
 	attached  bool
 	terminals bool
 }
@@ -142,6 +139,8 @@ type following struct {
 	typed   string
 	unsent  string
 	chose   Pick
+	seq     uint64
+	joined  chan struct{}
 }
 
 func linked(conn net.Conn) link { return link{conn: conn, gone: make(chan struct{})} }
@@ -167,9 +166,12 @@ func (h *Host) openAudience(store *session.Store, id string, a *audience) {
 	if a == nil {
 		a = &audience{seats: map[*seat]struct{}{}, changed: make(chan struct{}, 1)}
 	}
+	h.bus.mu.Lock()
+	h.bus.now.Settings = heldSettings{Asking: h.asking, Pick: h.pick}
+	h.bus.mu.Unlock()
 	a.mu.Lock()
 	moved := a.listener
-	a.listener, a.held = listener, heldSettings{Asking: h.asking, Pick: h.pick}
+	a.listener = listener
 	a.mu.Unlock()
 	if moved != nil {
 		_ = moved.Close()
@@ -184,75 +186,28 @@ func (h *Host) admit(a *audience, listener net.Listener) {
 		if err != nil {
 			return
 		}
-		s := &seat{link: linked(conn), out: make(chan []byte, followQueue)}
+		s := &seat{link: linked(conn), stream: make(chan []byte, followQueue), kept: make(chan []byte, followQueue)}
+		h.bus.mu.Lock()
 		a.mu.Lock()
-		if a.seats == nil {
-			a.mu.Unlock()
+		seated := a.seats != nil
+		if seated {
+			s.stream <- h.snapshot()
+			a.seats[s] = struct{}{}
+		}
+		a.mu.Unlock()
+		h.bus.mu.Unlock()
+		if !seated {
 			_ = conn.Close()
 			continue
 		}
-		if line, err := json.Marshal(followLine{Settings: &a.held}); err == nil {
-			s.send(line)
-		}
-		for _, event := range h.catchUp(a) {
-			if line, err := json.Marshal(followLine{Event: &event}); err == nil {
-				s.send(line)
-			}
-		}
-		a.seats[s] = struct{}{}
-		a.mu.Unlock()
 		safe.Go(h.report, "follow write", s.write)
 		safe.Go(h.report, "follow read", func() { h.serveSeat(a, s) })
 	}
 }
 
-func (h *Host) catchUp(a *audience) []Event {
-	var caught []Event
-	if a.started != nil {
-		caught = append(caught, *a.started)
-		if a.partial != "" {
-			caught = append(caught, Event{Kind: EventTextDelta, Text: a.partial})
-		}
-	}
-	h.steering.mu.Lock()
-	queued := h.steering.queued()
-	h.steering.mu.Unlock()
-	a.steers = slices.DeleteFunc(a.steers, func(steer Event) bool { return !slices.Contains(queued, steer.ID) })
-	return append(append(caught, a.asks...), a.steers...)
-}
-
-func (a *audience) tell(event Event) {
+func (a *audience) broadcast(said followLine, snapshot func() []byte) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	switch {
-	case event.Kind == EventTurnStarted:
-		a.started, a.partial = &event, ""
-	case event.Kind == EventTurnEnded:
-		a.started, a.partial = nil, ""
-	case event.Kind == EventTextDelta && event.Agent == "":
-		a.partial += event.Text
-	case endsTheLeadReply(event):
-		a.partial = ""
-	}
-	switch event.Kind {
-	case EventAwaitPerson:
-		a.asks = append(a.asks, event)
-	case EventResumed:
-		a.asks = slices.DeleteFunc(a.asks, func(asked Event) bool { return asked.ID == event.ID })
-	case EventSteerQueued:
-		a.steers = append(a.steers, event)
-	}
-	a.broadcast(followLine{Event: &event})
-}
-
-func (a *audience) settle(held heldSettings) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.held = held
-	a.broadcast(followLine{Settings: &held})
-}
-
-func (a *audience) broadcast(said followLine) {
 	if len(a.seats) == 0 {
 		return
 	}
@@ -260,11 +215,28 @@ func (a *audience) broadcast(said followLine) {
 	if err != nil {
 		return
 	}
+	var resynced []byte
 	for s := range a.seats {
-		if !s.send(line) {
-			a.unseat(s)
+		select {
+		case s.stream <- line:
+		default:
+			if resynced == nil {
+				resynced = snapshot()
+			}
+			s.resync(resynced)
 		}
 	}
+}
+
+func (s *seat) resync(snapshot []byte) {
+	for emptied := false; !emptied; {
+		select {
+		case <-s.stream:
+		default:
+			emptied = true
+		}
+	}
+	s.stream <- snapshot
 }
 
 func (a *audience) unseat(s *seat) {
@@ -335,7 +307,7 @@ func (a *audience) close() {
 
 func (s *seat) send(line []byte) bool {
 	select {
-	case s.out <- line:
+	case s.kept <- line:
 		return true
 	default:
 		return false
@@ -344,13 +316,15 @@ func (s *seat) send(line []byte) bool {
 
 func (s *seat) write() {
 	for {
+		var line []byte
 		select {
-		case line := <-s.out:
-			if _, err := s.conn.Write(line); err != nil {
-				s.leave()
-				return
-			}
+		case line = <-s.kept:
+		case line = <-s.stream:
 		case <-s.gone:
+			return
+		}
+		if _, err := s.conn.Write(line); err != nil {
+			s.leave()
 			return
 		}
 	}
@@ -372,7 +346,9 @@ func (h *Host) serveSeat(a *audience, s *seat) {
 		}
 		reply := h.served(a, s, raw)
 		line, _ := json.Marshal(followLine{Reply: &reply})
-		if !s.send(line) {
+		select {
+		case s.kept <- line:
+		case <-s.gone:
 			return
 		}
 	}
@@ -471,7 +447,7 @@ func (h *Host) dialHolder(id string, refused error) (*following, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &following{link: linked(conn), holder: busy, waiting: map[int]chan followReply{}}, nil
+	return &following{link: linked(conn), holder: busy, waiting: map[int]chan followReply{}, joined: make(chan struct{})}, nil
 }
 
 func (h *Host) follow(f *following, id string) {
@@ -607,6 +583,9 @@ func (h *Host) heed(f *following) {
 			h.asking, h.pick = held.Asking, held.Pick
 			h.mu.Unlock()
 		}
+		if now := line.Snapshot; now != nil {
+			h.rejoin(f, *now, line.Seq)
+		}
 		if line.Reply != nil && line.Reply.Refused != "" {
 			h.note("process " + strconv.Itoa(f.holder.PID) + " could not read what this tofu sent, so it did not run: " + line.Reply.Refused)
 		}
@@ -624,8 +603,11 @@ func (h *Host) heed(f *following) {
 			case <-f.gone:
 			}
 		}
-		if line.Event != nil && !f.echoes(*line.Event) {
-			h.mirror(f, *line.Event)
+		if event := line.Event; event != nil {
+			f.seq = line.Seq
+			if !f.echoes(*event) {
+				h.mirror(f, *event)
+			}
 		}
 	}
 	f.leave()
@@ -649,16 +631,40 @@ func (h *Host) mirror(f *following, event Event) {
 		h.id = event.ID
 		h.mu.Unlock()
 	}
-	if event.snapshot() {
-		select {
-		case h.events <- event:
-		default:
-		}
-		return
+	h.bus.mu.Lock()
+	h.bus.now.apply(event)
+	h.bus.mu.Unlock()
+	h.hand(event, f.gone)
+}
+
+func (h *Host) rejoin(f *following, now picture, seq uint64) {
+	h.mu.Lock()
+	h.asking, h.pick = now.Settings.Asking, now.Settings.Pick
+	id := h.id
+	h.mu.Unlock()
+	h.bus.mu.Lock()
+	if now.Session != nil && now.Session.ID == id && h.bus.now.Session == nil {
+		h.bus.now.Session = now.Session
 	}
+	moves := h.bus.now.toward(now)
+	h.bus.mu.Unlock()
 	select {
-	case h.events <- event:
+	case <-f.joined:
+		h.note("this tofu fell behind process " + strconv.Itoa(f.holder.PID) + " on session " + id + " after event " + strconv.FormatUint(f.seq, 10) + ", so it read the session again as it stood at event " + strconv.FormatUint(seq, 10))
+	default:
+		close(f.joined)
+	}
+	f.seq = seq
+	for _, event := range moves {
+		h.mirror(f, event)
+	}
+}
+
+func (f *following) caughtUp() {
+	select {
+	case <-f.joined:
 	case <-f.gone:
+	case <-time.After(followReplyWait):
 	}
 }
 

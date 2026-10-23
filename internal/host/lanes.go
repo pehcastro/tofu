@@ -155,8 +155,15 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	s.mu.Lock()
+	was := l.items.session
+	l.items.session = carry.Session
+	s.mu.Unlock()
 	chat, err := l.host.Resume(carry)
 	if err != nil {
+		s.mu.Lock()
+		l.items.session = was
+		s.mu.Unlock()
 		return nil, busy(err)
 	}
 	defer l.asks(p.Asking)
@@ -173,7 +180,11 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 	read := newItems(carry.Session)
 	lines := read.all(chat)
 	replay := freeze(lines)
-	if l.items.session == carry.Session {
+	if live := l.host.seen(); live.Turn != nil {
+		read.translate(*live.Turn, time.Now())
+		read.translate(Event{Kind: EventSubAgent, SubAgents: live.Agents}, time.Now())
+	}
+	if was == carry.Session {
 		maps.Copy(read.logged, l.items.logged)
 	}
 	*l.items, l.replay = read, replay

@@ -85,6 +85,7 @@ type Host struct {
 	now      func() time.Time
 	shells   *shell.Registry
 	events   chan Event
+	bus      bus
 	answers  chan Answer
 	steering steerQueue
 	stopLead chan struct{}
@@ -236,8 +237,6 @@ func (h *Host) followBinding() {
 	}
 }
 
-func (h *Host) Events() <-chan Event { return h.events }
-
 func (h *Host) Cron() *cron.Book { return h.cron }
 
 func (h *Host) ID() string {
@@ -280,9 +279,13 @@ func (h *Host) settle(asking AskingMode, pick Pick) {
 		h.pick = pick
 	}
 	now := heldSettings{Asking: h.asking, Pick: h.pick}
-	if a := h.audience.Load(); a != nil && now != was {
-		a.settle(now)
+	if now == was {
+		return
 	}
+	h.bus.mu.Lock()
+	h.bus.now.Settings = now
+	h.fanOut(followLine{Settings: &now})
+	h.bus.mu.Unlock()
 }
 
 func (h *Host) reachHolder() error {
@@ -604,23 +607,6 @@ func (h *Host) closing() session.Stop {
 	return closing
 }
 
-func (h *Host) deliver(event Event) {
-	if a := h.audience.Load(); a != nil {
-		a.tell(event)
-	}
-	select {
-	case h.events <- event:
-		return
-	default:
-	}
-	if !event.snapshot() {
-		select {
-		case h.events <- event:
-		case <-h.done:
-		}
-	}
-}
-
 func (h *Host) note(text string) {
 	h.emitter().emit(Event{Kind: EventNote, Text: text})
 }
@@ -760,6 +746,7 @@ func (h *Host) Fresh() error {
 		return errTurnRunning
 	}
 	h.letGo()
+	h.forget()
 	_ = h.carry(Carry{})
 	h.id, h.pending, h.started, h.readOnly = "", nil, SourceCleared, nil
 	return h.cron.Load("")
@@ -772,6 +759,7 @@ func (h *Host) Resume(carry Carry) ([]Event, error) {
 		h.mu.Unlock()
 		return nil, errTurnRunning
 	}
+	h.forget()
 	leader, err := h.holdOrFollow(carry.Session)
 	if err != nil {
 		h.mu.Unlock()
@@ -783,6 +771,9 @@ func (h *Host) Resume(carry Carry) ([]Event, error) {
 	h.id, h.pending, h.started = carry.Session, nil, SourceResumed
 	restoreErr := h.carry(carry)
 	h.mu.Unlock()
+	if leader != nil {
+		leader.caughtUp()
+	}
 	chat := h.Opening(carry)
 	if restoreErr != nil {
 		chat = append(chat, Event{Kind: EventNote, Text: restoreErr.Error()})
