@@ -190,15 +190,13 @@ func serveSessions(open string) (host.SessionList, error) {
 		return host.SessionList{}, err
 	}
 	opened, _ := store.Identity(open)
+	members := host.MembersOf(store.Project())
 	list := host.SessionList{Head: report.Head, Sessions: make([]host.SessionRow, len(report.Sessions))}
 	for index, row := range report.Sessions {
 		list.Sessions[index] = host.SessionRow{ID: row.ID, Name: row.Name, Handle: row.Handle, Family: row.Family, Generation: row.Generation, Generations: row.Generations,
 			At: row.At, LastAt: row.LastAt, Task: row.Task, Turns: row.Turns, SubAgents: row.Agents, Wire: row.Wire, Model: row.Model, CostUSD: row.CostUSD,
-			EndedAt: row.EndedAt, EndReason: string(row.EndReason), Outcome: row.Outcome, Expired: row.Expired, Open: row.ID == open || opened.Family != "" && row.Family == opened.Family}
-		var held sessionstore.BusyError
-		if errors.As(store.Busy(row.ID), &held) {
-			list.Sessions[index].HeldBy = &host.SessionHolder{PID: held.PID, Since: held.Since}
-		}
+			EndedAt: row.EndedAt, EndReason: string(row.EndReason), Outcome: row.Outcome, Expired: row.Expired, Open: row.ID == open || opened.Family != "" && row.Family == opened.Family,
+			Members: members[row.ID]}
 		list.Sessions[index].Kind = host.KindMain
 		if side, found, _ := store.Side(row.ID); found {
 			list.Sessions[index].Kind, list.Sessions[index].Owns, list.Sessions[index].Preset = host.KindSide, side.Owns, side.Preset

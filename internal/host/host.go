@@ -110,7 +110,8 @@ type Host struct {
 	stopBy    string
 	closeBy   string
 	closeWhy  string
-	cancel    context.CancelFunc
+	member    MemberKind
+	cancel    context.CancelCauseFunc
 	turnOver  chan struct{}
 	pick      Pick
 	fired     []string
@@ -173,6 +174,7 @@ func New(cfg Config) (*Host, []string) {
 		keys:        sync.OnceValue(loadKeyMask),
 		done:        make(chan struct{}),
 		joins:       cfg.Joins,
+		member:      MemberTUI,
 		id:          cfg.Resumed.Session,
 		started:     SourceStartup,
 		asks:        &asks{standing: map[string]Answer{}, until: map[string]time.Time{}},
@@ -314,7 +316,7 @@ func (h *Host) Send(pick Pick, task string) bool {
 
 func (h *Host) begin(pick Pick, task string, origin llm.Origin) {
 	h.dropCheckIn()
-	ctx, cancel := context.WithCancel(turn.WithLeadCheckIn(context.Background(), h.keepCheckIn))
+	ctx, cancel := context.WithCancelCause(turn.WithLeadCheckIn(context.Background(), h.keepCheckIn))
 	turnOver := make(chan struct{})
 	h.running, h.stopped, h.cancelled, h.stopBy, h.cancel, h.turn, h.turnOver = true, false, false, "", cancel, turn.NewID(h.now()), turnOver
 	live := Live{Turn: h.turn, Steering: h.steering.ready, LeadStop: h.stopLead, Answers: h.answers, Origin: origin, Unattended: origin.Source == llm.SourceCronFire}
@@ -333,7 +335,7 @@ func (h *Host) begin(pick Pick, task string, origin llm.Origin) {
 			h.play(ctx, pick, task, live)
 			return nil
 		})
-		cancel()
+		cancel(nil)
 		h.traceStop(h.ending(crashed))
 		h.ended(out)
 		h.armCheckIn()
@@ -414,7 +416,7 @@ func (h *Host) Stop(asked StopAsked) {
 	case cancel == nil:
 	case everything:
 		h.traceStop(session.Stop{Kind: session.StopTurn, By: asked.By, Why: asked.Why, Took: append([]string{"the lead"}, running...)})
-		cancel()
+		cancel(errors.New("stopped by " + asked.By))
 	default:
 		if asked.Why != "" {
 			asked.Why += "; "
@@ -565,7 +567,7 @@ func (h *Host) Close() {
 		h.traceStop(closing)
 	}
 	if cancel != nil {
-		cancel()
+		cancel(errors.New("closed by " + closing.By + ": " + closing.Why))
 	}
 	givenUp, stop := context.WithTimeout(context.Background(), konst.HostCloseWaitMillis*time.Millisecond)
 	defer stop()

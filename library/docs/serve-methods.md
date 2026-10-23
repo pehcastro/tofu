@@ -18,7 +18,7 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
   `tofu/askPerson`; answers `protocol`, `tofu`, `project` and `capabilities`, one name a family of methods
 - `session.list`: takes `search`, `limit` and `kind`; answers `head` and `sessions`, each `id`, `name`,
   `handle`, `task`, `turns`, `lastAt`, `wire`, `model`, `costUsd`, `outcome`, `open` (here), `running`,
-  `heldBy` (another tofu) and `kind`, `main` or `side`; a side chat adds `parent`, `owns`, `preset`
+  `members` (every tofu, desk and serve joined to it) and `kind`, `main` or `side`; a side chat adds `parent`, `owns`, `preset`
 - side chats (capability `side`): `session.branch` takes `session`, `kind: "side"`, `seed` (`summary` or
   `none`), `owns` or `preset`, `name`, `model`, `effort` and `at` `{item}`, the parent's event to branch from
   (the `item` `mention.resolve` answers), whose summary stops there; answers `session`, `handle`, `parent`
@@ -26,7 +26,7 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
   picks its `model`. `tofu session branch` takes `--model`, `--effort`, `--at`. `session.access` takes `session`
   and `owns` or `preset`, `read` with neither, and errs while that chat's turn runs
 - `session.open`: takes `session` (none starts a fresh one), `asking` and `replay`, how many of the newest
-  lines it sends; answers `session`, `fresh` and `heldBy` `{pid, since}` when another tofu on this machine holds it: this one follows, replaying the session, then streaming that tofu's events live, and `turn.send`, `turn.stop` and answers run there; when that tofu ends this one takes the session within 2 s. One that cannot be followed errs `session.busy`. While a
+  lines it sends; answers `session`, `fresh` and `members`, each `{process, kind, joined}` with `kind` `tui`, `desk` or `serve`: the session runs in the project's `tofu host`, every client joins it as a member, replaying the session and then streaming its events live, and `turn.send`, `turn.stop` and answers run there. `session.member` tells every client the new `members` whenever one joins or leaves, and `session.state` carries them too. When the last member leaves, the host cancels the session's turn, naming that member, and ends its shells. While a
   turn runs, the new one opens beside it (capability `sessions`) and one already open here takes the focus;
   a request with no `session` means the one opened last. `session.close` takes `session` and `stop`, and
   errs while that session's turn runs unless `stop` is true, and on the only session open

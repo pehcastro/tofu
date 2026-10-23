@@ -46,6 +46,7 @@ const (
 	EventMemoryScoped
 	EventAccount
 	EventSteerQueued
+	EventMembers
 )
 
 type Event struct {
@@ -94,6 +95,7 @@ type Event struct {
 	Scoped       *MemoryScoped
 	Account      *TurnAccount
 	Images       []MessageImage
+	Members      []Member
 	from         *Host
 }
 
@@ -117,7 +119,7 @@ func (e Event) snapshot() bool {
 	switch e.Kind {
 	case EventPersisted:
 		return e.Logged == nil || e.Logged.Kind != session.EventMessage || e.Agent != ""
-	case EventContext, EventSubAgent, EventSteerQueued:
+	case EventContext, EventSubAgent, EventSteerQueued, EventMembers:
 		return true
 	case EventText, EventTextDelta, EventToolCall, EventToolResult, EventNote, EventFailure, EventStats, EventDone,
 		EventDecision, EventGateOff, EventAwaitPerson, EventResumed, EventSteered, EventRequesting, EventPlan,

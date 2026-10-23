@@ -660,6 +660,10 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		return row
 	}
 	fail := func(err error) (Row, error) {
+		if errors.Is(err, context.Canceled) {
+			row.Error = redactor.Redact(context.Cause(ctx).Error())
+			return finish(OutcomeCancelled), err
+		}
 		row.Error = redactor.Redact(err.Error())
 		return finish(OutcomeError), err
 	}

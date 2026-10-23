@@ -59,7 +59,7 @@ Open a session another tofu on the same machine is working in, with
 follower instead of refusing. It shows the transcript, then every event the
 holding tofu writes, live, token by token. A prompt, `Esc` or an approval
 you give in the follower runs in the holding tofu, exactly as if you had
-typed it there, and the chat names the process that holds the session. So do steering, question answers and memory answers. Over `tofu serve`, `session.open` answers `heldBy` with the holder's pid and since when, and `turn.steerQueued` tells a client a follower's steer is waiting.
+typed it there, and the chat names the process that holds the session. So do steering, question answers and memory answers. Over `tofu serve`, `session.open` and `session.state` answer `members`, every process joined to the session with its kind, `tui`, `desk` or `serve`, and when it joined; `session.member` says the new list when one joins or leaves, and `turn.steerQueued` tells a client a follower's steer is waiting.
 
 There is one writer, always. When the holding tofu quits or is killed, the
 follower takes the session within 2 s and runs what you type itself. The

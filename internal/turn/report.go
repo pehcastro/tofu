@@ -157,6 +157,8 @@ func outcomeFinding(outcome Outcome, state subagent.State) (subagent.Finding, bo
 			Text: "the sub-agent was stopped by the " + outcome.String() + " and its work is unfinished"}, true
 	case OutcomeError:
 		return subagent.Finding{Bucket: subagent.ActOn, Text: "the sub-agent ended on an error and its work is unfinished"}, true
+	case OutcomeCancelled:
+		return subagent.Finding{Bucket: subagent.ActOn, Text: "the sub-agent was cancelled partway through, so its work is unfinished and what it did do stands"}, true
 	case OutcomeLoopGuard:
 		return subagent.Finding{Bucket: subagent.ActOn, Text: "the sub-agent repeated one call until the loop guard stopped it"}, true
 	case OutcomeTruncated:

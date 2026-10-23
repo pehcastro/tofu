@@ -232,7 +232,7 @@ func (d *turnDigests) note(event session.Event) {
 			return
 		}
 		_, digest.Status = doneWords(ended.Outcome, ended.Guard)
-		if ended.Error != "" {
+		if ended.Error != "" && ended.Outcome != turn.OutcomeCancelled {
 			digest.Status = StatusFailed
 		}
 		at := event.At

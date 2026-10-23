@@ -259,9 +259,6 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 	case "serve":
 		return serveVerb(args[1:], in, out, errOut)
 	case host.HubVerb:
-		if hostRuns(args) {
-			return hubRunVerb(args[2:], errOut)
-		}
 		return projectHostVerb(args[1:], out, errOut)
 	case "run":
 		return runVerb(args[1:], out, errOut)

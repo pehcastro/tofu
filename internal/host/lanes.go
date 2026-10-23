@@ -118,6 +118,9 @@ func (s *server) open(p SessionOpenParams) (any, error) {
 		return s.refocus(held, p)
 	case held == nil && s.Spawn != nil && focus.running():
 		h, release := s.Spawn()
+		s.mu.Lock()
+		h.joinAs(memberOf(s.client))
+		s.mu.Unlock()
 		asking, pick := focus.host.Settings()
 		h.SetAsking(asking)
 		h.Choose(pick)
@@ -140,7 +143,7 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 	if p.Session == "" {
 		id, err := l.host.OpenFresh()
 		if err != nil {
-			return nil, busy(err)
+			return nil, err
 		}
 		l.asks(p.Asking)
 		s.mu.Lock()
@@ -161,7 +164,7 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 		s.mu.Lock()
 		l.items.session = was
 		s.mu.Unlock()
-		return nil, busy(err)
+		return nil, err
 	}
 	defer l.asks(p.Asking)
 	s.mu.Lock()

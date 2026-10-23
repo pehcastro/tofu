@@ -306,6 +306,7 @@ func TestEveryOutcomeClosesTheTurnInWordsAndNeverInItsEnumName(t *testing.T) {
 		turn.OutcomeRetiredCostCap:      "stopped at a cap this build no longer sets, after",
 		turn.OutcomeRetiredWallClockCap: "stopped at the wall clock cap after",
 		turn.OutcomeLoopGuard:           loopGuardWords(nil) + ", after",
+		turn.OutcomeCancelled:           "cancelled at",
 	}
 	for _, outcome := range session.AllOutcomes() {
 		expected, named := want[outcome]

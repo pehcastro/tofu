@@ -21,6 +21,7 @@ type picture struct {
 	Asks     []Event       `json:",omitempty"`
 	Settled  []Event       `json:",omitempty"`
 	Steers   []Event       `json:",omitempty"`
+	Members  []Member      `json:",omitempty"`
 }
 
 type bus struct {
@@ -71,6 +72,8 @@ func (p *picture) apply(event Event) Event {
 		p.Steers = append(p.Steers, event)
 	case EventSteered:
 		p.Steers = slices.DeleteFunc(p.Steers, withID(event.ID))
+	case EventMembers:
+		p.Members = event.Members
 	}
 	return event
 }
@@ -118,6 +121,9 @@ func (seen picture) toward(now picture) []Event {
 	}
 	if now.Context != seen.Context {
 		moves = append(moves, Event{Kind: EventContext, Context: now.Context})
+	}
+	if !slices.Equal(seen.Members, now.Members) {
+		moves = append(moves, Event{Kind: EventMembers, Members: now.Members})
 	}
 	for _, asked := range now.Asks {
 		if !slices.ContainsFunc(seen.Asks, withID(asked.ID)) {

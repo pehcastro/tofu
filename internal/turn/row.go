@@ -39,6 +39,7 @@ const (
 	OutcomeError               = session.OutcomeError
 	OutcomeTruncated           = session.OutcomeTruncated
 	OutcomeLoopGuard           = session.OutcomeLoopGuard
+	OutcomeCancelled           = session.OutcomeCancelled
 )
 
 type ToolCallRow struct {

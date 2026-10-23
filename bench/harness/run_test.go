@@ -358,6 +358,7 @@ func TestEndReasonOfNamesEveryTurnOutcome(t *testing.T) {
 		turn.OutcomeError:               EndReasonCrash,
 		turn.OutcomeTruncated:           EndReasonTruncated,
 		turn.OutcomeLoopGuard:           EndReasonTurnCap,
+		turn.OutcomeCancelled:           EndReasonCrash,
 	}
 	outcomes := sessionstore.AllOutcomes()
 	if len(outcomes) < len(readBefore) {

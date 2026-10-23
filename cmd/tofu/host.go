@@ -21,6 +21,10 @@ const projectHostUsage = `usage: tofu host ensure|status|stop|run [--dir PATH] [
           ensure starts it, nobody needs to
 `
 
+func hostRuns(args []string) bool {
+	return len(args) > 1 && args[0] == host.HubVerb && args[1] == host.HubRunVerb
+}
+
 func projectHostVerb(args []string, out, errOut io.Writer) int {
 	usageFailed := func(why string) int {
 		_, _ = fmt.Fprintf(errOut, "tofu host: %s\n\n%s", why, projectHostUsage)
@@ -50,7 +54,7 @@ func projectHostVerb(args []string, out, errOut io.Writer) int {
 		say := func(line string) {
 			_, _ = fmt.Fprintln(errOut, time.Now().Format(time.DateTime)+" tofu host: "+line)
 		}
-		if err = host.RunHub(dir, crashTold(dir, say), say); err != nil {
+		if err = runHub(dir, say); err != nil {
 			say(err.Error())
 		}
 		if err != nil && !errors.Is(err, host.ErrHubRunning) {

@@ -239,6 +239,8 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		spent := *event.Account
 		spent.Identity = s.identity(event.Agent, s.mint("account"))
 		return append(out, kept("turn.account", &spent))
+	case EventMembers:
+		return append(out, merged("session.member", "", &SessionMembers{Identity: s.identity("", session.EventIDFor(s.session, "members")), Members: append([]Member{}, event.Members...)}))
 	case EventForkStart, EventResumed, EventRequesting:
 		return out
 	}

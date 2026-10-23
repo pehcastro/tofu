@@ -37,10 +37,11 @@ one go, refusing while its turn runs unless you pass `stop: true`. Two sessions 
 only with the setting `oneWorkingSessionPerProject` off; while it is on, the default, the second turn ends
 `failed` and says the project is busy.
 
-**No window owns a running session.** A session runs in a background holder; `tofu serve` and the
-terminal follow it, so closing one leaves the other running, and `session.open` names the holder in
-`heldBy`. A second window finds a busy holder wherever its temp folder is; one that cannot reach the
-holder says so, names the process, and only follows, running nothing, until that process closes. `turn.send` while a turn runs queues the text as a steer and answers `steered`; pass
+**No window owns a running session.** A session runs in the project's `tofu host`, and `tofu serve`, the
+terminal and the desk each join it as a member, so closing one leaves the others running. `session.open`
+and `session.state` list the `members`, each with its `process`, its `kind` (`tui`, `desk` or `serve`)
+and when it `joined`, and `session.member` says the new list whenever one joins or leaves. When the last
+member leaves, the host cancels the session's turn, naming that member, and ends the session's shells. `turn.send` while a turn runs queues the text as a steer and answers `steered`; pass
 `expectedTurnId` to be refused instead. `turn.stop` stops the lead and leaves running sub-agents
 working; pass `everything: true` to stop them too. A client that attaches mid-turn gets the
 queued messages, pending approvals and working sub-agents at once, and `turn.steer` takes `images: [{path}]` like `turn.send`, so an image pasted while the lead works reaches it. `session.set` from any

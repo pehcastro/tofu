@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,7 +21,10 @@ import (
 	"tofu/internal/shell"
 )
 
-const followReplyWait = konst.FollowReplyMillis * time.Millisecond
+const (
+	followReplyWait = konst.FollowReplyMillis * time.Millisecond
+	deskClient      = "tofu-desk"
+)
 
 var errHostSilent = errors.New("the tofu host did not answer, so nothing changed")
 
@@ -126,7 +130,7 @@ type seat struct {
 type following struct {
 	link
 	lines   *json.Decoder
-	hub     HubStatus
+	hub     hubJoined
 	mu      sync.Mutex
 	asked   int
 	waiting map[int]chan followReply
@@ -381,8 +385,28 @@ func (h *Host) steerFor(text string) string {
 	return id
 }
 
+func memberOf(client string) MemberKind {
+	if strings.HasPrefix(client, deskClient) {
+		return MemberDesk
+	}
+	return MemberServe
+}
+
+func (h *Host) joinAs(kind MemberKind) {
+	h.mu.Lock()
+	h.member = kind
+	h.mu.Unlock()
+}
+
+func (h *Host) membersAre(members []Member) {
+	h.emitter().emit(Event{Kind: EventMembers, Members: members})
+}
+
 func (h *Host) join(id string) (*following, error) {
-	conn, lines, hub, err := joinHub(h.dir, id)
+	h.mu.Lock()
+	kind := h.member
+	h.mu.Unlock()
+	conn, lines, hub, err := joinHub(h.dir, id, kind)
 	if err != nil {
 		return nil, err
 	}
@@ -606,9 +630,9 @@ func (h *Host) lost(f *following) {
 	out.emit(Event{Kind: EventNote, Text: "the tofu host, process " + pid + ", went away from session " + id + ", so the next message starts it again"})
 }
 
-func (h *Host) heldBy() *SessionHolder {
+func (h *Host) joined() (hubJoined, bool) {
 	if f := h.following.Load(); f != nil {
-		return &SessionHolder{PID: f.hub.PID, Since: f.hub.Started}
+		return f.hub, true
 	}
-	return nil
+	return hubJoined{}, false
 }

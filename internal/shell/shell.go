@@ -48,6 +48,7 @@ type Shell struct {
 	Command   string     `json:"command"`
 	Dir       string     `json:"dir"`
 	Owner     string     `json:"owner"`
+	Session   string     `json:"session,omitempty"`
 	Call      string     `json:"call,omitempty"`
 	TofuPID   int        `json:"tofu_pid,omitempty"`
 	PID       int        `json:"pid"`
@@ -95,6 +96,7 @@ type Registry struct {
 	Terminals atomic.Bool
 	dir       string
 	self      int
+	session   string
 	mu        sync.Mutex
 	running   map[string]*live
 	wrote     chan struct{}
@@ -102,6 +104,12 @@ type Registry struct {
 
 func OpenAt(dir string) *Registry {
 	return &Registry{dir: dir, self: os.Getpid(), running: map[string]*live{}, wrote: make(chan struct{}, 1)}
+}
+
+func (r *Registry) ForSession(id string) *Registry {
+	opened := OpenAt(r.dir)
+	opened.Lifetime, opened.session = r.Lifetime, id
+	return opened
 }
 
 func (s Shell) LeftOver() bool {
@@ -114,7 +122,7 @@ func (s Shell) OneShot() bool {
 
 func (r *Registry) Own() []Shell {
 	found, _ := r.List()
-	return slices.DeleteFunc(found, func(one Shell) bool { return one.State != Running || one.TofuPID != r.self })
+	return slices.DeleteFunc(found, func(one Shell) bool { return one.State != Running || one.TofuPID != r.self || one.Session != r.session })
 }
 
 func (r *Registry) endedPath(name string) string { return filepath.Join(r.dir, name+stateSuffix) }
@@ -234,7 +242,7 @@ func (r *Registry) Start(root, name, command, owner string, env ...string) (Shel
 	if err != nil {
 		return Shell{}, err
 	}
-	entry := Shell{Name: name, Command: command, Dir: root, Owner: owner, TofuPID: r.self, PID: cmd.Process.Pid, State: Running, Started: started, Terminal: terminal,
+	entry := Shell{Name: name, Command: command, Dir: root, Owner: owner, Session: r.session, TofuPID: r.self, PID: cmd.Process.Pid, State: Running, Started: started, Terminal: terminal,
 		Kept: KeptBackground, Port: NamedPort(root, command, cmd.Env), Env: env}
 	return entry, r.keep(entry, process, waited, logFile)
 }

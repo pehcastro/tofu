@@ -30,12 +30,11 @@ const (
 )
 
 const (
-	CodeParse       = -32700
-	CodeInvalid     = -32600
-	CodeNoMethod    = -32601
-	CodeBadParams   = -32602
-	CodeRefused     = -32000
-	CodeSessionBusy = -32001
+	CodeParse     = -32700
+	CodeInvalid   = -32600
+	CodeNoMethod  = -32601
+	CodeBadParams = -32602
+	CodeRefused   = -32000
 )
 
 type Refusal struct {
@@ -828,9 +827,32 @@ type SessionCloseParams struct {
 }
 
 type SessionOpenResult struct {
-	Session string         `json:"session"`
-	Fresh   bool           `json:"fresh"`
-	HeldBy  *SessionHolder `json:"heldBy,omitempty"`
+	Session string   `json:"session"`
+	Fresh   bool     `json:"fresh"`
+	Members []Member `json:"members,omitempty"`
+}
+
+type MemberKind string
+
+const (
+	MemberTUI   MemberKind = "tui"
+	MemberDesk  MemberKind = "desk"
+	MemberServe MemberKind = "serve"
+)
+
+func (MemberKind) enum() []string {
+	return []string{string(MemberTUI), string(MemberDesk), string(MemberServe)}
+}
+
+type Member struct {
+	Process int        `json:"process"`
+	Kind    MemberKind `json:"kind"`
+	Joined  time.Time  `json:"joined"`
+}
+
+type SessionMembers struct {
+	Identity
+	Members []Member `json:"members"`
 }
 
 type SessionListParams struct {
@@ -914,16 +936,11 @@ type SessionRow struct {
 	Expired     bool           `json:"expired"`
 	Open        bool           `json:"open"`
 	Running     bool           `json:"running"`
-	HeldBy      *SessionHolder `json:"heldBy,omitempty"`
+	Members     []Member       `json:"members,omitempty"`
 	Kind        string         `json:"kind"`
 	Parent      *SessionParent `json:"parent,omitempty"`
 	Owns        []string       `json:"owns,omitempty"`
 	Preset      string         `json:"preset,omitempty"`
-}
-
-type SessionHolder struct {
-	PID   int       `json:"pid"`
-	Since time.Time `json:"since"`
 }
 
 type SessionListed struct {
@@ -959,6 +976,7 @@ type SessionState struct {
 	Questions []QuestionRequest `json:"questions"`
 	Agents    []AgentNow        `json:"agents"`
 	Shells    []ShellNow        `json:"shells"`
+	Members   []Member          `json:"members"`
 	Context   *ContextUse       `json:"context,omitempty"`
 	Cron      CronState         `json:"cron"`
 }
@@ -983,6 +1001,7 @@ type AgentNow struct {
 
 type ShellNow struct {
 	Shell     string     `json:"shell"`
+	Session   string     `json:"session,omitempty"`
 	Command   string     `json:"command"`
 	PID       int        `json:"pid"`
 	State     ShellState `json:"state"`
@@ -1228,6 +1247,7 @@ func notifications() []method {
 		{name: "session.listed", params: SessionListed{}},
 		{name: "session.turns.updated", params: SessionTurnUpdated{}},
 		{name: "session.settings", params: SessionSettings{}},
+		{name: "session.member", params: SessionMembers{}},
 		{name: "settings.changed", params: SettingsChanged{}},
 		{name: "models.changed", params: ModelsChanged{}},
 		{name: "approval.resolved", params: ApprovalResolved{}},

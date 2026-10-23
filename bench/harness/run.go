@@ -338,6 +338,8 @@ func endReasonOf(session turn.Row) (EndReason, string) {
 		return EndReasonTruncated, ""
 	case turn.OutcomeError:
 		return EndReasonCrash, ""
+	case turn.OutcomeCancelled:
+		return EndReasonCrash, "end reason: the turn was cancelled from outside, and harness.EndReason has no variant for that, so this row says crash"
 	case turn.OutcomeUnset:
 		return EndReasonCrash, "end reason: the turn row carries no outcome, so this row says crash"
 	case turn.OutcomeForked:

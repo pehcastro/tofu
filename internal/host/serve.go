@@ -113,7 +113,10 @@ func Serve(cfg ServeConfig) error {
 	if err != nil {
 		ended.Why += ": " + err.Error()
 	}
-	s.stopTurns(ended, slices.DeleteFunc(slices.Clone(lanes), func(l *lane) bool { return l.host.heldBy() != nil })...)
+	s.stopTurns(ended, slices.DeleteFunc(slices.Clone(lanes), func(l *lane) bool {
+		_, joined := l.host.joined()
+		return joined
+	})...)
 	for _, l := range lanes {
 		l.halt()
 	}
@@ -238,7 +241,7 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 			safe.Go(s.report, "serve quota", s.quota)
 		}
 		if opened, ok := result.(SessionOpenResult); ok {
-			opened.HeldBy = s.focus().host.heldBy()
+			opened.Members = s.focus().host.seen().Members
 			result = opened
 		}
 		return result, err
@@ -338,6 +341,7 @@ func (s *server) initialize(p InitializeParams) (any, error) {
 		s.Shells.Terminals.Store(s.takeover)
 	}
 	s.mu.Unlock()
+	s.Host.joinAs(memberOf(p.Client))
 	return InitializeResult{Protocol: Protocol, Tofu: konst.Version, Project: s.Dir, Capabilities: capabilities()}, nil
 }
 
@@ -423,14 +427,6 @@ func (s *server) rename(p SessionRenameParams) (any, error) {
 	focused := s.focus()
 	safe.Go(s.report, "serve list", func() { s.listed(focused) })
 	return Ack{OK: true}, nil
-}
-
-func busy(err error) error {
-	var held session.BusyError
-	if errors.As(err, &held) {
-		return &Refusal{Code: CodeSessionBusy, Message: "session.busy", Data: held}
-	}
-	return err
 }
 
 func (s *server) send(p TurnSendParams) (any, error) {
@@ -704,7 +700,7 @@ func (s *server) elsewhere(name string, refused error, ask followAsk) (shell.Hol
 		return shell.Hold{}, refused
 	}
 	for _, l := range s.tracked() {
-		if held := l.host.heldBy(); held != nil && held.PID == entry.TofuPID {
+		if hub, joined := l.host.joined(); joined && hub.PID == entry.TofuPID && hub.Session == entry.Session {
 			ask.Shell = name
 			return l.host.heldShell(ask)
 		}

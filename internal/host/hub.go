@@ -1,7 +1,6 @@
 package host
 
 import (
-	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -37,6 +36,7 @@ const (
 	hubAskStatus  = "status"
 	hubAskJoin    = "join"
 	hubAskRoster  = "roster"
+	hubAskMembers = "members"
 	hubAskStop    = "stop"
 	hubAnswerWait = konst.HostAnswerMillis * time.Millisecond
 	hubRetry      = konst.HostRetryMillis * time.Millisecond
@@ -45,7 +45,6 @@ const (
 var (
 	ErrHubRunning = errors.New("a tofu host already serves this project")
 	errNoHub      = errors.New("no tofu host serves this project")
-	errNoSessions = errors.New("this tofu host was started without sessions, so it opens none")
 	errNoSession  = errors.New("a member joins a session, and this join named none")
 )
 
@@ -67,11 +66,12 @@ type hubPlace struct {
 type hubAsk struct {
 	Ask     string `json:"ask"`
 	Session string `json:"session,omitempty"`
-	Member  string `json:"member,omitempty"`
+	Member  Member `json:"member,omitzero"`
 }
 
 type hubJoined struct {
 	HubStatus
+	Session string `json:"session,omitempty"`
 	Refused string `json:"refused,omitempty"`
 }
 
@@ -90,14 +90,18 @@ type hub struct {
 }
 
 type hosted struct {
-	id     string
-	host   *Host
-	end    func()
-	failed error
-	seats  int
-	ending bool
-	ready  chan struct{}
-	ended  chan struct{}
+	id      string
+	host    *Host
+	end     func()
+	failed  error
+	members []Member
+	ending  bool
+	ready   chan struct{}
+	ended   chan struct{}
+}
+
+func (m Member) named() string {
+	return "process " + strconv.Itoa(m.Process) + " (" + string(m.Kind) + ")"
 }
 
 func placeOf(project string) (hubPlace, error) {
@@ -201,19 +205,19 @@ func EnsureHub(project string) (HubStatus, error) {
 	return HubStatus{}, fmt.Errorf("the tofu host did not answer on %s within %s, its log is %s", place.socket, ready, place.log)
 }
 
-func joinHub(project, id string) (net.Conn, *json.Decoder, HubStatus, error) {
+func joinHub(project, id string, kind MemberKind) (net.Conn, *json.Decoder, hubJoined, error) {
 	status, err := EnsureHub(project)
 	if err != nil {
-		return nil, nil, status, err
+		return nil, nil, hubJoined{HubStatus: status}, err
 	}
 	conn, err := net.DialTimeout(hubNetwork, status.Socket, hubAnswerWait)
 	if err != nil {
-		return nil, nil, status, err
+		return nil, nil, hubJoined{HubStatus: status}, err
 	}
 	_ = conn.SetDeadline(time.Now().Add(konst.HostJoinMillis * time.Millisecond))
 	lines := json.NewDecoder(conn)
 	var joined hubJoined
-	err = json.NewEncoder(conn).Encode(hubAsk{Ask: hubAskJoin, Session: id, Member: "process " + strconv.Itoa(os.Getpid())})
+	err = json.NewEncoder(conn).Encode(hubAsk{Ask: hubAskJoin, Session: id, Member: Member{Process: os.Getpid(), Kind: kind}})
 	if err == nil {
 		err = lines.Decode(&joined)
 	}
@@ -222,10 +226,22 @@ func joinHub(project, id string) (net.Conn, *json.Decoder, HubStatus, error) {
 	}
 	if err != nil {
 		_ = conn.Close()
-		return nil, nil, status, err
+		return nil, nil, joined, err
 	}
 	_ = conn.SetDeadline(time.Time{})
-	return conn, lines, joined.HubStatus, nil
+	return conn, lines, joined, nil
+}
+
+func MembersOf(project string) map[string][]Member {
+	place, err := placeOf(project)
+	if err != nil {
+		return nil
+	}
+	var members map[string][]Member
+	if askHubFor(place, hubAsk{Ask: hubAskMembers}, &members) != nil {
+		return nil
+	}
+	return members
 }
 
 func takeHubLock(place hubPlace) (*os.File, error) {
@@ -242,7 +258,7 @@ func takeHubLock(place hubPlace) (*os.File, error) {
 	}
 }
 
-func RunHub(project string, report safe.Report, say func(string), sessions ...HubSession) error {
+func RunHub(project string, report safe.Report, say func(string), open HubSession) error {
 	place, err := placeOf(project)
 	if err != nil {
 		return err
@@ -274,11 +290,9 @@ func RunHub(project string, report safe.Report, say func(string), sessions ...Hu
 		status:  HubStatus{PID: os.Getpid(), Socket: place.socket, Project: place.project, Version: konst.Version, Started: time.Now()},
 		changed: make(chan struct{}, 1),
 		stopped: make(chan struct{}),
+		open:    open,
 		report:  report,
 		say:     say,
-	}
-	if len(sessions) > 0 {
-		h.open = sessions[0]
 	}
 	if err := writeRegistry(place.registry, h.status); err != nil {
 		return fmt.Errorf("the host registry %s: %w", place.registry, err)
@@ -363,6 +377,8 @@ func (h *hub) serve(conn net.Conn) {
 		h.stop.Do(func() { close(h.stopped) })
 	case hubAskRoster:
 		_ = json.NewEncoder(conn).Encode(h.roster(asked.Session))
+	case hubAskMembers:
+		_ = json.NewEncoder(conn).Encode(h.membersNow())
 	case hubAskJoin:
 		h.moved(1)
 		defer h.moved(-1)
@@ -373,22 +389,29 @@ func (h *hub) serve(conn net.Conn) {
 func (h *hub) join(conn net.Conn, lines *json.Decoder, asked hubAsk) {
 	_ = conn.SetDeadline(time.Time{})
 	joined := hubJoined{HubStatus: h.status}
-	s, err := h.take(asked.Session)
+	member := asked.Member
+	member.Joined = time.Now()
+	s, err := h.take(asked.Session, member)
 	if err != nil {
 		joined.Refused = err.Error()
-	}
-	joined.Members = h.members.Load()
-	written := json.NewEncoder(conn).Encode(joined)
-	if err != nil {
+		_ = json.NewEncoder(conn).Encode(joined)
 		return
 	}
-	if written == nil {
+	joined.Members, joined.Session = h.members.Load(), s.id
+	h.told(s)
+	if json.NewEncoder(conn).Encode(joined) == nil {
 		s.host.seat(conn, io.MultiReader(lines.Buffered(), conn))
 	}
-	h.leave(s, asked.Member)
+	h.leave(s, member)
 }
 
-func (h *hub) take(id string) (*hosted, error) {
+func (h *hub) told(s *hosted) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	s.host.membersAre(slices.Clone(s.members))
+}
+
+func (h *hub) take(id string, member Member) (*hosted, error) {
 	if id == "" {
 		return nil, errNoSession
 	}
@@ -396,14 +419,14 @@ func (h *hub) take(id string) (*hosted, error) {
 		h.mu.Lock()
 		at := slices.IndexFunc(h.sessions, func(s *hosted) bool { return s.id == id || s.host != nil && s.host.ID() == id })
 		if at < 0 {
-			s := &hosted{id: id, seats: 1, ready: make(chan struct{}), ended: make(chan struct{})}
+			s := &hosted{id: id, members: []Member{member}, ready: make(chan struct{}), ended: make(chan struct{})}
 			h.sessions = append(h.sessions, s)
 			h.mu.Unlock()
 			return s, h.opened(s)
 		}
 		s := h.sessions[at]
 		if !s.ending {
-			s.seats++
+			s.members = append(s.members, member)
 		}
 		h.mu.Unlock()
 		if s.ending {
@@ -417,11 +440,6 @@ func (h *hub) take(id string) (*hosted, error) {
 
 func (h *hub) opened(s *hosted) error {
 	defer close(s.ready)
-	if h.open == nil {
-		s.failed = errNoSessions
-		h.forget(s)
-		return s.failed
-	}
 	live, end, troubles := h.open(s.id, &h.projectTurn)
 	for _, trouble := range troubles {
 		h.say("session " + s.id + ": " + trouble)
@@ -460,21 +478,25 @@ func (h *hub) forget(s *hosted) {
 	close(s.ended)
 }
 
-func (h *hub) leave(s *hosted, member string) {
+func (h *hub) leave(s *hosted, member Member) {
 	h.mu.Lock()
-	s.seats--
-	last := s.seats == 0 && !s.ending
+	if at := slices.Index(s.members, member); at >= 0 {
+		s.members = slices.Delete(s.members, at, at+1)
+	}
+	last := len(s.members) == 0 && !s.ending
 	s.ending = s.ending || last
 	h.mu.Unlock()
-	if last {
-		h.end(s, "the last member, "+cmp.Or(member, "unnamed")+", left session "+s.host.ID())
+	if !last {
+		h.told(s)
+		return
 	}
+	h.end(s, "the last member, "+member.named(), "it left, so the session's turn stops and its shells end")
 }
 
-func (h *hub) end(s *hosted, why string) {
-	s.host.endedBy("the tofu host, process "+strconv.Itoa(h.status.PID), why+", so its turn stops")
+func (h *hub) end(s *hosted, by, why string) {
+	s.host.endedBy(by, why)
 	s.end()
-	h.say("closed session " + s.host.ID() + ": " + why)
+	h.say("closed session " + s.host.ID() + ", " + by + ": " + why)
 	h.forget(s)
 }
 
@@ -489,7 +511,7 @@ func (h *hub) endAll() {
 		s.ending = true
 		h.mu.Unlock()
 		if ends {
-			h.end(s, "the tofu host exits")
+			h.end(s, "the tofu host, process "+strconv.Itoa(h.status.PID), "it exits, so the session's turn stops and its shells end")
 		}
 		<-s.ended
 	}
@@ -503,4 +525,16 @@ func (h *hub) roster(id string) []SubAgentRow {
 		return nil
 	}
 	return h.sessions[at].host.rosterRows()
+}
+
+func (h *hub) membersNow() map[string][]Member {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	now := map[string][]Member{}
+	for _, s := range h.sessions {
+		if s.host != nil {
+			now[s.host.ID()] = slices.Clone(s.members)
+		}
+	}
+	return now
 }

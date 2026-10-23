@@ -43,7 +43,7 @@ func TestServeListsSessionsReportsStateAndKeepsTheSettingsItWasGiven(t *testing.
 	listed := func(open string) (SessionList, error) {
 		return SessionList{Head: open, Sessions: []SessionRow{
 			{ID: open, Name: "gate", Handle: "gate", LastAt: lastAt, Open: true, Wire: "anthropic"},
-			{ID: "turn-other", Name: "docs", Handle: "docs", Task: "write the DOCS", HeldBy: &SessionHolder{PID: 42, Since: lastAt}},
+			{ID: "turn-other", Name: "docs", Handle: "docs", Task: "write the DOCS", Members: []Member{{Process: 42, Kind: MemberDesk, Joined: lastAt}}},
 		}}, nil
 	}
 	c, live, project := serving(t, play, ServeConfig{Sessions: listed, Wires: func() []string { return []string{"anthropic", "codex"} },
@@ -65,8 +65,8 @@ func TestServeListsSessionsReportsStateAndKeepsTheSettingsItWasGiven(t *testing.
 	c.ask("3", "session.list", `{}`)
 	var all SessionList
 	c.answer("3", &all)
-	if len(all.Sessions) != 2 || !all.Sessions[0].Open || all.Sessions[0].Running || !all.Sessions[0].LastAt.Equal(lastAt) || all.Sessions[1].HeldBy == nil {
-		t.Fatalf("session.list = %+v, want two typed rows, the open one not running and carrying lastAt, the other held", all)
+	if len(all.Sessions) != 2 || !all.Sessions[0].Open || all.Sessions[0].Running || !all.Sessions[0].LastAt.Equal(lastAt) || len(all.Sessions[1].Members) != 1 {
+		t.Fatalf("session.list = %+v, want two typed rows, the open one not running and carrying lastAt, the other with its one member", all)
 	}
 	if all.Sessions[0].Wire != "claude-sub" {
 		t.Errorf("session.list names the wire %q, the internal name, rather than claude-sub, the source a person sees", all.Sessions[0].Wire)

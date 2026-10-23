@@ -759,6 +759,8 @@ func doneWords(outcome turn.Outcome, guard *turn.LoopGuardStop) (string, Status)
 		return "stopped on a reply it could not finish, after", StatusStopped
 	case turn.OutcomeError:
 		return "failed after", StatusFailed
+	case turn.OutcomeCancelled:
+		return cancelledAt, StatusStopped
 	case turn.OutcomeRetiredCostCap:
 		return "stopped at a cap this build no longer sets, after", StatusStopped
 	case turn.OutcomeRetiredWallClockCap:

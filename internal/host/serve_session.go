@@ -119,7 +119,9 @@ func (s *server) state() SessionState {
 	focus := s.focus()
 	turn, running := focus.host.Turn()
 	asking, pick := focus.host.Settings()
-	state := SessionState{Session: focus.host.ID(), Running: running, Asking: asking, Pick: s.shown(pick), Standing: focus.host.Standing(), Shells: s.shellsNow(), Cron: focus.host.cronState()}
+	seen := focus.host.seen()
+	state := SessionState{Session: focus.host.ID(), Running: running, Asking: asking, Pick: s.shown(pick), Standing: focus.host.Standing(), Shells: s.shellsNow(),
+		Members: append([]Member{}, seen.Members...), Cron: focus.host.cronState()}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if running && focus.items.turn == turn {
@@ -127,7 +129,7 @@ func (s *server) state() SessionState {
 	}
 	state.Context = focus.items.context
 	state.Approvals, state.Questions = []ApprovalRequest{}, []QuestionRequest{}
-	for _, asked := range focus.host.seen().Asks {
+	for _, asked := range seen.Asks {
 		id := focus.items.identity(asked.Agent, asked.ID)
 		if asked.Questions != nil {
 			state.Questions = append(state.Questions, questionRequest(id, asked))
@@ -156,7 +158,7 @@ func (s *server) shellsNow() []ShellNow {
 	found, _ := s.Shells.List()
 	mask := sys.LoadKeyRedactor().Redact
 	for _, one := range slices.DeleteFunc(found, shell.Shell.OneShot) {
-		now = append(now, ShellNow{Shell: one.Name, Command: mask(one.Command), PID: one.PID, State: ShellState(one.State), StartedAt: one.Started, ExitCode: one.ExitCode, EndedAt: one.Ended,
+		now = append(now, ShellNow{Shell: one.Name, Session: one.Session, Command: mask(one.Command), PID: one.PID, State: ShellState(one.State), StartedAt: one.Started, ExitCode: one.ExitCode, EndedAt: one.Ended,
 			Kept: ShellKept(one.Kept), Dir: one.Dir, Port: one.Port, Ready: ShellReady(one.Ready), LeftOver: one.LeftOver(), Ref: tools.QuoteRef(one.Call), ShellHolding: holdingOf(one)})
 	}
 	return now
