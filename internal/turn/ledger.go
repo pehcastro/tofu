@@ -1,6 +1,7 @@
 package turn
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"path/filepath"
@@ -19,12 +20,20 @@ type readMark struct {
 }
 
 type ReadLedger struct {
-	mutex sync.Mutex
-	seen  map[string]readMark
+	mutex   sync.Mutex
+	byAgent map[string]map[string]readMark
 }
 
 func NewReadLedger() *ReadLedger {
-	return &ReadLedger{seen: map[string]readMark{}}
+	return &ReadLedger{byAgent: map[string]map[string]readMark{}}
+}
+
+func (l *ReadLedger) seen(ctx context.Context) map[string]readMark {
+	agent := SubAgentAsking(ctx)
+	if l.byAgent[agent] == nil {
+		l.byAgent[agent] = map[string]readMark{}
+	}
+	return l.byAgent[agent]
 }
 
 func ledgerKey(path string) string {
@@ -35,41 +44,41 @@ func lineCount(body []byte) int {
 	return strings.Count(strings.TrimSuffix(string(body), "\n"), "\n") + 1
 }
 
-func (l *ReadLedger) Mark(path string, body []byte) {
-	l.MarkLines(path, body, 1, lineCount(body))
+func (l *ReadLedger) Mark(ctx context.Context, path string, body []byte) {
+	l.MarkLines(ctx, path, body, 1, lineCount(body))
 }
 
-func (l *ReadLedger) MarkLines(path string, body []byte, first, last int) {
+func (l *ReadLedger) MarkLines(ctx context.Context, path string, body []byte, first, last int) {
 	if l == nil {
 		return
 	}
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	key, hash := ledgerKey(path), sha256.Sum256(body)
-	mark := l.seen[key]
+	seen, key, hash := l.seen(ctx), ledgerKey(path), sha256.Sum256(body)
+	mark := seen[key]
 	if mark.hash != hash {
 		mark = readMark{hash: hash}
 	}
 	mark.spans = merged(append(mark.spans, lineSpan{first, last}))
-	l.seen[key] = mark
+	seen[key] = mark
 }
 
-func (l *ReadLedger) Saw(path string, body []byte) bool {
+func (l *ReadLedger) Saw(ctx context.Context, path string, body []byte) bool {
 	if l == nil {
 		return true
 	}
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	return l.seen[ledgerKey(path)].hash == sha256.Sum256(body)
+	return l.seen(ctx)[ledgerKey(path)].hash == sha256.Sum256(body)
 }
 
-func (l *ReadLedger) Known(path string) bool {
+func (l *ReadLedger) Known(ctx context.Context, path string) bool {
 	if l == nil {
 		return true
 	}
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	_, known := l.seen[ledgerKey(path)]
+	_, known := l.seen(ctx)[ledgerKey(path)]
 	return known
 }
 
@@ -93,7 +102,7 @@ func (c LineChange) reach(lines int) (int, int) {
 	return first, min(max(c.oldLast, first), lines)
 }
 
-func (l *ReadLedger) Unshown(path string, body []byte, change LineChange) error {
+func (l *ReadLedger) Unshown(ctx context.Context, path string, body []byte, change LineChange) error {
 	if l == nil {
 		return nil
 	}
@@ -101,7 +110,7 @@ func (l *ReadLedger) Unshown(path string, body []byte, change LineChange) error 
 	defer l.mutex.Unlock()
 	first, last := change.reach(lineCount(body))
 	above, inserted := change.first-1, change.oldLast < change.first
-	spans := l.seen[ledgerKey(path)].spans
+	spans := l.seen(ctx)[ledgerKey(path)].spans
 	shown := make([]string, len(spans))
 	for i, span := range spans {
 		if span.first <= first && last <= span.last || inserted && span.first <= above && above <= span.last {
@@ -117,15 +126,15 @@ func (l *ReadLedger) Unshown(path string, body []byte, change LineChange) error 
 		path, strings.Join(shown, ", "), reach, first, last)
 }
 
-func (l *ReadLedger) Rewrote(path string, after []byte, change LineChange) {
+func (l *ReadLedger) Rewrote(ctx context.Context, path string, after []byte, change LineChange) {
 	if l == nil {
 		return
 	}
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	shift := change.newLast - change.oldLast
+	seen, key, shift := l.seen(ctx), ledgerKey(path), change.newLast-change.oldLast
 	var spans []lineSpan
-	for _, span := range l.seen[ledgerKey(path)].spans {
+	for _, span := range seen[key].spans {
 		if span.first < change.first {
 			spans = append(spans, lineSpan{span.first, min(span.last, change.first-1)})
 		}
@@ -136,7 +145,7 @@ func (l *ReadLedger) Rewrote(path string, after []byte, change LineChange) {
 	if change.newLast >= change.first {
 		spans = append(spans, lineSpan{change.first, change.newLast})
 	}
-	l.seen[ledgerKey(path)] = readMark{hash: sha256.Sum256(after), spans: merged(spans)}
+	seen[key] = readMark{hash: sha256.Sum256(after), spans: merged(spans)}
 }
 
 func merged(spans []lineSpan) []lineSpan {
@@ -152,9 +161,9 @@ func merged(spans []lineSpan) []lineSpan {
 	return joined
 }
 
-func (l *ReadLedger) Refuse(path string, body []byte, change LineChange) string {
+func (l *ReadLedger) Refuse(ctx context.Context, path string, body []byte, change LineChange) string {
 	if len(body) <= konst.RefusalCarriesWholeUpToBytes {
-		l.Mark(path, body)
+		l.Mark(ctx, path, body)
 		return "its current content follows, so try again against the text that is there.\n" + string(body)
 	}
 	lines := lineCount(body)

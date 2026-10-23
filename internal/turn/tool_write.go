@@ -92,11 +92,11 @@ func (t *WriteTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		err = sys.WriteFile(resolved, []byte(args.Content), writePerm)
 	} else {
 		change := ChangeOf(string(held), args.Content)
-		if !t.ledger.Saw(args.Path, held) {
+		if !t.ledger.Saw(ctx, args.Path, held) {
 			return Result{}, fmt.Errorf("write: %s exists and has not been read in this session or has changed since, so replacing it whole is refused rather than trusted against a guess: %s",
-				args.Path, t.ledger.Refuse(args.Path, held, change))
+				args.Path, t.ledger.Refuse(ctx, args.Path, held, change))
 		}
-		if err := t.ledger.Unshown(args.Path, held, change); err != nil {
+		if err := t.ledger.Unshown(ctx, args.Path, held, change); err != nil {
 			return Result{}, fmt.Errorf("write: %w", err)
 		}
 		if err := refuseOmission(string(held), args.Content); err != nil {
@@ -107,7 +107,7 @@ func (t *WriteTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if err != nil {
 		return Result{}, fmt.Errorf("write: %w", err)
 	}
-	t.ledger.Mark(args.Path, []byte(args.Content))
+	t.ledger.Mark(ctx, args.Path, []byte(args.Content))
 	before := string(held)
 	preview := transform.Preview{
 		Path:    args.Path,
@@ -137,17 +137,17 @@ func (t *WriteTool) appendTo(ctx context.Context, resolved string, args writeArg
 	added := strings.ReplaceAll(args.Content, "\r\n", "\n")
 	after := endings.Restore(lead + added)
 	change := ChangeOf(string(held), after)
-	if !t.ledger.Saw(args.Path, held) {
+	if !t.ledger.Saw(ctx, args.Path, held) {
 		return Result{}, fmt.Errorf("write: %s has not been read in this session or has changed since, so appending to it is refused: %s",
-			args.Path, t.ledger.Refuse(args.Path, held, change))
+			args.Path, t.ledger.Refuse(ctx, args.Path, held, change))
 	}
-	if err := t.ledger.Unshown(args.Path, held, change); err != nil {
+	if err := t.ledger.Unshown(ctx, args.Path, held, change); err != nil {
 		return Result{}, fmt.Errorf("write: %w", err)
 	}
 	if err := overwrite(resolved, held, []byte(after)); err != nil {
 		return Result{}, fmt.Errorf("write: %w", err)
 	}
-	t.ledger.Rewrote(args.Path, []byte(after), change)
+	t.ledger.Rewrote(ctx, args.Path, []byte(after), change)
 	first := strings.Count(lead, "\n") + 1
 	lines := strings.Split(strings.TrimSuffix(added, "\n"), "\n")
 	shown := fmt.Sprintf(appendedHead+"%d lines to %s"+appendedSpan, len(lines), args.Path, first, first+len(lines)-1)

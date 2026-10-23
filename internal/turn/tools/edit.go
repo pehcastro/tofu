@@ -101,7 +101,7 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 	}
 	plans := make([]plannedEdit, len(files))
 	for i, file := range files {
-		if plans[i], err = e.plan(byFile[file], len(files) > 1); err != nil {
+		if plans[i], err = e.plan(ctx, byFile[file], len(files) > 1); err != nil {
 			return turn.Result{}, fmt.Errorf("%w%s", err, turn.NoneWritten(len(files)))
 		}
 	}
@@ -119,7 +119,7 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 	}
 	shown, targets := make([]string, len(plans)), make([]string, len(plans))
 	for i, plan := range plans {
-		e.ledger.Rewrote(plan.preview.Path, []byte(plan.preview.After), plan.change)
+		e.ledger.Rewrote(ctx, plan.preview.Path, []byte(plan.preview.After), plan.change)
 		shown[i] = e.checkers.Typechecked(ctx, plan.resolved, strings.Join(append([]string{plan.preview.Diff}, plan.notes...), "\n"))
 		targets[i] = plan.preview.Path
 	}
@@ -142,7 +142,7 @@ func refusedChange(change turn.EditChange, onFile int) error {
 	return nil
 }
 
-func (e Edit) plan(changes []turn.EditChange, several bool) (plannedEdit, error) {
+func (e Edit) plan(ctx context.Context, changes []turn.EditChange, several bool) (plannedEdit, error) {
 	for _, change := range changes {
 		if err := refusedChange(change, len(changes)); err != nil {
 			return plannedEdit{}, err
@@ -205,17 +205,17 @@ func (e Edit) plan(changes []turn.EditChange, several bool) (plannedEdit, error)
 	if err == nil {
 		change = turn.ChangeOf(text, after)
 	}
-	if !e.ledger.Saw(target, body) {
-		if err != nil || changes[0].Symbol != "" || e.ledger.Known(target) || len(body) > konst.RefusalCarriesWholeUpToBytes {
+	if !e.ledger.Saw(ctx, target, body) {
+		if err != nil || changes[0].Symbol != "" || e.ledger.Known(ctx, target) || len(body) > konst.RefusalCarriesWholeUpToBytes {
 			return plannedEdit{}, fmt.Errorf("edit: %s has not been read in this session or has changed since, so the edit is refused rather than trusted against a guess: %s",
-				target, e.ledger.Refuse(target, body, change))
+				target, e.ledger.Refuse(ctx, target, body, change))
 		}
-		e.ledger.Mark(target, body)
+		e.ledger.Mark(ctx, target, body)
 	}
 	if err != nil {
 		return plannedEdit{}, err
 	}
-	if err := e.ledger.Unshown(target, body, change); err != nil && !quotedOnce {
+	if err := e.ledger.Unshown(ctx, target, body, change); err != nil && !quotedOnce {
 		return plannedEdit{}, fmt.Errorf("edit: %w", err)
 	}
 	after = endings.Restore(after)

@@ -100,7 +100,7 @@ func (t *ReadTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	}
 	switch media := http.DetectContentType(content); media {
 	case "image/png", "image/jpeg", "image/gif", "image/webp":
-		t.ledger.Mark(args.Path, content)
+		t.ledger.Mark(ctx, args.Path, content)
 		picture, said, err := lookAt(media, content)
 		if err != nil {
 			return Result{}, fmt.Errorf("read: %s: %w", args.Path, err)
@@ -108,7 +108,7 @@ func (t *ReadTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 		return Result{Content: repair + args.Path + ": " + said, Images: []llm.Image{picture}, Command: args.Path}, nil
 	}
 	if args.StartLine <= 0 && args.EndLine <= 0 {
-		t.ledger.Mark(args.Path, content)
+		t.ledger.Mark(ctx, args.Path, content)
 		return Result{Content: repair + t.noteRepeat(ctx, args.Path, content, string(content)), Command: args.Path}, nil
 	}
 
@@ -124,7 +124,7 @@ func (t *ReadTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 		return Result{}, fmt.Errorf("read: %s end_line %d is before start_line %d", args.Path, end, start)
 	}
 	span := fmt.Sprintf("%s lines %d-%d of %d", args.Path, start, end, len(lines))
-	t.ledger.MarkLines(args.Path, content, start, end)
+	t.ledger.MarkLines(ctx, args.Path, content, start, end)
 	return Result{
 		Content: repair + t.noteRepeat(ctx, args.Path, content, span+"\n"+strings.Join(lines[start-1:end], "\n")),
 		Command: span,

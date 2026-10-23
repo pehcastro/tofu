@@ -157,7 +157,7 @@ func TestAWriteOverAnExistingFileSpendsTheLinesItsDiffChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	ledger := NewReadLedger()
-	ledger.Mark("big.go", []byte(held))
+	ledger.Mark(context.Background(), "big.go", []byte(held))
 	var ran []string
 	budgeted := WithSourceBudget([]Tool{writer.Reading(ledger), ranTool{name: "edit", ran: &ran}}, nil)
 	write, edit := budgeted[0], budgeted[1]
@@ -223,7 +223,7 @@ func TestAFileTheShellPrintedWholeAfterCatCountsAsRead(t *testing.T) {
 			}
 			for path, body := range files {
 				want := slices.Contains(c.read, path)
-				if got := ledger.Saw(path, []byte(body)); got != want {
+				if got := ledger.Saw(context.Background(), path, []byte(body)); got != want {
 					t.Errorf("%s read %v, want %v", path, got, want)
 				}
 			}

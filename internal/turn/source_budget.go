@@ -363,7 +363,7 @@ func wholeFilePrinters(command string) ([]string, bool) {
 	return args, printing
 }
 
-func (b *sourceBudget) markPrinted(command, printed string) {
+func (b *sourceBudget) markPrinted(ctx context.Context, command, printed string) {
 	args, printing := wholeFilePrinters(command)
 	if b.files == nil || !printing {
 		return
@@ -387,7 +387,7 @@ func (b *sourceBudget) markPrinted(command, printed string) {
 		}
 		body, err := os.ReadFile(resolved)
 		if err == nil && len(body) > 0 && strings.Contains(printed, strings.ReplaceAll(string(body), "\r\n", "\n")) {
-			b.files.ledger.Mark(path, body)
+			b.files.ledger.Mark(ctx, path, body)
 		}
 	}
 }
@@ -450,7 +450,7 @@ func (t budgetedTool) runShell(ctx context.Context, raw json.RawMessage, command
 	if !slices.ContainsFunc(steps, runsScript) || t.budget.files == nil {
 		result, err := t.tool.Run(ctx, raw)
 		if err == nil {
-			t.budget.markPrinted(command, result.Content)
+			t.budget.markPrinted(ctx, command, result.Content)
 		}
 		return result, err
 	}

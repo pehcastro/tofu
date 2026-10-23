@@ -127,7 +127,7 @@ func TestWriteAppendAfterRead(t *testing.T) {
 				t.Fatal(err)
 			}
 			ledger := NewReadLedger()
-			ledger.Mark("a.test.ts", []byte(row.file))
+			ledger.Mark(context.Background(), "a.test.ts", []byte(row.file))
 			result, err := appendThrough(t, dir, ledger, row.content)
 			if err != nil {
 				t.Fatal(err)
@@ -165,7 +165,7 @@ func TestWriteAppendRefused(t *testing.T) {
 			}
 			ledger := NewReadLedger()
 			if row.read != "" {
-				ledger.Mark("a.test.ts", []byte(row.read))
+				ledger.Mark(context.Background(), "a.test.ts", []byte(row.read))
 			}
 			_, err := appendThrough(t, dir, ledger, row.content)
 			if err == nil || !strings.Contains(err.Error(), row.says) {

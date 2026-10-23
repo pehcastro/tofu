@@ -38,7 +38,7 @@ func TestEditKeepsTheLineEndingsAndBOMOfTheFile(t *testing.T) {
 				t.Fatal(err)
 			}
 			ledger := turn.NewReadLedger()
-			ledger.Mark("f.txt", []byte(row.file))
+			ledger.Mark(context.Background(), "f.txt", []byte(row.file))
 			editor, err := NewEdit(dir)
 			if err != nil {
 				t.Fatal(err)

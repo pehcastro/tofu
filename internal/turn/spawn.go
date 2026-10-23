@@ -518,7 +518,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	}
 	timing.took("scratch")
 	held := &heldSubAgent{agent: agent, definition: definition, effort: opened.Effort, askedEffort: effort, system: system,
-		environment: environment + scratchWords(scratch) + t.briefFiles(ctx, args, site.conversation),
+		environment: environment + scratchWords(scratch) + t.briefFiles(context.WithValue(ctx, subAgentKey{}, subAgentID), args, site.conversation),
 		boundary:    subagent.NewBoundary(subAgentID, scratch.Dir(), args.Owns), scratch: scratch, inbox: NewInbox(),
 		trace: spawnTrace{definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, ticket: args.Ticket, depth: t.depth + 1}}
 	runCtx, cancel := outlivingTheWave(ctx)

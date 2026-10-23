@@ -160,7 +160,7 @@ func severalFiles(t *testing.T) (string, *turn.ReadLedger, map[string]string) {
 			t.Fatal(err)
 		}
 		if name != "d.go" {
-			ledger.Mark(name, []byte(body))
+			ledger.Mark(context.Background(), name, []byte(body))
 		}
 	}
 	return dir, ledger, files
