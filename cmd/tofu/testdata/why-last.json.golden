@@ -9,7 +9,7 @@ exit 0
     "rows": [
       {
         "id": "2026-09-28-dropped",
-        "schema": 8,
+        "schema": 9,
         "at": "2026-09-28T11:00:00Z",
         "point": "tool_gate",
         "questions": "tool_gate",
@@ -60,7 +60,7 @@ exit 0
       },
       {
         "id": "2026-09-28-replayed",
-        "schema": 8,
+        "schema": 9,
         "at": "2026-09-28T11:30:00Z",
         "point": "tool_gate",
         "questions": "tool_gate",
@@ -132,7 +132,7 @@ exit 0
         "replay_of": "2026-09-28-allowed",
         "chain": {
           "id": "2026-09-28-allowed",
-          "schema": 8,
+          "schema": 9,
           "at": "2026-09-28T10:00:00Z",
           "point": "tool_gate",
           "questions": "tool_gate",

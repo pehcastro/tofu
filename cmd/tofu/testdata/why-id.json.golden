@@ -9,7 +9,7 @@ exit 0
     "rows": [
       {
         "id": "2026-09-28-allowed",
-        "schema": 8,
+        "schema": 9,
         "at": "2026-09-28T10:00:00Z",
         "point": "tool_gate",
         "questions": "tool_gate",
