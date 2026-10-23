@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,10 +20,16 @@ import (
 
 const undoLedgerName = "undo-turns.jsonl"
 
+type TurnReadParams struct {
+	Session string `json:"session,omitempty"`
+	Turn    string `json:"turn"`
+}
+
 type SessionTurns struct {
 	Session   string       `json:"session"`
 	Turns     []TurnDigest `json:"turns"`
 	Snapshots int          `json:"snapshots"`
+	Next      string       `json:"next,omitempty"`
 }
 
 type SessionTurnUpdated struct {
@@ -37,6 +44,7 @@ type TurnDigest struct {
 	WorkedForMs int64               `json:"worked_for_ms"`
 	Origin      Origin              `json:"origin"`
 	Asked       string              `json:"asked"`
+	Prompt      string              `json:"prompt,omitempty"`
 	Summary     string              `json:"summary,omitempty"`
 	Status      Status              `json:"status,omitempty"`
 	Outcome     TurnOutcome         `json:"outcome,omitempty"`
@@ -110,7 +118,26 @@ func (s *server) turns(p SessionParams) (any, error) {
 	if errors.Is(err, fs.ErrNotExist) && slices.ContainsFunc(s.tracked(), func(l *lane) bool { return l.host.ID() == asked }) {
 		return SessionTurns{Session: asked, Turns: []TurnDigest{}}, nil
 	}
+	for i := range answer.Turns {
+		answer.Turns[i].preview()
+	}
 	return answer, err
+}
+
+func (s *server) turn(p TurnReadParams) (any, error) {
+	store, err := session.OpenIn(s.Host.dir)
+	if err != nil {
+		return nil, err
+	}
+	answer, err := sessionTurns(store, cmp.Or(p.Session, s.focus().host.ID()))
+	if err != nil {
+		return nil, err
+	}
+	at := slices.IndexFunc(answer.Turns, func(digest TurnDigest) bool { return digest.Turn == p.Turn })
+	if at < 0 {
+		return nil, &Refusal{Code: CodeBadParams, Message: "session " + answer.Session + " holds no turn " + strconv.Quote(p.Turn) + "; a turn is read from the generation session.turns named it under"}
+	}
+	return answer.Turns[at], nil
 }
 
 func (s *server) turnEnded(l *lane, id string) {
@@ -123,13 +150,36 @@ func (s *server) turnEnded(l *lane, id string) {
 	if err != nil || at < 0 {
 		return
 	}
+	answer.Turns[at].preview()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.box.push(kept("session.turns.updated", &SessionTurnUpdated{Identity: l.items.identity("", id), Digest: answer.Turns[at]}))
 }
 
+func (d *TurnDigest) preview() {
+	d.Asked, d.Summary, d.Prompt = firstLine(d.Asked), firstLine(d.Summary), ""
+	for i := range d.Agents {
+		d.Agents[i].Report = firstLine(d.Agents[i].Report)
+	}
+}
+
+func firstLine(text string) string {
+	for line := range strings.Lines(text) {
+		if line = strings.TrimSpace(line); line != "" {
+			return line
+		}
+	}
+	return ""
+}
+
 func sessionTurns(store *session.Store, handle string) (SessionTurns, error) {
-	header, err := store.Header(handle)
+	var header session.Header
+	var err error
+	if named, resolved := store.Resolve(handle); resolved == nil && len(named) == 1 {
+		header = named[0]
+	} else {
+		header, err = store.Header(handle)
+	}
 	if err != nil {
 		return SessionTurns{}, err
 	}
@@ -137,18 +187,16 @@ func sessionTurns(store *session.Store, handle string) (SessionTurns, error) {
 	if err != nil {
 		return SessionTurns{}, err
 	}
-	slices.Reverse(lineage)
-	lineage = append(lineage, header)
+	events, err := store.Events(header.ID)
+	if err != nil {
+		return SessionTurns{}, err
+	}
 	digests := &turnDigests{byTurn: map[string]*TurnDigest{}, reports: map[string]string{}, calls: map[string]calledWith{}}
-	answer := SessionTurns{Session: header.ID, Turns: []TurnDigest{}}
-	for _, from := range lineage {
-		events, err := store.Events(from.ID)
-		if err != nil {
-			return SessionTurns{}, err
-		}
-		for _, event := range events {
-			digests.note(event)
-		}
+	for _, event := range events {
+		digests.note(event)
+	}
+	answer := SessionTurns{Session: header.ID, Turns: []TurnDigest{}, Next: header.Parent}
+	for _, from := range append(lineage, header) {
 		answer.Snapshots += undoSnapshots(store.Dir(from.ID))
 	}
 	runs := slices.SortedFunc(maps.Values(recordedRuns(store, header.ID)), func(a, b session.AgentRun) int { return a.StartedAt.Compare(b.StartedAt) })
@@ -196,8 +244,9 @@ func (d *turnDigests) note(event session.Event) {
 	switch event.Kind {
 	case session.EventTurnStart:
 		var start session.TurnStart
-		if event.Agent == "" && json.Unmarshal(event.Body, &start) == nil {
-			digest.Asked = cmp.Or(digest.Asked, start.Task)
+		if event.Agent == "" && json.Unmarshal(event.Body, &start) == nil && digest.Asked == "" {
+			typed, _ := turn.TaskIn(start.Task)
+			digest.Asked = strings.TrimSpace(typed)
 		}
 	case session.EventMessage:
 		var said session.MessageBody
@@ -205,7 +254,7 @@ func (d *turnDigests) note(event session.Event) {
 			return
 		}
 		if said.Role == session.RoleUser && digest.Origin.Kind == "" {
-			digest.Origin = wireOrigin(turn.OriginOf(said))
+			digest.Origin, digest.Prompt = wireOrigin(turn.OriginOf(said)), cmp.Or(digest.Prompt, said.Content)
 		}
 		if text := strings.TrimSpace(said.Content); said.Role == session.RoleAssistant && text != "" {
 			digest.Summary = text

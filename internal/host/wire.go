@@ -1291,6 +1291,7 @@ func requests() []method {
 		{name: "session.compact", params: SessionParams{}, result: Compaction{}},
 		{name: "session.history", params: SessionHistoryParams{}, result: SessionHistory{}},
 		{name: "session.turns", params: SessionParams{}, result: SessionTurns{}},
+		{name: "session.turn", params: TurnReadParams{}, result: TurnDigest{}},
 		{name: "shell.run", params: ShellRunParams{}, result: ShellRunResult{}},
 		{name: "undo", params: UndoParams{}, result: snapshot.Report{}},
 		{name: "shell.read", params: ShellParams{}, result: ShellReadResult{}},
