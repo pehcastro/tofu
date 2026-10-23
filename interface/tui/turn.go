@@ -540,7 +540,7 @@ func (a *App) absorb(event Event) {
 			a.cronFired(event.Text)
 		case event.Origin.Kind == host.OriginPerson:
 			a.view.Append(session.Entry{Kind: session.User, Body: event.Text})
-		case event.Origin.Sub == llm.SourceReplyCut || event.Origin.Sub == llm.SourceShellExit || event.Origin.Sub == llm.SourceStepCap:
+		case event.Origin.Sub == llm.SourceReplyCut:
 			a.view.Append(session.Entry{Kind: session.Note, Body: event.Text})
 		}
 	case EventText:
