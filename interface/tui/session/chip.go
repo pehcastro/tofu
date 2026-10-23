@@ -29,13 +29,10 @@ const (
 )
 
 type Chip struct {
-	Kind   ChipKind
-	Name   string
-	Format string
-	Bytes  int
-	Chars  int
-	Token  string
-	Text   string
+	Kind  ChipKind
+	Chars int
+	Token string
+	Text  string
 }
 
 type pendingPaste struct {
@@ -68,7 +65,7 @@ func (m *Model) Attached(outcome paste.Outcome) {
 		if kept {
 			token := host.ImageToken(outcome.Index)
 			m.replaceToken(held.token, token)
-			m.chips = append(m.chips, Chip{Kind: ImageChip, Name: outcome.Name, Format: outcome.Format(), Bytes: outcome.Bytes, Token: token})
+			m.chips = append(m.chips, Chip{Kind: ImageChip, Token: token})
 		}
 	case paste.Textual:
 		if kept {
@@ -181,24 +178,35 @@ func (m *Model) stepOver(fromRow, fromCol int) {
 	}
 }
 
-func (c Chip) label() string {
-	switch c.Kind {
-	case ImageChip:
-		return c.Format + " " + widget.Size(c.Bytes) + " " + c.Name
-	case TextChip:
-		return "text, " + strconv.Itoa(c.Chars) + " characters"
-	}
-	panic("session: unknown chip kind")
-}
-
 func (m *Model) chipLines(chips []Chip) []string {
-	lines := make([]string, 0, len(chips))
-	for index, chip := range chips {
+	var texts, lines []string
+	images := 0
+	for _, chip := range chips {
+		switch chip.Kind {
+		case ImageChip:
+			images++
+		case TextChip:
+			texts = append(texts, "text, "+strconv.Itoa(chip.Chars)+" characters")
+		default:
+			panic("session: unknown chip kind")
+		}
+	}
+	switch images {
+	case 0:
+	case 1:
+		lines = append(lines, "Attached 1 Image")
+	default:
+		lines = append(lines, "Attached "+strconv.Itoa(images)+" Images")
+	}
+	for index, text := range texts {
 		branch := treeBranch
-		if index == len(chips)-1 {
+		if index == len(texts)-1 {
 			branch = treeLast
 		}
-		lines = append(lines, look.Faint(widget.Fit(branch+chip.label(), m.textWidth())))
+		lines = append(lines, branch+text)
+	}
+	for index, line := range lines {
+		lines[index] = look.Faint(widget.Fit(line, m.textWidth()))
 	}
 	return lines
 }

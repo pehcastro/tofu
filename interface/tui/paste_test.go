@@ -207,10 +207,11 @@ func TestASentMessageDrawsATreeBeneathItNamingWhatWentWithIt(t *testing.T) {
 	typeText(app, " to the spec")
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	frame := ansi.Strip(app.View().Content)
-	for _, want := range []string{"compare [Image #1] to the spec", "└─ ", "PNG", pasteSessionID + "-image-01.png"} {
-		if !strings.Contains(frame, want) {
-			t.Fatalf("the sent message does not carry %q:\n%s", want, frame)
-		}
+	if !strings.Contains(frame, "compare [Image #1] to the spec") || !strings.Contains(frame, "Attached 1 Image") || strings.Contains(frame, "Images") {
+		t.Fatalf("the sent message does not say Attached 1 Image:\n%s", frame)
+	}
+	if strings.Contains(frame, pasteSessionID+"-image-01.png") {
+		t.Fatalf("the sent message still names the file:\n%s", frame)
 	}
 	golden.Assert(t, "session-paste-tree-80x24.golden", app.View().Content)
 }
@@ -241,14 +242,8 @@ func TestDeletingAPastedImagesTokenDropsItFromTheSentTree(t *testing.T) {
 	}
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	frame := ansi.Strip(app.View().Content)
-	if strings.Count(frame, "└─ ") != 1 {
-		t.Fatalf("the sent message's tree does not carry exactly one attachment:\n%s", frame)
-	}
-	if strings.Contains(frame, pasteSessionID+"-image-02.png") {
-		t.Fatalf("the deleted image still appears in the tree:\n%s", frame)
-	}
-	if !strings.Contains(frame, pasteSessionID+"-image-01.png") {
-		t.Fatalf("the kept image is missing from the tree:\n%s", frame)
+	if strings.Count(frame, "Attached 1 Image") != 1 || strings.Contains(frame, "Images") {
+		t.Fatalf("the sent message does not count exactly one kept image:\n%s", frame)
 	}
 }
 
