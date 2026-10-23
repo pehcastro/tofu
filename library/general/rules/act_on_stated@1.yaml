@@ -1,0 +1,5 @@
+id: act_on_stated
+domain: general
+kind: human
+concern: process_discipline
+text: if you state a next action, execute it in the same turn. keep working until the work is done or you are blocked on something only the person can settle.
