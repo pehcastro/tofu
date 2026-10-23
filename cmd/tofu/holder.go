@@ -49,6 +49,9 @@ func runHub(dir string, say func(string)) error {
 	}
 	home, _ := os.UserHomeDir()
 	safe.Go(crashTold(dir, say), "session sweep", func() { sweepSessions(dir, say) })
+	hostEnded := make(chan struct{})
+	defer close(hostEnded)
+	safe.Go(crashTold(dir, say), "scratch sweep", func() { sweepScratch(dir, say, hostEnded) })
 	return host.RunHub(dir, crashTold(dir, say), say, func(id string, projectTurn *sync.Mutex) (*host.Host, func(), []string) {
 		resumed, unrecorded, err := hostedCarry(id)
 		switch {

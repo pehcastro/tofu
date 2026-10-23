@@ -24,7 +24,7 @@ const (
 	artifactBackups        = "backups"
 	artifactHandleChars    = 32
 	artifactScanChunkBytes = 1 << 20
-	sessionLockFile        = "lock"
+	SessionLockFile        = "lock"
 )
 
 type ScratchFolder struct {
@@ -196,7 +196,7 @@ func RemoveUnreferencedArtifacts(artifacts, sessions string, before time.Time) e
 func activeSince(files []fs.DirEntry, since time.Time) bool {
 	return slices.ContainsFunc(files, func(file fs.DirEntry) bool {
 		info, err := file.Info()
-		return file.Name() == sessionLockFile || err == nil && info.ModTime().After(since)
+		return file.Name() == SessionLockFile || err == nil && info.ModTime().After(since)
 	})
 }
 

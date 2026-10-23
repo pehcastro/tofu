@@ -512,6 +512,7 @@ const (
 
 const (
 	ScratchCleanupDays       = 7
+	ScratchSweepHours        = 1
 	SessionStaleDays         = 90
 	ScratchMaxGB             = 50
 	ScratchRemoveTries       = 5

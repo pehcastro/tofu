@@ -2,8 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"slices"
 	"time"
 
@@ -58,7 +62,7 @@ func runScratch(args []string, out, errOut io.Writer) int {
 	sweep.Leftovers = sweep.Session == ""
 	cleaned := host.ScratchCleaned{Root: report.Root, DryRun: dryRun, Removed: append([]sys.ScratchFolder{}, report.Removable(sweep)...)}
 	if !dryRun {
-		if err := removeScratch(cleaned.Removed); err != nil {
+		if err := removeScratch(".", cleaned.Removed); err != nil {
 			return o.fail(err)
 		}
 	}
@@ -122,8 +126,39 @@ func scratchSweep(dir string) sys.ScratchSweep {
 	}
 }
 
-func removeScratch(folders []sys.ScratchFolder) error {
-	registry, err := launchShellRegistry(".")
+func sweepScratch(dir string, say func(string), stop <-chan struct{}) {
+	ticker := time.NewTicker(konst.ScratchSweepHours * time.Hour)
+	defer ticker.Stop()
+	for {
+		report, err := sys.ReadScratch(dir)
+		sweep := scratchSweep(dir)
+		busy := sweep.Live
+		sessions, openErr := session.OpenIn(dir)
+		sweep.Live = func(id string) bool {
+			if openErr != nil || busy(id) {
+				return true
+			}
+			_, locked := os.Stat(filepath.Join(sessions.Dir(id), sys.SessionLockFile))
+			return !errors.Is(locked, fs.ErrNotExist)
+		}
+		if removable := report.Removable(sweep); err == nil && len(removable) > 0 {
+			if err = removeScratch(dir, removable); err == nil {
+				say(fmt.Sprintf("the scratch sweep removed %s, past %d GB or untouched for %d days", plural(len(removable), "folder"), sweep.MaxGB, sweep.CleanupDays))
+			}
+		}
+		if err != nil {
+			say("the scratch sweep failed and runs again on the next tick: " + err.Error())
+		}
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func removeScratch(dir string, folders []sys.ScratchFolder) error {
+	registry, err := launchShellRegistry(dir)
 	if err != nil {
 		return err
 	}
@@ -140,7 +175,7 @@ func leadScratch(ctx context.Context, config turn.Config, errOut io.Writer) (con
 	sweep := scratchSweep(config.Project)
 	sweep.Keep = place.Session
 	if removable := report.Removable(sweep); err == nil && len(removable) > 0 {
-		if err := removeScratch(removable); err != nil {
+		if err := removeScratch(config.Project, removable); err != nil {
 			_, _ = fmt.Fprintln(errOut, "tofu run: scratch cleanup: "+err.Error())
 		}
 	}
