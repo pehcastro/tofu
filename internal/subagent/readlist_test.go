@@ -167,6 +167,19 @@ func TestWithNoOwnsBashRefusesEveryCommandThatWroteInRoundOne(t *testing.T) {
 		{"uv run python -c 'print(1)'", notRead},
 		{"rtk proxy python -c 'print(1)'", notRead},
 		{"rtk", notRead},
+		{"tofu", notRead},
+		{"tofu boardy move TOFU-1 done --board TOFU", notRead},
+		{"tofu boardy new --board TOFU x", notRead},
+		{"tofu boardy log TOFU-1 x --board TOFU", notRead},
+		{"tofu boardy triage accept T1 --board DESK", notRead},
+		{"tofu models reload", notRead},
+		{"tofu models bind classifier a/b", notRead},
+		{"tofu session resume x", notRead},
+		{"tofu session rename x y", notRead},
+		{"tofu session drain x", notRead},
+		{"tofu run x", notRead},
+		{"tofu --dir x session find y", notRead},
+		{"/usr/bin/tofu version", notRead},
 	})
 }
 
@@ -229,6 +242,17 @@ func TestWithNoOwnsBashStillRunsReadsAndChecks(t *testing.T) {
 		{"uv run ruff check src && uv run pytest tests/test_x.py::test_y", ""},
 		{"CI=1 ruff check . ; uv run --frozen python -m pytest -q", ""},
 		{"ruff format --check src", ""},
+		{"tofu session find x", ""},
+		{"tofu session find 8560e30c --text error --json", ""},
+		{"tofu session trace 8560e30c", ""},
+		{"tofu session info 8560e30c --json", ""},
+		{"tofu boardy show TOFU-1 --board TOFU", ""},
+		{"tofu boardy list --board TOFU --status doing", ""},
+		{"tofu boardy triage list --board DESK --json", ""},
+		{"tofu models", ""},
+		{"tofu models --json", ""},
+		{"tofu version", ""},
+		{"tofu.exe version", ""},
 	})
 }
 

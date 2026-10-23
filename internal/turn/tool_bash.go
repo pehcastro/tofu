@@ -312,6 +312,7 @@ func (t *BashTool) Definition() llm.Tool {
 		"runs one command in %s for the project's own package manager, build and tests. cwd is the working directory: no cd. "+
 			"a command still running after %d ms, or %d ms in a sub-agent, moves to a background shell and returns its name. "+
 			"the lead gets its exit back as a message on its own and never waits on it: it answers the person, goes on, or ends the turn. a sub-agent reads it back with shell wait, never sleep or poll. "+
+			"in a sub-agent a command the gate answers ask is refused, not asked, and nothing runs: rewrite it in a form that reads plainly, or name it in your report. "+
 			"timeout_ms at or under that limit kills it there instead. "+
 			"background true is only for a server or watcher that never ends: run the server itself, no & or nohup, and stop it with the shell tool, never kill. "+
 			"check_port names what holds a port. "+

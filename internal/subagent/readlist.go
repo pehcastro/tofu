@@ -374,6 +374,8 @@ func (g Grammar) readOnly(tool string, args []shellWord) (bool, error) {
 		return true, g.gitReads(args)
 	case "go":
 		return true, goChecks(args)
+	case "tofu":
+		return false, tofuReads(args)
 	case "gofmt":
 		return false, g.refuses(tool, args, "-cpuprofile")
 	case "rustfmt":
@@ -461,6 +463,18 @@ func (g Grammar) wrapped(wrapper string, args []shellWord) (bool, error) {
 	}
 	_, err := g.readOnly(toolName(args[0].text), args[1:])
 	return true, err
+}
+
+func tofuReads(args []shellWord) error {
+	if first(args) == "models" && len(operands(args)) == 1 {
+		return nil
+	}
+	for _, verb := range [][]string{{"version"}, {"session", "find"}, {"session", "trace"}, {"session", "info"}, {"boardy", "show"}, {"boardy", "list"}, {"boardy", "triage", "list"}} {
+		if len(args) >= len(verb) && slices.EqualFunc(args[:len(verb)], verb, func(arg shellWord, word string) bool { return arg.text == word }) {
+			return nil
+		}
+	}
+	return ReadListError{Program: "tofu", Why: "runs here only as session find, trace or info, boardy show, list or triage list, models, or version"}
 }
 
 func (g Grammar) refuses(tool string, args []shellWord, flags ...string) error {
