@@ -127,7 +127,7 @@ func (a API) Rows(request ListRequest) (RowsAnswer, error) {
 			worked := runs[t.ID]
 			answer.Rows = append(answer.Rows, Row{ID: t.ID, Title: t.Title, Type: t.Type, Status: t.Status, Reason: t.Reason, Priority: t.Priority, Points: t.Points,
 				Epic: t.Epic, Sprint: t.Sprint, Assignee: t.Assignee, Model: worked.model, Tools: worked.tools, Reads: worked.reads, Labels: t.Labels,
-				Questions: len(t.Questions), Created: t.Created, Updated: t.Updated})
+				Questions: len(t.OpenQuestions()), Created: t.Created, Updated: t.Updated})
 		}
 	}
 	return answer, errors.Join(err, runsErr)

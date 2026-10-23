@@ -114,7 +114,7 @@ func audit(key string, now time.Time, tickets []Ticket, events []Event) Audit {
 		case ticket.Status == Review:
 			bucket := slices.IndexFunc(result.Review, func(b AgeBucket) bool { return b.ToDays == 0 || aging.Days < b.ToDays })
 			result.Review[bucket].Tickets = append(result.Review[bucket].Tickets, ticket.ID)
-		case (ticket.Status == Blocked || ticket.Status == NeedsDecision) && len(ticket.Questions) == 0:
+		case (ticket.Status == Blocked || ticket.Status == NeedsDecision) && len(ticket.OpenQuestions()) == 0:
 			result.Unasked = append(result.Unasked, aging)
 		case ticket.Status == Todo && aging.Days >= konst.BoardAuditStaleDays:
 			result.StaleTodo = append(result.StaleTodo, aging)

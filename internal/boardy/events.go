@@ -42,6 +42,7 @@ type Event struct {
 	To         Status           `json:"to,omitempty"`
 	Text       string           `json:"text,omitempty"`
 	Why        string           `json:"why,omitempty"`
+	Question   int              `json:"question,omitempty"`
 	Default    string           `json:"default,omitempty"`
 	Unanswered string           `json:"unanswered,omitempty"`
 	Session    string           `json:"session,omitempty"`

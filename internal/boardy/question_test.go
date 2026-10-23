@@ -131,12 +131,12 @@ func TestCatchupAppliesAnAnswerOnceAndKeepsAnUnreadOne(t *testing.T) {
 		t.Fatalf("want 2 applied, 1 stale, 1 open, got %+v", applied)
 	}
 	back, _ := m.Store.Get(review.ID)
-	if back.Status != Review || len(back.Questions) != 0 || !strings.Contains(back.Log, "One file per ticket") {
-		t.Fatalf("an answered ticket goes back to where it was with the answer logged, got %s %d\n%s", back.Status, len(back.Questions), back.Log)
+	if back.Status != Review || len(back.OpenQuestions()) != 0 || len(back.Questions) != 1 || back.Questions[0].Answer != "option 2, One file per ticket" || !strings.Contains(back.Log, "One file per ticket") {
+		t.Fatalf("an answered ticket goes back to where it was with the answer kept on its question and logged, got %s %+v\n%s", back.Status, back.Questions, back.Log)
 	}
 	still, _ := m.Store.Get(doing.ID)
-	if still.Status != NeedsDecision || len(still.Questions) != 1 || !strings.Contains(still.Log, "keep both in the desk") {
-		t.Fatalf("a ticket with a question left stays, got %s %d\n%s", still.Status, len(still.Questions), still.Log)
+	if still.Status != NeedsDecision || len(still.OpenQuestions()) != 1 || !strings.Contains(still.Log, "keep both in the desk") {
+		t.Fatalf("a ticket with a question left stays, got %s %+v\n%s", still.Status, still.Questions, still.Log)
 	}
 
 	second, err := m.Answers("DEMO", manager)

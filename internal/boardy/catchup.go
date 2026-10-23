@@ -68,7 +68,7 @@ func (m Managed) OpenQuestions(key string) (Catchup, error) {
 	}
 	c := Catchup{Board: key, File: path, Open: []OpenQuestion{}, Applied: []Applied{}, Stale: []TypedAnswer{}}
 	for _, ticket := range tickets {
-		for _, q := range ticket.Questions {
+		for _, q := range ticket.OpenQuestions() {
 			open := OpenQuestion{Ticket: ticket.ID, Title: ticket.Title, Status: ticket.Status, Question: q}
 			at := slices.IndexFunc(typed, func(a TypedAnswer) bool { return a.Ticket == ticket.ID && a.Question == q.ID })
 			if at >= 0 && typed[at].TLDR == q.TLDR {
@@ -90,7 +90,8 @@ func (m Managed) Answer(id string, question int, answer, actor string) (Ticket, 
 	if err := m.Manages(board.Key, actor, "apply the person's answers"); err != nil {
 		return ticket, err
 	}
-	at := slices.IndexFunc(ticket.Questions, func(q Question) bool { return q.ID == question })
+	open := ticket.OpenQuestions()
+	at := slices.IndexFunc(open, func(q Question) bool { return q.ID == question })
 	answer = strings.Join(strings.Fields(answer), " ")
 	switch {
 	case at < 0:
@@ -98,7 +99,7 @@ func (m Managed) Answer(id string, question int, answer, actor string) (Ticket, 
 	case answer == "":
 		return ticket, RefusedError{Ticket: id, Why: "the answer is empty: give an option number or your own words"}
 	}
-	if _, err := m.apply(OpenQuestion{Ticket: ticket.ID, Title: ticket.Title, Status: ticket.Status, Question: ticket.Questions[at], Answer: answer}, actor); err != nil {
+	if _, err := m.apply(OpenQuestion{Ticket: ticket.ID, Title: ticket.Title, Status: ticket.Status, Question: open[at], Answer: answer}, actor); err != nil {
 		return ticket, err
 	}
 	return m.Store.Get(id)
@@ -148,18 +149,20 @@ func (m Managed) apply(open OpenQuestion, actor string) (Applied, error) {
 		return done, err
 	}
 	ticket, err := m.Store.Edit(open.Ticket, func(t *Ticket) error {
-		t.Questions = slices.DeleteFunc(t.Questions, func(left Question) bool { return left.ID == q.ID })
+		if at := slices.IndexFunc(t.Questions, func(left Question) bool { return left.ID == q.ID }); at >= 0 {
+			t.Questions[at].Answer = done.Logged
+		}
 		t.Log = strings.TrimSpace(t.Log + "\n" + m.Store.logLine(actor, text))
 		return nil
 	})
 	if err == nil {
-		err = m.Store.Record(ticket.Board(), Event{Ticket: ticket.ID, Kind: Answered, Actor: actor, Text: text})
+		err = m.Store.Record(ticket.Board(), Event{Ticket: ticket.ID, Kind: Answered, Actor: actor, Question: q.ID, Text: text})
 	}
 	if err == nil {
 		s.ticket = ticket
 		err = m.after(s)
 	}
-	if err != nil || len(ticket.Questions) > 0 || ticket.Status != NeedsDecision {
+	if err != nil || len(ticket.OpenQuestions()) > 0 || ticket.Status != NeedsDecision {
 		return done, err
 	}
 	if done.Back, err = m.cameFrom(ticket); err != nil {

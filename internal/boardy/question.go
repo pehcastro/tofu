@@ -29,13 +29,19 @@ type Question struct {
 	Options   []string `json:"options"`
 	Recommend int      `json:"recommend"`
 	Why       string   `json:"why"`
+	Answer    string   `json:"answer,omitempty"`
 }
 
 var (
 	questionHeading = sys.LazyRegexp(`^### Q([1-9][0-9]*) (.+)$`)
 	optionLine      = sys.LazyRegexp(`^([1-9])\. (.+)$`)
 	recommendLine   = sys.LazyRegexp(`^Recommend ([1-9]): (.+)$`)
+	answerLine      = sys.LazyRegexp(`^Answer: (.+)$`)
 )
+
+func (t Ticket) OpenQuestions() []Question {
+	return slices.DeleteFunc(slices.Clone(t.Questions), func(q Question) bool { return q.Answer != "" })
+}
 
 func (q Question) tidy() Question {
 	var lines []string
@@ -60,8 +66,10 @@ func (q Question) complete() error {
 		return fmt.Errorf("its tldr is one line of at most %d characters", konst.BoardTLDRRunesMost)
 	case q.ELI5 == "" || len(eli5) > konst.BoardELI5LinesMost:
 		return fmt.Errorf("its eli5 is one to %d plain lines", konst.BoardELI5LinesMost)
-	case slices.ContainsFunc(eli5, func(line string) bool { return optionLine().MatchString(line) || recommendLine().MatchString(line) }):
-		return errors.New("an eli5 line reads as an option or a recommendation")
+	case slices.ContainsFunc(eli5, func(line string) bool {
+		return optionLine().MatchString(line) || recommendLine().MatchString(line) || answerLine().MatchString(line)
+	}):
+		return errors.New("an eli5 line reads as an option, a recommendation or an answer")
 	case len(q.Options) < konst.AskPersonOptionsLeast || len(q.Options) > konst.AskPersonOptionsMost:
 		return fmt.Errorf("it has %d options, and a question offers %d to %d", len(q.Options), konst.AskPersonOptionsLeast, konst.AskPersonOptionsMost)
 	case slices.ContainsFunc(q.Options, func(option string) bool { return !oneLine(option) }):
@@ -82,6 +90,9 @@ func QuestionsMarkdown(questions []Question) string {
 			lines = append(lines, fmt.Sprintf("%d. %s", i+1, option))
 		}
 		lines = append(lines, "", fmt.Sprintf("Recommend %d: %s", q.Recommend, q.Why), "")
+		if q.Answer != "" {
+			lines = append(lines, "Answer: "+q.Answer, "")
+		}
 	}
 	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
@@ -114,6 +125,10 @@ func parseQuestions(body string) ([]Question, error) {
 			q.Why = match[2]
 			continue
 		}
+		if match := answerLine().FindStringSubmatch(line); match != nil {
+			q.Answer = match[1]
+			continue
+		}
 		q.ELI5 = strings.TrimSpace(q.ELI5 + "\n" + line)
 	}
 	return questions, nil
@@ -144,7 +159,7 @@ func (m Managed) Ask(id string, q Question, actor string) (Ticket, error) {
 		return nil
 	})
 	if err == nil {
-		err = m.Store.Record(board.Key, Event{Ticket: id, Kind: Asked, Actor: actor, Text: fmt.Sprintf("Q%d %s", q.ID, q.TLDR)})
+		err = m.Store.Record(board.Key, Event{Ticket: id, Kind: Asked, Actor: actor, Question: q.ID, Text: fmt.Sprintf("Q%d %s", q.ID, q.TLDR)})
 	}
 	if err != nil {
 		return asked, err
@@ -154,10 +169,11 @@ func (m Managed) Ask(id string, q Question, actor string) (Ticket, error) {
 }
 
 func decidable(ticket Ticket) error {
-	if len(ticket.Questions) == 0 {
+	open := ticket.OpenQuestions()
+	if len(open) == 0 {
 		return RefusedError{Ticket: ticket.ID, Why: fmt.Sprintf("it has no open question, and a ticket reaches %s only with one carrying a tldr, an eli5, options and a recommendation: tofu boardy ask %s", NeedsDecision, ticket.ID)}
 	}
-	for _, q := range ticket.Questions {
+	for _, q := range open {
 		if err := q.complete(); err != nil {
 			return RefusedError{Ticket: ticket.ID, Why: fmt.Sprintf("Q%d is not ready to ask: %v", q.ID, err)}
 		}
