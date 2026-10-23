@@ -284,6 +284,9 @@ func TaskNamed(text string) rule.Task {
 	task := rule.Task{Text: text}
 	for _, word := range strings.Fields(text) {
 		word = strings.Trim(word, ",;:()[]{}\"'`")
+		if strings.Contains(word, "://") {
+			continue
+		}
 		if strings.ContainsAny(word, `/\`) || namedExtension(word) {
 			task.Paths = append(task.Paths, filepath.ToSlash(word))
 			continue
