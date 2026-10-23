@@ -20,7 +20,7 @@ func (m Managed) Create(key string, ticket Ticket, actor string) (Ticket, error)
 	if err != nil {
 		return Ticket{}, err
 	}
-	if m.role(board, actor) != RoleManager {
+	if ticket.Status == Triage || m.role(board, actor) != RoleManager {
 		return m.Request(key, ticket, actor)
 	}
 	if err := m.Store.planned(key, ticket.Front); err != nil {

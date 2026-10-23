@@ -133,7 +133,7 @@ func (c boardyCall) triage() int {
 		return c.o.done(true, requests, func(page cli.Page) []string {
 			lines := page.Title(key+" triage", []string{plural(len(requests), "request")}, cli.Verdict{})
 			for _, req := range requests {
-				lines = append(lines, page.Rows([]cli.Row{{Mark: cli.Idle, Cells: []string{req.ID, req.By, req.Ticket.Title}}})...)
+				lines = append(lines, page.Rows([]cli.Row{{Mark: cli.Idle, Cells: []string{req.ID, dash(req.By), req.Ticket.Title}}})...)
 			}
 			return lines
 		})

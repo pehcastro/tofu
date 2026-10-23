@@ -71,12 +71,17 @@ func (m Managed) request(key string, ticket Ticket, actor string) (Ticket, error
 }
 
 func (s Store) Requests(key string) ([]Request, error) {
-	dir := filepath.Join(s.BoardDir(key), TriageDirName)
-	names, err := sys.ListFiles(dir, ".json")
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
+	tickets, err := s.Tickets(key)
+	var requests []Request
+	for _, ticket := range tickets {
+		if ticket.Status == Triage {
+			requests = append(requests, Request{ID: ticket.ID, At: ticket.Created, Ticket: ticket})
+		}
 	}
-	requests := make([]Request, 0, len(names))
+	names, listErr := sys.ListFiles(filepath.Join(s.BoardDir(key), TriageDirName), ".json")
+	if !errors.Is(listErr, fs.ErrNotExist) {
+		err = errors.Join(err, listErr)
+	}
 	for _, name := range names {
 		if strings.HasPrefix(name, ".") {
 			continue
@@ -87,6 +92,21 @@ func (s Store) Requests(key string) ([]Request, error) {
 	}
 	slices.SortFunc(requests, func(a, b Request) int { return cmp.Or(cmp.Compare(len(a.ID), len(b.ID)), strings.Compare(a.ID, b.ID)) })
 	return requests, err
+}
+
+func (m Managed) namesTriagedTicket(key, id string) (bool, error) {
+	ref, err := SplitID(id)
+	if err != nil {
+		return false, nil
+	}
+	if ref.Key != key {
+		return true, fmt.Errorf("%s is on %s, not in the triage of %s", id, ref.Key, key)
+	}
+	ticket, err := m.Store.Get(id)
+	if err == nil && ticket.Status != Triage {
+		err = fmt.Errorf("%s is %s, not in the triage of %s", id, ticket.Status, key)
+	}
+	return true, err
 }
 
 func (s Store) readRequest(key, id string) (Request, error) {
@@ -111,6 +131,18 @@ func (m Managed) AcceptPlanned(key, id, epic, sprint, actor string) (Ticket, err
 	}
 	if err := m.Store.planned(key, Front{Epic: epic, Sprint: sprint}); err != nil {
 		return Ticket{}, err
+	}
+	if isTicket, err := m.namesTriagedTicket(key, id); isTicket {
+		if err != nil {
+			return Ticket{}, err
+		}
+		if _, err := m.Store.Edit(id, func(t *Ticket) error {
+			t.Epic, t.Sprint = cmp.Or(epic, t.Epic), cmp.Or(sprint, t.Sprint)
+			return nil
+		}); err != nil {
+			return Ticket{}, err
+		}
+		return m.Move(id, Backlog, "accepted from triage", actor)
 	}
 	var accepted Ticket
 	err := m.Store.locked(key, "triage-"+id, func() error {
@@ -141,6 +173,12 @@ func (m Managed) AcceptPlanned(key, id, epic, sprint, actor string) (Ticket, err
 
 func (m Managed) Drop(key, id, reason, actor string) error {
 	if err := m.Manages(key, actor, "drop a triage request"); err != nil {
+		return err
+	}
+	if isTicket, err := m.namesTriagedTicket(key, id); isTicket {
+		if err == nil {
+			_, err = m.Move(id, Dropped, cmp.Or(reason, "dropped from triage"), actor)
+		}
 		return err
 	}
 	err := m.Store.locked(key, "triage-"+id, func() error {
