@@ -23,7 +23,7 @@ func tsProject(t *testing.T, runner, lockfile string, files map[string]string) s
 	if _, err := exec.LookPath(runner); err != nil {
 		t.Skip(runner + " is not on PATH")
 	}
-	dir := t.TempDir()
+	dir := filepath.Clean(t.TempDir())
 	for name, body := range map[string]string{"tsconfig.json": `{"compilerOptions":{"strict":true}}`, "package.json": `{"name":"fallback"}`, lockfile: "{}"} {
 		if _, given := files[name]; !given {
 			files[name] = body
