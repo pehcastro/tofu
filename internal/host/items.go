@@ -390,10 +390,10 @@ func (s *items) agentChanges(rows []SubAgentRow, now time.Time) []outgoing {
 	var out []outgoing
 	for _, row := range rows {
 		was, known := s.agents[row.Name]
+		if !known && ended(row.State) && (s.settled[row.Name] || row.Started.Before(s.began)) {
+			continue
+		}
 		if !known && s.settled[row.Name] {
-			if ended(row.State) {
-				continue
-			}
 			was, known = SubAgentRow{State: roster.Finished}, true
 		}
 		s.agents[row.Name] = row
