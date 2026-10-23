@@ -10,6 +10,12 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.17-fix1 - 2026-10-23
+
+### Fixed
+
+- The chat no longer shows a shell-exit notice or the step-cap warning, live or after reopening a session. Both are written for the model, which still receives them in full; before, a background shell's command and last output lines filled the chat.
+
 ## 0.5.17 - 2026-10-22
 
 tofu says where your tokens and money go, and a big pasted image no longer kills a session.
