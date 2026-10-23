@@ -1,7 +1,11 @@
 package anthropic
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	"image"
+	"image/png"
 	"testing"
 
 	"tofu/internal/llm"
@@ -85,4 +89,48 @@ func encodedThinkingMessages(t *testing.T, thinking llm.Thinking) []wireMessage 
 		t.Fatalf("decoding: %v", err)
 	}
 	return decoded.Messages
+}
+
+func TestAPastedPicturePastTheLimitsIsSentFittedAndOneInsideThemIsSentAsItIs(t *testing.T) {
+	encodedPNG := func(width, height int) []byte {
+		var out bytes.Buffer
+		if err := png.Encode(&out, image.NewGray(image.Rect(0, 0, width, height))); err != nil {
+			t.Fatal(err)
+		}
+		return out.Bytes()
+	}
+	huge, small, opaque := encodedPNG(4000, 3000), encodedPNG(300, 200), []byte("made-up png")
+	request := minimalRequest()
+	request.Messages = append(request.Messages, llm.Message{Role: llm.RoleUser, Content: "look", Images: []llm.Image{
+		{MediaType: "image/png", Data: huge}, {MediaType: "image/png", Data: small}, {MediaType: "image/png", Data: opaque}}})
+	body, err := request.Encode(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded struct {
+		Messages []wireMessage `json:"messages"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	var sent [][]byte
+	for _, block := range decoded.Messages[len(decoded.Messages)-1].Content {
+		if block.Type == "image" {
+			data, err := base64.StdEncoding.DecodeString(block.Source.Data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sent = append(sent, data)
+		}
+	}
+	if len(sent) != 3 {
+		t.Fatalf("three pictures went in and %d came out", len(sent))
+	}
+	config, _, err := image.DecodeConfig(bytes.NewReader(sent[0]))
+	if err != nil || max(config.Width, config.Height) > llm.ImageLongEdgePixels || config.Width*config.Height > llm.ImagePixels {
+		t.Errorf("a 4000x3000 paste was sent at %dx%d (%v), past the %d pixel long edge", config.Width, config.Height, err, llm.ImageLongEdgePixels)
+	}
+	if !bytes.Equal(sent[1], small) || !bytes.Equal(sent[2], opaque) {
+		t.Errorf("a picture inside the limits, or one that does not decode, was re-encoded: %d and %d bytes sent for %d and %d", len(sent[1]), len(sent[2]), len(small), len(opaque))
+	}
 }

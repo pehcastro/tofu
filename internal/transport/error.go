@@ -183,11 +183,27 @@ func (e *Error) Sentence() string {
 		}
 		return who + " answered with something tofu could not read (" + answered + "). Send it again, or " + pick + "."
 	case KindBadRequest, KindUnknown:
+		if message, limit, found := refusedImage(e.Said); found {
+			return who + " refused the image in message " + message + " (" + answered + "): it is past the limit of " + limit +
+				". tofu shrinks every image to fit before it sends it, so this is a limit tofu does not know yet; start a new session to go on, and report it."
+		}
 		return who + " refused the request (" + answered + "). Send it again, or " + pick + "."
 	case KindTimeout, KindProvider:
 		return who + " failed on its side (" + answered + "). Send it again in a moment, or " + pick + "."
 	}
 	panic("transport: unknown error kind " + strconv.Itoa(int(e.Kind)))
+}
+
+func refusedImage(said string) (message, limit string, found bool) {
+	path, reason, cut := strings.Cut(said, ": ")
+	fields := strings.Split(path, ".")
+	if !cut || len(fields) < 2 || fields[0] != "messages" || !slices.Contains(fields, "image") {
+		return "", "", false
+	}
+	if at := strings.LastIndex(reason, ": "); at >= 0 {
+		reason = reason[at+len(": "):]
+	}
+	return fields[1], reason, true
 }
 
 func (e *Error) technical() string {

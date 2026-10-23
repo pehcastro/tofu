@@ -443,7 +443,7 @@ func encodeMessage(index int, message Message) (wireMessage, error) {
 func pictureParts(images []Image) []wirePart {
 	parts := make([]wirePart, len(images))
 	for i, image := range images {
-		parts[i] = wirePart{Type: "image_url", ImageURL: &wireImageURL{URL: image.DataURL()}}
+		parts[i] = wirePart{Type: "image_url", ImageURL: &wireImageURL{URL: image.Fitted().DataURL()}}
 	}
 	return parts
 }

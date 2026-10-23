@@ -466,6 +466,7 @@ func encodeMessages(messages []llm.Message, oauth bool) ([]wireMessage, error) {
 func pictureBlocks(index int, images []llm.Image) ([]contentBlock, error) {
 	blocks := make([]contentBlock, len(images))
 	for i, image := range images {
+		image = image.Fitted()
 		data := image.Base64()
 		if len(data) > llm.ImageEncodedBytes {
 			return nil, transport.Fail("anthropic.Encode", transport.KindBadRequest, nil,

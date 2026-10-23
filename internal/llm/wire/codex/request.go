@@ -279,7 +279,7 @@ func encodeInput(messages []llm.Message) ([]inputItem, error) {
 func pictureParts(images []llm.Image) []inputPart {
 	parts := make([]inputPart, len(images))
 	for i, image := range images {
-		parts[i] = inputPart{Type: "input_image", Detail: imageDetail, ImageURL: image.DataURL()}
+		parts[i] = inputPart{Type: "input_image", Detail: imageDetail, ImageURL: image.Fitted().DataURL()}
 	}
 	return parts
 }

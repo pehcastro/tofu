@@ -4,17 +4,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
-	"image/draw"
-	_ "image/gif"
-	"image/jpeg"
-	"image/png"
 	"io/fs"
-	"math"
 	"net/http"
 	"os"
 	"strings"
@@ -164,70 +158,20 @@ func (t *ReadTool) noteRepeat(ctx context.Context, path string, content []byte, 
 
 func lookAt(media string, content []byte) (llm.Image, string, error) {
 	format := strings.TrimPrefix(media, "image/")
-	fits := base64.StdEncoding.EncodedLen(len(content)) <= llm.ImageEncodedBytes
-	if media == "image/webp" {
-		if !fits {
-			return llm.Image{}, "", fmt.Errorf("a webp of %d bytes is past what a model takes and tofu cannot shrink a webp; convert it to png or jpeg", len(content))
-		}
-		return llm.Image{MediaType: media, Data: content}, fmt.Sprintf("webp, %d bytes, attached as a picture", len(content)), nil
-	}
-	decoded, _, err := image.Decode(bytes.NewReader(content))
+	fit, err := llm.FitImage(llm.Image{MediaType: media, Data: content})
 	if err != nil {
+		return llm.Image{}, "", err
+	}
+	if media == "image/webp" {
+		return fit.Image, fmt.Sprintf("webp, %d bytes, attached as a picture", len(content)), nil
+	}
+	said := fmt.Sprintf("%s, %dx%d, %d bytes", format, fit.Was.X, fit.Was.Y, len(content))
+	if fit.Shrunk {
+		return fit.Image, fmt.Sprintf("%s, shrunk to %dx%d (%s, %d bytes) and attached as a picture",
+			said, fit.Sent.X, fit.Sent.Y, strings.TrimPrefix(fit.MediaType, "image/"), len(fit.Data)), nil
+	}
+	if _, _, err := image.Decode(bytes.NewReader(content)); err != nil {
 		return llm.Image{}, "", fmt.Errorf("it looks like a %s and does not decode: %w", format, err)
 	}
-	width, height := decoded.Bounds().Dx(), decoded.Bounds().Dy()
-	said := fmt.Sprintf("%s, %dx%d, %d bytes", format, width, height, len(content))
-	fitWidth, fitHeight := fitted(width, height)
-	if fits && fitWidth == width && fitHeight == height {
-		return llm.Image{MediaType: media, Data: content}, said + ", attached as a picture", nil
-	}
-	small := shrunk(decoded, fitWidth, fitHeight)
-	var encoded bytes.Buffer
-	if media != "image/jpeg" {
-		media, err = "image/png", png.Encode(&encoded, small)
-	}
-	if media == "image/jpeg" || base64.StdEncoding.EncodedLen(encoded.Len()) > llm.ImageEncodedBytes {
-		encoded.Reset()
-		media, err = "image/jpeg", jpeg.Encode(&encoded, small, nil)
-	}
-	if err != nil {
-		return llm.Image{}, "", fmt.Errorf("shrinking it to %dx%d: %w", fitWidth, fitHeight, err)
-	}
-	return llm.Image{MediaType: media, Data: encoded.Bytes()}, fmt.Sprintf("%s, shrunk to %dx%d (%s, %d bytes) and attached as a picture",
-		said, fitWidth, fitHeight, strings.TrimPrefix(media, "image/"), encoded.Len()), nil
-}
-
-func fitted(width, height int) (int, int) {
-	if long := max(width, height); long > llm.ImageLongEdgePixels {
-		width, height = max(1, width*llm.ImageLongEdgePixels/long), max(1, height*llm.ImageLongEdgePixels/long)
-	}
-	if width*height > llm.ImagePixels {
-		scale := math.Sqrt(float64(llm.ImagePixels) / float64(width*height))
-		width, height = max(1, int(float64(width)*scale)), max(1, int(float64(height)*scale))
-	}
-	return width, height
-}
-
-func shrunk(picture image.Image, width, height int) *image.RGBA {
-	bounds := picture.Bounds()
-	source := image.NewRGBA(image.Rect(0, 0, bounds.Dx(), bounds.Dy()))
-	draw.Draw(source, source.Bounds(), picture, bounds.Min, draw.Src)
-	out := image.NewRGBA(image.Rect(0, 0, width, height))
-	for y := range height {
-		top, bottom := y*bounds.Dy()/height, (y+1)*bounds.Dy()/height
-		for x := range width {
-			left, right := x*bounds.Dx()/width, (x+1)*bounds.Dx()/width
-			var sum [4]int
-			for row := top; row < bottom; row++ {
-				for i, value := range source.Pix[source.PixOffset(left, row):source.PixOffset(right, row)] {
-					sum[i%4] += int(value)
-				}
-			}
-			at, count := out.PixOffset(x, y), (bottom-top)*(right-left)
-			for channel, total := range sum {
-				out.Pix[at+channel] = uint8(total / count)
-			}
-		}
-	}
-	return out
+	return fit.Image, said + ", attached as a picture", nil
 }

@@ -931,7 +931,7 @@ func (h *Host) takePendingImages(task string) ([]llm.Image, error) {
 		if err != nil {
 			return nil, err
 		}
-		images = append(images, llm.Image{MediaType: imageMediaType(image.Path), Data: data})
+		images = append(images, llm.Image{MediaType: imageMediaType(image.Path), Data: data}.Fitted())
 	}
 	return images, nil
 }
