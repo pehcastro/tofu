@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
@@ -56,7 +57,7 @@ func (e SourceBudgetError) Error() string {
 		return fmt.Sprintf("%s: %s is source code, and this change of %d lines would pass the orchestrator's budget of %d changed source lines in one turn, %d of which are spent%s: spawn %s with this work instead, rather than another route to the same file, such as sed, a redirect or a script",
 			e.Tool, e.Path, e.Lines, konst.OrchestratorSourceLinesPerTurn, e.Spent, spentByScripts(e.Scripts), spawn)
 	case RefusedSpentScript:
-		return fmt.Sprintf("%s: nothing ran and no file changed: the command runs a script, and the orchestrator's budget of %d changed source lines in one turn is spent, %d lines%s: spawn %s with this work instead",
+		return fmt.Sprintf("%s: nothing ran and no file changed: the command runs a script, and the orchestrator's budget of %d changed source lines in one turn is spent, %d lines%s: spawn %s with this work instead. a script file kept outside the project's source, such as one in an ignored folder like .local or outside the project, still runs",
 			e.Tool, konst.OrchestratorSourceLinesPerTurn, e.Spent, spentByScripts(e.Scripts), spawn)
 	}
 	panic("tofu: unknown source budget refusal " + string(e.Reason))
@@ -159,16 +160,44 @@ func sameChangeByTool(step subagent.ShellStep, path string) string {
 	return fmt.Sprintf("one edit call with old_string %q, new_string %q and replace_all true for each file, the rest in edits: %s", old, replacement, strings.Join(named, ", "))
 }
 
-func runsScript(steps []subagent.ShellStep) bool {
-	runner := func(name string) bool {
-		name = strings.TrimSuffix(strings.ToLower(path.Base(filepath.ToSlash(name))), ".exe")
-		return slices.Contains([]string{"python", "py", "pypy", "node", "bun", "deno", "tsx", "ts-node", "bash", "sh", "zsh", "dash", "ksh", "fish", "ruby", "perl", "php", "lua", "pwsh", "powershell", "awk", "gawk"}, strings.TrimRight(name, "0123456789.")) ||
-			slices.Contains([]string{".py", ".js", ".mjs", ".cjs", ".ts", ".mts", ".sh", ".bash", ".zsh", ".rb", ".pl", ".php", ".lua", ".ps1"}, path.Ext(name))
+func scriptFile(name string) bool {
+	return slices.Contains([]string{".py", ".js", ".mjs", ".cjs", ".ts", ".mts", ".sh", ".bash", ".zsh", ".rb", ".pl", ".php", ".lua", ".ps1"}, path.Ext(strings.ToLower(name)))
+}
+
+func scriptRunner(name string) bool {
+	name = strings.TrimSuffix(strings.ToLower(path.Base(filepath.ToSlash(name))), ".exe")
+	return scriptFile(name) || slices.Contains([]string{"python", "py", "pypy", "node", "bun", "deno", "tsx", "ts-node", "bash", "sh", "zsh", "dash", "ksh", "fish", "ruby", "perl", "php", "lua", "pwsh", "powershell", "awk", "gawk"}, strings.TrimRight(name, "0123456789."))
+}
+
+func runsScript(step subagent.ShellStep) bool {
+	launched := slices.Contains([]string{"env", "xargs", "timeout", "nice", "time", "uv", "uvx", "npx", "bunx"}, step.Program) && slices.ContainsFunc(step.Args, scriptRunner)
+	return scriptRunner(step.Program) || launched || step.Program == "go" && len(step.Args) > 0 && step.Args[0] == "run"
+}
+
+func (r Root) scriptsOutsideSource(steps []subagent.ShellStep) bool {
+	for _, step := range steps {
+		if !runsScript(step) {
+			continue
+		}
+		words := append([]string{step.Program}, step.Args...)
+		at := slices.IndexFunc(words, scriptFile)
+		if at < 0 {
+			return false
+		}
+		script := words[at]
+		if !filepath.IsAbs(script) {
+			script = filepath.Join(string(r), script)
+		}
+		relative, err := filepath.Rel(string(r), script)
+		if err != nil {
+			return false
+		}
+		outside := relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator))
+		if !outside && exec.Command("git", "-C", string(r), "check-ignore", "-q", filepath.ToSlash(relative)).Run() != nil {
+			return false
+		}
 	}
-	return slices.ContainsFunc(steps, func(step subagent.ShellStep) bool {
-		launched := slices.Contains([]string{"env", "xargs", "timeout", "nice", "time", "uv", "uvx", "npx", "bunx"}, step.Program) && slices.ContainsFunc(step.Args, runner)
-		return runner(step.Program) || launched || step.Program == "go" && len(step.Args) > 0 && step.Args[0] == "run"
-	})
+	return true
 }
 
 func generatedFiles(steps []subagent.ShellStep) []string {
@@ -239,7 +268,20 @@ func (b *sourceBudget) writtenBySubAgents(paths []string) []string {
 	return written
 }
 
-func changedSince(before, after map[string]string, uncounted []string) int {
+func (b *sourceBudget) heldBySubAgents() []string {
+	if b.roster == nil {
+		return nil
+	}
+	var owns []string
+	for _, agent := range b.roster.SubAgents() {
+		if agent.Holds() {
+			owns = append(owns, agent.Owns...)
+		}
+	}
+	return owns
+}
+
+func changedSince(before, after map[string]string, counted func(file string) bool) int {
 	for file := range before {
 		if _, kept := after[file]; !kept {
 			after[file] = ""
@@ -247,7 +289,7 @@ func changedSince(before, after map[string]string, uncounted []string) int {
 	}
 	changed := 0
 	for file, body := range after {
-		if before[file] != body && !slices.Contains(uncounted, file) {
+		if before[file] != body && counted(file) {
 			changed += changedLines(before[file], body)
 		}
 	}
@@ -260,6 +302,7 @@ type sourceBudget struct {
 	enabled []subagent.Definition
 	files   *WriteTool
 	writes  *subagent.Writes
+	roster  *subagent.Roster
 }
 
 func (b *sourceBudget) spendScript(command string, lines int) string {
@@ -359,7 +402,7 @@ func WithSourceBudget(tools []Tool, defined []subagent.Definition) []Tool {
 	wrapped := slices.Clone(tools)
 	for i, tool := range wrapped {
 		if spawner, spawns := tool.(*SpawnTool); spawns {
-			budget.writes = spawner.writes
+			budget.writes, budget.roster = spawner.writes, spawner.roster
 		}
 		inner := tool
 		if memoised, cached := tool.(interface{ Uncached() Tool }); cached {
@@ -404,22 +447,27 @@ func (t budgetedTool) runShell(ctx context.Context, raw json.RawMessage, command
 		return Result{}, t.refuse(refusal)
 	}
 	steps := subagent.ShellSteps(command)
-	if !runsScript(steps) || t.budget.files == nil {
+	if !slices.ContainsFunc(steps, runsScript) || t.budget.files == nil {
 		result, err := t.tool.Run(ctx, raw)
 		if err == nil {
 			t.budget.markPrinted(command, result.Content)
 		}
 		return result, err
 	}
-	if t.budget.spent >= konst.OrchestratorSourceLinesPerTurn {
+	root := t.budget.files.root
+	if t.budget.spent >= konst.OrchestratorSourceLinesPerTurn && !root.scriptsOutsideSource(steps) {
 		return Result{}, t.refuse(SourceBudgetError{Reason: RefusedSpentScript})
 	}
-	root, mark := t.budget.files.root, t.budget.writes.Begin()
+	mark, held := t.budget.writes.Begin(), t.budget.heldBySubAgents()
 	before := root.sources()
 	result, err := t.tool.Run(ctx, raw)
 	after := root.sources()
+	held = append(held, t.budget.heldBySubAgents()...)
 	uncounted := append(generatedFiles(steps), t.budget.writtenBySubAgents(t.budget.writes.End(mark))...)
-	result.Content += t.budget.spendScript(command, changedSince(before, after, uncounted))
+	result.Content += t.budget.spendScript(command, changedSince(before, after, func(file string) bool {
+		owned, _ := subagent.Matches(file, held)
+		return !owned && !slices.Contains(uncounted, file)
+	}))
 	return result, err
 }
 
