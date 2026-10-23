@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -40,6 +41,13 @@ func ledgerKey(path string) string {
 	return filepath.ToSlash(filepath.Clean(path))
 }
 
+func readKey(path string) string {
+	if runtime.GOOS == "windows" {
+		return strings.ToLower(ledgerKey(path))
+	}
+	return ledgerKey(path)
+}
+
 func lineCount(body []byte) int {
 	return strings.Count(strings.TrimSuffix(string(body), "\n"), "\n") + 1
 }
@@ -54,7 +62,7 @@ func (l *ReadLedger) MarkLines(ctx context.Context, path string, body []byte, fi
 	}
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	seen, key, hash := l.seen(ctx), ledgerKey(path), sha256.Sum256(body)
+	seen, key, hash := l.seen(ctx), readKey(path), sha256.Sum256(body)
 	mark := seen[key]
 	if mark.hash != hash {
 		mark = readMark{hash: hash}
@@ -69,7 +77,7 @@ func (l *ReadLedger) Saw(ctx context.Context, path string, body []byte) bool {
 	}
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	return l.seen(ctx)[ledgerKey(path)].hash == sha256.Sum256(body)
+	return l.seen(ctx)[readKey(path)].hash == sha256.Sum256(body)
 }
 
 func (l *ReadLedger) Known(ctx context.Context, path string) bool {
@@ -78,7 +86,7 @@ func (l *ReadLedger) Known(ctx context.Context, path string) bool {
 	}
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	_, known := l.seen(ctx)[ledgerKey(path)]
+	_, known := l.seen(ctx)[readKey(path)]
 	return known
 }
 
@@ -110,7 +118,7 @@ func (l *ReadLedger) Unshown(ctx context.Context, path string, body []byte, chan
 	defer l.mutex.Unlock()
 	first, last := change.reach(lineCount(body))
 	above, inserted := change.first-1, change.oldLast < change.first
-	spans := l.seen(ctx)[ledgerKey(path)].spans
+	spans := l.seen(ctx)[readKey(path)].spans
 	shown := make([]string, len(spans))
 	for i, span := range spans {
 		if span.first <= first && last <= span.last || inserted && span.first <= above && above <= span.last {
@@ -132,7 +140,7 @@ func (l *ReadLedger) Rewrote(ctx context.Context, path string, after []byte, cha
 	}
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	seen, key, shift := l.seen(ctx), ledgerKey(path), change.newLast-change.oldLast
+	seen, key, shift := l.seen(ctx), readKey(path), change.newLast-change.oldLast
 	var spans []lineSpan
 	for _, span := range seen[key].spans {
 		if span.first < change.first {
