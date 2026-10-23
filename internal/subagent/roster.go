@@ -121,6 +121,7 @@ func (e CollisionError) Error() string {
 type Roster struct {
 	held      sync.Mutex
 	agents    []SubAgent
+	at        map[string]int
 	partial   map[string]bool
 	recalling sync.Once
 	recall    func() []SubAgent
@@ -174,8 +175,18 @@ func (r *Roster) Hold(agent SubAgent) error {
 		return err
 	}
 	agent.State, agent.Active, agent.Round = Working, agent.Started, 1
-	r.agents = append(r.agents, agent)
+	r.add(agent)
 	return nil
+}
+
+func (r *Roster) add(agent SubAgent) {
+	if r.at == nil {
+		r.at = map[string]int{}
+	}
+	if _, known := r.at[agent.ID]; !known {
+		r.at[agent.ID] = len(r.agents)
+	}
+	r.agents = append(r.agents, agent)
 }
 
 func (r *Roster) Regrant(id string, owns []string, change OwnsChange) error {
@@ -217,7 +228,7 @@ func (r *Roster) Restore(agent SubAgent) {
 	r.held.Lock()
 	defer r.held.Unlock()
 	agent.Released, agent.Active, agent.Round = true, agent.Started, 1
-	r.agents = append(r.agents, agent)
+	r.add(agent)
 }
 
 func (r *Roster) Recall(recorded SubAgent) {
@@ -231,7 +242,10 @@ func (r *Roster) Recall(recorded SubAgent) {
 }
 
 func (r *Roster) index(id string) int {
-	return slices.IndexFunc(r.agents, func(agent SubAgent) bool { return agent.ID == id })
+	if at, known := r.at[id]; known {
+		return at
+	}
+	return -1
 }
 
 func (r *Roster) SubAgent(id string) (SubAgent, bool) {
@@ -295,48 +309,41 @@ func (r *Roster) Reopen(id, reason string) (int, error) {
 	}
 	r.held.Lock()
 	defer r.held.Unlock()
-	for i := range r.agents {
-		agent := &r.agents[i]
-		if agent.ID != id {
-			continue
-		}
-		if agent.Round >= konst.SubAgentMaxRounds {
-			return 0, RoundCapError{Ticket: cmp.Or(agent.Ticket, TicketID(agent.Brief)), Cap: konst.SubAgentMaxRounds}
-		}
-		agent.Round++
-		agent.State, agent.Report = Reopened, reason
-		return agent.Round, nil
+	at := r.index(id)
+	if at < 0 {
+		return 0, fmt.Errorf("subagent: %s is not on the roster, so it cannot be reopened", id)
 	}
-	return 0, fmt.Errorf("subagent: %s is not on the roster, so it cannot be reopened", id)
+	agent := &r.agents[at]
+	if agent.Round >= konst.SubAgentMaxRounds {
+		return 0, RoundCapError{Ticket: cmp.Or(agent.Ticket, TicketID(agent.Brief)), Cap: konst.SubAgentMaxRounds}
+	}
+	agent.Round++
+	agent.State, agent.Report = Reopened, reason
+	return agent.Round, nil
 }
 
-func (r *Roster) Stepped(id string, steps int, at time.Time, calling ...string) {
+func (r *Roster) Stepped(id string, steps int, active time.Time, calling ...string) {
 	r.held.Lock()
 	defer r.held.Unlock()
-	for i := range r.agents {
-		agent := &r.agents[i]
-		if agent.ID != id {
-			continue
-		}
-		agent.Steps, agent.Active = steps, at
-		agent.Calling = append(agent.Calling, calling...)
-		if made := len(agent.Calling) + agent.CallsDropped; made > konst.SubAgentCallsWatched {
-			kept := konst.SubAgentCallsWatched - 1
-			agent.Calling = slices.Delete(agent.Calling, 0, len(agent.Calling)-kept)
-			agent.CallsDropped = made - kept
-		}
+	at := r.index(id)
+	if at < 0 {
 		return
+	}
+	agent := &r.agents[at]
+	agent.Steps, agent.Active = steps, active
+	agent.Calling = append(agent.Calling, calling...)
+	if made := len(agent.Calling) + agent.CallsDropped; made > konst.SubAgentCallsWatched {
+		kept := konst.SubAgentCallsWatched - 1
+		agent.Calling = slices.Delete(agent.Calling, 0, len(agent.Calling)-kept)
+		agent.CallsDropped = made - kept
 	}
 }
 
 func (r *Roster) Reached(id string, state State, report string) {
 	r.held.Lock()
 	defer r.held.Unlock()
-	for i := range r.agents {
-		if r.agents[i].ID == id {
-			r.agents[i].State, r.agents[i].Report = state, report
-			return
-		}
+	if at := r.index(id); at >= 0 {
+		r.agents[at].State, r.agents[at].Report = state, report
 	}
 }
 

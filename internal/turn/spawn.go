@@ -646,7 +646,7 @@ func (t *SpawnTool) settle(ctx context.Context, held *heldSubAgent, report strin
 	}
 	_ = held.scratch.Settle(report)
 	if log != nil && t.base.Sessions != nil {
-		held.forget(readBack(t.base.Sessions, log.ID(), held.agent.ID))
+		held.shed(readBack(t.base.Sessions, log.ID(), held.agent.ID))
 	}
 	return nil
 }

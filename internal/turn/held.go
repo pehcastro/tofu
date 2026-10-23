@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -101,11 +102,21 @@ func (h *heldSubAgent) conversation() ([]llm.Message, error) {
 	if h.reload == nil {
 		return h.history, nil
 	}
-	history, err := h.reload()
-	if err == nil {
-		h.history, h.reload = history, nil
+	return h.reload()
+}
+
+func (h *heldSubAgent) reloaded() error {
+	h.kept.Lock()
+	defer h.kept.Unlock()
+	if h.reload == nil {
+		return nil
 	}
-	return h.history, err
+	history, err := h.reload()
+	if err != nil {
+		return fmt.Errorf("%s's conversation did not read back: %w", h.agent.ID, err)
+	}
+	h.history, h.reload = history, nil
+	return nil
 }
 
 type watchedTool struct {
@@ -168,9 +179,10 @@ func (h *heldSubAgent) remember(round Row) {
 	h.history = Sendable(round.Conversation)
 }
 
-func (h *heldSubAgent) forget(reload func() ([]llm.Message, error)) {
+func (h *heldSubAgent) shed(reload func() ([]llm.Message, error)) {
 	h.kept.Lock()
 	h.history, h.reload, h.prefix = nil, reload, Prefix{}
+	h.system, h.environment, h.definition, h.restored = "", "", subagent.Definition{}, true
 	h.kept.Unlock()
 	h.forking.Lock()
 	h.forked = nil

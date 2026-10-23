@@ -195,7 +195,10 @@ func (t *SpawnTool) send(ctx context.Context, to, text, from string) (Result, er
 		held.history, held.reload = backup, nil
 		held.kept.Unlock()
 	}
-	err = t.recompose(held)
+	err = held.reloaded()
+	if err == nil {
+		err = t.recompose(held)
+	}
 	if err == nil && held.scratch.Root != "" {
 		err = held.scratch.Make()
 	}
