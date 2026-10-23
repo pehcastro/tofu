@@ -169,6 +169,15 @@ func (b *Boundary) Bash(command string, grammar Grammar) error {
 	if err := b.writes(commands, grammar.changes, grammar.devices()); err != nil {
 		return err
 	}
+	scripts, err := writesOf(commands, simpleCommand.script, nil)
+	if err != nil {
+		return err
+	}
+	for _, script := range scripts {
+		if Allow(script, b.Owns()) != nil {
+			return ReadListError{Program: script, Why: "is not inside a path you hold, so powershell does not run it: name it in your report to ask the orchestrator to grant its folder"}
+		}
+	}
 	formatted, err := writesOf(commands, simpleCommand.formats, nil)
 	if err != nil {
 		return err
@@ -183,8 +192,11 @@ func (b *Boundary) Bash(command string, grammar Grammar) error {
 
 func (c simpleCommand) unwrapped() (string, []shellWord) {
 	tool, args := c.named()
-	for tool == "rtk" {
-		if first(args) == "proxy" {
+	for tool == "rtk" || tool == "timeout" {
+		switch {
+		case tool == "timeout":
+			args = timed(args)
+		case first(args) == "proxy":
 			args = args[1:]
 		}
 		if len(args) == 0 {
@@ -193,6 +205,38 @@ func (c simpleCommand) unwrapped() (string, []shellWord) {
 		tool, args = toolName(args[0].text), args[1:]
 	}
 	return tool, args
+}
+
+func timed(args []shellWord) []shellWord {
+	for strings.HasPrefix(first(args), "-") {
+		if slices.Contains([]string{"-s", "-k", "--signal", "--kill-after"}, args[0].text) {
+			args = args[1:]
+		}
+		args = args[min(1, len(args)):]
+	}
+	return args[min(1, len(args)):]
+}
+
+func scriptFile(args []shellWord) (shellWord, bool) {
+	for i := 0; i < len(args); i++ {
+		switch flag := strings.ToLower(args[i].text); {
+		case (flag == "-file" || flag == "-f") && i+1 < len(args):
+			return args[i+1], true
+		case flag == "-executionpolicy" || flag == "-ep":
+			i++
+		case !slices.Contains([]string{"-noprofile", "-nop", "-noninteractive", "-nologo"}, flag):
+			return shellWord{}, false
+		}
+	}
+	return shellWord{}, false
+}
+
+func (c simpleCommand) script() []shellWord {
+	tool, args := c.unwrapped()
+	if file, found := scriptFile(args); found && (tool == "powershell" || tool == "pwsh") {
+		return []shellWord{file}
+	}
+	return nil
 }
 
 func (c simpleCommand) formats() []shellWord {
@@ -404,6 +448,13 @@ func (g Grammar) readOnly(tool string, args []shellWord) (bool, error) {
 		return g.wrapped(tool, args[1:])
 	case "node":
 		return true, ReadListError{Program: tool, Why: codeAskWhy}
+	case "timeout":
+		return g.wrapped(tool, timed(args))
+	case "powershell", "pwsh":
+		if _, found := scriptFile(args); !found {
+			return true, ReadListError{Program: tool, Why: "runs here only as -File with a script inside a path you hold, after -NoProfile, -NonInteractive, -NoLogo or -ExecutionPolicy: name any other use in your report to ask the orchestrator for it"}
+		}
+		return true, nil
 	case "npx", "pnpx", "bunx":
 		if !slices.Contains([]string{"tsc", "vue-tsc", "svelte-check", "vitest", "jest", "eslint", "prettier"}, first(args)) {
 			return true, ReadListError{Program: tool, Why: "runs here only a type checker, test runner or linter"}

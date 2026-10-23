@@ -90,6 +90,40 @@ func TestTheShellsOwnStatusAndTheRtkReadersAreReads(t *testing.T) {
 	})
 }
 
+func TestAScriptInAHeldFolderRunsAndATimeoutIsJudgedByWhatItWraps(t *testing.T) {
+	root := lay(t, "Cargo.toml", "src/main.rs", "shots/d1/run.ps1", "shots/other/run.ps1", "run.ps1")
+	scratch := root + "/.tofu/scratch/rust-dev-7"
+	owner := NewBoundary("rust-dev-7", scratch, []string{"src/**", "target_agent_7/**", "shots/d1/**", "run.ps1"})
+	const askGrant = "ask the orchestrator to grant"
+	rows := []bashRow{
+		{"powershell -NoProfile -File shots/d1/run.ps1 -Out shots/d1/a.png", ""},
+		{"pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File shots/d1/run.ps1", ""},
+		{"powershell.exe -file shots/d1/run.ps1", ""},
+		{"powershell -NoProfile -File shots/other/run.ps1", askGrant},
+		{"cd shots/other && powershell -File run.ps1", askGrant},
+		{"powershell -File " + scratch + "/tmp/x.ps1", notRead},
+		{"powershell -File ../run.ps1", notRead},
+		{"powershell -File", notRead},
+		{`powershell -Command "Remove-Item C:/x"`, notRead},
+		{"powershell -NoProfile -Command shots/d1/run.ps1", notRead},
+		{"powershell -NoProfile -EncodedCommand AAAA", notRead},
+		{"timeout 60 cargo test", ""},
+		{"timeout -k 5 --signal=KILL 60 cargo build --target-dir target_agent_7", ""},
+		{"timeout 600 powershell -NoProfile -File shots/d1/run.ps1", ""},
+		{"rtk proxy timeout 60 powershell -File shots/d1/run.ps1", ""},
+		{"timeout 60 cargo build --target-dir target", notOwned},
+		{"timeout 60 powershell -File shots/other/run.ps1", askGrant},
+		{`timeout 60 powershell -Command "Remove-Item C:/x"`, notRead},
+		{"timeout 5 curl http://x", notRead},
+		{"timeout 5", notRead},
+		{"timeout 5 timeout 5 gofmt -w README.go", notOwned},
+		{"cargo build --target-dir target_agent_7", ""},
+		{"cargo build --target-dir target", notOwned},
+	}
+	drive(t, owner, POSIX, rows)
+	drive(t, owner, PowerShell, rows)
+}
+
 func TestAnMSYSDrivePathIsTheSameFileAsItsWindowsSpelling(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("an MSYS drive path is a Windows spelling")

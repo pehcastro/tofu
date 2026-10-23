@@ -87,7 +87,7 @@ func (t ownedShell) Definition() llm.Tool {
 		"(ls, cat, head, grep, rg, find without -exec or -delete, sed without w or e, git status, log, diff, show or blame) " +
 		"or runs the project's own checks (go vet and go test, gofmt -l, cargo test, check and clippy, npm, pnpm, yarn or bun test or a test, check, lint, typecheck or vet script, " +
 		"make targets named the same way, pytest, mypy, ruff check, rustfmt --check, and rtk or uv run around any of these). " +
-		"gofmt -w, rustfmt and cargo build run on files and a target folder you hold. A check over . or ./... runs when you hold a file in every folder it reaches, and is the orchestrator's otherwise. " +
+		"gofmt -w, rustfmt and cargo build run on files and a target folder you hold. powershell -File runs a script inside a path you hold, and timeout <n> wraps any command allowed here. A check over . or ./... runs when you hold a file in every folder it reaches, and is the orchestrator's otherwise. " +
 		"A redirect, tee, cp, mv, rm, mkdir, touch or sed -i lands only inside the paths your first message says you hold or your scratch folder, which $TMPDIR names; the system temp folder is refused, and a source file changes with edit or write. " +
 		"Inline code asks the person: one python or node call with -c or -e in single quotes, a heredoc (python - <<'EOF'), or a script in your scratch folder ($TMPDIR/x.py), with nothing piped or chained. " +
 		"The orchestrator may refuse it, only the person may allow it, and it runs with cwd in your scratch folder and no secret names in its environment. " +
