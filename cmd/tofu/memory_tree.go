@@ -109,7 +109,7 @@ func memoryTree(o verbOutput, store *memtree.Store, budget int) int {
 	}
 	memoryModel := openMemoryModel(dir, session)
 	defer memoryModel.release()
-	compact := memoryModel.compactor(func(ctx context.Context, _, _ string, model turn.Model, request llm.Request) (llm.Decision, error) {
+	one, all := memoryModel.compactors(func(ctx context.Context, _, _ string, model turn.Model, request llm.Request) (llm.Decision, error) {
 		asked.Add(1)
 		decision, err := model.Ask(ctx, request)
 		if decision.CacheReadTokens > 0 {
@@ -124,7 +124,7 @@ func memoryTree(o verbOutput, store *memtree.Store, budget int) int {
 	var built memtree.Built
 	err = store.Advance(budget, budget/2)
 	if err == nil {
-		built, err = store.Build(context.Background(), compact)
+		built, err = memtree.BuildInReplies(context.Background(), func(building func(*memtree.Store) error) error { return building(store) }, one, all)
 	}
 	if err == nil {
 		err = store.Advance(budget, budget/2)
@@ -250,16 +250,17 @@ func (s *sessionMemoryModel) close() {
 	}
 }
 
-func (m memoryModel) compactor(ask turn.RecordedAsk) memtree.Compact {
+func (m memoryModel) compactors(ask turn.RecordedAsk) (memtree.Compact, memtree.CompactAll) {
 	if m.err != nil {
-		return func(context.Context, string, string, string) (string, error) { return "", m.err }
+		return func(context.Context, string, string, string) (string, error) { return "", m.err },
+			func(context.Context, string, []memtree.Step) ([]string, error) { return nil, m.err }
 	}
 	var mu sync.Mutex
 	chatsBeingWritten := map[string]chan struct{}{}
 	system := fmt.Sprintf("%s\n\nYour line is about %d bytes, the length of this ruler, never over %d:\n%s\nA line of that length about another log, for its size and form only:\n%s\nYour line has at most %d words: rewrite <input> shorter, never join or copy it.",
 		compactionSystem, len(compactionExample), konst.MemtreeLineBytes, strings.Repeat("-", len(compactionExample)), compactionExample, len(strings.Fields(compactionExample)))
 	chatStep := konst.MemtreeCompactionsAtOnce * konst.MemtreeLineBytes
-	return func(ctx context.Context, before, left, right string) (string, error) {
+	written := func(ctx context.Context, before, why, task string) (string, error) {
 		messages := []llm.Message{{Role: llm.RoleSystem, Content: system}, {Role: llm.RoleUser, Content: "<chat>\n"}}
 		cachedChat, offset, sharedEnd := 0, 0, len(before)/chatStep*chatStep
 		for line := range strings.Lines(before) {
@@ -290,13 +291,8 @@ func (m memoryModel) compactor(ask turn.RecordedAsk) memtree.Compact {
 				return "", ctx.Err()
 			}
 		}
-		task, input := "compress this item", left
-		if right != "" {
-			task, input = "merge these two adjacent lines", left+"\n"+right
-		}
-		messages = append(messages, llm.Message{Role: llm.RoleUser, Origin: llm.Origin{Source: anthropic.SourceAfterTheCachedPrefix},
-			Content: fmt.Sprintf("\n</chat>\n\nCompaction: %s into one line.\n<input>\n%s\n</input>\n<input> is %d words.", task, input, len(strings.Fields(input)))})
-		decision, err := ask(anthropic.WithCacheTTL(ctx, anthropic.CacheTTLFiveMinutes), "memory model: "+task, m.wire, account.Model, llm.Request{Messages: messages})
+		messages = append(messages, llm.Message{Role: llm.RoleUser, Origin: llm.Origin{Source: anthropic.SourceAfterTheCachedPrefix}, Content: "\n</chat>\n\n" + task})
+		decision, err := ask(anthropic.WithCacheTTL(ctx, anthropic.CacheTTLFiveMinutes), why, m.wire, account.Model, llm.Request{Messages: messages})
 		if !anotherCallWritesThisChat {
 			mu.Lock()
 			delete(chatsBeingWritten, before[:cachedChat])
@@ -306,16 +302,62 @@ func (m memoryModel) compactor(ask turn.RecordedAsk) memtree.Compact {
 		if err != nil {
 			return "", err
 		}
-		line := strings.TrimSpace(decision.Content)
-		if decision.Outcome != llm.OutcomeMessage || line == "" {
+		if decision.Outcome != llm.OutcomeMessage || strings.TrimSpace(decision.Content) == "" {
 			return "", fmt.Errorf("the memory model wrote no line: outcome %s, refusal %q", decision.Outcome, decision.Refusal)
 		}
-		if len(line) <= konst.MemtreeLineBytes {
-			return line, nil
-		}
-		if cut := strings.LastIndexByte(line[:konst.MemtreeLineBytes+1], ' '); cut > 0 {
-			line = strings.TrimRight(line[:cut], ",;: ")
-		}
-		return line, nil
+		return decision.Content, nil
 	}
+	one := func(ctx context.Context, before, left, right string) (string, error) {
+		task, input := "compress this item", left
+		if right != "" {
+			task, input = "merge these two adjacent lines", left+"\n"+right
+		}
+		line, err := written(ctx, before, "memory model: "+task, fmt.Sprintf("Compaction: %s into one line.\n<input>\n%s\n</input>\n<input> is %d words.", task, input, len(strings.Fields(input))))
+		return cutAtAWord(line), err
+	}
+	all := func(ctx context.Context, before string, steps []memtree.Step) ([]string, error) {
+		var tasks strings.Builder
+		fmt.Fprintf(&tasks, "Compaction: %d tasks, one line each, all in this one reply. Write each line as its task number, a bar and the line, as in 1|user: ..., one per row and nothing else. Each line keeps the rules above on its own: the ruler, the word limit, the order of value, and every name it is asked to keep.\n", len(steps))
+		for number, step := range steps {
+			task, input := "compress this item", step.Left
+			if step.Level > 0 {
+				halves := []string{step.Left, step.Right}
+				for i, from := range step.From {
+					if from > 0 {
+						halves[i] = fmt.Sprintf("(your line for task %d)", from)
+					}
+				}
+				task, input = "merge these two adjacent lines", strings.Join(halves, "\n")
+			}
+			fmt.Fprintf(&tasks, "\nTask %d: %s into one line.\n<input>\n%s\n</input>", number+1, task, input)
+			if step.From == [2]int{} {
+				fmt.Fprintf(&tasks, "\n<input> is %d words.", len(strings.Fields(input)))
+			}
+			if names := memtree.Names(input); len(names) > 0 {
+				fmt.Fprintf(&tasks, " Keep these names as written: %s.", strings.Join(names, ", "))
+			}
+		}
+		reply, err := written(ctx, before, fmt.Sprintf("memory model: %d compactions in one reply", len(steps)), tasks.String())
+		lines := make([]string, len(steps))
+		for row := range strings.Lines(reply) {
+			number, line, found := strings.Cut(strings.TrimSpace(row), "|")
+			task, numbered := strconv.Atoi(strings.TrimSpace(number))
+			if found && numbered == nil && task >= 1 && task <= len(steps) && lines[task-1] == "" {
+				lines[task-1] = cutAtAWord(line)
+			}
+		}
+		return lines, err
+	}
+	return one, all
+}
+
+func cutAtAWord(line string) string {
+	line = strings.TrimSpace(line)
+	if len(line) <= konst.MemtreeLineBytes {
+		return line
+	}
+	if cut := strings.LastIndexByte(line[:konst.MemtreeLineBytes+1], ' '); cut > 0 {
+		line = strings.TrimRight(line[:cut], ",;: ")
+	}
+	return line
 }

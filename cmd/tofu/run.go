@@ -942,12 +942,14 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		config.Environment += leadAttached(board, sessionID, run)
 	}
 	if opts.agent == "" && episodesOn(dir) {
-		zoom := &tools.Zoom{Project: dir, Compactor: func(ask turn.RecordedAsk) (memtree.Compact, func()) {
+		zoom := &tools.Zoom{Project: dir, Compactor: func(ask turn.RecordedAsk) (memtree.Compact, memtree.CompactAll, func()) {
 			if run.memory == nil {
 				opened := openMemoryModel(dir, run.orchestrator)
-				return opened.compactor(ask), opened.release
+				one, all := opened.compactors(ask)
+				return one, all, opened.release
 			}
-			return run.memory.model(dir, run.orchestrator).compactor(ask), func() {}
+			one, all := run.memory.model(dir, run.orchestrator).compactors(ask)
+			return one, all, func() {}
 		}}
 		asking = append(asking, zoom, tools.Recall{Zoom: zoom, Sessions: run.sessions, Session: sessionID})
 	}

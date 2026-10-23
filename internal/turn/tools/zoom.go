@@ -3,9 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -14,8 +12,6 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/memory"
 	"tofu/internal/memtree"
-	"tofu/internal/safe"
-	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
@@ -27,7 +23,7 @@ func memoryStores() []string {
 
 type Zoom struct {
 	Project   string
-	Compactor func(turn.RecordedAsk) (memtree.Compact, func())
+	Compactor func(turn.RecordedAsk) (memtree.Compact, memtree.CompactAll, func())
 	held      sync.Mutex
 }
 
@@ -102,71 +98,27 @@ func (z *Zoom) Keep(kind, text string) error {
 	return memory.KeepEpisode(z.Project, memtree.Item{Kind: kind, Text: text})
 }
 
-type summaryAsked struct {
-	before, left, right string
-}
-
-type summaryAnswer struct {
-	line string
-	err  error
-}
-
-var errAskedWithTheLogClosed = errors.New("this summary is asked with the episode log closed and kept on the next pass")
-
 func (z *Zoom) Compact(ctx context.Context, ask turn.RecordedAsk) error {
 	logs, err := memory.Trees(z.Project)
 	if err != nil {
 		return err
 	}
-	compact, release := z.Compactor(ask)
+	one, all, release := z.Compactor(ask)
 	defer release()
-	var answering sync.Mutex
-	answers, asked := map[summaryAsked]summaryAnswer{}, map[summaryAsked]bool{}
-	answered := func(_ context.Context, before, left, right string) (string, error) {
-		answering.Lock()
-		defer answering.Unlock()
-		question := summaryAsked{before, left, right}
-		if answer, known := answers[question]; known {
-			return answer.line, answer.err
-		}
-		asked[question] = true
-		return "", errAskedWithTheLogClosed
-	}
-	for {
-		if _, err := z.open(logs[memory.EpisodesStore], func(store *memtree.Store) ([]string, error) {
-			_, err := store.Build(ctx, answered)
-			return nil, err
-		}); err != nil {
-			return err
-		}
-		if len(asked) == 0 {
-			break
-		}
-		var asking sync.WaitGroup
-		slots, report := make(chan struct{}, konst.MemtreeCompactionsAtOnce), sys.Crashes(z.Project)
-		for question := range asked {
-			slots <- struct{}{}
-			asking.Go(func() {
-				defer func() { <-slots }()
-				var line string
-				err := safe.Call(report, "memory compaction", func() (err error) {
-					line, err = compact(ctx, question.before, question.left, question.right)
-					return err
-				})
-				answering.Lock()
-				answers[question] = summaryAnswer{line, err}
-				answering.Unlock()
-			})
-		}
-		asking.Wait()
-		clear(asked)
+	built, err := memtree.BuildInReplies(ctx, func(building func(*memtree.Store) error) error {
+		_, err := z.open(logs[memory.EpisodesStore], func(store *memtree.Store) ([]string, error) { return nil, building(store) })
+		return err
+	}, one, all)
+	if err != nil {
+		return err
 	}
 	z.held.Lock()
 	defer z.held.Unlock()
-	_, built, err := memory.EpisodeView(z.Project, konst.MemtreeViewBytes, nil, answered)
-	failed := slices.DeleteFunc(built.Failed, func(err error) bool { return errors.Is(err, errAskedWithTheLogClosed) })
-	if err == nil && len(failed) > 0 {
-		err = fmt.Errorf("%d of %d episode summaries failed and are tried after the next turn, the first: %w", len(failed), len(answers), failed[0])
+	if _, _, err := memory.EpisodeView(z.Project, konst.MemtreeViewBytes, nil, nil); err != nil {
+		return err
 	}
-	return err
+	if len(built.Failed) > 0 {
+		return fmt.Errorf("%d of %d episode summaries failed and are tried after the next turn, the first: %w", len(built.Failed), built.Calls, built.Failed[0])
+	}
+	return nil
 }
