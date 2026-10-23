@@ -651,7 +651,14 @@ func (t *SpawnTool) settle(ctx context.Context, held *heldSubAgent, report strin
 	return nil
 }
 
-func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *checkIn, limits SubAgentLimits) Config {
+func (t *SpawnTool) OfferedTo(definition subagent.Definition, ticket string) []llm.Tool {
+	agent := subagent.SubAgent{ID: definition.Name, Ticket: ticket}
+	held := &heldSubAgent{agent: agent, definition: definition, boundary: subagent.NewBoundary(agent.ID, "", nil), inbox: NewInbox()}
+	offered, _ := t.offeredTools(held, spawnSite{}, SubAgentLimits{})
+	return NewRegistry(offered...).Definitions()
+}
+
+func (t *SpawnTool) offeredTools(held *heldSubAgent, site spawnSite, limits SubAgentLimits) ([]Tool, agentPlan) {
 	offered := func(name string) bool {
 		if name == ShellToolName {
 			name = bashToolName
@@ -690,11 +697,15 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 			orchestratorID: held.agent.ID, depth: t.depth + 1, writesNothing: len(held.boundary.Owns()) == 0, base: t.base, roster: t.roster, tree: t.tree, built: t.built, writes: t.writes})
 	}
 	ask := askTool{orchestrator: t, asking: held.agent, conversation: site.conversation}
+	return append(owned, watchedTool{tool: ask, held: held, definition: ask.Definition()}), plan
+}
+
+func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *checkIn, limits SubAgentLimits) Config {
+	owned, plan := t.offeredTools(held, site, limits)
 	subAgent := t.base
 	if subAgent.Plan != nil {
 		subAgent.Plan = plan.shown
 	}
-	owned = append(owned, watchedTool{tool: ask, held: held, definition: ask.Definition()})
 	subAgent.Tools = claimedTools(NewRegistry(owned...), t.base.Sessions, t.base.Session)
 	subAgent.Caps.MaxSteps, subAgent.Caps.MaxForks = cmp.Or(subAgent.Caps.MaxSteps, konst.SubAgentMaxSteps), konst.SubAgentMaxForks
 	subAgent.Caps.WallClock = cmp.Or(limits.WallClock, konst.SubAgentWallClockSeconds*time.Second)

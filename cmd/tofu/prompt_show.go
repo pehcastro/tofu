@@ -6,15 +6,25 @@ import (
 	"io"
 	"strings"
 
+	"tofu/internal/llm"
+	settingspkg "tofu/internal/settings"
 	"tofu/internal/turn"
 )
 
 func showPrompt(opts runOpts, out, errOut io.Writer) int {
-	named, _, err := assembleRunTools(opts.dir, opts.toolSet, readsWhen(opts.readBeforeEdit, turn.NewReadLedger()), nil, &turn.BashTool{})
+	shell, err := turn.ResolveRunShell(settingText(opts.dir, settingspkg.Shell, writeNotice(errOut)))
+	if err != nil {
+		return runFail(errOut, err)
+	}
+	named, _, err := buildRunToolsForRun(opts.dir, opts.toolSet, readsWhen(opts.readBeforeEdit, turn.NewReadLedger()), nil, shell)
 	if err != nil {
 		return runFail(errOut, err)
 	}
 	prompt, err := composeRun(opts, named, runtime{notify: writeNotice(errOut), open: openAppWire})
+	if err != nil {
+		return runFail(errOut, err)
+	}
+	offered, err := offeredTools(opts, prompt.subAgents, named)
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -48,7 +58,23 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 		_, _ = fmt.Fprintf(out, "\nmemory, a user message before the first, %d bytes\n%s\n", len(view.Content), view.Content)
 	}
 	_, _ = fmt.Fprintf(out, "\nfirst user message, %d bytes\n%s\n", len(firstUser), firstUser)
+	_, _ = fmt.Fprintf(out, "\noffered tools, %d, as the request sends them\n", len(offered))
+	for _, tool := range offered {
+		_, _ = fmt.Fprintf(out, "\ntool %s\n%s\n", tool.Name, tool.Description)
+	}
 	_, _ = fmt.Fprintf(out, "\ncomposed system prompt %d bytes against %d uncomposed, %+d bytes\n",
 		len(sent.System), uncomposed, len(sent.System)-uncomposed)
 	return exitOK
+}
+
+func offeredTools(opts runOpts, subAgents turn.SubAgents, named []turn.Tool) ([]llm.Tool, error) {
+	config, spawner, err := runConfig(opts, named, runtime{open: openAppWire})
+	if err != nil || opts.agent == "" {
+		return config.Tools.Definitions(), err
+	}
+	agent, err := subAgents.Named(opts.agent)
+	if err != nil {
+		return nil, err
+	}
+	return spawner.OfferedTo(agent, ""), nil
 }
