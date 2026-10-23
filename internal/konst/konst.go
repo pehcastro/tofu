@@ -476,13 +476,13 @@ const (
 )
 
 const (
-	ServeQueue             = 128
-	ServeLineBytes         = 16 << 20
-	ServeShellPollMillis   = 250
-	ServeStopMillis        = 10000
-	ServeQuotaPollMinutes  = 5
-	ServeLedgerPageRows    = 200
-	PrecedentCPUsPerWorker = 2
+	ServeQueue            = 128
+	ServeLineBytes        = 16 << 20
+	ServeShellPollMillis  = 250
+	ServeStopMillis       = 10000
+	ServeQuotaPollMinutes = 5
+	ServeLedgerPageRows   = 200
+	CPUsPerReadWorker     = 2
 )
 
 const (

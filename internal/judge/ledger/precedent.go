@@ -137,7 +137,7 @@ func (r *Reader) Precedents(targets []Row) ([][]Precedent, error) {
 	var shortlisting sync.WaitGroup
 	var taken atomic.Int64
 	report := sys.Crashes(".")
-	for range min(max(runtime.GOMAXPROCS(0)/konst.PrecedentCPUsPerWorker, 1), len(targets)) {
+	for range min(max(runtime.GOMAXPROCS(0)/konst.CPUsPerReadWorker, 1), len(targets)) {
 		shortlisting.Go(func() {
 			for {
 				i := int(taken.Add(1)) - 1

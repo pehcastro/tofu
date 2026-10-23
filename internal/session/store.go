@@ -11,12 +11,14 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/safe"
 	"tofu/internal/sys"
 )
@@ -458,7 +460,12 @@ func (s *Store) holding(handle string) (string, string) {
 	if err != nil {
 		return id, ""
 	}
-	for _, header := range listing.Sessions {
+	quoted, _ := json.Marshal(id)
+	mentioned := s.mentioning(listing.Sessions, quoted)
+	for i, header := range listing.Sessions {
+		if !mentioned[i] {
+			continue
+		}
 		events, err := s.Events(header.ID)
 		if err != nil {
 			continue
@@ -470,6 +477,44 @@ func (s *Store) holding(handle string) (string, string) {
 		}
 	}
 	return id, ""
+}
+
+func (s *Store) mentioning(sessions []Header, quoted []byte) []bool {
+	mentioned, next := make([]bool, len(sessions)), make(chan int)
+	var readers sync.WaitGroup
+	for range max(runtime.GOMAXPROCS(0)/konst.CPUsPerReadWorker, 1) {
+		readers.Go(func() {
+			window := make([]byte, len(quoted)+bufio.MaxScanTokenSize)
+			for i := range next {
+				mentioned[i] = mentions(s.EventsPath(sessions[i].ID), quoted, window)
+			}
+		})
+	}
+	for i := range sessions {
+		next <- i
+	}
+	close(next)
+	readers.Wait()
+	return mentioned
+}
+
+func mentions(path string, quoted, window []byte) bool {
+	file, err := os.Open(path)
+	if err != nil {
+		return true
+	}
+	defer func() { _ = file.Close() }()
+	kept := 0
+	for {
+		n, err := file.Read(window[kept:])
+		if bytes.Contains(window[:kept+n], quoted) {
+			return true
+		}
+		if err != nil {
+			return !errors.Is(err, io.EOF)
+		}
+		kept = copy(window, window[max(0, kept+n-len(quoted)+1):kept+n])
+	}
 }
 
 func (s *Store) Events(id string) ([]Event, error) {
