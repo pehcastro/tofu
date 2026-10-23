@@ -698,7 +698,7 @@ func appSessions(inUse string) ([]tui.SessionRow, error) {
 		return nil, err
 	}
 	now := time.Now()
-	report, err := sessionListing(store, sessionstore.DefaultSettings().Lifetime, now)
+	report, err := sessionListing(store)
 	if err != nil {
 		return nil, err
 	}

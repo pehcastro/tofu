@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -474,12 +475,9 @@ func TestTheSessionsAlreadyOnDiskListWithNoNameRatherThanFailing(t *testing.T) {
 		}
 	}
 
-	report, err := sessionListing(store, session.DefaultSettings().Lifetime, time.Now())
+	report, err := sessionListing(store)
 	if err != nil {
 		t.Fatalf("rendering the recorded sessions: %v", err)
-	}
-	if report.Expired != 0 {
-		t.Fatalf("%d recorded sessions are expired under the default lifetime", report.Expired)
 	}
 	unnamed := 0
 	for _, row := range report.Sessions {
@@ -591,50 +589,166 @@ func TestASessionEndedIsMarkedEndedAnOpenOneIsNotAndTheEndedOneStillResumes(t *t
 	}
 }
 
-func TestASessionPastTheLifetimeIsListedAsExpiredAndIsStillOnDisk(t *testing.T) {
-	store := sessionProject(t)
-	now := time.Now()
-	recorded(t, store, "turn-old", "the old one", now.Add(-40*sessionDay))
-	recorded(t, store, "turn-young", "the young one", now.Add(-2*sessionDay))
-
-	report, err := sessionListing(store, 30, now)
+func idleSince(t *testing.T, dir string, at time.Time) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, entry := range entries {
+		if err := os.Chtimes(filepath.Join(dir, entry.Name()), at, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func seeded(t *testing.T, store *session.Store, id string, started, active time.Time, edit func(*session.Header)) {
+	t.Helper()
+	header := session.Header{ID: id, At: started, Task: "seeded " + id, Root: id}
+	edit(&header)
+	if err := store.Write(header, []session.Event{{Kind: session.EventStep, Body: json.RawMessage(`{"index":1}`)}}); err != nil {
+		t.Fatal(err)
+	}
+	events, err := store.Events(id)
+	if err != nil || len(events) == 0 {
+		t.Fatalf("%s wrote %d events: %v", id, len(events), err)
+	}
+	events[len(events)-1].At = active
+	var lines []byte
+	for _, event := range events {
+		line, err := json.Marshal(event)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines = append(append(lines, line...), '\n')
+	}
+	if err := os.WriteFile(store.EventsPath(id), lines, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	idleSince(t, store.Dir(id), active)
+}
+
+func TestTheListMarksASessionIdlePastTheSettingAndDeletesNothing(t *testing.T) {
+	store := sessionProject(t)
+	now := time.Now()
+	seeded(t, store, "turn-old", now.Add(-50*sessionDay), now.Add(-40*sessionDay), func(*session.Header) {})
+	seeded(t, store, "turn-young", now.Add(-50*sessionDay), now.Add(-2*sessionDay), func(*session.Header) {})
+	if _, _, code := sessionRun(t, "settings", "set", sessionStaleSetting, "30"); code != exitOK {
+		t.Fatalf("settings set %s 30 exited %d", sessionStaleSetting, code)
+	}
+
+	out, _, _ := sessionRun(t, "session", "list", jsonFlag)
+	var report sessionListReport
+	envelopeData(t, out, &report)
 	expired := map[string]bool{}
 	for _, row := range report.Sessions {
 		expired[row.ID] = row.Expired
 	}
-	if !expired["turn-old"] || expired["turn-young"] {
-		t.Errorf("expired reads %v, want only turn-old", expired)
+	if !expired["turn-old"] || expired["turn-young"] || report.Expired != 1 || report.Lifetime != 30 {
+		t.Errorf("under 30 idle days the list reads %v, %d expired, lifetime %s; want only turn-old", expired, report.Expired, report.Lifetime)
 	}
-	if report.Expired != 1 {
-		t.Errorf("the list counts %d expired, want 1", report.Expired)
-	}
-	text := strings.Join(sessionListLines(cli.Page{Width: konst.ProseWidthChars}, report, now), "\n")
-	if !strings.Contains(text, "1 past 30d, kept") {
-		t.Errorf("the list says nothing about the expired session:\n%s", text)
+	if text, _, _ := sessionRun(t, "session", "list"); !strings.Contains(text, "1 idle past 30d") {
+		t.Errorf("the list says nothing about the idle session:\n%s", text)
 	}
 	for _, id := range []string{"turn-old", "turn-young"} {
 		if _, err := os.Stat(filepath.Join(store.Dir(id), "session.json")); err != nil {
-			t.Fatalf("%s was deleted: %v", id, err)
+			t.Fatalf("listing deleted %s: %v", id, err)
 		}
 	}
-	t.Logf("%s", text)
 }
 
-func TestTheDefaultLifetimeExpiresNothingOnTheList(t *testing.T) {
+func TestTheSweepDeletesOnlyAStaleSessionNothingKeeps(t *testing.T) {
 	store := sessionProject(t)
 	now := time.Now()
-	recorded(t, store, "turn-ancient", "written years ago", now.Add(-4000*sessionDay))
-
-	report, err := sessionListing(store, session.DefaultSettings().Lifetime, now)
-	if err != nil {
+	stale, fresh := now.Add(-91*sessionDay), now.Add(-sessionDay)
+	same := func(*session.Header) {}
+	seeded(t, store, "turn-idle", now.Add(-100*sessionDay), stale, same)
+	seeded(t, store, "turn-old-but-active", now.Add(-200*sessionDay), fresh, same)
+	seeded(t, store, "turn-grandparent", now.Add(-300*sessionDay), stale, same)
+	seeded(t, store, "turn-parent", now.Add(-250*sessionDay), stale, func(h *session.Header) {
+		h.CarriedFrom, h.Root = &session.Carried{Session: "turn-grandparent"}, "turn-grandparent"
+	})
+	seeded(t, store, "turn-fork", now.Add(-2*sessionDay), fresh, func(h *session.Header) {
+		h.CarriedFrom, h.Root = &session.Carried{Session: "turn-parent"}, "turn-grandparent"
+	})
+	seeded(t, store, "turn-branched", now.Add(-150*sessionDay), stale, same)
+	seeded(t, store, "turn-side", now.Add(-3*sessionDay), fresh, func(h *session.Header) {
+		h.Kind, h.BranchedFrom = session.KindSide, &session.Carried{Session: "turn-branched"}
+	})
+	for id, book := range map[string]string{
+		"turn-cron":        `{"made":1,"jobs":[{"id":"c1","versions":[{"n":1,"by":"person","reason":"seeded","spec":{"schedule":"every 1m","prompt":"check"}}],"fires":0}]}`,
+		"turn-cron-broken": `{`,
+	} {
+		seeded(t, store, id, now.Add(-120*sessionDay), stale, same)
+		if err := os.WriteFile(filepath.Join(store.Dir(id), "cron.json"), []byte(book), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		idleSince(t, store.Dir(id), stale)
+	}
+	seeded(t, store, "turn-skewed", now.Add(-120*sessionDay), stale, same)
+	idleSince(t, store.Dir("turn-skewed"), now.Add(sessionDay))
+	seeded(t, store, "turn-copied", now.Add(-120*sessionDay), fresh, same)
+	idleSince(t, store.Dir("turn-copied"), stale)
+	seeded(t, store, "turn-header-only", now.Add(-120*sessionDay), stale, same)
+	if err := os.Remove(store.EventsPath("turn-header-only")); err != nil {
 		t.Fatal(err)
 	}
-	if report.Expired != 0 || report.Lifetime != session.LifetimeNever {
-		t.Fatalf("the default lifetime is %s and expired %d sessions", report.Lifetime, report.Expired)
+	seeded(t, store, "turn-head", now.Add(-120*sessionDay), stale, same)
+	if err := store.SetHead("turn-head"); err != nil {
+		t.Fatal(err)
 	}
+	if err := os.MkdirAll(store.Dir("turn-half"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(store.EventsPath("turn-half"), []byte(`{"kind":"step"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	idleSince(t, store.Dir("turn-half"), stale)
+	crashed := filepath.Join(store.Dir(""), ".turn-crashed"+sessionGoneSuffix)
+	if err := os.MkdirAll(filepath.Join(crashed, "left"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	present := func() []string {
+		entries, err := os.ReadDir(store.Dir(""))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var ids []string
+		for _, entry := range entries {
+			if entry.IsDir() {
+				ids = append(ids, entry.Name())
+			}
+		}
+		return ids
+	}
+	before := present()
+
+	never, err := sessionSweep(store, session.LifetimeNever, now, false)
+	if err != nil || len(never.Deleted) != 0 || !slices.Equal(present(), before) {
+		t.Fatalf("a lifetime of 0 deleted %v, %v; the folders went from %v to %v", never.Deleted, err, before, present())
+	}
+	dry, err := sessionSweep(store, konst.SessionStaleDays, now, true)
+	want := []string{"turn-header-only", "turn-idle"}
+	if err != nil || !slices.Equal(slices.Sorted(slices.Values(dry.Deleted)), want) || !slices.Equal(present(), before) {
+		t.Fatalf("a dry run named %v, %v, want %v, and the folders went from %v to %v", dry.Deleted, err, want, before, present())
+	}
+	swept, err := sessionSweep(store, konst.SessionStaleDays, now, false)
+	if err != nil || !slices.Equal(slices.Sorted(slices.Values(swept.Deleted)), want) || len(swept.Failed) != 0 {
+		t.Fatalf("the sweep deleted %v and failed %v, %v; want %v", swept.Deleted, swept.Failed, err, want)
+	}
+	left := present()
+	for _, id := range append(want, filepath.Base(crashed)) {
+		if slices.Contains(left, id) {
+			t.Errorf("%s is still on disk after the sweep", id)
+		}
+	}
+	for _, id := range []string{"turn-old-but-active", "turn-grandparent", "turn-parent", "turn-fork", "turn-branched", "turn-side", "turn-cron", "turn-cron-broken", "turn-skewed", "turn-copied", "turn-head", "turn-half"} {
+		if !slices.Contains(left, id) {
+			t.Errorf("the sweep deleted %s", id)
+		}
+	}
+	text := strings.Join(sessionCleanLines(cli.Page{Width: konst.ProseWidthChars}, swept), "\n")
+	t.Logf("%s", text)
 }
 
 func TestSessionResumeJSONNamesWhatItCarries(t *testing.T) {

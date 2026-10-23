@@ -342,6 +342,8 @@ func Default() []Spec {
 			Least: 0, Most: math.MaxInt32, Unit: "days a session's scratch folder is kept untouched"},
 		{Key: "scratchMaxGB", Label: "Scratchpad size", Description: "past this many gigabytes in one project's scratchpad, the oldest session folders are deleted first", Category: "Projects", Kind: Int, Default: konst.ScratchMaxGB,
 			Least: 1, Most: math.MaxInt32, Unit: "gigabytes one project's scratchpad may hold"},
+		{Key: "sessionStaleDays", Label: "Session cleanup", Description: "a session with no activity for this many days, no new event, request or open, is deleted with its folder when the project's host starts or on tofu session clean; a session a kept one continues or branches from, the head, one open now and one with a live cron job are kept; 0 never deletes", Category: "Projects", Kind: Int, Default: konst.SessionStaleDays,
+			Least: 0, Most: math.MaxInt32, Unit: "days a session is kept with no activity"},
 		{Key: Browser, Label: "Browser", Description: "drive lets the model read your Chrome tabs and click and type in them; read lets it only read them; off offers no browser tool", Category: "Browser", Kind: Text, DefaultText: BrowserDrive,
 			Choices: []string{BrowserOff, BrowserRead, BrowserDrive}},
 		{Key: BrowserDriver, Label: "Browser driver", Description: "subagent gives the browser steps to a browser sub-agent on browserModel, which the model spawns with a task and a tab; steps gives the model browser_observe and browser_act itself; goal gives it browser_do, where jev picks each step toward a whole goal", Category: "Browser", Kind: Text, DefaultText: DriverSubagent,

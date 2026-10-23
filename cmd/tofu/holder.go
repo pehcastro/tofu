@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"tofu/internal/host"
+	"tofu/internal/safe"
 	sessionstore "tofu/internal/session"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
@@ -47,6 +48,7 @@ func runHub(dir string, say func(string)) error {
 		return err
 	}
 	home, _ := os.UserHomeDir()
+	safe.Go(crashTold(dir, say), "session sweep", func() { sweepSessions(dir, say) })
 	return host.RunHub(dir, crashTold(dir, say), say, func(id string, projectTurn *sync.Mutex) (*host.Host, func(), []string) {
 		resumed, unrecorded, err := hostedCarry(id)
 		switch {

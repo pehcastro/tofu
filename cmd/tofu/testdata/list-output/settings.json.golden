@@ -683,6 +683,17 @@ exit 0
         "unit": "gigabytes one project's scratchpad may hold"
       },
       {
+        "key": "sessionStaleDays",
+        "category": "Projects",
+        "value": 90,
+        "source": "default",
+        "label": "Session cleanup",
+        "description": "a session with no activity for this many days, no new event, request or open, is deleted with its folder when the project's host starts or on tofu session clean; a session a kept one continues or branches from, the head, one open now and one with a live cron job are kept; 0 never deletes",
+        "kind": "int",
+        "min": 0,
+        "unit": "days a session is kept with no activity"
+      },
+      {
         "key": "browser",
         "category": "Browser",
         "value": "drive",

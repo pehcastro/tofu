@@ -7,7 +7,7 @@ exit 0
   "at": "AT",
   "data": {
     "head": "turn-one",
-    "lifetime": "never",
+    "lifetime": "90d",
     "expired": 0,
     "sessions": [
       {

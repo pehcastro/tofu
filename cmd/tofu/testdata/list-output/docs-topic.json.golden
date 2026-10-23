@@ -484,6 +484,14 @@ exit 0
         "description": "past this many gigabytes in one project's scratchpad, the oldest session folders are deleted first"
       },
       {
+        "key": "sessionStaleDays",
+        "category": "Projects",
+        "default": "90",
+        "takes": "at least 0 days a session is kept with no activity",
+        "restart": false,
+        "description": "a session with no activity for this many days, no new event, request or open, is deleted with its folder when the project's host starts or on tofu session clean; a session a kept one continues or branches from, the head, one open now and one with a live cron job are kept; 0 never deletes"
+      },
+      {
         "key": "browser",
         "category": "Browser",
         "default": "drive",

@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Settings · 2 set                                                     67 declared
+Settings · 2 set                                                     68 declared
 
 Appearance
   ● theme                        Nord                project
@@ -77,6 +77,7 @@ Projects
     boardFlow                    jira                default
     scratchCleanupDays           7                   default
     scratchMaxGB                 50                  default
+    sessionStaleDays             90                  default
 
 Browser
     browser                      drive               default

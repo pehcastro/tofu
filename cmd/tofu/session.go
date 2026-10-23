@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -15,6 +17,7 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/interface/tui/trace"
+	"tofu/internal/cron"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/llm"
@@ -26,7 +29,7 @@ import (
 )
 
 const (
-	sessionSubcommands = "tofu session <name|id>, or tofu session list [--all], or tofu session info|trace|drain|reads|resume|rename|request|find|branch <name|id> [--json]"
+	sessionSubcommands = "tofu session <name|id>, or tofu session list [--all], or tofu session clean [--dry-run], or tofu session info|trace|drain|reads|resume|rename|request|find|branch <name|id> [--json]"
 	sessionFresh       = "no session recorded here"
 	sessionDay         = 24 * time.Hour
 	sessionWeek        = 7 * sessionDay
@@ -117,6 +120,9 @@ func sessionVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if args[0] == "drain" {
 		return sessionDrainVerb(o, args[1:])
 	}
+	if args[0] == "clean" {
+		return sessionCleanVerb(o, args[1:], now)
+	}
 	if args[0] == "find" {
 		o.verb, o.usageLine = "session find", sessionFindUsage
 		handle, query, err := sessionFindArgs(args[1:], now)
@@ -149,12 +155,19 @@ func sessionVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return o.fail(err)
 	}
-	lifetime := session.DefaultSettings().Lifetime
+	lifetime := sessionLifetime(".", o.errOut)
 	switch args[0] {
 	case "list":
-		report, err := sessionListing(store, lifetime, now)
+		report, err := sessionListing(store)
 		if err != nil {
 			return o.fail(err)
+		}
+		report.Lifetime = lifetime
+		for i := range report.Sessions {
+			row := &report.Sessions[i]
+			if row.Expired = lifetime.Expired(row.lastAt, now); row.Expired {
+				report.Expired++
+			}
 		}
 		report.Sessions = slices.DeleteFunc(report.Sessions, func(row sessionRow) bool { return !all && row.sideOf != "" })
 		return o.done(true, report, func(page cli.Page) []string { return sessionListLines(page, report, now) })
@@ -432,7 +445,7 @@ func sessionSummary(store *session.Store, handle string) (sessionRow, []session.
 		CostUSD:          header.CostUSD,
 		EndedAt:          header.EndedAt,
 		EndReason:        header.EndReason,
-	}, lastAt: header.LastAt(), tasks: tasks}
+	}, lastAt: sessionActivity(store, header, events), tasks: tasks}
 	if header.Name != nil {
 		row.Name = *header.Name
 	}
@@ -457,16 +470,16 @@ func sessionSummary(store *session.Store, handle string) (sessionRow, []session.
 	return row, events, nil
 }
 
-func sessionListing(store *session.Store, lifetime session.Lifetime, now time.Time) (sessionListReport, error) {
-	return sessionListingOf(store, lifetime, now, sessionDetail)
+func sessionListing(store *session.Store) (sessionListReport, error) {
+	return sessionListingOf(store, sessionDetail)
 }
 
-func sessionListingOf(store *session.Store, lifetime session.Lifetime, now time.Time, rowOf func(*session.Store, string) (sessionRow, error)) (sessionListReport, error) {
+func sessionListingOf(store *session.Store, rowOf func(*session.Store, string) (sessionRow, error)) (sessionListReport, error) {
 	listing, err := store.Listing()
 	if err != nil {
 		return sessionListReport{}, err
 	}
-	report := sessionListReport{Lifetime: lifetime, Sessions: []sessionRow{}}
+	report := sessionListReport{Sessions: []sessionRow{}}
 	if head, err := store.Head(); err == nil {
 		report.Head, report.HeadDerived = head.ID, head.Derived
 	}
@@ -480,13 +493,202 @@ func sessionListingOf(store *session.Store, lifetime session.Lifetime, now time.
 			continue
 		}
 		row.Head, row.Generations = slices.ContainsFunc(family.Generations, func(header session.Header) bool { return header.ID == report.Head }), len(family.Generations)
-		row.Expired = lifetime.Expired(row.lastAt, now)
-		if row.Expired {
-			report.Expired++
-		}
 		report.Sessions = append(report.Sessions, row)
 	}
 	return report, nil
+}
+
+const (
+	sessionStaleSetting = "sessionStaleDays"
+	sessionGoneSuffix   = ".gone"
+	sessionActive       = "active"
+)
+
+type sessionSweepReport struct {
+	Lifetime session.Lifetime `json:"lifetime"`
+	DryRun   bool             `json:"dry_run,omitempty"`
+	Deleted  []string         `json:"deleted"`
+	Kept     []sessionSkip    `json:"kept,omitempty"`
+	Failed   []sessionSkip    `json:"failed,omitempty"`
+}
+
+func sessionLifetime(dir string, errOut io.Writer) session.Lifetime {
+	return session.Lifetime(settingInt(dir, sessionStaleSetting, func(line string) { _, _ = fmt.Fprintln(errOut, "tofu: "+line) }))
+}
+
+func sweepSessions(dir string, say func(string)) {
+	store, err := session.OpenIn(dir)
+	report := sessionSweepReport{}
+	if err == nil {
+		report, err = sessionSweep(store, session.Lifetime(settingInt(dir, sessionStaleSetting, say)), time.Now(), false)
+	}
+	if err != nil {
+		say("the stale session sweep stopped: " + err.Error())
+	}
+	if len(report.Deleted) > 0 {
+		say("deleted " + plural(len(report.Deleted), "session") + " idle past " + report.Lifetime.String() + ": " + strings.Join(report.Deleted, ", "))
+	}
+	for _, failed := range report.Failed {
+		say("the stale session " + failed.Session + " was not deleted: " + failed.Reason)
+	}
+}
+
+func sessionCleanVerb(o verbOutput, args []string, now time.Time) int {
+	o.verb, o.usageLine = "session clean", "tofu session clean [--dry-run] [--json]"
+	dryRun := slices.Contains(args, "--dry-run")
+	if rest := slices.DeleteFunc(withoutJSON(args), func(arg string) bool { return arg == "--dry-run" }); len(rest) > 0 {
+		return o.usage(fmt.Errorf("unknown argument %q", rest[0]))
+	}
+	store, err := session.Open()
+	if err != nil {
+		return o.fail(err)
+	}
+	report, err := sessionSweep(store, sessionLifetime(".", o.errOut), now, dryRun)
+	if err != nil {
+		return o.fail(err)
+	}
+	return o.done(len(report.Failed) == 0, report, func(page cli.Page) []string { return sessionCleanLines(page, report) })
+}
+
+func sessionSweep(store *session.Store, lifetime session.Lifetime, now time.Time, dryRun bool) (sessionSweepReport, error) {
+	report := sessionSweepReport{Lifetime: lifetime, DryRun: dryRun, Deleted: []string{}}
+	if lifetime == session.LifetimeNever {
+		return report, nil
+	}
+	listing, err := store.Listing()
+	if err != nil {
+		return report, err
+	}
+	head, _ := store.Head()
+	byID, keptFor, kept := map[string]session.Header{}, map[string]string{}, []string{}
+	for _, header := range listing.Sessions {
+		byID[header.ID] = header
+		if why := sessionKeeps(store, header, head.ID, lifetime, now); why != "" {
+			keptFor[header.ID], kept = why, append(kept, header.ID)
+		}
+	}
+	for ; len(kept) > 0; kept = kept[1:] {
+		header := byID[kept[0]]
+		links := []string{header.Parent, header.Root}
+		if header.BranchedFrom != nil {
+			links = append(links, header.BranchedFrom.Session)
+		}
+		for _, from := range links {
+			if _, known := keptFor[from]; from != "" && !known {
+				keptFor[from], kept = "a kept session continues it or branches from it", append(kept, from)
+			}
+		}
+	}
+	for _, header := range listing.Sessions {
+		why, isKept := keptFor[header.ID]
+		switch {
+		case why == sessionActive:
+		case isKept:
+			report.Kept = append(report.Kept, sessionSkip{Session: header.ID, Reason: why})
+		case dryRun:
+			report.Deleted = append(report.Deleted, header.ID)
+		default:
+			if err := sessionRemove(store, header.ID); err != nil {
+				report.Failed = append(report.Failed, sessionSkip{Session: header.ID, Reason: err.Error()})
+				continue
+			}
+			report.Deleted = append(report.Deleted, header.ID)
+		}
+	}
+	if dryRun {
+		return report, nil
+	}
+	entries, err := os.ReadDir(store.Dir(""))
+	for _, entry := range entries {
+		if name := entry.Name(); entry.IsDir() && strings.HasPrefix(name, ".") && strings.HasSuffix(name, sessionGoneSuffix) {
+			if err := os.RemoveAll(filepath.Join(store.Dir(""), name)); err != nil {
+				report.Failed = append(report.Failed, sessionSkip{Session: name, Reason: err.Error()})
+			}
+		}
+	}
+	return report, err
+}
+
+func sessionKeeps(store *session.Store, header session.Header, head string, lifetime session.Lifetime, now time.Time) string {
+	if !lifetime.Expired(sessionActivity(store, header, nil), now) {
+		return sessionActive
+	}
+	events, err := store.Events(header.ID)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return "its events do not read: " + err.Error()
+	}
+	if !lifetime.Expired(sessionActivity(store, header, events), now) {
+		return sessionActive
+	}
+	if header.ID == head {
+		return "it is the head"
+	}
+	var book cron.Book
+	if err := book.Load(filepath.Join(store.Dir(header.ID), "cron.json")); err != nil {
+		return err.Error()
+	}
+	if book.Live() > 0 {
+		return "a cron job in it still schedules"
+	}
+	if err := store.Busy(header.ID); err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
+func sessionActivity(store *session.Store, header session.Header, events []session.Event) time.Time {
+	entries, err := os.ReadDir(store.Dir(header.ID))
+	if err != nil {
+		return time.Time{}
+	}
+	newest := header.LastAt()
+	later := func(at time.Time) {
+		if at.After(newest) {
+			newest = at
+		}
+	}
+	for _, entry := range entries {
+		if info, err := entry.Info(); err == nil {
+			later(info.ModTime())
+		}
+	}
+	for _, event := range events {
+		later(event.At)
+	}
+	return newest
+}
+
+func sessionRemove(store *session.Store, id string) error {
+	if err := store.Busy(id); err != nil {
+		return err
+	}
+	gone := filepath.Join(store.Dir(""), "."+id+sessionGoneSuffix)
+	if err := os.Rename(store.Dir(id), gone); err != nil {
+		return err
+	}
+	return errors.Join(os.RemoveAll(gone), os.RemoveAll(store.AttachmentDir(id)))
+}
+
+func sessionCleanLines(page cli.Page, report sessionSweepReport) []string {
+	if report.Lifetime == session.LifetimeNever {
+		return page.Title("Session clean", []string{sessionStaleSetting + " is 0"}, cli.Verdict{Mark: cli.Idle, Text: "deletes nothing"})
+	}
+	done := "deleted"
+	if report.DryRun {
+		done = "would delete"
+	}
+	var rows []cli.Row
+	for _, id := range report.Deleted {
+		rows = append(rows, cli.Row{Mark: cli.Changed, Cells: []string{id, done}})
+	}
+	for _, kept := range report.Kept {
+		rows = append(rows, cli.Row{Mark: cli.Idle, Cells: []string{kept.Session, "kept"}, Detail: kept.Reason})
+	}
+	for _, failed := range report.Failed {
+		rows = append(rows, cli.Row{Mark: cli.Fail, Cells: []string{failed.Session, "failed"}, Detail: failed.Reason})
+	}
+	lines := append(page.Title("Session clean", []string{"idle past " + report.Lifetime.String(), done + " " + plural(len(report.Deleted), "session")}, cli.Verdict{}), "")
+	return append(lines, cli.Indent(page.Rows(rows)...)...)
 }
 
 func sessionListLines(page cli.Page, report sessionListReport, now time.Time) []string {
@@ -495,7 +697,7 @@ func sessionListLines(page cli.Page, report sessionListReport, now time.Time) []
 	}
 	facts := []string{plural(len(report.Sessions), "session")}
 	if report.Expired > 0 {
-		facts = append(facts, strconv.Itoa(report.Expired)+" past "+report.Lifetime.String()+", kept")
+		facts = append(facts, strconv.Itoa(report.Expired)+" idle past "+report.Lifetime.String())
 	}
 	var verdict cli.Verdict
 	rows := make([]cli.Row, len(report.Sessions))

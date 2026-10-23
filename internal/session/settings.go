@@ -49,18 +49,17 @@ func (l *Lifetime) UnmarshalJSON(data []byte) error {
 }
 
 func (l Lifetime) Expired(last, now time.Time) bool {
-	if l == LifetimeNever {
+	if l == LifetimeNever || last.IsZero() {
 		return false
 	}
 	return now.Sub(last) > time.Duration(l)*lifetimeDay
 }
 
 type Settings struct {
-	RecordReads     bool     `json:"record_reads"`
-	RecordReasoning bool     `json:"record_reasoning"`
-	Lifetime        Lifetime `json:"lifetime"`
+	RecordReads     bool `json:"record_reads"`
+	RecordReasoning bool `json:"record_reasoning"`
 }
 
 func DefaultSettings() Settings {
-	return Settings{RecordReads: true, RecordReasoning: true, Lifetime: LifetimeNever}
+	return Settings{RecordReads: true, RecordReasoning: true}
 }

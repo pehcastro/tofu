@@ -376,6 +376,12 @@ Projects
       at least 1 gigabytes one project's scratchpad may hold
       past this many gigabytes in one project's scratchpad, the oldest session
       folders are deleted first
+    sessionStaleDays             90
+      at least 0 days a session is kept with no activity
+      a session with no activity for this many days, no new event, request or
+      open, is deleted with its folder when the project's host starts or on tofu
+      session clean; a session a kept one continues or branches from, the head,
+      one open now and one with a live cron job are kept; 0 never deletes
 
 Browser
     browser                      drive
