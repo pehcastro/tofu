@@ -113,7 +113,12 @@ func TestFollowHolderProcess(t *testing.T) {
 
 func startHolder(t *testing.T) (*holder, string) {
 	t.Helper()
-	home, project := t.TempDir(), t.TempDir()
+	home, err := os.MkdirTemp(os.TempDir(), "h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
+	project := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	cmd := exec.Command(os.Args[0], "-test.run=^TestFollowHolderProcess$")

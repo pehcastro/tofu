@@ -15,14 +15,16 @@ import (
 )
 
 const (
-	lockName                       = "lock"
-	turnLockName                   = "turn.lock"
-	channelName                    = "follow.sock"
-	channelDirName                 = "sock"
-	channelPathLimit               = 100
-	channelHashBytes               = 8
-	lockStaleGrace   time.Duration = 3 * time.Second
-	lockRetry        time.Duration = 50 * time.Millisecond
+	lockName                            = "lock"
+	turnLockName                        = "turn.lock"
+	channelName                         = "follow.sock"
+	channelDirName                      = "sock"
+	channelShortDir                     = "s"
+	channelShortHashBytes               = 4
+	channelPathLimit                    = 100
+	channelHashBytes                    = 8
+	lockStaleGrace        time.Duration = 3 * time.Second
+	lockRetry             time.Duration = 50 * time.Millisecond
 )
 
 type BusyError struct {
@@ -88,17 +90,16 @@ func (s *Store) HoldTurn() (func() error, error) {
 }
 
 func (s *Store) Channel(id string) string {
-	if beside := filepath.Join(s.Dir(id), channelName); len(beside) < channelPathLimit {
+	beside := filepath.Join(s.Dir(id), channelName)
+	home, err := sys.HomeConfigDir()
+	if len(beside) < channelPathLimit || err != nil {
 		return beside
 	}
 	sum := sha256.Sum256([]byte(id))
-	named := "tofu-" + hex.EncodeToString(sum[:channelHashBytes]) + ".sock"
-	if home, err := sys.HomeConfigDir(); err == nil {
-		if under := filepath.Join(home, channelDirName, named); len(under) < channelPathLimit {
-			return under
-		}
+	if under := filepath.Join(home, channelDirName, "tofu-"+hex.EncodeToString(sum[:channelHashBytes])+".sock"); len(under) < channelPathLimit {
+		return under
 	}
-	return filepath.Join(os.TempDir(), named)
+	return filepath.Join(home, channelShortDir, hex.EncodeToString(sum[:channelShortHashBytes])+".sock")
 }
 
 func takeLock(path string) (*os.File, *lockHolder, error) {

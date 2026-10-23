@@ -27,8 +27,8 @@ var (
 
 func startHolder(dir string, store *session.Store, id string) error {
 	ready := konst.HolderReadyMillis * time.Millisecond
-	for deadline := time.Now().Add(ready); ; time.Sleep(followRetry) {
-		path := store.Channel(id)
+	path := store.Channel(id)
+	for ; ; time.Sleep(followRetry) {
 		if answers(path) {
 			return nil
 		}
@@ -40,10 +40,16 @@ func startHolder(dir string, store *session.Store, id string) error {
 			}
 			break
 		}
-		if time.Now().After(deadline) {
+		if time.Since(busy.Since) > ready {
 			return nil
 		}
 	}
+	_ = os.MkdirAll(filepath.Dir(path), 0o700)
+	listener, err := net.Listen(followNetwork, path)
+	if err != nil {
+		return fmt.Errorf("the channel of session %s does not open here, so no holder could share it: %w", id, err)
+	}
+	_ = listener.Close()
 	exe, err := os.Executable()
 	if err != nil {
 		return err
@@ -65,7 +71,7 @@ func startHolder(dir string, store *session.Store, id string) error {
 		return err
 	}
 	for deadline := time.Now().Add(ready); time.Now().Before(deadline); time.Sleep(followRetry) {
-		if answers(store.Channel(id)) {
+		if answers(path) {
 			return nil
 		}
 	}

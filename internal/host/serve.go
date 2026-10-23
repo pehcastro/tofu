@@ -63,6 +63,7 @@ type server struct {
 	ServeConfig
 	box      *outbox
 	mu       sync.Mutex
+	opening  sync.Mutex
 	items    items
 	client   string
 	ready    bool
@@ -140,6 +141,8 @@ func (s *server) read() error {
 			})
 		}
 	}
+	s.opening.Lock()
+	defer s.opening.Unlock()
 	return lines.Err()
 }
 
@@ -164,7 +167,15 @@ func (s *server) receive(line []byte) {
 	case in.ID == nil:
 	case strings.HasPrefix(in.Method, queryPrefix) || slices.Contains([]string{"login.start", "login.key", "login.logout", "session.info", "session.find", "session.trace", "session.turns", "mention.resolve", "shell.run", "session.list", "session.history", "memory.view", "memory.zoom", "memory.recall", "reload", "models.reload", "hooks.trust", "learn.scan", "setup.check"}, in.Method):
 		safe.Go(s.report, in.Method, func() { s.answer(in.ID, in.Method, in.Params) })
+	case in.Method == "session.open":
+		s.opening.Lock()
+		safe.Go(s.report, in.Method, func() {
+			defer s.opening.Unlock()
+			s.answer(in.ID, in.Method, in.Params)
+		})
 	default:
+		s.opening.Lock()
+		defer s.opening.Unlock()
 		s.answer(in.ID, in.Method, in.Params)
 	}
 }

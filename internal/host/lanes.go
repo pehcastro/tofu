@@ -155,13 +155,12 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.mu.Lock()
 	chat, err := l.host.Resume(carry)
 	if err != nil {
-		s.mu.Unlock()
 		return nil, busy(err)
 	}
 	defer l.asks(p.Asking)
+	s.mu.Lock()
 	defer s.mu.Unlock()
 	if store, err := session.OpenIn(s.Host.dir); err == nil {
 		if side, found, _ := store.Side(carry.Session); found && side.Model != "" {
