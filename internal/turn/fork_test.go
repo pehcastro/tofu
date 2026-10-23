@@ -352,19 +352,25 @@ func TestAPictureAToolReadsReachesTheModelCountsAndIsTheFirstThingDropped(t *tes
 	}
 
 	var many []llm.Message
-	for i := range konst.ImageResultsKept + 2 {
+	rewrites := 0
+	for i := range 2 * konst.ImageResultsKept {
+		sent := slices.Clone(many)
 		many = append(many, pictureStep("p"+strconv.Itoa(i))...)
-	}
-	keepNewestPictures(many)
-	pictures := 0
-	for i, message := range many {
-		pictures += len(message.Images)
-		if message.Role == llm.RoleTool && i < 4 && message.Images != nil {
-			t.Errorf("picture %d of %d is kept", i/2+1, konst.ImageResultsKept+2)
+		keepNewestPictures(many)
+		if !slices.EqualFunc(sent, many[:len(sent)], func(a, b llm.Message) bool { return a.Content == b.Content && len(a.Images) == len(b.Images) }) {
+			rewrites++
+		}
+		pictures := 0
+		for _, message := range many {
+			pictures += len(message.Images)
+		}
+		if pictures > konst.ImageResultsCeiling || pictures < min(i+1, konst.ImageResultsKept) || len(many[len(many)-1].Images) != 1 {
+			t.Errorf("after picture %d, %d pictures go out, want between %d and %d with the newest among them", i+1, pictures, min(i+1, konst.ImageResultsKept), konst.ImageResultsCeiling)
 		}
 	}
-	if pictures != konst.ImageResultsKept {
-		t.Errorf("%d pictures go out, want %d", pictures, konst.ImageResultsKept)
+	batch := konst.ImageResultsCeiling - konst.ImageResultsKept + 1
+	if want := konst.ImageResultsKept / batch; rewrites > want {
+		t.Errorf("%d pictures read one per call rewrote the cached prefix %d times, want at most %d: drop old pictures in batches, not one per call", 2*konst.ImageResultsKept, rewrites, want)
 	}
 
 	fork, begun, err := forkHistory(artifacts, recall.Budget{}.At(1800, "a small budget"), taskOpening("look"), slices.Concat(messages[:2], pictureStep("last")), ForkContinuation, 1, 0)

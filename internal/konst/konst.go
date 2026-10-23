@@ -71,8 +71,9 @@ const (
 	TrimColdAfterIdleMinutes   = 90
 	ArtifactHandleBytesAtMost  = 64
 
-	ImageTokens      = 1600
-	ImageResultsKept = 20
+	ImageTokens         = 1600
+	ImageResultsKept    = 20
+	ImageResultsCeiling = 25
 
 	CarryNotLookups = "write edit message spawn plan remember rule_override ask settings lookup"
 

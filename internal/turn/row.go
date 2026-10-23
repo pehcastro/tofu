@@ -290,6 +290,12 @@ func messageOf(m MessageRow) (llm.Message, error) {
 	}
 	message := llm.Message{Content: m.Content, ToolCallID: m.ToolCallID, ToolResultBytes: m.ToolResultBytes,
 		Thinking: llm.Thinking{Text: m.Thinking, Signature: signature}, Origin: OriginOf(m)}
+	if m.PostedAt != nil {
+		message.Origin.PostedAt = *m.PostedAt
+	}
+	if m.TakenAt != nil {
+		message.Origin.TakenAt = *m.TakenAt
+	}
 	switch m.Role {
 	case session.RoleSystem:
 		message.Role = llm.RoleSystem

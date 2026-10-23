@@ -355,14 +355,17 @@ func dropPicture(message *llm.Message) int {
 }
 
 func keepNewestPictures(messages []llm.Message) {
-	kept := 0
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role != llm.RoleTool || len(messages[i].Images) == 0 {
-			continue
+	var pictured []int
+	for i, message := range messages {
+		if message.Role == llm.RoleTool && len(message.Images) > 0 {
+			pictured = append(pictured, i)
 		}
-		if kept++; kept > konst.ImageResultsKept {
-			dropPicture(&messages[i])
-		}
+	}
+	if len(pictured) <= konst.ImageResultsCeiling {
+		return
+	}
+	for _, i := range pictured[:len(pictured)-konst.ImageResultsKept] {
+		dropPicture(&messages[i])
 	}
 }
 

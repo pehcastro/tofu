@@ -136,7 +136,7 @@ func (t *SpawnTool) answer(ctx context.Context, asking subagent.SubAgent, conver
 	question := fmt.Sprintf("sub-agent %s, whose brief is %q, asks you: %s\nwhy: %s\nwhat it does with no answer: %s\n\nwhat runs now: %s\n\nanswer it in one line.",
 		asking.ID, asking.Brief, args.Question, args.Why, args.Default, strings.Join(running, "; "))
 	spoken := slices.DeleteFunc(slices.Clone(conversation), func(message llm.Message) bool { return message.Role == llm.RoleSystem })
-	messages := append([]llm.Message{{Role: llm.RoleSystem, Content: system}}, resumable(spoken)...)
+	messages := append([]llm.Message{{Role: llm.RoleSystem, Content: system}}, Sendable(WithoutThinking(spoken))...)
 	request := llm.Request{Messages: append(messages, llm.Message{Role: llm.RoleUser, Content: question})}
 	if tools := t.base.Tools.Definitions(); len(tools) > 0 {
 		request.Tools, request.ToolChoice = tools, llm.ToolChoiceNone

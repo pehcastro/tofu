@@ -3,11 +3,13 @@ package turn
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"tofu/internal/llm"
+	"tofu/internal/session"
 	"tofu/internal/subagent"
 )
 
@@ -133,5 +135,41 @@ func TestAMessageToAnUnknownNameIsRefusedListingTheNames(t *testing.T) {
 	startLead(context.Background(), lead, nil).wait(t)
 	if refused := answerTo(t, model, "call-message"); !strings.HasPrefix(refused, "error:") || !strings.Contains(refused, "ts-dev-9") || !strings.Contains(refused, "ts-dev-1") {
 		t.Errorf("a message to ts-dev-9 answered %q, want a refusal naming ts-dev-1", refused)
+	}
+}
+
+func TestASubAgentMessagedAfterItEndedResendsItsLastRequestUnchangedThinkingIncluded(t *testing.T) {
+	thought := toolCallDecision(llm.ToolCall{ID: "call-read", Name: "read", Arguments: json.RawMessage(`{"path":"plan.md"}`)})
+	thought.Thinking = llm.Thinking{Text: "the plan names the route", Signature: "signed-by-the-wire"}
+	model := newCrew(map[string][]llm.Decision{
+		leadKey:    {spawnCall("call-spawn", usersRoute, "src/users.ts"), messageTo("call-ended", "sub-1", "also add /health"), claimDecision("asked sub-1 for more"), claimDecision("all done")},
+		usersRoute: {thought, claimDecision("the users route is added"), claimDecision("the health route is added")},
+	})
+	release := model.hold(usersRoute, 2)
+	defer release()
+	root := t.TempDir()
+	read, err := NewReadTool(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(read), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096, ArtifactDir: filepath.Join(root, "artifacts"),
+		NewID: func() string { return "turn-lead" }, Sessions: session.NewStore(t.TempDir()), Session: session.NewEventID()}
+	spawn := NewSpawnTool("turn-lead", base, &subagent.Roster{})
+	lead := base
+	lead.Task, lead.Tools, lead.Inbox = "hand the work to a sub-agent", NewRegistry(read, spawn), spawn.Inbox
+	led := startLead(context.Background(), lead, nil)
+	waitFor(t, "the lead's first turn to end with sub-1 running", func() bool { return len(led.turns()) == 1 })
+	release()
+	led.wait(t)
+
+	asked := model.requests(usersRoute)
+	if len(asked) != 3 {
+		t.Fatalf("sub-1 was asked %d times, want 3", len(asked))
+	}
+	last, resumed := asked[1].Messages, asked[2].Messages
+	for i, message := range last {
+		if i >= len(resumed) || message.Role != resumed[i].Role || message.Content != resumed[i].Content || message.Thinking != resumed[i].Thinking || !message.Origin.TakenAt.Equal(resumed[i].Origin.TakenAt) {
+			t.Fatalf("message %d of sub-1's last request was not resent unchanged after it ended, so its cached prefix is written again:\nwas  %+v\nsent %+v", i, message, resumed[min(i, len(resumed)-1)])
+		}
 	}
 }

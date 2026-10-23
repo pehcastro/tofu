@@ -364,13 +364,5 @@ func subAgentHistory(store *session.Store, chain []recordedSession, agentID stri
 		}
 	}
 	after, err := ConversationFrom(since)
-	return resumable(append(conversation, after...)), err
-}
-
-func resumable(messages []llm.Message) []llm.Message {
-	stripped := slices.Clone(messages)
-	for i := range stripped {
-		stripped[i].Thinking = llm.Thinking{}
-	}
-	return Sendable(stripped)
+	return Sendable(append(conversation, after...)), err
 }
