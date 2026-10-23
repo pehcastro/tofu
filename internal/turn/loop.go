@@ -48,13 +48,15 @@ const aMessageArrivedMidTurn = "the person wrote to you while you were working. 
 	"research it after that answer, in this turn. take in what they told you in their own terms. " +
 	"never call their message irrelevant or say it changes nothing."
 
-const theAnswerComesFirst = "the person's message is answered before any tool call"
-
 type openQuestion struct {
 	said      string
 	step      int
 	toolsHeld bool
 	endHeld   bool
+}
+
+func (q openQuestion) refusal() string {
+	return "the person's message is answered before any tool call: answer \"" + q.said + "\" first, in the text of your reply"
 }
 
 func (q openQuestion) sendBack() string {
@@ -118,7 +120,7 @@ func (j *steerJudge) answers(ctx context.Context, said, reply string) (bool, err
 		Verdict: ledger.VerdictAsk, Reason: &ledger.Reason{Question: steerAnsweredName, Comparison: ">= " + strconv.FormatFloat(j.threshold, 'f', -1, 64), Threshold: j.threshold, Mode: ledger.ModeEnforced}}
 	decision, err := j.client.Ask(ctx, jev.Request{State: json.RawMessage(body), Questions: asked})
 	if err != nil {
-		failed := "jev could not answer, so the person's question stays open: " + err.Error()
+		failed := "jev could not answer, so a reply with text counts as the answer: " + err.Error()
 		row.Reason.ModeReason = &failed
 		_, unwritten := j.ledger.Append(row)
 		return false, errors.Join(err, unwritten)
@@ -1003,7 +1005,8 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			answered, err := answeredBy(decision.Content)
 			switch {
 			case err != nil:
-				recorded.notice("the person's question from step " + strconv.Itoa(asked.step) + " stays open, since jev could not judge the reply at step " + strconv.Itoa(step) + ": " + err.Error())
+				recorded.notice("the person's question from step " + strconv.Itoa(asked.step) + " counts as answered by the reply at step " + strconv.Itoa(step) + ", because jev could not judge it: " + err.Error())
+				asked = nil
 			case answered:
 				recorded.notice("the person's question from step " + strconv.Itoa(asked.step) + " was answered at step " + strconv.Itoa(step))
 				asked = nil
@@ -1087,7 +1090,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			}
 			if asked != nil && !asked.toolsHeld {
 				asked.toolsHeld = true
-				refuse(&stepRow, decision.ToolCalls, theAnswerComesFirst)
+				refuse(&stepRow, decision.ToolCalls, asked.refusal())
 				holdFor(&stepRow, "the lead called a tool before answering the person")
 				keep(stepRow)
 				continue
