@@ -5492,6 +5492,30 @@
       "called_by": "internal/turn/shellsift.go"
     },
     {
+      "point": "board_epic",
+      "on": true,
+      "switched_on": "yes, through the judged method",
+      "costs": "one jev request per ticket created without an epic, 263 ms in the driven run",
+      "why": "jev picks the epic a new ticket belongs to from the board's open epics, or none, on a fresh board driven through tofu boardy init; a word match cannot tell two epics that share words",
+      "called_by": "internal/boardy/hook_jev.go"
+    },
+    {
+      "point": "steer_answered",
+      "on": true,
+      "switched_on": "yes, through the judged method",
+      "costs": "one jev call per assistant text while a question is open, p50 about 240 ms",
+      "why": "jev keeps 18 of 18 unanswered questions open with 0 of 12 false, against 5 of 18 with 3 false for the phrase list, on a 30-pair corpus",
+      "called_by": "internal/turn/loop.go"
+    },
+    {
+      "point": "person_repeat",
+      "on": true,
+      "switched_on": "yes, through the judged method",
+      "costs": "about $0.0069 for 42 requests over that corpus, p50 276 ms, worst 412 ms",
+      "why": "jev catches 7 of 14 hand-labelled repeats with 2 false notes over 13 generations of one long session, against 1 of 14 with 3 false for the local stem matcher; the same request also asks whether a kept memory entry already covers the message, so the lead says it is in force rather than promising it again",
+      "called_by": "internal/turn/inbox.go"
+    },
+    {
       "point": "browser_step",
       "on": true,
       "switched_on": "yes, through the judged method",
@@ -5529,6 +5553,14 @@
       "costs": "not measured. one jev call a remember candidate, which is rare in a session; the shadow rows carry cost and latency",
       "why": "in shadow. jev picks the scope on every remember candidate and the card preselects it, the person's pick is the label in the ledger, and a names_private yes refuses project local. nothing is measured yet, 4 probe candidates picked the expected scope on one run",
       "called_by": "cmd/tofu/judge_ledger.go"
+    },
+    {
+      "point": "memory_same",
+      "on": true,
+      "switched_on": "yes, through the judged method",
+      "costs": "one jev request a remember call that is not a replace or keep_both, 239 to 297 ms on two entries in the driven run, cost reported 0",
+      "why": "a word match cannot tell two rules that say one thing in other words from two that share a subject; on 8 hand-labelled pairs the same pairs shared 2 to 5 content words and the different ones 0 to 4, while jev gave the same pairs 0.27 to 0.56 and the different ones 0.05 to 0.16. same_at 0.25 is provisional on those 8 pairs",
+      "called_by": "internal/turn/tools/remember.go"
     },
     {
       "point": "ask",
@@ -5772,6 +5804,28 @@
     }
   ],
   "reports": [
+    {
+      "package": "drain",
+      "date": "2026-10-22",
+      "source": "bench/drain/report-2026-10-22.md",
+      "figure": "805 ms",
+      "built_from": "prose",
+      "sample": "12 timed drains and 10 floor runs of tofu version, two passes of bench/drain/run.sh over one recorded 20,168,967 byte session, on DESKTOP-AHUN9RO",
+      "skips": "one session and one machine only; no earlier drain build to compare against, so the floor is the only baseline",
+      "commit": "b4cf8de6",
+      "version": "0.5.16-fix2",
+      "previous_run": "none, the first dated report of bench/drain",
+      "conclusion": [
+        {
+          "text": "tofu session drain answers in a median of 805 ms on a 20.2 MB session of 11,298 events, 672 ms over the 132 ms floor of starting the binary at all.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
     {
       "package": "boardy",
       "date": "2026-10-14",
@@ -7315,6 +7369,11 @@
       "note": "TOFU-1307, 2026-10-13, 2 runs on 5 cassettes before (5a267524) and after (committed as 2d7ce78a), both tofu 0.5.12. The bench prints its table and writes no file; the rows are copied from the board into bench/report/runs/board-2026-10-13.md."
     },
     {
+      "package": "flows",
+      "kind": "runner",
+      "note": "drives 8 long-session flows on cassettes, each on a fresh home and project, and writes a pass stamp keyed by HEAD's tree when every flow passes on a clean tree. A gate, not a measurement: 0 dated reports."
+    },
+    {
       "package": "learn",
       "kind": "measurement with no dated report",
       "note": "learn/jobs, TOFU-1305, 2026-10-13 at 6d565412 and rerun 2026-10-14 at 9586ec60: 4 of 5 labelled repeated jobs found, 0 false, on 5 made-up sessions; the output is in bench/report/runs/learn-jobs-2026-10-14.txt and on the first tab. The labels.txt run of TOFU-1176 needs Jev and claude and has no committed number."
@@ -7378,12 +7437,22 @@
       "package": "stat",
       "kind": "library",
       "note": "median, p95 and p99 over a slice of floats, called by every bench that reports a spread."
+    },
+    {
+      "package": "thread",
+      "kind": "measurement with no dated report",
+      "note": "replays one recorded lead and sub-agent cassette through a before and an after tofu binary, each in a fresh home, and prints the thread, engineer and evidence characters per arm; it prints to the terminal and writes 0 files, so 0 numbers from it are on this page."
+    },
+    {
+      "package": "treewide",
+      "kind": "runner",
+      "note": "runs vet and every package's tests, reruns each failing test alone, and writes a pass stamp keyed by HEAD's tree only on a clean HEAD. A gate, not a measurement: 0 dated reports."
     }
   ],
   "counts": {
-    "reports": 67,
-    "packages_with_a_dated_report": 42,
-    "packages_with_no_dated_report": 18,
+    "reports": 68,
+    "packages_with_a_dated_report": 43,
+    "packages_with_no_dated_report": 21,
     "withdrawn_whole_or_in_part": 20,
     "stale": 1,
     "unparsed": 2

@@ -53,6 +53,7 @@ var DeliberatelyUnread = []UnreadKey{
 	{"turn", "error", "the error text that ended the turn; outcome already says how it ended, and no bench point reads the text from the corpus yet"},
 	{"turn", "loop_guard", "the repeated call the loop guard stopped the turn on; no bench point reads it from the corpus yet"},
 	{"step", "cache_write_1h_tokens", "the one hour share of cache_write_tokens, which is already read; no bench point splits the write by lifetime yet"},
+	{"step", "reasoning_tokens", "the reasoning share of completion_tokens, which is already read; no bench point splits output by reasoning yet"},
 	{"step", "compaction", "an in place rewrite at the step; bench/recall reads it through turn.StepRow, not RecordedStep"},
 	{"step", "duration_ms", "how long the request took; no bench point reads request latency from the corpus yet"},
 	{"step", "first_token_ms", "time to the first streamed token; no bench point reads request latency from the corpus yet"},

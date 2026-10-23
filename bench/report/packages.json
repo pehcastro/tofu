@@ -88,5 +88,20 @@
     "package": "sessiontime",
     "kind": "measurement with no dated report",
     "note": "prints to the terminal and writes no file. Run 2026-10-13 at 7624da00 (TOFU-1313) and 2026-10-14 at 9586ec60; the second output is in bench/report/runs/sessiontime-2026-10-14.txt."
+  },
+  {
+    "package": "flows",
+    "kind": "runner",
+    "note": "drives 8 long-session flows on cassettes, each on a fresh home and project, and writes a pass stamp keyed by HEAD's tree when every flow passes on a clean tree. A gate, not a measurement: 0 dated reports."
+  },
+  {
+    "package": "thread",
+    "kind": "measurement with no dated report",
+    "note": "replays one recorded lead and sub-agent cassette through a before and an after tofu binary, each in a fresh home, and prints the thread, engineer and evidence characters per arm; it prints to the terminal and writes 0 files, so 0 numbers from it are on this page."
+  },
+  {
+    "package": "treewide",
+    "kind": "runner",
+    "note": "runs vet and every package's tests, reruns each failing test alone, and writes a pass stamp keyed by HEAD's tree only on a clean HEAD. A gate, not a measurement: 0 dated reports."
   }
 ]

@@ -24,7 +24,7 @@ claude vs tofu: wall clock not comparable, credential kinds differ (subscription
 codex vs tofu: codex lower on wall clock by 9000 ms (widest range 5000 ms)
 
 DOLLARS PER PASSING RUN hono-routes
-claude: model n/a, spent as subscription quota. jev decisions $0.0000 on the openrouter key
+claude: model n/a, spent as subscription quota. jev decisions $0.0000 on the typesafe key
 codex: model median $0.1100, range $0.1000 to $0.1200 over 3 repeats. jev decisions $0.0000
 tofu: model median $0.1100, range $0.1100 to $0.1200 over 3 repeats. jev decisions $0.0000
 claude vs codex: dollars not comparable, credential kinds differ (subscription vs key)

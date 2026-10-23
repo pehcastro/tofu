@@ -269,7 +269,7 @@ type sse struct {
 func (e *sse) event(kind string, payload map[string]any) {
 	payload["type"] = kind
 	line, _ := json.Marshal(payload)
-	fmt.Fprintf(e.w, "event: %s\ndata: %s\n\n", kind, line)
+	_, _ = fmt.Fprintf(e.w, "event: %s\ndata: %s\n\n", kind, line)
 	e.flusher.Flush()
 }
 

@@ -23,5 +23,25 @@
     "point": "read_worth",
     "file": "cmd/tofu/sift.go",
     "symbol": "sift.Length"
+  },
+  {
+    "point": "board_epic",
+    "file": "internal/boardy/hook_jev.go",
+    "symbol": "askJev"
+  },
+  {
+    "point": "steer_answered",
+    "file": "internal/turn/loop.go",
+    "symbol": "newSteerJudge"
+  },
+  {
+    "point": "person_repeat",
+    "file": "internal/turn/inbox.go",
+    "symbol": "judgeRepeats"
+  },
+  {
+    "point": "memory_same",
+    "file": "internal/turn/tools/remember.go",
+    "symbol": "duplicate"
   }
 ]

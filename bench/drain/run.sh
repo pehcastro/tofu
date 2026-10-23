@@ -29,7 +29,7 @@ measure() {
   ms=$(clock "$@") || exit 1
   lines=$(wc -l < "$events")
   printf '{"date":"%s","machine":"%s","commit":"%s","session":"%s","bytes":%s,"events":%s,"arm":"%s","run":%s,"ms":%s}\n' \
-    "$day" "$machine" "$commit" "$id" "$bytes" "$lines" "$arm" "$run" "$ms" | tee -a "$results"
+    "$day" "$machine" "$commit" "${DRAIN_LABEL:-recorded}" "$bytes" "$lines" "$arm" "$run" "$ms" | tee -a "$results"
 }
 
 measure cold 1 session drain "$id"

@@ -683,6 +683,16 @@
     "version": "0.5.14"
   },
   {
+    "report": "bench/drain/report-2026-10-22.md",
+    "figure": "805 ms",
+    "says": "tofu session drain answers in a median of 805 ms on a 20.2 MB session of 11,298 events, 672 ms over the 132 ms floor of starting the binary; the slowest of 12 runs took 1,037 ms.",
+    "from": "prose",
+    "sample": "12 timed drains and 10 floor runs of tofu version, two passes of bench/drain/run.sh over one recorded 20,168,967 byte session, on DESKTOP-AHUN9RO",
+    "skips": "one session and one machine only; no earlier drain build to compare against, so the floor is the only baseline",
+    "commit": "b4cf8de6",
+    "version": "0.5.16-fix2"
+  },
+  {
     "report": "bench/startup/frame/report-2026-10-14.md",
     "figure": "1.45x faster",
     "says": "The first typeable frame on a fresh project draws 1.45x faster after TOFU-1354 and 1.38x faster after TOFU-1357; resuming a 2,130 event session draws 1.49x and then 1.19x faster, with drive screens identical to head.",
