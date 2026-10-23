@@ -54,15 +54,16 @@ type event struct {
 	AgentID        string `json:"agent_id"`
 	StopHookActive bool   `json:"stop_hook_active"`
 	ToolInput      struct {
-		FilePath     string `json:"file_path"`
-		Content      string `json:"content"`
-		OldString    string `json:"old_string"`
-		NewString    string `json:"new_string"`
-		ReplaceAll   bool   `json:"replace_all"`
-		Command      string `json:"command"`
-		Prompt       string `json:"prompt"`
-		SubagentType string `json:"subagent_type"`
-		Ticket       string `json:"ticket"`
+		FilePath     string   `json:"file_path"`
+		Content      string   `json:"content"`
+		OldString    string   `json:"old_string"`
+		NewString    string   `json:"new_string"`
+		ReplaceAll   bool     `json:"replace_all"`
+		Command      string   `json:"command"`
+		Prompt       string   `json:"prompt"`
+		SubagentType string   `json:"subagent_type"`
+		Ticket       string   `json:"ticket"`
+		Owns         []string `json:"owns"`
 	} `json:"tool_input"`
 }
 

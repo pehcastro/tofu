@@ -38,7 +38,26 @@ func SubAgentList(defined []subagent.Definition) string {
 	for _, definition := range enabled {
 		lines = append(lines, "- "+definition.Name+": "+definition.Description)
 	}
-	return strings.Join(lines, "\n")
+	return strings.Join(append(lines, strings.TrimSpace(ticketNeed(enabled))), "\n")
+}
+
+func ticketNeed(enabled []subagent.Definition) string {
+	var readers, editors []string
+	for _, definition := range enabled {
+		if len(definition.Tools) > 0 && !slices.Contains(definition.Tools, "edit") {
+			readers = append(readers, definition.Name)
+		} else {
+			editors = append(editors, definition.Name)
+		}
+	}
+	said := ""
+	if len(editors) > 0 {
+		said = "agents that edit need a ticket naming them, or owns where the project has no board: " + strings.Join(editors, ", ") + ". "
+	}
+	if len(readers) > 0 {
+		said += "agents with no edit tool only read and start with no ticket and no owns: " + strings.Join(readers, ", ") + ". "
+	}
+	return said
 }
 
 const LeadAloneMostNamedFiles = 5

@@ -17,17 +17,23 @@ var citedTicket = sys.LazyRegexp(`(TOFU|BOJI|DESK)-\d+(?:-\d+)?`)
 
 func requireTicket(env Env, ev event) (Answer, error) {
 	kind := ev.ToolInput.SubagentType
-	if strings.EqualFold(kind, "Explore") || strings.EqualFold(kind, "Plan") {
+	agents := agentsIn(env.Root)
+	grantsPaths := !blank(ev.ToolInput.Ticket) || len(ev.ToolInput.Owns) > 0
+	if strings.EqualFold(kind, "Explore") || strings.EqualFold(kind, "Plan") || !grantsPaths && foldContains(agents.readers, kind) {
 		return Answer{}, nil
 	}
 	source := ticketsAt(env)
-	why, err := spawnRefusal(env.Root, source, kind, ev.ToolInput.Ticket, ev.ToolInput.Prompt)
+	why, err := spawnRefusal(agents.names, source, kind, ev.ToolInput.Ticket, ev.ToolInput.Prompt)
 	if why == "" {
 		return Answer{}, err
 	}
 	first := "1. Write .local/boji/tickets/doing/TOFU-NNN.md with front matter carrying id, title, epic, size, owns, spec and owner, then Problem, Scope, Acceptance, Notes."
 	if _, onBoards := source.(boardTickets); onBoards {
 		first = "1. Create it on its board: tofu boardy new --board TOFU --owns a,b --acceptance text --as orchestrator <title>, then tofu boardy assign it to the agent type and tofu boardy move it to doing. Tickets live in boardy now; a file under .local/boji/tickets alone is not a ticket."
+	}
+	readers := "This project defines no read-only agent, one whose tools hold no edit, so every agent here needs a ticket."
+	if len(agents.readers) > 0 {
+		readers = "A read-only agent, one whose definition holds no edit tool, is not gated while its spawn names no ticket and no owns, so use one if you need to understand the problem before you can write the ticket: " + strings.Join(agents.readers, ", ") + "."
 	}
 	return deny(why + `
 
@@ -41,10 +47,10 @@ Do this instead:
 5. owner: names the agent type this ticket runs as. Spawn that type, or if owner: is orchestrator, spawn general-purpose: PowerShell hooks and other work with no specialized agent are done by a general agent on purpose.
 6. Start the agent again with the ticket id and the acceptance list rather than a paraphrase.
 
-An investigation agent (Explore, Plan) is not gated, so use one if you need to understand the problem before you can write the ticket.`), err
+` + readers), err
 }
 
-func spawnRefusal(root string, source ticketSource, kind, named, prompt string) (string, error) {
+func spawnRefusal(known []string, source ticketSource, kind, named, prompt string) (string, error) {
 	id := named
 	if id == "" {
 		id = citedTicket().FindString(prompt)
@@ -85,22 +91,18 @@ func spawnRefusal(root string, source ticketSource, kind, named, prompt string) 
 	if cited.Owner == "" {
 		return id + " has no owner (assignee on a board), so there is nothing to check this spawn's agent type against.", err
 	}
-	known := knownAgentTypes(root)
-	registered := func(owner string) bool {
-		return slices.ContainsFunc(known, func(name string) bool { return strings.EqualFold(name, owner) })
-	}
 	owner := cited.Owner
-	if !registered(owner) {
+	if !foldContains(known, owner) {
 		owner = boardy.AgentTypeOf(owner)
 	}
-	if !registered(owner) {
-		return fmt.Sprintf("%s names owner: %s, which is not a registered agent type. This hook only knows what .claude/agents/ and library/*/agents/ define, plus orchestrator and general-purpose: %s.", id, cited.Owner, strings.Join(known, ", ")), err
+	if !foldContains(known, owner) {
+		return fmt.Sprintf("%s names owner: %s, which is not a registered agent type. This hook only knows what .tofu/agents/, .agents/agents/, .claude/agents/ and library/*/agents/ define, plus orchestrator and general-purpose: %s.", id, cited.Owner, strings.Join(known, ", ")), err
 	}
 	allowed := []string{owner}
 	if strings.EqualFold(owner, "orchestrator") {
 		allowed = []string{"orchestrator", "general-purpose"}
 	}
-	if !slices.ContainsFunc(allowed, func(name string) bool { return strings.EqualFold(name, kind) }) {
+	if !foldContains(allowed, kind) {
 		return fmt.Sprintf("%s names owner: %s, which should run as %s, not the requested %s.", id, cited.Owner, strings.Join(allowed, " or "), kind), err
 	}
 	return "", err
@@ -117,21 +119,53 @@ func globsOverlap(a, b string) bool {
 	return pa == "" || pb == "" || foldPrefix(pa, pb) || foldPrefix(pb, pa)
 }
 
-var agentName = sys.LazyRegexp(`(?im)^name:\s*(\S+)\s*$`)
+var (
+	agentName  = sys.LazyRegexp(`(?im)^name:\s*(\S+)\s*$`)
+	agentTools = sys.LazyRegexp(`(?im)^tools:[ \t]*(\S.*?)[ \t]*$`)
+)
 
-func knownAgentTypes(root string) []string {
-	known := []string{"orchestrator", "general-purpose"}
-	files, _ := filepath.Glob(filepath.Join(root, ".claude", "agents", "*.md"))
-	shipped, _ := filepath.Glob(filepath.Join(root, "library", "*", "agents", "*.md"))
-	files = append(files, shipped...)
+type agentCatalog struct {
+	names   []string
+	readers []string
+}
+
+func agentsIn(root string) agentCatalog {
+	files, _ := filepath.Glob(filepath.Join(root, "library", "*", "agents", "*.md"))
+	for _, folder := range []string{".tofu", ".agents", ".claude"} {
+		found, _ := filepath.Glob(filepath.Join(root, folder, "agents", "*.md"))
+		files = append(files, found...)
+	}
+	editors := []string{"orchestrator", "general-purpose"}
+	var readers []string
 	for _, file := range files {
 		data, _ := os.ReadFile(file)
-		if name := agentName().FindStringSubmatch(string(data)); name != nil {
-			known = append(known, name[1])
+		name := agentName().FindStringSubmatch(string(data))
+		if name == nil {
+			continue
+		}
+		tools := agentTools().FindStringSubmatch(string(data))
+		if tools == nil || slices.ContainsFunc(strings.Split(tools[1], ","), editsFiles) {
+			editors = append(editors, name[1])
+		} else {
+			readers = append(readers, name[1])
 		}
 	}
-	slices.SortFunc(known, func(a, b string) int { return strings.Compare(strings.ToLower(a), strings.ToLower(b)) })
-	return slices.Compact(known)
+	readers = slices.DeleteFunc(readers, func(name string) bool { return foldContains(editors, name) })
+	return agentCatalog{names: sortedNames(append(editors, readers...)), readers: sortedNames(readers)}
+}
+
+func editsFiles(tool string) bool {
+	tool = strings.ToLower(tool)
+	return strings.Contains(tool, "edit") || strings.Contains(tool, "patch")
+}
+
+func sortedNames(names []string) []string {
+	slices.SortFunc(names, func(a, b string) int { return strings.Compare(strings.ToLower(a), strings.ToLower(b)) })
+	return slices.Compact(names)
+}
+
+func foldContains(names []string, want string) bool {
+	return slices.ContainsFunc(names, func(name string) bool { return strings.EqualFold(name, want) })
 }
 
 var gatedRoots = []string{"cmd/", "internal/", "interface/", "bench/", "library/"}
