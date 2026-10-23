@@ -32,6 +32,7 @@ type WireCaps struct {
 	MaxChoiceOptions  int
 	MaxScoreLevels    int
 	ReturnsConfidence bool
+	ListUSDPerInput   float64
 }
 
 func (w WireCaps) Accepts(kind CriteriaKind) bool {

@@ -17,20 +17,20 @@ type Result struct {
 	Snippet string
 }
 
-func (c *Client) Search(ctx context.Context, config Config, query string, count int) ([]Result, error) {
+func (c *Client) Search(ctx context.Context, config Config, query string, count int) ([]Result, http.Header, error) {
 	if strings.TrimSpace(query) == "" {
-		return nil, errors.New("a search needs a question")
+		return nil, nil, errors.New("a search needs a question")
 	}
 	provider := config.Provider
 	if !config.HasSearch() {
-		return nil, errors.New("no search provider is configured")
+		return nil, nil, errors.New("no search provider is configured")
 	}
 	if count <= 0 || count > provider.MaxResults {
 		count = provider.MaxResults
 	}
 	address, err := url.Parse(provider.Endpoint)
 	if err != nil {
-		return nil, fmt.Errorf("%s: endpoint %q is not an address", provider.Origin, provider.Endpoint)
+		return nil, nil, fmt.Errorf("%s: endpoint %q is not an address", provider.Origin, provider.Endpoint)
 	}
 	values := address.Query()
 	values.Set(provider.QueryParam, query)
@@ -44,7 +44,7 @@ func (c *Client) Search(ctx context.Context, config Config, query string, count 
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, address.String(), nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	request.Header.Set("Accept", "application/json")
 	if provider.KeyHeader != "" {
@@ -52,20 +52,20 @@ func (c *Client) Search(ctx context.Context, config Config, query string, count 
 	}
 	response, err := c.http.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("%s did not answer: %w", provider.Name, err)
+		return nil, nil, fmt.Errorf("%s did not answer: %w", provider.Name, err)
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode >= http.StatusBadRequest {
-		return nil, StatusError{URL: provider.Endpoint, Status: response.StatusCode}
+		return nil, response.Header, StatusError{URL: provider.Endpoint, Status: response.StatusCode}
 	}
 
 	var decoded any
 	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
-		return nil, fmt.Errorf("%s answered with something that is not json: %w", provider.Name, err)
+		return nil, response.Header, fmt.Errorf("%s answered with something that is not json: %w", provider.Name, err)
 	}
 	rows, ok := field(decoded, provider.ResultsPath).([]any)
 	if !ok {
-		return nil, fmt.Errorf("%s answered without a list at %s, which %s says is where its results are",
+		return nil, response.Header, fmt.Errorf("%s answered without a list at %s, which %s says is where its results are",
 			provider.Name, provider.ResultsPath, provider.Origin)
 	}
 	results := make([]Result, 0, min(len(rows), count))
@@ -82,7 +82,7 @@ func (c *Client) Search(ctx context.Context, config Config, query string, count 
 			results = append(results, found)
 		}
 	}
-	return results, nil
+	return results, response.Header, nil
 }
 
 func field(value any, path string) any {

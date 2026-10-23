@@ -11,7 +11,7 @@ import (
 	"tofu/internal/sys"
 )
 
-const SchemaVersion = 8
+const SchemaVersion = 9
 
 const StateBuilderSchema = 3
 
@@ -248,6 +248,10 @@ type Row struct {
 	Reason        *Reason         `json:"reason,omitempty"`
 	LatencyMS     int64           `json:"latency_ms"`
 	Cost          float64         `json:"cost"`
+	Provider      string          `json:"provider,omitempty"`
+	Key           string          `json:"key,omitempty"`
+	Usage         *Usage          `json:"usage,omitempty"`
+	Charge        *Charge         `json:"charge,omitempty"`
 	RequestID     string          `json:"request_id"`
 	ReplayOf      string          `json:"replay_of,omitempty"`
 	Outcome       *Outcome        `json:"outcome,omitempty"`

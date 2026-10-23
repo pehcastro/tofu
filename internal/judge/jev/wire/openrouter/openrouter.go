@@ -19,6 +19,7 @@ const (
 	Name            = "openrouter"
 	Endpoint        = "https://openrouter.ai/api/alpha/decisions"
 	ListingVariable = "TOFU_JEV_LISTING_URL"
+	RequestIDHeader = "X-Generation-Id"
 
 	listingURL        = "https://openrouter.ai/api/v1/models"
 	vendorPrefix      = "typesafe/"
@@ -57,7 +58,7 @@ func New(bound string, config Config) (*Wire, error) {
 }
 
 func on(model string, config Config) (*Wire, error) {
-	return wire.New(wire.Spec{Name: Name, Endpoint: Endpoint, Model: model, FailOp: "openrouter.New"}, config)
+	return wire.New(wire.Spec{Name: Name, Endpoint: Endpoint, Model: model, FailOp: "openrouter.New", RequestIDHeader: RequestIDHeader}, config)
 }
 
 func CheckPin(ctx context.Context, bound string, config Config, client *transport.Client) (jev.PinCheck, jev.Pin) {

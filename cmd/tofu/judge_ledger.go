@@ -134,10 +134,8 @@ func (l rowLedger) append(state any, set battery, in rowInput) (ledger.Row, erro
 		}
 	}
 	if in.decision != nil {
-		row.Build = in.decision.Build
 		row.LatencyMS = in.decision.Latency.Milliseconds()
-		row.Cost = in.decision.Usage.Cost
-		row.RequestID = cmp.Or(in.decision.RequestID, in.decision.TransportID)
+		in.decision.Spent(&row)
 	} else {
 		row.Build = in.build
 		row.RequestID = in.requestID

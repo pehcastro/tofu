@@ -143,7 +143,7 @@ func (r Route) Client(concurrency int) (*jev.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return jev.NewClient(jev.Config{Wire: built})
+	return jev.NewClient(jev.Config{Wire: built, Key: served.key})
 }
 
 func (r Route) Alias() (string, error) {

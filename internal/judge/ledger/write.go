@@ -72,6 +72,9 @@ func (w *Writer) Append(row Row) (Row, error) {
 	if err := appendLine(filepath.Join(w.dir, row.Day()+logSuffix), line); err != nil {
 		return Row{}, err
 	}
+	if row.Key != "" && row.Usage != nil && row.Charge != nil {
+		_ = Tally(KeyUse{Key: row.Key, Provider: row.Provider, Model: row.Build, Usage: *row.Usage, Charge: *row.Charge, At: row.At})
+	}
 	return row, nil
 }
 

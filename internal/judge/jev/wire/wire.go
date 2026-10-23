@@ -16,6 +16,7 @@ type Spec struct {
 	Model           string
 	FailOp          string
 	RequestIDHeader string
+	ListUSDPerInput float64
 }
 
 type Config struct {
@@ -67,6 +68,7 @@ func (w *Wire) Caps() jev.WireCaps {
 		MaxChoiceOptions:  konst.ChoiceCeiling,
 		MaxScoreLevels:    konst.JudgeScoreLevelCeiling,
 		ReturnsConfidence: true,
+		ListUSDPerInput:   w.spec.ListUSDPerInput,
 	}
 }
 

@@ -1,10 +1,14 @@
 package jev
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"time"
 
+	"tofu/internal/judge/ledger"
 	"tofu/internal/transport"
 )
 
@@ -23,6 +27,7 @@ type Wire interface {
 
 type Decision struct {
 	Wire        string
+	Key         string
 	Build       string
 	Alias       string
 	Provider    string
@@ -30,6 +35,7 @@ type Decision struct {
 	TransportID string
 	Answers     map[string]Answer
 	Usage       Usage
+	Charge      ledger.Charge
 	AssetsUsed  json.RawMessage
 	Attempts    int
 	Latency     time.Duration
@@ -39,17 +45,19 @@ type Decision struct {
 
 type Config struct {
 	Wire Wire
+	Key  string
 }
 
 type Client struct {
 	wire Wire
+	key  string
 }
 
 func NewClient(config Config) (*Client, error) {
 	if config.Wire == nil {
 		return nil, transport.Fail("jev.NewClient", transport.KindBadRequest, nil, "the client has no wire")
 	}
-	return &Client{wire: config.Wire}, nil
+	return &Client{wire: config.Wire, key: config.Key}, nil
 }
 
 func (c *Client) Caps() WireCaps { return c.wire.Caps() }
@@ -69,6 +77,11 @@ func (c *Client) Ask(ctx context.Context, request Request) (Decision, error) {
 	}
 
 	raw, err := c.wire.Post(ctx, body)
+	var refused *transport.Error
+	if errors.As(err, &refused) && refused.Status != 0 && c.key != "" {
+		_ = ledger.Tally(ledger.KeyUse{Key: c.key, Provider: caps.Name, Model: alias, Charge: ledger.ChargeOf(0, 0),
+			Failed: &ledger.KeyError{Status: refused.Status, What: cmp.Or(refused.Said, providerMessage(refused.Detail), refused.Code, refused.Kind.String())}})
+	}
 	if err != nil {
 		return Decision{}, err
 	}
@@ -82,6 +95,7 @@ func (c *Client) Ask(ctx context.Context, request Request) (Decision, error) {
 
 	return Decision{
 		Wire:        caps.Name,
+		Key:         c.key,
 		Build:       response.Build,
 		Alias:       alias,
 		Provider:    response.Provider,
@@ -89,10 +103,17 @@ func (c *Client) Ask(ctx context.Context, request Request) (Decision, error) {
 		TransportID: raw.RequestID,
 		Answers:     response.Answers,
 		Usage:       response.Usage,
+		Charge:      ledger.ChargeOf(response.Usage.Cost, float64(response.Usage.InputTokens)*caps.ListUSDPerInput),
 		AssetsUsed:  response.AssetsUsed,
 		Attempts:    raw.Attempts,
 		Latency:     raw.Latency,
 		Bytes:       len(body),
 		Raw:         response.Raw,
 	}, nil
+}
+
+func providerMessage(body string) string {
+	_, message, _ := strings.Cut(body, `"message":"`)
+	message, _, _ = strings.Cut(message, `"`)
+	return strings.ReplaceAll(message, `\n`, " ")
 }

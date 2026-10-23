@@ -52,7 +52,7 @@ func New(bound string, config Config) (*Wire, error) {
 }
 
 func on(model string, config Config) (*Wire, error) {
-	return wire.New(wire.Spec{Name: Name, Endpoint: Endpoint, Model: model, FailOp: "typesafe.New", RequestIDHeader: RequestIDHeader}, config)
+	return wire.New(wire.Spec{Name: Name, Endpoint: Endpoint, Model: model, FailOp: "typesafe.New", RequestIDHeader: RequestIDHeader, ListUSDPerInput: DollarsPerInputToken}, config)
 }
 
 func CheckPin(ctx context.Context, bound string, config Config) (jev.PinCheck, jev.Pin) {

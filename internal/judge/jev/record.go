@@ -9,8 +9,8 @@ import (
 )
 
 func (d Decision) Record(row *ledger.Row, asked []Question, wording int) {
-	row.Build, row.Model, row.RequestID = d.Build, d.Alias, cmp.Or(d.RequestID, d.TransportID)
-	row.LatencyMS, row.Cost = d.Latency.Milliseconds(), d.Usage.Cost
+	row.Model, row.LatencyMS = d.Alias, d.Latency.Milliseconds()
+	d.Spent(row)
 	for _, q := range asked {
 		answer := d.Answers[q.ID]
 		recorded := ledger.Answer{Question: q.ID, Wording: wording, Kind: ledger.AnswerNoul, Noul: answer.Noul}
@@ -22,4 +22,11 @@ func (d Decision) Record(row *ledger.Row, asked []Question, wording int) {
 		}
 		row.Answers = append(row.Answers, recorded)
 	}
+}
+
+func (d Decision) Spent(row *ledger.Row) {
+	charge := d.Charge
+	row.Build, row.RequestID, row.Cost = d.Build, cmp.Or(d.RequestID, d.TransportID), d.Usage.Cost
+	row.Provider, row.Key, row.Charge = d.Wire, d.Key, &charge
+	row.Usage = &ledger.Usage{InputTokens: d.Usage.InputTokens, OutputTokens: d.Usage.OutputTokens}
 }

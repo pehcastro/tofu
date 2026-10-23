@@ -50,9 +50,15 @@ const (
 )
 
 type keyFacts struct {
-	role                          role
-	provider, variable, name, use string
+	role                                          role
+	provider, variable, name, use, reports, model string
 }
+
+const (
+	openRouterReports = "OpenRouter reports spend and limits for the key and a cost per call; per-model history needs a management key"
+	typeSafeReports   = "TypeSafe reports tokens per call; it has no spend, balance or limit API, so cost is estimated from list price"
+	metaReports       = "Meta reports tokens per call and team rate limits; it has no spend or balance API, so cost is estimated from list price"
+)
 
 func (f keyFacts) hint() string { return commandFor("login", f.role, f.provider) }
 
@@ -74,12 +80,18 @@ func classifierKeyUse(bound models.Model, err error, provider models.Provider) s
 
 func keyTable() []keyFacts {
 	bound, err := boundClassifier()
+	boundOn := func(provider models.Provider) string {
+		if err != nil || bound.Provider != provider {
+			return ""
+		}
+		return bound.Slug()
+	}
 	return []keyFacts{
-		{roleLLM, metaName, sys.MetaMuseKeyName, models.Meta.Display(), "serves the meta models"},
-		{roleLLM, openRouterName, sys.OpenRouterKeyName, models.OpenRouter.Display(), "serves the openrouter models on your own key"},
-		{roleClassifier, typeSafeName, classifier.KeyName(models.TypeSafe), models.TypeSafe.Display(), classifierKeyUse(bound, err, models.TypeSafe)},
-		{roleClassifier, openRouterName, classifier.KeyName(models.OpenRouter), models.OpenRouter.Display(), classifierKeyUse(bound, err, models.OpenRouter)},
-		{roleSearch, braveName, sys.BraveSearchKeyName, braveDisplay, "backs the web search tool"},
+		{roleLLM, metaName, sys.MetaMuseKeyName, models.Meta.Display(), "serves the meta models", metaReports, ""},
+		{roleLLM, openRouterName, sys.OpenRouterKeyName, models.OpenRouter.Display(), "serves the openrouter models on your own key", openRouterReports, ""},
+		{roleClassifier, typeSafeName, classifier.KeyName(models.TypeSafe), models.TypeSafe.Display(), classifierKeyUse(bound, err, models.TypeSafe), typeSafeReports, boundOn(models.TypeSafe)},
+		{roleClassifier, openRouterName, classifier.KeyName(models.OpenRouter), models.OpenRouter.Display(), classifierKeyUse(bound, err, models.OpenRouter), openRouterReports, boundOn(models.OpenRouter)},
+		{roleSearch, braveName, sys.BraveSearchKeyName, braveDisplay, "backs the web search tool", braveReports(), ""},
 	}
 }
 
@@ -97,7 +109,7 @@ func keyStatuses(resolve func(variable string) string) []keyStatus {
 }
 
 func (f keyFacts) status(resolve func(variable string) string) keyStatus {
-	key := keyStatus{Role: f.role, Provider: f.provider, Variable: f.variable}
+	key := keyStatus{Role: f.role, Provider: f.provider, Variable: f.variable, ProviderReports: f.reports, Model: f.model}
 	if value := resolve(f.variable); value != "" {
 		key.Key = widget.Mask(value)
 	}
@@ -132,6 +144,11 @@ func statusVerb(args []string, out, errOut io.Writer, now time.Time, urls map[qu
 
 func credentialStatus(now time.Time, redact bool, urls map[quota.Provider]string) (statusData, []cli.Problem, error) {
 	data := statusData{Keys: keyStatuses(resolvedKey)}
+	polled, err := withSpend(context.Background(), data.Keys, now)
+	defer polled()
+	if err != nil {
+		return data, nil, err
+	}
 	store, err := openStoredCredentials()
 	if err != nil || store == nil {
 		return data, nil, err

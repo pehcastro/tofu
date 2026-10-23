@@ -22,28 +22,39 @@
       {
         "role": "llm",
         "provider": "meta",
-        "variable": "META_MUSE_API_KEY"
+        "variable": "META_MUSE_API_KEY",
+        "provider_reports": "Meta reports tokens per call and team rate limits; it has no spend or balance API, so cost is estimated from list price",
+        "calls": 0
       },
       {
         "role": "llm",
         "provider": "openrouter",
-        "variable": "OPENROUTER_LLM_KEY"
+        "variable": "OPENROUTER_LLM_KEY",
+        "provider_reports": "OpenRouter reports spend and limits for the key and a cost per call; per-model history needs a management key",
+        "calls": 0
       },
       {
         "role": "classifier",
         "provider": "typesafe",
         "variable": "TYPESAFE_API_KEY",
-        "key": "····7Qx2"
+        "key": "····7Qx2",
+        "model": "typesafe/jev-latest",
+        "provider_reports": "TypeSafe reports tokens per call; it has no spend, balance or limit API, so cost is estimated from list price",
+        "calls": 0
       },
       {
         "role": "classifier",
         "provider": "openrouter",
-        "variable": "OPENROUTER_KEY"
+        "variable": "OPENROUTER_KEY",
+        "provider_reports": "OpenRouter reports spend and limits for the key and a cost per call; per-model history needs a management key",
+        "calls": 0
       },
       {
         "role": "search",
         "provider": "brave",
-        "variable": "BRAVE_SEARCH_KEY"
+        "variable": "BRAVE_SEARCH_KEY",
+        "provider_reports": "Brave reports monthly calls remaining and the reset; it has no spend API, so cost is estimated from 5 USD per 1000 calls",
+        "calls": 0
       }
     ]
   },

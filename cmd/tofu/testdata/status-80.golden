@@ -27,11 +27,22 @@ language model
   └─────────────────────────────────────────────────────────────────────────────
 
   ○ Meta        not set   → tofu login llm meta
+      reports    Meta reports tokens per call and team rate limits; it has no
+        spend or balance API, so cost is estimated from list price
   ✓ OpenRouter  ····3498  serves the openrouter models on your own key
+      calls      no calls yet
+      reports    OpenRouter reports spend and limits for the key and a cost
+        per call; per-model history needs a management key
 
 classifier · jev, required
   ○ TypeSafe    not set  → tofu login classifier typesafe
+      reports    TypeSafe reports tokens per call; it has no spend, balance or
+        limit API, so cost is estimated from list price
   ○ OpenRouter  not set  → tofu login classifier openrouter
+      reports    OpenRouter reports spend and limits for the key and a cost
+        per call; per-model history needs a management key
 
 search
   ○ Brave  not set  → tofu login search brave
+      reports    Brave reports monthly calls remaining and the reset; it has
+        no spend API, so cost is estimated from 5 USD per 1000 calls

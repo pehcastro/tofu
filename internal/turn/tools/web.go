@@ -4,12 +4,16 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
+	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 	"tofu/internal/web"
 )
@@ -133,7 +137,18 @@ func (t webSearch) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("web_search: arguments are not the expected shape: %w", err)
 	}
-	results, err := t.client.Search(ctx, t.config, args.Query, args.Count)
+	results, header, err := t.client.Search(ctx, t.config, args.Query, args.Count)
+	if provider := t.config.Provider; provider.KeyVariable != "" && header != nil {
+		use := ledger.KeyUse{Key: provider.KeyVariable, Provider: provider.Name, Queries: 1, Charge: ledger.ChargeOf(0, 0), Allowance: ledger.HeaderAllowance(header, time.Now())}
+		var refused web.StatusError
+		switch {
+		case errors.As(err, &refused):
+			use.Failed = &ledger.KeyError{Status: refused.Status, What: err.Error()}
+		case provider.KeyVariable == sys.BraveSearchKeyName:
+			use.Charge = ledger.ChargeOf(0, konst.BraveSearchDollarsPerCall)
+		}
+		_ = ledger.Tally(use)
+	}
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("web_search: %w", err)
 	}

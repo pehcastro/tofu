@@ -525,4 +525,7 @@ const (
 
 	BoardSaidSentencesMost = 3
 	BoardSaidRunesMost     = 480
+
+	BraveSearchDollarsPerCall = 5.0 / 1000
+	KeyPollTimeoutMillis      = 5000
 )

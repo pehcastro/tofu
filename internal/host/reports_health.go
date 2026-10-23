@@ -113,10 +113,115 @@ type WindowStatus struct {
 }
 
 type KeyStatus struct {
-	Role     AccountRole `json:"role"`
-	Provider string      `json:"provider"`
-	Variable string      `json:"variable"`
-	Key      string      `json:"key,omitempty"`
+	Role            AccountRole   `json:"role"`
+	Provider        string        `json:"provider"`
+	Variable        string        `json:"variable"`
+	Key             string        `json:"key,omitempty"`
+	Label           string        `json:"label,omitempty"`
+	Model           string        `json:"model,omitempty"`
+	ProviderReports string        `json:"provider_reports"`
+	Calls           int           `json:"calls"`
+	LastUsedAt      time.Time     `json:"last_used_at,omitzero"`
+	Periods         []KeyPeriod   `json:"periods,omitempty"`
+	ByModel         []KeyModelUse `json:"by_model,omitempty"`
+	Queries         int           `json:"queries,omitempty"`
+	Limit           *KeyLimit     `json:"limit,omitempty"`
+	LimitUnread     string        `json:"limit_unread,omitempty"`
+	Balance         *KeyBalance   `json:"balance,omitempty"`
+	BalanceUnread   string        `json:"balance_unread,omitempty"`
+	Allowance       *KeyAllowance `json:"allowance,omitempty"`
+	LastError       *KeyFailure   `json:"last_error,omitempty"`
+}
+
+type KeyBalance struct {
+	From       string    `json:"from"`
+	CreditsUSD float64   `json:"credits_usd"`
+	UsedUSD    float64   `json:"used_usd"`
+	BalanceUSD float64   `json:"balance_usd"`
+	ReadAt     time.Time `json:"read_at"`
+}
+
+type KeyAllowance struct {
+	From      string    `json:"from"`
+	Limit     int       `json:"limit"`
+	Remaining int       `json:"remaining"`
+	ResetsAt  time.Time `json:"resets_at,omitzero"`
+	ReadAt    time.Time `json:"read_at"`
+}
+
+type KeyFailure struct {
+	Status int       `json:"status,omitempty"`
+	What   string    `json:"what"`
+	At     time.Time `json:"at"`
+}
+
+type CostSource string
+
+const (
+	CostProvider CostSource = "provider"
+	CostList     CostSource = "list"
+	CostNone     CostSource = "none"
+)
+
+func (CostSource) enum() []string {
+	return []string{string(CostProvider), string(CostList), string(CostNone)}
+}
+
+type KeyPeriodID string
+
+const (
+	PeriodToday KeyPeriodID = "today"
+	PeriodWeek  KeyPeriodID = "7d"
+	PeriodMonth KeyPeriodID = "30d"
+	PeriodAll   KeyPeriodID = "all"
+)
+
+func (KeyPeriodID) enum() []string {
+	return []string{string(PeriodToday), string(PeriodWeek), string(PeriodMonth), string(PeriodAll)}
+}
+
+type KeyTokens struct {
+	InputTokens           int `json:"input_tokens"`
+	OutputTokens          int `json:"output_tokens"`
+	CacheReadInputTokens  int `json:"cache_read_input_tokens"`
+	CacheWriteInputTokens int `json:"cache_write_input_tokens"`
+	ReasoningOutputTokens int `json:"reasoning_output_tokens"`
+}
+
+type KeySpend struct {
+	Calls      int        `json:"calls"`
+	Tokens     KeyTokens  `json:"tokens"`
+	CostUSD    float64    `json:"cost_usd,omitempty"`
+	CostSource CostSource `json:"cost_source"`
+}
+
+type KeyPeriod struct {
+	Period KeyPeriodID `json:"period"`
+	KeySpend
+}
+
+type KeyModelUse struct {
+	Model string `json:"model"`
+	KeySpend
+}
+
+type KeyLimit struct {
+	From          string         `json:"from"`
+	Capped        bool           `json:"capped"`
+	LimitUSD      *float64       `json:"limit_usd,omitempty"`
+	RemainingUSD  *float64       `json:"remaining_usd,omitempty"`
+	Resets        string         `json:"resets,omitempty"`
+	ProviderSpend *ProviderSpend `json:"provider_spend,omitempty"`
+	FreeTier      bool           `json:"free_tier,omitempty"`
+	ReadAt        time.Time      `json:"read_at"`
+}
+
+type ProviderSpend struct {
+	TodayUSD float64 `json:"today_usd"`
+	WeekUSD  float64 `json:"week_usd"`
+	MonthUSD float64 `json:"month_usd"`
+	AllUSD   float64 `json:"all_usd"`
+	BYOKUSD  float64 `json:"byok_usd"`
 }
 
 type DoctorVerdict string
