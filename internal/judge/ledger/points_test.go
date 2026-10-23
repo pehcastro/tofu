@@ -39,7 +39,7 @@ func TestPointsSummariseEachPointInsideTheWindowByLocalDay(t *testing.T) {
 		}
 	}
 
-	points, report, err := NewReader(dir).Points(now.AddDate(0, 0, -7), now)
+	points, report, err := NewReader(dir).Points(Filter{Since: now.AddDate(0, 0, -7)}, now)
 	if err != nil || len(report.Corrupt) > 0 {
 		t.Fatalf("points: %v, corrupt %v", err, report.Corrupt)
 	}

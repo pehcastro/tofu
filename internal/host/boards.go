@@ -93,7 +93,8 @@ type SkillsReport struct {
 }
 
 type LedgerSummaryParams struct {
-	Since time.Time `json:"since,omitzero"`
+	Since   time.Time `json:"since,omitzero"`
+	Session string    `json:"session,omitempty"`
 }
 
 type LedgerSummary struct {
@@ -227,16 +228,41 @@ func (s *server) skills(NoParams) (any, error) {
 
 func (s *server) ledgerSummary(p LedgerSummaryParams) (any, error) {
 	now := time.Now()
-	since := p.Since
-	if since.IsZero() {
-		since = now.AddDate(0, 0, -ledgerSummaryDays)
+	filter := ledger.Filter{Since: cmp.Or(p.Since, now.AddDate(0, 0, -ledgerSummaryDays))}
+	if p.Session != "" {
+		turns, began, err := SessionTurnIDs(s.Host.dir, p.Session)
+		if err != nil {
+			return nil, err
+		}
+		filter.Turns, filter.Since = turns, cmp.Or(p.Since, began)
 	}
 	dir, err := logDir(s.Host.dir)
 	if err != nil {
 		return nil, err
 	}
-	points, report, err := ledger.NewReader(dir).Points(since, now)
-	return LedgerSummary{Since: since, Points: points, Corrupt: len(report.Corrupt)}, err
+	points, report, err := ledger.NewReader(dir).Points(filter, now)
+	return LedgerSummary{Since: filter.Since, Points: points, Corrupt: len(report.Corrupt)}, err
+}
+
+func SessionTurnIDs(project, handle string) (map[string]bool, time.Time, error) {
+	store, err := session.OpenIn(project)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	header, err := store.Header(handle)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	events, err := store.Events(header.ID)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	turns := map[string]bool{}
+	for _, event := range events {
+		turns[event.Turn], turns[event.Agent] = true, true
+	}
+	delete(turns, "")
+	return turns, header.At, nil
 }
 
 func (s *server) ledgerPage(p LedgerParams) (any, error) {

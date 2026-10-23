@@ -33,10 +33,11 @@ type pointTally struct {
 	compared  map[string]Row
 }
 
-func (r *Reader) Points(since, now time.Time) ([]PointSummary, Report, error) {
+func (r *Reader) Points(filter Filter, now time.Time) ([]PointSummary, Report, error) {
 	tallies := map[string]*pointTally{}
 	today := localDay(now, now)
-	report, err := r.Each(Filter{Since: since, Until: now}, func(row Row) error {
+	filter.Until = now
+	report, err := r.Each(filter, func(row Row) error {
 		tally := tallies[row.Point]
 		if tally == nil {
 			tally = &pointTally{PointSummary: PointSummary{Point: row.Point}, compared: map[string]Row{}}

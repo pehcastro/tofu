@@ -255,27 +255,6 @@ func serveAccess(p host.SessionAccessParams) (host.SessionAccess, error) {
 	return host.SessionAccess{Session: header.ID, Owns: append([]string{}, header.Owns...), Preset: header.Preset}, nil
 }
 
-func sessionTurnIDs(handle string) (map[string]bool, time.Time, error) {
-	store, err := sessionstore.Open()
-	if err != nil {
-		return nil, time.Time{}, err
-	}
-	header, err := store.Header(handle)
-	if err != nil {
-		return nil, time.Time{}, err
-	}
-	events, err := store.Events(header.ID)
-	if err != nil {
-		return nil, time.Time{}, err
-	}
-	turns := map[string]bool{}
-	for _, event := range events {
-		turns[event.Turn], turns[event.Agent] = true, true
-	}
-	delete(turns, "")
-	return turns, header.At, nil
-}
-
 func serveLedger(p host.LedgerParams) (host.LedgerReport, error) {
 	var args []string
 	if p.ID != "" {
@@ -300,7 +279,7 @@ func serveLedger(p host.LedgerParams) (host.LedgerReport, error) {
 		return host.LedgerReport{}, &host.Refusal{Code: host.CodeBadParams, Message: err.Error()}
 	}
 	if p.Session != "" {
-		if opts.turns, opts.since, err = sessionTurnIDs(p.Session); err != nil {
+		if opts.turns, opts.since, err = host.SessionTurnIDs(".", p.Session); err != nil {
 			return host.LedgerReport{}, err
 		}
 	}
