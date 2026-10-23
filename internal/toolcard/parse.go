@@ -2,6 +2,7 @@ package toolcard
 
 import (
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -16,6 +17,9 @@ const (
 	searchFoundNone  = 1
 	failedTestPrefix = "--- FAIL: "
 	pushedNote       = "pushed"
+	rtkDone          = "ok "
+	rtkUpToDate      = "ok (up-to-date)"
+	rtkPulled        = "ok %d files +%d -%d"
 )
 
 func readable(content string) ([]string, bool) {
@@ -192,6 +196,11 @@ func committed(c Card, lines []string) Card {
 		return c
 	}
 	for _, line := range lines {
+		if sha, found := strings.CutPrefix(line, rtkDone); found && hex(sha) {
+			subject := commitSubject(c.words)
+			c.Object, c.Meta, c.subject = sha, subject, subject
+			break
+		}
 		inside, subject, found := strings.Cut(strings.TrimPrefix(line, "["), "] ")
 		if !found || !strings.HasPrefix(line, "[") {
 			continue
@@ -223,6 +232,22 @@ func committed(c Card, lines []string) Card {
 
 func hex(word string) bool {
 	return word != "" && strings.Trim(word, "0123456789abcdef") == ""
+}
+
+func commitSubject(words []string) string {
+	message := ""
+	for at, word := range words {
+		if word == "--message" || strings.HasPrefix(word, "-") && !strings.HasPrefix(word, "--") && strings.HasSuffix(word, "m") {
+			message = argument(words, at+1)
+			break
+		}
+		if given, found := strings.CutPrefix(word, "--message="); found {
+			message = given
+			break
+		}
+	}
+	subject, _, _ := strings.Cut(message, "\n")
+	return subject
 }
 
 func pushed(c Card, lines []string) Card {
@@ -259,13 +284,17 @@ func pulled(c Card, lines []string) Card {
 			conflicts++
 		}
 	}
+	var files, added, removed int
+	_, notRtk := fmt.Sscanf(argument(lines, len(lines)-1), rtkPulled, &files, &added, &removed)
 	switch {
 	case conflicts > 0:
 		c.Tone, c.Meta = Fail, counted(conflicts, "conflict", "conflicts")
-	case anyContains(lines, "up to date"):
+	case anyContains(lines, "up to date") || slices.Contains(lines, rtkUpToDate):
 		c.Meta = "up to date"
 	case anyContains(lines, "Fast-forward"):
 		c.Meta = "fast-forward"
+	case notRtk == nil:
+		c.Meta = strings.TrimSpace(counted(files, "file", "files") + " " + delta(added, removed))
 	}
 	return c
 }

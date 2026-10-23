@@ -19,21 +19,22 @@ type ToolCard struct {
 
 type CardFamily string
 
-func (CardFamily) enum() []string {
-	return []string{string(toolcard.Explored), string(toolcard.Edited), string(toolcard.Tests), string(toolcard.Git), string(toolcard.Board),
-		string(toolcard.Memory), string(toolcard.Agents), string(toolcard.Asked), string(toolcard.Web), string(toolcard.Ran)}
-}
+func (CardFamily) enum() []string { return names(toolcard.Families()) }
 
 type CardTone string
 
-func (CardTone) enum() []string {
-	return []string{string(toolcard.Ok), string(toolcard.Warn), string(toolcard.Fail)}
-}
+func (CardTone) enum() []string { return names(toolcard.Tones()) }
 
 type CardInk string
 
-func (CardInk) enum() []string {
-	return []string{string(toolcard.Plain), string(toolcard.Muted), string(toolcard.Ref), string(toolcard.Added), string(toolcard.Removed), string(toolcard.Failed)}
+func (CardInk) enum() []string { return names(toolcard.Inks()) }
+
+func names[T ~string](values []T) []string {
+	said := make([]string, len(values))
+	for at, value := range values {
+		said[at] = string(value)
+	}
+	return said
 }
 
 type CardPiece struct {

@@ -19,6 +19,8 @@ const (
 	Failed  Ink = "failed"
 )
 
+func Inks() []Ink { return []Ink{Plain, Muted, Ref, Added, Removed, Failed} }
+
 type Piece struct {
 	Text string
 	Ink  Ink
@@ -67,7 +69,7 @@ func Group(cards []Card, room Room) Summary {
 			summary.Head, shown = next, shown+1
 		}
 	}
-	for _, family := range []Family{Explored, Edited, Tests, Git, Board, Memory, Agents, Asked, Web, Ran} {
+	for _, family := range Families() {
 		if held := byFamily[family]; len(held) > 0 {
 			items, collapsed := detail(family, held)
 			summary.Open = append(summary.Open, Line{Family: family, Detail: fitted(items, collapsed, room)})
@@ -151,6 +153,7 @@ func highlights(cards []Card, failed int) []Phrase {
 	for _, card := range cards {
 		ok := card.Tone != Fail
 		switch {
+		case !card.settled:
 		case card.Family == Tests:
 			lastTest = card
 		case card.kind == kindCommit:

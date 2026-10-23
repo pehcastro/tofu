@@ -23,6 +23,10 @@ const (
 	Ran      Family = "ran"
 )
 
+func Families() []Family {
+	return []Family{Explored, Edited, Tests, Git, Board, Memory, Agents, Asked, Web, Ran}
+}
+
 type Tone string
 
 const (
@@ -30,6 +34,8 @@ const (
 	Warn Tone = "warn"
 	Fail Tone = "fail"
 )
+
+func Tones() []Tone { return []Tone{Ok, Warn, Fail} }
 
 type Change struct {
 	Path    string
@@ -52,6 +58,7 @@ type Card struct {
 	subject    string
 	withPush   bool
 	pushNote   string
+	settled    bool
 }
 
 type kind int
@@ -173,6 +180,7 @@ func Of(name string, args json.RawMessage) Card {
 
 func (c Card) Settled(content string, failed bool, exit int) Card {
 	lines, trimmed := readable(content)
+	c.settled = true
 	if failed || exit != 0 {
 		c.Tone = Fail
 	}
