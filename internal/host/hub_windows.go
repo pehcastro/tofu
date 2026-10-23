@@ -3,6 +3,7 @@ package host
 import (
 	"errors"
 	"os"
+	"path/filepath"
 
 	"golang.org/x/sys/windows"
 )
@@ -20,4 +21,12 @@ func lockHub(path string) (*os.File, bool, error) {
 		return nil, false, err
 	}
 	return os.NewFile(uintptr(handle), path), false, nil
+}
+
+func hubSocketOf(home, name string) (string, error) {
+	return socketWithinLimit(filepath.Join(home, hubSocketDir, name+".sock"))
+}
+
+func throughSocketDir(socket string, use func(string) error) error {
+	return use(socket)
 }

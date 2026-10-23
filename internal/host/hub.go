@@ -124,15 +124,31 @@ func placeOf(project string) (hubPlace, error) {
 	sum := sha256.Sum256([]byte(keyed))
 	key := hex.EncodeToString(sum[:])
 	short := filepath.Join(home, hubSocketDir, key[:hubShortKey])
-	socket := short + ".sock"
-	if limit := len(syscall.RawSockaddrUnix{}.Path); len(socket) >= limit {
-		return hubPlace{}, fmt.Errorf("the host socket %s is %d bytes and a unix socket path on %s must stay under %d, so the tofu host cannot start under this home: use a shorter home", socket, len(socket), sys.OS(), limit)
+	socket, err := hubSocketOf(home, key[:hubShortKey])
+	if err != nil {
+		return hubPlace{}, err
 	}
 	return hubPlace{project: abs, socket: socket, lock: short + ".lock", log: short + ".log", registry: filepath.Join(home, hubHostsDir, key+".json")}, nil
 }
 
+func socketWithinLimit(socket string) (string, error) {
+	if limit := len(syscall.RawSockaddrUnix{}.Path); len(socket) >= limit {
+		return "", fmt.Errorf("the host socket %s is %d bytes and a unix socket path on %s must stay under %d, so the tofu host cannot start under this home: use a shorter home", socket, len(socket), sys.OS(), limit)
+	}
+	return socket, nil
+}
+
+func dialHub(socket string) (net.Conn, error) {
+	var conn net.Conn
+	err := throughSocketDir(socket, func(reachable string) (err error) {
+		conn, err = net.DialTimeout(hubNetwork, reachable, hubAnswerWait)
+		return err
+	})
+	return conn, err
+}
+
 func askHubFor(place hubPlace, ask hubAsk, answer any) error {
-	conn, err := net.DialTimeout(hubNetwork, place.socket, hubAnswerWait)
+	conn, err := dialHub(place.socket)
 	if err != nil {
 		return errNoHub
 	}
@@ -216,7 +232,7 @@ func joinHub(project, id string, kind MemberKind) (net.Conn, *json.Decoder, hubJ
 	if err != nil {
 		return nil, nil, hubJoined{HubStatus: status}, err
 	}
-	conn, err := net.DialTimeout(hubNetwork, status.Socket, hubAnswerWait)
+	conn, err := dialHub(status.Socket)
 	if err != nil {
 		return nil, nil, hubJoined{HubStatus: status}, err
 	}
@@ -283,10 +299,14 @@ func RunHub(project string, report safe.Report, say func(string), open HubSessio
 	}
 	defer func() { _ = lock.Close() }()
 	_ = os.Remove(place.socket)
-	listener, err := net.Listen(hubNetwork, place.socket)
-	if err != nil {
+	var listener *net.UnixListener
+	if err := throughSocketDir(place.socket, func(reachable string) (err error) {
+		listener, err = net.ListenUnix(hubNetwork, &net.UnixAddr{Name: reachable, Net: hubNetwork})
+		return err
+	}); err != nil {
 		return fmt.Errorf("the host socket %s does not open: %w", place.socket, err)
 	}
+	listener.SetUnlinkOnClose(false)
 	defer func() {
 		_ = listener.Close()
 		_ = os.Remove(place.socket)
