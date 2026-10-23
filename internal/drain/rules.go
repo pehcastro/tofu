@@ -182,7 +182,7 @@ func (s *signals) findings(report Report, turns map[string]float64) []Finding {
 			costliest = id
 		}
 	}
-	if len(turns) >= concentrateTurns && turns[costliest] >= report.Total.Weighted*concentrateShare {
+	if len(turns) >= concentrateTurns && report.Total.Weighted > 0 && turns[costliest] >= report.Total.Weighted*concentrateShare {
 		findings = append(findings, found(RuleConcentrate, SeverityInfo, "most spend landed in one turn",
 			"the turn took "+share(turns[costliest], report.Total.Weighted)+" of the session's weighted tokens, sub-agents included", where{turn: costliest}))
 	}

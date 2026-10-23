@@ -110,8 +110,9 @@ type Resident struct {
 type Cause string
 
 const (
-	CauseIdle   Cause = "idle past ttl"
-	CausePrefix Cause = "prefix changed"
+	CauseIdle    Cause = "idle past ttl"
+	CauseHistory Cause = "history past its 5m lifetime"
+	CausePrefix  Cause = "prefix changed"
 )
 
 type Break struct {
@@ -201,6 +202,7 @@ type thread struct {
 	context  int
 	cached   int
 	ttl      time.Duration
+	history  time.Duration
 	wrote    float64
 	wroteAt  where
 	refill   int
@@ -407,8 +409,11 @@ func (p *pass) request(event session.Event, body requestBody) {
 	}
 	if differs, broke := p.breaks[event.ID]; broke {
 		cause, ttl := CausePrefix, cmp.Or(th.ttl, fiveMinuteTTL)
-		if gap >= ttl {
+		switch {
+		case gap >= ttl:
 			cause = CauseIdle
+		case th.history > 0 && gap >= th.history:
+			cause, ttl = CauseHistory, th.history
 		}
 		p.report.Rebuilds = append(p.report.Rebuilds, Rebuild{Agent: event.Agent, Turn: event.Turn, Request: event.ID, Cause: cause, GapMS: gap.Milliseconds(),
 			TTLMS: ttl.Milliseconds(), Written: write5m + write1h, Weighted: written, Differs: differs})
@@ -429,10 +434,12 @@ func (p *pass) request(event session.Event, body requestBody) {
 	p.signals.sized(th, context, at)
 	th.at, th.context, th.cached, th.wrote, th.wroteAt = event.At, context, body.Read+body.Write, written, at
 	switch {
+	case write1h > 0 && write5m > 0:
+		th.ttl, th.history = oneHourTTL, fiveMinuteTTL
 	case write1h > 0:
-		th.ttl = oneHourTTL
+		th.ttl, th.history = oneHourTTL, 0
 	case write5m > 0:
-		th.ttl = fiveMinuteTTL
+		th.ttl, th.history = fiveMinuteTTL, 0
 	}
 }
 
