@@ -198,6 +198,9 @@ func serveSessions(open string) (host.SessionList, error) {
 			EndedAt: row.EndedAt, EndReason: string(row.EndReason), Outcome: row.Outcome, Expired: row.Expired, Open: row.ID == open || opened.Family != "" && row.Family == opened.Family,
 			Members: members[row.ID]}
 		list.Sessions[index].Kind = host.KindMain
+		if row.Parent != "" {
+			list.Sessions[index].Parent = &host.SessionParent{Session: row.Parent}
+		}
 		if side, found, _ := store.Side(row.ID); found {
 			list.Sessions[index].Kind, list.Sessions[index].Owns, list.Sessions[index].Preset = host.KindSide, side.Owns, side.Preset
 			list.Sessions[index].Parent = &host.SessionParent{Session: side.BranchedFrom.Session, Event: side.BranchedFrom.Event}
