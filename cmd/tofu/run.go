@@ -193,6 +193,12 @@ func (r runtime) applyThinkingSummary(accounts turn.Accounts) turn.Accounts {
 		},
 		Resets: accounts.Resets,
 	}
+	if accounts.Keep != nil {
+		omitting.Keep = func(ctx context.Context, held turn.Held) (turn.Account, string, error) {
+			account, leftBecause, err := accounts.Keep(ctx, held)
+			return omitted(account), leftBecause, err
+		}
+	}
 	if accounts.Elsewhere != nil {
 		omitting.Elsewhere = func(ctx context.Context, left []string, conversationTokens int) (turn.Moved, error) {
 			moved, err := accounts.Elsewhere(ctx, left, conversationTokens)

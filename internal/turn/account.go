@@ -28,6 +28,12 @@ type Accounts struct {
 	Next      func(context.Context, Account) (Account, bool, error)
 	Resets    func(context.Context, Account) (time.Time, bool)
 	Elsewhere func(ctx context.Context, left []string, conversationTokens int) (Moved, error)
+	Keep      func(ctx context.Context, held Held) (kept Account, leftBecause string, err error)
+}
+
+type Held struct {
+	ID   int64
+	Idle time.Duration
 }
 
 type Moved struct {

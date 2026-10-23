@@ -17,6 +17,7 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
@@ -63,7 +64,34 @@ func (a *accounts) forTurn() turn.Accounts {
 	moveOn := func(ctx context.Context, left []string, conversationTokens int) (turn.Moved, error) {
 		return a.continuing().move(ctx, left, conversationTokens)
 	}
-	return turn.Accounts{Pick: a.pick, Next: a.next, Resets: a.resets, Elsewhere: moveOn}
+	return turn.Accounts{Pick: a.pick, Next: a.next, Resets: a.resets, Elsewhere: moveOn, Keep: a.keep}
+}
+
+func (a *accounts) keep(ctx context.Context, held turn.Held) (turn.Account, string, error) {
+	candidates, rows, err := a.read(ctx)
+	if err != nil {
+		return turn.Account{}, "", err
+	}
+	return keeping(candidates, held, a.dir, a.spends, a.now(), func(choice quota.Choice) (turn.Account, error) { return a.account(choice, rows) })
+}
+
+func keeping(candidates []quota.Candidate, held turn.Held, dir string, spends []string, now time.Time, on func(quota.Choice) (turn.Account, error)) (turn.Account, string, error) {
+	ttl := settingText(cmp.Or(dir, "."), settingspkg.LeadCache, nil)
+	if ttl == konst.SubscriptionCacheHistory5m {
+		ttl = konst.SubscriptionCacheTTL
+	}
+	lifetime, _ := time.ParseDuration(ttl)
+	at := slices.IndexFunc(candidates, func(candidate quota.Candidate) bool { return candidate.ID == held.ID })
+	switch {
+	case held.Idle >= lifetime:
+		return turn.Account{}, fmt.Sprintf("account #%d last answered %s ago, past its %s cache, so this turn takes the account with the most headroom", held.ID, held.Idle.Round(time.Minute), ttl), nil
+	case at < 0:
+		return turn.Account{}, fmt.Sprintf("account #%d is no longer signed in, so this turn moves to another account and writes its cache there once", held.ID), nil
+	case quota.Spent(candidates[at].Report, spends, now):
+		return turn.Account{}, fmt.Sprintf("account #%d is at its limit, so this turn moves to the account with the most headroom and writes its cache there once", held.ID), nil
+	}
+	kept, err := on(quota.Choice{ID: held.ID, Headroom: quota.Left(candidates[at].Report, spends, now)})
+	return kept, "", err
 }
 
 func (a *accounts) resets(ctx context.Context, pinned turn.Account) (time.Time, bool) {
@@ -90,29 +118,51 @@ func (s standIns) mine() []frame.Quota {
 }
 
 func (s standIns) account(ctx context.Context, reading frame.Quota) (turn.Account, error) {
-	account, err := s.held.pick(ctx)
 	_, window, _ := strings.Cut(reading.Label, " ")
-	account.ID, account.Headroom, account.Window = reading.AccountID(), 1-reading.Fraction, window
+	return s.on(ctx, quota.Choice{ID: reading.AccountID(), Headroom: quota.Headroom{Fraction: 1 - reading.Fraction, Window: window}})
+}
+
+func (s standIns) on(ctx context.Context, choice quota.Choice) (turn.Account, error) {
+	account, err := s.held.pick(ctx)
+	account.ID, account.Headroom, account.Window = choice.ID, choice.Headroom.Fraction, choice.Headroom.Window
 	return account, err
 }
 
-func (s standIns) forTurn() turn.Accounts {
-	mine := s.mine()
-	at := func(pinned turn.Account) int {
-		return slices.IndexFunc(mine, func(reading frame.Quota) bool { return reading.AccountID() == pinned.ID })
+func (s standIns) candidates() []quota.Candidate {
+	var candidates []quota.Candidate
+	for _, reading := range s.mine() {
+		at := slices.IndexFunc(candidates, func(candidate quota.Candidate) bool { return candidate.ID == reading.AccountID() })
+		if at < 0 {
+			candidates, at = append(candidates, quota.Candidate{ID: reading.AccountID(), Provider: quota.Provider(s.source)}), len(candidates)
+		}
+		_, window, _ := strings.Cut(reading.Label, " ")
+		candidates[at].Report.Windows = append(candidates[at].Report.Windows, quota.Window{ID: window, Used: quota.Used{Fraction: reading.Fraction, Reported: reading.Reported}, ResetsAt: reading.ResetsAt})
 	}
+	return candidates
+}
+
+func (s standIns) forTurn() turn.Accounts {
 	return turn.Accounts{
-		Pick: func(ctx context.Context) (turn.Account, error) { return s.account(ctx, mine[0]) },
+		Pick: func(ctx context.Context) (turn.Account, error) {
+			choice, _ := quota.Pick(s.candidates(), quota.Provider(s.source), s.held.spends, s.held.now())
+			return s.on(ctx, choice)
+		},
+		Keep: func(ctx context.Context, held turn.Held) (turn.Account, string, error) {
+			return keeping(s.candidates(), held, s.held.dir, s.held.spends, s.held.now(), func(choice quota.Choice) (turn.Account, error) { return s.on(ctx, choice) })
+		},
 		Next: func(ctx context.Context, pinned turn.Account) (turn.Account, bool, error) {
-			pinnedAt := at(pinned)
-			if pinnedAt < 0 || mine[pinnedAt].Fraction < 1 || len(mine) == 1 {
+			candidates, now := s.candidates(), s.held.now()
+			pinnedAt := slices.IndexFunc(candidates, func(candidate quota.Candidate) bool { return candidate.ID == pinned.ID })
+			if pinnedAt < 0 || !quota.Spent(candidates[pinnedAt].Report, s.held.spends, now) || len(candidates) == 1 {
 				return turn.Account{}, false, nil
 			}
-			next, err := s.account(ctx, mine[(pinnedAt+1)%len(mine)])
+			after := candidates[(pinnedAt+1)%len(candidates)]
+			next, err := s.on(ctx, quota.Choice{ID: after.ID, Headroom: quota.Left(after.Report, s.held.spends, now)})
 			return next, err == nil, err
 		},
 		Resets: func(_ context.Context, pinned turn.Account) (time.Time, bool) {
-			if pinnedAt := at(pinned); pinnedAt >= 0 {
+			mine := s.mine()
+			if pinnedAt := slices.IndexFunc(mine, func(reading frame.Quota) bool { return reading.AccountID() == pinned.ID }); pinnedAt >= 0 {
 				return mine[pinnedAt].ResetsAt, !mine[pinnedAt].ResetsAt.IsZero()
 			}
 			return time.Time{}, false

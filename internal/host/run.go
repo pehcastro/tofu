@@ -1,6 +1,8 @@
 package host
 
 import (
+	"bufio"
+	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -231,6 +233,7 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 		spent.Reason = AccountReason(turn.AccountMoved)
 		emit(Event{Kind: EventAccount, Account: &spent})
 	})
+	config.Accounts = keepingHeld(config.Accounts, heldAccount(sessions, id, h.now()), func(why string) { emit(Event{Kind: EventNote, Text: why}) })
 	announce := func(ended turn.Row, agent, into string) {
 		forked := forkOf(ended, into)
 		emit(Event{Kind: EventForkStart, Agent: agent})
@@ -389,6 +392,85 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 		return limitReached{}
 	}
 	return reached
+}
+
+func heldAccount(sessions *session.Store, id string, now time.Time) turn.Held {
+	file, err := os.Open(sessions.EventsPath(id))
+	if err != nil {
+		return turn.Held{}
+	}
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if err != nil {
+		return turn.Held{}
+	}
+	for window := int64(bufio.MaxScanTokenSize); ; window *= 2 {
+		start := max(info.Size()-window, 0)
+		tail := make([]byte, info.Size()-start)
+		if read, _ := file.ReadAt(tail, start); read < len(tail) {
+			return turn.Held{}
+		}
+		if held, found := lastHeld(tail, start == 0, now); found || start == 0 {
+			return held
+		}
+	}
+}
+
+func lastHeld(tail []byte, whole bool, now time.Time) (turn.Held, bool) {
+	lines := bytes.Split(tail, []byte{'\n'})
+	if !whole {
+		lines = lines[1:]
+	}
+	turnEnd, request := []byte(`"kind":"`+session.EventTurnEnd+`"`), []byte(`"kind":"`+session.EventRequest+`"`)
+	var held turn.Held
+	var ended bool
+	var asked time.Time
+	for at := len(lines) - 1; at >= 0 && (!ended || asked.IsZero()); at-- {
+		if !bytes.Contains(lines[at], turnEnd) && !bytes.Contains(lines[at], request) {
+			continue
+		}
+		var event struct {
+			At    time.Time
+			Agent string
+			Kind  session.EventKind
+			Body  struct {
+				Account int64 `json:"account"`
+			}
+		}
+		if json.Unmarshal(lines[at], &event) != nil || event.Agent != "" {
+			continue
+		}
+		switch {
+		case event.Kind == session.EventTurnEnd && !ended:
+			held.ID, ended = event.Body.Account, true
+		case event.Kind == session.EventRequest && asked.IsZero():
+			asked = event.At
+		}
+	}
+	if asked.IsZero() {
+		return turn.Held{}, false
+	}
+	held.Idle = now.Sub(asked)
+	return held, ended
+}
+
+func keepingHeld(accounts turn.Accounts, held turn.Held, note func(string)) turn.Accounts {
+	pick, keep := accounts.Pick, accounts.Keep
+	if pick == nil || keep == nil || held.ID == 0 {
+		return accounts
+	}
+	accounts.Pick = func(ctx context.Context) (turn.Account, error) {
+		kept, leftBecause, err := keep(ctx, held)
+		if err != nil || kept.ID != 0 {
+			return kept, err
+		}
+		picked, err := pick(ctx)
+		if err == nil && picked.ID != held.ID {
+			note(leftBecause)
+		}
+		return picked, err
+	}
+	return accounts
 }
 
 func announcingMoves(accounts turn.Accounts, announce func(turn.Moved)) turn.Accounts {
