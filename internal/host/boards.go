@@ -10,6 +10,7 @@ import (
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
+	"tofu/internal/konst"
 	"tofu/internal/llm/quota"
 	"tofu/internal/recall"
 	"tofu/internal/rule"
@@ -236,6 +237,28 @@ func (s *server) ledgerSummary(p LedgerSummaryParams) (any, error) {
 	}
 	points, report, err := ledger.NewReader(dir).Points(since, now)
 	return LedgerSummary{Since: since, Points: points, Corrupt: len(report.Corrupt)}, err
+}
+
+func (s *server) ledgerPage(p LedgerParams) (any, error) {
+	switch {
+	case s.Ledger == nil:
+		return nil, &Refusal{Code: CodeRefused, Message: "this tofu reads no ledger"}
+	case p.Last < 0:
+		return nil, &Refusal{Code: CodeBadParams, Message: "last is a count of rows, from 1; without it a page holds " + strconv.Itoa(konst.ServeLedgerPageRows)}
+	}
+	paged := p.ID == ""
+	if paged {
+		p.Last = cmp.Or(p.Last, konst.ServeLedgerPageRows) + 1
+	}
+	report, err := s.Ledger(p)
+	if err != nil {
+		return nil, err
+	}
+	if paged && len(report.Rows) == p.Last {
+		report.Rows = report.Rows[1:]
+		report.Next = report.Rows[0].ID
+	}
+	return s.withSubjects(report)
 }
 
 func (s *server) withSubjects(report LedgerReport) (LedgerReport, error) {

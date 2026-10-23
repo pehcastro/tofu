@@ -21,6 +21,7 @@ import (
 const (
 	stepsPerTurn = 20
 	boardKey     = "BENCH"
+	boardEpic    = "BENCH-E1"
 	boardTickets = 3
 )
 
@@ -28,6 +29,7 @@ type arm struct {
 	label, tofu, version string
 	samples              map[string][]time.Duration
 	answers              map[string][]byte
+	sizes                map[string]int
 }
 
 type method struct {
@@ -46,6 +48,7 @@ func methods() []method {
 		{"query.settings", none},
 		{"boardy.boards", none},
 		{"session.trace", func(session string) any { return host.SessionParams{Session: session} }},
+		{besideSmall, func(session string) any { return host.SessionParams{Session: session} }},
 	}
 }
 
@@ -92,8 +95,11 @@ func build(tofu, root, deck string, steps int) (string, error) {
 	if err := verb(tofu, project, env, "boardy", "init", "--key", boardKey, "--name", "bench serve"); err != nil {
 		return "", err
 	}
+	if err := verb(tofu, project, env, "boardy", "epic", "new", boardEpic, "bench epic", "--board", boardKey); err != nil {
+		return "", err
+	}
 	for ticket := 1; ticket <= boardTickets; ticket++ {
-		if err := verb(tofu, project, env, "boardy", "new", "--board", boardKey, fmt.Sprintf("bench ticket %d", ticket)); err != nil {
+		if err := verb(tofu, project, env, "boardy", "new", "--board", boardKey, "--epic", boardEpic, fmt.Sprintf("bench ticket %d", ticket)); err != nil {
 			return "", err
 		}
 	}
@@ -118,7 +124,7 @@ func build(tofu, root, deck string, steps int) (string, error) {
 		}
 		return err
 	}()
-	return state.Session, errors.Join(err, s.close())
+	return state.Session, errors.Join(err, s.close(), hostGone(home))
 }
 
 func mask(raw []byte, opened string) []byte {
@@ -129,7 +135,7 @@ func mask(raw []byte, opened string) []byte {
 	return bytes.ReplaceAll(raw, []byte(opened), []byte("<opened>"))
 }
 
-func (a *arm) measure(pristine, live, deck, session string, calls int) error {
+func (a *arm) measure(pristine, live, deck, session string, calls, beside int) error {
 	if err := os.RemoveAll(live); err != nil {
 		return err
 	}
@@ -159,9 +165,16 @@ func (a *arm) measure(pristine, live, deck, session string, calls int) error {
 				a.answers[m.name] = mask(raw, state.Session)
 			}
 		}
+		for range beside {
+			for _, delay := range besideDelays() {
+				if err == nil {
+					err = a.beside(s, session, delay)
+				}
+			}
+		}
 		return err
 	}()
-	return errors.Join(err, s.close())
+	return errors.Join(err, s.close(), hostGone(filepath.Join(live, "home")))
 }
 
 func quantile(samples []time.Duration, q float64) time.Duration {
@@ -201,18 +214,48 @@ func table(arms []*arm) string {
 	return out.String()
 }
 
-func run(arms []*arm, calls, rounds, steps int, keep string) error {
-	work, err := os.MkdirTemp("", "tofu-bench-serve-")
+func besideTable(arms []*arm) string {
+	var out strings.Builder
+	fmt.Fprintf(&out, "\n%-34s %5s", "beside case", "n")
+	for _, a := range arms {
+		fmt.Fprintf(&out, " %12s %12s %14s", a.label+" p50", a.label+" p99", a.label+" bytes")
+	}
+	out.WriteString("\n")
+	for _, delay := range besideDelays() {
+		asked, small := besideNames(delay)
+		for _, name := range []string{asked, small} {
+			fmt.Fprintf(&out, "%-34s %5d", name, len(arms[0].samples[name]))
+			for _, a := range arms {
+				fmt.Fprintf(&out, " %12s %12s %14d", ms(quantile(a.samples[name], 0.5)), ms(quantile(a.samples[name], 0.99)), a.sizes[name])
+			}
+			out.WriteString("\n")
+		}
+	}
+	return out.String()
+}
+
+type plan struct {
+	calls, rounds, steps, rows, beside int
+	keep                               string
+}
+
+func run(arms []*arm, p plan) error {
+	work, err := os.MkdirTemp("", "bserve-")
 	if err != nil {
 		return err
 	}
 	live, pristine, deck := filepath.Join(work, "live"), filepath.Join(work, "pristine"), filepath.Join(work, "session.jsonl")
-	session, err := build(arms[0].tofu, live, deck, steps)
+	session, err := build(arms[0].tofu, live, deck, p.steps)
 	if err != nil {
-		return fmt.Errorf("building the %d step session: %w, the log is %s", steps, err, filepath.Join(live, "build.log"))
+		return fmt.Errorf("building the %d step session: %w, the log is %s", p.steps, err, filepath.Join(live, "build.log"))
 	}
 	if err := os.Remove(filepath.Join(live, "build.log")); err != nil {
 		return err
+	}
+	if p.rows > 0 {
+		if err := writeLedger(live, p.rows); err != nil {
+			return fmt.Errorf("writing %d synthetic ledger rows: %w", p.rows, err)
+		}
 	}
 	if err := os.CopyFS(pristine, os.DirFS(live)); err != nil {
 		return err
@@ -222,30 +265,34 @@ func run(arms []*arm, calls, rounds, steps int, keep string) error {
 	for _, a := range arms {
 		fmt.Printf("  %-9s %s (%s)\n", a.label, a.version, a.tofu)
 	}
-	fmt.Printf("  session   %s, %d steps in %d turns, built on a cassette in a fresh home under %s\n", session, steps, steps/stepsPerTurn, work)
-	fmt.Printf("  calls     %d per method per round, %d rounds, arms alternate; one initialize per run before timing, not counted\n", calls, rounds)
+	fmt.Printf("  session   %s, %d steps in %d turns, built on a cassette in a fresh home under %s\n", session, p.steps, p.steps/stepsPerTurn, work)
+	fmt.Printf("  calls     %d per method per round, %d rounds, arms alternate; one initialize per run before timing, not counted\n", p.calls, p.rounds)
+	fmt.Printf("  ledger    %d synthetic rows; beside case %d times per delay per round: %s with last %d, then %s after each of %v\n", p.rows, p.beside, besideAsked, besideLast, besideSmall, besideDelays())
 	fmt.Printf("  masked    timestamps and the id of the session serve opens, before comparing answers\n\n")
-	for round := range rounds {
+	for round := range p.rounds {
 		order := slices.Clone(arms)
 		if round%2 == 1 {
 			slices.Reverse(order)
 		}
 		for _, a := range order {
-			if err := a.measure(pristine, live, deck, session, calls); err != nil {
+			if err := a.measure(pristine, live, deck, session, p.calls, p.beside); err != nil {
 				return fmt.Errorf("%s round %d: %w, the log is %s", a.label, round+1, err, filepath.Join(live, "serve.log"))
 			}
 		}
 	}
 	fmt.Print(table(arms))
-	if keep == "" {
+	if p.beside > 0 {
+		fmt.Print(besideTable(arms))
+	}
+	if p.keep == "" {
 		return os.RemoveAll(work)
 	}
 	for _, a := range arms {
-		if err := os.MkdirAll(filepath.Join(keep, a.label), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(p.keep, a.label), 0o755); err != nil {
 			return err
 		}
 		for name, answer := range a.answers {
-			if err := os.WriteFile(filepath.Join(keep, a.label, name+".json"), answer, 0o644); err != nil {
+			if err := os.WriteFile(filepath.Join(p.keep, a.label, name+".json"), answer, 0o644); err != nil {
 				return err
 			}
 		}
@@ -268,7 +315,7 @@ func parseArms(text string) ([]*arm, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s version: %w", full, err)
 		}
-		arms = append(arms, &arm{label: label, tofu: full, version: strings.Join(strings.Fields(string(version)), " "), samples: map[string][]time.Duration{}, answers: map[string][]byte{}})
+		arms = append(arms, &arm{label: label, tofu: full, version: strings.Join(strings.Fields(string(version)), " "), samples: map[string][]time.Duration{}, answers: map[string][]byte{}, sizes: map[string]int{}})
 	}
 	return arms, nil
 }
@@ -278,14 +325,20 @@ func main() {
 	calls := flag.Int("calls", 50, "calls of each method per round")
 	rounds := flag.Int("rounds", 2, "rounds, each arm once per round")
 	steps := flag.Int("steps", 200, "steps in the traced session, a multiple of 20")
+	rows := flag.Int("ledger", 0, "synthetic ledger rows written into the bench home before timing")
+	beside := flag.Int("beside", 0, "times per round to send query.drain while a query.ledger of the last 10000 rows builds; needs --ledger")
 	keep := flag.String("keep", "", "a folder to write each arm's masked answers into, one file per method; it also keeps the work folder the header names, which is removed without it")
 	flag.Parse()
 	arms, err := parseArms(*armsFlag)
-	if err == nil && (*steps < stepsPerTurn || *steps%stepsPerTurn != 0) {
+	switch {
+	case err != nil:
+	case *steps < stepsPerTurn || *steps%stepsPerTurn != 0:
 		err = fmt.Errorf("--steps %d is not a positive multiple of %d", *steps, stepsPerTurn)
+	case *beside > 0 && *rows == 0:
+		err = errors.New("--beside needs --ledger rows to build against")
 	}
 	if err == nil {
-		err = run(arms, *calls, *rounds, *steps, *keep)
+		err = run(arms, plan{calls: *calls, rounds: *rounds, steps: *steps, rows: *rows, beside: *beside, keep: *keep})
 	}
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "bench/serve:", err)

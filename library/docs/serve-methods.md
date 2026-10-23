@@ -72,8 +72,10 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
   `account`, `name`, `read_at`, `source`, `stale` and `retry_at`; the answer's `read_at` and `age_ms` are its
   oldest reading's), `doctor`, `accounts`, `cron`, `docs` (takes `topic`), `context` (takes `session`, else the
   open one, which before its first turn answers `unmeasured`; `items`, each `{band, kind, name, tokens,
-  fate, step}`), `drain` (takes `session`; answers what `tofu session drain --json` prints) and `ledger` (takes `id`, or `last`, `point` and `session`, which keeps that session's rows before
-  `last` counts; `rows` with `precedents` and `subject`, `{tool, command, path, url}`)
+  fate, step}`), `drain` (takes `session`; answers what `tofu session drain --json` prints) and `ledger` (takes `id`, or `last`, `point`, `session` and `before`; `session` keeps that session's rows before
+  `last` counts; without `last` an answer is one page of the newest 200 rows; `rows`, oldest first, with
+  `precedents` and `subject`, `{tool, command, path, url}`, and `next` when older rows remain: send it back as
+  `before` for the page that ends just before it)
 - boards (capability `boards`): `query.session` takes `session`; answers `info` and `generations`, the fork
   tree, each with `forked_into`, `fork_kind`, `tokens_before` and `tokens_after`. `query.usage.history` takes
   `range` (`day` by hour, `week` or `month` by day) and `project`; answers `buckets`, `total`, `sifted_tokens`

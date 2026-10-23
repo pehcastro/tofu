@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -18,6 +19,7 @@ const (
 	callLimit = 2 * time.Minute
 	turnLimit = 5 * time.Minute
 	exitLimit = 30 * time.Second
+	hostPoll  = 200 * time.Millisecond
 	lineBytes = 64 << 20
 )
 
@@ -27,6 +29,7 @@ type wireLine struct {
 	Params json.RawMessage `json:"params,omitempty"`
 	Result json.RawMessage `json:"result,omitempty"`
 	Error  json.RawMessage `json:"error,omitempty"`
+	size   int
 }
 
 type served struct {
@@ -63,7 +66,7 @@ func serve(tofu, project, cassette, log string, env []string) (*served, error) {
 		scanner := bufio.NewScanner(out)
 		scanner.Buffer(make([]byte, 0, 1<<20), lineBytes)
 		for scanner.Scan() {
-			var line wireLine
+			line := wireLine{size: len(scanner.Bytes())}
 			if json.Unmarshal(scanner.Bytes(), &line) == nil {
 				s.lines <- line
 			}
@@ -88,18 +91,24 @@ func (s *served) await(deadline <-chan time.Time, wanted func(wireLine) bool) (w
 	}
 }
 
-func (s *served) call(method string, params any) (json.RawMessage, time.Duration, error) {
+func (s *served) send(method string, params any) (string, int64, error) {
 	s.next++
-	id := strconv.Itoa(s.next)
-	body, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params})
+	id := strconv.Quote(strconv.Itoa(s.next))
+	body, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": json.RawMessage(id), "method": method, "params": params})
+	if err != nil {
+		return "", 0, err
+	}
+	started := s.clock.now()
+	_, err = s.in.Write(append(body, '\n'))
+	return id, started, err
+}
+
+func (s *served) call(method string, params any) (json.RawMessage, time.Duration, error) {
+	id, started, err := s.send(method, params)
 	if err != nil {
 		return nil, 0, err
 	}
-	started := s.clock.now()
-	if _, err := s.in.Write(append(body, '\n')); err != nil {
-		return nil, 0, err
-	}
-	line, err := s.await(time.After(callLimit), func(line wireLine) bool { return line.Method == "" && string(line.ID) == strconv.Quote(id) })
+	line, err := s.await(time.After(callLimit), func(line wireLine) bool { return line.Method == "" && string(line.ID) == id })
 	took := s.clock.since(started)
 	switch {
 	case err != nil:
@@ -126,6 +135,20 @@ func (s *served) turn(session, text string) error {
 		return fmt.Errorf("turn %q ended %s", text, done.Status)
 	}
 	return nil
+}
+
+func hostGone(home string) error {
+	deadline := time.Now().Add(exitLimit)
+	for {
+		socks, err := filepath.Glob(filepath.Join(home, ".tofu", "h", "*.sock"))
+		switch {
+		case err != nil || len(socks) == 0:
+			return err
+		case time.Now().After(deadline):
+			return errors.New("the tofu host still listens on " + socks[0] + " after its last member left")
+		}
+		time.Sleep(hostPoll)
+	}
 }
 
 func (s *served) close() error {

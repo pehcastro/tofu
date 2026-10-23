@@ -19,14 +19,15 @@ import (
 const whyUsage = "tofu why <id> | --last [n] [--point name] [--state | --json]"
 
 type whyOpts struct {
-	id    string
-	last  bool
-	count int
-	point string
-	json  bool
-	state bool
-	turns map[string]bool
-	since time.Time
+	id     string
+	last   bool
+	count  int
+	point  string
+	before string
+	json   bool
+	state  bool
+	turns  map[string]bool
+	since  time.Time
 }
 
 type whyReport struct {
@@ -233,13 +234,17 @@ func whyRows(reader *ledger.Reader, opts whyOpts) ([]ledger.Row, error) {
 		return []ledger.Row{row}, nil
 	}
 	var window []ledger.Row
+	reachedBefore := errors.New("reached the row the page ends before")
 	if _, err := reader.Each(ledger.Filter{Point: opts.point, Turns: opts.turns, Since: opts.since}, func(row ledger.Row) error {
+		if opts.before != "" && row.ID == opts.before {
+			return reachedBefore
+		}
 		window = append(window, row)
 		if len(window) > opts.count {
 			window = window[1:]
 		}
 		return nil
-	}); err != nil {
+	}); err != nil && !errors.Is(err, reachedBefore) {
 		return nil, err
 	}
 	return window, nil

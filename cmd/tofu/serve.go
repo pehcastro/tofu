@@ -288,9 +288,14 @@ func serveLedger(p host.LedgerParams) (host.LedgerReport, error) {
 		args = append(args, "--point", p.Point)
 	}
 	opts, err := parseWhyArgs(args)
-	if err == nil && p.Session != "" && p.ID != "" {
+	switch {
+	case err != nil:
+	case p.ID != "" && p.Session != "":
 		err = errors.New("session goes with last, not with an id")
+	case p.ID != "" && p.Before != "":
+		err = errors.New("before goes with last, not with an id")
 	}
+	opts.before = p.Before
 	if err != nil {
 		return host.LedgerReport{}, &host.Refusal{Code: host.CodeBadParams, Message: err.Error()}
 	}

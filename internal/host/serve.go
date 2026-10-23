@@ -279,16 +279,7 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 	case "session.turns":
 		return handle(raw, s.turns)
 	case queryPrefix + "ledger":
-		return handle(raw, func(p LedgerParams) (any, error) {
-			if s.Ledger == nil {
-				return nil, &Refusal{Code: CodeRefused, Message: "this tofu reads no ledger"}
-			}
-			report, err := s.Ledger(p)
-			if err != nil {
-				return nil, err
-			}
-			return s.withSubjects(report)
-		})
+		return handle(raw, s.ledgerPage)
 	case "undo":
 		return handle(raw, s.undo)
 	case "shell.read":

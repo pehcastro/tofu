@@ -3,8 +3,10 @@ package ledger
 import (
 	"errors"
 	"math"
+	"runtime"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"tofu/internal/konst"
@@ -133,13 +135,20 @@ func (r *Reader) Precedents(targets []Row) ([][]Precedent, error) {
 	}
 	found, failed := make([][]Precedent, len(targets)), make([]error, len(targets))
 	var shortlisting sync.WaitGroup
+	var taken atomic.Int64
 	report := sys.Crashes(".")
-	for i, target := range targets {
+	for range min(max(runtime.GOMAXPROCS(0)/konst.PrecedentCPUsPerWorker, 1), len(targets)) {
 		shortlisting.Go(func() {
-			failed[i] = safe.Call(report, "precedent shortlist", func() error {
-				found[i] = Shortlist(target, points[target.Point])
-				return nil
-			})
+			for {
+				i := int(taken.Add(1)) - 1
+				if i >= len(targets) {
+					return
+				}
+				failed[i] = safe.Call(report, "precedent shortlist", func() error {
+					found[i] = Shortlist(targets[i], points[targets[i].Point])
+					return nil
+				})
+			}
 		})
 	}
 	shortlisting.Wait()

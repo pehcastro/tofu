@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"tofu/internal/judge/ledger"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/session"
 )
@@ -42,9 +45,13 @@ func TestServeStopsTheLeadUnsteersRunsCommandsCompactsAndPagesHistory(t *testing
 		turns <- seen
 	}
 	var asked []LedgerParams
-	ledger := func(p LedgerParams) (LedgerReport, error) {
+	read := func(p LedgerParams) (LedgerReport, error) {
 		asked = append(asked, p)
-		return LedgerReport{Rows: []LedgerRow{}}, nil
+		rows := []LedgerRow{}
+		for at := range min(p.Last, konst.ServeLedgerPageRows+1) {
+			rows = append(rows, LedgerRow{Row: ledger.Row{ID: "row-" + strconv.Itoa(at)}})
+		}
+		return LedgerReport{Rows: rows}, nil
 	}
 	run := func(ctx context.Context, command string) (string, bool) {
 		if command == "sleep 30" {
@@ -61,7 +68,7 @@ func TestServeStopsTheLeadUnsteersRunsCommandsCompactsAndPagesHistory(t *testing
 			{Role: llm.RoleUser, Content: "second task"}, {Role: llm.RoleAssistant, Content: "second answer"},
 		}}, nil
 	}
-	c, live, project := serving(t, play, ServeConfig{Ledger: ledger, Run: run, Carry: carry, Compact: func(*Host) (Compaction, error) { return compacted, nil }})
+	c, live, project := serving(t, play, ServeConfig{Ledger: read, Run: run, Carry: carry, Compact: func(*Host) (Compaction, error) { return compacted, nil }})
 	h = live
 	store, err := session.OpenIn(project)
 	if err != nil {
@@ -180,13 +187,14 @@ func TestServeStopsTheLeadUnsteersRunsCommandsCompactsAndPagesHistory(t *testing
 		t.Errorf("session.compact = %+v, want %+v", result, compacted)
 	}
 
-	var report LedgerReport
+	var page, last LedgerReport
 	c.ask("17", "query.ledger", `{}`)
-	c.answer("17", &report)
-	c.ask("18", "query.ledger", `{"last":3,"point":"tool_gate"}`)
-	c.answer("18", &report)
-	if report.Rows == nil || !slices.Contains(asked, LedgerParams{}) || !slices.Contains(asked, LedgerParams{Last: 3, Point: "tool_gate"}) {
-		t.Errorf("query.ledger asked the ledger %+v and answered %+v", asked, report)
+	c.answer("17", &page)
+	c.ask("18", "query.ledger", `{"last":3,"point":"tool_gate","before":"row-9"}`)
+	c.answer("18", &last)
+	wanted := []LedgerParams{{Last: konst.ServeLedgerPageRows + 1}, {Last: 4, Point: "tool_gate", Before: "row-9"}}
+	if !slices.Equal(asked, wanted) || len(page.Rows) != konst.ServeLedgerPageRows || page.Next != "row-1" || len(last.Rows) != 3 || last.Next != "row-1" {
+		t.Errorf("query.ledger asked the ledger %+v, want %+v, and answered %d rows next %q, then %d rows next %q", asked, wanted, len(page.Rows), page.Next, len(last.Rows), last.Next)
 	}
 	schema, err := Schema()
 	if err != nil || !strings.Contains(string(schema), `"#/$defs/ledger.Reason"`) {

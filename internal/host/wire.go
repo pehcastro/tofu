@@ -1110,11 +1110,13 @@ type LedgerParams struct {
 	Last    int    `json:"last,omitempty"`
 	Point   string `json:"point,omitempty"`
 	Session string `json:"session,omitempty"`
+	Before  string `json:"before,omitempty"`
 }
 
 type LedgerReport struct {
 	Call *LedgerCall `json:"call,omitempty"`
 	Rows []LedgerRow `json:"rows"`
+	Next string      `json:"next,omitempty"`
 }
 
 type LedgerCall struct {
