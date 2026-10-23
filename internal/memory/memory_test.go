@@ -316,16 +316,18 @@ func TestAFullScopeKeepsEveryWriteRemovesByAppendingAndSurvivesATornLine(t *test
 	}
 }
 
-func TestALeadRuleIsOneLineOfAtMost160BytesNamingNoOne(t *testing.T) {
-	at160 := strings.Repeat("a", 159) + "."
+func TestALeadRuleIsOneLineOfAtMost25WordsNamingNoOne(t *testing.T) {
+	at25 := strings.TrimSpace(strings.Repeat("components ", 24)) + " stay."
+	over := at25 + " shared  everywhere\tnow and always"
 	cases := []struct {
 		statement, rule, refusal string
 	}{
 		{"  Use the shared components; never build a parallel copy.  ", "Use the shared components; never build a parallel copy.", ""},
-		{at160, at160, ""},
-		{"  " + at160 + "\t", at160, ""},
-		{at160 + "b", "", "161 bytes"},
-		{strings.Repeat("€", 54), "", "162 bytes"},
+		{at25, at25, ""},
+		{"  " + at25 + "\t", at25, ""},
+		{over, "", "30 words, 5 over the 25"},
+		{over, "", "trimmed to 25 it reads: \"" + at25 + "\""},
+		{strings.Repeat("€ ", 26), "", "26 words, 1 over the 25"},
 		{"Use the shared components.\nAlso keep replies short.", "", "one line"},
 		{"Use the shared components.\r\nAlso keep replies short.", "", "one line"},
 		{"   ", "", "empty"},

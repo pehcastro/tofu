@@ -202,16 +202,16 @@ func (Remember) Definition() llm.Tool {
 	return llm.Tool{
 		Name: turn.RememberToolName,
 		Description: "offers the person to keep one short rule for every later session. call it only for a standing rule the person stated, such as a correction or how things are always done here; never to save a whole message, a task, or a summary. " +
-			"said must be their own words, copied exactly from a message they typed in this conversation; anything else is refused. " +
-			"statement is the rule itself and nothing else: one line, at most " + strconv.Itoa(konst.MemoryRuleBytes) + " bytes, imperative or declarative, naming no one: no name, no the person, the user, he or she, such as: " +
+			"said must be their own words, copied exactly from a message they typed in this conversation, or fragments of one such message joined by ... in the order typed; anything else is refused. " +
+			"statement is the rule itself and nothing else: one line, at most " + strconv.Itoa(konst.MemoryRuleWordsMost) + " words, imperative or declarative, naming no one: no name, no the person, the user, he or she, such as: " +
 			"Desk UI primitives are widened to fit a new need; never build a parallel copy in a caller. a longer statement, a second line, or one that names the person is refused with the reason. " +
 			"the person answers yes, no, or always, and picks one of the four scopes on the card; nothing is kept before a yes. scope says where it belongs: user-global the person everywhere, project-global this project in the person's home, user-local the person in this repository, project-local the team in this repository. without scope a person entry goes to user-global, a project or reference entry to project-global. " +
 			"a statement that says the same as an entry already kept is refused with that entry's id: call again with replaces set to that id to put this one in its place, or with keep_both true when the two really differ",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"statement": map[string]any{"type": "string", "description": "the rule itself, one line of at most " + strconv.Itoa(konst.MemoryRuleBytes) + " bytes, naming no one"},
-				"said":      map[string]any{"type": "string", "description": "the person's exact words this comes from"},
+				"statement": map[string]any{"type": "string", "description": "the rule itself, one line of at most " + strconv.Itoa(konst.MemoryRuleWordsMost) + " words, naming no one"},
+				"said":      map[string]any{"type": "string", "description": "the person's exact words this comes from; fragments of one message may be joined by ... in the order they were typed"},
 				"kind":      map[string]any{"type": "string", "enum": []string{string(memory.KindPerson), string(memory.KindProject), string(memory.KindReference)}},
 				"scope":     map[string]any{"type": "string", "enum": []string{string(memory.UserLocal), string(memory.ProjectLocal), string(memory.Project), string(memory.Global)}},
 				"replaces":  map[string]any{"type": "string", "description": "the id of the entry this one takes the place of, as a refusal named it"},
@@ -220,6 +220,23 @@ func (Remember) Definition() llm.Tool {
 			"required": []string{"statement", "said", "kind"},
 		},
 	}
+}
+
+func quotes(message, quote string) bool {
+	rest := strings.Join(strings.Fields(message), " ")
+	found := false
+	for _, fragment := range strings.Split(strings.ReplaceAll(quote, "…", "..."), "...") {
+		fragment = strings.Join(strings.Fields(fragment), " ")
+		if fragment == "" {
+			continue
+		}
+		at := strings.Index(rest, fragment)
+		if at < 0 {
+			return false
+		}
+		rest, found = rest[at+len(fragment):], true
+	}
+	return found
 }
 
 func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
@@ -242,11 +259,8 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("remember: %w", err)
 	}
-	quote := strings.Join(strings.Fields(args.Said), " ")
-	if !slices.ContainsFunc(typed, func(said turn.PersonSaid) bool {
-		return quote != "" && strings.Contains(strings.Join(strings.Fields(said.Words), " "), quote)
-	}) {
-		return turn.Result{}, fmt.Errorf("remember: %q is not in any message the person typed in this conversation; copy their words exactly, or do not offer it", args.Said)
+	if !slices.ContainsFunc(typed, func(said turn.PersonSaid) bool { return quotes(said.Words, args.Said) }) {
+		return turn.Result{}, fmt.Errorf("remember: %q is not in any message the person typed in this conversation, whole or as fragments of one message joined by ... in their order; copy their words exactly, or do not offer it", args.Said)
 	}
 	entry := memory.Entry{Scope: cmp.Or(args.Scope, args.Kind.Scope()), Kind: args.Kind, Text: rule, Said: args.Said, Session: r.Session, At: time.Now(), By: memory.ByLead}
 	if family, err := r.Store.Identity(r.Session); err == nil {

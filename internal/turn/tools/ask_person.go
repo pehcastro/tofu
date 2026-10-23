@@ -9,12 +9,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/memory"
 	"tofu/internal/safe"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
@@ -92,7 +92,7 @@ func (AskPerson) Definition() llm.Tool {
 		"type": "object",
 		"properties": map[string]any{
 			"id":          map[string]any{"type": "string"},
-			"header":      map[string]any{"type": "string", "description": "at most " + strconv.Itoa(konst.AskPersonHeaderRunes) + " characters"},
+			"header":      map[string]any{"type": "string", "description": "1 to " + strconv.Itoa(konst.AskPersonHeaderWordsMost) + " words"},
 			"question":    map[string]any{"type": "string", "description": "one sentence"},
 			"type":        map[string]any{"type": "string", "enum": []string{string(turn.QuestionChoice), string(turn.QuestionMulti), string(turn.QuestionText), string(turn.QuestionYesNo)}},
 			"options":     map[string]any{"type": "array", "items": option, "minItems": konst.AskPersonOptionsLeast, "maxItems": konst.AskPersonOptionsMost, "description": "for choice and multi; yesno is yes then no; text has none"},
@@ -356,8 +356,9 @@ func checkQuestions(questions []turn.PersonQuestion) error {
 			return errors.New("a question has no id")
 		case slices.Contains(ids, q.ID):
 			return fmt.Errorf("the id %q is used twice", q.ID)
-		case utf8.RuneCountInString(q.Header) > konst.AskPersonHeaderRunes:
-			return fmt.Errorf("%s: the header %q is over %d characters", q.ID, q.Header, konst.AskPersonHeaderRunes)
+		}
+		if err := memory.WordsAtMost(fmt.Sprintf("the header %q", q.Header), q.Header, konst.AskPersonHeaderWordsMost); err != nil {
+			return fmt.Errorf("%s: %w", q.ID, err)
 		}
 		ids = append(ids, q.ID)
 		if err := checkOptions(q); err != nil {
@@ -386,12 +387,14 @@ func checkOptions(q turn.PersonQuestion) error {
 		return fmt.Errorf("the type %q is not choice, multi, text or yesno", q.Type)
 	}
 	for _, o := range q.Options {
-		words := len(strings.Fields(o.Label))
 		switch {
-		case words < 1 || words > konst.AskPersonLabelWordsMost:
-			return fmt.Errorf("the label %q is not 1 to %d words", o.Label, konst.AskPersonLabelWordsMost)
+		case strings.TrimSpace(o.Label) == "":
+			return fmt.Errorf("the label %q is empty, and a label is 1 to %d words", o.Label, konst.AskPersonLabelWordsMost)
 		case strings.EqualFold(strings.TrimSpace(o.Label), "other"):
 			return errors.New("tofu adds other to every choice, so the options never name one")
+		}
+		if err := memory.WordsAtMost(fmt.Sprintf("the label %q", o.Label), o.Label, konst.AskPersonLabelWordsMost); err != nil {
+			return err
 		}
 	}
 	if q.Recommended == nil || *q.Recommended < 0 || *q.Recommended >= len(optionsOf(q)) {

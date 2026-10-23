@@ -88,6 +88,26 @@ func TestRememberRefusesWordsThePersonDidNotType(t *testing.T) {
 	}
 }
 
+func TestRememberTakesFragmentsOfOneMessageInTheirOrder(t *testing.T) {
+	for quote, takes := range map[string]bool{
+		"ok. ... the logs go to /tmp":                 true,
+		"also remember…/tmp":                          true,
+		"...keep replies short":                       true,
+		"never run cargo ... 2 jobs, ok?":             true,
+		"the logs go to /tmp ... ok. also":            false,
+		"keep replies ... the logs go to /tmp":        false,
+		"remember ... remember":                       false,
+		"...":                                         false,
+		"never run cargo ... the logs go to /tmp":     false,
+		"ok. also remember that ... the logs go to /": true,
+	} {
+		_, err := rememberChain(t, memory.Project).remembered(t, "logs go to /tmp", quote, "project")
+		if takes != (err == nil) {
+			t.Errorf("quote %q: err %v, want taken %v", quote, err, takes)
+		}
+	}
+}
+
 func TestRememberAsksAndKeepsWordsFromAnyMessageOfTheChain(t *testing.T) {
 	c := rememberChain(t, memory.Project)
 	result, err := c.remembered(t, "cargo runs with at most 2 jobs", "never run cargo with more than 2 jobs", "person")

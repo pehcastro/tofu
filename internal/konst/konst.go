@@ -440,7 +440,7 @@ const (
 )
 
 const (
-	MemoryRuleBytes             = 160
+	MemoryRuleWordsMost         = 25
 	MemoryIdentityTimeoutMillis = 3000
 	MemoryGhIDKeptHours         = 24
 	MemorySaltBytes             = 16
@@ -510,18 +510,18 @@ const (
 )
 
 const (
-	AskPersonWaitSeconds    = 120
-	AskPersonQuestionsMost  = 4
-	AskPersonOptionsLeast   = 2
-	AskPersonOptionsMost    = 4
-	AskPersonHeaderRunes    = 30
-	UpgradeNoteBytes        = 6 << 10
-	AskPersonLabelWordsMost = 5
-	BoardTLDRRunesMost      = 120
-	BoardELI5LinesMost      = 3
-	BoardReadersMost        = 8
-	BoardHookDepthMost      = 3
-	LeadCheckInReviewsMost  = 10
+	AskPersonWaitSeconds     = 120
+	AskPersonQuestionsMost   = 4
+	AskPersonOptionsLeast    = 2
+	AskPersonOptionsMost     = 4
+	AskPersonHeaderWordsMost = 4
+	UpgradeNoteBytes         = 6 << 10
+	AskPersonLabelWordsMost  = 5
+	BoardTLDRRunesMost       = 120
+	BoardELI5LinesMost       = 3
+	BoardReadersMost         = 8
+	BoardHookDepthMost       = 3
+	LeadCheckInReviewsMost   = 10
 
 	BoardAuditFreshDays        = 1
 	BoardAuditStaleDays        = 7

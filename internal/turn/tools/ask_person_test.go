@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/konst"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 )
@@ -59,10 +58,10 @@ func TestAskPersonRefusesAQuestionSetOutsideTheShape(t *testing.T) {
 		{"five questions", `{"questions":[` + strings.Repeat(question("x", "h", "choice", two, `,"recommended":0`)+",", 4) + question("y", "h", "choice", two, `,"recommended":0`) + `]}`, "1 to 4"},
 		{"two ids alike", `{"questions":[` + question("x", "h", "choice", two, `,"recommended":0`) + "," + question("x", "h", "choice", two, `,"recommended":0`) + `]}`, "twice"},
 		{"no id", `{"questions":[` + question("", "h", "choice", two, `,"recommended":0`) + `]}`, "id"},
-		{"a header one rune over", `{"questions":[` + question("x", strings.Repeat("é", konst.AskPersonHeaderRunes+1), "choice", two, `,"recommended":0`) + `]}`, "header"},
+		{"a header one word over", `{"questions":[` + question("x", "Which HTTP client fits best", "choice", two, `,"recommended":0`) + `]}`, `header "Which HTTP client fits best" is 5 words, 1 over the 4; trimmed to 4 it reads: "Which HTTP client fits"`},
 		{"one option", `{"questions":[` + question("x", "h", "choice", option("a"), `,"recommended":0`) + `]}`, "2 to 4"},
 		{"five options", `{"questions":[` + question("x", "h", "multi", two+","+two+","+option("c"), `,"recommended":0`) + `]}`, "2 to 4"},
-		{"a label of six words", `{"questions":[` + question("x", "h", "choice", option("one two three four five six")+","+option("b"), `,"recommended":0`) + `]}`, "1 to 5 words"},
+		{"a label of six words", `{"questions":[` + question("x", "h", "choice", option("one two three four five six")+","+option("b"), `,"recommended":0`) + `]}`, `label "one two three four five six" is 6 words, 1 over the 5; trimmed to 5 it reads: "one two three four five"`},
 		{"an empty label", `{"questions":[` + question("x", "h", "choice", option(" ")+","+option("b"), `,"recommended":0`) + `]}`, "1 to 5 words"},
 		{"the model writes other", `{"questions":[` + question("x", "h", "choice", option("Other")+","+option("b"), `,"recommended":0`) + `]}`, "other"},
 		{"no recommended", `{"questions":[` + question("x", "h", "choice", two, "") + `]}`, "recommended"},
@@ -81,9 +80,9 @@ func TestAskPersonRefusesAQuestionSetOutsideTheShape(t *testing.T) {
 	}
 }
 
-func TestAskPersonTakesATwelveRuneHeaderThatIsLongerInBytes(t *testing.T) {
+func TestAskPersonTakesAFourWordHeaderLongerThanThirtyCharacters(t *testing.T) {
 	tool := tools.AskPerson{Person: personSays(turn.PersonAllowedOnce, nil), Auto: func() bool { return false }}
-	got := asked(t, tool, strings.Replace(twoLibraries, "HTTP client", "clientè HTTP", 1))
+	got := asked(t, tool, strings.Replace(twoLibraries, "HTTP client", "Préférences  concernant client HTTPS", 1))
 	if got.Outcome != "submitted" {
 		t.Fatalf("outcome %q, want submitted", got.Outcome)
 	}

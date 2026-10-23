@@ -249,7 +249,7 @@ func (m *Memory) Add(e Entry, replace string) (Entry, error) {
 		}
 	}
 	if len(e.viewed()) > konst.MemtreeLineBytes {
-		err = fmt.Errorf("the entry reads as %d bytes, over the %d a memory line holds; write the rule itself and nothing else", len(e.viewed()), konst.MemtreeLineBytes)
+		err = fmt.Errorf("the entry is %d words, and its words are too long to fit one memory line; say it in shorter words", len(strings.Fields(e.Text)))
 	} else {
 		e, err = m.keep(e, false)
 	}
@@ -326,10 +326,19 @@ func Rule(statement string) (string, error) {
 		return "", errors.New("the statement is empty; write the rule itself")
 	case strings.ContainsAny(rule, "\r\n"):
 		return "", errors.New("the statement is more than one line; write one rule on one line, never the whole message")
-	case len(rule) > konst.MemoryRuleBytes:
-		return "", fmt.Errorf("the statement is %d bytes, over the %d a rule may hold; write the rule itself and nothing else, never the whole message", len(rule), konst.MemoryRuleBytes)
+	}
+	if err := WordsAtMost("the statement", rule, konst.MemoryRuleWordsMost); err != nil {
+		return "", fmt.Errorf("%w; write the rule itself and nothing else, never the whole message", err)
 	}
 	return rule, nil
+}
+
+func WordsAtMost(subject, text string, most int) error {
+	words := strings.Fields(text)
+	if len(words) <= most {
+		return nil
+	}
+	return fmt.Errorf("%s is %d words, %d over the %d; trimmed to %d it reads: %q", subject, len(words), len(words)-most, most, most, strings.Join(words[:most], " "))
 }
 
 func PersonIn(statement string) (string, bool) {

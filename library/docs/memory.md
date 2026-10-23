@@ -65,7 +65,7 @@ the words, `--replace <id>` writes a new version, `--dir <project>` names anothe
 In the app, `/remember <what>` keeps a `user-global` entry at once and prints the undo. A message you type is never offered as memory.
 
 The lead offers one rule with its `remember` tool, only with words you typed in this conversation:
-one line, at most 160 bytes, naming no one. Its card, `[&orchestrator] wants to add a
+one line, at most 25 words, naming no one. Its card, `[&orchestrator] wants to add a
 project-global memory`, takes `1` yes, `2` no, `3` always, `esc` no, and `tab` switches to
 `user-global`. Nothing is written before you pick. Always turns `autoMemory` on, and later rules are
 kept at once in the scope the lead named, except `project-local`, which always asks. `tofu settings
