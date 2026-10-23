@@ -210,6 +210,12 @@ const (
 	ShellResizeAckMillis     = 150
 	ShellResizeTries         = 3
 
+	ShellLogBytes         = 1048576
+	ShellLogHeadBytes     = 262144
+	ShellLogTailBytes     = 262144
+	ShellLogLineSeekBytes = 4096
+	KeptShellsRunningMax  = 64
+
 	TypecheckDeadlineMillis    = 15000
 	TypecheckFirstCheckMillis  = 240000
 	TypecheckInlineMillis      = 800
@@ -506,6 +512,7 @@ const (
 
 const (
 	ScratchCleanupDays       = 7
+	SessionStaleDays         = 90
 	ScratchMaxGB             = 50
 	ScratchRemoveTries       = 5
 	ScratchRemoveRetryMillis = 200

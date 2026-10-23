@@ -1,12 +1,45 @@
 package shell
 
 import (
+	"bytes"
 	"context"
 	"net"
+	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"testing"
 	"time"
+
+	"tofu/internal/konst"
 )
+
+func TestAKeptShellsLogKeepsItsStartAndItsNewestOutputUnderTheCap(t *testing.T) {
+	registry := OpenAt(filepath.Join(t.TempDir(), "shells"))
+	const last = 400000
+	command := "seq 1 " + strconv.Itoa(last) + "; sleep 30"
+	got, err := registry.YieldReady(context.Background(), shellCommand(t, t.TempDir(), command), command, "", Wait{Within: 5 * time.Second, Kept: KeptBackground})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = registry.Kill(got.Shell.Name) })
+	printed := 0
+	for n := 1; n <= last; n++ {
+		printed += len(strconv.Itoa(n)) + 1
+	}
+	log, err := os.ReadFile(registry.logPath(got.Shell.Name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := regexp.MustCompile(`\ntofu: (\d+) bytes dropped[^\n]*\n`).FindSubmatch(log)
+	if len(log) > konst.ShellLogBytes || marker == nil || !bytes.HasPrefix(log, []byte("1\n2\n3\n")) || !bytes.HasSuffix(log, []byte(strconv.Itoa(last-1)+"\n"+strconv.Itoa(last)+"\n")) {
+		t.Fatalf("the log of %d printed bytes is %d bytes, cap %d, marker %q, starts %q, ends %q", printed, len(log), konst.ShellLogBytes, marker, log[:min(12, len(log))], log[max(0, len(log)-16):])
+	}
+	dropped, _ := strconv.Atoi(string(marker[1]))
+	if kept := len(log) - len(marker[0]); kept+dropped != printed {
+		t.Fatalf("the log keeps %d bytes and says %d were dropped, which is %d, not the %d printed", kept, dropped, kept+dropped, printed)
+	}
+}
 
 func TestTheRegistrySaysWhyAShellWasKeptWhereItRunsWhatMadeItReadyAndHowItEnded(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "shells")

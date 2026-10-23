@@ -2,6 +2,7 @@ package shell
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"regexp"
@@ -64,6 +65,11 @@ func (r *Registry) YieldReady(ctx context.Context, cmd *exec.Cmd, command, owner
 			return Yielded{}, err
 		}
 	}
+	if wait.Kept == KeptBackground {
+		if err := r.keptFull(0); err != nil {
+			return Yielded{}, err
+		}
+	}
 	name, logFile, err := r.claim()
 	if err != nil {
 		return Yielded{}, err
@@ -81,11 +87,11 @@ func (r *Registry) YieldReady(ctx context.Context, cmd *exec.Cmd, command, owner
 	if err := r.list(got.Shell, process); err != nil {
 		_ = killTree(cmd.Process.Pid)
 		process.tree.release()
-		_ = logFile.Close()
+		_ = process.log.Close()
 		return Yielded{}, err
 	}
 	exited := func(waitErr error) (Yielded, error) {
-		_ = logFile.Close()
+		process.closeLog()
 		process.tree.release()
 		output, readErr := os.ReadFile(r.logPath(name))
 		r.mu.Lock()
@@ -129,8 +135,13 @@ func (r *Registry) YieldReady(ctx context.Context, cmd *exec.Cmd, command, owner
 	if got.Ready != ReadyStopped || wait.Kept == KeptBackground {
 		got.Shell.Kept = wait.Kept
 	}
-	if err := r.keep(got.Shell, process, waited, logFile); err != nil {
+	if err := r.keep(got.Shell, process, waited); err != nil {
 		return got, err
+	}
+	if got.Shell.Kept != "" {
+		if err := r.keptFull(1); err != nil {
+			return got, errors.Join(err, errors.New("shell: this one ran past its wait, so it was ended rather than kept"), r.stop(name, HolderAgent))
+		}
 	}
 	got.Output, err = r.Tail(name, DefaultTail)
 	return got, err

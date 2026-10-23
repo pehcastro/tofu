@@ -80,6 +80,8 @@ const (
 type live struct {
 	tree     tree
 	term     *terminal
+	log      io.WriteCloser
+	drained  <-chan struct{}
 	finished chan struct{}
 	killed   bool
 }
@@ -172,7 +174,7 @@ func (r *Registry) claim() (string, *os.File, error) {
 	}
 	for number := highest + 1; ; number++ {
 		name := claimedPrefix + strconv.Itoa(number)
-		logFile, err := os.OpenFile(r.logPath(name), os.O_CREATE|os.O_EXCL|os.O_WRONLY, fileMode)
+		logFile, err := os.OpenFile(r.logPath(name), os.O_CREATE|os.O_EXCL|os.O_RDWR, fileMode)
 		if errors.Is(err, os.ErrExist) {
 			continue
 		}
@@ -184,25 +186,28 @@ func (r *Registry) claim() (string, *os.File, error) {
 }
 
 func (r *Registry) spawn(cmd *exec.Cmd, command string, logFile *os.File) (*live, <-chan error, bool, error) {
-	typed := r.Terminals.Load()
+	log := io.WriteCloser(&keptLog{file: logFile})
+	if r.Lifetime == OutlivesTofu {
+		log = logFile
+	}
+	typed, report := r.Terminals.Load(), r.toldIn(log)
 	if typed || len(cmd.Args) == 3 && cmd.Args[1] == "-c" && endsInFilter(command) {
 		cmd.Env = append(cmd.Environ(), "PAGER=cat", "GIT_PAGER=cat")
 		if typed {
 			cmd.Env = append(cmd.Env, "TERM=xterm-256color")
 		}
-		if spawned, waited, term, err := startConsole(cmd, logFile, r.Lifetime, typed, r.toldIn(logFile)); err == nil {
-			return &live{tree: spawned, term: term, finished: make(chan struct{})}, waited, true, nil
+		if spawned, waited, term, err := startConsole(cmd, log, r.Lifetime, typed, report); err == nil {
+			return &live{tree: spawned, term: term, log: log, finished: make(chan struct{})}, waited, true, nil
 		}
 	}
-	cmd.Stdout, cmd.Stderr = logFile, logFile
-	spawned, err := startTree(cmd, r.Lifetime)
+	spawned, drained, err := startLogged(cmd, r.Lifetime, logFile, log, report)
 	if err != nil {
-		_ = logFile.Close()
+		_ = log.Close()
 		return nil, nil, false, err
 	}
-	waited, report := make(chan error, 1), r.toldIn(logFile)
+	waited := make(chan error, 1)
 	safe.Go(report, "shell wait", func() { waited <- safe.Call(report, "shell wait", cmd.Wait) })
-	return &live{tree: spawned, finished: make(chan struct{})}, waited, false, nil
+	return &live{tree: spawned, log: log, drained: drained, finished: make(chan struct{})}, waited, false, nil
 }
 
 func (r *Registry) toldIn(log io.Writer) safe.Report {
@@ -218,14 +223,17 @@ func (r *Registry) list(entry Shell, process *live) error {
 	return r.writeLocked(entry)
 }
 
-func (r *Registry) keep(entry Shell, process *live, waited <-chan error, logFile *os.File) error {
+func (r *Registry) keep(entry Shell, process *live, waited <-chan error) error {
 	err := r.list(entry, process)
-	safe.Go(r.toldIn(logFile), "shell await", func() { r.await(waited, logFile, entry, process) })
+	safe.Go(r.toldIn(process.log), "shell await", func() { r.await(waited, entry, process) })
 	return err
 }
 
 func (r *Registry) Start(root, name, command, owner string, env ...string) (Shell, error) {
 	if err := r.reserve(name); err != nil {
+		return Shell{}, err
+	}
+	if err := r.keptFull(0); err != nil {
 		return Shell{}, err
 	}
 	choice, err := Resolve("")
@@ -244,7 +252,7 @@ func (r *Registry) Start(root, name, command, owner string, env ...string) (Shel
 	}
 	entry := Shell{Name: name, Command: command, Dir: root, Owner: owner, Session: r.session, TofuPID: r.self, PID: cmd.Process.Pid, State: Running, Started: started, Terminal: terminal,
 		Kept: KeptBackground, Port: NamedPort(root, command, cmd.Env), Env: env}
-	return entry, r.keep(entry, process, waited, logFile)
+	return entry, r.keep(entry, process, waited)
 }
 
 func exitCode(waitErr error) int {
@@ -258,9 +266,9 @@ func exitCode(waitErr error) int {
 	return -1
 }
 
-func (r *Registry) await(waited <-chan error, logFile *os.File, started Shell, process *live) {
+func (r *Registry) await(waited <-chan error, started Shell, process *live) {
 	code := exitCode(<-waited)
-	_ = logFile.Close()
+	process.closeLog()
 	defer close(process.finished)
 	r.mu.Lock()
 	defer r.mu.Unlock()
