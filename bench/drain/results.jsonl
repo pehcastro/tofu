@@ -20,3 +20,5 @@
 {"date":"2026-10-22","machine":"DESKTOP-AHUN9RO","commit":"b4cf8de687b2eccd6b263998e612ed07d2c1f0dd-dirty","session":"recorded","bytes":20168967,"events":11298,"arm":"floor","run":3,"ms":133}
 {"date":"2026-10-22","machine":"DESKTOP-AHUN9RO","commit":"b4cf8de687b2eccd6b263998e612ed07d2c1f0dd-dirty","session":"recorded","bytes":20168967,"events":11298,"arm":"floor","run":4,"ms":139}
 {"date":"2026-10-22","machine":"DESKTOP-AHUN9RO","commit":"b4cf8de687b2eccd6b263998e612ed07d2c1f0dd-dirty","session":"recorded","bytes":20168967,"events":11298,"arm":"floor","run":5,"ms":132}
+{"date":"2026-10-23","machine":"DESKTOP-AHUN9RO","commit":"fda0e22820cca73956f27e08034153fb8cbdd6fa-dirty","session":"claude:ade52729-2164-44a1-b4b8-877a234f4893.jsonl","main_bytes":312935630,"subagent_files":692,"subagent_bytes":1273919397,"gomaxprocs":4,"arm":"claude","run":1,"ms":4827}
+{"date":"2026-10-23","machine":"DESKTOP-AHUN9RO","commit":"fda0e22820cca73956f27e08034153fb8cbdd6fa-dirty","session":"claude:ade52729-2164-44a1-b4b8-877a234f4893.jsonl","main_bytes":312935630,"subagent_files":692,"subagent_bytes":1273919397,"gomaxprocs":4,"arm":"claude","run":2,"ms":4860}

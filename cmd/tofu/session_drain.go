@@ -12,6 +12,7 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/drain"
+	"tofu/internal/drain/claudecode"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/recall"
 	"tofu/internal/session"
@@ -19,7 +20,8 @@ import (
 )
 
 const (
-	sessionDrainUsage = "tofu session drain [name|id] [--json]"
+	sessionDrainUsage = "tofu session drain [name|id] [--claude <transcript.jsonl>] [--json]"
+	claudeFlag        = "--claude"
 	drainShownRows    = 10
 	drainMillion      = 1_000_000
 	drainThousand     = 1_000
@@ -33,6 +35,16 @@ type drainReport struct {
 
 func sessionDrainVerb(o verbOutput, args []string) int {
 	o.verb, o.usageLine = "session drain", sessionDrainUsage
+	if at := slices.Index(args, claudeFlag); at >= 0 {
+		if at+1 == len(args) {
+			return o.usage(errors.New("--claude needs a transcript path"))
+		}
+		path, rest := args[at+1], slices.Delete(slices.Clone(args), at, at+2)
+		if handles, _, err := verbArgs(rest); err != nil || len(handles) > 0 {
+			return o.usage(cmp.Or(err, errors.New("--claude takes a path, not a session")))
+		}
+		return claudeDrain(o, path)
+	}
 	handles, _, err := verbArgs(args)
 	if err == nil && len(handles) > 1 {
 		err = fmt.Errorf("%d operands, want at most one <name|id>", len(handles))
@@ -41,6 +53,23 @@ func sessionDrainVerb(o verbOutput, args []string) int {
 		return o.usage(err)
 	}
 	return sessionReport(o, func(store *session.Store) (drainReport, error) { return sessionDrain(store, handles) }, drainLines)
+}
+
+func claudeDrain(o verbOutput, path string) int {
+	registry, err := modelRegistry()
+	if err != nil {
+		return o.fail(err)
+	}
+	estimate, err := recall.LoadConfig()
+	if err != nil {
+		return o.fail(err)
+	}
+	report, err := claudecode.Read(path, drain.Input{Weights: drain.WeightsFrom(registry), BytesPerThousandTokens: estimate.BytesPerThousandTokens})
+	if err != nil {
+		return o.fail(err)
+	}
+	result := drainReport{Handle: report.Session, Report: report}
+	return o.done(true, result, func(page cli.Page) []string { return drainLines(page, result) })
 }
 
 func sessionDrain(store *session.Store, handles []string) (drainReport, error) {
