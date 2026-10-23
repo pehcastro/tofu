@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"slices"
 	"time"
 
@@ -40,7 +41,17 @@ func withAncestors(store *session.Store, header session.Header, report sessionTr
 			carried[call.Call] = i
 		}
 	}
+	writtenSince := func(id string) bool {
+		entries, err := os.ReadDir(store.Dir(id))
+		return err != nil || slices.ContainsFunc(entries, func(entry os.DirEntry) bool {
+			info, err := entry.Info()
+			return err != nil || !info.ModTime().Before(header.At)
+		})
+	}
 	for _, from := range ancestors {
+		if len(carried) == 0 && !writtenSince(from.ID) {
+			continue
+		}
 		events, err := store.Events(from.ID)
 		if err != nil {
 			return sessionTraceReport{}, err
