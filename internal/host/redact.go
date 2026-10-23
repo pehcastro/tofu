@@ -148,6 +148,19 @@ func redacted(event Event, mask func(string) string) Event {
 		decided.Failure, decided.OverridesRule = mask(decided.Failure), mask(decided.OverridesRule)
 		event.Decision = &decided
 	}
+	if event.Card != nil {
+		card := *event.Card
+		card.Doing, card.Verb, card.Object, card.Meta = mask(card.Doing), mask(card.Verb), mask(card.Object), mask(card.Meta)
+		event.Card = &card
+	}
+	if event.GroupSummary != nil {
+		summary := *event.GroupSummary
+		summary.Head, summary.Open = maskedPieces(summary.Head, mask), slices.Clone(summary.Open)
+		for i := range summary.Open {
+			summary.Open[i].Detail = maskedPieces(summary.Open[i].Detail, mask)
+		}
+		event.GroupSummary = &summary
+	}
 	event.Plan = slices.Clone(event.Plan)
 	for i := range event.Plan {
 		event.Plan[i].Phase, event.Plan[i].Text = mask(event.Plan[i].Phase), mask(event.Plan[i].Text)

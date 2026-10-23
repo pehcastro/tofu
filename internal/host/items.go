@@ -167,7 +167,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		}
 		_ = json.Unmarshal(event.Args, &args)
 		s.tools[event.ID] = openTool{tool: event.Tool, path: args.Path, at: now}
-		return append(out, notify("tool.started", &ToolStarted{Identity: id, Instance: event.Agent, Tool: event.Tool, Title: args.Title, Args: wholeJSON(event.Args), StartedAt: now}))
+		return append(out, notify("tool.started", &ToolStarted{Identity: id, Instance: event.Agent, Tool: event.Tool, Title: args.Title, Args: wholeJSON(event.Args), StartedAt: now, Card: event.Card, Group: event.Group}))
 	case EventToolResult:
 		return append(out, s.toolCompleted(id, event, now)...)
 	case EventDecision:
@@ -294,7 +294,8 @@ func wholeJSON(raw json.RawMessage) json.RawMessage {
 func (s *items) toolCompleted(id Identity, event Event, now time.Time) []outgoing {
 	opened, known := s.tools[event.ID]
 	delete(s.tools, event.ID)
-	completed := &ToolCompleted{Identity: id, Instance: event.Agent, Tool: opened.tool, Failed: event.Failed, ExitCode: event.ExitCode, Bytes: event.Bytes, Lines: lineCount(event.Detail), Output: event.Detail}
+	completed := &ToolCompleted{Identity: id, Instance: event.Agent, Tool: opened.tool, Failed: event.Failed, ExitCode: event.ExitCode, Bytes: event.Bytes, Lines: lineCount(event.Detail), Output: event.Detail,
+		Card: event.Card, Group: event.Group, GroupSummary: event.GroupSummary}
 	if known {
 		completed.DurationMs = now.Sub(opened.at).Milliseconds()
 	}

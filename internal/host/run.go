@@ -100,12 +100,12 @@ func (h *Host) heardTyped(emit func(Event), typed string) {
 	emit(h.withImages(Event{Kind: EventSteered, ID: h.steering.heard(), Text: typed, Step: 1, Origin: wireOrigin(llm.Origin{Source: llm.SourceTyped})}))
 }
 
-func enteredUnshown(logged session.Event) (Event, bool) {
+func leadUserMessage(logged session.Event) (session.MessageBody, bool) {
 	var said session.MessageBody
-	if logged.Agent != "" || logged.Kind != session.EventMessage || json.Unmarshal(logged.Body, &said) != nil || said.Role != session.RoleUser {
-		return Event{}, false
-	}
-	origin := turn.OriginOf(said)
+	return said, logged.Agent == "" && logged.Kind == session.EventMessage && json.Unmarshal(logged.Body, &said) == nil && said.Role == session.RoleUser
+}
+
+func enteredUnshown(said session.MessageBody, origin llm.Origin) (Event, bool) {
 	switch origin.Source {
 	case llm.SourceTyped, llm.SourceSteer, llm.SourceEnvironment, llm.SourceSpawnLine:
 		return Event{}, false
@@ -266,8 +266,14 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	var opened atomic.Bool
 	opened.Store(resumed)
 	config.Appended = func(logged session.Event) {
-		if entered, unshown := enteredUnshown(logged); unshown && (entered.Origin.Sub != live.Origin.Source || opened.Swap(true)) {
-			emit(entered)
+		if said, user := leadUserMessage(logged); user {
+			origin := turn.OriginOf(said)
+			if endsTheRow(origin.Source) {
+				watch.endLeadRow()
+			}
+			if entered, unshown := enteredUnshown(said, origin); unshown && (entered.Origin.Sub != live.Origin.Source || opened.Swap(true)) {
+				emit(entered)
+			}
 		}
 		emit(Event{Kind: EventPersisted, ID: logged.ID, Agent: logged.Agent, Logged: &logged})
 		forking.Lock()

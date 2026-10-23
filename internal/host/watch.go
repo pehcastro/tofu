@@ -20,6 +20,7 @@ import (
 	"tofu/internal/safe"
 	"tofu/internal/session"
 	roster "tofu/internal/subagent"
+	"tofu/internal/toolcard"
 	"tofu/internal/turn"
 )
 
@@ -78,6 +79,7 @@ type watcher struct {
 	parents   map[string]string
 	drawn     []SubAgentRow
 	ticked    []roster.SubAgent
+	cards     cardRows
 }
 
 type watchedAgent struct {
@@ -245,8 +247,11 @@ func (a *watcher) askThrough(ctx context.Context, inner turn.Model, request llm.
 		stats.Decisions = a.decisions()
 	}
 	a.emit(stats)
-	if text := strings.TrimSpace(decision.Content); text != "" && !streamed && inChat {
-		a.emit(Event{Kind: EventText, Text: text})
+	if text := strings.TrimSpace(decision.Content); text != "" && inChat {
+		a.endLeadRow()
+		if !streamed {
+			a.emit(Event{Kind: EventText, Text: text})
+		}
 	}
 	for _, call := range decision.ToolCalls {
 		a.called(call, asker)
@@ -268,10 +273,15 @@ func (a *watcher) called(call llm.ToolCall, asker string) {
 	a.marks.Lock()
 	if promotes {
 		a.spawns = append(a.spawns, id)
+		delete(a.cards.open, asker)
+	}
+	card, group := a.cards.place(asker, id, toolcard.Of(call.Name, call.Arguments))
+	if promotes {
+		delete(a.cards.open, asker)
 	}
 	a.noteWholeFile(call, asker)
 	a.marks.Unlock()
-	a.emit(Event{Kind: EventToolCall, ID: id, Tool: call.Name, Text: intent, Detail: detail, Promote: promotes, Agent: asker, Args: call.Arguments})
+	a.emit(Event{Kind: EventToolCall, ID: id, Tool: call.Name, Text: intent, Detail: detail, Promote: promotes, Agent: asker, Args: call.Arguments, Card: card, Group: group})
 }
 
 func (a *watcher) result(message llm.Message, asker string) {
@@ -302,6 +312,7 @@ func (a *watcher) result(message llm.Message, asker string) {
 		result.Text = reply
 	}
 	body := turn.WithoutToolRef(message.Content)
+	result.Card, result.Group, result.GroupSummary = a.cards.settle(result.ID, body, result.Failed, message.ToolExitCode)
 	first, appended, appends := turn.AppendedLines(body)
 	switch {
 	case result.Failed:

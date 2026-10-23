@@ -83,6 +83,9 @@ func resumedChat(carry Carry, dir string) []Event {
 		}
 		switch message.Role {
 		case llm.RoleUser:
+			if endsTheRow(message.Origin.Source) {
+				lead.watch.endLeadRow()
+			}
 			task, origin := carry.taskIn(message.Content), lead.originOf(message)
 			left, drew := lead.reportsIn(task)
 			switch {
@@ -98,6 +101,7 @@ func resumedChat(carry Carry, dir string) []Event {
 			}
 		case llm.RoleAssistant:
 			if text := strings.TrimSpace(message.Content); text != "" {
+				lead.watch.endLeadRow()
 				lead.watch.emit(Event{Kind: EventText, Text: text})
 			}
 			for _, call := range message.ToolCalls {

@@ -332,19 +332,24 @@ type ToolStarted struct {
 	Title     string          `json:"title,omitempty"`
 	Args      json.RawMessage `json:"args"`
 	StartedAt time.Time       `json:"startedAt"`
+	Card      *ToolCard       `json:"card,omitempty"`
+	Group     string          `json:"group,omitempty"`
 }
 
 type ToolCompleted struct {
 	Identity
-	Instance   string      `json:"instance,omitempty"`
-	Tool       string      `json:"tool"`
-	Failed     bool        `json:"failed"`
-	ExitCode   *int        `json:"exitCode,omitempty"`
-	Bytes      int         `json:"bytes"`
-	Lines      int         `json:"lines"`
-	DurationMs int64       `json:"durationMs"`
-	Output     string      `json:"output"`
-	Summary    ToolSummary `json:"summary"`
+	Instance     string        `json:"instance,omitempty"`
+	Tool         string        `json:"tool"`
+	Failed       bool          `json:"failed"`
+	ExitCode     *int          `json:"exitCode,omitempty"`
+	Bytes        int           `json:"bytes"`
+	Lines        int           `json:"lines"`
+	DurationMs   int64         `json:"durationMs"`
+	Output       string        `json:"output"`
+	Summary      ToolSummary   `json:"summary"`
+	Card         *ToolCard     `json:"card,omitempty"`
+	Group        string        `json:"group,omitempty"`
+	GroupSummary *GroupSummary `json:"groupSummary,omitempty"`
 }
 
 type ToolSummary struct {

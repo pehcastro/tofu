@@ -96,6 +96,9 @@ type Event struct {
 	Account      *TurnAccount
 	Images       []MessageImage
 	Members      []Member
+	Card         *ToolCard
+	Group        string
+	GroupSummary *GroupSummary
 	from         *Host
 }
 
