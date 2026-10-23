@@ -1,6 +1,8 @@
+use std::rc::Rc;
+
 use gpui::{
-    Bounds, Div, FontWeight, PathBuilder, Pixels, Rgba, SharedString, Window, canvas, div, point,
-    prelude::*, px,
+    App, Bounds, Div, FontWeight, PathBuilder, Pixels, Rgba, SharedString, Window, canvas, div,
+    point, prelude::*, px,
 };
 
 use crate::components::card::inner_card;
@@ -39,10 +41,13 @@ pub struct Generation {
     pub into: Option<Fork>,
 }
 
+type OnOpen = Rc<dyn Fn(&usize, &mut Window, &mut App)>;
+
 #[derive(IntoElement)]
 pub struct ForkChain {
     theme: Theme,
     generations: Vec<Generation>,
+    on_open: Option<OnOpen>,
 }
 
 impl ForkChain {
@@ -50,7 +55,13 @@ impl ForkChain {
         ForkChain {
             theme: theme.clone(),
             generations,
+            on_open: None,
         }
+    }
+
+    pub fn on_open(mut self, open: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self {
+        self.on_open = Some(Rc::new(open));
+        self
     }
 }
 
@@ -63,9 +74,7 @@ fn rail_line(theme: &Theme, shown: bool) -> Div {
 
 fn ribbon(fill: Option<(f32, f32)>, color: Rgba) -> impl IntoElement {
     let width = |share: f32| RIBBON_LEAST + (RIBBON_MOST - RIBBON_LEAST) * share.clamp(0.0, 1.0);
-    let (top, bottom) = fill.map_or((LINE, LINE), |(before, after)| {
-        (width(before), width(after))
-    });
+    let (top, bottom) = fill.map_or((LINE, LINE), |(top, bottom)| (width(top), width(bottom)));
     canvas(
         |_, _, _| (),
         move |bounds: Bounds<Pixels>, (), window: &mut Window, _| {
@@ -220,7 +229,7 @@ fn generation_row(generation: &Generation, last: bool, theme: &Theme) -> Div {
 }
 
 impl RenderOnce for ForkChain {
-    fn render(self, _: &mut Window, _: &mut gpui::App) -> impl IntoElement {
+    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
         let count = self.generations.len();
         div().flex().flex_col().min_w_0().children(
             self.generations
@@ -230,8 +239,16 @@ impl RenderOnce for ForkChain {
                     let fork = generation
                         .into
                         .as_ref()
-                        .map(|fork| fork_row(fork, &self.theme));
+                        .map(|fork| fork_row(fork, &self.theme).into_any_element());
                     let row = generation_row(generation, at + 1 == count, &self.theme);
+                    let row = match self.on_open.clone().filter(|_| !generation.current) {
+                        Some(open) => row
+                            .id(("fork-generation", at))
+                            .cursor_pointer()
+                            .on_click(move |_, window, cx| open(&at, window, cx))
+                            .into_any_element(),
+                        None => row.into_any_element(),
+                    };
                     fork.into_iter().chain([row])
                 })
                 .collect::<Vec<_>>(),
