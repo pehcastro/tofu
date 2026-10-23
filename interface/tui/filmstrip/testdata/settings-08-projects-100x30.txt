@@ -10,14 +10,14 @@
     Files         03                                                                                
     Shell         05      Scratchpad cleanup                                               7  ▾     
     Turn          17      a session's scratch folder untouched this many days, with no tofu run…    
-  › Projects      04                                                                                
+  › Projects      05                                                                                
     Browser       08      Scratchpad size                                                 50  ▾     
                           past this many gigabytes in one project's scratchpad, the oldest sess…    
   NAVIGATE                                                                                          
-  ↑↓ setting · ←→       enter change  ·  shift+tab scope  ·  esc chat                               
-  section                                                                                           
+  ↑↓ setting · ←→         Session cleanup                                                 90  ▾     
+  section                 a session with no activity for this many days, no new event, request …    
   ctrl+k search ·                                                                                   
-  esc chat                                                                                          
+  esc chat              enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     
                                                                                                     
                                                                                                     

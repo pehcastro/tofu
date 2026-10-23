@@ -10,7 +10,7 @@
     Files         03                                                                                
     Shell         05       tofu light                                                 subtle  ▾     
     Turn          17                                                                                
-    Projects      04       tofu dusk                                                                
+    Projects      05       tofu dusk                                                                
     Browser       08                                                                 compact  ▾     
                            Solarized Light                                                          
   NAVIGATE                                                                                          

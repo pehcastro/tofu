@@ -10,7 +10,7 @@
     Files         03                                                                                
     Shell         05      Animations                                                  subtle  ▾     
     Turn          17      Motion for conversational states                                          
-    Projects      04                                                                                
+    Projects      05                                                                                
     Browser       08      Status bar                                                 compact  ▾     
                           Context, quotas, and runtime counters                                     
   NAVIGATE                                                                                          

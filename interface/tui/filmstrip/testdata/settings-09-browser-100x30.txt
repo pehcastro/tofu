@@ -10,7 +10,7 @@
     Files         03                                                                                
     Shell         05      Browser steps                                                   30  ▾     
     Turn          17      how many actions one browser task may take                                
-    Projects      04                                                                                
+    Projects      05                                                                                
   › Browser       08      Browser model                                              default  ▾     
                           the subscription model a browser task asks for the text to type and f…    
   NAVIGATE                                                                                          

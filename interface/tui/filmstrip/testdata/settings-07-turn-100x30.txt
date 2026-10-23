@@ -10,7 +10,7 @@
     Files         03                                                                                
     Shell         05      One working session per project                                   ● on    
   › Turn          17      while one session in this project is working, any other session waits…    
-    Projects      04                                                                                
+    Projects      05                                                                                
     Browser       08      Plan every step                                                   ● on    
                           the lead sees its plan, with each step's status, before every step of…    
   NAVIGATE                                                                                          

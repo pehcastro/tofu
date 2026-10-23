@@ -90,7 +90,7 @@ Select an edit reference to read every changed line.
     Files         03      Spacing across lists and pane…    
     Shell         05                                        
     Turn          17      Animations          subtle  ▾     
-    Projects      04      Motion for conversational sta…    
+    Projects      05      Motion for conversational sta…    
     Browser       08                                        
                           Status bar         compact  ▾     
   NAVIGATE                Context, quotas, and runtime …    
@@ -206,7 +206,7 @@ Select an edit reference to read every changed line.
     Files         03                                                            
     Shell         05      Animations                              subtle  ▾     
     Turn          17      Motion for conversational states                      
-    Projects      04                                                            
+    Projects      05                                                            
     Browser       08      Status bar                             compact  ▾     
                           Context, quotas, and runtime counters                 
   NAVIGATE                                                                      
@@ -358,7 +358,7 @@ Select an edit reference to read every changed line.
     Files         03                                                                                    
     Shell         05      Animations                                                      subtle  ▾     
     Turn          17      Motion for conversational states                                              
-    Projects      04                                                                                    
+    Projects      05                                                                                    
     Browser       08      Status bar                                                     compact  ▾     
                           Context, quotas, and runtime counters                                         
   NAVIGATE                                                                                              
@@ -550,7 +550,7 @@ Select an edit reference to read every changed line.
     Files               03                                                                                                                  
     Shell               05      Animations                                                     subtle  ▾     HOW IT WORKS                   
     Turn                17      Motion for conversational states                                             Enter opens a focused          
-    Projects            04                                                                                   choice. Changes preview        
+    Projects            05                                                                                   choice. Changes preview        
     Browser             08      Status bar                                                    compact  ▾     immediately; Esc keeps the     
                                 Context, quotas, and runtime counters                                        prior value.                   
   NAVIGATE                                                                                                                                  

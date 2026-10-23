@@ -70,7 +70,7 @@
     Files         03                                                                                
     Shell         05      Browser steps                                                   30  ▾     
     Turn          17      how many actions one browser task may take                                
-    Projects      04                                                                                
+    Projects      05                                                                                
   › Browser       08    › Browser model                                  meta/muse-spark-1.3  ▾     
                           the subscription model a browser task asks for the text to type and f…    
   NAVIGATE                                                                                          
