@@ -1,6 +1,7 @@
 package host
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -139,9 +140,10 @@ func askHubFor(place hubPlace, ask hubAsk, answer any) error {
 	return json.NewDecoder(conn).Decode(answer)
 }
 
-func askHub(place hubPlace, ask string) (HubStatus, error) {
+func askStatus(place hubPlace) (HubStatus, error) {
 	var status HubStatus
-	return status, askHubFor(place, hubAsk{Ask: ask}, &status)
+	err := askHubFor(place, hubAsk{Ask: hubAskStatus}, &status)
+	return status, err
 }
 
 func HubStatusOf(project string) (HubStatus, error) {
@@ -149,7 +151,7 @@ func HubStatusOf(project string) (HubStatus, error) {
 	if err != nil {
 		return HubStatus{}, err
 	}
-	return askHub(place, hubAskStatus)
+	return askStatus(place)
 }
 
 func StopHub(project string) (HubStatus, error) {
@@ -157,16 +159,16 @@ func StopHub(project string) (HubStatus, error) {
 	if err != nil {
 		return HubStatus{}, err
 	}
-	stopped, err := askHub(place, hubAskStop)
-	if err != nil {
-		return stopped, err
+	var stopped hubJoined
+	if err := askHubFor(place, hubAsk{Ask: hubAskStop}, &stopped); err != nil || stopped.Refused != "" {
+		return stopped.HubStatus, cmp.Or(err, errors.New(stopped.Refused))
 	}
 	for deadline := time.Now().Add(konst.HostReadyMillis * time.Millisecond); time.Now().Before(deadline); time.Sleep(hubRetry) {
 		if _, err := os.Stat(place.registry); errors.Is(err, os.ErrNotExist) {
-			return stopped, nil
+			return stopped.HubStatus, nil
 		}
 	}
-	return stopped, fmt.Errorf("the tofu host %d was asked to stop and its registry %s is still there", stopped.PID, place.registry)
+	return stopped.HubStatus, fmt.Errorf("the tofu host %d was asked to stop and its registry %s is still there", stopped.PID, place.registry)
 }
 
 func EnsureHub(project string) (HubStatus, error) {
@@ -174,7 +176,7 @@ func EnsureHub(project string) (HubStatus, error) {
 	if err != nil {
 		return HubStatus{}, err
 	}
-	if status, err := askHub(place, hubAskStatus); err == nil {
+	if status, err := askStatus(place); err == nil {
 		return status, nil
 	}
 	exe, err := os.Executable()
@@ -198,7 +200,7 @@ func EnsureHub(project string) (HubStatus, error) {
 	}
 	ready := konst.HostReadyMillis * time.Millisecond
 	for deadline := time.Now().Add(ready); time.Now().Before(deadline); time.Sleep(hubRetry) {
-		if status, err := askHub(place, hubAskStatus); err == nil {
+		if status, err := askStatus(place); err == nil {
 			return status, nil
 		}
 	}
@@ -249,7 +251,7 @@ func takeHubLock(place hubPlace) (*os.File, error) {
 		if file, held, err := lockHub(place.lock); err != nil || !held {
 			return file, err
 		}
-		if _, err := askHub(place, hubAskStatus); err == nil {
+		if _, err := askStatus(place); err == nil {
 			return nil, ErrHubRunning
 		}
 		if time.Now().After(deadline) {
@@ -373,6 +375,10 @@ func (h *hub) serve(conn net.Conn) {
 	case hubAskStatus:
 		_ = h.answer(conn)
 	case hubAskStop:
+		if err := startedHere(conn); err != nil {
+			_ = json.NewEncoder(conn).Encode(hubJoined{HubStatus: h.status, Refused: err.Error()})
+			return
+		}
 		_ = h.answer(conn)
 		h.stop.Do(func() { close(h.stopped) })
 	case hubAskRoster:
@@ -386,12 +392,31 @@ func (h *hub) serve(conn net.Conn) {
 	}
 }
 
+func startedHere(conn net.Conn) error {
+	peer, err := peerProcess(conn)
+	if err != nil {
+		return fmt.Errorf("the tofu host, process %d, could not tell which process dialled it, so it refused: %w", os.Getpid(), err)
+	}
+	seen := map[int]bool{}
+	for pid := peer; pid > 1 && !seen[pid] && err == nil; pid, err = parentOf(pid) {
+		if pid == os.Getpid() {
+			return fmt.Errorf("process %d was started by the tofu host, process %d, so it may not join the host or stop it", peer, pid)
+		}
+		seen[pid] = true
+	}
+	return nil
+}
+
 func (h *hub) join(conn net.Conn, lines *json.Decoder, asked hubAsk) {
 	_ = conn.SetDeadline(time.Time{})
 	joined := hubJoined{HubStatus: h.status}
 	member := asked.Member
 	member.Joined = time.Now()
-	s, err := h.take(asked.Session, member)
+	err := startedHere(conn)
+	var s *hosted
+	if err == nil {
+		s, err = h.take(asked.Session, member)
+	}
 	if err != nil {
 		joined.Refused = err.Error()
 		_ = json.NewEncoder(conn).Encode(joined)
