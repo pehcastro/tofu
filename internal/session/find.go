@@ -1,6 +1,7 @@
 package session
 
 import (
+	"cmp"
 	"encoding/json"
 	"strings"
 	"time"
@@ -74,7 +75,7 @@ func (s *Store) Find(family Family, query Query) ([]Hit, error) {
 		if err != nil {
 			return nil, err
 		}
-		placed := map[string]int{}
+		placed, tools := map[string]int{}, map[string]string{}
 		for _, event := range events {
 			if !query.keeps(event) {
 				continue
@@ -90,6 +91,7 @@ func (s *Store) Find(family Family, query Query) ([]Hit, error) {
 					continue
 				}
 				_ = json.Unmarshal(call.Args, &args)
+				tools[event.Call] = call.Tool
 				if query.calls(call, args.Command) {
 					hit.Tool, hit.Command, hit.Args = call.Tool, args.Command, call.Args
 					placed[event.Call] = len(hits)
@@ -97,8 +99,16 @@ func (s *Store) Find(family Family, query Query) ([]Hit, error) {
 				}
 			case EventToolResult:
 				var result ResultBody
-				if found, known := placed[event.Call]; known && json.Unmarshal(event.Body, &result) == nil {
-					hits[found].Ran = &Ran{Outcome: result.ToolOutcome, Bytes: result.ResultBytes, ExitCode: result.ExitCode, Error: result.Error}
+				if json.Unmarshal(event.Body, &result) != nil {
+					continue
+				}
+				ran := &Ran{Outcome: result.ToolOutcome, Bytes: result.ResultBytes, ExitCode: result.ExitCode, Error: result.Error}
+				if found, known := placed[event.Call]; known {
+					hits[found].Ran = ran
+				}
+				if query.Text != "" && !query.asksForCalls() && (holds(result.Content, query.Text) || holds(result.Error, query.Text)) {
+					hit.Role, hit.Tool, hit.Text, hit.Ran = RoleTool, tools[event.Call], cmp.Or(result.Content, result.Error), ran
+					hits = append(hits, hit)
 				}
 			case EventMessage:
 				var said MessageBody
