@@ -72,7 +72,7 @@ func (b Budget) Sending(cfg Config, toolSchemas string) Budget {
 }
 
 func (b Budget) Reported(tokens int, asSent Occupancy) Budget {
-	b.reported, b.reportedAt = tokens, asSent.Total()+b.toolTokens
+	b.reported, b.reportedAt = tokens, asSent.Total()
 	return b
 }
 

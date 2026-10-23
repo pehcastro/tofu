@@ -33,11 +33,14 @@ func TestEstimateCountsFromTheLastReportAndOnlyEstimatesWhatCameAfter(t *testing
 	if err != nil {
 		t.Fatalf("BudgetUnder: %v", err)
 	}
-	measured := func(c recall.Conversation) recall.Occupancy { return recall.Measure(cfg, budget.Bands, c) }
+	measured := func(c recall.Conversation) recall.Occupancy {
+		c.ToolSchemas = schemas
+		return recall.Measure(cfg, budget.Bands, c)
+	}
 	unanchored := budget.Sending(cfg, schemas)
 	anchored := unanchored.Reported(reported, measured(sent))
 
-	plain := measured(sent).Total()
+	plain := recall.Measure(cfg, budget.Bands, sent).Total()
 	if got, want := unanchored.Tokens(cfg, sent), plain+cfg.Tokens(schemas); got != want {
 		t.Fatalf("with no report the count is %d, want the estimate %d plus the %d token schemas", got, plain, cfg.Tokens(schemas))
 	}

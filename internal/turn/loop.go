@@ -896,7 +896,12 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			trimmedBefore = cmp.Or(unforked, trimmedBefore)
 		}
 		keepNewestPictures(messages)
-		asSent := recall.Measure(artifacts.preview, budget.Bands, historyOf(messages))
+		measureSent := func() recall.Occupancy {
+			sent := historyOf(messages)
+			sent.ToolSchemas = string(schemas)
+			return recall.Measure(artifacts.preview, budget.Bands, sent)
+		}
+		asSent := measureSent()
 		decision, timing, requestID, err := ask(ctx, "step "+strconv.Itoa(step), llm.Request{Messages: withPlan(messages), Tools: definitions})
 		if errors.Is(err, SentNow{}) {
 			step--
@@ -918,7 +923,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				if config.Notify != nil {
 					config.Notify(told)
 				}
-				asSent = recall.Measure(artifacts.preview, budget.Bands, historyOf(messages))
+				asSent = measureSent()
 				decision, timing, requestID, err = ask(ctx, "step "+strconv.Itoa(step)+", asked again after the overflow shrink", llm.Request{Messages: withPlan(messages), Tools: definitions})
 				if overflowed(err) {
 					err = fmt.Errorf("the context window overflowed again after tofu %s, so the turn ends: %w", shrink, err)
@@ -944,7 +949,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				told, on, next, left = moved.words(), moved.To, moved.Account, append(left, moved.From)
 				config.Accounts, config.Wire, config.Spend, row.Wire, row.Spend = moved.Accounts, moved.Wire, moved.Spend, moved.Wire, moved.Spend
 				if moved.Budget != (recall.Budget{}) {
-					budget = moved.Budget
+					budget = moved.Budget.Sending(artifacts.preview, string(schemas))
 				}
 			}
 			row.Warnings = append(row.Warnings, told)
