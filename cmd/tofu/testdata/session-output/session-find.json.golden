@@ -25,7 +25,8 @@ exit 0
         "ran": {
           "outcome": "ran",
           "bytes": 2048
-        }
+        },
+        "role": "tool"
       }
     ]
   },
