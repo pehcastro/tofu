@@ -3,7 +3,6 @@ package session
 import (
 	"slices"
 	"strings"
-	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -52,15 +51,13 @@ func (m *Model) caret() int {
 
 func (m *Model) setDraft(head, tail string) {
 	m.composer.SetValue(head + tail)
-	head, kept := strings.CutSuffix(m.composer.Value(), tail)
-	if !kept {
-		return
-	}
+	whole := m.composer.Value()
+	m.composer.SetValue(tail)
 	m.composer.MoveToBegin()
-	for m.composer.Line() < strings.Count(head, "\n") {
-		m.composer.CursorDown()
+	m.composer.InsertString(head)
+	if m.composer.Value() != whole {
+		m.composer.SetValue(whole)
 	}
-	m.composer.SetCursorColumn(utf8.RuneCountInString(head[strings.LastIndexByte(head, '\n')+1:]))
 }
 
 func (m *Model) transcriptRows() int {
