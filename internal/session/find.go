@@ -13,16 +13,20 @@ type Query struct {
 	File    string    `json:"file,omitempty"`
 	Text    string    `json:"text,omitempty"`
 	Agent   string    `json:"agent,omitempty"`
+	Failed  bool      `json:"failed,omitempty"`
 	Since   time.Time `json:"since,omitzero"`
 	Until   time.Time `json:"until,omitzero"`
 }
 
 type Ran struct {
 	Outcome  string `json:"outcome,omitempty"`
+	Refused  bool   `json:"refused,omitempty"`
 	Bytes    int    `json:"bytes"`
 	ExitCode *int   `json:"exit_code,omitempty"`
 	Error    string `json:"error,omitempty"`
 }
+
+func (r *Ran) Failed() bool { return r != nil && r.Outcome == ToolOutcomeFailed }
 
 type Hit struct {
 	Generation int             `json:"generation"`
@@ -49,10 +53,12 @@ func (q Query) keeps(event Event) bool {
 	return agent && (q.Since.IsZero() || !event.At.Before(q.Since)) && (q.Until.IsZero() || !event.At.After(q.Until))
 }
 
-func (q Query) asksForCalls() bool { return q.Tool != "" || q.Command != "" || q.File != "" }
+func (q Query) asksForCalls() bool {
+	return q.Tool != "" || q.Command != "" || q.File != "" || q.Failed
+}
 
-func (q Query) calls(call CallBody, command string) bool {
-	if q.Text != "" || (q.Tool != "" && !strings.EqualFold(call.Tool, q.Tool)) || (q.Command != "" && !holds(command, q.Command)) {
+func (q Query) calls(call Hit) bool {
+	if (q.Tool != "" && !strings.EqualFold(call.Tool, q.Tool)) || (q.Command != "" && !holds(call.Command, q.Command)) {
 		return false
 	}
 	if q.File == "" {
@@ -75,7 +81,7 @@ func (s *Store) Find(family Family, query Query) ([]Hit, error) {
 		if err != nil {
 			return nil, err
 		}
-		placed, tools := map[string]int{}, map[string]string{}
+		placed, called := map[string]int{}, map[string]Hit{}
 		for _, event := range events {
 			if !query.keeps(event) {
 				continue
@@ -91,31 +97,44 @@ func (s *Store) Find(family Family, query Query) ([]Hit, error) {
 					continue
 				}
 				_ = json.Unmarshal(call.Args, &args)
-				tools[event.Call] = call.Tool
-				if query.calls(call, args.Command) {
-					hit.Tool, hit.Command, hit.Args = call.Tool, args.Command, call.Args
+				hit.Role, hit.Tool, hit.Command, hit.Args = RoleTool, call.Tool, args.Command, call.Args
+				called[event.Call] = hit
+				if !query.Failed && query.calls(hit) && holds(string(call.Args), query.Text) {
 					placed[event.Call] = len(hits)
 					hits = append(hits, hit)
 				}
 			case EventToolResult:
-				var result ResultBody
+				var result struct {
+					ResultBody
+					Refused bool `json:"refused"`
+				}
 				if json.Unmarshal(event.Body, &result) != nil {
 					continue
 				}
-				ran := &Ran{Outcome: result.ToolOutcome, Bytes: result.ResultBytes, ExitCode: result.ExitCode, Error: result.Error}
+				ran := &Ran{Outcome: result.ToolOutcome, Refused: result.Refused, Bytes: result.ResultBytes, ExitCode: result.ExitCode, Error: result.Error}
+				text, matched := cmp.Or(result.Content, result.Error), query.Text != "" && (holds(result.Content, query.Text) || holds(result.Error, query.Text))
 				if found, known := placed[event.Call]; known {
 					hits[found].Ran = ran
-				}
-				if query.Text != "" && !query.asksForCalls() && (holds(result.Content, query.Text) || holds(result.Error, query.Text)) {
-					hit.Role, hit.Tool, hit.Text, hit.Ran = RoleTool, tools[event.Call], cmp.Or(result.Content, result.Error), ran
-					hits = append(hits, hit)
-				}
-			case EventMessage:
-				var said MessageBody
-				if query.asksForCalls() || json.Unmarshal(event.Body, &said) != nil || (said.Role != RoleUser && said.Role != RoleAssistant) || strings.TrimSpace(said.Content) == "" || !holds(said.Content, query.Text) {
+					if matched {
+						hits[found].Text = text
+					}
 					continue
 				}
-				hit.Call, hit.Role, hit.Text = "", said.Role, said.Content
+				call, wanted := called[event.Call], matched
+				if query.Failed {
+					wanted = ran.Failed() && (matched || holds(string(call.Args), query.Text))
+				}
+				if !wanted || !query.calls(call) {
+					continue
+				}
+				hit.Role, hit.Tool, hit.Command, hit.Args, hit.Text, hit.Ran = RoleTool, call.Tool, call.Command, call.Args, text, ran
+				hits = append(hits, hit)
+			case EventMessage:
+				var message MessageBody
+				if query.asksForCalls() || json.Unmarshal(event.Body, &message) != nil || (message.Role != RoleUser && message.Role != RoleAssistant) || strings.TrimSpace(message.Content) == "" || !holds(message.Content, query.Text) {
+					continue
+				}
+				hit.Call, hit.Role, hit.Text = "", message.Role, message.Content
 				hits = append(hits, hit)
 			}
 		}

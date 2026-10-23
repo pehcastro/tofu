@@ -16,7 +16,7 @@ import (
 	"tofu/internal/widget"
 )
 
-const sessionFindUsage = "tofu session find <name|id> [--tool T] [--command C] [--file F] [--text T] [--agent A] [--since 2h|RFC3339] [--until 2h|RFC3339] [--json]"
+const sessionFindUsage = "tofu session find <name|id> [--tool T] [--command C] [--file F] [--text T] [--failed] [--agent A] [--since 2h|RFC3339] [--until 2h|RFC3339] [--json]"
 
 type familyGeneration struct {
 	Generation int               `json:"generation"`
@@ -232,6 +232,9 @@ func sessionFindArgs(args []string, now time.Time) (string, session.Query, error
 		switch {
 		case arg == jsonFlag:
 			continue
+		case arg == "--failed":
+			query.Failed = true
+			continue
 		case !strings.HasPrefix(arg, "-"):
 			handles = append(handles, arg)
 			continue
@@ -279,10 +282,12 @@ func sessionFindLines(page cli.Page, report sessionFindReport, now time.Time) []
 	}
 	rows := make([]cli.Row, len(report.Hits))
 	for i, hit := range report.Hits {
-		what, detail := cmp.Or(hit.Tool, hit.Role), cmp.Or(hit.Command, oneLine(hit.Text), oneLine(string(hit.Args)))
-		mark := cli.Idle
-		if hit.Ran != nil && (hit.Ran.Error != "" || hit.Ran.ExitCode != nil && *hit.Ran.ExitCode != 0) {
+		what, detail, mark := cmp.Or(hit.Tool, hit.Role), cmp.Or(hit.Command, oneLine(hit.Text), oneLine(string(hit.Args))), cli.Idle
+		if hit.Ran.Failed() {
 			mark = cli.Fail
+		}
+		if hit.Ran != nil && hit.Ran.Refused {
+			what += " refused"
 		}
 		rows[i] = cli.Row{Mark: mark, Cells: []string{"." + strconv.Itoa(hit.Generation), sessionWhen(hit.At, now), cmp.Or(hit.Agent, "lead"), what}, Detail: detail}
 	}
