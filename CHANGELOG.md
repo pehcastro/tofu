@@ -10,6 +10,28 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.17 - 2026-10-22
+
+tofu says where your tokens and money go, and a big pasted image no longer kills a session.
+
+### Added
+
+- `tofu session drain` says where a session's tokens went: which rules, memory, skills, tool schemas and tool results stay in context, how many requests they ride, and their weighted token cost. `tofu serve` answers the same as `query.drain`.
+- `tofu context` names each rule, memory file, skill and tool schema in the context, with its size.
+- `tofu login --status` shows each API key's calls, tokens in, out and reasoning, cost and where the cost comes from: the provider's own figure, a list price marked estimated, or none. It shows the key limit, the account balance on OpenRouter, the team or key allowance in calls or tokens, and a line for what the provider does not report.
+- An OpenRouter call records the cost OpenRouter reports, including the upstream cost on a bring-your-own-key route, and the cached, cache-write and reasoning tokens.
+- `usage.updated` carries `cacheWrite5m`, `cacheWrite1h` and `costUsd`.
+- `session.info` carries `carried_from` for a session carried from another.
+- Every boardy actor, on a triage request, an event or a log line, carries an `id` like `rust-dev-278#<session>`, an `alias` like `rust-dev-278` and a `kind`: person, lead, sub-agent, hook or unknown. `tofu boardy triage list` shows the alias and kind.
+
+### Fixed
+
+- A pasted or read image is fitted to 1568 px on its long edge before it is sent, so a large image no longer makes the provider refuse every later turn of the session. A refused image now says so and names the limit.
+- A chip in the composer deletes and moves as one block.
+- An OpenRouter 402 says the account is out of credit.
+- Opening or resuming a session over `tofu serve` answers in milliseconds instead of waiting 10 s, and `session.history` no longer waits behind an open. The session holder's socket lives only under your home.
+- Triage has one path: `tofu boardy new --status triage` files a triage request, and a ticket already in status triage shows in `tofu boardy triage list` and `boardy.triage`, where accept and drop take its id.
+
 ## 0.5.16-fix2 - 2026-10-22
 
 ### Fixed

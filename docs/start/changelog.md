@@ -73,6 +73,12 @@ per language.
   paths never share one, and a moved repository can be relinked.
 - **Long sessions**: the sub-agents screen opens in under 10 ms where it took
   about 250, and the shells screen reads only the new end of each log.
+- **Spend**: `tofu session drain` says where a session's tokens went, and
+  `tofu login --status` shows each API key's calls, tokens, cost and its
+  source, limits and balance. See [Session drain](/docs/features/drain) and
+  [API keys](/docs/llms/api-keys).
+- **Images**: a pasted or read image is fitted to 1568 px on its long edge,
+  so a large image no longer stops a session.
 - **Frontends, more**: one `tofu serve` keeps several sessions running at
   once, and sends account and settings changes as they happen.
 - **Decisions in one minute**: a ticket that needs you carries a question

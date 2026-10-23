@@ -235,9 +235,7 @@ func TestDeletingAPastedImagesTokenDropsItFromTheSentTree(t *testing.T) {
 	if got := app.view.Value(); got != "compare [Image #1][Image #2]" {
 		t.Fatalf("the composer holds %q before the delete", got)
 	}
-	for range len("[Image #2]") {
-		app.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
-	}
+	app.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
 	if got := app.view.Value(); got != "compare [Image #1]" {
 		t.Fatalf("the composer holds %q after deleting the second token", got)
 	}
