@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -43,7 +44,7 @@ func AppendReading(dir string, reading Reading) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	name := filepath.Join(dir, reading.At.UTC().Format(time.DateOnly)+".jsonl")
+	name := filepath.Join(dir, reading.At.UTC().Format(time.DateOnly)+readingSuffix)
 	file, err := os.OpenFile(name, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
@@ -52,5 +53,20 @@ func AppendReading(dir string, reading Reading) error {
 		_ = file.Close()
 		return err
 	}
-	return file.Close()
+	if err := file.Close(); err != nil {
+		return err
+	}
+	dropDaysBefore(dir, reading.At.Add(-loggedLookback))
+	return nil
+}
+
+func dropDaysBefore(dir string, cut time.Time) {
+	entries, _ := os.ReadDir(dir)
+	oldest := cut.UTC().Format(time.DateOnly)
+	for _, entry := range entries {
+		day, isDay := strings.CutSuffix(entry.Name(), readingSuffix)
+		if _, err := time.Parse(time.DateOnly, day); isDay && err == nil && day < oldest {
+			_ = os.Remove(filepath.Join(dir, entry.Name()))
+		}
+	}
 }
