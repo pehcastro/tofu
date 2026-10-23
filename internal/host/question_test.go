@@ -17,19 +17,23 @@ func questionServer(t *testing.T, declared bool) (*server, turn.PersonForm, chan
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	h, _ := New(Config{})
-	s := &server{ServeConfig: ServeConfig{Host: h}, box: newOutbox(), pending: map[string]ApprovalRequest{}, asked: map[string]QuestionRequest{},
-		items: items{tools: map[string]openTool{}, agents: map[string]SubAgentRow{}}}
+	s := &server{ServeConfig: ServeConfig{Host: h}, box: newOutbox(), items: items{tools: map[string]openTool{}, agents: map[string]SubAgentRow{}}}
 	if _, err := s.initialize(InitializeParams{Client: "desk", Capabilities: slices.DeleteFunc([]string{"questions"}, func(string) bool { return !declared })}); err != nil {
 		t.Fatal(err)
 	}
 	awaited := make(chan string, 1)
 	emit := func(event Event) {
-		s.publish(event)
+		s.heard(event)
 		if event.Kind == EventAwaitPerson {
 			awaited <- event.ID
 		}
 	}
 	return s, askForm(emit, h.questions), awaited
+}
+
+func (s *server) heard(event Event) {
+	s.Host.deliver(event)
+	s.publish(<-s.Host.Events())
 }
 
 func twoLibraries() []turn.PersonQuestion {

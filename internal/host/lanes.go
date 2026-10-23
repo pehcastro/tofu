@@ -19,8 +19,6 @@ type lane struct {
 	release func()
 	items   *items
 	replay  []HistoryLine
-	pending map[string]ApprovalRequest
-	asked   map[string]QuestionRequest
 	status  *statusFeed
 	stop    chan struct{}
 	pumped  chan struct{}
@@ -28,8 +26,7 @@ type lane struct {
 
 func newLane(h *Host, release func()) *lane {
 	fresh := newItems(h.ID())
-	return &lane{host: h, release: release, items: &fresh, pending: map[string]ApprovalRequest{}, asked: map[string]QuestionRequest{},
-		status: &statusFeed{board: status.Board{Now: time.Now}, acked: map[string]bool{}}, stop: make(chan struct{}), pumped: make(chan struct{})}
+	return &lane{host: h, release: release, items: &fresh, status: &statusFeed{board: status.Board{Now: time.Now}, acked: map[string]bool{}}, stop: make(chan struct{}), pumped: make(chan struct{})}
 }
 
 func (l *lane) running() bool {
@@ -44,7 +41,7 @@ func (l *lane) asks(asking AskingMode) {
 }
 
 func (s *server) first() *lane {
-	return &lane{host: s.Host, release: s.Release, items: &s.items, pending: s.pending, asked: s.asked, status: &s.status}
+	return &lane{host: s.Host, release: s.Release, items: &s.items, status: &s.status}
 }
 
 func (s *server) tracked() []*lane {

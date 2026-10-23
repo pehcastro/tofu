@@ -16,11 +16,10 @@ func TestTwoAsksWaitingAtOnceEachGetTheAnswerSentForThem(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	h, _ := New(Config{})
-	s := &server{ServeConfig: ServeConfig{Host: h}, box: newOutbox(), pending: map[string]ApprovalRequest{},
-		items: items{tools: map[string]openTool{}, agents: map[string]SubAgentRow{}}}
+	s := &server{ServeConfig: ServeConfig{Host: h}, box: newOutbox(), items: items{tools: map[string]openTool{}, agents: map[string]SubAgentRow{}}}
 	awaited := make(chan string, 2)
 	emit := func(event Event) {
-		s.publish(event)
+		s.heard(event)
 		if event.Kind == EventAwaitPerson {
 			awaited <- event.ID
 		}

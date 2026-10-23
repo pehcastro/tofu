@@ -472,6 +472,8 @@ const (
 	HostReadyMillis     = 10000
 	HostAnswerMillis    = 1000
 	HostRetryMillis     = 50
+	FollowQueue         = 1024
+	FollowSettledKept   = 32
 )
 
 const (

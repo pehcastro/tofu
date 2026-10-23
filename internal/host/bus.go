@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"sync"
+
+	"tofu/internal/konst"
 )
 
 type picture struct {
@@ -17,6 +19,7 @@ type picture struct {
 	Plan     []PlanItem    `json:",omitempty"`
 	Context  Context       `json:",omitzero"`
 	Asks     []Event       `json:",omitempty"`
+	Settled  []Event       `json:",omitempty"`
 	Steers   []Event       `json:",omitempty"`
 }
 
@@ -26,7 +29,7 @@ type bus struct {
 	now picture
 }
 
-func (p *picture) apply(event Event) {
+func (p *picture) apply(event Event) Event {
 	switch {
 	case event.Kind == EventTurnStarted:
 		p.Turn, p.Partial = &event, ""
@@ -57,12 +60,19 @@ func (p *picture) apply(event Event) {
 	case EventAwaitPerson:
 		p.Asks = append(p.Asks, event)
 	case EventResumed:
-		p.Asks = slices.DeleteFunc(p.Asks, withID(event.ID))
+		if at := slices.IndexFunc(p.Asks, withID(event.ID)); at >= 0 {
+			asked := p.Asks[at]
+			event.Tool, event.Agent, event.Questions, event.Accepts = asked.Tool, asked.Agent, asked.Questions, asked.Accepts
+			p.Asks = slices.Delete(p.Asks, at, at+1)
+		}
+		p.Settled = append(p.Settled, event)
+		p.Settled = p.Settled[max(0, len(p.Settled)-konst.FollowSettledKept):]
 	case EventSteerQueued:
 		p.Steers = append(p.Steers, event)
 	case EventSteered:
 		p.Steers = slices.DeleteFunc(p.Steers, withID(event.ID))
 	}
+	return event
 }
 
 func withID(id string) func(Event) bool { return func(event Event) bool { return event.ID == id } }
@@ -70,9 +80,14 @@ func withID(id string) func(Event) bool { return func(event Event) bool { return
 func (seen picture) toward(now picture) []Event {
 	var moves []Event
 	for _, asked := range seen.Asks {
-		if !slices.ContainsFunc(now.Asks, withID(asked.ID)) {
-			moves = append(moves, Event{Kind: EventResumed, ID: asked.ID})
+		if slices.ContainsFunc(now.Asks, withID(asked.ID)) {
+			continue
 		}
+		resumed := Event{Kind: EventResumed, ID: asked.ID}
+		if at := slices.IndexFunc(now.Settled, withID(asked.ID)); at >= 0 {
+			resumed = now.Settled[at]
+		}
+		moves = append(moves, resumed)
 	}
 	if now.Session != nil && (seen.Session == nil || seen.Session.ID != now.Session.ID) {
 		moves = append(moves, *now.Session)
@@ -122,10 +137,10 @@ func (h *Host) Events() <-chan Event { return h.events }
 func (h *Host) deliver(event Event) {
 	h.bus.mu.Lock()
 	h.bus.seq++
-	h.bus.now.apply(event)
+	told := h.bus.now.apply(event)
 	h.fanOut(followLine{Seq: h.bus.seq, Event: &event})
 	h.bus.mu.Unlock()
-	h.hand(event, h.done)
+	h.hand(told, h.done)
 }
 
 func (h *Host) fanOut(said followLine) {
@@ -162,6 +177,34 @@ func (h *Host) seen() picture {
 	h.bus.mu.Lock()
 	defer h.bus.mu.Unlock()
 	return h.bus.now
+}
+
+func (h *Host) asked(id string) (Event, bool) {
+	h.bus.mu.Lock()
+	defer h.bus.mu.Unlock()
+	at := slices.IndexFunc(h.bus.now.Asks, withID(id))
+	if at < 0 {
+		return Event{}, false
+	}
+	return h.bus.now.Asks[at], true
+}
+
+func (h *Host) takeAsk(id string) bool {
+	h.bus.mu.Lock()
+	defer h.bus.mu.Unlock()
+	open := len(h.bus.now.Asks)
+	h.bus.now.Asks = slices.DeleteFunc(h.bus.now.Asks, withID(id))
+	return len(h.bus.now.Asks) < open
+}
+
+func (h *Host) putBack(asked Event) (resumed Event, settled bool) {
+	h.bus.mu.Lock()
+	defer h.bus.mu.Unlock()
+	if at := slices.IndexFunc(h.bus.now.Settled, withID(asked.ID)); at >= 0 {
+		return h.bus.now.Settled[at], true
+	}
+	h.bus.now.Asks = append(h.bus.now.Asks, asked)
+	return Event{}, false
 }
 
 func (h *Host) forget() {

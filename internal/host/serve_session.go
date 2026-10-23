@@ -3,7 +3,6 @@ package host
 import (
 	"cmp"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -127,9 +126,16 @@ func (s *server) state() SessionState {
 		state.Turn = &RunningTurn{ID: turn, Task: focus.items.task, StartedAt: focus.items.began}
 	}
 	state.Context = focus.items.context
-	state.Approvals = slices.AppendSeq([]ApprovalRequest{}, maps.Values(focus.pending))
+	state.Approvals, state.Questions = []ApprovalRequest{}, []QuestionRequest{}
+	for _, asked := range focus.host.seen().Asks {
+		id := focus.items.identity(asked.Agent, asked.ID)
+		if asked.Questions != nil {
+			state.Questions = append(state.Questions, questionRequest(id, asked))
+			continue
+		}
+		state.Approvals = append(state.Approvals, approvalRequest(id, asked))
+	}
 	slices.SortFunc(state.Approvals, func(a, b ApprovalRequest) int { return strings.Compare(a.Approval, b.Approval) })
-	state.Questions = slices.AppendSeq([]QuestionRequest{}, maps.Values(focus.asked))
 	slices.SortFunc(state.Questions, func(a, b QuestionRequest) int { return strings.Compare(a.Question, b.Question) })
 	state.Agents = []AgentNow{}
 	for _, row := range focus.items.agents {

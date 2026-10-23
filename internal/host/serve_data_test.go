@@ -125,11 +125,10 @@ func TestServeDataRememberAnswersCarryTheScope(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	h, _ := New(Config{})
-	s := &server{ServeConfig: ServeConfig{Host: h}, box: newOutbox(), pending: map[string]ApprovalRequest{},
-		items: items{tools: map[string]openTool{}, agents: map[string]SubAgentRow{}}}
+	s := &server{ServeConfig: ServeConfig{Host: h}, box: newOutbox(), items: items{tools: map[string]openTool{}, agents: map[string]SubAgentRow{}}}
 	awaited := make(chan string, 1)
 	person := awaitPerson(func(event Event) {
-		s.publish(event)
+		s.heard(event)
 		if event.Kind == EventAwaitPerson {
 			awaited <- event.ID
 		}
@@ -144,7 +143,7 @@ func TestServeDataRememberAnswersCarryTheScope(t *testing.T) {
 	}
 	picked := make(chan string, 1)
 	pick := pickMemory(func(event Event) {
-		s.publish(event)
+		s.heard(event)
 		if event.Kind == EventAwaitPerson {
 			picked <- event.ID
 		}

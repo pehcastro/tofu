@@ -67,8 +67,6 @@ type server struct {
 	items    items
 	client   string
 	ready    bool
-	pending  map[string]ApprovalRequest
-	asked    map[string]QuestionRequest
 	answers  bool
 	takeover bool
 	shells   map[string]*watchedShell
@@ -83,7 +81,7 @@ type server struct {
 }
 
 func Serve(cfg ServeConfig) error {
-	s := &server{ServeConfig: cfg, box: newOutbox(), pending: map[string]ApprovalRequest{}, asked: map[string]QuestionRequest{}, shells: map[string]*watchedShell{}, items: newItems(cfg.Host.ID()),
+	s := &server{ServeConfig: cfg, box: newOutbox(), shells: map[string]*watchedShell{}, items: newItems(cfg.Host.ID()),
 		status: statusFeed{board: status.Board{Now: time.Now}, acked: map[string]bool{}}, requota: make(chan struct{}, 1), accounts: map[string]AccountCondition{}}
 	s.seen.files = readSettingsFiles(cfg.Dir)
 	first := s.first()
@@ -751,34 +749,37 @@ func (s *server) shellRelease(p ShellReleaseParams) (any, error) {
 }
 
 func (s *server) answered(id, result json.RawMessage) error {
-	var approval string
-	_ = json.Unmarshal(id, &approval)
+	var asked string
+	_ = json.Unmarshal(id, &asked)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	lanes := s.tracked()
-	at := slices.IndexFunc(lanes, func(l *lane) bool {
-		_, asked := l.asked[approval]
-		_, pending := l.pending[approval]
-		return asked || pending
-	})
-	if at < 0 {
-		return &Refusal{Code: CodeInvalid, Message: "nothing waits on the answer " + string(id) + ": it was answered, withdrawn, or never asked"}
+	for _, l := range s.tracked() {
+		open, waiting := l.host.asked(asked)
+		switch {
+		case waiting && open.Questions != nil:
+			return s.questionAnswered(l, open, result)
+		case waiting:
+			return s.approvalAnswered(l, open, result)
+		}
 	}
-	l := lanes[at]
-	if asked, open := l.asked[approval]; open {
-		return s.questionAnswered(l, asked, result)
-	}
-	asked := l.pending[approval]
+	return &Refusal{Code: CodeInvalid, Message: "nothing waits on the answer " + string(id) + ": it was answered, withdrawn, or never asked"}
+}
+
+func (s *server) approvalAnswered(l *lane, asked Event, result json.RawMessage) error {
+	approval := asked.ID
 	var answer ApprovalAnswer
-	if json.Unmarshal(result, &answer) != nil || !slices.Contains(asked.Decisions, answer.Decision) {
-		accepted := make([]string, len(asked.Decisions))
-		for index, decision := range asked.Decisions {
+	if json.Unmarshal(result, &answer) != nil || !slices.Contains(asked.Accepts, answer.Decision) {
+		accepted := make([]string, len(asked.Accepts))
+		for index, decision := range asked.Accepts {
 			accepted[index] = string(decision)
 		}
 		return &Refusal{Code: CodeBadParams, Message: "approval " + approval + " takes a decision of " + strings.Join(accepted, ", ")}
 	}
 	if answer.ForSeconds < 0 || answer.ForSeconds > konst.ApprovalAllowForMostSeconds || answer.ForSeconds > 0 && answer.Decision != AllowFor {
 		return &Refusal{Code: CodeBadParams, Message: "approval " + approval + " takes forSeconds only with allow_for, from 1 to " + strconv.Itoa(konst.ApprovalAllowForMostSeconds)}
+	}
+	if !l.host.takeAsk(approval) {
+		return withdrawn("approval " + approval)
 	}
 	answered, stands, until := true, false, time.Time{}
 	switch {
@@ -793,11 +794,29 @@ func (s *server) answered(id, result json.RawMessage) error {
 		answered, stands = l.host.AnswerAsk(approval, personAnswerOf(answer.Decision))
 	}
 	if !answered {
-		return &Refusal{Code: CodeInvalid, Message: "approval " + approval + " was withdrawn before this answer arrived"}
+		return s.unanswered(l, asked, "approval "+approval)
 	}
-	delete(l.pending, approval)
-	s.box.push(kept("approval.resolved", &ApprovalResolved{Identity: asked.Identity, Approval: approval, Decision: answer.Decision, By: s.client, Standing: stands, Until: until}))
+	s.box.push(kept("approval.resolved", &ApprovalResolved{Identity: l.items.identity(asked.Agent, approval), Approval: approval, Decision: answer.Decision, By: s.client, Standing: stands, Until: until}))
 	return nil
+}
+
+func (s *server) unanswered(l *lane, asked Event, named string) error {
+	if resumed, settled := l.host.putBack(asked); settled {
+		s.box.push(s.resolution(l, asked, resumed))
+	}
+	return withdrawn(named)
+}
+
+func withdrawn(named string) error {
+	return &Refusal{Code: CodeInvalid, Message: named + " was withdrawn before this answer arrived"}
+}
+
+func (s *server) resolution(l *lane, asked, resumed Event) outgoing {
+	id := l.items.identity(asked.Agent, asked.ID)
+	if asked.Questions != nil {
+		return kept("question.resolved", &QuestionResolved{Identity: id, Question: asked.ID, Outcome: QuestionOutcome(resumed.Text), By: resumed.Detail})
+	}
+	return kept("approval.resolved", &ApprovalResolved{Identity: id, Approval: asked.ID, Decision: Cancelled, By: "tofu"})
 }
 
 func (s *server) revoke(p ApprovalRevokeParams) (any, error) {
@@ -810,16 +829,19 @@ func (s *server) revoke(p ApprovalRevokeParams) (any, error) {
 	return gone, nil
 }
 
-func (s *server) questionAnswered(l *lane, asked QuestionRequest, result json.RawMessage) error {
+func (s *server) questionAnswered(l *lane, asked Event, result json.RawMessage) error {
+	named := "question " + asked.ID
 	var answer QuestionAnswer
 	if json.Unmarshal(result, &answer) != nil || answer.Outcome != QuestionSubmitted && answer.Outcome != QuestionCancelled || !offered(asked.Questions, answer.Answers) {
-		return &Refusal{Code: CodeBadParams, Message: "question " + asked.Question + " takes submitted with answers among its options, or cancelled"}
+		return &Refusal{Code: CodeBadParams, Message: named + " takes submitted with answers among its options, or cancelled"}
 	}
-	if !l.host.AnswerQuestion(asked.Question, answer, s.client) {
-		return &Refusal{Code: CodeInvalid, Message: "question " + asked.Question + " was withdrawn before this answer arrived"}
+	if !l.host.takeAsk(asked.ID) {
+		return withdrawn(named)
 	}
-	delete(l.asked, asked.Question)
-	s.box.push(kept("question.resolved", &QuestionResolved{Identity: asked.Identity, Question: asked.Question, Outcome: answer.Outcome, By: s.client}))
+	if !l.host.AnswerQuestion(asked.ID, answer, s.client) {
+		return s.unanswered(l, asked, named)
+	}
+	s.box.push(s.resolution(l, asked, Event{Text: string(answer.Outcome), Detail: s.client}))
 	return nil
 }
 
@@ -851,19 +873,9 @@ func (s *server) publish(event Event) {
 			})
 			return
 		}
-		if event.Questions != nil {
-			l.asked[event.ID] = questionRequest(l.items.identity(event.Agent, event.ID), event)
-			break
-		}
-		l.pending[event.ID] = approvalRequest(l.items.identity(event.Agent, event.ID), event)
 	case EventResumed:
-		if asked, open := l.asked[event.ID]; open {
-			delete(l.asked, event.ID)
-			s.box.push(kept("question.resolved", &QuestionResolved{Identity: asked.Identity, Question: event.ID, Outcome: QuestionOutcome(event.Text), By: event.Detail}))
-		}
-		if asked, pending := l.pending[event.ID]; pending {
-			delete(l.pending, event.ID)
-			s.box.push(kept("approval.resolved", &ApprovalResolved{Identity: asked.Identity, Approval: event.ID, Decision: Cancelled, By: "tofu"}))
+		if event.Tool != "" {
+			s.box.push(s.resolution(l, event, event))
 		}
 	case EventTurnEnded:
 		ended := l.items.turn

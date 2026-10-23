@@ -162,7 +162,7 @@ func New(cfg Config) (*Host, []string) {
 		now:         cfg.Now,
 		shells:      cfg.Shells,
 		events:      make(chan Event, konst.HostEventBuffer),
-		shellRaw:    make(chan ShellRaw, followQueue),
+		shellRaw:    make(chan ShellRaw, konst.FollowQueue),
 		answers:     make(chan Answer, 1),
 		steering:    steerQueue{ready: make(chan string, konst.HostSteeringQueue)},
 		stopLead:    make(chan struct{}, 1),
@@ -430,24 +430,26 @@ func (h *Host) Stop(asked StopAsked) {
 	}
 }
 
-func (h *Host) traceStop(stop session.Stop) {
+func (h *Host) traceStop(stop session.Stop) { h.trace(stop.Said(), &stop) }
+
+func (h *Host) trace(said string, stop *session.Stop) {
 	h.mu.Lock()
 	id, turnID, inbox := h.id, h.turn, h.inbox
 	h.mu.Unlock()
 	if id == "" {
 		return
 	}
-	event, body := session.Event{Turn: turnID, Kind: session.EventNotice}, session.StopBody{NoticeBody: session.NoticeBody{Text: stop.Said(), From: turn.RecordedOrigin(llm.Origin{Source: llm.SourceNotice})}, Stop: &stop}
+	event, body := session.Event{Turn: turnID, Kind: session.EventNotice}, session.StopBody{NoticeBody: session.NoticeBody{Text: said, From: turn.RecordedOrigin(llm.Origin{Source: llm.SourceNotice})}, Stop: stop}
 	written, err := inbox.Record(id, event, body)
 	if !written && err == nil {
-		err = appendStop(h.dir, id, event, body)
+		err = appendNotice(h.dir, id, event, body)
 	}
 	if err != nil {
-		h.note("the trace row for " + stop.Said() + " was not written: " + err.Error())
+		h.note("the trace row for " + said + " was not written: " + err.Error())
 	}
 }
 
-func appendStop(dir, id string, event session.Event, body session.StopBody) error {
+func appendNotice(dir, id string, event session.Event, body session.StopBody) error {
 	store, err := session.OpenIn(dir)
 	if err != nil {
 		return err

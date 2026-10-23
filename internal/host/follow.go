@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"tofu/internal/cron"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/memory"
 	"tofu/internal/safe"
@@ -20,7 +21,6 @@ import (
 )
 
 const (
-	followQueue        = 1024
 	followReplyWait    = 3 * time.Second
 	followDialWait     = time.Second
 	followTakeOverWait = 2 * time.Second
@@ -55,6 +55,7 @@ const (
 	followInput     followOp = "input"
 	followResize    followOp = "resize"
 	followRelease   followOp = "release"
+	followTrace     followOp = "trace"
 )
 
 type followAsk struct {
@@ -186,7 +187,7 @@ func (h *Host) admit(a *audience, listener net.Listener) {
 		if err != nil {
 			return
 		}
-		s := &seat{link: linked(conn), stream: make(chan []byte, followQueue), kept: make(chan []byte, followQueue)}
+		s := &seat{link: linked(conn), stream: make(chan []byte, konst.FollowQueue), kept: make(chan []byte, konst.FollowQueue)}
 		h.bus.mu.Lock()
 		a.mu.Lock()
 		seated := a.seats != nil
@@ -408,6 +409,8 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 		reply = h.servedShell(s, ask)
 	case followSettings:
 		h.Settle(ask.Asking, ask.Pick)
+	case followTrace:
+		h.trace(ask.Text, nil)
 	case followRan:
 		h.Ran(ask.Command, ask.Text, ask.Stopped)
 	case followRemember:
@@ -632,9 +635,9 @@ func (h *Host) mirror(f *following, event Event) {
 		h.mu.Unlock()
 	}
 	h.bus.mu.Lock()
-	h.bus.now.apply(event)
+	told := h.bus.now.apply(event)
 	h.bus.mu.Unlock()
-	h.hand(event, f.gone)
+	h.hand(told, f.gone)
 }
 
 func (h *Host) rejoin(f *following, now picture, seq uint64) {
@@ -650,7 +653,8 @@ func (h *Host) rejoin(f *following, now picture, seq uint64) {
 	h.bus.mu.Unlock()
 	select {
 	case <-f.joined:
-		h.note("this tofu fell behind process " + strconv.Itoa(f.holder.PID) + " on session " + id + " after event " + strconv.FormatUint(f.seq, 10) + ", so it read the session again as it stood at event " + strconv.FormatUint(seq, 10))
+		said := "process " + strconv.Itoa(os.Getpid()) + " fell behind process " + strconv.Itoa(f.holder.PID) + " on session " + id + " after event " + strconv.FormatUint(f.seq, 10) + ", so it read the session again as it stood at event " + strconv.FormatUint(seq, 10)
+		safe.Go(h.report, "follow trace", func() { f.ask(followAsk{Op: followTrace, Text: said}) })
 	default:
 		close(f.joined)
 	}
@@ -658,6 +662,9 @@ func (h *Host) rejoin(f *following, now picture, seq uint64) {
 	for _, event := range moves {
 		h.mirror(f, event)
 	}
+	h.bus.mu.Lock()
+	h.bus.now = now
+	h.bus.mu.Unlock()
 }
 
 func (f *following) caughtUp() {
