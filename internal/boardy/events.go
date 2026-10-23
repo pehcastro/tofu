@@ -211,5 +211,10 @@ func (s Store) Events(key string, from int) ([]Event, error) {
 	if decoded == 0 {
 		return nil, err
 	}
+	for _, event := range events[:decoded] {
+		if event.Author != nil && event.Author.ID == "" {
+			event.Author.identifyStored(event.Actor)
+		}
+	}
 	return events[:decoded], err
 }

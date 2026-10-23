@@ -22,7 +22,7 @@ func (m Managed) Hand(id, toKey string, to Store, actor string) (Ticket, error) 
 	}
 	there := Managed{Local: Local{Store: to}, Person: m.Person}
 	moved := ticket
-	moved.Log = strings.TrimSpace(ticket.Log + "\n" + logLine(actor, "handed from "+id))
+	moved.Log = strings.TrimSpace(ticket.Log + "\n" + m.Store.logLine(actor, "handed from "+id))
 	moved.Depends, moved.Blocks, moved.Relates, moved.Duplicates, moved.Parent = nil, nil, nil, nil, ""
 	if to.Dir == m.Store.Dir {
 		moved.Relates = []string{id}
@@ -46,7 +46,7 @@ func (m Managed) Hand(id, toKey string, to Store, actor string) (Ticket, error) 
 	}
 	_, err = m.Store.Edit(id, func(t *Ticket) error {
 		t.Status, t.Reason = Dropped, "handed to "+link
-		t.Log = strings.TrimSpace(t.Log + "\n" + logLine(actor, "handed to "+link))
+		t.Log = strings.TrimSpace(t.Log + "\n" + m.Store.logLine(actor, "handed to "+link))
 		return nil
 	})
 	if err != nil {

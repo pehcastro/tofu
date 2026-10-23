@@ -149,7 +149,7 @@ func (m Managed) apply(open OpenQuestion, actor string) (Applied, error) {
 	}
 	ticket, err := m.Store.Edit(open.Ticket, func(t *Ticket) error {
 		t.Questions = slices.DeleteFunc(t.Questions, func(left Question) bool { return left.ID == q.ID })
-		t.Log = strings.TrimSpace(t.Log + "\n" + logLine(actor, text))
+		t.Log = strings.TrimSpace(t.Log + "\n" + m.Store.logLine(actor, text))
 		return nil
 	})
 	if err == nil {

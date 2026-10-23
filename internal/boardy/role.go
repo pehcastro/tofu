@@ -56,10 +56,11 @@ const (
 	AuthorLead       AuthorKind = "lead"
 	AuthorSubAgent   AuthorKind = "sub-agent"
 	AuthorHook       AuthorKind = "hook"
+	AuthorUnknown    AuthorKind = "unknown"
 )
 
 func (AuthorKind) Enum() []string {
-	return enum(AuthorPerson, AuthorClaudeCode, AuthorLead, AuthorSubAgent, AuthorHook)
+	return enum(AuthorPerson, AuthorClaudeCode, AuthorLead, AuthorSubAgent, AuthorHook, AuthorUnknown)
 }
 
 type AuthorRole string
@@ -87,6 +88,8 @@ func (Harness) Enum() []string {
 }
 
 type Author struct {
+	ID      string     `json:"id"`
+	Alias   string     `json:"alias"`
 	Kind    AuthorKind `json:"kind"`
 	Role    AuthorRole `json:"role,omitempty"`
 	Name    string     `json:"name"`
@@ -106,35 +109,67 @@ const (
 	personName        = "you"
 	leadTraceAgent    = "lead"
 	shortSessionChars = 8
+	aliasMostRunes    = 24
 )
 
 var tofuSessionID = sys.LazyRegexp(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 func HarnessActor(harness Harness, session, agent string) string {
-	actor := string(harness)
-	if session != "" {
-		actor += harnessSession + session
-	}
+	actor := sessioned(string(harness), session)
 	if agent != "" {
 		actor += subAgentOfSession + agent
 	}
 	return actor
 }
 
+func sessioned(name, session string) string {
+	if session == "" {
+		return name
+	}
+	return name + harnessSession + session
+}
+
+func aliasOf(name string) string {
+	runes := []rune(name)
+	return string(runes[:min(len(runes), aliasMostRunes)])
+}
+
+func unknownAuthor(text string) Author {
+	return Author{ID: text, Alias: aliasOf(text), Kind: AuthorUnknown, Name: text}
+}
+
+func (a *Author) identifyStored(actor string) {
+	name, _, _ := strings.Cut(actor, harnessSession)
+	a.ID, a.Alias = actor, aliasOf(name)
+	switch a.Kind {
+	case AuthorPerson:
+		a.Alias = personName
+	case AuthorSubAgent:
+		a.Alias = aliasOf(a.Name)
+	case AuthorLead, AuthorClaudeCode:
+		a.Kind = AuthorLead
+		if a.Harness != "" && a.Harness != HarnessOther {
+			a.Alias = string(a.Harness)
+		}
+	case "":
+		a.Kind = AuthorUnknown
+	}
+}
+
 func LeadAuthor(session, handle, name, model string) *Author {
-	return &Author{Kind: AuthorLead, Role: AsPM, Name: cmp.Or(name, handle, OrchestratorName+"-"+shortSession(session)), Harness: HarnessTofu, Model: model,
+	return &Author{ID: sessioned(string(HarnessTofu), session), Alias: string(HarnessTofu), Kind: AuthorLead, Role: AsPM, Name: cmp.Or(name, handle, OrchestratorName+"-"+shortSession(session)), Harness: HarnessTofu, Model: model,
 		Session: session, Handle: handle, Trace: sessionTrace(session, leadTraceAgent)}
 }
 
 func EngineerAuthor(session, handle, id, model string) *Author {
 	agent := AgentTypeOf(id)
 	number, _ := strconv.Atoi(strings.TrimPrefix(id, agent+"-"))
-	return &Author{Kind: AuthorSubAgent, Role: AsEngineer, Name: id, Harness: HarnessTofu, Model: model, Agent: agent, Number: number,
+	return &Author{ID: sessioned(id, session), Alias: aliasOf(id), Kind: AuthorSubAgent, Role: AsEngineer, Name: id, Harness: HarnessTofu, Model: model, Agent: agent, Number: number,
 		Session: session, Handle: handle, Trace: sessionTrace(session, id)}
 }
 
 func SubAgentAuthor(session, agent string) *Author {
-	return &Author{Kind: AuthorSubAgent, Role: AsEngineer, Name: agent, Harness: HarnessTofu, Session: session, Trace: sessionTrace(session, agent)}
+	return &Author{ID: sessioned(agent, session), Alias: aliasOf(agent), Kind: AuthorSubAgent, Role: AsEngineer, Name: agent, Harness: HarnessTofu, Session: session, Trace: sessionTrace(session, agent)}
 }
 
 func AgentTypeOf(name string) string {
@@ -166,11 +201,11 @@ func (s Store) authorOf(actor string) *Author {
 	}
 	switch {
 	case actor == string(RolePerson):
-		return &Author{Kind: AuthorPerson, Role: AsPerson, Name: personName}
+		return &Author{ID: actor, Alias: personName, Kind: AuthorPerson, Role: AsPerson, Name: personName}
 	case strings.HasPrefix(actor, hookActorPrefix):
-		return &Author{Kind: AuthorHook, Role: AsHook, Name: actor, Trace: "tofu boardy rule show " + strings.TrimPrefix(actor, hookActorPrefix)}
+		return &Author{ID: actor, Alias: aliasOf(actor), Kind: AuthorHook, Role: AsHook, Name: actor, Trace: "tofu boardy rule show " + strings.TrimPrefix(actor, hookActorPrefix)}
 	case actor == serveActor:
-		return &Author{Kind: AuthorHook, Role: AsHook, Name: actor}
+		return &Author{ID: actor, Alias: actor, Kind: AuthorHook, Role: AsHook, Name: actor}
 	case ranIn(HarnessClaudeCode):
 		return harnessAuthor(HarnessClaudeCode, session, agent, "claude --resume ")
 	case ranIn(HarnessCodex):
@@ -180,22 +215,20 @@ func (s Store) authorOf(actor string) *Author {
 	case tofuSessionID().MatchString(actor):
 		return LeadAuthor(actor, "", "", "")
 	case actor == OrchestratorName:
-		return &Author{Kind: AuthorLead, Role: AsPM, Name: actor, Harness: HarnessOther}
+		return &Author{ID: actor, Alias: actor, Kind: AuthorLead, Role: AsPM, Name: actor, Harness: HarnessOther}
 	}
-	return &Author{Kind: AuthorSubAgent, Role: AsEngineer, Name: actor, Harness: HarnessOther, Agent: AgentTypeOf(actor)}
+	unknown := unknownAuthor(actor)
+	return &unknown
 }
 
 func harnessAuthor(harness Harness, actorSession, agent, resume string) *Author {
 	session := strings.TrimPrefix(strings.TrimPrefix(actorSession, string(harness)), harnessSession)
-	author := &Author{Kind: AuthorLead, Role: AsPM, Name: string(harness), Harness: harness, Session: session, Handle: session}
-	if harness == HarnessClaudeCode {
-		author.Kind = AuthorClaudeCode
-	}
+	author := &Author{ID: sessioned(string(harness), session), Alias: string(harness), Kind: AuthorLead, Role: AsPM, Name: string(harness), Harness: harness, Session: session, Handle: session}
 	if session != "" {
 		author.Name, author.Trace = string(harness)+harnessSession+shortSession(session), resume+session
 	}
 	if agent != "" {
-		author.Kind, author.Role, author.Name, author.Agent = AuthorSubAgent, AsEngineer, agent, AgentTypeOf(agent)
+		author.ID, author.Alias, author.Kind, author.Role, author.Name, author.Agent = sessioned(agent, session), aliasOf(agent), AuthorSubAgent, AsEngineer, agent, AgentTypeOf(agent)
 	}
 	return author
 }

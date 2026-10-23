@@ -89,7 +89,7 @@ func (m Managed) Plan(id, epic, sprint, actor string) (Ticket, error) {
 	text := "set " + strings.Join(said, ", ")
 	planned, err := m.Store.Edit(id, func(t *Ticket) error {
 		t.Epic, t.Sprint = cmp.Or(epic, t.Epic), cmp.Or(sprint, t.Sprint)
-		t.Log = strings.TrimSpace(t.Log + "\n" + logLine(actor, text))
+		t.Log = strings.TrimSpace(t.Log + "\n" + m.Store.logLine(actor, text))
 		return nil
 	})
 	if err != nil {

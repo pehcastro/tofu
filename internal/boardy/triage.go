@@ -24,9 +24,27 @@ const (
 
 type Request struct {
 	ID     string    `json:"id"`
-	By     string    `json:"by"`
+	By     Author    `json:"by"`
 	At     time.Time `json:"at"`
 	Ticket Ticket    `json:"ticket"`
+}
+
+func (r *Request) UnmarshalJSON(raw []byte) error {
+	type stored Request
+	var shape struct {
+		stored
+		By json.RawMessage `json:"by"`
+	}
+	if err := json.Unmarshal(raw, &shape); err != nil {
+		return err
+	}
+	*r = Request(shape.stored)
+	var text string
+	if len(shape.By) == 0 || json.Unmarshal(shape.By, &text) == nil {
+		r.By = unknownAuthor(text)
+		return nil
+	}
+	return json.Unmarshal(shape.By, &r.By)
 }
 
 func (s Store) requestPath(key, id string) string {
@@ -42,7 +60,7 @@ func (m Managed) request(key string, ticket Ticket, actor string) (Ticket, error
 	if err := m.gate(&s); err != nil {
 		return Ticket{}, err
 	}
-	req := Request{By: actor, At: time.Now().UTC().Truncate(time.Second), Ticket: ticket}
+	req := Request{By: *m.Store.authorOf(actor), At: time.Now().UTC().Truncate(time.Second), Ticket: ticket}
 	err := m.Store.locked(key, triageCounterName, func() error {
 		dir := filepath.Join(m.Store.BoardDir(key), TriageDirName)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -75,7 +93,7 @@ func (s Store) Requests(key string) ([]Request, error) {
 	var requests []Request
 	for _, ticket := range tickets {
 		if ticket.Status == Triage {
-			requests = append(requests, Request{ID: ticket.ID, At: ticket.Created, Ticket: ticket})
+			requests = append(requests, Request{ID: ticket.ID, By: unknownAuthor(""), At: ticket.Created, Ticket: ticket})
 		}
 	}
 	names, listErr := sys.ListFiles(filepath.Join(s.BoardDir(key), TriageDirName), ".json")
@@ -152,7 +170,7 @@ func (m Managed) AcceptPlanned(key, id, epic, sprint, actor string) (Ticket, err
 		}
 		ticket := req.Ticket
 		ticket.Status, ticket.Reason, ticket.Epic, ticket.Sprint = Backlog, "", cmp.Or(epic, ticket.Epic), cmp.Or(sprint, ticket.Sprint)
-		ticket.Log = strings.TrimSpace(ticket.Log + "\n" + logLine(actor, fmt.Sprintf("accepted triage request %s from %s", id, req.By)))
+		ticket.Log = strings.TrimSpace(ticket.Log + "\n" + m.Store.logLine(actor, fmt.Sprintf("accepted triage request %s from %s", id, cmp.Or(req.By.ID, "an unknown actor"))))
 		accepting := subject{event: rule.HookTriageAccept, key: key, ticket: ticket, from: Triage, to: Backlog, actor: actor}
 		if err := m.gate(&accepting); err != nil {
 			return err

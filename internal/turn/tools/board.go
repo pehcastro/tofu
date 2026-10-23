@@ -282,7 +282,7 @@ func (t boardTool) triage(a boardArgs) (string, error) {
 	}
 	lines = append(lines, fmt.Sprintf("%s triage holds %d requests", answer.Board, len(answer.Requests)))
 	for _, request := range answer.Requests {
-		lines = append(lines, fmt.Sprintf("- %s by %s: %s", request.ID, request.By, request.Ticket.Title))
+		lines = append(lines, fmt.Sprintf("- %s by %s: %s", request.ID, cmp.Or(request.By.ID, string(request.By.Kind)), request.Ticket.Title))
 	}
 	return strings.Join(lines, "\n"), err
 }

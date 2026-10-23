@@ -429,7 +429,7 @@ func (m Managed) effect(h rule.Hook, s subject) error {
 	switch h.Action.Do {
 	case rule.DoCreate:
 		var made Ticket
-		follow := Ticket{Front: Front{Title: arg, Epic: s.ticket.Epic, Sprint: s.ticket.Sprint}, Log: logLine(actor, fmt.Sprintf("made by hook %s after %s of %s", h.ID, s.event, cmp.Or(s.ticket.ID, s.ticket.Title)))}
+		follow := Ticket{Front: Front{Title: arg, Epic: s.ticket.Epic, Sprint: s.ticket.Sprint}, Log: m.Store.logLine(actor, fmt.Sprintf("made by hook %s after %s of %s", h.ID, s.event, cmp.Or(s.ticket.ID, s.ticket.Title)))}
 		if s.ticket.ID != "" {
 			follow.Relates = []string{s.ticket.ID}
 		}

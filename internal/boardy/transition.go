@@ -411,6 +411,6 @@ func (m Managed) ownsFree(key string, ticket Front, owns []string, status Status
 	return nil
 }
 
-func logLine(actor, text string) string {
-	return "- " + time.Now().Format(time.DateOnly) + " " + actor + ": " + text
+func (s Store) logLine(actor, text string) string {
+	return "- " + time.Now().Format(time.DateOnly) + " " + s.authorOf(actor).ID + ": " + text
 }

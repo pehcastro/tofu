@@ -61,10 +61,7 @@ func (l Local) appendLog(id, text, actor string, event Event) (Ticket, error) {
 	who := ""
 	if actor != "" {
 		event.Author = l.Store.authorOf(actor)
-		name := event.Author.Name
-		if event.Author.Kind == AuthorPerson {
-			name = string(RolePerson)
-		}
+		name := event.Author.ID
 		text, event.Text = strings.TrimPrefix(text, name+": "), strings.TrimPrefix(event.Text, name+": ")
 		who = name + ": "
 		if event.Kind == Evidence {
