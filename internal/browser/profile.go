@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -8,13 +9,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"golang.org/x/net/websocket"
 
 	"tofu/internal/konst"
 	"tofu/internal/safe"
+	"tofu/internal/shell"
 	"tofu/internal/sys"
 )
 
@@ -30,6 +34,9 @@ func (e Endpoint) Dial() (*Client, error) {
 	}
 	dir, err := profileDir(e.Home, e.Profile)
 	if err != nil {
+		return nil, err
+	}
+	if err := stopLeftover(dir); err != nil {
 		return nil, err
 	}
 	conn, err := attachChrome(dir)
@@ -50,6 +57,9 @@ type Profile struct {
 
 const (
 	devToolsActivePort = "DevToolsActivePort"
+	ownerFile          = "tofu-owner"
+	headlessOwner      = "headless "
+	visibleOwner       = "visible"
 	debuggerOrigin     = "http://tofu.invalid"
 	LoginURL           = "https://accounts.google.com"
 )
@@ -108,11 +118,64 @@ func StopProfile(home, name string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	return stopChrome(dir)
+}
+
+func reapLeftovers(home string) {
+	profiles, _ := Profiles(home)
+	for _, profile := range profiles {
+		_ = stopLeftover(profile.Dir)
+	}
+}
+
+func stopLeftover(dir string) error {
+	raw, err := os.ReadFile(filepath.Join(dir, ownerFile))
+	unrecorded := errors.Is(err, os.ErrNotExist)
+	if !unrecorded && (err != nil || !headlessOwnerGone(string(raw))) {
+		return nil
+	}
+	conn, err := attachChrome(dir)
+	if err != nil {
+		return nil
+	}
+	if unrecorded {
+		var version struct {
+			UserAgent string `json:"userAgent"`
+		}
+		answer, err := conn.send("", "Browser.getVersion", nil)
+		if err != nil || json.Unmarshal(answer, &version) != nil || !strings.Contains(version.UserAgent, "HeadlessChrome") {
+			_ = conn.ws.Close()
+			<-conn.done
+			return nil
+		}
+	}
+	return closeChrome(conn, dir)
+}
+
+func headlessOwnerGone(record string) bool {
+	digits, headless := strings.CutPrefix(strings.TrimSpace(record), headlessOwner)
+	pid, err := strconv.Atoi(digits)
+	if !headless || err != nil {
+		return false
+	}
+	owner, err := os.FindProcess(pid)
+	if err != nil {
+		return true
+	}
+	defer func() { _ = owner.Release() }()
+	return runtime.GOOS != "windows" && owner.Signal(syscall.Signal(0)) != nil
+}
+
+func stopChrome(dir string) (bool, error) {
 	conn, err := attachChrome(dir)
 	if err != nil {
 		return false, nil
 	}
-	_, err = conn.send("", "Browser.close", nil)
+	return true, closeChrome(conn, dir)
+}
+
+func closeChrome(conn *cdpConn, dir string) error {
+	_, err := conn.send("", "Browser.close", nil)
 	if err != nil {
 		_ = conn.ws.Close()
 	}
@@ -120,13 +183,13 @@ func StopProfile(home, name string) (bool, error) {
 	for until := time.Now().Add(konst.BrowserCallTimeoutMillis * time.Millisecond); profileHeld(dir) && time.Now().Before(until); {
 		time.Sleep(konst.BrowserSettleTickMillis * time.Millisecond)
 	}
-	return true, err
+	return err
 }
 
 func RemoveProfile(home, name string) error {
 	dir, err := profileDir(home, name)
 	if err == nil {
-		_, err = StopProfile(home, name)
+		_, err = stopChrome(dir)
 	}
 	if err != nil {
 		return err
@@ -183,12 +246,21 @@ func launchChrome(dir string, headless bool) (*cdpConn, error) {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
-	args := []string{"--user-data-dir=" + dir, "--remote-debugging-port=0", "--remote-allow-origins=" + debuggerOrigin, "--no-first-run", "--no-default-browser-check"}
+	owner, args := visibleOwner, []string{"--user-data-dir=" + dir, "--remote-debugging-port=0", "--remote-allow-origins=" + debuggerOrigin, "--no-first-run", "--no-default-browser-check"}
 	if headless {
-		args = append(args, "--headless=new")
+		owner, args = headlessOwner+strconv.Itoa(os.Getpid()), append(args, "--headless=new")
+	}
+	if err := os.WriteFile(filepath.Join(dir, ownerFile), []byte(owner), 0o600); err != nil {
+		return nil, err
 	}
 	command := exec.Command(chrome, append(args, "about:blank")...)
-	if err := command.Start(); err != nil {
+	var tracked shell.Tree
+	if headless {
+		tracked, err = shell.StartTracked(command)
+	} else {
+		err = command.Start()
+	}
+	if err != nil {
 		return nil, err
 	}
 	exited := make(chan error, 1)
@@ -200,11 +272,14 @@ func launchChrome(dir string, headless bool) (*cdpConn, error) {
 		}
 		select {
 		case err := <-exited:
+			tracked.Release()
 			return nil, fmt.Errorf("%s exited before it opened a debugging port on %s: %v", chrome, dir, err)
 		case <-time.After(konst.BrowserSettleTickMillis * time.Millisecond):
 		}
 	}
-	return nil, errors.Join(fmt.Errorf("%s opened no debugging port on %s within %d ms, so tofu stopped it", chrome, dir, konst.BrowserCallTimeoutMillis), command.Process.Kill())
+	killed := command.Process.Kill()
+	tracked.Release()
+	return nil, errors.Join(fmt.Errorf("%s opened no debugging port on %s within %d ms, so tofu stopped it", chrome, dir, konst.BrowserCallTimeoutMillis), killed)
 }
 
 func profileHeld(dir string) bool {

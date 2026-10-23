@@ -75,6 +75,7 @@ func Host(origin string, stdin io.Reader, stdout io.Writer, home string) error {
 	if err != nil {
 		return err
 	}
+	reapLeftovers(home)
 	return host(origin, stdin, stdout, home, tofu, installedBuild)
 }
 
