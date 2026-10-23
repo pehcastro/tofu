@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -33,11 +34,12 @@ type Cited struct {
 	Found    []Citation
 	Resolved int
 	Refused  int
+	NotFound int
 	Text     string
 }
 
 var citationPattern = sys.LazyRegexp(
-	`(?:^|[^A-Za-z0-9_./\\-])(\.?[A-Za-z0-9_][A-Za-z0-9_./\\-]*\.[A-Za-z][A-Za-z0-9]{0,9})` +
+	`(?:^|[^A-Za-z0-9_./\\-])((?:\.\.?[/\\])*\.?[A-Za-z0-9_][A-Za-z0-9_./\\-]*\.[A-Za-z][A-Za-z0-9]{0,9})` +
 		`:([1-9][0-9]{0,8})(?:-([1-9][0-9]{0,8}))?` +
 		`(?::([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?))?`)
 
@@ -46,7 +48,9 @@ type fileBody struct {
 	present bool
 }
 
-func Cite(root, text string) Cited {
+func Cite(root, text string, moved ...string) Cited {
+	roots := append(slices.Clip(moved), root)
+	places := searchedPlaces(root, moved)
 	read := map[string]fileBody{}
 	var cited Cited
 	for _, match := range citationPattern().FindAllStringSubmatch(text, -1) {
@@ -58,15 +62,18 @@ func Cite(root, text string) Cited {
 		}
 		one.Text = spell(one)
 		if _, known := read[one.Path]; !known {
-			read[one.Path] = fileLines(root, one.Path)
+			read[one.Path] = firstPresent(roots, one.Path)
 		}
-		one.Claim, one.Detail = resolveCitation(one, read[one.Path])
-		if one.Claim == ClaimResolved {
+		one.Claim, one.Detail = resolveCitation(one, read[one.Path], places)
+		switch one.Claim {
+		case ClaimResolved:
 			cited.Resolved++
+		case ClaimNoFile:
+			cited.NotFound++
 		}
 		cited.Found = append(cited.Found, one)
 	}
-	cited.Refused = len(cited.Found) - cited.Resolved
+	cited.Refused = len(cited.Found) - cited.Resolved - cited.NotFound
 	cited.Text = renderCitations(cited)
 	return cited
 }
@@ -82,22 +89,36 @@ func spell(one Citation) string {
 	return text
 }
 
-func fileLines(root, rel string) fileBody {
-	body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
-	if err != nil {
-		return fileBody{}
+func searchedPlaces(root string, moved []string) string {
+	places := []string{"the working directory"}
+	for _, dir := range moved {
+		if rel, err := filepath.Rel(root, dir); err == nil && !strings.HasPrefix(rel, "..") {
+			dir = rel
+		}
+		places = append(places, filepath.ToSlash(dir))
 	}
-	if len(body) == 0 {
-		return fileBody{present: true}
-	}
-	unwound := strings.TrimSuffix(strings.ReplaceAll(string(body), "\r\n", "\n"), "\n")
-	return fileBody{lines: strings.Split(unwound, "\n"), present: true}
+	return strings.Join(places, " or ")
 }
 
-func resolveCitation(one Citation, file fileBody) (Claim, string) {
+func firstPresent(roots []string, rel string) fileBody {
+	for _, root := range roots {
+		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		switch {
+		case err != nil:
+			continue
+		case len(body) == 0:
+			return fileBody{present: true}
+		}
+		unwound := strings.TrimSuffix(strings.ReplaceAll(string(body), "\r\n", "\n"), "\n")
+		return fileBody{lines: strings.Split(unwound, "\n"), present: true}
+	}
+	return fileBody{}
+}
+
+func resolveCitation(one Citation, file fileBody, places string) (Claim, string) {
 	switch {
 	case !file.present:
-		return ClaimNoFile, "no file is at that path under the working directory"
+		return ClaimNoFile, "no file is at that path under " + places + ", so it was not checked"
 	case one.LastLine < one.FirstLine:
 		return ClaimNoLine, "the range ends before it begins"
 	case one.LastLine > len(file.lines):
@@ -142,13 +163,19 @@ func renderCitations(cited Cited) string {
 	if len(cited.Found) == 0 {
 		return ""
 	}
-	headline := fmt.Sprintf("citations: %d found, %d resolved", len(cited.Found), cited.Resolved)
-	if cited.Refused == 0 {
-		return headline
+	lines := []string{fmt.Sprintf("citations: %d found, %d resolved", len(cited.Found), cited.Resolved)}
+	if cited.NotFound > 0 {
+		lines[0] += fmt.Sprintf(", %d not found", cited.NotFound)
 	}
-	lines := []string{fmt.Sprintf("%s, %d refused. a refused citation is not evidence and must not be repeated as one", headline, cited.Refused)}
+	if cited.Refused > 0 {
+		lines[0] += fmt.Sprintf(", %d refused. a refused citation is not evidence and must not be repeated as one", cited.Refused)
+	}
 	for _, one := range cited.Found {
-		if one.Claim != ClaimResolved {
+		switch one.Claim {
+		case ClaimResolved:
+		case ClaimNoFile:
+			lines = append(lines, "not found "+one.Text+": "+one.Detail)
+		default:
 			lines = append(lines, fmt.Sprintf("refused %s %s: %s", one.Text, one.Claim, one.Detail))
 		}
 	}

@@ -275,18 +275,35 @@ func lastLines(raw []byte, lines int) string {
 	return strings.Join(all[max(0, len(all)-lines):], "\n")
 }
 
+type Step struct {
+	Text  string
+	Dir   string
+	Moved bool
+}
+
+func Steps(dir, command string) []Step {
+	var steps []Step
+	for _, text := range commandStep().Split(command, -1) {
+		moved := changedDir().FindStringSubmatch(text)
+		if moved != nil {
+			dir = within(dir, moved[1])
+		}
+		steps = append(steps, Step{Text: text, Dir: dir, Moved: moved != nil})
+	}
+	return steps
+}
+
 func namedLogs(dir, command string) []string {
 	var paths []string
-	for _, step := range commandStep().Split(command, -1) {
-		if moved := changedDir().FindStringSubmatch(step); moved != nil {
-			dir = within(dir, moved[1])
+	for _, step := range Steps(dir, command) {
+		if step.Moved {
 			continue
 		}
-		for _, match := range logTarget().FindAllStringSubmatch(step, -1) {
+		for _, match := range logTarget().FindAllStringSubmatch(step.Text, -1) {
 			if slices.Contains([]string{"/dev/null", "$null", "nul"}, strings.ToLower(match[1])) {
 				continue
 			}
-			if path := within(dir, match[1]); !slices.Contains(paths, path) {
+			if path := within(step.Dir, match[1]); !slices.Contains(paths, path) {
 				paths = append(paths, path)
 			}
 		}
