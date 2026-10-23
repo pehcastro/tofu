@@ -78,7 +78,7 @@ type appWiring struct {
 	quota     func() []frame.Quota
 	reload    func(ctx context.Context, out io.Writer) int
 	now       func() time.Time
-	detached  bool
+	joins     bool
 }
 
 type appLaunch struct {
@@ -122,7 +122,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch, he
 	defer launch.stopRestoring()
 	places, _ := sys.ResolvePlaces(".")
 	engine := &appEngine{dir: dir, arms: arms, open: wiring.open, quota: wiring.quota, tabs: launch.tabs, places: places}
-	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), Resumed: launch.resumed.hosted(), Detached: wiring.detached, Now: wiring.now})
+	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), Resumed: launch.resumed.hosted(), Joins: wiring.joins, Now: wiring.now})
 	notes := append([]string{launch.note}, troubles...)
 	if _, err := gateKeyFrom(held.keys()); err != nil {
 		notes = append(notes, gateOffSaid(err))
@@ -133,7 +133,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch, he
 		engine.warm.Close()
 	}
 	*launch.endSession = func() []string {
-		if wiring.detached {
+		if wiring.joins {
 			return nil
 		}
 		return turn.EndSession(context.Background(), dir, live.ID(), sessionEndExit)
@@ -286,21 +286,15 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 	stopRestoring := restoring(out, resumed)
 	held := holdStore()
 	defer held.close()
-	live := appWiring{open: openAppWire, wires: held.wires, blockers: held.requirements, quota: held.quota, reload: held.reload, detached: true}
+	live := appWiring{open: openAppWire, wires: held.wires, blockers: held.requirements, quota: held.quota, reload: held.reload, joins: true}
 	launch := launchOf(dir, resumed, resumed.Session == "")
 	launch.stopRestoring = stopRestoring
-	var keeperCrashed []string
-	stopKeeping := keepAccountsAlive(held, func(string) {}, func(said string) { keeperCrashed = append(keeperCrashed, said) })
 	var identity sync.WaitGroup
 	var identityErr error
 	identity.Go(func() {
 		identityErr = crashed(dir, safe.Call(nil, "project identity", func() error { return sys.RecordIdentity(dir) }))
 	})
 	err = tui.Run(appOptions(dir, runOpts{}, live, launch, held))
-	stopKeeping()
-	for _, said := range keeperCrashed {
-		_, _ = fmt.Fprintln(errOut, "tofu: "+said)
-	}
 	identity.Wait()
 	if identityErr != nil {
 		_, _ = fmt.Fprintf(errOut, "tofu: the git remote and root of this project were not recorded: %v\n", identityErr)

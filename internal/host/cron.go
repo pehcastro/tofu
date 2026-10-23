@@ -15,25 +15,22 @@ import (
 )
 
 func (h *Host) CronCommand(line string) (cron.Reply, error) {
-	if err := h.reachHolder(); err != nil {
+	if err := h.reachHost(); err != nil {
 		return cron.Reply{}, err
 	}
 	if f := h.following.Load(); f != nil {
 		reply := f.ask(followAsk{Op: followCron, Text: line})
 		switch {
 		case reply.ID == 0:
-			return cron.Reply{}, errHolderSilent
+			return cron.Reply{}, errHostSilent
 		case reply.Failed != "":
 			return cron.Reply{}, errors.New(reply.Failed)
 		}
 		return reply.Cron, h.loadCron(h.ID())
 	}
 	h.mu.Lock()
-	readOnly, idle := h.readOnly, !h.running
+	idle := !h.running
 	h.mu.Unlock()
-	if readOnly != nil {
-		return cron.Reply{}, readOnly
-	}
 	reply, err := h.cron.Command(line, h.now())
 	if err != nil {
 		return reply, err
@@ -76,18 +73,14 @@ func (h *Host) cronState() CronState {
 func (h *Host) armCron() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if h.ticking != nil || h.closed || h.readOnly != nil {
+	if h.ticking != nil || h.closed || h.joins {
 		return
 	}
 	h.ticking = time.AfterFunc(konst.CronPollMillis*time.Millisecond, func() {
 		h.mu.Lock()
 		h.ticking = nil
-		readOnly := h.readOnly != nil
 		h.dropRead()
 		h.mu.Unlock()
-		if readOnly {
-			return
-		}
 		_ = safe.Call(h.report, "cron", func() error {
 			h.fire(h.cron.Due(context.Background(), h.now(), cron.Tick))
 			return nil

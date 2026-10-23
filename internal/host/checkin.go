@@ -24,10 +24,10 @@ func (h *Host) armCheckIn() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	armed := h.checkIn
-	if armed == nil || h.running || h.stopped || h.closed || h.readOnly != nil {
+	if armed == nil || h.running || h.stopped || h.closed || h.joins {
 		return
 	}
-	idle := func() bool { return h.checkIn == armed && !h.running && !h.closed && h.readOnly == nil }
+	idle := func() bool { return h.checkIn == armed && !h.running && !h.closed }
 	h.checking = time.AfterFunc(armed.Every, func() {
 		h.mu.Lock()
 		waiting := idle()

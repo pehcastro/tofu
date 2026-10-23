@@ -220,7 +220,7 @@ func steeredImage(s session) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if _, err := s.drive("10-steer-image", "", time.Minute, "--holder", "--clipboard", shot); err != nil {
+	if _, err := s.drive("10-steer-image", "", time.Minute, "--host", "--clipboard", shot); err != nil {
 		return "", err
 	}
 	dump, err := os.ReadFile(s.requests())

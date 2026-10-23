@@ -41,7 +41,7 @@ func ImageToken(index int) string { return ImageTokenHead + strconv.Itoa(index) 
 
 var (
 	errTurnRunning = errors.New("a turn is running: wait for it to end, or stop it")
-	errProjectTurn = errors.New("another session this tofu holds is already working in this project, and this project lets one session work at a time: wait for it, or set oneWorkingSessionPerProject off")
+	errProjectTurn = errors.New("another session in this project's tofu host is already working, and this project lets one session work at a time: wait for it, or set oneWorkingSessionPerProject off")
 )
 
 type Play func(ctx context.Context, pick Pick, task string, live Live)
@@ -74,7 +74,7 @@ type Config struct {
 	Check       cron.Checker
 	Resumed     Carry
 	ProjectTurn *sync.Mutex
-	Detached    bool
+	Joins       bool
 	Unrecorded  bool
 }
 
@@ -92,11 +92,10 @@ type Host struct {
 	sendNow  chan struct{}
 	cron     *cron.Book
 	cronMove chan struct{}
-	readOnly error
 	turnLock *sync.Mutex
 	keys     func() keyMask
 	done     chan struct{}
-	detached bool
+	joins    bool
 
 	audience  atomic.Pointer[audience]
 	following atomic.Pointer[following]
@@ -110,6 +109,7 @@ type Host struct {
 	cancelled bool
 	stopBy    string
 	closeBy   string
+	closeWhy  string
 	cancel    context.CancelFunc
 	turnOver  chan struct{}
 	pick      Pick
@@ -172,7 +172,7 @@ func New(cfg Config) (*Host, []string) {
 		turnLock:    cfg.ProjectTurn,
 		keys:        sync.OnceValue(loadKeyMask),
 		done:        make(chan struct{}),
-		detached:    cfg.Detached,
+		joins:       cfg.Joins,
 		id:          cfg.Resumed.Session,
 		started:     SourceStartup,
 		asks:        &asks{standing: map[string]Answer{}, until: map[string]time.Time{}},
@@ -197,13 +197,11 @@ func New(cfg Config) (*Host, []string) {
 	if !cfg.Unrecorded {
 		h.started = SourceResumed
 	}
-	leader, err := h.holdOrFollow(h.id)
-	switch {
-	case err != nil:
-		h.readOnly = err
-		return h, append(troubles, cmp.Or(unreached(h.id, err), err.Error()))
-	case leader != nil:
-		return h, append(troubles, leader.note(h.id))
+	if err := h.enter(h.id); err != nil {
+		return h, append(troubles, err.Error())
+	}
+	if h.joins {
+		return h, troubles
 	}
 	safe.Go(h.report, "follow binding", h.followBinding)
 	if err := h.loadCron(h.id); err != nil {
@@ -288,19 +286,15 @@ func (h *Host) settle(asking AskingMode, pick Pick) {
 	h.bus.mu.Unlock()
 }
 
-func (h *Host) reachHolder() error {
-	if !h.detached || h.following.Load() != nil {
+func (h *Host) reachHost() error {
+	if !h.joins || h.following.Load() != nil {
 		return nil
 	}
-	id := h.pendingID()
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	_, err := h.holdOrFollow(id)
-	return err
+	return h.enter(h.pendingID())
 }
 
 func (h *Host) Send(pick Pick, task string) bool {
-	if err := h.reachHolder(); err != nil {
+	if err := h.reachHost(); err != nil {
 		h.note(err.Error())
 		return false
 	}
@@ -375,7 +369,7 @@ func (h *Host) OpenFresh() (string, error) {
 		return "", err
 	}
 	id := h.pendingID()
-	if h.detached {
+	if h.joins {
 		return id, nil
 	}
 	h.mu.Lock()
@@ -400,7 +394,7 @@ type StopAsked struct {
 }
 
 func (asked StopAsked) followed() StopAsked {
-	asked.By = "follower pid " + strconv.Itoa(os.Getpid()) + ", " + asked.By
+	asked.By = "member process " + strconv.Itoa(os.Getpid()) + ", " + asked.By
 	return asked
 }
 
@@ -542,9 +536,11 @@ func (h *Host) Standing() []StandingAnswer {
 	return h.asks.standingNow()
 }
 
-func (h *Host) ClosingBy(by string) {
+func (h *Host) ClosingBy(by string) { h.endedBy(by, "process "+strconv.Itoa(os.Getpid())+" quit") }
+
+func (h *Host) endedBy(by, why string) {
 	h.mu.Lock()
-	h.closeBy = by
+	h.closeBy, h.closeWhy = by, why
 	h.mu.Unlock()
 }
 
@@ -594,15 +590,7 @@ func (h *Host) Close() {
 }
 
 func (h *Host) closing() session.Stop {
-	pid := strconv.Itoa(os.Getpid())
-	closing := session.Stop{Kind: session.HostClose, By: h.closeBy, Why: "process " + pid + " quit"}
-	switch {
-	case h.closeBy != "":
-	case h.heldID != "" && os.Getenv(HolderVariable) == h.heldID:
-		closing.By, closing.Why = "the holder, process "+pid, "holder grace, no client attached"
-	default:
-		closing.By, closing.Why = "process "+pid, "its window or tofu serve closed the session"
-	}
+	closing := session.Stop{Kind: session.HostClose, By: cmp.Or(h.closeBy, "process "+strconv.Itoa(os.Getpid())), Why: cmp.Or(h.closeWhy, "its window or tofu serve closed the session")}
 	if h.cancel != nil {
 		closing.Took = append([]string{"the lead"}, h.inbox.Running()...)
 	}
@@ -630,13 +618,6 @@ func (h *Host) hold(id string) error {
 	if err != nil {
 		return err
 	}
-	if h.detached {
-		started := startHolder(h.dir, store, id)
-		if started == nil {
-			return cmp.Or(store.Busy(id), errNoHolder)
-		}
-		safe.Go(h.report, "holder note", func() { h.note(started.Error() + ", so this tofu runs the session itself") })
-	}
 	release, err := store.Hold(id)
 	if err != nil {
 		return err
@@ -646,25 +627,35 @@ func (h *Host) hold(id string) error {
 	h.release, h.heldID = release, id
 	switch {
 	case release != nil:
-		h.openAudience(store, id, moving)
+		h.openAudience(moving)
 	case moving != nil:
 		moving.close()
 	}
 	return nil
 }
 
-func (h *Host) holdOrFollow(id string) (*following, error) {
-	refused := h.hold(id)
-	if refused == nil {
-		return nil, nil
+func (h *Host) holds(id string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.heldID == id && h.release != nil
+}
+
+func (h *Host) enter(id string) error {
+	if !h.joins {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		return h.hold(id)
 	}
-	leader, err := h.dialHolder(id, refused)
+	f, err := h.join(id)
 	if err != nil {
-		return nil, refused
+		return err
 	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	h.letGo()
-	h.follow(leader, id)
-	return leader, nil
+	h.id = id
+	h.follow(f, id)
+	return nil
 }
 
 func (h *Host) letGo() {
@@ -713,7 +704,7 @@ func (h *Host) carry(resumed Carry) error {
 		return nil
 	}
 	store, err := resumed.reading(h.dir)
-	if err == nil && !h.detached && h.following.Load() == nil {
+	if err == nil && !h.joins {
 		err = turn.RestoreSubAgents(store, resumed.Session, h.roster, h.inbox)
 	}
 	if err != nil {
@@ -750,31 +741,28 @@ func (h *Host) Fresh() error {
 	h.letGo()
 	h.forget()
 	_ = h.carry(Carry{})
-	h.id, h.pending, h.started, h.readOnly = "", nil, SourceCleared, nil
+	h.id, h.pending, h.started = "", nil, SourceCleared
 	return h.cron.Load("")
 }
 
 func (h *Host) Resume(carry Carry) ([]Event, error) {
 	h.mu.Lock()
 	h.dropCheckIn()
-	if h.running {
-		h.mu.Unlock()
+	running := h.running
+	h.mu.Unlock()
+	if running {
 		return nil, errTurnRunning
 	}
 	h.forget()
-	leader, err := h.holdOrFollow(carry.Session)
-	if err != nil {
-		h.mu.Unlock()
+	if err := h.enter(carry.Session); err != nil {
 		return nil, err
 	}
-	if leader == nil {
-		h.readOnly = nil
-	}
+	h.mu.Lock()
 	h.id, h.pending, h.started = carry.Session, nil, SourceResumed
 	restoreErr := h.carry(carry)
 	h.mu.Unlock()
-	if leader != nil {
-		leader.caughtUp()
+	if f := h.following.Load(); f != nil {
+		f.caughtUp()
 	}
 	chat := h.Opening(carry)
 	if restoreErr != nil {
@@ -787,36 +775,14 @@ func (h *Host) Resume(carry Carry) ([]Event, error) {
 	return chat, nil
 }
 
-func (h *Host) Opening(carry Carry) []Event {
-	chat := resumedChat(carry, h.dir)
-	h.mu.Lock()
-	note := unreached(carry.Session, h.readOnly)
-	h.mu.Unlock()
-	if f := h.following.Load(); f != nil {
-		note = f.note(carry.Session)
-	}
-	if note == "" {
-		return chat
-	}
-	return append(chat, Event{Kind: EventNote, Text: note})
-}
-
-func unreached(id string, readOnly error) string {
-	var busy session.BusyError
-	if !errors.As(readOnly, &busy) || !busy.Live() {
-		return ""
-	}
-	pid := strconv.Itoa(busy.PID)
-	return "process " + pid + " has held session " + id + " since " + busy.Since.Format(time.TimeOnly) + " and does not answer, so this window only follows it and runs nothing: close process " + pid + " to take the session over"
-}
+func (h *Host) Opening(carry Carry) []Event { return resumedChat(carry, h.dir) }
 
 func (h *Host) Compacted(into string, messages []llm.Message) error {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	h.dropCheckIn()
 	h.id, h.carried, h.prefix = into, messages, &turn.Prefix{}
-	_, err := h.holdOrFollow(into)
-	return err
+	h.mu.Unlock()
+	return h.enter(into)
 }
 
 func (h *Host) Ran(command, output string, stopped bool) string {

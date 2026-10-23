@@ -1,8 +1,6 @@
 package session
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,21 +8,13 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-
-	"tofu/internal/sys"
 )
 
 const (
-	lockName                            = "lock"
-	turnLockName                        = "turn.lock"
-	channelName                         = "follow.sock"
-	channelDirName                      = "sock"
-	channelShortDir                     = "s"
-	channelShortHashBytes               = 4
-	channelPathLimit                    = 100
-	channelHashBytes                    = 8
-	lockStaleGrace        time.Duration = 3 * time.Second
-	lockRetry             time.Duration = 50 * time.Millisecond
+	lockName                     = "lock"
+	turnLockName                 = "turn.lock"
+	lockStaleGrace time.Duration = 3 * time.Second
+	lockRetry      time.Duration = 50 * time.Millisecond
 )
 
 type BusyError struct {
@@ -87,19 +77,6 @@ func (s *Store) HoldTurn() (func() error, error) {
 		return nil, err
 	}
 	return func() error { return unlock(file) }, nil
-}
-
-func (s *Store) Channel(id string) string {
-	beside := filepath.Join(s.Dir(id), channelName)
-	home, err := sys.HomeConfigDir()
-	if len(beside) < channelPathLimit || err != nil {
-		return beside
-	}
-	sum := sha256.Sum256([]byte(id))
-	if under := filepath.Join(home, channelDirName, "tofu-"+hex.EncodeToString(sum[:channelHashBytes])+".sock"); len(under) < channelPathLimit {
-		return under
-	}
-	return filepath.Join(home, channelShortDir, hex.EncodeToString(sum[:channelShortHashBytes])+".sock")
 }
 
 func takeLock(path string) (*os.File, *lockHolder, error) {

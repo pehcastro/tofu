@@ -117,18 +117,13 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		return serveFail(errOut, err)
 	}
 	polled, accounts := serveQuota(kept)
-	open, wires, stopKeeping := openAppWire, signedInWires, func() {}
+	open, wires := openAppWire, signedInWires
 	if deck != nil {
 		_ = os.Setenv(cassetteVariable, plan.cassette)
 		open, wires = driveWire(deck), func() []string { return append(runWires(), wireMeta) }
 		if os.Getenv(quota.ClaudeUsageURLVariable) == "" && os.Getenv(quota.CodexUsageURLVariable) == "" {
 			polled = nil
 		}
-	} else {
-		held := holdStore()
-		defer held.close()
-		note := func(line string) { _, _ = fmt.Fprintln(errOut, "tofu serve: "+line) }
-		stopKeeping = keepAccountsAlive(held, note, note)
 	}
 	launch := launchOf(dir, sessionResume{}, true)
 	say := func(line string) {
@@ -142,10 +137,9 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return serveFail(errOut, err)
 	}
-	var projectTurn sync.Mutex
 	spawn := func() (*host.Host, func()) {
 		engine := &appEngine{dir: dir, open: open, tabs: launch.tabs, places: places}
-		live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), ProjectTurn: &projectTurn, Detached: true, Now: clock})
+		live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), Joins: true, Now: clock})
 		for _, trouble := range troubles {
 			say(trouble)
 		}
@@ -161,7 +155,6 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 			return shellCommand(ctx, dir, launch.registry, command)
 		},
 		Stale: func() bool { return catalogStale(time.Now()) }, Setup: serveSetup, SaveKey: serveKey, Logout: serveLogout})
-	stopKeeping()
 	leaveShells(launch.registry)
 	if err != nil {
 		return serveFail(errOut, err)

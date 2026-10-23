@@ -20,7 +20,7 @@ type heldShell struct {
 	next int64
 }
 
-func (h *Host) servesShells() bool { return h.shells != nil && !h.detached }
+func (h *Host) servesShells() bool { return h.shells != nil && !h.joins }
 
 func (h *Host) useTerminals(a *audience) {
 	if h.servesShells() {
@@ -131,7 +131,7 @@ func (h *Host) heldShell(ask followAsk) (shell.Hold, error) {
 	case reply.Failed != "":
 		return reply.Hold, errors.New(reply.Failed)
 	case !reply.delivered():
-		return reply.Hold, errHolderSilent
+		return reply.Hold, errHostSilent
 	}
 	return reply.Hold, nil
 }

@@ -1,11 +1,12 @@
 package host
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"os"
-	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -17,16 +18,11 @@ import (
 	"tofu/internal/safe"
 	"tofu/internal/session"
 	"tofu/internal/shell"
-	"tofu/internal/turn"
 )
 
-const (
-	followReplyWait    = 3 * time.Second
-	followDialWait     = time.Second
-	followTakeOverWait = 2 * time.Second
-	followRetry        = 50 * time.Millisecond
-	followNetwork      = "unix"
-)
+const followReplyWait = konst.FollowReplyMillis * time.Millisecond
+
+var errHostSilent = errors.New("the tofu host did not answer, so nothing changed")
 
 type followOp string
 
@@ -110,11 +106,8 @@ type heldSettings struct {
 }
 
 type audience struct {
-	mu       sync.Mutex
-	listener net.Listener
-	seats    map[*seat]struct{}
-	attached int
-	changed  chan struct{}
+	mu    sync.Mutex
+	seats map[*seat]struct{}
 }
 
 type link struct {
@@ -127,13 +120,13 @@ type seat struct {
 	link
 	stream    chan []byte
 	kept      chan []byte
-	attached  bool
 	terminals bool
 }
 
 type following struct {
 	link
-	holder  session.BusyError
+	lines   *json.Decoder
+	hub     HubStatus
 	mu      sync.Mutex
 	asked   int
 	waiting map[int]chan followReply
@@ -153,57 +146,36 @@ func (l *link) leave() {
 	})
 }
 
-func (h *Host) openAudience(store *session.Store, id string, a *audience) {
-	path := store.Channel(id)
-	_ = os.Remove(path)
-	_ = os.MkdirAll(filepath.Dir(path), 0o700)
-	listener, err := net.Listen(followNetwork, path)
-	if err != nil {
-		if a != nil {
-			a.close()
-		}
-		return
-	}
+func (h *Host) openAudience(a *audience) {
 	if a == nil {
-		a = &audience{seats: map[*seat]struct{}{}, changed: make(chan struct{}, 1)}
+		a = &audience{seats: map[*seat]struct{}{}}
 	}
 	h.bus.mu.Lock()
 	h.bus.now.Settings = heldSettings{Asking: h.asking, Pick: h.pick}
 	h.bus.mu.Unlock()
-	a.mu.Lock()
-	moved := a.listener
-	a.listener = listener
-	a.mu.Unlock()
-	if moved != nil {
-		_ = moved.Close()
-	}
 	h.audience.Store(a)
-	safe.Go(h.report, "follow admit", func() { h.admit(a, listener) })
 }
 
-func (h *Host) admit(a *audience, listener net.Listener) {
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			return
-		}
-		s := &seat{link: linked(conn), stream: make(chan []byte, konst.FollowQueue), kept: make(chan []byte, konst.FollowQueue)}
-		h.bus.mu.Lock()
-		a.mu.Lock()
-		seated := a.seats != nil
-		if seated {
-			s.stream <- h.snapshot()
-			a.seats[s] = struct{}{}
-		}
-		a.mu.Unlock()
-		h.bus.mu.Unlock()
-		if !seated {
-			_ = conn.Close()
-			continue
-		}
-		safe.Go(h.report, "follow write", s.write)
-		safe.Go(h.report, "follow read", func() { h.serveSeat(a, s) })
+func (h *Host) seat(conn net.Conn, in io.Reader) {
+	a := h.audience.Load()
+	if a == nil {
+		return
 	}
+	s := &seat{link: linked(conn), stream: make(chan []byte, konst.FollowQueue), kept: make(chan []byte, konst.FollowQueue)}
+	h.bus.mu.Lock()
+	a.mu.Lock()
+	seated := a.seats != nil
+	if seated {
+		s.stream <- h.snapshot()
+		a.seats[s] = struct{}{}
+	}
+	a.mu.Unlock()
+	h.bus.mu.Unlock()
+	if !seated {
+		return
+	}
+	safe.Go(h.report, "follow write", s.write)
+	h.serveSeat(a, s, in)
 }
 
 func (a *audience) broadcast(said followLine, snapshot func() []byte) {
@@ -240,47 +212,17 @@ func (s *seat) resync(snapshot []byte) {
 	s.stream <- snapshot
 }
 
-func (a *audience) unseat(s *seat) {
-	if _, seated := a.seats[s]; !seated {
-		return
-	}
-	delete(a.seats, s)
-	s.leave()
-	if s.attached {
-		a.attached--
-		a.changes()
-	}
-}
-
 func (a *audience) attach(s *seat, terminals bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	s.terminals = terminals
-	if _, seated := a.seats[s]; seated && !s.attached {
-		s.attached = true
-		a.attached++
-		a.changes()
-	}
-}
-
-func (a *audience) changes() {
-	select {
-	case a.changed <- struct{}{}:
-	default:
-	}
-}
-
-func (a *audience) attachedNow() int {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.attached
 }
 
 func (a *audience) wantsTerminals() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for s := range a.seats {
-		if s.attached && s.terminals {
+		if s.terminals {
 			return true
 		}
 	}
@@ -289,18 +231,16 @@ func (a *audience) wantsTerminals() bool {
 
 func (a *audience) drop(s *seat) {
 	a.mu.Lock()
-	a.unseat(s)
+	delete(a.seats, s)
 	a.mu.Unlock()
 	s.leave()
 }
 
 func (a *audience) close() {
 	a.mu.Lock()
-	listener, seats := a.listener, a.seats
-	a.seats, a.attached = nil, 0
-	a.changes()
+	seats := a.seats
+	a.seats = nil
 	a.mu.Unlock()
-	_ = listener.Close()
 	for s := range seats {
 		s.leave()
 	}
@@ -331,13 +271,13 @@ func (s *seat) write() {
 	}
 }
 
-func (h *Host) serveSeat(a *audience, s *seat) {
+func (h *Host) serveSeat(a *audience, s *seat, in io.Reader) {
 	defer func() {
 		a.drop(s)
 		h.useTerminals(a)
 		h.handBackHeld(s)
 	}()
-	asks := json.NewDecoder(s.conn)
+	asks := json.NewDecoder(in)
 	for {
 		var raw json.RawMessage
 		if err := asks.Decode(&raw); err != nil {
@@ -421,14 +361,18 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 			reply.OK, reply.Failed = false, err.Error()
 		}
 	case followRoster:
-		h.mu.Lock()
-		held := h.roster
-		h.mu.Unlock()
-		reply.Agents = SubAgentRows(held.SubAgents(), time.Now(), 0, nil, nil)
+		reply.Agents = h.rosterRows()
 	default:
 		reply.OK = false
 	}
 	return reply
+}
+
+func (h *Host) rosterRows() []SubAgentRow {
+	h.mu.Lock()
+	held := h.roster
+	h.mu.Unlock()
+	return SubAgentRows(held.SubAgents(), time.Now(), 0, nil, nil)
 }
 
 func (h *Host) steerFor(text string) string {
@@ -437,63 +381,35 @@ func (h *Host) steerFor(text string) string {
 	return id
 }
 
-func (h *Host) dialHolder(id string, refused error) (*following, error) {
-	var busy session.BusyError
-	if !errors.As(refused, &busy) {
-		return nil, refused
-	}
-	store, err := session.OpenIn(h.dir)
+func (h *Host) join(id string) (*following, error) {
+	conn, lines, hub, err := joinHub(h.dir, id)
 	if err != nil {
 		return nil, err
 	}
-	conn, err := net.DialTimeout(followNetwork, store.Channel(id), followDialWait)
-	if err != nil {
-		return nil, err
-	}
-	return &following{link: linked(conn), holder: busy, waiting: map[int]chan followReply{}, joined: make(chan struct{})}, nil
+	return &following{link: linked(conn), lines: lines, hub: hub, waiting: map[int]chan followReply{}, joined: make(chan struct{})}, nil
 }
 
 func (h *Host) follow(f *following, id string) {
 	settled := followAsk{Op: followSettings, Asking: h.asking, Pick: h.pick}
 	h.following.Store(f)
-	h.readOnly = f.holder
 	safe.Go(h.report, "follow", func() { h.heed(f) })
 	_ = h.loadCron(id)
-	if os.Getenv(HolderVariable) != id {
-		safe.Go(h.report, "follow attach", func() {
-			f.ask(followAsk{Op: followAttach, Terminals: h.shells != nil && h.shells.Terminals.Load()})
-			f.ask(settled)
-		})
-	}
+	safe.Go(h.report, "follow attach", func() {
+		f.ask(followAsk{Op: followAttach, Terminals: h.shells != nil && h.shells.Terminals.Load()})
+		f.ask(settled)
+	})
 }
 
 func heldRoster(store *session.Store, id string) []SubAgentRow {
-	conn, err := net.DialTimeout(followNetwork, store.Channel(id), followDialWait)
+	place, err := placeOf(cmp.Or(store.Project(), "."))
 	if err != nil {
 		return nil
 	}
-	defer func() { _ = conn.Close() }()
-	asked, _ := json.Marshal(followAsk{ID: 1, Op: followRoster})
-	if conn.SetDeadline(time.Now().Add(followReplyWait)) != nil {
+	var rows []SubAgentRow
+	if askHubFor(place, hubAsk{Ask: hubAskRoster, Session: id}, &rows) != nil {
 		return nil
 	}
-	if _, err := conn.Write(asked); err != nil {
-		return nil
-	}
-	lines := json.NewDecoder(conn)
-	for {
-		var line followLine
-		if lines.Decode(&line) != nil {
-			return nil
-		}
-		if line.Reply != nil && line.Reply.ID == 1 {
-			return line.Reply.Agents
-		}
-	}
-}
-
-func (f *following) note(id string) string {
-	return "process " + strconv.Itoa(f.holder.PID) + " has held session " + id + " since " + f.holder.Since.Format(time.TimeOnly) + ", so this tofu follows it and what you type runs there"
+	return rows
 }
 
 func (f *following) ask(ask followAsk) followReply {
@@ -573,10 +489,9 @@ func (f *following) echoes(event Event) bool {
 }
 
 func (h *Host) heed(f *following) {
-	lines := json.NewDecoder(f.conn)
 	for {
 		var raw json.RawMessage
-		if lines.Decode(&raw) != nil {
+		if f.lines.Decode(&raw) != nil {
 			break
 		}
 		var line followLine
@@ -590,7 +505,7 @@ func (h *Host) heed(f *following) {
 			h.rejoin(f, *now, line.Seq)
 		}
 		if line.Reply != nil && line.Reply.Refused != "" {
-			h.note("process " + strconv.Itoa(f.holder.PID) + " could not read what this tofu sent, so it did not run: " + line.Reply.Refused)
+			h.note("the tofu host, process " + strconv.Itoa(f.hub.PID) + ", could not read what this tofu sent, so it did not run: " + line.Reply.Refused)
 		}
 		if line.Reply != nil {
 			f.mu.Lock()
@@ -614,7 +529,7 @@ func (h *Host) heed(f *following) {
 		}
 	}
 	f.leave()
-	h.takeOver(f)
+	h.lost(f)
 }
 
 func (h *Host) mirror(f *following, event Event) {
@@ -653,7 +568,7 @@ func (h *Host) rejoin(f *following, now picture, seq uint64) {
 	h.bus.mu.Unlock()
 	select {
 	case <-f.joined:
-		said := "process " + strconv.Itoa(os.Getpid()) + " fell behind process " + strconv.Itoa(f.holder.PID) + " on session " + id + " after event " + strconv.FormatUint(f.seq, 10) + ", so it read the session again as it stood at event " + strconv.FormatUint(seq, 10)
+		said := "process " + strconv.Itoa(os.Getpid()) + " fell behind the tofu host, process " + strconv.Itoa(f.hub.PID) + ", on session " + id + " after event " + strconv.FormatUint(f.seq, 10) + ", so it read the session again as it stood at event " + strconv.FormatUint(seq, 10)
 		safe.Go(h.report, "follow trace", func() { f.ask(followAsk{Op: followTrace, Text: said}) })
 	default:
 		close(f.joined)
@@ -675,88 +590,25 @@ func (f *following) caughtUp() {
 	}
 }
 
-func (h *Host) takeOver(f *following) {
-	lost := time.Now()
-	id := h.ID()
-	for ; time.Since(lost) < followTakeOverWait; time.Sleep(followRetry) {
-		h.mu.Lock()
-		if h.closed || h.following.Load() != f {
-			h.mu.Unlock()
-			return
-		}
-		refused := h.hold(id)
-		if refused == nil {
-			ran := h.running
-			h.readOnly, h.running = nil, false
-			reloaded := h.reload(id)
-			h.mu.Unlock()
-			h.tookOver(f, id, time.Since(lost), ran, reloaded)
-			return
-		}
-		next, err := h.dialHolder(id, refused)
-		if err == nil {
-			ran := h.running && next.holder.PID != f.holder.PID
-			h.running = h.running && !ran
-			h.follow(next, id)
-			h.mu.Unlock()
-			if ran {
-				h.endedWith(f)
-			}
-			h.note(next.note(id))
-			return
-		}
-		h.mu.Unlock()
+func (h *Host) lost(f *following) {
+	if !h.following.CompareAndSwap(f, nil) {
+		return
 	}
-	h.following.CompareAndSwap(f, nil)
-	h.note("process " + strconv.Itoa(f.holder.PID) + " let go of session " + id + ", and it is still held after " + followTakeOverWait.String() + ", so this tofu reads it and writes nothing")
-}
-
-func (h *Host) endedWith(f *following) {
-	out := h.emitter()
-	out.emit(Event{Kind: EventNote, Text: "the turn process " + strconv.Itoa(f.holder.PID) + " was running ended with it"})
-	out.emit(Event{Kind: EventTurnEnded})
-}
-
-func (h *Host) tookOver(f *following, id string, took time.Duration, ran bool, reloaded error) {
+	h.mu.Lock()
+	ran, id := h.running, h.id
+	h.running = false
+	h.mu.Unlock()
+	out, pid := h.emitter(), strconv.Itoa(f.hub.PID)
 	if ran {
-		h.endedWith(f)
-		h.traceStop(session.Stop{Kind: session.TurnEnd, By: "the holder, process " + strconv.Itoa(f.holder.PID), Why: "it exited or crashed with the turn running, and process " + strconv.Itoa(os.Getpid()) + " took the session over"})
+		out.emit(Event{Kind: EventNote, Text: "the turn the tofu host, process " + pid + ", was running ended with it"})
+		out.emit(Event{Kind: EventTurnEnded})
 	}
-	out := h.emitter()
-	out.emit(Event{Kind: EventNote, Text: "process " + strconv.Itoa(f.holder.PID) + " let go of session " + id + ", so this tofu holds it now and runs what you type (took " + took.Round(time.Millisecond).String() + ")"})
-	if reloaded != nil {
-		out.emit(Event{Kind: EventNote, Text: "the conversation of " + id + " did not read back, so the next turn starts without it: " + reloaded.Error()})
-	}
-	if err := h.loadCron(id); err != nil {
-		out.emit(Event{Kind: EventNote, Text: err.Error()})
-	}
-	h.armCron()
-}
-
-func (h *Host) reload(id string) error {
-	store, err := session.OpenIn(h.dir)
-	if err != nil {
-		return err
-	}
-	events, err := store.Events(id)
-	if err != nil {
-		return err
-	}
-	said, _, err := store.Said(events)
-	if err != nil {
-		return err
-	}
-	messages, err := turn.ConversationFrom(said)
-	if err != nil {
-		return err
-	}
-	h.id = id
-	return h.carry(Carry{Session: id, Messages: messages, Store: store})
+	out.emit(Event{Kind: EventNote, Text: "the tofu host, process " + pid + ", went away from session " + id + ", so the next message starts it again"})
 }
 
 func (h *Host) heldBy() *SessionHolder {
 	if f := h.following.Load(); f != nil {
-		return &SessionHolder{PID: f.holder.PID, Since: f.holder.Since}
+		return &SessionHolder{PID: f.hub.PID, Since: f.hub.Started}
 	}
 	return nil
 }

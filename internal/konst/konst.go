@@ -465,15 +465,14 @@ const (
 	HostEventBuffer     = 256
 	HostSteeringQueue   = 64
 	HostCloseWaitMillis = 3000
-	HolderGraceMillis   = 10000
-	HolderReadyMillis   = 10000
-	HolderProbeMillis   = 200
 	HostLingerMillis    = 5000
 	HostReadyMillis     = 10000
 	HostAnswerMillis    = 1000
+	HostJoinMillis      = 120000
 	HostRetryMillis     = 50
 	FollowQueue         = 1024
 	FollowSettledKept   = 32
+	FollowReplyMillis   = 3000
 )
 
 const (

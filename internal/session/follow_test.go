@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,21 +26,20 @@ import (
 )
 
 const (
-	followHolderVariable = "TOFU_TEST_FOLLOW_HOLDER"
-	followSoakVariable   = "TOFU_FOLLOW_SOAK"
-	streamTask           = "stream "
-	slowTask             = "slow"
-	ranIn                = "ran in "
-	latencyEvents        = 100
-	tokenGap             = 10 * time.Millisecond
-	latencyCeiling       = 20 * time.Millisecond
-	takeOverCeiling      = 2 * time.Second
-	slowPause            = 2 * time.Second
-	eventWait            = 10 * time.Second
-	pollGap              = 50 * time.Millisecond
+	followHubVariable  = "TOFU_TEST_FOLLOW_HUB"
+	followSoakVariable = "TOFU_FOLLOW_SOAK"
+	streamTask         = "stream "
+	slowTask           = "slow"
+	ranIn              = "ran in "
+	latencyEvents      = 100
+	tokenGap           = 10 * time.Millisecond
+	latencyCeiling     = 20 * time.Millisecond
+	slowPause          = 2 * time.Second
+	eventWait          = 10 * time.Second
+	pollGap            = 50 * time.Millisecond
 )
 
-type holder struct {
+type hubProcess struct {
 	cmd   *exec.Cmd
 	id    string
 	in    io.WriteCloser
@@ -48,9 +48,9 @@ type holder struct {
 	exit  error
 }
 
-func (h *holder) pid() int { return h.cmd.Process.Pid }
+func (h *hubProcess) pid() int { return h.cmd.Process.Pid }
 
-func (h *holder) asked(t *testing.T, what string) int {
+func (h *hubProcess) asked(t *testing.T, what string) int {
 	t.Helper()
 	if _, err := io.WriteString(h.in, what+"\n"); err != nil {
 		t.Fatal(err)
@@ -58,7 +58,7 @@ func (h *holder) asked(t *testing.T, what string) int {
 	said, err := h.out.ReadString('\n')
 	count, err2 := strconv.Atoi(strings.TrimPrefix(strings.TrimSpace(said), what+" "))
 	if err != nil || err2 != nil {
-		t.Fatalf("the holder answered %s with %q, %v", what, said, err)
+		t.Fatalf("the hub answered %s with %q, %v", what, said, err)
 	}
 	return count
 }
@@ -82,21 +82,22 @@ func play(_ context.Context, _ host.Pick, task string, live host.Live) {
 	}
 }
 
-func TestFollowHolderProcess(t *testing.T) {
-	project := os.Getenv(followHolderVariable)
+func TestFollowHubProcess(t *testing.T) {
+	project := os.Getenv(followHubVariable)
 	if project == "" {
-		t.Skip("runs only as the holding process of another Follow test")
+		t.Skip("runs only as the tofu host of another Follow test")
 	}
-	h, _ := host.New(host.Config{Dir: project, Play: play})
-	id, err := h.OpenFresh()
-	if err != nil {
-		t.Fatal(err)
+	var ran sync.WaitGroup
+	ran.Go(func() {
+		_ = host.RunHub(project, nil, func(string) {}, func(id string, projectTurn *sync.Mutex) (*host.Host, func(), []string) {
+			h, troubles := host.New(host.Config{Dir: project, Play: play, Resumed: host.Carry{Session: id}, Unrecorded: true, ProjectTurn: projectTurn})
+			return h, h.Close, troubles
+		})
+	})
+	for _, err := host.HubStatusOf(project); err != nil; _, err = host.HubStatusOf(project) {
+		time.Sleep(pollGap)
 	}
-	go func() {
-		for range h.Events() {
-		}
-	}()
-	_, _ = os.Stdout.WriteString("held " + id + "\n")
+	_, _ = os.Stdout.WriteString("serving\n")
 	for lines := bufio.NewScanner(os.Stdin); lines.Scan(); {
 		switch lines.Text() {
 		case "goroutines":
@@ -108,10 +109,11 @@ func TestFollowHolderProcess(t *testing.T) {
 			_, _ = os.Stdout.WriteString("heap " + strconv.FormatUint(stats.HeapInuse/1024, 10) + "\n")
 		}
 	}
-	h.Close()
+	_, _ = host.StopHub(project)
+	ran.Wait()
 }
 
-func startHolder(t *testing.T) (*holder, string) {
+func startHub(t *testing.T) (*hubProcess, string) {
 	t.Helper()
 	home, err := os.MkdirTemp(os.TempDir(), "h")
 	if err != nil {
@@ -121,8 +123,8 @@ func startHolder(t *testing.T) (*holder, string) {
 	project := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	cmd := exec.Command(os.Args[0], "-test.run=^TestFollowHolderProcess$")
-	cmd.Env = append(os.Environ(), followHolderVariable+"="+project)
+	cmd := exec.Command(os.Args[0], "-test.run=^TestFollowHubProcess$")
+	cmd.Env = append(os.Environ(), followHubVariable+"="+project)
 	in, err := cmd.StdinPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -134,7 +136,7 @@ func startHolder(t *testing.T) (*holder, string) {
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	h := &holder{cmd: cmd, in: in, out: bufio.NewReader(out), ended: make(chan struct{})}
+	h := &hubProcess{cmd: cmd, id: session.NewEventID(), in: in, out: bufio.NewReader(out), ended: make(chan struct{})}
 	go func() {
 		h.exit = cmd.Wait()
 		close(h.ended)
@@ -148,25 +150,20 @@ func startHolder(t *testing.T) (*holder, string) {
 			<-h.ended
 		}
 	})
-	said, err := h.out.ReadString('\n')
-	id, held := strings.CutPrefix(strings.TrimSpace(said), "held ")
-	if !held {
-		t.Fatalf("the holding process said %q, %v", said, err)
+	if said, err := h.out.ReadString('\n'); strings.TrimSpace(said) != "serving" {
+		t.Fatalf("the hub process said %q, %v", said, err)
 	}
-	h.id = id
 	return h, project
 }
 
-func follow(t *testing.T, project string, h *holder) *host.Host {
+func follow(t *testing.T, project string, h *hubProcess) *host.Host {
 	t.Helper()
-	follower, troubles := host.New(host.Config{Dir: project, Play: play, Resumed: host.Carry{Session: h.id}})
-	t.Cleanup(follower.Close)
-	if !slices.ContainsFunc(troubles, func(one string) bool {
-		return strings.Contains(one, "process "+strconv.Itoa(h.pid())+" has held session "+h.id) && strings.Contains(one, "follows it")
-	}) {
-		t.Fatalf("the follower said %q, want it following %s in process %d", troubles, h.id, h.pid())
+	member, troubles := host.New(host.Config{Dir: project, Play: play, Joins: true, Resumed: host.Carry{Session: h.id}})
+	t.Cleanup(member.Close)
+	if len(troubles) > 0 {
+		t.Fatalf("joining session %s in process %d said %q", h.id, h.pid(), troubles)
 	}
-	return follower
+	return member
 }
 
 func next(t *testing.T, h *host.Host, kind host.EventKind, saying string) host.Event {
@@ -193,66 +190,66 @@ func until(t *testing.T, what string, done func() bool) {
 	}
 }
 
-func TestFollowStreamsTheHoldersTurnAndRunsAForwardedPromptThere(t *testing.T) {
-	held, project := startHolder(t)
-	follower := follow(t, project, held)
+func TestFollowStreamsTheHostsTurnAndRunsAForwardedPromptThere(t *testing.T) {
+	held, project := startHub(t)
+	member := follow(t, project, held)
 
-	if !follower.Send(host.Pick{}, "say hello") {
-		t.Fatal("the holder refused a prompt forwarded while it was idle")
+	if !member.Send(host.Pick{}, "say hello") {
+		t.Fatal("the host refused a prompt forwarded while it was idle")
 	}
-	next(t, follower, host.EventText, ranIn+strconv.Itoa(held.pid())+": say hello")
-	next(t, follower, host.EventTurnEnded, "")
+	next(t, member, host.EventText, ranIn+strconv.Itoa(held.pid())+": say hello")
+	next(t, member, host.EventTurnEnded, "")
 
 	trips := make([]time.Duration, latencyEvents)
 	for at := range trips {
 		sent := time.Now()
-		if !follower.Send(host.Pick{}, "ping "+strconv.Itoa(at)) {
-			t.Fatal("the holder refused a ping")
+		if !member.Send(host.Pick{}, "ping "+strconv.Itoa(at)) {
+			t.Fatal("the host refused a ping")
 		}
-		next(t, follower, host.EventText, ": ping "+strconv.Itoa(at))
+		next(t, member, host.EventText, ": ping "+strconv.Itoa(at))
 		trips[at] = time.Since(sent)
-		next(t, follower, host.EventTurnEnded, "")
+		next(t, member, host.EventTurnEnded, "")
 	}
 	slices.Sort(trips)
 	t.Logf("prompt forwarded to process %d and its answer shown here, %d round trips on one clock: median %s, p90 %s, max %s", held.pid(), len(trips),
 		trips[len(trips)/2], trips[len(trips)*9/10], trips[len(trips)-1])
 
-	if !follower.Send(host.Pick{}, streamTask+strconv.Itoa(latencyEvents)) {
-		t.Fatal("the holder refused the streaming prompt")
+	if !member.Send(host.Pick{}, streamTask+strconv.Itoa(latencyEvents)) {
+		t.Fatal("the host refused the streaming prompt")
 	}
-	next(t, follower, host.EventTurnStarted, streamTask)
-	if _, running := follower.Turn(); !running {
-		t.Fatal("the follower does not see the holder's turn as running")
+	next(t, member, host.EventTurnStarted, streamTask)
+	if _, running := member.Turn(); !running {
+		t.Fatal("the member does not see the host's turn as running")
 	}
 	took := make([]time.Duration, 0, latencyEvents)
 	for len(took) < latencyEvents {
-		sent, err := strconv.ParseInt(next(t, follower, host.EventTextDelta, "").Text, 10, 64)
+		sent, err := strconv.ParseInt(next(t, member, host.EventTextDelta, "").Text, 10, 64)
 		if err != nil {
 			t.Fatal(err)
 		}
 		took = append(took, time.Since(time.Unix(0, sent)))
 	}
-	next(t, follower, host.EventTurnEnded, "")
+	next(t, member, host.EventTurnEnded, "")
 	slices.Sort(took)
 	median := took[len(took)/2]
 	t.Logf("appended by process %d, read by process %d, %d events: min %s, median %s, p90 %s, max %s", held.pid(), os.Getpid(), len(took),
 		took[0], median, took[len(took)*9/10], took[len(took)-1])
 	if median >= latencyCeiling {
-		t.Errorf("the median from append to follower is %s, want under %s", median, latencyCeiling)
+		t.Errorf("the median from append to member is %s, want under %s", median, latencyCeiling)
 	}
 }
 
 func TestFollowAttachMidTurnSeesTheTurnAndItsPartialText(t *testing.T) {
-	held, project := startHolder(t)
+	held, project := startHub(t)
 	first := follow(t, project, held)
 	if !first.Send(host.Pick{}, slowTask) {
-		t.Fatal("the holder refused the slow prompt")
+		t.Fatal("the host refused the slow prompt")
 	}
 	next(t, first, host.EventTextDelta, "first half")
 	late := follow(t, project, held)
 	next(t, late, host.EventTurnStarted, slowTask)
 	if partial := next(t, late, host.EventTextDelta, ""); partial.Text != "first half, " {
-		t.Fatalf("a follower attached mid-turn saw the partial text as %q", partial.Text)
+		t.Fatalf("a member joined mid-turn saw the partial text as %q", partial.Text)
 	}
 	if rest := next(t, late, host.EventTextDelta, ""); rest.Text != "second half" {
 		t.Fatalf("the rest of the stream arrived as %q", rest.Text)
@@ -260,49 +257,19 @@ func TestFollowAttachMidTurnSeesTheTurnAndItsPartialText(t *testing.T) {
 	next(t, late, host.EventTurnEnded, "")
 }
 
-func TestFollowTakesTheLockWhenTheHolderIsKilled(t *testing.T) {
-	held, project := startHolder(t)
-	follower := follow(t, project, held)
-	killed := time.Now()
-	if err := held.cmd.Process.Kill(); err != nil {
-		t.Fatal(err)
-	}
-	took := next(t, follower, host.EventNote, "holds it now")
-	since := time.Since(killed)
-	t.Logf("killed process %d; process %d took %s %s later and said: %s", held.pid(), os.Getpid(), held.id, since.Round(time.Millisecond), took.Text)
-	if since > takeOverCeiling {
-		t.Errorf("the follower held the session %s after the kill, want within %s", since, takeOverCeiling)
-	}
-	store, err := session.OpenIn(project)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Busy(held.id); err != nil {
-		t.Fatalf("after the takeover the lock probe says %v, want this process holding it", err)
-	}
-	if !follower.Send(host.Pick{}, "after the kill") {
-		t.Fatal("the new writer refused a prompt")
-	}
-	next(t, follower, host.EventText, ranIn+strconv.Itoa(os.Getpid())+": after the kill")
-}
-
 func TestFollowLeavesNothingListeningWhenEitherSideEnds(t *testing.T) {
-	held, project := startHolder(t)
-	store, err := session.OpenIn(project)
+	held, project := startHub(t)
+	status, err := host.HubStatusOf(project)
 	if err != nil {
 		t.Fatal(err)
-	}
-	channel := store.Channel(held.id)
-	if _, err := os.Stat(channel); err != nil {
-		t.Fatalf("the holder opened no channel at %s: %v", channel, err)
 	}
 	alone := held.asked(t, "goroutines")
-	follower, _ := host.New(host.Config{Dir: project, Play: play, Resumed: host.Carry{Session: held.id}})
-	until(t, "the holder seating its follower", func() bool { return held.asked(t, "goroutines") > alone })
+	member, _ := host.New(host.Config{Dir: project, Play: play, Joins: true, Resumed: host.Carry{Session: held.id}})
+	until(t, "the host seating its member", func() bool { return held.asked(t, "goroutines") > alone })
 	seated := held.asked(t, "goroutines")
-	follower.Close()
-	until(t, "the holder dropping the follower that quit", func() bool { return held.asked(t, "goroutines") == alone })
-	t.Logf("holder goroutines alone %d, with a follower %d, after it quit %d", alone, seated, held.asked(t, "goroutines"))
+	member.Close()
+	until(t, "the host dropping the member that quit", func() bool { return held.asked(t, "goroutines") == alone })
+	t.Logf("host goroutines alone %d, with a member %d, after it quit %d", alone, seated, held.asked(t, "goroutines"))
 
 	before := runtime.NumGoroutine()
 	second := follow(t, project, held)
@@ -311,19 +278,19 @@ func TestFollowLeavesNothingListeningWhenEitherSideEnds(t *testing.T) {
 	}
 	<-held.ended
 	if held.exit != nil {
-		t.Fatalf("the holder did not end cleanly: %v", held.exit)
+		t.Fatalf("the host did not end cleanly: %v", held.exit)
 	}
-	next(t, second, host.EventNote, "holds it now")
+	next(t, second, host.EventNote, "went away")
 	second.Close()
-	if _, err := os.Stat(channel); !errors.Is(err, fs.ErrNotExist) {
-		t.Fatalf("the channel at %s is still there after both sides ended: %v", channel, err)
+	if _, err := os.Stat(status.Socket); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("the socket at %s is still there after both sides ended: %v", status.Socket, err)
 	}
-	if conn, err := net.DialTimeout("unix", channel, time.Second); err == nil {
+	if conn, err := net.DialTimeout("unix", status.Socket, time.Second); err == nil {
 		_ = conn.Close()
-		t.Fatalf("something still listens at %s", channel)
+		t.Fatalf("something still listens at %s", status.Socket)
 	}
 	until(t, "every follow goroutine here ending", func() bool { return runtime.NumGoroutine() <= before })
-	t.Logf("here: goroutines before following %d, after the holder quit and this side closed %d; %s is gone and nothing answers a dial", before, runtime.NumGoroutine(), channel)
+	t.Logf("here: goroutines before joining %d, after the host quit and this side closed %d; %s is gone and nothing answers a dial", before, runtime.NumGoroutine(), status.Socket)
 }
 
 func TestFollowEventsCrossTheChannelUnchanged(t *testing.T) {
@@ -354,34 +321,34 @@ func TestFollowEventsCrossTheChannelUnchanged(t *testing.T) {
 	}
 }
 
-func TestFollowSoakHolderMemory(t *testing.T) {
+func TestFollowSoakHostMemory(t *testing.T) {
 	soak, err := time.ParseDuration(os.Getenv(followSoakVariable))
 	if err != nil {
-		t.Skip("set " + followSoakVariable + " to a duration, such as 10m, to soak a holder with a follower attached")
+		t.Skip("set " + followSoakVariable + " to a duration, such as 10m, to soak a host with a member joined")
 	}
-	held, project := startHolder(t)
-	follower := follow(t, project, held)
+	held, project := startHub(t)
+	member := follow(t, project, held)
 	first := held.asked(t, "heap")
-	t.Logf("holder heap in use at attach: %d KiB", first)
+	t.Logf("host heap in use at join: %d KiB", first)
 	turns, tokens, began, minute := 0, 0, time.Now(), 1
 	for time.Since(began) < soak {
-		if !follower.Send(host.Pick{}, streamTask+strconv.Itoa(latencyEvents)) {
-			t.Fatal("the holder refused a soak turn")
+		if !member.Send(host.Pick{}, streamTask+strconv.Itoa(latencyEvents)) {
+			t.Fatal("the host refused a soak turn")
 		}
-		for event := next(t, follower, host.EventTurnStarted, ""); event.Kind != host.EventTurnEnded; event = <-follower.Events() {
+		for event := next(t, member, host.EventTurnStarted, ""); event.Kind != host.EventTurnEnded; event = <-member.Events() {
 			if event.Kind == host.EventTextDelta {
 				tokens++
 			}
 		}
 		turns++
 		if time.Since(began) >= time.Duration(minute)*time.Minute {
-			t.Logf("minute %d: holder heap in use %d KiB, holder goroutines %d, %d turns and %d tokens followed", minute, held.asked(t, "heap"), held.asked(t, "goroutines"), turns, tokens)
+			t.Logf("minute %d: host heap in use %d KiB, host goroutines %d, %d turns and %d tokens followed", minute, held.asked(t, "heap"), held.asked(t, "goroutines"), turns, tokens)
 			minute++
 		}
 	}
 	last := held.asked(t, "heap")
-	t.Logf("holder heap in use at attach %d KiB, after %s %d KiB; the follower read %d tokens over %d turns", first, soak, last, tokens, turns)
+	t.Logf("host heap in use at join %d KiB, after %s %d KiB; the member read %d tokens over %d turns", first, soak, last, tokens, turns)
 	if last > first*2 {
-		t.Errorf("the holder heap grew from %d to %d KiB with a follower attached", first, last)
+		t.Errorf("the host heap grew from %d to %d KiB with a member joined", first, last)
 	}
 }

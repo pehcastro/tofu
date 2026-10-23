@@ -1,6 +1,7 @@
 package host
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -13,6 +14,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,6 +36,7 @@ const (
 	hubShortKey   = 8
 	hubAskStatus  = "status"
 	hubAskJoin    = "join"
+	hubAskRoster  = "roster"
 	hubAskStop    = "stop"
 	hubAnswerWait = konst.HostAnswerMillis * time.Millisecond
 	hubRetry      = konst.HostRetryMillis * time.Millisecond
@@ -42,7 +45,11 @@ const (
 var (
 	ErrHubRunning = errors.New("a tofu host already serves this project")
 	errNoHub      = errors.New("no tofu host serves this project")
+	errNoSessions = errors.New("this tofu host was started without sessions, so it opens none")
+	errNoSession  = errors.New("a member joins a session, and this join named none")
 )
+
+type HubSession func(id string, projectTurn *sync.Mutex) (*Host, func(), []string)
 
 type HubStatus struct {
 	PID     int       `json:"pid"`
@@ -58,15 +65,39 @@ type hubPlace struct {
 }
 
 type hubAsk struct {
-	Ask string `json:"ask"`
+	Ask     string `json:"ask"`
+	Session string `json:"session,omitempty"`
+	Member  string `json:"member,omitempty"`
+}
+
+type hubJoined struct {
+	HubStatus
+	Refused string `json:"refused,omitempty"`
 }
 
 type hub struct {
-	status  HubStatus
-	members atomic.Int64
-	changed chan struct{}
-	stopped chan struct{}
-	stop    sync.Once
+	status      HubStatus
+	members     atomic.Int64
+	changed     chan struct{}
+	stopped     chan struct{}
+	stop        sync.Once
+	open        HubSession
+	report      safe.Report
+	say         func(string)
+	projectTurn sync.Mutex
+	mu          sync.Mutex
+	sessions    []*hosted
+}
+
+type hosted struct {
+	id     string
+	host   *Host
+	end    func()
+	failed error
+	seats  int
+	ending bool
+	ready  chan struct{}
+	ended  chan struct{}
 }
 
 func placeOf(project string) (hubPlace, error) {
@@ -91,18 +122,22 @@ func placeOf(project string) (hubPlace, error) {
 	return hubPlace{project: abs, socket: short + ".sock", lock: short + ".lock", log: short + ".log", registry: filepath.Join(home, hubHostsDir, key+".json")}, nil
 }
 
-func askHub(place hubPlace, ask string) (HubStatus, error) {
+func askHubFor(place hubPlace, ask hubAsk, answer any) error {
 	conn, err := net.DialTimeout(hubNetwork, place.socket, hubAnswerWait)
 	if err != nil {
-		return HubStatus{}, errNoHub
+		return errNoHub
 	}
 	defer func() { _ = conn.Close() }()
 	_ = conn.SetDeadline(time.Now().Add(hubAnswerWait))
-	var status HubStatus
-	if err := json.NewEncoder(conn).Encode(hubAsk{Ask: ask}); err != nil {
-		return status, err
+	if err := json.NewEncoder(conn).Encode(ask); err != nil {
+		return err
 	}
-	return status, json.NewDecoder(conn).Decode(&status)
+	return json.NewDecoder(conn).Decode(answer)
+}
+
+func askHub(place hubPlace, ask string) (HubStatus, error) {
+	var status HubStatus
+	return status, askHubFor(place, hubAsk{Ask: ask}, &status)
 }
 
 func HubStatusOf(project string) (HubStatus, error) {
@@ -166,6 +201,33 @@ func EnsureHub(project string) (HubStatus, error) {
 	return HubStatus{}, fmt.Errorf("the tofu host did not answer on %s within %s, its log is %s", place.socket, ready, place.log)
 }
 
+func joinHub(project, id string) (net.Conn, *json.Decoder, HubStatus, error) {
+	status, err := EnsureHub(project)
+	if err != nil {
+		return nil, nil, status, err
+	}
+	conn, err := net.DialTimeout(hubNetwork, status.Socket, hubAnswerWait)
+	if err != nil {
+		return nil, nil, status, err
+	}
+	_ = conn.SetDeadline(time.Now().Add(konst.HostJoinMillis * time.Millisecond))
+	lines := json.NewDecoder(conn)
+	var joined hubJoined
+	err = json.NewEncoder(conn).Encode(hubAsk{Ask: hubAskJoin, Session: id, Member: "process " + strconv.Itoa(os.Getpid())})
+	if err == nil {
+		err = lines.Decode(&joined)
+	}
+	if err == nil && joined.Refused != "" {
+		err = errors.New(joined.Refused)
+	}
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, status, err
+	}
+	_ = conn.SetDeadline(time.Time{})
+	return conn, lines, joined.HubStatus, nil
+}
+
 func takeHubLock(place hubPlace) (*os.File, error) {
 	for deadline := time.Now().Add(konst.HostReadyMillis * time.Millisecond); ; time.Sleep(hubRetry) {
 		if file, held, err := lockHub(place.lock); err != nil || !held {
@@ -180,7 +242,7 @@ func takeHubLock(place hubPlace) (*os.File, error) {
 	}
 }
 
-func RunHub(project string, report safe.Report, say func(string)) error {
+func RunHub(project string, report safe.Report, say func(string), sessions ...HubSession) error {
 	place, err := placeOf(project)
 	if err != nil {
 		return err
@@ -212,6 +274,11 @@ func RunHub(project string, report safe.Report, say func(string)) error {
 		status:  HubStatus{PID: os.Getpid(), Socket: place.socket, Project: place.project, Version: konst.Version, Started: time.Now()},
 		changed: make(chan struct{}, 1),
 		stopped: make(chan struct{}),
+		report:  report,
+		say:     say,
+	}
+	if len(sessions) > 0 {
+		h.open = sessions[0]
 	}
 	if err := writeRegistry(place.registry, h.status); err != nil {
 		return fmt.Errorf("the host registry %s: %w", place.registry, err)
@@ -229,6 +296,8 @@ func RunHub(project string, report safe.Report, say func(string)) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	say(h.wait(ctx, konst.HostLingerMillis*time.Millisecond))
+	_ = listener.Close()
+	h.endAll()
 	return nil
 }
 
@@ -281,8 +350,9 @@ func (h *hub) answer(conn net.Conn) error {
 func (h *hub) serve(conn net.Conn) {
 	defer func() { _ = conn.Close() }()
 	_ = conn.SetDeadline(time.Now().Add(hubAnswerWait))
+	lines := json.NewDecoder(conn)
 	var asked hubAsk
-	if json.NewDecoder(conn).Decode(&asked) != nil {
+	if lines.Decode(&asked) != nil {
 		return
 	}
 	switch asked.Ask {
@@ -291,13 +361,146 @@ func (h *hub) serve(conn net.Conn) {
 	case hubAskStop:
 		_ = h.answer(conn)
 		h.stop.Do(func() { close(h.stopped) })
+	case hubAskRoster:
+		_ = json.NewEncoder(conn).Encode(h.roster(asked.Session))
 	case hubAskJoin:
 		h.moved(1)
 		defer h.moved(-1)
-		if h.answer(conn) != nil {
-			return
-		}
-		_ = conn.SetDeadline(time.Time{})
-		_, _ = io.Copy(io.Discard, conn)
+		h.join(conn, lines, asked)
 	}
+}
+
+func (h *hub) join(conn net.Conn, lines *json.Decoder, asked hubAsk) {
+	_ = conn.SetDeadline(time.Time{})
+	joined := hubJoined{HubStatus: h.status}
+	s, err := h.take(asked.Session)
+	if err != nil {
+		joined.Refused = err.Error()
+	}
+	joined.Members = h.members.Load()
+	written := json.NewEncoder(conn).Encode(joined)
+	if err != nil {
+		return
+	}
+	if written == nil {
+		s.host.seat(conn, io.MultiReader(lines.Buffered(), conn))
+	}
+	h.leave(s, asked.Member)
+}
+
+func (h *hub) take(id string) (*hosted, error) {
+	if id == "" {
+		return nil, errNoSession
+	}
+	for {
+		h.mu.Lock()
+		at := slices.IndexFunc(h.sessions, func(s *hosted) bool { return s.id == id || s.host != nil && s.host.ID() == id })
+		if at < 0 {
+			s := &hosted{id: id, seats: 1, ready: make(chan struct{}), ended: make(chan struct{})}
+			h.sessions = append(h.sessions, s)
+			h.mu.Unlock()
+			return s, h.opened(s)
+		}
+		s := h.sessions[at]
+		if !s.ending {
+			s.seats++
+		}
+		h.mu.Unlock()
+		if s.ending {
+			<-s.ended
+			continue
+		}
+		<-s.ready
+		return s, s.failed
+	}
+}
+
+func (h *hub) opened(s *hosted) error {
+	defer close(s.ready)
+	if h.open == nil {
+		s.failed = errNoSessions
+		h.forget(s)
+		return s.failed
+	}
+	live, end, troubles := h.open(s.id, &h.projectTurn)
+	for _, trouble := range troubles {
+		h.say("session " + s.id + ": " + trouble)
+	}
+	if live == nil || !live.holds(s.id) {
+		if end != nil {
+			end()
+		}
+		s.failed = fmt.Errorf("the tofu host, process %d, did not open session %s: %s", h.status.PID, s.id, strings.Join(troubles, "; "))
+		h.forget(s)
+		return s.failed
+	}
+	safe.Go(h.report, "host session events", func() {
+		for {
+			select {
+			case event := <-live.events:
+				if event.Kind == EventNote || event.Kind == EventFailure {
+					h.say("session " + s.id + ": " + event.Text)
+				}
+			case <-live.done:
+				return
+			}
+		}
+	})
+	h.mu.Lock()
+	s.host, s.end = live, end
+	h.mu.Unlock()
+	h.say("opened session " + s.id)
+	return nil
+}
+
+func (h *hub) forget(s *hosted) {
+	h.mu.Lock()
+	h.sessions = slices.DeleteFunc(h.sessions, func(other *hosted) bool { return other == s })
+	h.mu.Unlock()
+	close(s.ended)
+}
+
+func (h *hub) leave(s *hosted, member string) {
+	h.mu.Lock()
+	s.seats--
+	last := s.seats == 0 && !s.ending
+	s.ending = s.ending || last
+	h.mu.Unlock()
+	if last {
+		h.end(s, "the last member, "+cmp.Or(member, "unnamed")+", left session "+s.host.ID())
+	}
+}
+
+func (h *hub) end(s *hosted, why string) {
+	s.host.endedBy("the tofu host, process "+strconv.Itoa(h.status.PID), why+", so its turn stops")
+	s.end()
+	h.say("closed session " + s.host.ID() + ": " + why)
+	h.forget(s)
+}
+
+func (h *hub) endAll() {
+	h.mu.Lock()
+	open := slices.Clone(h.sessions)
+	h.mu.Unlock()
+	for _, s := range open {
+		<-s.ready
+		h.mu.Lock()
+		ends := !s.ending && s.failed == nil
+		s.ending = true
+		h.mu.Unlock()
+		if ends {
+			h.end(s, "the tofu host exits")
+		}
+		<-s.ended
+	}
+}
+
+func (h *hub) roster(id string) []SubAgentRow {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	at := slices.IndexFunc(h.sessions, func(s *hosted) bool { return s.host != nil && s.host.ID() == id })
+	if at < 0 {
+		return nil
+	}
+	return h.sessions[at].host.rosterRows()
 }

@@ -432,10 +432,7 @@ func (h *Host) holdTurn(id string) (func() error, error) {
 		return nil, err
 	}
 	h.mu.Lock()
-	err = h.readOnly
-	if err == nil {
-		err = h.hold(id)
-	}
+	err = h.hold(id)
 	h.mu.Unlock()
 	free := func() error { return nil }
 	if err != nil {

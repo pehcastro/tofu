@@ -33,7 +33,7 @@ import (
 	"tofu/internal/widget"
 )
 
-const driveUsage = `usage: tofu drive [SCRIPT] [--dir PATH] [--home PATH] [--cassette PATH] [--clipboard PATH] [--source NAME] [--quota PATH] [--width N] [--height N] [--timeout 60s] [--plain] [--fresh | --continue] [--holder] [--setup] [ARM]
+const driveUsage = `usage: tofu drive [SCRIPT] [--dir PATH] [--home PATH] [--cassette PATH] [--clipboard PATH] [--source NAME] [--quota PATH] [--width N] [--height N] [--timeout 60s] [--plain] [--fresh | --continue] [--host] [--setup] [ARM]
 
 drives the app the way a person does, with no terminal and no model call.
 SCRIPT is a file of steps, or - for standard input.
@@ -53,13 +53,14 @@ The driven app never reads your clipboard. --clipboard PATH makes it hold that
 file, as a file copied in the explorer does, so ctrl+v attaches it; without it
 the clipboard is empty.
 
---holder runs the session in a holder process and the app follows it over the
-session's socket, as tofu does, so what a person types and pastes crosses that
-socket. The holder answers from the same cassette.
+--host runs the session in the project's tofu host and the app joins it as a
+member over the host's socket, as tofu does, so what a person types and pastes
+crosses that socket. The host answers from the same cassette when this drive
+starts it.
 
-TOFU_DRIVE_REQUESTS names a file that every cassette, here, in a holder or in a
-server, appends each request it was sent to, in the form requests prints, so a
-run under a holder still shows what the model was sent.
+TOFU_DRIVE_REQUESTS names a file that every cassette, here, in the tofu host or
+in a server, appends each request it was sent to, in the form requests prints,
+so a run under the host still shows what the model was sent.
 
 --fresh starts the app as a new session does: the chat, with the tofu cat and
 wordmark in the empty transcript until the first message. --continue starts it
@@ -164,7 +165,7 @@ wire opens at all and a turn fails saying so, so a driven run reaches no network
 TOFU_DRIVE_CLOCK starts the session's clock at a local time, such as
 2026-10-17T23:59:58, and runs it on from there, so a driven run crosses midnight
 in seconds. It moves the date the model is told and the cron book, and it is
-read only beside a cassette, here and in the holder and the server a cassette
+read only beside a cassette, here and in the tofu host and the server a cassette
 run starts.
 
 A turn that fails before its wire opens never says cooked for, so wait cooked for
@@ -635,9 +636,9 @@ func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePla
 			}
 			return sys.Clipboard{Kind: sys.ClipboardFiles, Files: []string{plan.clipboard}}, nil
 		},
-		quota:    quotas,
-		now:      clock,
-		detached: plan.holder,
+		quota: quotas,
+		now:   clock,
+		joins: plan.host,
 	}
 	return tui.New(appOptions(dir, plan.arms, recorded, launch, held))
 }
@@ -669,7 +670,7 @@ type drivePlan struct {
 	plain     bool
 	fresh     bool
 	resume    bool
-	holder    bool
+	host      bool
 	setup     bool
 	arms      runOpts
 }
@@ -705,8 +706,8 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 		case "--continue":
 			plan.resume = true
 			continue
-		case "--holder":
-			plan.holder = true
+		case "--host":
+			plan.host = true
 			continue
 		case "--setup":
 			plan.setup = true
@@ -856,7 +857,7 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return driveFail(errOut, err)
 	}
-	if plan.holder && deck != nil {
+	if plan.host && deck != nil {
 		held, err := filepath.Abs(plan.cassette)
 		if err != nil {
 			return driveFail(errOut, err)
