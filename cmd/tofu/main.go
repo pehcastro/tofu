@@ -87,6 +87,8 @@ Verbs:
   frame     print one recorded interface frame, at a width and a height
   drive     run a script of what a person would do against the real app,
             with no terminal and no model call, and print the screens it asks for
+  host      start, read or stop this project's host, the one process every
+            tofu and desk of the project joins: ensure, status, stop
   serve     serve this project to a frontend: --stdio speaks tofu.host/1,
             JSON-RPC on standard input and output, and --schema prints its schema
   settings  list, get or set a declared setting, global or project
@@ -258,6 +260,8 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return serveVerb(args[1:], in, out, errOut)
 	case host.HolderVerb:
 		return holderVerb(args[1:], errOut)
+	case host.HubVerb:
+		return projectHostVerb(args[1:], out, errOut)
 	case "run":
 		return runVerb(args[1:], out, errOut)
 	case "judge":

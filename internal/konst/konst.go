@@ -468,6 +468,10 @@ const (
 	HolderGraceMillis   = 10000
 	HolderReadyMillis   = 10000
 	HolderProbeMillis   = 200
+	HostLingerMillis    = 5000
+	HostReadyMillis     = 10000
+	HostAnswerMillis    = 1000
+	HostRetryMillis     = 50
 )
 
 const (
