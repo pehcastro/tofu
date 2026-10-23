@@ -17,5 +17,6 @@ func launch([]string, string, []string) (*console, error) {
 func (*console) drain(io.Writer)             {}
 func (*console) Write(p []byte) (int, error) { return len(p), nil }
 func (*console) read() (reading, error)      { return reading{}, errors.New("no console") }
+func readPID(int) (reading, error)           { return reading{}, errors.New("no console") }
 func (*console) quit(time.Duration) bool     { return false }
 func (*console) close()                      {}

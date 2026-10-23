@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -17,7 +17,7 @@ const (
 	memoryCeilingMB = 300
 	quitWithin      = 3 * time.Second
 	memoryEvery     = 500 * time.Millisecond
-	shellsAsked     = "the orchestrator request 2"
+	quitAsked       = "no turn has sent a request yet"
 )
 
 func keptShellsQuit(s session) (string, error) {
@@ -26,11 +26,11 @@ func keptShellsQuit(s session) (string, error) {
 		return "", err
 	}
 	seedTook := time.Since(seeded).Round(time.Second)
-	cmd, err := s.command("8-shells", "", 4*time.Minute, nil)
+	cmd, err := s.command("8-shells", "", 4*time.Minute, []string{"--host"})
 	if err != nil {
 		return "", err
 	}
-	out := &heldOutput{marker: shellsAsked}
+	out := &heldOutput{marker: quitAsked}
 	cmd.Stdout, cmd.Stderr = out, out
 	if err := cmd.Start(); err != nil {
 		return "", err
@@ -38,7 +38,8 @@ func keptShellsQuit(s session) (string, error) {
 	exited := make(chan error, 1)
 	go func() { exited <- cmd.Wait() }()
 	defer func() { _ = s.keep("8-shells", out.String()) }()
-	started, peak := time.Now(), 0.0
+	started, hostPID := time.Now(), 0
+	var peak, hostPeak, memberPeak float64
 	var ended time.Time
 	var driven error
 	for ended.IsZero() {
@@ -46,13 +47,16 @@ func keptShellsQuit(s session) (string, error) {
 		case driven = <-exited:
 			ended = time.Now()
 		case <-time.After(memoryEvery):
-			if read, err := memoryMB(cmd.Process.Pid); err == nil {
-				peak = max(peak, read)
+			if hostPID == 0 {
+				hostPID = s.hostPID()
 			}
+			member, _ := memoryMB(cmd.Process.Pid)
+			hosted, _ := memoryMB(hostPID)
+			peak, hostPeak, memberPeak = max(peak, hosted+member), max(hostPeak, hosted), max(memberPeak, member)
 			if peak > memoryCeilingMB {
 				_ = cmd.Process.Kill()
 				<-exited
-				return "", fmt.Errorf("%s memory reached %.0f MB after %s with %d kept shells, over %d MB", memoryKind, peak, time.Since(started).Round(time.Second), keptShells, memoryCeilingMB)
+				return "", fmt.Errorf("host plus member %s memory reached %.0f MB after %s with %d kept shells, over %d MB", memoryKind, peak, time.Since(started).Round(time.Second), keptShells, memoryCeilingMB)
 			}
 		}
 	}
@@ -60,25 +64,52 @@ func keptShellsQuit(s session) (string, error) {
 	if driven != nil {
 		return "", fmt.Errorf("8-shells: %s", failure(out.String(), driven))
 	}
-	lead, err := lastLead(out.String())
+	if hostPID == 0 {
+		return "", fmt.Errorf("no tofu host answered while 8-shells ran under --host, so only the member was measured")
+	}
+	lead, err := s.lastLeadRequest()
 	if err != nil {
 		return "", err
 	}
-	if err := carries(lead, "SHELLSREPORT"); err != nil {
-		return "", err
+	if shown, err := s.tofu("session", "request", lead.session, lead.id, "--json").CombinedOutput(); err != nil || !strings.Contains(string(shown), "SHELLSREPORT") {
+		return "", fmt.Errorf("tofu session request %s %s does not carry SHELLSREPORT: %v", lead.session, lead.id, err)
 	}
 	quit := ended.Sub(asked).Round(100 * time.Millisecond)
 	if asked.IsZero() || quit > quitWithin {
 		return "", fmt.Errorf("the app took %s to quit after ctrl+c, over %s, or never reached it", quit, quitWithin)
 	}
-	return fmt.Sprintf("%d shells seeded in %s; %s memory peak %.0f MB over %s; %s carries SHELLSREPORT; quit %s after ctrl+c",
-		keptShells, seedTook, memoryKind, peak, ended.Sub(started).Round(time.Second), lead.name(), quit), nil
+	return fmt.Sprintf("%d shells seeded in %s; host pid %d plus member %s memory peak %.0f MB (host peak %.0f, member peak %.0f) over %s; the lead's last request %s carries SHELLSREPORT; quit %s after ctrl+c",
+		keptShells, seedTook, hostPID, memoryKind, peak, hostPeak, memberPeak, ended.Sub(started).Round(time.Second), lead.id, quit), nil
+}
+
+type storedRequest struct {
+	session, id string
+}
+
+func (s session) lastLeadRequest() (storedRequest, error) {
+	logs, err := filepath.Glob(filepath.Join(s.home, ".tofu", "projects", "*", "sessions", "*", "requests.jsonl"))
+	if err != nil || len(logs) != 1 {
+		return storedRequest{}, fmt.Errorf("%d sessions stored requests, want 1: %v", len(logs), err)
+	}
+	body, err := os.ReadFile(logs[0])
+	if err != nil {
+		return storedRequest{}, err
+	}
+	last := storedRequest{session: filepath.Base(filepath.Dir(logs[0]))}
+	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
+		var sent struct{ Request, Agent string }
+		if json.Unmarshal([]byte(line), &sent) == nil && sent.Agent == "" {
+			last.id = sent.Request
+		}
+	}
+	if last.id == "" {
+		return storedRequest{}, fmt.Errorf("the session %s stored no request from the lead", last.session)
+	}
+	return last, nil
 }
 
 func seedShells(s session) error {
-	cmd := exec.Command(s.exe, "session", "list")
-	cmd.Dir, cmd.Env = s.project, s.env()
-	if out, err := cmd.CombinedOutput(); err != nil {
+	if out, err := s.tofu("session", "list").CombinedOutput(); err != nil {
 		return fmt.Errorf("tofu session list: %v: %s", err, out)
 	}
 	projects, err := filepath.Glob(filepath.Join(s.home, ".tofu", "projects", "*"))

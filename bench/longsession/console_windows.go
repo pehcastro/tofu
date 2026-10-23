@@ -92,13 +92,24 @@ func (c *console) drain(into io.Writer) { _, _ = io.Copy(into, c.out) }
 
 func (c *console) Write(p []byte) (int, error) { return c.in.Write(p) }
 
-func (c *console) read() (reading, error) {
+func (c *console) read() (reading, error) { return readProcess(c.process) }
+
+func readPID(pid int) (reading, error) {
+	process, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
+	if err != nil {
+		return reading{}, err
+	}
+	defer func() { _ = windows.CloseHandle(process) }()
+	return readProcess(process)
+}
+
+func readProcess(process windows.Handle) (reading, error) {
 	counters := memoryCounters{size: uint32(unsafe.Sizeof(memoryCounters{}))}
-	if ok, _, err := processMemory.Call(uintptr(c.process), uintptr(unsafe.Pointer(&counters)), uintptr(counters.size)); ok == 0 {
+	if ok, _, err := processMemory.Call(uintptr(process), uintptr(unsafe.Pointer(&counters)), uintptr(counters.size)); ok == 0 {
 		return reading{}, err
 	}
 	var created, exited, kernel, user windows.Filetime
-	if err := windows.GetProcessTimes(c.process, &created, &exited, &kernel, &user); err != nil {
+	if err := windows.GetProcessTimes(process, &created, &exited, &kernel, &user); err != nil {
 		return reading{}, err
 	}
 	ticks := func(at windows.Filetime) float64 {

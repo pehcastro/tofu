@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -84,10 +85,27 @@ func (s session) env() []string {
 
 func (s session) requests() string { return filepath.Join(s.dir, "requests.txt") }
 
-func (s session) setting(name, value string) error {
-	cmd := exec.Command(s.exe, "settings", "set", name, value)
+func (s session) tofu(args ...string) *exec.Cmd {
+	cmd := exec.Command(s.exe, args...)
 	cmd.Dir, cmd.Env = s.project, s.env()
-	if out, err := cmd.CombinedOutput(); err != nil {
+	return cmd
+}
+
+func (s session) hostPID() int {
+	var status struct {
+		PID int `json:"pid"`
+	}
+	out, err := s.tofu("host", "status", "--json", "--dir", s.project).Output()
+	if err != nil || json.Unmarshal(out, &status) != nil {
+		return 0
+	}
+	return status.PID
+}
+
+func (s session) stopHost() { _ = s.tofu("host", "stop", "--dir", s.project).Run() }
+
+func (s session) setting(name, value string) error {
+	if out, err := s.tofu("settings", "set", name, value).CombinedOutput(); err != nil {
 		return fmt.Errorf("tofu settings set %s %s: %v: %s", name, value, err, out)
 	}
 	return nil
@@ -105,9 +123,7 @@ func (s session) command(script, cassette string, timeout time.Duration, extra [
 	}
 	args := append([]string{"drive", steps, "--plain", "--dir", s.project, "--home", s.home, "--cassette", cassette,
 		"--timeout", timeout.String(), "--width", screenWidth, "--height", screenHeight}, extra...)
-	cmd := exec.Command(s.exe, args...)
-	cmd.Dir, cmd.Env = s.project, s.env()
-	return cmd, nil
+	return s.tofu(args...), nil
 }
 
 func (s session) unpack(name string) (string, error) {

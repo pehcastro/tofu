@@ -30,6 +30,7 @@ const (
 	seedStepsPerAgent = 4
 	seedMinutesCap    = 60
 	workPace          = 4500 * time.Millisecond
+	hostLeaves        = 10 * time.Second
 )
 
 type reading struct {
@@ -38,24 +39,29 @@ type reading struct {
 }
 
 type row struct {
-	Arm        string  `json:"arm"`
-	Phase      string  `json:"phase"`
-	Agents     int     `json:"agents"`
-	Workers    int     `json:"workers"`
-	Minute     int     `json:"minute"`
-	WorkingMB  float64 `json:"working_mb"`
-	PrivateMB  float64 `json:"private_mb"`
-	CPUSeconds float64 `json:"cpu_s"`
-	Cores      float64 `json:"cores"`
-	Requests   int64   `json:"requests"`
-	WorkSteps  int64   `json:"work_steps"`
-	Version    string  `json:"version"`
-	Commit     string  `json:"commit"`
-	Credential string  `json:"credential"`
-	Wire       string  `json:"wire"`
-	GOMAXPROCS string  `json:"gomaxprocs"`
-	Machine    string  `json:"machine"`
-	Date       string  `json:"date"`
+	Arm           string  `json:"arm"`
+	Phase         string  `json:"phase"`
+	Agents        int     `json:"agents"`
+	Workers       int     `json:"workers"`
+	Minute        int     `json:"minute"`
+	WorkingMB     float64 `json:"working_mb"`
+	PrivateMB     float64 `json:"private_mb"`
+	CPUSeconds    float64 `json:"cpu_s"`
+	Cores         float64 `json:"cores"`
+	Requests      int64   `json:"requests"`
+	WorkSteps     int64   `json:"work_steps"`
+	HostPID       int     `json:"host_pid"`
+	HostWorkingMB float64 `json:"host_working_mb"`
+	HostPrivateMB float64 `json:"host_private_mb"`
+	HostCPU       float64 `json:"host_cpu_s"`
+	HostCores     float64 `json:"host_cores"`
+	Version       string  `json:"version"`
+	Commit        string  `json:"commit"`
+	Credential    string  `json:"credential"`
+	Wire          string  `json:"wire"`
+	GOMAXPROCS    string  `json:"gomaxprocs"`
+	Machine       string  `json:"machine"`
+	Date          string  `json:"date"`
 }
 
 func main() {
@@ -163,6 +169,19 @@ func seed(args []string) error {
 	return err
 }
 
+func hostOf(exe, dir string, env []string) int {
+	var status struct {
+		PID int `json:"pid"`
+	}
+	cmd := exec.Command(exe, "host", "status", "--json", "--dir", dir)
+	cmd.Dir, cmd.Env = dir, env
+	out, err := cmd.Output()
+	if err != nil || json.Unmarshal(out, &status) != nil {
+		return 0
+	}
+	return status.PID
+}
+
 func versionOf(exe string) (string, string) {
 	out, _ := exec.Command(exe, "version").Output()
 	fields := strings.Fields(string(out))
@@ -224,8 +243,12 @@ func measure(args []string) error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = tofu(*exe, *dir, env, "", "host", "stop", "--dir", *dir) }()
+	hostPID := hostOf(*exe, *dir, env)
+	hostLast, _ := readPID(hostPID)
 	asked, steps := server.asked.Load(), server.workSteps.Load()
-	fmt.Printf("%s opens: working %.0f MB, private %.0f MB, cpu %.1f s after %s settle (not measured)\n", label, last.workingMB, last.privateMB, last.cpuSeconds, *settle)
+	fmt.Printf("%s opens: working %.0f MB, private %.0f MB, cpu %.1f s; host pid %d private %.0f MB, cpu %.1f s; after %s settle (not measured)\n",
+		label, last.workingMB, last.privateMB, last.cpuSeconds, hostPID, hostLast.privateMB, hostLast.cpuSeconds, *settle)
 	for _, phase := range strings.Split(*phases, ",") {
 		window, said := *minutes, ""
 		switch phase {
@@ -255,20 +278,31 @@ func measure(args []string) error {
 			r.Phase, r.Minute, r.WorkingMB, r.PrivateMB, r.CPUSeconds = phase, minute, now.workingMB, now.privateMB, now.cpuSeconds-last.cpuSeconds
 			r.Cores = r.CPUSeconds / now.at.Sub(last.at).Seconds()
 			r.Requests, r.WorkSteps = server.asked.Load()-asked, server.workSteps.Load()-steps
-			asked, steps, last = server.asked.Load(), server.workSteps.Load(), now
+			hostNow, err := readPID(hostPID)
+			if err != nil {
+				hostPID, hostLast = hostOf(*exe, *dir, env), reading{}
+				hostNow, _ = readPID(hostPID)
+			}
+			r.HostPID, r.HostWorkingMB, r.HostPrivateMB, r.HostCPU = hostPID, hostNow.workingMB, hostNow.privateMB, hostNow.cpuSeconds-hostLast.cpuSeconds
+			r.HostCores = r.HostCPU / now.at.Sub(last.at).Seconds()
+			asked, steps, last, hostLast = server.asked.Load(), server.workSteps.Load(), now, hostNow
 			line, _ := json.Marshal(r)
 			if _, err := file.Write(append(line, '\n')); err != nil {
 				return err
 			}
-			fmt.Printf("%s %s minute %2d: working %7.0f MB  private %7.0f MB  cpu %6.1f s  cores %.2f  requests %d  worker steps %d  reported %d\n",
-				label, phase, minute, r.WorkingMB, r.PrivateMB, r.CPUSeconds, r.Cores, r.Requests, r.WorkSteps, server.reported.Load())
+			fmt.Printf("%s %s minute %2d: working %7.0f MB  private %7.0f MB  cpu %6.1f s  cores %.2f  host %d private %7.0f MB  cpu %6.1f s  requests %d  worker steps %d  reported %d\n",
+				label, phase, minute, r.WorkingMB, r.PrivateMB, r.CPUSeconds, r.Cores, r.HostPID, r.HostPrivateMB, r.HostCPU, r.Requests, r.WorkSteps, server.reported.Load())
 			if phase == "seed" && server.reported.Load() >= int64(*agents) {
 				break
 			}
 		}
 	}
 	quitted := c.quit(quitWithin)
-	fmt.Printf("%s quit by ctrl+c: exited %v, profile in %s\n", label, quitted, profile)
+	hostStayed := hostPID
+	for deadline := time.Now().Add(hostLeaves); hostStayed != 0 && time.Now().Before(deadline); time.Sleep(time.Second) {
+		hostStayed = hostOf(*exe, *dir, env)
+	}
+	fmt.Printf("%s quit by ctrl+c: exited %v, host %d gone within %s: %v, profile in %s\n", label, quitted, hostPID, hostLeaves, hostStayed == 0, profile)
 	return os.WriteFile(filepath.Join(*work, "screen-"+label+".ansi"), screen.bytes(), 0o644)
 }
 

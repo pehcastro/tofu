@@ -127,6 +127,7 @@ func play(each flow, exe, dir string) row {
 	evidence := ""
 	if err == nil {
 		evidence, err = each.run(s)
+		s.stopHost()
 	}
 	r := row{number: each.number, name: each.name, passed: err == nil, took: time.Since(started), evidence: evidence}
 	if err != nil {

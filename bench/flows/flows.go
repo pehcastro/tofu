@@ -187,7 +187,7 @@ func foldAndSearch(s session) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	out, err := s.drive("7-fold", cassette, 5*time.Minute)
+	out, err := s.drive("7-fold", cassette, 5*time.Minute, "--host")
 	if err != nil {
 		return "", err
 	}
