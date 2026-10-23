@@ -104,6 +104,13 @@ func (h *Host) Steer(text string) string {
 	return id
 }
 
+func (h *Host) withImages(event Event) Event {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	event.Images = shownPending(event.Text, h.pending)
+	return event
+}
+
 func (h *Host) queueTyped(text string) string {
 	if h.following.Load() != nil {
 		return h.Steer(text)

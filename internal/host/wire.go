@@ -237,16 +237,18 @@ type Text struct {
 
 type Steered struct {
 	Identity
-	Text   string    `json:"text"`
-	Origin Origin    `json:"origin"`
-	Step   int       `json:"step"`
-	ReadAt time.Time `json:"readAt"`
+	Text   string         `json:"text"`
+	Origin Origin         `json:"origin"`
+	Step   int            `json:"step"`
+	ReadAt time.Time      `json:"readAt"`
+	Images []MessageImage `json:"images,omitempty"`
 }
 
 type SteerQueued struct {
 	Identity
-	Text   string `json:"text"`
-	Origin Origin `json:"origin"`
+	Text   string         `json:"text"`
+	Origin Origin         `json:"origin"`
+	Images []MessageImage `json:"images,omitempty"`
 }
 
 type OriginKind = llm.OriginKind

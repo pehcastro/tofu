@@ -97,7 +97,7 @@ func (h *Host) runFrom(ctx context.Context, pick Pick, task string, live Live, r
 }
 
 func (h *Host) heardTyped(emit func(Event), typed string) {
-	emit(Event{Kind: EventSteered, ID: h.steering.heard(), Text: typed, Step: 1, Origin: wireOrigin(llm.Origin{Source: llm.SourceTyped})})
+	emit(h.withImages(Event{Kind: EventSteered, ID: h.steering.heard(), Text: typed, Step: 1, Origin: wireOrigin(llm.Origin{Source: llm.SourceTyped})}))
 }
 
 func enteredUnshown(logged session.Event) (Event, bool) {
@@ -205,7 +205,8 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	config.TaskOrigin = live.Origin
 	h.mu.Unlock()
 	var steps atomic.Int64
-	config.Steering = func() []string { return h.steering.take(emit, int(steps.Load())+1) }
+	readSteer := func(event Event) { emit(h.withImages(event)) }
+	config.Steering = func() []string { return h.steering.take(readSteer, int(steps.Load())+1) }
 	config.ImagesOf = imagesOf
 	config.ToolResult = func(answered llm.Message) { watch.result(answered, "") }
 	movedTo, ceiling := "", prepared.Ceiling

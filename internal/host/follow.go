@@ -381,7 +381,7 @@ func (h *Host) rosterRows() []SubAgentRow {
 
 func (h *Host) steerFor(text string) string {
 	id := h.Steer(text)
-	h.emitter().emit(Event{Kind: EventSteerQueued, ID: id, Text: text})
+	h.emitter().emit(h.withImages(Event{Kind: EventSteerQueued, ID: id, Text: text}))
 	return id
 }
 

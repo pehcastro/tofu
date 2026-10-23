@@ -157,9 +157,9 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 			id.Item = s.mint("steered")
 		}
 		s.awaitLog(id.Item, session.RoleUser, event.Text)
-		return append(out, notify("turn.steered", &Steered{Identity: id, Text: event.Text, Origin: event.originOr(llm.SourceSteer), Step: event.Step, ReadAt: now}))
+		return append(out, notify("turn.steered", &Steered{Identity: id, Text: event.Text, Origin: event.originOr(llm.SourceSteer), Step: event.Step, ReadAt: now, Images: event.Images}))
 	case EventSteerQueued:
-		return append(out, notify("turn.steerQueued", &SteerQueued{Identity: id, Text: event.Text, Origin: event.originOr(llm.SourceSteer)}))
+		return append(out, notify("turn.steerQueued", &SteerQueued{Identity: id, Text: event.Text, Origin: event.originOr(llm.SourceSteer), Images: event.Images}))
 	case EventToolCall:
 		var args struct {
 			Path  string `json:"path"`
