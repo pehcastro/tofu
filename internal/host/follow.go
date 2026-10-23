@@ -56,6 +56,7 @@ const (
 	followResize    followOp = "resize"
 	followRelease   followOp = "release"
 	followTrace     followOp = "trace"
+	followBeat      followOp = "beat"
 )
 
 type followAsk struct {
@@ -160,10 +161,10 @@ func (h *Host) openAudience(a *audience) {
 	h.audience.Store(a)
 }
 
-func (h *Host) seat(conn net.Conn, in io.Reader) {
+func (h *Host) seat(conn net.Conn, in io.Reader) error {
 	a := h.audience.Load()
 	if a == nil {
-		return
+		return nil
 	}
 	s := &seat{link: linked(conn), stream: make(chan []byte, konst.FollowQueue), kept: make(chan []byte, konst.FollowQueue)}
 	h.bus.mu.Lock()
@@ -176,10 +177,10 @@ func (h *Host) seat(conn net.Conn, in io.Reader) {
 	a.mu.Unlock()
 	h.bus.mu.Unlock()
 	if !seated {
-		return
+		return nil
 	}
 	safe.Go(h.report, "follow write", s.write)
-	h.serveSeat(a, s, in)
+	return h.serveSeat(a, s, in)
 }
 
 func (a *audience) broadcast(said followLine, snapshot func() []byte) {
@@ -275,7 +276,7 @@ func (s *seat) write() {
 	}
 }
 
-func (h *Host) serveSeat(a *audience, s *seat, in io.Reader) {
+func (h *Host) serveSeat(a *audience, s *seat, in io.Reader) error {
 	defer func() {
 		a.drop(s)
 		h.useTerminals(a)
@@ -286,15 +287,16 @@ func (h *Host) serveSeat(a *audience, s *seat, in io.Reader) {
 		var raw json.RawMessage
 		if err := asks.Decode(&raw); err != nil {
 			line, _ := json.Marshal(followLine{Reply: &followReply{Refused: err.Error()}})
+			_ = s.conn.SetWriteDeadline(time.Now().Add(hubAnswerWait))
 			_, _ = s.conn.Write(line)
-			return
+			return err
 		}
 		reply := h.served(a, s, raw)
 		line, _ := json.Marshal(followLine{Reply: &reply})
 		select {
 		case s.kept <- line:
 		case <-s.gone:
-			return
+			return nil
 		}
 	}
 }
@@ -366,6 +368,8 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 		}
 	case followRoster:
 		reply.Agents = h.rosterRows()
+	case followBeat:
+		_ = s.conn.SetReadDeadline(time.Now().Add(hubBeatMissed))
 	default:
 		reply.OK = false
 	}
@@ -417,6 +421,7 @@ func (h *Host) follow(f *following, id string) {
 	settled := followAsk{Op: followSettings, Asking: h.asking, Pick: h.pick}
 	h.following.Store(f)
 	safe.Go(h.report, "follow", func() { h.heed(f) })
+	safe.Go(h.report, "follow beat", f.beat)
 	_ = h.loadCron(id)
 	safe.Go(h.report, "follow attach", func() {
 		f.ask(followAsk{Op: followAttach, Terminals: h.shells != nil && h.shells.Terminals.Load()})
@@ -472,6 +477,26 @@ func (f *following) ask(ask followAsk) followReply {
 	case <-time.After(followReplyWait):
 	}
 	return followReply{}
+}
+
+func (f *following) beat() {
+	line, _ := json.Marshal(followAsk{Op: followBeat})
+	tick := time.NewTicker(hubBeat)
+	defer tick.Stop()
+	for {
+		f.mu.Lock()
+		_ = f.conn.SetWriteDeadline(time.Now().Add(followReplyWait))
+		_, err := f.conn.Write(line)
+		f.mu.Unlock()
+		if err != nil {
+			return
+		}
+		select {
+		case <-tick.C:
+		case <-f.gone:
+			return
+		}
+	}
 }
 
 func (f *following) send(pick Pick, task string, images []pendingImage) followReply {

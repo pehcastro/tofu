@@ -41,6 +41,10 @@ const (
 	hubAskStop    = "stop"
 	hubAnswerWait = konst.HostAnswerMillis * time.Millisecond
 	hubRetry      = konst.HostRetryMillis * time.Millisecond
+	hubBeat       = 2000 * time.Millisecond
+	hubBeatMissed = 10000 * time.Millisecond
+	hubLogCap     = 1 << 20
+	hubLogKept    = ".1"
 )
 
 var (
@@ -312,6 +316,7 @@ func RunHub(project string, report safe.Report, say func(string), open HubSessio
 		_ = os.Remove(place.socket)
 		_ = os.Remove(place.registry)
 	}()
+	say = rotating(place.log, say)
 	h := &hub{
 		status:  HubStatus{PID: os.Getpid(), Socket: place.socket, Project: place.project, Version: konst.Version, Started: time.Now()},
 		changed: make(chan struct{}, 1),
@@ -339,6 +344,21 @@ func RunHub(project string, report safe.Report, say func(string), open HubSessio
 	_ = listener.Close()
 	h.endAll()
 	return nil
+}
+
+func rotating(log string, say func(string)) func(string) {
+	var mu sync.Mutex
+	return func(line string) {
+		mu.Lock()
+		defer mu.Unlock()
+		say(line)
+		if info, err := os.Stat(log); err != nil || info.Size() < hubLogCap {
+			return
+		}
+		if data, err := os.ReadFile(log); err == nil && os.WriteFile(log+hubLogKept, data, 0o600) == nil {
+			_ = os.Truncate(log, 0)
+		}
+	}
 }
 
 func writeRegistry(path string, status HubStatus) error {
@@ -448,8 +468,8 @@ func (h *hub) join(conn net.Conn, lines *json.Decoder, asked hubAsk) {
 	}
 	joined.Members, joined.Session = h.members.Load(), s.id
 	h.told(s)
-	if json.NewEncoder(conn).Encode(joined) == nil {
-		s.host.seat(conn, io.MultiReader(lines.Buffered(), conn))
+	if json.NewEncoder(conn).Encode(joined) == nil && errors.Is(s.host.seat(conn, io.MultiReader(lines.Buffered(), conn)), os.ErrDeadlineExceeded) {
+		h.say(member.named() + " sent no heartbeat for " + hubBeatMissed.String() + ", so the host let it go")
 	}
 	h.leave(s, member)
 }
