@@ -124,7 +124,11 @@ func placeOf(project string) (hubPlace, error) {
 	sum := sha256.Sum256([]byte(keyed))
 	key := hex.EncodeToString(sum[:])
 	short := filepath.Join(home, hubSocketDir, key[:hubShortKey])
-	return hubPlace{project: abs, socket: short + ".sock", lock: short + ".lock", log: short + ".log", registry: filepath.Join(home, hubHostsDir, key+".json")}, nil
+	socket := short + ".sock"
+	if limit := len(syscall.RawSockaddrUnix{}.Path); len(socket) >= limit {
+		return hubPlace{}, fmt.Errorf("the host socket %s is %d bytes and a unix socket path on %s must stay under %d, so the tofu host cannot start under this home: use a shorter home", socket, len(socket), sys.OS(), limit)
+	}
+	return hubPlace{project: abs, socket: socket, lock: short + ".lock", log: short + ".log", registry: filepath.Join(home, hubHostsDir, key+".json")}, nil
 }
 
 func askHubFor(place hubPlace, ask hubAsk, answer any) error {
@@ -398,7 +402,7 @@ func startedHere(conn net.Conn) error {
 		return fmt.Errorf("the tofu host, process %d, could not tell which process dialled it, so it refused: %w", os.Getpid(), err)
 	}
 	seen := map[int]bool{}
-	for pid := peer; pid > 1 && !seen[pid] && err == nil; pid, err = parentOf(pid) {
+	for pid, err := parentOf(peer); pid > 1 && !seen[pid] && err == nil; pid, err = parentOf(pid) {
 		if pid == os.Getpid() {
 			return fmt.Errorf("process %d was started by the tofu host, process %d, so it may not join the host or stop it", peer, pid)
 		}
