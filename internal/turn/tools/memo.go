@@ -130,7 +130,7 @@ func (t memoTool) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 		return held, nil
 	}
 	result, err := t.tool.Run(ctx, raw)
-	if err == nil {
+	if err == nil && len(result.Images) == 0 {
 		t.memo.keep(key, result)
 	}
 	return result, err

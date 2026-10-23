@@ -61,7 +61,7 @@ func FitImage(picture Image) (FittedImage, error) {
 	if err != nil {
 		return FittedImage{}, fmt.Errorf("shrinking it to %dx%d: %w", sent.X, sent.Y, err)
 	}
-	return FittedImage{Image: Image{MediaType: media, Data: encoded.Bytes()}, Was: was, Sent: sent, Shrunk: true}, nil
+	return FittedImage{Image: Image{MediaType: media, Data: bytes.Clone(encoded.Bytes())}, Was: was, Sent: sent, Shrunk: true}, nil
 }
 
 func fittedSize(size image.Point) image.Point {

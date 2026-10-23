@@ -418,6 +418,9 @@ func (c *cassette) take(request llm.Request) (recordedReply, error) {
 		line += ", tool_choice " + choice
 	}
 	sent := sentRequest{summary: line, messages: slices.Clone(request.Messages)}
+	for at := range sent.messages {
+		sent.messages[at].Images = make([]llm.Image, len(sent.messages[at].Images))
+	}
 	c.sent = append(c.sent, sent)
 	if c.dump != "" {
 		if err := appendLines(c.dump, sent.lines(requestsForm{}, 0, sys.KeyRedactor{})); err != nil {
