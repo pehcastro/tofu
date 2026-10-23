@@ -421,6 +421,10 @@ func (h *Host) follow(f *following, id string) {
 	safe.Go(h.report, "follow attach", func() {
 		f.ask(followAsk{Op: followAttach, Terminals: h.shells != nil && h.shells.Terminals.Load()})
 		f.ask(settled)
+		if f.hub.Version != konst.Version {
+			f.caughtUp()
+			h.note("the tofu host, process " + strconv.Itoa(f.hub.PID) + ", runs tofu " + f.hub.Version + " and this is tofu " + konst.Version + ", so this session runs on " + f.hub.Version + " until its last member leaves")
+		}
 	})
 }
 

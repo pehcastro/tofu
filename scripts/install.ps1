@@ -36,9 +36,9 @@ try {
     Expand-Archive -Path $zip -DestinationPath $tmp -Force
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
     $target = Join-Path $dir 'tofu.exe'
-    $aside = "$target.old"
-    Remove-Item -Force -ErrorAction SilentlyContinue $aside
-    if (Test-Path $target) { Move-Item -Force $target $aside }
+    $aside = "$target.old-" + [Guid]::NewGuid().ToString('N')
+    Get-ChildItem -Path $dir -Filter 'tofu.exe.old*' | Remove-Item -Force -ErrorAction SilentlyContinue
+    if (Test-Path $target) { Move-Item $target $aside }
     Move-Item -Force (Join-Path $tmp 'tofu.exe') $target
     Remove-Item -Force -ErrorAction SilentlyContinue $aside
     Write-Host "installed $target"
