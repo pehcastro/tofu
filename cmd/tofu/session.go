@@ -265,7 +265,7 @@ func resumeOf(store *session.Store, id string) (sessionResume, error) {
 	if err != nil {
 		return sessionResume{}, err
 	}
-	said, steps, err := store.Said(recorded)
+	said, steps, err := store.Said(row.ID, recorded)
 	if err != nil {
 		return sessionResume{}, err
 	}

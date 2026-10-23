@@ -280,6 +280,9 @@ func messageRowOf(message llm.Message) MessageRow {
 	for _, call := range message.ToolCalls {
 		row.ToolCalls = append(row.ToolCalls, MessageToolCall{ID: call.ID, Name: call.Name, Arguments: call.Arguments})
 	}
+	for _, image := range message.Images {
+		row.Pictures = append(row.Pictures, session.Picture{MediaType: image.MediaType, Data: image.Data})
+	}
 	return row
 }
 
@@ -322,6 +325,11 @@ func messageOf(m MessageRow) (llm.Message, error) {
 	}
 	for _, call := range m.ToolCalls {
 		message.ToolCalls = append(message.ToolCalls, llm.ToolCall{ID: call.ID, Name: call.Name, Arguments: call.Arguments})
+	}
+	for _, picture := range m.Pictures {
+		if len(picture.Data) > 0 {
+			message.Images = append(message.Images, llm.Image{MediaType: picture.MediaType, Data: picture.Data})
+		}
 	}
 	return message, nil
 }
@@ -475,8 +483,9 @@ type toolsKept struct {
 
 type resultRow struct {
 	ToolCallRow
-	Content     string `json:"content"`
-	ToolOutcome string `json:"tool_outcome,omitempty"`
+	Content     string            `json:"content"`
+	ToolOutcome string            `json:"tool_outcome,omitempty"`
+	Pictures    []session.Picture `json:"pictures,omitempty"`
 }
 
 type compactionRow struct {
@@ -593,8 +602,9 @@ func (r *record) message(message llm.Message, request string, results map[string
 		if row.Proxy == nil {
 			row.Args = nil
 		}
+		held, _ := r.heldRow(message)
 		r.add(session.Event{Kind: session.EventToolResult, Call: message.ToolCallID, Request: request},
-			resultRow{ToolCallRow: row, Content: message.Content, ToolOutcome: toolOutcomeName(message.ToolOutcome)})
+			resultRow{ToolCallRow: row, Content: message.Content, ToolOutcome: toolOutcomeName(message.ToolOutcome), Pictures: held.Pictures})
 	case llm.RoleAssistant:
 		if len(message.ToolCalls) > 0 {
 			r.undoStarted()
@@ -611,28 +621,44 @@ func (r *record) message(message llm.Message, request string, results map[string
 				session.CallBody{Tool: call.Name, Args: call.Arguments})
 		}
 	default:
-		r.add(session.Event{Kind: session.EventMessage}, messageRowOf(message))
+		held, _ := r.heldRow(message)
+		r.add(session.Event{Kind: session.EventMessage}, held)
 	}
 }
 
-func (r *record) keptList(messages []llm.Message) []string {
-	hashes := make([]string, 0, len(messages))
-	for _, message := range messages {
-		hash, err := r.log.Keep(messageRowOf(message))
+func (r *record) heldRow(message llm.Message) (MessageRow, []session.Picture) {
+	row := messageRowOf(message)
+	sent := row.Pictures
+	row.Pictures = nil
+	for i, picture := range sent {
+		kept, err := r.log.KeepPicture(picture.MediaType, picture.Data)
 		r.note(err)
-		hashes = append(hashes, hash)
+		row.Pictures, sent[i].Blob = append(row.Pictures, kept), kept.Blob
 	}
-	return hashes
+	return row, sent
+}
+
+func (r *record) keptList(messages []llm.Message) ([]string, []session.Picture) {
+	hashes := make([]string, 0, len(messages))
+	var pictures []session.Picture
+	for _, message := range messages {
+		row, sent := r.heldRow(message)
+		hash, err := r.log.Keep(row)
+		r.note(err)
+		hashes, pictures = append(hashes, hash), append(pictures, sent...)
+	}
+	return hashes, pictures
 }
 
 func (r *record) exchange(id, why, wire string, request llm.Request, started time.Time, attempts []llm.Attempt, decision llm.Decision, failed error) {
 	if r == nil {
 		return
 	}
+	messages, pictures := r.keptList(request.Messages)
 	exchange := session.Exchange{Request: id, Agent: r.agent, Turn: r.turn, At: started, Why: why, Wire: wire, Model: decision.Build,
-		ToolChoice: request.ToolChoice.OpenAIValue(), Messages: r.keptList(request.Messages), Tools: r.keptTools(request.Tools), DurationMS: time.Since(started).Milliseconds()}
+		ToolChoice: request.ToolChoice.OpenAIValue(), Messages: messages, Tools: r.keptTools(request.Tools), DurationMS: time.Since(started).Milliseconds()}
 	for _, attempt := range attempts {
-		body, err := r.log.KeepBody(attempt.Body)
+		body, err := r.log.KeepBody(attempt.Body, pictures)
 		r.note(err)
 		detail, err := json.Marshal(attempt)
 		r.note(err)
@@ -664,9 +690,10 @@ func (r *record) listChange(kind, why string, before, after []llm.Message) {
 	if r == nil {
 		return
 	}
-	change := session.ListChangeBody{Kind: kind, Why: why, After: r.keptList(after)}
+	change := session.ListChangeBody{Kind: kind, Why: why}
+	change.After, _ = r.keptList(after)
 	if before != nil {
-		change.Before = r.keptList(before)
+		change.Before, _ = r.keptList(before)
 	}
 	r.add(session.Event{Kind: session.EventListChange}, change)
 }

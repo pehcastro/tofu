@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -23,6 +24,9 @@ const (
 	blobHashField = `{"hash":"`
 	recordEnd     = '}'
 	cutMark       = "!\n"
+
+	pictureMarkOpen  = `\u0000picture `
+	pictureMarkClose = `\u0000`
 )
 
 type BodyPart struct {
@@ -73,6 +77,17 @@ func (l *Log) keep(raw []byte) (string, error) {
 	if redacted := l.redact.Redact(text); redacted != text {
 		masked = []byte(redacted)
 	}
+	return l.keepUnmasked(masked)
+}
+
+func (l *Log) KeepPicture(mediaType string, data []byte) (Picture, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	hash, err := l.keepUnmasked([]byte(`"` + base64.StdEncoding.EncodeToString(data) + `"`))
+	return Picture{MediaType: mediaType, Blob: hash}, err
+}
+
+func (l *Log) keepUnmasked(masked []byte) (string, error) {
 	hash := BlobHash(masked)
 	if l.blobs == nil {
 		kept, err := l.store.blobHashes(l.header.ID)
@@ -96,12 +111,17 @@ func BlobHash(masked []byte) string {
 	return hex.EncodeToString(sum[:blobHashBytes])
 }
 
-func (l *Log) KeepBody(body []byte) ([]BodyPart, error) {
+func (l *Log) KeepBody(body []byte, pictures []Picture) ([]BodyPart, error) {
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	if opening, err := decoder.Token(); err != nil || opening != json.Delim('{') {
 		hash, keepErr := l.Keep(string(body))
 		return []BodyPart{{Blob: hash}}, keepErr
 	}
+	marks := make(map[string]string, len(pictures))
+	for _, picture := range pictures {
+		marks[base64.StdEncoding.EncodeToString(picture.Data)] = pictureMarkOpen + picture.Blob + pictureMarkClose
+	}
+	keep := func(raw []byte) (string, error) { return l.keep(markPictures(raw, marks)) }
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	var parts []BodyPart
@@ -119,18 +139,43 @@ func (l *Log) KeepBody(body []byte) ([]BodyPart, error) {
 		if bytes.HasPrefix(bytes.TrimSpace(value), []byte("[")) && json.Unmarshal(value, &items) == nil {
 			part.Items = make([]string, 0, len(items))
 			for _, item := range items {
-				hash, err := l.keep(item)
+				hash, err := keep(item)
 				if err != nil {
 					return nil, err
 				}
 				part.Items = append(part.Items, hash)
 			}
-		} else if part.Blob, err = l.keep(value); err != nil {
+		} else if part.Blob, err = keep(value); err != nil {
 			return nil, err
 		}
 		parts = append(parts, part)
 	}
 	return parts, nil
+}
+
+func markPictures(raw []byte, marks map[string]string) []byte {
+	if len(marks) == 0 {
+		return raw
+	}
+	var marked []byte
+	copied, from := 0, 0
+	for at := 0; at <= len(raw); at++ {
+		if at < len(raw) && isBase64(raw[at]) {
+			continue
+		}
+		if mark, known := marks[string(raw[from:at])]; known {
+			marked, copied = append(append(marked, raw[copied:from]...), mark...), at
+		}
+		from = at + 1
+	}
+	if marked == nil {
+		return raw
+	}
+	return append(marked, raw[copied:]...)
+}
+
+func isBase64(b byte) bool {
+	return 'A' <= b && b <= 'Z' || 'a' <= b && b <= 'z' || '0' <= b && b <= '9' || b == '+' || b == '/' || b == '='
 }
 
 func (l *Log) Exchanged(exchange Exchange) error {
@@ -272,6 +317,26 @@ func (s *Store) Blobs(id string) (map[string]json.RawMessage, error) {
 	return blobs, err
 }
 
+func (s *Store) blobsNamed(id string, wanted []string) (map[string]json.RawMessage, error) {
+	blobs := map[string]json.RawMessage{}
+	if len(wanted) == 0 {
+		return blobs, nil
+	}
+	named := map[string]bool{}
+	for _, hash := range wanted {
+		named[hash] = true
+	}
+	err := eachLine(filepath.Join(s.Dir(id), blobsName), func(line []byte) error {
+		rest, opens := bytes.CutPrefix(line, []byte(blobHashField))
+		hash, body, closes := bytes.Cut(rest, []byte(`","body":`))
+		if opens && closes && named[string(hash)] {
+			blobs[string(hash)] = body[:len(body)-1]
+		}
+		return nil
+	})
+	return blobs, err
+}
+
 func (s *Store) blobHashes(id string) (map[string]bool, error) {
 	hashes := map[string]bool{}
 	file, err := os.Open(filepath.Join(s.Dir(id), blobsName))
@@ -312,7 +377,7 @@ func (s *Store) blobHashes(id string) (map[string]bool, error) {
 
 func Assemble(parts []BodyPart, blobs map[string]json.RawMessage) json.RawMessage {
 	if len(parts) == 1 && parts[0].Key == "" {
-		return blobs[parts[0].Blob]
+		return withPictures(blobs[parts[0].Blob], blobs)
 	}
 	var body bytes.Buffer
 	body.WriteByte('{')
@@ -337,5 +402,21 @@ func Assemble(parts []BodyPart, blobs map[string]json.RawMessage) json.RawMessag
 		body.WriteByte(']')
 	}
 	body.WriteByte('}')
-	return body.Bytes()
+	return withPictures(body.Bytes(), blobs)
+}
+
+func withPictures(body []byte, blobs map[string]json.RawMessage) []byte {
+	var whole []byte
+	for {
+		before, after, found := bytes.Cut(body, []byte(pictureMarkOpen))
+		if !found {
+			return append(whole, body...)
+		}
+		hash, rest, closed := bytes.Cut(after, []byte(pictureMarkClose))
+		if picture, held := blobs[string(hash)]; closed && held {
+			whole, body = append(append(whole, before...), bytes.Trim(picture, `"`)...), rest
+			continue
+		}
+		whole, body = append(append(whole, before...), pictureMarkOpen...), after
+	}
 }

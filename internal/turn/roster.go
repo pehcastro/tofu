@@ -16,8 +16,6 @@ import (
 	"tofu/internal/subagent"
 )
 
-const listChangeFork = "fork"
-
 type recordedSession struct {
 	id     string
 	events []session.Event
@@ -328,41 +326,29 @@ func reportsWrittenBeforeReportEvents(leadReports []string, order []*recordedSub
 
 func subAgentHistory(store *session.Store, chain []recordedSession, agentID string) ([]llm.Message, error) {
 	var since []session.Event
-	var change session.ListChangeBody
+	var change session.Event
 	changedIn := ""
 	for _, recorded := range chain {
 		part, err := store.Part(recorded.events, agentID)
+		if err == nil {
+			err = store.WithPictureData(recorded.id, part)
+		}
 		if err != nil {
 			return nil, err
 		}
 		since = append(since, part...)
 		for i, event := range part {
-			var changed session.ListChangeBody
-			if event.Kind == session.EventListChange && json.Unmarshal(event.Body, &changed) == nil {
-				since, change, changedIn = part[i+1:], changed, recorded.id
+			if event.Kind == session.EventListChange {
+				since, change, changedIn = part[i+1:], event, recorded.id
 			}
 		}
 	}
-	var conversation []llm.Message
-	if changedIn != "" && change.Kind != listChangeFork {
-		blobs, err := store.Blobs(changedIn)
+	if changedIn != "" {
+		carried, err := store.Carried(changedIn, change)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s's conversation in session %s: %w", agentID, changedIn, err)
 		}
-		for _, hash := range change.After {
-			var row MessageRow
-			if err := json.Unmarshal(blobs[hash], &row); err != nil {
-				return nil, fmt.Errorf("the message %s carried into %s's %s is not in session %s: %w", hash, agentID, change.Kind, changedIn, err)
-			}
-			message, err := messageOf(row)
-			if err != nil {
-				return nil, err
-			}
-			if message.Role != llm.RoleSystem {
-				conversation = append(conversation, message)
-			}
-		}
+		since = append(carried, since...)
 	}
-	after, err := ConversationFrom(since)
-	return Sendable(append(conversation, after...)), err
+	return ConversationFrom(since)
 }

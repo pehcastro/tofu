@@ -354,7 +354,7 @@ func dropPicture(message *llm.Message) int {
 	return freed
 }
 
-func keepNewestPictures(messages []llm.Message) {
+func keepNewestPictures(messages []llm.Message) (dropped int) {
 	var pictured []int
 	for i, message := range messages {
 		if message.Role == llm.RoleTool && len(message.Images) > 0 {
@@ -362,11 +362,12 @@ func keepNewestPictures(messages []llm.Message) {
 		}
 	}
 	if len(pictured) <= konst.ImageResultsCeiling {
-		return
+		return 0
 	}
 	for _, i := range pictured[:len(pictured)-konst.ImageResultsKept] {
 		dropPicture(&messages[i])
 	}
+	return len(pictured) - konst.ImageResultsKept
 }
 
 func HistoryTokens(preview recall.Config, messages []llm.Message) int {

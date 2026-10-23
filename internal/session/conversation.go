@@ -29,6 +29,12 @@ type ReasoningItem struct {
 	EncryptedContent string `json:"encrypted_content"`
 }
 
+type Picture struct {
+	MediaType string `json:"media_type"`
+	Blob      string `json:"blob,omitempty"`
+	Data      []byte `json:"data,omitempty"`
+}
+
 type MessageBody struct {
 	Role              string            `json:"role"`
 	Content           string            `json:"content,omitempty"`
@@ -36,6 +42,7 @@ type MessageBody struct {
 	ToolCalls         []MessageToolCall `json:"tool_calls,omitempty"`
 	ToolOutcome       string            `json:"tool_outcome,omitempty"`
 	ToolResultBytes   int               `json:"tool_result_bytes,omitempty"`
+	Pictures          []Picture         `json:"pictures,omitempty"`
 	Thinking          string            `json:"thinking,omitempty"`
 	ThinkingSignature string            `json:"thinking_signature,omitempty"`
 	Reasoning         *ReasoningItem    `json:"reasoning,omitempty"`

@@ -67,7 +67,7 @@ func (s Settings) shown(events []Event, depth viewDepth, report safe.Report) ([]
 				var result ResultBody
 				_ = json.Unmarshal(event.Body, &result)
 				message := MessageBody{Role: RoleTool, ToolCallID: event.Call, Content: result.Content, ToolOutcome: result.ToolOutcome,
-					ToolResultBytes: cmp.Or(result.ResultBytes, len(result.Content))}
+					ToolResultBytes: cmp.Or(result.ResultBytes, len(result.Content)), Pictures: result.Pictures}
 				shown = append(shown, Event{ID: event.ID, Author: author, Attempt: FirstAttempt, Kind: EventMessage, Body: marshalled(message)})
 			case EventRequest:
 				if depth == withoutSteps {

@@ -555,15 +555,78 @@ func (s *Store) Part(events []Event, part string) ([]Event, error) {
 	return s.settings.shown(partOf(events, part), withSteps, s.crashed)
 }
 
-func (s *Store) Said(events []Event) (said []Event, steps int, err error) {
+func (s *Store) Said(id string, events []Event) (said []Event, steps int, err error) {
 	kept := partOf(events, "")
-	for _, event := range kept {
-		if event.Kind == EventRequest || event.Kind == EventStep {
+	changed := -1
+	for i, event := range kept {
+		switch event.Kind {
+		case EventRequest, EventStep:
 			steps++
+		case EventListChange:
+			changed = i
 		}
 	}
-	said, err = s.settings.shown(kept, withoutSteps, s.crashed)
-	return said, steps, err
+	var carried []Event
+	if changed >= 0 {
+		if carried, err = s.Carried(id, kept[changed]); err != nil {
+			return nil, 0, err
+		}
+		kept = kept[changed+1:]
+	}
+	if said, err = s.settings.shown(kept, withoutSteps, s.crashed); err != nil {
+		return nil, 0, err
+	}
+	err = s.WithPictureData(id, said)
+	return append(carried, said...), steps, err
+}
+
+func (s *Store) WithPictureData(id string, said []Event) error {
+	pictured := map[int]MessageBody{}
+	var wanted []string
+	for i, event := range said {
+		var message MessageBody
+		if event.Kind == EventMessage && bytes.Contains(event.Body, []byte(`"pictures":`)) && json.Unmarshal(event.Body, &message) == nil {
+			pictured[i] = message
+			for _, picture := range message.Pictures {
+				wanted = append(wanted, picture.Blob)
+			}
+		}
+	}
+	blobs, err := s.blobsNamed(id, wanted)
+	for i, message := range pictured {
+		for p, picture := range message.Pictures {
+			if held, found := blobs[picture.Blob]; found && err == nil {
+				err = json.Unmarshal(held, &message.Pictures[p].Data)
+			}
+		}
+		said[i].Body = marshalled(message)
+	}
+	return err
+}
+
+func (s *Store) Carried(id string, change Event) ([]Event, error) {
+	var body ListChangeBody
+	if err := json.Unmarshal(change.Body, &body); err != nil {
+		return nil, fmt.Errorf("the list change %s does not parse: %w", change.ID, err)
+	}
+	if body.Kind == ListChangeFork {
+		return nil, nil
+	}
+	blobs, err := s.blobsNamed(id, body.After)
+	if err != nil {
+		return nil, err
+	}
+	var carried []Event
+	for _, hash := range body.After {
+		var message MessageBody
+		if err := json.Unmarshal(blobs[hash], &message); err != nil {
+			return nil, fmt.Errorf("the message %s that the %s %s kept is not held: %w", hash, body.Kind, change.ID, err)
+		}
+		if message.Role != RoleSystem {
+			carried = append(carried, Event{ID: hash, Author: AuthorOrchestrator, Attempt: FirstAttempt, Kind: EventMessage, Body: blobs[hash]})
+		}
+	}
+	return carried, s.WithPictureData(id, carried)
 }
 
 func partOf(events []Event, part string) []Event {

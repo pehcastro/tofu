@@ -551,6 +551,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		before := slices.Clone(messages)
 		compaction, shrink, err := trimRead(artifacts, budget, step, messages, from)
 		if compaction != nil {
+			flush()
 			recorded.listChange("compaction", when+": the conversation crossed its budget, so tofu "+shrink.String(), before, messages)
 			compacted()
 		}
@@ -774,7 +775,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 		recorded.fork(ended, row, fork, row.At)
 		row.Session = recorded.session()
-		recorded.listChange("fork", string(fork.Kind)+" fork "+strconv.Itoa(forks)+" "+when+" from "+ended.Session+", "+
+		recorded.listChange(session.ListChangeFork, string(fork.Kind)+" fork "+strconv.Itoa(forks)+" "+when+" from "+ended.Session+", "+
 			strconv.Itoa(fork.TokensBefore)+" to "+strconv.Itoa(fork.TokensAfter)+" tokens, "+strconv.Itoa(fork.TailMessages)+" tail messages", beforeFork, begun)
 		messages, sent, answering = begun, 0, ""
 		if fork.Kind == ForkCompact {
@@ -895,7 +896,11 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			}
 			trimmedBefore = cmp.Or(unforked, trimmedBefore)
 		}
-		keepNewestPictures(messages)
+		if dropped := keepNewestPictures(messages); dropped > 0 {
+			flush()
+			recorded.listChange("pictures dropped", "step "+strconv.Itoa(step)+" sends the newest "+strconv.Itoa(konst.ImageResultsKept)+
+				" pictures, so tofu dropped the "+strconv.Itoa(dropped)+" oldest", nil, messages)
+		}
 		measureSent := func() recall.Occupancy {
 			sent := historyOf(messages)
 			sent.ToolSchemas = string(schemas)
@@ -910,6 +915,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		if overflowed(err) {
 			before := slices.Clone(messages)
 			shrink, shrinkErr := shrinkOverflow(artifacts, messages, asSent.Total(), budget.WindowTokens)
+			flush()
 			recorded.listChange("overflow shrink", "the context window overflowed on step "+strconv.Itoa(step), before, messages)
 			switch {
 			case shrinkErr != nil:

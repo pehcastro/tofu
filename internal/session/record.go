@@ -47,6 +47,8 @@ type NoticeBody struct {
 	From *Origin `json:"from,omitempty"`
 }
 
+const ListChangeFork = "fork"
+
 type ListChangeBody struct {
 	Kind   string   `json:"kind"`
 	Why    string   `json:"why,omitempty"`
@@ -86,11 +88,12 @@ type CallBody struct {
 }
 
 type ResultBody struct {
-	Content     string `json:"content"`
-	ToolOutcome string `json:"tool_outcome,omitempty"`
-	ResultBytes int    `json:"result_bytes"`
-	ExitCode    *int   `json:"exit_code,omitempty"`
-	Error       string `json:"error,omitempty"`
+	Content     string    `json:"content"`
+	ToolOutcome string    `json:"tool_outcome,omitempty"`
+	ResultBytes int       `json:"result_bytes"`
+	Pictures    []Picture `json:"pictures,omitempty"`
+	ExitCode    *int      `json:"exit_code,omitempty"`
+	Error       string    `json:"error,omitempty"`
 }
 
 type SpawnBody struct {
