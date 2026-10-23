@@ -113,24 +113,24 @@ type WindowStatus struct {
 }
 
 type KeyStatus struct {
-	Role            AccountRole   `json:"role"`
-	Provider        string        `json:"provider"`
-	Variable        string        `json:"variable"`
-	Key             string        `json:"key,omitempty"`
-	Label           string        `json:"label,omitempty"`
-	Model           string        `json:"model,omitempty"`
-	ProviderReports string        `json:"provider_reports"`
-	Calls           int           `json:"calls"`
-	LastUsedAt      time.Time     `json:"last_used_at,omitzero"`
-	Periods         []KeyPeriod   `json:"periods,omitempty"`
-	ByModel         []KeyModelUse `json:"by_model,omitempty"`
-	Queries         int           `json:"queries,omitempty"`
-	Limit           *KeyLimit     `json:"limit,omitempty"`
-	LimitUnread     string        `json:"limit_unread,omitempty"`
-	Balance         *KeyBalance   `json:"balance,omitempty"`
-	BalanceUnread   string        `json:"balance_unread,omitempty"`
-	Allowance       *KeyAllowance `json:"allowance,omitempty"`
-	LastError       *KeyFailure   `json:"last_error,omitempty"`
+	Role            AccountRole    `json:"role"`
+	Provider        string         `json:"provider"`
+	Variable        string         `json:"variable"`
+	Key             string         `json:"key,omitempty"`
+	Label           string         `json:"label,omitempty"`
+	Model           string         `json:"model,omitempty"`
+	ProviderReports string         `json:"provider_reports"`
+	Calls           int            `json:"calls"`
+	LastUsedAt      time.Time      `json:"last_used_at,omitzero"`
+	Periods         []KeyPeriod    `json:"periods,omitempty"`
+	ByModel         []KeyModelUse  `json:"by_model,omitempty"`
+	Queries         int            `json:"queries,omitempty"`
+	Limit           *KeyLimit      `json:"limit,omitempty"`
+	LimitUnread     string         `json:"limit_unread,omitempty"`
+	Balance         *KeyBalance    `json:"balance,omitempty"`
+	BalanceUnread   string         `json:"balance_unread,omitempty"`
+	Allowances      []KeyAllowance `json:"allowances,omitempty"`
+	LastError       *KeyFailure    `json:"last_error,omitempty"`
 }
 
 type KeyBalance struct {
@@ -141,12 +141,32 @@ type KeyBalance struct {
 	ReadAt     time.Time `json:"read_at"`
 }
 
+type AllowanceScope string
+
+const (
+	ScopeKey  AllowanceScope = "key"
+	ScopeTeam AllowanceScope = "team"
+)
+
+func (AllowanceScope) enum() []string { return []string{string(ScopeKey), string(ScopeTeam)} }
+
+type AllowanceUnit string
+
+const (
+	UnitCalls  AllowanceUnit = "calls"
+	UnitTokens AllowanceUnit = "tokens"
+)
+
+func (AllowanceUnit) enum() []string { return []string{string(UnitCalls), string(UnitTokens)} }
+
 type KeyAllowance struct {
-	From      string    `json:"from"`
-	Limit     int       `json:"limit"`
-	Remaining int       `json:"remaining"`
-	ResetsAt  time.Time `json:"resets_at,omitzero"`
-	ReadAt    time.Time `json:"read_at"`
+	From      string         `json:"from"`
+	Scope     AllowanceScope `json:"scope"`
+	Unit      AllowanceUnit  `json:"unit"`
+	Limit     int            `json:"limit"`
+	Remaining int            `json:"remaining"`
+	ResetsAt  time.Time      `json:"resets_at,omitzero"`
+	ReadAt    time.Time      `json:"read_at"`
 }
 
 type KeyFailure struct {
@@ -189,10 +209,11 @@ type KeyTokens struct {
 }
 
 type KeySpend struct {
-	Calls      int        `json:"calls"`
-	Tokens     KeyTokens  `json:"tokens"`
-	CostUSD    float64    `json:"cost_usd,omitempty"`
-	CostSource CostSource `json:"cost_source"`
+	Calls       int        `json:"calls"`
+	Tokens      KeyTokens  `json:"tokens"`
+	CostUSD     float64    `json:"cost_usd,omitempty"`
+	CostSource  CostSource `json:"cost_source"`
+	UpstreamUSD float64    `json:"upstream_usd,omitempty"`
 }
 
 type KeyPeriod struct {

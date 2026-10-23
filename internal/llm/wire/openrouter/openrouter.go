@@ -1,9 +1,13 @@
 package openrouter
 
 import (
+	"cmp"
 	"context"
+	"errors"
 	"net/http"
+	"time"
 
+	"tofu/internal/judge/ledger"
 	"tofu/internal/llm"
 	"tofu/internal/transport"
 )
@@ -17,6 +21,7 @@ type Config struct {
 	Endpoint  string
 	Model     string
 	Key       string
+	KeyName   string
 	Transport transport.Config
 }
 
@@ -24,6 +29,7 @@ type Wire struct {
 	endpoint string
 	model    string
 	key      string
+	keyName  string
 	client   *transport.Client
 }
 
@@ -42,7 +48,7 @@ func New(config Config) (*Wire, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Wire{endpoint: endpoint, model: config.Model, key: config.Key, client: client}, nil
+	return &Wire{endpoint: endpoint, model: config.Model, key: config.Key, keyName: config.KeyName, client: client}, nil
 }
 
 func (w *Wire) Name() string { return Name }
@@ -77,6 +83,7 @@ func (w *Wire) send(ctx context.Context, body []byte) (llm.Raw, error) {
 		Body:   body,
 		Header: header,
 	})
+	w.tally(response, err)
 	if err != nil {
 		return llm.Raw{}, err
 	}
@@ -86,4 +93,30 @@ func (w *Wire) send(ctx context.Context, body []byte) (llm.Raw, error) {
 		Attempts:  response.Attempts,
 		Latency:   response.Elapsed,
 	}, nil
+}
+
+func (w *Wire) tally(response transport.Response, err error) {
+	if w.keyName == "" {
+		return
+	}
+	use := ledger.KeyUse{Key: w.keyName, Provider: Name, Model: w.model, Charge: ledger.ChargeOf(0, 0)}
+	var refused *transport.Error
+	switch {
+	case errors.As(err, &refused) && refused.Status != 0:
+		use.Failed = &ledger.KeyError{Status: refused.Status, What: cmp.Or(refused.Said, refused.Code, refused.Kind.String())}
+	case err != nil:
+		return
+	default:
+		accounted, err := llm.Accounted(response.Body)
+		if err != nil {
+			return
+		}
+		use.Model = cmp.Or(accounted.Build, w.model)
+		use.Usage = ledger.Usage{InputTokens: accounted.Usage.InputTokens, OutputTokens: accounted.Usage.OutputTokens,
+			CacheReadInputTokens: accounted.CacheReadTokens, CacheWriteInputTokens: accounted.CacheWriteTokens, ReasoningOutputTokens: accounted.Usage.ReasoningTokens}
+		use.Charge = ledger.ChargeOf(accounted.Usage.Cost, 0)
+		use.UpstreamUSD = accounted.UpstreamCostUSD
+		use.Allowances = ledger.HeaderAllowance(response.Header, time.Now())
+	}
+	_ = ledger.Tally(use)
 }

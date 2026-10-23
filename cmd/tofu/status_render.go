@@ -154,8 +154,8 @@ func keyLines(page cli.Page, key keyStatus, now time.Time) []cli.Fact {
 		facts = append(facts, cli.Fact{Label: "balance", Text: usdText(balance.BalanceUSD) + " (" + usdText(balance.CreditsUSD) + " bought, " + usdText(balance.UsedUSD) + " used)"})
 	}
 	facts = append(facts, cli.Fact{Label: "balance", Text: key.BalanceUnread})
-	if allowance := key.Allowance; allowance != nil {
-		text := strconv.Itoa(allowance.Remaining) + " of " + strconv.Itoa(allowance.Limit) + " calls left"
+	for _, allowance := range key.Allowances {
+		text := strconv.Itoa(allowance.Remaining) + " of " + strconv.Itoa(allowance.Limit) + " " + string(allowance.Unit) + " left, per " + string(allowance.Scope)
 		if !allowance.ResetsAt.IsZero() {
 			text += " · resets in " + widget.Until(allowance.ResetsAt.Sub(now))
 		}
@@ -181,12 +181,16 @@ func spendText(spend host.KeySpend) string {
 	}
 	switch spend.CostSource {
 	case host.CostProvider:
-		return text + " · " + usdText(spend.CostUSD) + " reported by the provider"
+		text += " · " + usdText(spend.CostUSD) + " reported by the provider"
 	case host.CostList:
-		return text + " · " + usdText(spend.CostUSD) + " at list price, estimated"
+		text += " · " + usdText(spend.CostUSD) + " at list price, estimated"
 	case host.CostNone:
+		text += " · no price"
 	}
-	return text + " · no price"
+	if spend.UpstreamUSD > 0 {
+		text += " · " + usdText(spend.UpstreamUSD) + " charged upstream"
+	}
+	return text
 }
 
 func usdText(usd float64) string {

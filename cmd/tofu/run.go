@@ -1136,6 +1136,7 @@ func keyModel(model string) (turn.Model, error) {
 		Endpoint:  os.Getenv(openRouterEndpointVariable),
 		Model:     model,
 		Key:       key,
+		KeyName:   facts.variable,
 		Transport: turnTransportConfig(),
 	})
 	if err != nil {
@@ -1566,10 +1567,27 @@ func askedAsOf(row turn.Row, spawned []turn.Spawned, slug, windows string) (stri
 	return slug, windows
 }
 
+func keySpend(row turn.Row, askedAs string) string {
+	reported := fmt.Sprintf("spend api key $%.6f", row.TotalCostUSD)
+	if row.TotalCostUSD > 0 {
+		return reported
+	}
+	registry, _ := modelRegistry()
+	price, priced := registry.Prices[askedAs]
+	if !priced {
+		return reported
+	}
+	var estimate float64
+	for _, step := range row.Steps {
+		estimate += listUSD(price, step.PromptTokens, step.CacheReadTokens, step.CompletionTokens)
+	}
+	return fmt.Sprintf("spend api key estimated $%.6f at list price", estimate)
+}
+
 func printRunRow(out io.Writer, row turn.Row, askedAs, windows string) {
 	spend := "spend subscription windows " + windows + ", no money"
 	if row.Spend != turn.SpendSubscription {
-		spend = fmt.Sprintf("spend api key $%.6f", row.TotalCostUSD)
+		spend = keySpend(row, askedAs)
 	}
 	_, _ = fmt.Fprintf(out, "turn %s outcome %s model %s asked_as %s %s wall_clock_ms %d\n",
 		row.ID, row.Outcome, row.Model, askedAs, spend, row.WallClockMS)

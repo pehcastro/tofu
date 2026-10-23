@@ -390,7 +390,6 @@ func (r Request) Encode(model string) ([]byte, error) {
 		Messages:   messages,
 		Tools:      tools,
 		ToolChoice: r.ToolChoice.OpenAIValue(),
-		Usage:      wireUsageOption{Include: true},
 	})
 	if err != nil {
 		return nil, transport.Fail("llm.Encode", transport.KindBadRequest, err, "encoding the request")
@@ -509,14 +508,9 @@ type wireTool struct {
 	Function wireFunction `json:"function"`
 }
 
-type wireUsageOption struct {
-	Include bool `json:"include"`
-}
-
 type wireRequest struct {
-	Model      string          `json:"model"`
-	Messages   []wireMessage   `json:"messages"`
-	Tools      []wireTool      `json:"tools,omitempty"`
-	ToolChoice string          `json:"tool_choice,omitempty"`
-	Usage      wireUsageOption `json:"usage"`
+	Model      string        `json:"model"`
+	Messages   []wireMessage `json:"messages"`
+	Tools      []wireTool    `json:"tools,omitempty"`
+	ToolChoice string        `json:"tool_choice,omitempty"`
 }

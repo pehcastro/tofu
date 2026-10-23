@@ -1,7 +1,9 @@
 package main
 
 import (
+	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -14,6 +16,7 @@ import (
 	"tofu/interface/tui/frame"
 	"tofu/internal/host"
 	"tofu/internal/judge/jev"
+	"tofu/internal/judge/ledger"
 	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
@@ -319,13 +322,44 @@ func metaModel(selected models.Model, effort llm.Effort) (turn.Model, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: run %s", err, loginHint(metaName))
 	}
+	registry, _ := modelRegistry()
+	price := registry.Prices[selected.Slug()]
 	wire, err := codex.New(codex.Config{
 		BaseURL:   models.MetaBaseURL() + codex.KeyPath,
 		Model:     selected.ID,
 		Token:     func(context.Context, string) (string, error) { return key, nil },
 		Transport: turnTransportConfig(),
+		OnCall: func(result codex.Result, header http.Header, failed error) {
+			tallyMetaCall(selected.ID, price, result, header, failed)
+		},
 	})
 	return codexTurn{wire: wire, effort: effort, verbosity: selected.Verbosity, reasoningContext: selected.ReasoningContext}, err
+}
+
+func listUSD(price models.Price, input, cached, output int) float64 {
+	rates := price.Rates
+	for _, tier := range price.Tiers {
+		if input > tier.AboveTokens {
+			rates = tier.Rates
+		}
+	}
+	return (float64(input-cached)*rates.Input + float64(cached)*rates.CacheRead + float64(output)*rates.Output) / tokensPerMillion
+}
+
+func tallyMetaCall(model string, price models.Price, result codex.Result, header http.Header, failed error) {
+	usage := result.Usage
+	use := ledger.KeyUse{Key: sys.MetaMuseKeyName, Provider: metaName, Model: cmp.Or(result.Model, model),
+		Usage:      ledger.Usage{InputTokens: usage.Input, OutputTokens: usage.Output, CacheReadInputTokens: usage.CacheRead, ReasoningOutputTokens: usage.Reasoning},
+		Charge:     ledger.ChargeOf(0, listUSD(price, usage.Input, usage.CacheRead, usage.Output)),
+		Allowances: ledger.PerUnitAllowance(header, ledger.ScopeTeam)}
+	var refused *transport.Error
+	switch {
+	case errors.As(failed, &refused):
+		use.Failed = &ledger.KeyError{Status: refused.Status, What: cmp.Or(refused.Said, refused.Code, refused.Kind.String())}
+	case failed != nil:
+		use.Failed = &ledger.KeyError{What: failed.Error()}
+	}
+	_ = ledger.Tally(use)
 }
 
 func openAccounts(opts runOpts, selected models.Model) (*accounts, turn.Spend, error) {

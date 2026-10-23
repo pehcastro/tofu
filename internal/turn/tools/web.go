@@ -139,7 +139,7 @@ func (t webSearch) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 	}
 	results, header, err := t.client.Search(ctx, t.config, args.Query, args.Count)
 	if provider := t.config.Provider; provider.KeyVariable != "" && header != nil {
-		use := ledger.KeyUse{Key: provider.KeyVariable, Provider: provider.Name, Queries: 1, Charge: ledger.ChargeOf(0, 0), Allowance: ledger.HeaderAllowance(header, time.Now())}
+		use := ledger.KeyUse{Key: provider.KeyVariable, Provider: provider.Name, Queries: 1, Charge: ledger.ChargeOf(0, 0), Allowances: ledger.HeaderAllowance(header, time.Now())}
 		var refused web.StatusError
 		switch {
 		case errors.As(err, &refused):

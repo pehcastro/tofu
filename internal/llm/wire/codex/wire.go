@@ -30,6 +30,7 @@ type Config struct {
 	SessionID      string
 	ClientVersion  string
 	OnHeaders      func(http.Header)
+	OnCall         func(Result, http.Header, error)
 }
 
 type Wire struct {
@@ -56,6 +57,9 @@ func New(config Config) (*Wire, error) {
 	}
 	if config.StreamIdle <= 0 {
 		config.StreamIdle = konst.StreamIdleMillis * time.Millisecond
+	}
+	if config.OnCall == nil {
+		config.OnCall = func(Result, http.Header, error) {}
 	}
 	threadID, err := randomUUID()
 	if err != nil {
@@ -255,7 +259,9 @@ func (w *Wire) post(ctx context.Context, dump Dump, onThinking func(string)) (Re
 
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		detail, _ := io.ReadAll(io.LimitReader(response.Body, konst.TransportErrorDetailBytes))
-		return Result{}, Refusal(response.StatusCode, response.Header, detail)
+		refused := Refusal(response.StatusCode, response.Header, detail)
+		w.config.OnCall(Result{}, response.Header, refused)
+		return Result{}, refused
 	}
 
 	body := llm.WatchIdle(response.Body, w.config.StreamIdle)
@@ -264,5 +270,6 @@ func (w *Wire) post(ctx context.Context, dump Dump, onThinking func(string)) (Re
 	if turnState := response.Header.Get(HeaderTurnState); turnState != "" {
 		result.TurnState = turnState
 	}
+	w.config.OnCall(result, response.Header, err)
 	return result, err
 }

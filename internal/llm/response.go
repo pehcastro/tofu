@@ -67,6 +67,13 @@ func (p PromptAccounting) FreshTokens(promptTokens, cacheReadTokens int) int {
 	return promptTokens
 }
 
+func (p PromptAccounting) ContextTokens(promptTokens, cacheReadTokens, cacheWriteTokens int) int {
+	if p == PromptIncludesCacheReads {
+		return promptTokens
+	}
+	return promptTokens + cacheReadTokens + cacheWriteTokens
+}
+
 func (p PromptAccounting) BilledTokens(promptTokens, cacheReadTokens int) int {
 	if p == PromptIncludesCacheReads {
 		return promptTokens
@@ -75,26 +82,35 @@ func (p PromptAccounting) BilledTokens(promptTokens, cacheReadTokens int) int {
 }
 
 type Response struct {
-	Build           string
-	RequestID       string
-	Outcome         Outcome
-	Stop            string
-	Content         string
-	ToolCalls       []ToolCall
-	Refusal         string
-	Usage           Usage
-	CacheReadTokens int
-	Warnings        []string
-	Raw             []byte
+	Build            string
+	RequestID        string
+	Outcome          Outcome
+	Stop             string
+	Content          string
+	ToolCalls        []ToolCall
+	Refusal          string
+	Usage            Usage
+	CacheReadTokens  int
+	CacheWriteTokens int
+	UpstreamCostUSD  float64
+	Warnings         []string
+	Raw              []byte
 }
 
 type wireUsage struct {
 	PromptTokens     int     `json:"prompt_tokens"`
 	CompletionTokens int     `json:"completion_tokens"`
 	Cost             float64 `json:"cost"`
-	PromptDetails    struct {
-		CachedTokens int `json:"cached_tokens"`
+	CostDetails      struct {
+		UpstreamInferenceCost float64 `json:"upstream_inference_cost"`
+	} `json:"cost_details"`
+	PromptDetails struct {
+		CachedTokens     int `json:"cached_tokens"`
+		CacheWriteTokens int `json:"cache_write_tokens"`
 	} `json:"prompt_tokens_details"`
+	CompletionDetails struct {
+		ReasoningTokens int `json:"reasoning_tokens"`
+	} `json:"completion_tokens_details"`
 }
 
 type wireResponseMessage struct {
@@ -151,22 +167,37 @@ func Decode(raw []byte) (Response, error) {
 			"the response has no content, no tool calls and no refusal")
 	}
 
-	response := Response{
-		Build:           wire.Model,
-		RequestID:       wire.ID,
-		Outcome:         outcome,
-		Stop:            choice.FinishReason,
-		Content:         choice.Message.Content,
-		ToolCalls:       calls,
-		Refusal:         choice.Message.Refusal,
-		Usage:           Usage{InputTokens: wire.Usage.PromptTokens, OutputTokens: wire.Usage.CompletionTokens, Cost: wire.Usage.Cost},
-		CacheReadTokens: wire.Usage.PromptDetails.CachedTokens,
-		Raw:             raw,
-	}
+	response := wire.accounted()
+	response.Outcome = outcome
+	response.Stop = choice.FinishReason
+	response.Content = choice.Message.Content
+	response.ToolCalls = calls
+	response.Refusal = choice.Message.Refusal
+	response.Raw = raw
 	if !handled {
 		response.Warnings = []string{"unhandled finish reason: " + strconv.Quote(choice.FinishReason)}
 	}
 	return response, nil
+}
+
+func Accounted(raw []byte) (Response, error) {
+	var wire wireResponse
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		return Response{}, transport.Fail("llm.Accounted", transport.KindInvalidAnswer, err, "the response is not the expected object")
+	}
+	return wire.accounted(), nil
+}
+
+func (w wireResponse) accounted() Response {
+	return Response{
+		Build:     w.Model,
+		RequestID: w.ID,
+		Usage: Usage{InputTokens: w.Usage.PromptTokens, OutputTokens: w.Usage.CompletionTokens,
+			ReasoningTokens: w.Usage.CompletionDetails.ReasoningTokens, Cost: w.Usage.Cost},
+		CacheReadTokens:  w.Usage.PromptDetails.CachedTokens,
+		CacheWriteTokens: w.Usage.PromptDetails.CacheWriteTokens,
+		UpstreamCostUSD:  w.Usage.CostDetails.UpstreamInferenceCost,
+	}
 }
 
 func decodeToolCalls(wire []wireToolCall) ([]ToolCall, error) {

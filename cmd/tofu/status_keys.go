@@ -57,8 +57,16 @@ func withSpend(ctx context.Context, keys []keyStatus, now time.Time) (func(), er
 }
 
 func spendOn(key *keyStatus, use ledger.KeyUse, now time.Time) {
-	if use.Allowance != nil && (key.Allowance == nil || !use.At.Before(key.Allowance.ReadAt)) {
-		key.Allowance = &host.KeyAllowance{From: rateLimitHeaders, Limit: use.Allowance.Limit, Remaining: use.Allowance.Remaining, ResetsAt: use.Allowance.ResetsAt, ReadAt: use.At}
+	for _, read := range use.Allowances {
+		allowance := host.KeyAllowance{From: rateLimitHeaders, Scope: host.AllowanceScope(read.Scope), Unit: host.AllowanceUnit(read.Unit),
+			Limit: read.Limit, Remaining: read.Remaining, ResetsAt: read.ResetsAt, ReadAt: use.At}
+		at := slices.IndexFunc(key.Allowances, func(held host.KeyAllowance) bool { return held.Scope == allowance.Scope && held.Unit == allowance.Unit })
+		switch {
+		case at < 0:
+			key.Allowances = append(key.Allowances, allowance)
+		case !use.At.Before(key.Allowances[at].ReadAt):
+			key.Allowances[at] = allowance
+		}
 	}
 	if use.Failed != nil {
 		if key.LastError == nil || use.At.After(key.LastError.At) {
@@ -100,6 +108,7 @@ func addSpend(spend host.KeySpend, use ledger.KeyUse) host.KeySpend {
 	spend.Tokens.CacheReadInputTokens += use.Usage.CacheReadInputTokens
 	spend.Tokens.CacheWriteInputTokens += use.Usage.CacheWriteInputTokens
 	spend.Tokens.ReasoningOutputTokens += use.Usage.ReasoningOutputTokens
+	spend.UpstreamUSD += use.UpstreamUSD
 	spend.CostSource = cmp.Or(spend.CostSource, host.CostNone)
 	if use.Charge.USD > 0 {
 		spend.CostUSD += use.Charge.USD

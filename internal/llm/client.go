@@ -99,6 +99,7 @@ func (c *Client) Ask(ctx context.Context, request Request) (Decision, error) {
 		Usage:            response.Usage,
 		PromptAccounting: PromptAccountingFor(c.wire.Name()),
 		CacheReadTokens:  response.CacheReadTokens,
+		CacheWriteTokens: response.CacheWriteTokens,
 		Warnings:         response.Warnings,
 	}, nil
 }

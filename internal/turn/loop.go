@@ -963,7 +963,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 		row.Model = decision.Build
 		row.TotalCostUSD += decision.Usage.Cost
-		reported := decision.PromptAccounting.BilledTokens(decision.Usage.InputTokens, decision.CacheReadTokens) + decision.CacheWriteTokens
+		reported := decision.PromptAccounting.ContextTokens(decision.Usage.InputTokens, decision.CacheReadTokens, decision.CacheWriteTokens)
 		budget = budget.Reported(reported, asSent)
 
 		stepRow := stepFrom(requestID, step, timing, decision)
