@@ -62,6 +62,40 @@ terminal shows what you type, tofu warns before reading.
   line in an `.env` file in the working directory. The credential store is
   read first.
 
+## What a key has spent
+
+`tofu login --status` shows, under each stored key, every call tofu made
+on it, so you see what a key costs without opening the provider's site.
+Every call on a key is one line in `~/.tofu/keyuse/<date>.jsonl`, written
+by every tofu process, with the variable the key came from and never the
+key itself.
+
+| Row | What it says |
+|---|---|
+| `calls` | how many calls and when the key was last used |
+| `today`, `7d`, `30d`, `all` | calls, input, output, cache and reasoning tokens, and the cost; periods with the same figures fold into one row, such as `today to all` |
+| `on <model>` | the same per model, when more than one answered |
+| `answered by` | the model ids the provider said it ran |
+| `key limit` | the key's spend limit, what is left, and what the provider says it spent today, this week, this month and in all |
+| `balance` | the account's credit, bought and used |
+| `allowance` | a rate limit read from the last call, in calls or tokens, per key or per team, and when it resets |
+| `last error` | the newest refusal, such as `402 account out of credit` |
+| `reports` | what this provider reports, and what it does not |
+
+Every cost says where it came from: `reported by the provider`,
+`at list price, estimated` when the provider gives no cost, or `no price`.
+On OpenRouter a call also shows what the model's own provider charged, as
+`charged upstream`. The key limit and the balance are read from
+OpenRouter's `/api/v1/key` and `/api/v1/credits` each time you ask; a key
+that may not read the balance says it needs a management key.
+
+| Provider | Reports | Does not report |
+|---|---|---|
+| Meta | tokens per call, team rate limits | spend or balance, so cost is estimated from list price |
+| OpenRouter | spend and limits for the key, a cost per call, the account balance | per-model history without a management key |
+| TypeSafe | tokens per call | spend, balance or limits, so cost is estimated from list price |
+| Brave | monthly calls remaining and the reset | spend, so cost is estimated from 5 USD per 1000 calls |
+
 ## Commands
 
 ```
@@ -74,12 +108,22 @@ tofu models bind classifier typesafe/jev-latest
 tofu run --dir . --model meta/muse-spark-1.3 "<task>"
 ```
 
-`tofu login --status` lists each key under its role:
+`tofu login --status` lists each key under its role, here with made-up
+figures:
 
 ```
 language model
-  ○ Meta        not set  → tofu login llm meta
-  ○ OpenRouter  not set  → tofu login llm openrouter
+  ○ Meta        not set   → tofu login llm meta
+  ✓ OpenRouter  ····a1b2  serves the openrouter models on your own key
+      calls         12 calls · last used 3m ago
+      today to all  12 calls · 48210 in, 1904 out tokens · 0.0412 USD
+        reported by the provider
+      answered by   deepseek/deepseek-v3
+      key limit     8.50 USD of 10.00 USD left · spent today 0.04 USD,
+        week 0.90 USD, month 1.50 USD, all 1.50 USD
+      balance       4.20 USD (20.00 USD bought, 15.80 USD used)
+      reports       OpenRouter reports spend and limits for the key and a
+        cost per call; per-model history needs a management key
 
 classifier · jev, required
   ○ TypeSafe    not set  → tofu login classifier typesafe

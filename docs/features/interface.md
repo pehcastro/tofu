@@ -2,7 +2,7 @@
 title: The interface
 description: "The tofu app in the terminal: four tabs, a command palette, and a composer that keeps working while the model does."
 order: 10
-updated: 2026-10-09
+updated: 2026-10-22
 ---
 
 Run `tofu` in a project to open the app. Four tabs hold the work:
@@ -67,7 +67,15 @@ when something changed, and the welcome animations share one clock.
   On Linux it reads through `wl-paste` on Wayland, or `xclip` or `xsel` on
   X11, so install `wl-clipboard` or `xclip` first. The image reaches the
   model with the message it is in, also when that message waits for the
-  next step while sub-agents run, and after a fork.
+  next step while sub-agents run, and after a fork. Before it is sent,
+  tofu fits every image to at most 1568 pixels on its long edge, about
+  1.15 million pixels and 5 MB, whether you pasted it, a client sent it
+  or the model read it from a file; a webp over 5 MB is refused with a
+  note to convert it.
+- **Edit around a chip**: a pasted image, a long pasted text and a paste
+  still loading each sit in the composer as one chip, such as
+  `[Image #1]`. `Backspace` or `Delete` on any part of it removes the
+  whole chip, and the arrow keys step over it in one move.
 - **Drop a screenshot on the terminal**: a dragged or pasted path to a png,
   jpg, gif or webp file attaches the image. Any other path stays text.
 - **Answer the gate** when a call waits for you: `1` allows once, `2`

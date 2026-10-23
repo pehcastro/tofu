@@ -81,6 +81,11 @@ tofu context
 
 prints how full the session is, band by band, against the target and the
 ceiling. With no session yet, it prints the ceiling the next turn takes.
+Below the bands it names what fills the identity band, each with its
+tokens, such as `tofu's prompt`, `rules`, `skills`, `sub-agent`, `instruction
+files` and `tool schemas`, and `memory` in the working set. `--json`
+and `query.context` carry the same as `items`. `tofu session drain`
+says what those tokens cost over the whole session.
 
 ```
 tofu session trace <name>

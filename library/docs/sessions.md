@@ -98,7 +98,7 @@ finds calls across every generation. `--command`, `--file`, `--text`, `--agent`,
 
 prints one session: its id, task, counts, its `history` (`fresh, holds 40 messages`, or `12 messages from
 <handle>` for one carried over, `nothing to resume` when empty), whether it ended, its model and cost, why
-it ended in an error, and the command that continues it. `tofu session reads <name|id>` lists every file it read.
+it ended in an error, and the command that continues it. `tofu session reads <name|id>` lists every file it read, and `tofu session drain <name|id>` where its tokens went, in `tofu docs drain`.
 
     tofu session trace <name|id>
 

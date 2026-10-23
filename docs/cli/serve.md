@@ -71,7 +71,7 @@ tofu from a newer one. Beside the session, turn, settings and login methods, the
 | `takeover` | `shell.takeover`, `shell.input`, `shell.resize`, `shell.release` | a person borrows a kept shell: every bash command runs in a terminal once the client declares `takeover`, the take-over answers the raw output so far with its colours, keystrokes and sizes go in as base64 bytes, and the release hands it back to the agent with an optional note. Neither kills the process. A refusal is `-32000` with `data.reason`, one of `not_declared`, `unknown_shell`, `not_running`, `not_kept`, `not_in_terminal`, `other_process` and `not_held` |
 | `boardy` | `boardy.boards`, `boardy.list`, `boardy.rows` (the list's fields only, 349 KB instead of 11 MB on 1,500 tickets, each row with its `type`, `points`, `reason`, and the `model`, `tools` and `reads` of the sub-agent that worked it), `boardy.get`, `boardy.events`, `boardy.report`, `boardy.create`, `boardy.move`, `boardy.assign`, `boardy.log`, `boardy.hand`, `boardy.triage` | the project's ticket boards, a view of one, a ticket with its events and actuals, a report, and every ticket change the person may make; see [Boardy views](/docs/features/boardy-views) |
 | `scratch` | `scratch.list`, `scratch.clean` | the project's scratchpad folders with their size and when each was last touched, and a cleanup with `session`, `cache` and `dryRun` |
-| `queries` | `query.context`, `query.rules`, `query.usage`, `query.settings`, `query.ledger` and the other `query.*` | the context items, rule text and how often each rule fired, quota with each reading's age, each setting with its label, kind, choices and range, the decisions of one session |
+| `queries` | `query.context`, `query.drain`, `query.rules`, `query.usage`, `query.settings`, `query.accounts`, `query.ledger` and the other `query.*` | the context items, named down to the rules, memory, skills and tool schemas; where a session's tokens went, as `tofu session drain --json` prints it; rule text and how often each rule fired, quota with each reading's age, each setting with its label, kind, choices and range, every credential with what each API key has spent, its limits and balance; the decisions of one session |
 
 `session.state` lists the approvals waiting, the standing answers, the open questions, the
 sub-agents, the kept shells and the cron jobs, which is what a client reads after it falls behind.
@@ -102,6 +102,9 @@ started it.
 - `turn.steerQueued` when another window following the session steers it: the message waits on the
   holder's queue, `item` its id and `text` what was typed, until `turn.steered` says the lead read it.
 - `session.turns.updated`: the digest of a turn just ended, the row `session.turns` answers.
+- `usage.updated` after each model call, one per turn and agent, with the running `model`,
+  `tokensIn`, `tokensOut`, `cacheRead`, `cacheWrite5m`, `cacheWrite1h`, `costUsd` and `decisions`, so
+  a client shows what a turn costs as it runs.
 - `quota.updated` when a session opens, after each turn, when a turn moves to another account, every
   five minutes, and as soon as a rate-limited account may be asked again. Each window says when it
   was read, whether it is a last good reading kept through a failed poll (`stale`), and the `source`

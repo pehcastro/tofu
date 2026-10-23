@@ -39,7 +39,7 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
 - `session.compact`: answers `results`, `tokensBefore`, `tokensAfter`, `into`, and errs on a session opened
   beside the first. `session.history`: takes `session`, `limit` and `before`; answers `lines`, each
   `{method, params}` as `session.open` sends it, from `first` of `total`
-- `session.info` and `session.trace` answer what `tofu session info` and `trace` print. `session.find` takes
+- `session.info` and `session.trace` answer what `tofu session info` and `trace` print, `session.info` with `carried_from` `{session, handle, messages}` when it began with messages carried over. `session.find` takes
   `session` and any of `tool`, `command`, `file`, `text`, `agent`, `since`, `until`; answers `handle`, `query`, `hits`
 - `session.turns` takes `session`; answers `snapshots`, how many turns undo holds, and `turns`, each
   `turn`, `at`, `ended_at`, `worked_for_ms`, `origin`, `asked`, `summary` (the lead's last reply),
@@ -72,7 +72,7 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
   `account`, `name`, `read_at`, `source`, `stale` and `retry_at`; the answer's `read_at` and `age_ms` are its
   oldest reading's), `doctor`, `accounts`, `cron`, `docs` (takes `topic`), `context` (takes `session`, else the
   open one, which before its first turn answers `unmeasured`; `items`, each `{band, kind, name, tokens,
-  fate, step}`) and `ledger` (takes `id`, or `last`, `point` and `session`, which keeps that session's rows before
+  fate, step}`), `drain` (takes `session`; answers what `tofu session drain --json` prints) and `ledger` (takes `id`, or `last`, `point` and `session`, which keeps that session's rows before
   `last` counts; `rows` with `precedents` and `subject`, `{tool, command, path, url}`)
 - boards (capability `boards`): `query.session` takes `session`; answers `info` and `generations`, the fork
   tree, each with `forked_into`, `fork_kind`, `tokens_before` and `tokens_after`. `query.usage.history` takes

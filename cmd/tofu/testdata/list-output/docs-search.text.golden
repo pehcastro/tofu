@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                           69 matches
+Docs · "change the colours"                                           71 matches
 
   change the colours
     → tofu settings set theme Nord
@@ -10,6 +10,8 @@ Docs · "change the colours"                                           69 matche
     → /cron edit c1 --schedule "every 30m" --reason "the build is stable"
   Sub-agents
     → tofu docs agents
+  What an API key has spent
+    → tofu docs api-keys
   When the lead asks you
     → tofu docs asking
   Boardy views, reports, epics and sprints
@@ -26,6 +28,8 @@ Docs · "change the colours"                                           69 matche
     → tofu docs cron
   The doctor
     → tofu docs doctor
+  Where a session's tokens went
+    → tofu docs drain
   Driving the app from a script
     → tofu docs drive
   The gate

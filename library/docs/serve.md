@@ -41,7 +41,7 @@ context. `tofu docs serve-methods` lists every request; this page is what serve 
   `agent` and `instance`, live and replayed; `tool.started` the bash `title` the model gave, and
   `tool.completed` a `summary`: `exit`, `durationMs`, `hits` for a search, `added` and `removed` lines
 - `agent.ended`: `endedAt`, `durationMs`, the `turn` that spawned it;
-  `turn.steered`: the lead read a message sent mid-turn, until then queued
+  `turn.steered`: the lead read a message sent mid-turn, until then queued; `usage.updated`, per turn and agent after each call, the running `tokensIn`, `tokensOut`, `cacheRead`, `cacheWrite5m`, `cacheWrite1h`, `costUsd`, `decisions`
 - `quota.updated`: on open, after each turn, on an account move, every five minutes, and once a `retry_at`
   passes; each window's `percent`, `source`, `account_id` (as `query.accounts`), `read_at` and `stale`, true
   for a last good reading kept through a failed poll; `windows: []`, none answered

@@ -266,6 +266,14 @@
   do: tofu context
   check: tofu context --json
   topic: sessions
+- ask: where did a session's tokens go
+  do: tofu session drain <name|id>
+  check: tofu session drain <name|id> --json
+  topic: drain
+- ask: how much has my API key spent, and what limit is left
+  do: tofu login --status
+  check: tofu login --status --json
+  topic: api-keys
 - ask: free room in the context before the next turn
   do: /compact in the app, between turns
   check: tofu session info <name|id>

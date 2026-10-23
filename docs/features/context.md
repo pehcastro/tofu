@@ -2,7 +2,7 @@
 title: Context
 description: How tofu keeps a conversation small and cheap to resend, from the cached prompt prefix to forks that carry the conversation and point back at every call.
 order: 5
-updated: 2026-10-12
+updated: 2026-10-22
 ---
 
 Everything the model sees on a step is resent on the next one. tofu manages
@@ -107,7 +107,10 @@ its first request, so the whole history is never sent first.
 ## Watching and changing it
 
 - **See how full a session is**: `tofu context`, or the context meter in the
-  status bar.
+  status bar. It names the rules, memory, skills and tool schemas in the
+  identity band with their tokens.
+- **See what a session's tokens cost**: `tofu session drain`, see
+  [Where tokens went](/docs/features/drain).
 - **See the cache at work**: `tofu session trace <name> --json` gives each
   request's `cache_read_tokens` and `cache_write_tokens`.
 - **Change the ceiling for one run**: set `TOFU_CONTEXT_CEILING`, for example
@@ -141,16 +144,24 @@ tofu context
 ```text
 Context · brisk-amber-heron · 5 steps                                   ✓ step 5
 
-  task         explain this repository to me
-  identity     ▓░░░░░░░░░░░   8%  1920 / 21600
-  facts        ░░░░░░░░░░░░   0%  0 / 5400
-  working set  ░░░░░░░░░░░░   0%  0 / 32400
-  recent       ▓▓▓▓░░░░░░░░  35%  19014 / 54000
-  total        ▓▓░░░░░░░░░░  18%  20934 / 113400
-  ceiling      ░░░░░░░░░░░░   4%  20934 / 450000
-  caps         recorded by the step
-  bytes        2310 per thousand tokens
+  task           explain this repository to me
+  identity       ▓░░░░░░░░░░░   8%  1920 / 21600
+  facts          ░░░░░░░░░░░░   0%  0 / 5400
+  working set    ░░░░░░░░░░░░   0%  0 / 32400
+  recent         ▓▓▓▓░░░░░░░░  35%  19014 / 54000
+  total          ▓▓░░░░░░░░░░  18%  20934 / 113400
+  ceiling        ░░░░░░░░░░░░   4%  20934 / 450000
+  caps           recorded by the step
+  tofu's prompt  1120 tokens of identity
+  rules          640 tokens of identity
+  tool schemas   160 tokens of identity
+  bytes          2310 per thousand tokens
 ```
+
+Below the bands, `tofu context` names what fills the identity band, each
+with its tokens, such as `tofu's prompt`, `rules`, `skills`, `sub-agent`,
+`instruction files` and `tool schemas`, and `memory` in the working set.
+`--json` and `query.context` carry the same as `items`.
 
 ```sh
 tofu session trace brisk-amber-heron --json

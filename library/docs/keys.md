@@ -36,6 +36,15 @@ are in, without a search.
 `shift+enter`, `alt+enter` and `ctrl+j` add a line. The composer grows to
 8 rows and then scrolls, keeping every line you typed.
 
+A pasted image, a long pasted text and a paste still loading each sit in
+the composer as one chip, such as `[Image #1]`. `backspace` or `delete`
+on any part of a chip removes the whole chip, and the arrow keys step over
+it in one move, so a chip is never left half typed. Before an image is
+sent, tofu fits it to at most 1568 pixels on its long edge, about 1.15
+million pixels and 5 MB, whether you pasted it, a client sent it or the
+model read it from a file. A webp over 5 MB cannot be shrunk and is
+refused with a note to convert it to png or jpeg.
+
 `ctrl+c` while the lead works stops the lead at once, and its sub-agents
 keep running. With the lead idle and sub-agents working, the first press
 shows "this will stop 2 sub-agents, press Ctrl+C again to confirm" for 3

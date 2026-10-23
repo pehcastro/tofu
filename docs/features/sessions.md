@@ -184,3 +184,13 @@ with and what it holds now, such as `fresh, holds 40 messages` or
 <request id>` prints one request exactly as it was sent with its response or
 error body, and `tofu session reads <name>` every file it read. Each takes
 `--json`, and `tofu session trace --json` with a filter prints the same rows.
+Over `tofu serve`, `session.info` carries the same history as
+`carried_from`: the session, its handle and how many messages came over.
+
+```sh
+tofu session drain brisk-amber-heron
+```
+
+says where the session's tokens went, by agent, by what woke it, by
+context size and by cache rebuild, and which of eight wasteful patterns it
+found; see [Where tokens went](/docs/features/drain).

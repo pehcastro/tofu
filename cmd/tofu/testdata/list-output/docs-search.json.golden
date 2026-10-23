@@ -25,6 +25,10 @@ exit 0
         "do": "tofu docs agents"
       },
       {
+        "text": "What an API key has spent",
+        "do": "tofu docs api-keys"
+      },
+      {
         "text": "When the lead asks you",
         "do": "tofu docs asking"
       },
@@ -55,6 +59,10 @@ exit 0
       {
         "text": "The doctor",
         "do": "tofu docs doctor"
+      },
+      {
+        "text": "Where a session's tokens went",
+        "do": "tofu docs drain"
       },
       {
         "text": "Driving the app from a script",

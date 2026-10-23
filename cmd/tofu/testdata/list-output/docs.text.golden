@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · 105 asks                                                        32 topics
+Docs · 107 asks                                                        34 topics
 
 agents  add a sub-agent for every project or for one, choose the model it
   runs, and remove it
@@ -16,6 +16,12 @@ agents  add a sub-agent for every project or for one, choose the model it
     → tofu agents remove <name>
   set up three sub-agents at once, each on its own model
     → tofu agents add <name> --description "<what it does>" --model <source/model>, once per sub-agent
+
+api-keys  tofu login --status shows each API key's calls, tokens and cost with
+  where the cost came from, the limits and balance the provider reports, and
+  what that provider does not report
+  how much has my API key spent, and what limit is left
+    → tofu login --status
 
 asking  how the lead puts a decision to you with options and a recommended
   one, what auto and ask do with it, and when it cannot ask
@@ -89,6 +95,12 @@ doctor  what tofu doctor checks, what each line it prints means, and what to
     → write use off in .tofu/tools/shell/proxy.yaml
   check the library files and these pages
     → tofu library
+
+drain  tofu session drain weighs every call of a session, says what woke the
+  lead and each sub-agent, which context band and cache rebuilds took the most,
+  and names eight patterns that waste tokens
+  where did a session's tokens go
+    → tofu session drain <name|id>
 
 drive  what tofu drive does, the steps a script takes, and what the requests
   step prints
