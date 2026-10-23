@@ -5,9 +5,10 @@
 | task | one small Go package, `testdata/seed`, and one prompt, `testdata/prompt.txt`: a bug, a feature, a rename, a question and a new file |
 | quality | hidden tests from `testdata/hidden` plus the rubric in `score.go`: visible tests, gofmt, go vet, the old name gone, no stray files |
 | verdict | a win or a loss only when the lowest to highest spreads of the two arms do not meet; otherwise a tie |
-| order | one run at a time behind the rival slot, on the owner's subscriptions, no money |
+| order | one run at a time behind the rival slot, a folder taken with mkdir at `tofu-rivalslot` under the system temp folder unless `-slot` names another and shared with `bench/profile`, on the owner's subscriptions, no money |
+| classifier | each tofu arm's fresh home carries a copy of the owner's classifier binding, so the shadow gate runs the classifier his settings name |
 | network | this bench needs the network and spends subscription quota; the report itself reads only `runs/` |
-| rerun | `go run ./bench/rivals run -arm <arm> -rep <n> -setting omitted -batch <batch> -slot <dir>`, then `go run ./bench/rivals report -batch <batch>` |
+| rerun | `go run ./bench/rivals run -arm <arm> -rep <n> -setting omitted -batch <batch>`, then `go run ./bench/rivals report -batch <batch>` |
 
 ## Parity
 

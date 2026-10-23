@@ -99,7 +99,7 @@ type row struct {
 
 func main() {
 	if len(os.Args) < 2 {
-		fail(errors.New("usage: rivals check [-task <name>] [-prompt <file>] | run [-task <name>] -arm <name> -rep <n> -slot <dir> | reparse [-batch <dir>] [-task <name>] | report | parity -batch <dir> [-task <name>]"))
+		fail(errors.New("usage: rivals check [-task <name>] [-prompt <file>] | run [-task <name>] -arm <name> -rep <n> [-slot <dir>] | reparse [-batch <dir>] [-task <name>] | report | parity -batch <dir> [-task <name>]"))
 	}
 	switch os.Args[1] {
 	case "check":
@@ -202,7 +202,7 @@ func runArm(args []string) error {
 	flags := flag.NewFlagSet("run", flag.ContinueOnError)
 	name := flags.String("arm", "", "arm name")
 	rep := flags.Int("rep", 0, "repeat number")
-	slot := flags.String("slot", "", "directory taken with mkdir so only one tool runs on the machine")
+	slot := flags.String("slot", filepath.Join(os.TempDir(), "tofu-rivalslot"), "directory taken with mkdir so only one tool runs on the machine, shared with bench/profile")
 	work := flags.String("work", filepath.Join(os.TempDir(), "tofu-rivals"), "scratch root")
 	limit := flags.Duration("limit", 20*time.Minute, "wall clock cap")
 	patience := flags.Duration("patience", 30*time.Minute, "how long to wait for the slot")
@@ -220,6 +220,7 @@ func runArm(args []string) error {
 	if index < 0 || *rep < 1 || *slot == "" {
 		return errors.New("run needs -arm, -rep and -slot")
 	}
+	fmt.Println("rival slot:", *slot)
 	switch *setting {
 	case "", settingShipped, settingRival, thinkingSummarized, thinkingOmitted:
 	default:
@@ -242,10 +243,11 @@ func runArm(args []string) error {
 	}
 	env := goEnv(dirs)
 	if chosen.Tool == "tofu" {
-		profile, err := freshHome(r.Work, loginSource(chosen.AskedModel))
+		profile, binding, err := freshHome(r.Work, loginSource(chosen.AskedModel))
 		if err != nil {
 			return err
 		}
+		r.Notes = append(r.Notes, "setting: the classifier binding copied from the owner's home reads "+binding)
 		env = append(env, profile...)
 		reload := exec.Command("tofu", "models", "reload")
 		reload.Dir, reload.Env = dirs.repo, env
