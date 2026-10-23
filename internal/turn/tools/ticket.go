@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"tofu/internal/boardy"
@@ -37,10 +38,11 @@ const (
 	logEvidence logKind = logKind(boardy.Evidence)
 )
 
-func sentencesIn(text string) int {
+func sentencesIn(words []string) int {
 	sentences := 1
-	for i := 1; i < len(text); i++ {
-		if text[i] == ' ' && strings.ContainsRune(".!?", rune(text[i-1])) {
+	for i := 1; i < len(words); i++ {
+		next, _ := utf8.DecodeRuneInString(words[i])
+		if strings.ContainsAny(words[i-1][len(words[i-1])-1:], ".!?") && unicode.IsUpper(next) {
 			sentences++
 		}
 	}
@@ -48,13 +50,12 @@ func sentencesIn(text string) int {
 }
 
 func sayable(text string) error {
-	text = strings.TrimSpace(text)
-	sentences, runes := sentencesIn(text), utf8.RuneCountInString(text)
-	switch {
-	case strings.Contains(text, "\n"):
+	words := strings.Fields(text)
+	switch sentences := sentencesIn(words); {
+	case strings.Contains(strings.TrimSpace(text), "\n"):
 		return fmt.Errorf("a said entry is one line: put the command and its output in an entry of kind %s", logEvidence)
-	case sentences > konst.BoardSaidSentencesMost || runes > konst.BoardSaidRunesMost:
-		return fmt.Errorf("a said entry is at most %d sentences and %d characters, and this one is %d and %d: say what you decided, found or need, and put the proof in an entry of kind %s", konst.BoardSaidSentencesMost, konst.BoardSaidRunesMost, sentences, runes, logEvidence)
+	case sentences > konst.BoardSaidSentencesMost || len(words) > konst.BoardSaidWordsMost:
+		return fmt.Errorf("a said entry is at most %d sentences and %d words, and this one is %d sentences and %d words: say what you decided, found or need, and put the proof in an entry of kind %s", konst.BoardSaidSentencesMost, konst.BoardSaidWordsMost, sentences, len(words), logEvidence)
 	}
 	return nil
 }
@@ -133,7 +134,7 @@ func (t ticketTool) Definition() llm.Tool {
 	case ticketRead:
 		describe = "reads a ticket by its id from any board of this project: front matter, Problem, Scope, every Acceptance revision (the last one is in force) and Log"
 	case ticketLog:
-		describe = fmt.Sprintf("adds one entry to your own ticket, under your name, so never start it with your name. kind say is you talking to the lead in the first person, at most %d sentences on one line and no command output: a decision and why, a finding that changes the plan, what stops you, what you need, or that you are done. kind evidence proves one acceptance line, named by line: the command exactly as you ran it and the output lines that matter; the lead reads it at review and it stays out of the conversation. your last say entry is where you ended, and the lead reads it as your report: say it plainly, with no heading and no bold label. progress nobody acts on is not an entry", konst.BoardSaidSentencesMost)
+		describe = fmt.Sprintf("adds one entry to your own ticket, under your name, so never start it with your name. kind say is you talking to the lead in the first person, at most %d sentences and %d words on one line and no command output: a decision and why, a finding that changes the plan, what stops you, what you need, or that you are done. kind evidence proves one acceptance line, named by line: the command exactly as you ran it and the output lines that matter; the lead reads it at review and it stays out of the conversation. your last say entry is where you ended, and the lead reads it as your report: say it plainly, with no heading and no bold label. progress nobody acts on is not an entry", konst.BoardSaidSentencesMost, konst.BoardSaidWordsMost)
 		properties["kind"] = map[string]any{"type": "string", "enum": []logKind{logSay, logEvidence}}
 		properties["line"] = map[string]any{"type": "integer", "description": "for kind evidence, the acceptance line in force it proves, counted from 1"}
 		properties["text"], required = stringParam("what you say, or the evidence"), append(required, "kind", "text")
@@ -159,16 +160,17 @@ func (t ticketTool) Definition() llm.Tool {
 		}
 		required = []string{"board", "title", "acceptance"}
 		if t.verb == ticketCreate {
-			describe = "creates a ticket on a board you manage, numbered by the board; put it in an epic and a sprint, and make them first with epic and sprint when none fits"
+			describe = "creates a ticket on a board you manage, numbered by the board; put it in an epic and a sprint, and make them first with epic and sprint when none fits. a sub-ticket's owns sit inside its parent's owns, which are the ceiling, so a parent that owns nothing takes no sub-ticket and the new one is made without a parent; no owns glob may overlap the owns of a ticket in doing on any board, and the refusal names the glob and the ticket"
 			properties["epic"], properties["sprint"] = stringParam("the epic id it belongs to, from epic list"), stringParam("the sprint id it is planned in, from sprint list")
 		}
 	case ticketMove:
 		statuses := []boardy.Status{boardy.Review}
-		describe = "moves your own ticket from doing to review once every acceptance line in force has an entry of kind evidence naming it, or is in leave"
+		describe = "moves your own ticket from doing to review once every acceptance line in force has an entry of kind evidence naming it, or is in leave; a board may also want a least amount of evidence, and the refusal says how much"
 		if t.manager {
-			statuses, describe = boardy.Statuses(), "moves a ticket on a board you manage to a status; blocked needs a reason"
+			statuses, describe = boardy.Statuses(), "moves a ticket on a board you manage to a status; blocked needs a reason. a ticket reaches doing, review or done only with Acceptance, review only with a Log entry, and a parent reaches review or done only once its sub-tickets are done or dropped. a ticket moving into doing may not own a path a ticket in doing already owns; the refusal names the glob and the ticket"
 		}
-		properties["to"], properties["reason"], required = map[string]any{"type": "string", "enum": statuses}, stringParam("why, in one sentence, required for blocked; anything longer goes in ticket_log"), append(required, "to")
+		properties["to"], properties["reason"], required = map[string]any{"type": "string", "enum": statuses}, stringParam("why, required for blocked"), append(required, "to")
+		describe += ". a reason is one sentence on one line, and anything longer goes in ticket_log"
 		properties["leave"] = map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "on a move to review, the acceptance lines, counted from 1, that are not yours to prove and that the lead proves"}
 	case ticketAssign:
 		describe = "assigns a ticket on a board you manage to a session or the person, by name"
@@ -240,7 +242,7 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 			reason := strings.TrimSpace(args.Reason)
 			switch to, err = boardy.ParseStatus(args.To); {
 			case err != nil:
-			case strings.Contains(reason, "\n") || sentencesIn(reason) > 1:
+			case strings.Contains(reason, "\n") || sentencesIn(strings.Fields(reason)) > 1:
 				err = fmt.Errorf("a move reason is one sentence on one line: say the rest with ticket_log kind %s, and put what you ran and what it printed in an entry of kind %s", logSay, logEvidence)
 			default:
 				ticket, err = t.board.MoveLeaving(args.ID, to, args.Reason, t.actor, args.Leave)

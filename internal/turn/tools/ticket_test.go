@@ -166,3 +166,41 @@ func TestTicketToolsWriteNoBoardWhenThereIsNone(t *testing.T) {
 		t.Errorf("building %d tools gave %v and the boards folder stats as %v", len(list), err, statErr)
 	}
 }
+
+func TestTicketToolsStateAndKeepTheirLimitsInWords(t *testing.T) {
+	board := ticketBoard(t)
+	if _, err := tools.TicketGrant(board, "DEMO-2", "lead", "go-dev-1"); err != nil {
+		t.Fatal(err)
+	}
+	logged := subAgentTool(t, board, "ticket_log")
+	long := strings.Repeat("parsing ", 22) + "works, e.g. on UTF-8 input in v0.5.9. Then" + strings.Repeat(" validation", 21) + " passes. Then" + strings.Repeat(" reviewers", 21) + " approve."
+	if words := len(strings.Fields(long)); words != 75 || len(long) <= 480 {
+		t.Fatalf("the say is %d words and %d characters", words, len(long))
+	}
+	if _, err := runTicket(logged, `{"id":"DEMO-2","kind":"say","text":"`+long+`"}`); err != nil {
+		t.Errorf("a say of 3 sentences, 75 words and %d characters: %v", len(long), err)
+	}
+	if _, err := runTicket(logged, `{"id":"DEMO-2","kind":"say","text":"`+strings.Repeat("word ", 81)+`"}`); err == nil || !strings.Contains(err.Error(), "81 words") {
+		t.Errorf("a say of 81 words: %v, want a refusal counting 81 words", err)
+	}
+	if _, err := runTicket(subAgentTool(t, board, "ticket_move"), `{"id":"DEMO-2","to":"review","reason":"fixed the parser, e.g. its UTF-8 path in v0.5.9 and later."}`); err != nil && strings.Contains(err.Error(), "one sentence") {
+		t.Errorf("a one-sentence reason with e.g. was refused: %v", err)
+	}
+	lead, err := tools.TicketTools(board, "lead")
+	if err != nil {
+		t.Fatal(err)
+	}
+	described := map[string]string{}
+	for _, tool := range append(lead, logged) {
+		described[tool.Name()] = tool.Definition().Description
+	}
+	for name, want := range map[string]string{"ticket_log": "80 words", "ticket_move": "one sentence", "ticket_create": "parent's owns"} {
+		if !strings.Contains(described[name], want) {
+			t.Errorf("%s says %q, want %q in it", name, described[name], want)
+		}
+	}
+	create := lead[slices.IndexFunc(lead, func(tool turn.Tool) bool { return tool.Name() == "ticket_create" })]
+	if _, err := runTicket(create, `{"board":"DEMO","parent":"DEMO-1","title":"half","acceptance":"- it parses","owns":["internal/a/parse.go"]}`); err == nil || !strings.Contains(err.Error(), "DEMO-1 owns no paths") || !strings.Contains(err.Error(), "without a parent") {
+		t.Errorf("a sub-ticket of DEMO-1, which owns nothing: %v", err)
+	}
+}

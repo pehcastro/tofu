@@ -529,7 +529,7 @@ const (
 	BoardAuditDuplicateOverlap = 0.8
 
 	BoardSaidSentencesMost = 3
-	BoardSaidRunesMost     = 480
+	BoardSaidWordsMost     = 80
 
 	BraveSearchDollarsPerCall = 5.0 / 1000
 	KeyPollTimeoutMillis      = 5000

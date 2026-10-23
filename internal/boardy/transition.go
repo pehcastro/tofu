@@ -383,6 +383,9 @@ func (m Managed) ownsFree(key string, ticket Front, owns []string, status Status
 		if err != nil {
 			return err
 		}
+		if len(owns) > 0 && len(parent.Owns) == 0 {
+			return RefusedError{Ticket: id, Why: fmt.Sprintf("its parent %s owns no paths, and a parent's owns are the ceiling for its sub-tickets: create it without a parent, or widen %s first", parent.ID, parent.ID)}
+		}
 		if glob := outsideOwns(owns, parent.Owns); glob != "" {
 			return RefusedError{Ticket: id, Why: fmt.Sprintf("%s is outside the owns of its parent %s (%s), and a parent's owns are the ceiling for its sub-tickets", glob, parent.ID, strings.Join(parent.Owns, ", "))}
 		}
