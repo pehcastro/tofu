@@ -28,23 +28,24 @@ import (
 )
 
 const (
-	HubVerb       = "host"
-	HubRunVerb    = "run"
-	hubNetwork    = "unix"
-	hubSocketDir  = "h"
-	hubHostsDir   = "hosts"
-	hubShortKey   = 8
-	hubAskStatus  = "status"
-	hubAskJoin    = "join"
-	hubAskRoster  = "roster"
-	hubAskMembers = "members"
-	hubAskStop    = "stop"
-	hubAnswerWait = konst.HostAnswerMillis * time.Millisecond
-	hubRetry      = konst.HostRetryMillis * time.Millisecond
-	hubBeat       = 2000 * time.Millisecond
-	hubBeatMissed = 10000 * time.Millisecond
-	hubLogCap     = 1 << 20
-	hubLogKept    = ".1"
+	HubVerb          = "host"
+	HubRunVerb       = "run"
+	hubNetwork       = "unix"
+	hubSocketDir     = "h"
+	hubHostsDir      = "hosts"
+	hubShortKey      = 8
+	hubTempDirPrefix = "tofu-"
+	hubAskStatus     = "status"
+	hubAskJoin       = "join"
+	hubAskRoster     = "roster"
+	hubAskMembers    = "members"
+	hubAskStop       = "stop"
+	hubAnswerWait    = konst.HostAnswerMillis * time.Millisecond
+	hubRetry         = konst.HostRetryMillis * time.Millisecond
+	hubBeat          = 2000 * time.Millisecond
+	hubBeatMissed    = 10000 * time.Millisecond
+	hubLogCap        = 1 << 20
+	hubLogKept       = ".1"
 )
 
 var (
@@ -140,6 +141,11 @@ func socketWithinLimit(socket string) (string, error) {
 		return "", fmt.Errorf("the host socket %s is %d bytes and a unix socket path on %s must stay under %d, so the tofu host cannot start under this home: use a shorter home", socket, len(socket), sys.OS(), limit)
 	}
 	return socket, nil
+}
+
+func tempSocketOf(home, name string) (string, error) {
+	sum := sha256.Sum256([]byte(home))
+	return socketWithinLimit(filepath.Join(os.TempDir(), hubTempDirPrefix+hex.EncodeToString(sum[:])[:hubShortKey], name+".sock"))
 }
 
 func dialHub(socket string) (net.Conn, error) {
@@ -289,7 +295,7 @@ func RunHub(project string, report safe.Report, say func(string), open HubSessio
 	if err != nil {
 		return err
 	}
-	for _, dir := range []string{filepath.Dir(place.socket), filepath.Dir(place.registry)} {
+	for _, dir := range []string{filepath.Dir(place.socket), filepath.Dir(place.lock), filepath.Dir(place.registry)} {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return err
 		}
