@@ -224,6 +224,7 @@ type SessionFindParams struct {
 	Command string `json:"command,omitempty"`
 	File    string `json:"file,omitempty"`
 	Text    string `json:"text,omitempty"`
+	Failed  bool   `json:"failed,omitempty"`
 	Agent   string `json:"agent,omitempty"`
 	Since   string `json:"since,omitempty"`
 	Until   string `json:"until,omitempty"`

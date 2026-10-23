@@ -40,7 +40,7 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
   beside the first. `session.history`: takes `session`, `limit` and `before`; answers `lines`, each
   `{method, params}` as `session.open` sends it, from `first` of `total`
 - `session.info` and `session.trace` answer what `tofu session info` and `trace` print, `session.info` with `carried_from` `{session, handle, messages}` when it began with messages carried over. `session.find` takes
-  `session` and any of `tool`, `command`, `file`, `text`, `agent`, `since`, `until`; answers `handle`, `query`, `hits`
+  `session` and any of `tool`, `command`, `file`, `text`, `agent`, `since`, `until`, and `failed` true for failed and refused calls only; answers `handle`, `query`, `hits`
 - `session.turns` takes `session`; answers `snapshots`, how many turns undo holds, and `turns`, each
   `turn`, `at`, `ended_at`, `worked_for_ms`, `origin`, `asked`, `summary` (the lead's last reply),
   `status`, `outcome` (`loop_guard`, `step_cap` and the rest), `error`, `held` (calls a `gate` or a

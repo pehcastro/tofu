@@ -198,7 +198,7 @@ func (s *server) data(method string, raw json.RawMessage) (any, error) {
 	case "session.find":
 		return handle(raw, func(p SessionFindParams) (any, error) {
 			options := map[string]string{"--tool": p.Tool, "--command": p.Command, "--file": p.File, "--text": p.Text, "--agent": p.Agent, "--since": p.Since, "--until": p.Until}
-			return verbAs[SessionFind](s, verbLine([]string{"session", "find"}, nil, options, p.Session)...)
+			return verbAs[SessionFind](s, verbLine([]string{"session", "find"}, map[string]bool{"--failed": p.Failed}, options, p.Session)...)
 		})
 	case "rules.add", "rules.off", "rules.remove", "rules.restore":
 		return handle(raw, func(p RuleWriteParams) (any, error) {
