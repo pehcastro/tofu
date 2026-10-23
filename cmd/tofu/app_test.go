@@ -957,9 +957,9 @@ func TestTheBarShowsTheRequestAsSentAndTheForkDecidedOnWhatCameBackAfterIt(t *te
 	}
 
 	asSent, decided := forking.Occupancy.Total(), forking.Fork.TokensBefore
-	if decided-asSent != schemas+appended {
-		t.Fatalf("step %d sent %d tokens and the fork decided on %d, a gap of %d, where the tool schemas are %d and the call and its %d results are %d",
-			forking.Index, asSent, decided, decided-asSent, schemas, len(forking.ToolCalls), appended)
+	if decided-asSent != appended {
+		t.Fatalf("step %d sent %d tokens with its %d of tool schemas and the fork decided on %d, a gap of %d, where the call and its %d results are %d",
+			forking.Index, asSent, schemas, decided, decided-asSent, len(forking.ToolCalls), appended)
 	}
 
 	var shown []int
@@ -972,7 +972,7 @@ func TestTheBarShowsTheRequestAsSentAndTheForkDecidedOnWhatCameBackAfterIt(t *te
 	if slices.Contains(shown, decided) {
 		t.Fatalf("the bar was shown %d, the conversation after step %d's results, rather than the request it sent", decided, forking.Index)
 	}
-	t.Logf("step %d sent %d tokens, the fork decided on %d, and between them are %d of tool schemas and %d of the call and its results", forking.Index, asSent, decided, schemas, appended)
+	t.Logf("step %d sent %d tokens with its %d of tool schemas, the fork decided on %d, and between them are %d of the call and its results", forking.Index, asSent, schemas, decided, appended)
 }
 
 func TestASpawnedSubAgentShowsInTheSubAgentViewWithTheGlobsItHolds(t *testing.T) {
