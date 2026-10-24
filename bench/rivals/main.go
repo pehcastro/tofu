@@ -209,6 +209,7 @@ func runArm(args []string) error {
 	setting := flags.String("setting", "", "the build or setting under test: shipped or rival name a build, summarized or omitted pass --thinking-summary to a tofu arm")
 	batch := flags.String("batch", "", "folder under runs for this batch of rows, so a rerun keeps the rows before it")
 	taskName := flags.String("task", "", "task folder under testdata/tasks; empty is the first task in testdata")
+	board := flags.Bool("board", false, "a tofu arm's fresh home sets projectManagement boardy and the scratch project gets a board")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -253,6 +254,12 @@ func runArm(args []string) error {
 		reload.Dir, reload.Env = dirs.repo, env
 		if said, err := reload.CombinedOutput(); err != nil {
 			return fmt.Errorf("tofu models reload in the fresh home: %v: %s", err, said)
+		}
+		if *board {
+			if err := manageWithBoard(dirs.repo, env); err != nil {
+				return err
+			}
+			r.Notes = append(r.Notes, "setting: projectManagement resolves to "+toolOutput(dirs.repo, env, "tofu", "settings", "get", "projectManagement")+" in the fresh home, boards "+toolOutput(dirs.repo, env, "tofu", "boardy", "boards"))
 		}
 		r.Version, r.Commit = tofuBuild(toolOutput(dirs.repo, env, chosen.Tool, "version"))
 		r.Notes = append(r.Notes, "setting: thinkingSummary resolves to "+toolOutput(dirs.repo, env, "tofu", "settings", "get", "thinkingSummary")+" in the fresh home, -setting "+cmp.Or(*setting, "unset"))

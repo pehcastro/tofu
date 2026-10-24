@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -87,6 +88,17 @@ func loginOutlivesRun(db *sql.DB, source string) error {
 		return fmt.Errorf("the owner's home holds no usable %s login", source)
 	}
 	return rows.Err()
+}
+
+func manageWithBoard(project string, env []string) error {
+	for _, args := range [][]string{{"settings", "set", "--scope", "global", "projectManagement", "boardy"}, {"boardy", "init", "--key", "BENCH", "--name", "bench"}} {
+		cmd := exec.Command("tofu", args...)
+		cmd.Dir, cmd.Env = project, env
+		if said, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("tofu %s in the fresh home: %v: %s", strings.Join(args, " "), err, said)
+		}
+	}
+	return nil
 }
 
 func loginSource(model string) string {
