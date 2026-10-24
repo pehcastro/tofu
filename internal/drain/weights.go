@@ -1,6 +1,9 @@
 package drain
 
 import (
+	"cmp"
+	"maps"
+	"slices"
 	"strings"
 
 	"tofu/internal/llm/models"
@@ -28,29 +31,42 @@ func defaultWeights() Weights {
 }
 
 func WeightsFrom(registry models.Registry) func(model string) Weights {
-	byModel := map[string]Weights{}
+	bySlug := map[string]Weights{}
 	for slug, price := range registry.Prices {
 		if price.Input <= 0 {
 			continue
 		}
 		weights := defaultWeights()
-		weights.Output, weights.From = price.Output/price.Input, price.From
+		weights.Output, weights.From = price.Output/price.Input, slug+", "+price.From
 		if price.CacheRead > 0 {
 			weights.Read = price.CacheRead / price.Input
 		}
 		if price.CacheWrite > 0 {
 			weights.Write5m = price.CacheWrite / price.Input
 		}
-		byModel[slug], byModel[modelID(slug)] = weights, weights
+		bySlug[slug] = weights
 	}
-	return func(model string) Weights {
-		if weights, priced := byModel[model]; priced {
-			return weights
+	priced := bySource(bySlug)
+	return func(model string) Weights { return cmp.Or(priced(model), defaultWeights()) }
+}
+
+func WindowsFrom(registry models.Registry) func(model string) int {
+	return bySource(registry.Windows)
+}
+
+func bySource[V any](bySlug map[string]V) func(model string) V {
+	byModel := map[string]V{}
+	for _, slug := range slices.Sorted(maps.Keys(bySlug)) {
+		byModel[slug] = bySlug[slug]
+		if _, taken := byModel[modelID(slug)]; !taken {
+			byModel[modelID(slug)] = bySlug[slug]
 		}
-		if weights, priced := byModel[modelID(model)]; priced {
-			return weights
+	}
+	return func(model string) V {
+		if value, found := byModel[model]; found {
+			return value
 		}
-		return defaultWeights()
+		return byModel[modelID(model)]
 	}
 }
 

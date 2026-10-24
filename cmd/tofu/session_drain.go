@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"slices"
 	"strconv"
@@ -64,7 +65,7 @@ func claudeDrain(o verbOutput, path string) int {
 	if err != nil {
 		return o.fail(err)
 	}
-	report, err := claudecode.Read(path, drain.Input{Weights: drain.WeightsFrom(registry), BytesPerThousandTokens: estimate.BytesPerThousandTokens})
+	report, err := claudecode.Read(path, drain.Input{Weights: drain.WeightsFrom(registry), LeadWindow: drain.WindowsFrom(registry), BytesPerThousandTokens: estimate.BytesPerThousandTokens})
 	if err != nil {
 		return o.fail(err)
 	}
@@ -183,7 +184,11 @@ func spendRows(lines []drain.Line, whole float64) []cli.Row {
 
 func drainTldr(report drainReport) []cli.Fact {
 	total := report.Total.Weighted
-	tldr := []cli.Fact{{Label: "sub-agents", Text: percentOf(total-report.Lead.Weighted, total) + " of weighted tokens across " + plural(len(report.Agents), "sub-agent")}}
+	var tldr []cli.Fact
+	for _, model := range slices.Sorted(maps.Keys(report.PricedBy)) {
+		tldr = append(tldr, cli.Fact{Label: "priced", Text: model + " by " + report.PricedBy[model]})
+	}
+	tldr = append(tldr, cli.Fact{Label: "sub-agents", Text: percentOf(total-report.Lead.Weighted, total) + " of weighted tokens across " + plural(len(report.Agents), "sub-agent")})
 	if len(report.Wakes) > 0 {
 		tldr = append(tldr, cli.Fact{Label: "lead woken", Text: "by " + report.Wakes[0].Name + " for " + percentOf(report.Wakes[0].Weighted, report.Lead.Weighted) + " of the lead's weighted tokens"})
 	}
@@ -202,8 +207,11 @@ func drainTldr(report drainReport) []cli.Fact {
 }
 
 func drainLines(page cli.Page, report drainReport) []string {
-	total := report.Total.Weighted
-	lines := append(page.Title("Drain", []string{report.Handle, plural(report.Total.Calls, "call"), weighted(total) + " weighted tokens", dollars(report.Total.USD)}, cli.Verdict{}), "")
+	total, cost := report.Total.Weighted, "no cost recorded"
+	if report.CostRecorded {
+		cost = dollars(report.Total.USD)
+	}
+	lines := append(page.Title("Drain", []string{report.Handle, plural(report.Total.Calls, "call"), weighted(total) + " weighted tokens", cost}, cli.Verdict{}), "")
 	lines = append(lines, cli.Indent(page.Facts(drainTldr(report))...)...)
 	section := func(name string, rows []cli.Row, render func([]cli.Row) []string) {
 		lines = append(append(lines, "", page.Section(name, cli.Verdict{})), render(rows[:min(len(rows), drainShownRows)])...)

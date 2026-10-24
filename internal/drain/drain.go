@@ -142,22 +142,24 @@ type Agent struct {
 }
 
 type Report struct {
-	Session   string     `json:"session"`
-	Ceiling   int        `json:"context_ceiling"`
-	Weights   Weights    `json:"default_weights"`
-	Total     Spend      `json:"total"`
-	Tokens    Tokens     `json:"tokens"`
-	Lead      Spend      `json:"lead"`
-	Memory    Spend      `json:"memory"`
-	Unread    float64    `json:"unread_weighted"`
-	Wakes     []Line     `json:"wakes"`
-	Children  []Line     `json:"child_wakes"`
-	Bands     []Line     `json:"bands"`
-	Residency []Resident `json:"residency"`
-	Rebuilds  []Rebuild  `json:"rebuilds"`
-	Findings  []Finding  `json:"findings"`
-	Agents    []Agent    `json:"agents"`
-	Types     []Line     `json:"agent_types"`
+	Session      string            `json:"session"`
+	Ceiling      int               `json:"context_ceiling"`
+	Weights      Weights           `json:"default_weights"`
+	PricedBy     map[string]string `json:"priced_by"`
+	CostRecorded bool              `json:"cost_recorded"`
+	Total        Spend             `json:"total"`
+	Tokens       Tokens            `json:"tokens"`
+	Lead         Spend             `json:"lead"`
+	Memory       Spend             `json:"memory"`
+	Unread       float64           `json:"unread_weighted"`
+	Wakes        []Line            `json:"wakes"`
+	Children     []Line            `json:"child_wakes"`
+	Bands        []Line            `json:"bands"`
+	Residency    []Resident        `json:"residency"`
+	Rebuilds     []Rebuild         `json:"rebuilds"`
+	Findings     []Finding         `json:"findings"`
+	Agents       []Agent           `json:"agents"`
+	Types        []Line            `json:"agent_types"`
 }
 
 type Input struct {
@@ -165,6 +167,7 @@ type Input struct {
 	Classifier             []session.ClassifierCall
 	Runs                   []session.AgentRun
 	Weights                func(model string) Weights
+	LeadWindow             func(model string) int
 	BytesPerThousandTokens int
 }
 
@@ -176,7 +179,7 @@ type requestBody struct {
 	Write      int             `json:"cache_write_tokens"`
 	Write5m    int             `json:"cache_write_5m_tokens"`
 	Write1h    int             `json:"cache_write_1h_tokens"`
-	CostUSD    float64         `json:"cost_usd"`
+	CostUSD    *float64        `json:"cost_usd"`
 	DurationMS int64           `json:"duration_ms"`
 	ToolCalls  json.RawMessage `json:"tool_calls"`
 }
@@ -229,7 +232,7 @@ type pass struct {
 }
 
 func Read(id string, events []session.Event, in Input) Report {
-	p := pass{Input: in, report: Report{Session: id, Ceiling: konst.ContextCeilingTokens, Weights: defaultWeights()},
+	p := pass{Input: in, report: Report{Session: id, Ceiling: konst.ContextCeilingTokens, Weights: defaultWeights(), PricedBy: map[string]string{}, CostRecorded: len(in.Classifier) > 0},
 		threads: map[string]*thread{}, agents: map[string]*Agent{}, wakes: map[Wake]*Spend{}, children: map[Wake]*Spend{}, bands: map[string]*Spend{},
 		resident: map[string]*Resident{}, turns: map[string]float64{}, breaks: map[string]string{}, calls: map[string]string{}, tests: map[string]bool{}}
 	for _, cut := range in.Breaks {
@@ -369,13 +372,21 @@ func FiveMinuteWrites(written, split5m, split1h int) int {
 
 func (p *pass) request(event session.Event, body requestBody) {
 	weights := p.Weights(body.Model)
+	p.report.PricedBy[body.Model] = weights.From
+	if p.LeadWindow != nil && event.Agent == "" {
+		p.report.Ceiling, p.LeadWindow = cmp.Or(p.LeadWindow(body.Model), p.report.Ceiling), nil
+	}
+	var usd float64
+	if body.CostUSD != nil {
+		usd, p.report.CostRecorded = *body.CostUSD, true
+	}
 	input, write1h := body.Prompt, body.Write1h
 	if p.inclusive {
 		input = max(0, body.Prompt-body.Read)
 	}
 	write5m := FiveMinuteWrites(body.Write, body.Write5m, body.Write1h)
 	written := weights.Write5m*float64(write5m) + weights.Write1h*float64(write1h)
-	spend := Spend{Calls: 1, USD: body.CostUSD,
+	spend := Spend{Calls: 1, USD: usd,
 		Weighted: weights.Input*float64(input) + written + weights.Read*float64(body.Read) + weights.Output*float64(body.Completion)}
 	if event.Kind == session.EventMemoryRequest {
 		p.report.Memory.add(spend)
