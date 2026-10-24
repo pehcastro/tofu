@@ -136,12 +136,16 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		s.written += event.Text
 		return append(out, notify("message.delta", &Text{Identity: s.identity("", s.message), Text: event.Text}))
 	case EventText:
-		id.Item = s.mint("message")
-		s.awaitLog(id.Item, session.RoleAssistant, event.Text)
+		if id.Item == "" {
+			id.Item = s.mint("message")
+			s.awaitLog(id.Item, session.RoleAssistant, event.Text)
+		}
 		return append(out, notify("message.started", &Marker{Identity: id}), notify("message.completed", &Text{Identity: id, Text: event.Text}))
 	case EventTask:
-		id.Item = s.mint("task")
-		s.awaitLog(id.Item, session.RoleUser, event.Text)
+		if id.Item == "" {
+			id.Item = s.mint("task")
+			s.awaitLog(id.Item, session.RoleUser, event.Text)
+		}
 		return append(out, notify("message.user", &UserMessage{Identity: id, Text: event.Text, Origin: event.Origin, Images: event.Images}))
 	case EventStreamReset:
 		if event.Agent != "" || s.message == "" {

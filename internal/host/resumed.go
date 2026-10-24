@@ -74,9 +74,9 @@ func resumedChat(carry Carry, dir string) []Event {
 		if message.Origin.Source == llm.SourceSpawnLine {
 			continue
 		}
-		said := lead.recorded(message)
+		said, persisted := lead.recorded(message), ""
 		if said != nil {
-			lead.at = said.At
+			lead.at, persisted = said.At, said.ID
 		}
 		if said != nil && message.Role == llm.RoleUser && (message.Origin.Source == llm.SourceTask || message.Origin.Source == llm.SourceCronFire) {
 			lead.turn, lead.watch.turnID = said.Turn, cmp.Or(said.Turn, carry.Session)
@@ -95,14 +95,14 @@ func resumedChat(carry Carry, dir string) []Event {
 				if said != nil && store != nil {
 					images = shownAttached(task, lead.images[said.ID], store)
 				}
-				lead.watch.emit(Event{Kind: EventTask, Text: task, Origin: origin, Images: images})
+				lead.watch.emit(Event{Kind: EventTask, ID: persisted, Text: task, Origin: origin, Images: images})
 			case left != "" && origin.Kind == OriginPerson:
-				lead.watch.emit(Event{Kind: EventTask, Text: left, Origin: origin})
+				lead.watch.emit(Event{Kind: EventTask, ID: persisted, Text: left, Origin: origin})
 			}
 		case llm.RoleAssistant:
 			if text := strings.TrimSpace(message.Content); text != "" {
 				lead.watch.endLeadRow()
-				lead.watch.emit(Event{Kind: EventText, Text: text})
+				lead.watch.emit(Event{Kind: EventText, ID: persisted, Text: text})
 			}
 			for _, call := range message.ToolCalls {
 				recorded := lead.calls[call.ID]

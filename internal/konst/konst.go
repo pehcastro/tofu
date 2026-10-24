@@ -491,6 +491,7 @@ const (
 
 const (
 	ServeQueue            = 128
+	ServeKeptQueue        = 1024
 	ServeLineBytes        = 16 << 20
 	ServeShellPollMillis  = 250
 	ServeStopMillis       = 10000

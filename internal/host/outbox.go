@@ -85,7 +85,7 @@ func (o *outbox) push(out outgoing) {
 			return
 		}
 	}
-	if out.kept || len(o.queue) < konst.ServeQueue {
+	if len(o.queue) < konst.ServeQueue || out.kept && (out.msg.ID != nil || len(o.queue) < konst.ServeKeptQueue) {
 		o.queue = append(o.queue, out)
 		return
 	}
