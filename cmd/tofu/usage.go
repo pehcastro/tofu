@@ -148,6 +148,10 @@ func tofuSpend(spends []windowSpend, earliest, now time.Time) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	weights, err := pricedByProvider(registry)
+	if err != nil {
+		return 0, err
+	}
 	home, err := sys.HomeConfigDir()
 	if err != nil {
 		return 0, err
@@ -166,7 +170,7 @@ func tofuSpend(spends []windowSpend, earliest, now time.Time) (int, error) {
 			}
 		}
 	})
-	paths, weights, torn := slices.Concat(written...), drain.WeightsFrom(registry), 0
+	paths, torn := slices.Concat(written...), 0
 	var adding sync.Mutex
 	inParallel(len(paths), func(at int) {
 		events, unreadable := requestEvents(paths[at], earliest)

@@ -23,7 +23,6 @@ const (
 
 	assistantBlock = "assistant"
 	messageBlock   = "message"
-	anthropicWire  = "anthropic"
 	forkChange     = "fork"
 )
 
@@ -216,24 +215,24 @@ type thread struct {
 
 type pass struct {
 	Input
-	report    Report
-	inclusive bool
-	threads   map[string]*thread
-	agents    map[string]*Agent
-	wakes     map[Wake]*Spend
-	children  map[Wake]*Spend
-	bands     map[string]*Spend
-	resident  map[string]*Resident
-	turns     map[string]float64
-	breaks    map[string]string
-	calls     map[string]string
-	tests     map[string]bool
-	signals   signals
+	report   Report
+	wires    map[string]string
+	threads  map[string]*thread
+	agents   map[string]*Agent
+	wakes    map[Wake]*Spend
+	children map[Wake]*Spend
+	bands    map[string]*Spend
+	resident map[string]*Resident
+	turns    map[string]float64
+	breaks   map[string]string
+	calls    map[string]string
+	tests    map[string]bool
+	signals  signals
 }
 
 func Read(id string, events []session.Event, in Input) Report {
 	p := pass{Input: in, report: Report{Session: id, Ceiling: konst.ContextCeilingTokens, Weights: defaultWeights(), PricedBy: map[string]string{}, CostRecorded: len(in.Classifier) > 0},
-		threads: map[string]*thread{}, agents: map[string]*Agent{}, wakes: map[Wake]*Spend{}, children: map[Wake]*Spend{}, bands: map[string]*Spend{},
+		wires: map[string]string{}, threads: map[string]*thread{}, agents: map[string]*Agent{}, wakes: map[Wake]*Spend{}, children: map[Wake]*Spend{}, bands: map[string]*Spend{},
 		resident: map[string]*Resident{}, turns: map[string]float64{}, breaks: map[string]string{}, calls: map[string]string{}, tests: map[string]bool{}}
 	for _, cut := range in.Breaks {
 		p.breaks[cut.Request] = cut.Differs
@@ -283,11 +282,13 @@ func (p *pass) read(event session.Event) {
 	switch event.Kind {
 	case session.EventTurnStart:
 		var start session.TurnStart
-		if json.Unmarshal(event.Body, &start) != nil || event.Agent != "" {
+		if json.Unmarshal(event.Body, &start) != nil {
+			return
+		}
+		if p.wires[event.Agent] = start.Wire; event.Agent != "" {
 			return
 		}
 		p.report.Ceiling = cmp.Or(start.ContextCeiling, p.report.Ceiling)
-		p.inclusive = start.Wire != "" && start.Wire != anthropicWire
 		th := p.thread("")
 		th.busy, th.waking = false, ""
 	case session.EventSpawn:
@@ -371,7 +372,11 @@ func FiveMinuteWrites(written, split5m, split1h int) int {
 }
 
 func (p *pass) request(event session.Event, body requestBody) {
-	weights := p.Weights(body.Model)
+	wire, priced := cmp.Or(p.wires[event.Agent], p.wires[""]), body.Model
+	if wire != "" {
+		priced = wire + "/" + body.Model
+	}
+	weights := p.Weights(priced)
 	p.report.PricedBy[body.Model] = weights.From
 	if p.LeadWindow != nil && event.Agent == "" {
 		p.report.Ceiling, p.LeadWindow = cmp.Or(p.LeadWindow(body.Model), p.report.Ceiling), nil
@@ -380,10 +385,7 @@ func (p *pass) request(event session.Event, body requestBody) {
 	if body.CostUSD != nil {
 		usd, p.report.CostRecorded = *body.CostUSD, true
 	}
-	input, write1h := body.Prompt, body.Write1h
-	if p.inclusive {
-		input = max(0, body.Prompt-body.Read)
-	}
+	input, write1h := max(0, llm.PromptAccountingFor(wire).FreshTokens(body.Prompt, body.Read)), body.Write1h
 	write5m := FiveMinuteWrites(body.Write, body.Write5m, body.Write1h)
 	written := weights.Write5m*float64(write5m) + weights.Write1h*float64(write1h)
 	spend := Spend{Calls: 1, USD: usd,

@@ -174,8 +174,7 @@ func Read(path string, in drain.Input) (drain.Report, error) {
 		events = append(events, file.events...)
 	}
 	slices.SortStableFunc(events, func(a, b session.Event) int { return a.At.Compare(b.At) })
-	weights, window := in.Weights, in.LeadWindow
-	in.Weights = func(model string) drain.Weights { return weights(anthropicWire + "/" + model) }
+	window := in.LeadWindow
 	in.LeadWindow = func(model string) int { return window(anthropicWire + "/" + model) }
 	return drain.Read(id, events, in), nil
 }
