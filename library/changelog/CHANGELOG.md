@@ -10,6 +10,68 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.18 - 2026-10-24
+
+Every session runs in one tofu host per project that each window joins, a long session stays light and fast, and a session keeps its model, pictures and account across resume.
+
+### Added
+
+- `tofu host ensure|status|stop|run`: every session runs in the project's tofu host, which the app, the desk and `tofu serve` start on demand and join as members, so closing one window leaves the others working and a prompt, steer or approval from any of them runs in the host. The host exits 5 s after its last member leaves, stopping that session's turn and shells. `tofu host status` prints its process, socket, version and members. A newer tofu joining an older host says which build the session runs on.
+- `tofu session clean [--dry-run]` deletes the sessions idle past the new `sessionStaleDays` setting, 90 days by default, `0` for never, and the host runs the same sweep when it starts. It keeps the head, a session a kept one continues or branches from, one open or busy, and one with a live cron job. `tofu session list` counts the sessions idle past that lifetime.
+- `tofu session set <name|id> --model source/model` picks the model a session runs, from its next resume, or from its next turn when a host holds it.
+- `tofu session drain --claude <transcript.jsonl>` weighs a Claude Code transcript the same way as a tofu session.
+- `tofu session find --failed` lists only the calls that failed or a gate refused, and `--text` also matches a call's result and names its tool.
+- `tofu session request` says what went into a request: each prompt part with its tokens and whether it was switched off, the skills, the memory, tokens by kind, images, and the messages new or dropped since the last request. `tofu serve` sends `request.sent` and answers `query.request`.
+- `tofu usage` shows each window's pace: the share used per day, when it runs out at that pace, and what tofu spent in it. `tofu usage --json` adds `window_spend`.
+- `tofu boardy triage show <request>` prints who asked, when, the spec and owns, then the requested ticket.
+- `tofu undo --turn <id>` undoes that turn only while it is the newest recorded, and otherwise names the newest. Two undos on one session run one at a time.
+- Every tofu verb answers an unknown subcommand or flag with `did you mean tofu ...` under its usage line.
+- Over `tofu serve`: `session.turns` pages one generation with `next`, and `session.turn` answers one turn whole; `turn.send` answers the id of the turn it started; a message carries `sentAt` and a note `at`; a tool call carries `card`, `group` and `groupSummary`; `query.ledger.summary` takes `session`; a settings row carries `reason` and marks a `custom` choice; a fork's row names its `parent`.
+
+### Changed
+
+- The chat folds a turn's tool calls into one group row, such as `2 calls 2s`, that shows the call in progress while the turn works and sums up the work once it settles. Ctrl+O or a click opens it to one line per kind of work. A failed call, a gate verdict and a question keep their own rows.
+- A sent message in the chat says `Attached 1 Image` or `Attached 3 Images`, and each pasted text keeps its own line.
+- A new turn keeps the account that served the last one while the lead's cache there lives, `leadCache`, 1h by default, and otherwise takes the account with the most headroom. The chat says why in one line.
+- `tofu run --show-prompt` ends with the tools the request offers, each with its name and description, and a sub-agent's tools with `--agent`.
+- `tofu guard require-ticket` lets a read-only agent, one whose definition holds no edit or patch tool, start with no ticket while its spawn names no ticket and no owns. The refusal names the read-only agents, and the lead's spawn tool says which agents need a ticket.
+- In a sub-agent's shell, `tofu session find`, `trace` and `info`, `tofu boardy show`, `list` and `triage list`, `tofu models` and `tofu version` run, and so do `powershell -File` on a script in a held path and `timeout <n>` around an allowed command. A command the gate would ask about is refused there rather than asked.
+- `tofu session trace --kind notice` lists each sub-agent move, spawned, reviewed, reopened or accepted, with its round and reason.
+- `tofu memory tree` and the episode log write each pass in one batched call to the memory model, and a summary that drops a name its lines held is asked for again.
+- The host sweeps the scratchpad by `scratchCleanupDays` and `scratchMaxGB` when it starts and every hour; `tofu scratch` lists what is left.
+- `tofu boardy show` keeps an answered question under Questions with its answer, and `tofu boardy catchup` counts only the open ones.
+- A kept shell's log stays under 1 MiB, keeping its first and last 256 KiB, and at most 64 kept shells run at once; `tofu shells log` marks where the middle was dropped.
+- Every agent carries the library rule `act_on_stated`: a next action it states, it does in the same turn. `tofu rules list` shows it.
+
+### Removed
+
+- `tofu holder`: the project's host replaces it.
+
+### Fixed
+
+- A resumed session and a resumed sub-agent keep their pictures, a resumed sub-agent keeps its thinking, and a chosen model carries into every forked generation.
+- A long session stays light: the chat holds a window of rows and reads the rest from the session as you scroll, the composer caches its render, the desk keeps a replay in a file, the outbox and member queues are capped, `session.list` stops reading at its limit, and the shell list is read again only when it changes.
+- Past 25 picture results, all but the newest 20 drop at once, so the prompt cache rebuilds once rather than every turn.
+- A settled sub-agent sheds its prompts until it is resumed, and the first turn after opening a session sends no settled older sub-agents.
+- `tofu session drain` prices each request by the wire it went out on, names who priced each model, says `no cost recorded` when nothing recorded one, and never shows a NaN share; `--json` adds `priced_by` and `cost_recorded`.
+- A second Ctrl+C while tool calls finish quits tofu.
+- Headless Chrome ends with the tofu that started it.
+- Quota day files older than the lookback are deleted.
+- The read ledger ignores case on Windows, and each agent keeps its own.
+- The context total counts the tool schemas once.
+- A screenshot holds only its PNG.
+- The output of `rtk git commit`, `push` and `pull` is read.
+- A stop from the inbox no longer crashes tofu.
+- The caret sits after a chip in the composer.
+- A URL in the prompt is no longer read as a project path.
+- The lead's source budget skips the files a sub-agent holds, and a script kept in an ignored folder or outside the project still runs.
+- Ticket tools state their limits in sentences and words, and the `remember` and `ask_person` limits count words.
+- The answer-first check quotes the message you sent and lets the reply through when Jev fails.
+- A citation resolves against the command's `cd` and `./` paths.
+- An unknown session handle fails at once.
+- `tofu session trace` skips the ancestors written before the generation it reads.
+- `scripts/install.ps1` moves a held old binary aside instead of stopping.
+
 ## 0.5.17-fix1 - 2026-10-23
 
 ### Fixed
