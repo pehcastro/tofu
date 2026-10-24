@@ -183,16 +183,18 @@ func (s *shellScorer) scorePerChunk(ctx context.Context, shell sift.Shell, units
 
 func (s *shellScorer) record(state json.RawMessage, set battery, builder string, decision jev.Decision) error {
 	s.spent.Lock()
-	s.calls++
-	s.costUSD += decision.Usage.Cost
 	turnID := s.turnID
 	s.spent.Unlock()
-	_, err := s.rows.append(state, set, rowInput{
+	row, err := s.rows.append(state, set, rowInput{
 		decision:     &decision,
 		answers:      toLedgerAnswers(set.QuestionsVersion, decision.Answers),
 		turnID:       turnID,
 		stateBuilder: builder,
 	})
+	s.spent.Lock()
+	s.calls++
+	s.costUSD += row.Charge.USD
+	s.spent.Unlock()
 	return err
 }
 

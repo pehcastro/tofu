@@ -197,10 +197,11 @@ func (g *toolGate) ask(ctx context.Context, request turn.GateRequest) (ledger.Ro
 		}
 		return row, jevUnavailable{err}
 	}
-	g.costUSD += decision.Usage.Cost
 	written.decision = &decision
 	written.answers = toLedgerAnswers(g.set.QuestionsVersion, decision.Answers)
-	return g.rows.append(builtState, g.set, written)
+	row, err := g.rows.append(builtState, g.set, written)
+	g.costUSD += row.Charge.USD
+	return row, err
 }
 
 func (l rowLedger) appendOwnShell(state json.RawMessage, set battery, in rowInput, own []string) (ledger.Row, error) {

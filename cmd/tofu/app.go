@@ -743,15 +743,41 @@ func pickedOpts(dir string, start host.Turn, maxSteps int) runOpts {
 	})
 }
 
+type missingJudge int
+
+const (
+	missingJudgeRunsWithout missingJudge = iota
+	missingJudgeRefuses
+)
+
 type appEngine struct {
-	dir    string
-	arms   runOpts
-	open   func(runOpts) (appWire, error)
-	quota  func() []frame.Quota
-	tabs   *tools.BrowserTabs
-	warm   *warmProcesses
-	places sys.Places
-	timed  string
+	dir          string
+	arms         runOpts
+	open         func(runOpts) (appWire, error)
+	quota        func() []frame.Quota
+	tabs         *tools.BrowserTabs
+	warm         *warmProcesses
+	places       sys.Places
+	timed        string
+	missingJudge missingJudge
+}
+
+type startedTurn struct {
+	host.Prepared
+	gate   *toolGate
+	scorer *shellScorer
+	budget recall.Budget
+}
+
+func settled(opts runOpts, say func(string)) runOpts {
+	dir := cmp.Or(opts.dir, ".")
+	if opts.maxSteps == 0 {
+		opts.maxSteps = settingInt(dir, settingspkg.DecisionCap, say)
+	}
+	opts.noSubAgents = opts.noSubAgents || settingInt(dir, settingspkg.TurnMaySpawn, say) == 0
+	opts.readBeforeEdit = settingInt(dir, settingspkg.ReadBeforeEdit, say) != 0
+	opts.planEveryStep = settingInt(dir, settingspkg.PlanEveryStep, say) != 0
+	return opts
 }
 
 func (e *appEngine) Renew() {
@@ -765,18 +791,29 @@ func (e *appEngine) OneTurnPerProject() bool {
 }
 
 func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, error) {
-	say := hooks.Say
-	clock := clockFromNow()
-	opts := pickedOpts(e.dir, start, cmp.Or(e.arms.maxSteps, settingInt(e.dir, settingspkg.DecisionCap, say)))
-	opts.gateArm, opts.siftArm, opts.noInstructions, opts.noDocs = e.arms.gateArm, e.arms.siftArm, e.arms.noInstructions, e.arms.noDocs
-	opts.toolSet, opts.contextCeiling = cmp.Or(e.arms.toolSet, opts.toolSet), e.arms.contextCeiling
-	opts.noSubAgents = e.arms.noSubAgents || settingInt(e.dir, settingspkg.TurnMaySpawn, say) == 0
-	opts.readBeforeEdit = settingInt(e.dir, settingspkg.ReadBeforeEdit, say) != 0
-	opts.planEveryStep = settingInt(e.dir, settingspkg.PlanEveryStep, say) != 0
-	prepared := host.Prepared{MaxSteps: opts.maxSteps}
-	shell, err := turn.ResolveRunShell(settingText(e.dir, settingspkg.Shell, say))
+	opts := pickedOpts(e.dir, start, e.arms.maxSteps)
+	opts.gateArm, opts.siftArm, opts.doneArm, opts.noInstructions, opts.noDocs = e.arms.gateArm, e.arms.siftArm, cmp.Or(e.arms.doneArm, doneArmOff), e.arms.noInstructions, e.arms.noDocs
+	opts.toolSet, opts.contextCeiling, opts.noSubAgents = cmp.Or(e.arms.toolSet, opts.toolSet), e.arms.contextCeiling, e.arms.noSubAgents
+	started, err := e.startTurn(settled(opts, hooks.Say), start, hooks, clockFromNow())
+	if started.scorer != nil {
+		closing := started.Close
+		started.Close = func() {
+			closing()
+			if calls, cost := started.scorer.spend(); calls > 0 {
+				hooks.Say(fmt.Sprintf("sift decisions %d cost $%.6f", calls, cost))
+			}
+		}
+	}
+	return started.Prepared, err
+}
+
+func (e *appEngine) startTurn(opts runOpts, start host.Turn, hooks host.Hooks, clock *startupClock) (startedTurn, error) {
+	say, dir := hooks.Say, cmp.Or(opts.dir, ".")
+	started := startedTurn{Prepared: host.Prepared{MaxSteps: opts.maxSteps}}
+	prepared := &started.Prepared
+	shell, err := turn.ResolveRunShell(settingText(dir, settingspkg.Shell, say))
 	if err != nil {
-		return prepared, err
+		return started, err
 	}
 	opts.shell = shell
 	clock.step("settings")
@@ -785,7 +822,7 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 		prepared.Close = opened.held.close
 	}
 	if err != nil {
-		return prepared, err
+		return started, err
 	}
 	checked := opened.held.checkUsageAlongside(clock)
 	prepared.Close = func() {
@@ -795,15 +832,15 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 	clock.step("model choice and credentials")
 	images := start.Images
 	if len(images) > 0 {
-		if refused := imagesRefused(settingText(e.dir, settingspkg.Images, say), opened.selected, len(images)); refused != "" {
+		if refused := imagesRefused(settingText(dir, settingspkg.Images, say), opened.selected, len(images)); refused != "" {
 			say(refused)
 			images = nil
 		}
 	}
-	built, plan, builtErr := buildRunToolsForRun(e.dir, opts.toolSet, readsWhen(opts.readBeforeEdit, hooks.Reads), e.warm, shell)
-	sessions, sessionsErr := sessionstore.Open()
+	built, plan, builtErr := buildRunToolsForRun(opts.dir, opts.toolSet, readsWhen(opts.readBeforeEdit, hooks.Reads), e.warm, shell)
+	sessions, sessionsErr := sessionstore.OpenIn(dir)
 	if err := cmp.Or(builtErr, sessionsErr); err != nil {
-		return prepared, err
+		return started, err
 	}
 	sessions.Redacts(e.warm.keys.redactor)
 	built, plan = planAsOffered(opened.selected, built, plan)
@@ -814,19 +851,22 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 	places := e.places
 	if places == (sys.Places{}) {
 		if places, err = sys.ResolvePlaces("."); err != nil {
-			return prepared, err
+			return started, err
 		}
 	}
 	var gate *toolGate
 	var gateErr error
 	if opts.gateArm != gateOff {
-		gate, gateErr = toolGateOn(e.dir, places.Log, e.warm.keys.keyring())
+		gate, gateErr = toolGateOn(opts.dir, places.Log, e.warm.keys.keyring())
 	}
 	var unusable unusableRule
-	if errors.As(gateErr, &unusable) {
-		return prepared, fmt.Errorf("no turn starts while the tool gate rule is unusable: %w", unusable)
-	}
-	if jev.IsUnbound(gateErr) {
+	switch {
+	case gateErr == nil:
+	case e.missingJudge == missingJudgeRefuses:
+		return started, gateErr
+	case errors.As(gateErr, &unusable):
+		return started, fmt.Errorf("no turn starts while the tool gate rule is unusable: %w", unusable)
+	case jev.IsUnbound(gateErr):
 		sayEach, unbound := say, gateErr.Error()
 		say = func(note string) {
 			if !strings.HasSuffix(note, unbound) {
@@ -835,13 +875,17 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 		}
 	}
 	sifter, scorer, siftErr := shellSiftOn(opts.siftArm, places.Log, e.warm.keys.keyring())
+	var contradiction turn.RuleContradictsTheTableError
+	if siftErr != nil && e.missingJudge == missingJudgeRefuses && !errors.As(siftErr, &contradiction) {
+		return started, siftErr
+	}
 	if siftErr != nil {
 		say("no shell result is cut: " + siftErr.Error())
 	}
 	clock.step("gate and sift")
 	budget, err := contextBudget(opts, opened.selected)
 	if err != nil {
-		return prepared, err
+		return started, err
 	}
 	clock.step("model catalogue")
 	opened.held.wrapping(func(model turn.Model, budget recall.Budget) (turn.Model, error) {
@@ -863,7 +907,12 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 	config, spawner, err := runConfig(opts, built, runtime{accounts: clock.picking(turnAccounts, opened.held.store), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: say, roster: hooks.Roster, inbox: hooks.Inbox, now: hooks.Now,
 		open: e.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.selected, tabs: e.tabs, leadAsks: person, cron: hooks.Cron, plan: plan, places: places, startup: clock, keys: &e.warm.keys, memory: &e.warm.memory})
 	if err != nil {
-		return prepared, err
+		return started, err
+	}
+	if spawner != nil {
+		if spawner.Review, err = newDoneReview(opts.doneArm); err != nil {
+			return started, err
+		}
 	}
 	clock.step("lead tools, board and spawn")
 	if config.Session != e.timed {
@@ -882,9 +931,9 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 	}
 	config.Images = images
 	config.Person = person.Asking(config.GatePromptAsks)
-	prepared.Config, prepared.Spawner, prepared.Plan, prepared.Ceiling, prepared.Sessions, prepared.GateOff = config, spawner, plan, budget.CeilingTokens, sessions, gateErr
-	prepared.Account = account
-	return prepared, nil
+	prepared.Config, prepared.Spawner, prepared.Plan, prepared.Ceiling, prepared.Sessions, prepared.GateOff, prepared.Account = config, spawner, plan, budget.CeilingTokens, sessions, gateErr, account
+	started.gate, started.scorer, started.budget = gate, scorer, budget
+	return started, nil
 }
 
 func (e *appEngine) standIns(held *accounts, wire string) standIns {

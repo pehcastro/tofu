@@ -72,6 +72,8 @@ where it reads from, and the app takes it exactly as tofu run does, so a
 mechanism can be driven by hand on a cassette rather than argued about:
   --sift free|judged        which arm cuts a bash result before the model reads
                             it, otherwise the method table decides
+  --done-review off|cheap|screen|typed   how a sub-agent's hand-back is
+                            reviewed before the lead reads it, off when not named
   --gate off|shadow|enforce, --no-gate    how a tool call is judged
   --tools full|three        which tools the turn is given
   --no-subagents            run without the spawn tool
@@ -761,6 +763,8 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 			plan.arms.gateArm = taken
 		case "--sift":
 			plan.arms.siftArm = taken
+		case "--done-review":
+			plan.arms.doneArm = taken
 		case "--tools":
 			plan.arms.toolSet = taken
 		case "--max-steps":
@@ -777,6 +781,7 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 	if err := cmp.Or(
 		armIsKnown("--gate", plan.arms.gateArm, gateArms()),
 		armIsKnown("--sift", plan.arms.siftArm, siftArms()),
+		armIsKnown("--done-review", plan.arms.doneArm, doneArms()),
 		armIsKnown("--tools", plan.arms.toolSet, []string{toolSetFull, toolSetThree}),
 		armIsKnown("--source", plan.source, []string{string(cred.ClaudeSub), string(cred.CodexSub)}),
 	); err != nil {

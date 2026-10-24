@@ -463,22 +463,13 @@ func runVerb(args []string, out, errOut io.Writer) int {
 			say("refused " + refused.Error())
 		}
 	}
-	if opts.maxSteps == 0 {
-		opts.maxSteps = settingInt(dir, settingspkg.DecisionCap, say)
-	}
-	if !opts.noSubAgents {
-		if maySpawn := settingInt(dir, settingspkg.TurnMaySpawn, say); maySpawn == 0 {
-			opts.noSubAgents = true
-			if opts.doneArm != doneArmOff {
-				return runFail(errOut, fmt.Errorf(
-					"--done-review %s with the %s setting off: that arm has no spawn tool, so no sub-agent is ever reviewed and the flag would say a check is running that is not",
-					opts.doneArm, settingspkg.TurnMaySpawn))
-			}
-		}
+	opts = settled(opts, say)
+	if opts.noSubAgents && opts.doneArm != doneArmOff {
+		return runFail(errOut, fmt.Errorf(
+			"--done-review %s with the %s setting off: that arm has no spawn tool, so no sub-agent is ever reviewed and the flag would say a check is running that is not",
+			opts.doneArm, settingspkg.TurnMaySpawn))
 	}
 	opts.leadMayWorkAlone = true
-	opts.readBeforeEdit = settingInt(dir, settingspkg.ReadBeforeEdit, say) != 0
-	opts.planEveryStep = settingInt(dir, settingspkg.PlanEveryStep, say) != 0
 	if opts.showPrompt {
 		return showPrompt(opts, out, errOut)
 	}
@@ -489,13 +480,18 @@ func runVerb(args []string, out, errOut io.Writer) int {
 		return runFail(errOut, err)
 	}
 	clock.step("model choice")
+	if opts.dryRun {
+		return dryRun(opts, selected, dir, say, out, errOut)
+	}
+	return runTurn(opts, selected, clock, out, errOut)
+}
 
+func dryRun(opts runOpts, selected models.Model, dir string, say func(string), out, errOut io.Writer) int {
 	shell, err := turn.ResolveRunShell(settingText(dir, settingspkg.Shell, say))
 	if err != nil {
 		return runFail(errOut, err)
 	}
 	opts.shell = shell
-
 	home, _ := os.UserHomeDir()
 	warm := newWarmProcesses(tools.NewBrowserTabs(home))
 	defer warm.Close()
@@ -503,29 +499,23 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return runFail(errOut, err)
 	}
-	built, plan = planAsOffered(selected, built, plan)
-	clock.step("shell and tools")
+	built, _ = planAsOffered(selected, built, plan)
 	budget, err := contextBudget(opts, selected)
 	if err != nil {
 		return runFail(errOut, err)
 	}
-	clock.step("model catalogue")
-
-	if opts.dryRun {
-		opts.effort = selected.EffortTaken(opts.effort)
-		config, _, err := runConfig(opts, built, runtime{spend: turn.SpendSubscription, budget: budget, notify: writeNotice(errOut), open: openAppWire, orchestrator: selected})
-		if err != nil {
-			return runFail(errOut, err)
-		}
-		body, err := dryRunBody(opts, selected, config)
-		if err != nil {
-			return runFail(errOut, err)
-		}
-		_, _ = fmt.Fprintln(errOut, "context budget "+budget.Record())
-		_, _ = fmt.Fprintln(out, string(body))
-		return exitOK
+	opts.effort = selected.EffortTaken(opts.effort)
+	config, _, err := runConfig(opts, built, runtime{spend: turn.SpendSubscription, budget: budget, notify: writeNotice(errOut), open: openAppWire, orchestrator: selected})
+	if err != nil {
+		return runFail(errOut, err)
 	}
-	return runTurn(opts, selected, built, plan, budget, warm, clock, out, errOut)
+	body, err := dryRunBody(opts, selected, config)
+	if err != nil {
+		return runFail(errOut, err)
+	}
+	_, _ = fmt.Fprintln(errOut, "context budget "+budget.Record())
+	_, _ = fmt.Fprintln(out, string(body))
+	return exitOK
 }
 
 func contextBudget(opts runOpts, model models.Model) (recall.Budget, error) {
@@ -571,7 +561,7 @@ func guarded(model turn.Model, budget recall.Budget) (turn.Model, error) {
 	return windowGuard{inner: model, budget: budget, cfg: cfg}, nil
 }
 
-func runTurn(opts runOpts, selected models.Model, built []turn.Tool, plan *tools.Plan, budget recall.Budget, warm *warmProcesses, clock *startupClock, out, errOut io.Writer) int {
+func runTurn(opts runOpts, selected models.Model, clock *startupClock, out, errOut io.Writer) int {
 	open := openAppWire
 	deck, err := readCassette(os.Getenv(cassetteVariable))
 	if err != nil {
@@ -580,61 +570,24 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, plan *tools
 	if deck != nil {
 		open = driveWire(deck)
 	}
-	opened, err := open(opts)
-	if opened.held != nil {
-		defer opened.held.close()
-	}
-	if err != nil {
-		return runFail(errOut, err)
-	}
-	defer opened.held.checkUsageAlongside(clock)()
-	clock.step("credentials")
-	opened.held.wrapping(func(model turn.Model, budget recall.Budget) (turn.Model, error) {
-		asked, err := guarded(model, budget)
-		return clock.leading(asked), err
-	}, budget, opts)
 	places, err := sys.ResolvePlaces(".")
 	if err != nil {
 		return runFail(errOut, err)
 	}
-
-	var gate *toolGate
-	if opts.gateArm != gateOff {
-		if gate, err = toolGateOn(opts.dir, places.Log, warm.keys.keyring()); err != nil {
-			return runFail(errOut, err)
-		}
+	home, _ := os.UserHomeDir()
+	warm := newWarmProcesses(tools.NewBrowserTabs(home))
+	defer warm.Close()
+	engine := &appEngine{dir: opts.dir, open: open, tabs: warm.tabs, warm: warm, places: places, missingJudge: missingJudgeRefuses}
+	same := func(model turn.Model) turn.Model { return model }
+	started, err := engine.startTurn(opts, host.Turn{}, host.Hooks{Lead: same, SubAgent: same, Say: writeNotice(errOut), Reads: turn.NewReadLedger()}, clock)
+	if started.Close != nil {
+		defer started.Close()
 	}
-
-	sifter, scorer, err := shellSiftOn(opts.siftArm, places.Log, warm.keys.keyring())
-	if err != nil {
-		var contradiction turn.RuleContradictsTheTableError
-		if !errors.As(err, &contradiction) {
-			return runFail(errOut, err)
-		}
-		_, _ = fmt.Fprintln(errOut, "tofu run: no shell result is cut: "+err.Error())
-	}
-
-	sessions, err := session.OpenIn(cmp.Or(opts.dir, "."))
 	if err != nil {
 		return runFail(errOut, err)
 	}
-	sessions.Redacts(warm.keys.redactor)
-	clock.step("gate, sift and session store")
-
-	config, spawner, err := runConfig(opts, built, runtime{accounts: clock.picking(opened.held.forTurn(), opened.held.store), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: writeNotice(errOut),
-		open: open, wrapSubAgent: guarded, orchestrator: selected, tabs: warm.tabs, plan: plan, places: places, startup: clock, keys: &warm.keys, memory: &warm.memory})
-	if err != nil {
-		return runFail(errOut, err)
-	}
-	clock.step("lead tools, board and spawn")
-	if spawner != nil {
-		review, reviewErr := newDoneReview(opts.doneArm)
-		if reviewErr != nil {
-			return runFail(errOut, reviewErr)
-		}
-		spawner.Review = review
-	}
-	_, _ = fmt.Fprintln(out, "context budget "+budget.Record())
+	config, spawner, sessions, gate, scorer := started.Config, started.Spawner, started.Sessions, started.gate, started.scorer
+	_, _ = fmt.Fprintln(out, "context budget "+started.budget.Record())
 	registry, registryErr := launchShellRegistry(opts.dir)
 	if registryErr == nil {
 		_ = registry.Prune()
@@ -652,9 +605,6 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, plan *tools
 		printRunRow(out, row, selected.Slug(), selected.WindowText())
 		head, rows = cmp.Or(row.Session, head), append(rows, row)
 	})
-	if err := clock.record(sessions, config.Session); err != nil {
-		_, _ = fmt.Fprintln(errOut, "tofu run: the startup steps were not recorded: "+err.Error())
-	}
 	for _, warning := range turn.EndSession(context.Background(), cmp.Or(opts.dir, "."), head, sessionEndOther) {
 		_, _ = fmt.Fprintln(errOut, "tofu run: "+warning)
 	}
