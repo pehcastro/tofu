@@ -111,7 +111,7 @@ func Run(ctx context.Context, key string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	pol, resolution, err := gateRule(root)
+	pol, resolution, err := gateRule(root, gateRuleFile)
 	if err != nil {
 		return Result{}, err
 	}

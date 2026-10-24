@@ -19,7 +19,7 @@ const repoRoot = "../.."
 func liveKey(t *testing.T, gate string) string {
 	t.Helper()
 	if os.Getenv(gate) != "1" {
-		t.Skipf("set %s=1 to spend money on the jev, opus and fable arms", gate)
+		t.Skipf("set %s=1 to spend money on the jev arms", gate)
 	}
 	sys.AllowLiveCredential(t)
 	key, err := jev.TypeSafeKey(filepath.Join(repoRoot, ".env"))

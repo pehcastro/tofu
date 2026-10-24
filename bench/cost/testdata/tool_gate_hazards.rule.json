@@ -1,0 +1,8 @@
+{
+  "questions": "testdata/tool_gate_hazards@1.yaml",
+  "hazard_ask_at": 0.5,
+  "relaxed_by": "user_requested",
+  "user_requested_relax_at": 0.85,
+  "never_relaxed_by": "from_untrusted",
+  "chosen": "2026-10-24, before any decomposed answer existed: 0.5 is the noul midpoint, 0.85 is user_requested_relax_at in library/general/rules/tool_gate@3.yaml"
+}

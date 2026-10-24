@@ -11,7 +11,7 @@ import (
 
 func shippedGate(t *testing.T) (gate.Rule, gate.Resolution) {
 	t.Helper()
-	pol, resolution, err := gateRule(repoRoot)
+	pol, resolution, err := gateRule(repoRoot, gateRuleFile)
 	if err != nil {
 		t.Fatalf("loading the shipped tool gate: %v", err)
 	}

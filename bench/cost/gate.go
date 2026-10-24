@@ -18,15 +18,15 @@ const (
 	Refused Verdict = "refused"
 )
 
-func gateRule(root string) (gate.Rule, gate.Resolution, error) {
-	pol, findings, err := gate.LintFile(filepath.Join(root, filepath.FromSlash(gateRuleFile)), filepath.Join(root, "library"))
+func gateRule(root, file string) (gate.Rule, gate.Resolution, error) {
+	pol, findings, err := gate.LintFile(filepath.Join(root, filepath.FromSlash(file)), filepath.Join(root, "library"))
 	if err != nil {
 		return gate.Rule{}, gate.Resolution{}, err
 	}
 	if len(findings) > 0 {
-		return gate.Rule{}, gate.Resolution{}, fmt.Errorf("%s fails its own lint: %s", gateRuleFile, findings[0])
+		return gate.Rule{}, gate.Resolution{}, fmt.Errorf("%s fails its own lint: %s", file, findings[0])
 	}
-	pol.File = gateRuleFile
+	pol.File = file
 	resolution := gate.Resolve(pol, gate.LockLookup{}, gate.Current{})
 	return resolution.Rule, resolution, nil
 }
