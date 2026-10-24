@@ -825,7 +825,7 @@ func (r *record) fork(ended, next Row, fork *Fork, at time.Time) {
 	if r == nil || !r.own {
 		return
 	}
-	into, from := session.NewEventID(), r.log.Header()
+	into := session.NewEventID()
 	r.add(session.Event{Kind: session.EventTurnEnd}, ended.Summary())
 	r.note(r.log.Edit(func(header *session.Header) {
 		header.Outcome, header.Model, header.ForkedInto = ended.Outcome.String(), cmp.Or(ended.Model, header.Model), into
@@ -833,8 +833,9 @@ func (r *record) fork(ended, next Row, fork *Fork, at time.Time) {
 		header.ForkTokensBefore, header.ForkTokensAfter = fork.TokensBefore, fork.TokensAfter
 	}))
 	r.note(r.inbox.release(r.log))
-	log, err := r.inbox.open(r.store, session.Header{ID: into, At: at, ForkKind: string(fork.Kind), Root: cmp.Or(from.Root, from.ID),
-		CarriedFrom: &session.Carried{Session: from.ID, Event: r.log.Header().Head}})
+	from := r.log.Header()
+	log, err := r.inbox.open(r.store, session.Header{ID: into, At: at, ForkKind: string(fork.Kind), Root: cmp.Or(from.Root, from.ID), Chosen: from.Chosen,
+		CarriedFrom: &session.Carried{Session: from.ID, Event: from.Head}})
 	if err != nil {
 		r.note(err)
 		return

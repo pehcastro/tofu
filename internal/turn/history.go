@@ -261,7 +261,7 @@ func RecordCarried(store *session.Store, from string, compacted Compacted, at ti
 	}
 	was, into := ended.Header(), session.NewEventID()
 	log, err := store.Open(session.Header{ID: into, At: at, ForkKind: string(ForkCompact), Root: cmp.Or(was.Root, was.ID), Task: was.Task,
-		Wire: was.Wire, Model: was.Model, CarriedFrom: &session.Carried{Session: was.ID, Event: was.Head}})
+		Wire: was.Wire, Model: was.Model, Chosen: was.Chosen, CarriedFrom: &session.Carried{Session: was.ID, Event: was.Head}})
 	if err != nil {
 		return "", errors.Join(err, ended.Close())
 	}
