@@ -54,7 +54,7 @@ What it is
   set the work stops and names them. `tofu docs usage` has more.
 
   A setting changed in one window, by `tofu settings set` or by hand, reaches
-  every open window and the session holder on the next turn, with no reload.
+  every open window and the project's host on the next turn, with no reload.
 
 The detail
 

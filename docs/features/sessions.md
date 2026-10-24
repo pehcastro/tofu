@@ -2,7 +2,7 @@
 title: Sessions
 description: Every session is recorded as it runs, outside your project, and one command reopens it where you left off.
 order: 6
-updated: 2026-10-22
+updated: 2026-10-24
 ---
 
 A session is one conversation with tofu: every message, tool call and
@@ -29,8 +29,11 @@ quits tofu the way a person's quit does, saving first.
 
 **Never rewritten.** When a session forks to stay under its context budget,
 the old one keeps its whole record and points at the new one, and the new
-one carries every message you typed, word for word. tofu never deletes a
-session either; that is yours to do.
+one carries every message you typed, word for word.
+
+**Deleted only when idle for long.** A session nobody touched for 90 days is
+deleted when the project's tofu host starts; see
+[Cleaning up old sessions](#cleaning-up-old-sessions).
 
 **One name for one conversation.** A fork to stay under the context
 budget, `/compact` and a move to another account start the next
@@ -50,22 +53,46 @@ the message itself rather than its memory of it, across forks and
 so `tofu --continue` opens in under a second on a chain of 21 sessions
 with 84 sub-agents. Each message keeps its own time, each sub-agent report
 draws as a report, and a conversation over the context target forks
-before its first request instead of resending the whole history.
+before its first request instead of resending the whole history. A resumed
+session and a resumed sub-agent keep their pictures, their model and the
+sub-agent's thinking, and a fork keeps the model you chose.
 
-## One session in two places
+**A long session stays light.** The chat holds a window of the newest rows
+and reads older ones from the session as you scroll, so a session of
+thousands of rows scrolls and types as fast as a new one. Past 25 picture
+results, tofu drops all but the newest 20 at once, so the provider's prompt
+cache rebuilds once rather than on every turn.
 
-Open a session another tofu on the same machine is working in, with
-`tofu session resume <name>`, `tofu --continue` or the desk, and it opens as a
-follower instead of refusing. It shows the transcript, then every event the
-holding tofu writes, live, token by token. A prompt, `Esc` or an approval
-you give in the follower runs in the holding tofu, exactly as if you had
-typed it there, and the chat names the process that holds the session. So do steering, question answers and memory answers. Over `tofu serve`, `session.open` and `session.state` answer `members`, every process joined to the session with its kind, `tui`, `desk` or `serve`, and when it joined; `session.member` says the new list when one joins or leaves, and `turn.steerQueued` tells a client a follower's steer is waiting.
+## One host per project
 
-There is one writer, always. When the holding tofu quits or is killed, the
-follower takes the session within 2 s and runs what you type itself. The
-two talk over a local socket under the session's folder, or under the
-system temp folder when that path is too long for a socket, so nothing is
-reachable from another machine.
+Every session runs in the project's `tofu host`, one process per project
+that the terminal, the desk and `tofu serve` each join as a member. No
+window owns a session, so closing one leaves the others working. A prompt,
+`Esc`, a steer or an approval you give in any member runs in the host, and
+the first answer to a question wins. A member that joins late gets the
+transcript and then every event live, token by token.
+
+You never start the host yourself. The first window starts it, and it
+exits 5 s after its last member leaves. When the last member leaves, the
+host stops the session's turn, naming that member, and ends its shells. A
+member that stops answering for 10 s is let go.
+
+```sh
+tofu host status
+tofu host ensure
+tofu host stop
+```
+
+`status` prints the host's process, socket, project, version, members and
+start time; `ensure` starts it when none answers; `stop` ends it now. Each
+takes `--dir` and `--json`. The host's log is `~/.tofu/h/<key>.log`, kept
+under 1 MiB with one older copy beside it.
+
+The members and the host talk over a local socket under your home, or, on
+Windows, under a temp folder only your user can open, so nothing is
+reachable from another machine or another user. A newer tofu that joins a
+host started by an older one says so, and the session runs on the older
+build until its last member leaves.
 
 ## Side chats
 
@@ -102,7 +129,11 @@ chats; `tofu session list --all` shows them. A frontend opens one over
   `checkout-redesign`, on every generation.
 - **Point at one generation**: `brisk-amber-heron#4mhr1.2`; the name alone
   is the newest.
-- **Delete one**: remove its folder under `sessions/`.
+- **Change its model**: `tofu session set <name|id> --model
+  claude-sub/claude-sonnet-5` runs it on that model from its next resume, or
+  from its next turn when a host holds it.
+- **Delete one**: remove its folder under `sessions/`, or let
+  `tofu session clean` remove the old ones.
 - **Move sessions an older tofu left in the project**: opening the app moves
   them once and prints one line; `tofu migrate --dry-run` lists the move
   first. A file the home already holds with other bytes is settled by kind:
@@ -121,6 +152,22 @@ time the project opens, instantly whatever its size, and nothing is left under
 the old name. If an older tofu still holds a file in it, the open says so in
 one line, keeps reading the old folder and tries again next time; close older
 tofu sessions before that first run.
+
+## Cleaning up old sessions
+
+A session idle for longer than the `sessionStaleDays` setting, 90 days by
+default, is deleted when the project's host starts. Idle means nothing in
+its folder changed. `0` keeps every session forever.
+
+```sh
+tofu session clean --dry-run
+tofu session clean
+```
+
+`--dry-run` lists what would go and why the rest stays. tofu always keeps
+the head, a session that a kept one continues or branches from, a session
+open or busy now, and one with a cron job that still schedules.
+`tofu session list` counts the sessions idle past the lifetime.
 
 ## Commands
 
@@ -146,7 +193,10 @@ tofu session find brisk-amber-heron --tool bash
 ```
 
 finds every call across every generation, and `--command`, `--file`,
-`--text`, `--agent`, `--since` and `--until` narrow it, together.
+`--text`, `--agent`, `--since` and `--until` narrow it, together. `--text`
+also matches a call's result and names the tool it came from. `--failed`
+lists only the calls that failed or that a gate refused, a refused call
+reading as `bash refused`.
 
 ```sh
 tofu session trace brisk-amber-heron
@@ -165,9 +215,11 @@ one line each, and filters combine: `--since`, `--from` and `--to` (`1h`,
 `spawn`, `report`, `message`, `insert`, `cron`, `request`, `memory`, `call`,
 `shell`, `gate`, `hook`, `cache`, `compaction`, `list`, `read`, `startup`,
 `notice` and `attachment`. `--wide` prints each row whole, and `--full`
-prints every request, call, hook and message section. A sub-agent that kept
-writing to the session before a continue shows with the session it was
-recorded in.
+prints every request, call, hook and message section. `--kind notice` lists
+each sub-agent move, spawned, reviewed, reopened or accepted, with its round
+and reason, such as `go-dev reopened, round 2: acceptance line 3 fails`.
+A sub-agent that kept writing to the session before a continue shows with
+the session it was recorded in.
 
 Every request, call and sub-agent run says when it began as `start_ms`,
 milliseconds from the start of the session, so a timeline lines up without
@@ -182,7 +234,12 @@ with and what it holds now, such as `fresh, holds 40 messages` or
 `12 messages from brisk-amber-heron#4mhr1.1, holds 52 messages`, and
 `nothing to resume` when it holds none. `tofu session request <name>
 <request id>` prints one request exactly as it was sent with its response or
-error body, and `tofu session reads <name>` every file it read. Each takes
+error body, and a section on what went into it: each prompt part, such as a
+rule, an agent or the system prompt, with its tokens and whether it was
+switched off, the skills loaded, the memory, the tokens by kind, the images,
+and how many messages were new or dropped since the last request. A request
+recorded by an older tofu says `not recorded`. `tofu session reads <name>`
+prints every file it read. Each takes
 `--json`, and `tofu session trace --json` with a filter prints the same rows.
 Over `tofu serve`, `session.info` carries the same history as
 `carried_from`: the session, its handle and how many messages came over.

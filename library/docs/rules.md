@@ -11,7 +11,7 @@ A rule is one line of instruction the model reads, like "never write yaml
 by hand". A rule may declare a `language`, `framework`, `scope`, `condition`
 (an `unless` vetoes a match on its line), `task` or `role`, and reaches only the tasks that match. A `framework`
 comes from the package.json or Cargo.toml the task reaches, and the reason names which. tofu ships its own set, and you can add yours,
-switch one of tofu's off, or replace one with your own text.
+switch one of tofu's off, or replace one with your own text. One of tofu's, `act_on_stated`, reaches every agent: a next action it states, it does in the same turn, and it keeps working until the work is done or only you can settle what blocks it.
 
 A rule has an id, a short name in lower case letters, digits and
 underscores, like `no_yaml`. The id is how you switch it off or remove it.

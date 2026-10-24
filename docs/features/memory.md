@@ -2,7 +2,7 @@
 title: Memory
 description: Tell tofu once. Memory keeps what you asked it to remember in four scopes, and the episode log keeps the whole conversation of a project, summarized as a tree the lead can open line by line.
 order: 14
-updated: 2026-10-09
+updated: 2026-10-24
 ---
 
 Memory keeps two things for you across sessions. **Entries** are the short
@@ -95,6 +95,11 @@ before it acts on it. Where tofu departs:
 - **No tool output in the log.** Episodes hold your words, the lead's
   replies and sub-agent reports. A tool result keeps its handle, which
   `lookup` and `artifact_fetch` read back exactly.
+- **One call per pass, and names kept.** Every summary a pass of the tree
+  needs, from `tofu memory tree` or the episode log after a reply, goes out
+  in one batched call to the memory model. A summary that drops a name its
+  two lines held, such as a file or a function, is asked for again on its
+  own.
 - **The view fits the context target.** It takes at most half the room left
   under the target, capped at 32 KB, where OptChat sends 64 to 128 KB.
 - **Your subscription writes the summaries.** The `memoryModel` setting,

@@ -23,8 +23,7 @@ context. `tofu docs serve-methods` lists every request; this page is what serve 
 - `session.open` replays the chat as events; `session.history` pages it. Opened while a turn runs, it keeps
   that turn going in its own session (capability `sessions`), each event naming its `session`; a request
   with no `session` means the session opened last, and `session.close` lets one go. Both run turns at once
-  only with `oneWorkingSessionPerProject` off; while on, the default, the second turn ends `failed`. A
-  window that cannot reach the session's busy holder names that process and only follows, running nothing
+  only with `oneWorkingSessionPerProject` off; while on, the default, the second turn ends `failed`. Every window joins the project's `tofu host` as a member, and the session runs there
 - `session.listed`: the open row of `session.list` again when a turn starts or ends, after a fork and a
   rename; `session.updated` follows every turn, a rename and a compaction, with `lastAt`, the last record;
   `session.turns.updated` carries the ended turn's `digest`, one row of `session.turns`
@@ -34,12 +33,12 @@ context. `tofu docs serve-methods` lists every request; this page is what serve 
 - `origin` on `turn.started`, every `message.user`, `turn.steered` and `turn.steerQueued`: `kind` (`person`,
   `agent`, `tofu`, `cron`, `hook`, `memory`, `skill`, `library`, `plugin`) and `sub`, what sent it, such as
   `{"kind":"person","sub":"typed"}` or `{"kind":"cron","sub":"fire","job":"c1","schedule":"every 30m"}`;
-  only `person` is your words. `images: [{n, path, mime}]`, `n` the `[Image #N]` in the text
+  only `person` is your words. `images: [{n, path, mime}]`, `n` the `[Image #N]` in the text, also on a steer. A message carries `sentAt`, when you sent it, and a note or a reply its `at`
 - `cron.updated` and `query.cron`: `live`, `goals` and each job's `id`, `schedule`, `prompt`, `paused`, `next`
   and `ended`; a fire that starts a turn shows in its `origin` alone, one joining a running turn sends a `note`
 - `tool.started`, `tool.completed` and `file.edit` (an append as an added hunk) by a sub-agent carry its
   `agent` and `instance`, live and replayed; `tool.started` the bash `title` the model gave, and
-  `tool.completed` a `summary`: `exit`, `durationMs`, `hits` for a search, `added` and `removed` lines
+  `tool.completed` a `summary`: `exit`, `durationMs`, `hits` for a search, `added` and `removed` lines. Both carry `card`, the call drawn as a row (`family`, `doing`, `verb`, `object`, `meta`, `tone`), its `group`, and `groupSummary`, the turn's group row: `calls`, `failed`, its `head` and its `open` lines
 - `agent.ended`: `endedAt`, `durationMs`, the `turn` that spawned it;
   `turn.steered`: the lead read a message sent mid-turn, until then queued; `usage.updated`, per turn and agent after each call, the running `tokensIn`, `tokensOut`, `cacheRead`, `cacheWrite5m`, `cacheWrite1h`, `costUsd`, `decisions`
 - `quota.updated`: on open, after each turn, on an account move, every five minutes, and once a `retry_at`

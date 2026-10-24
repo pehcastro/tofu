@@ -58,7 +58,7 @@ The `boards` folder is under the project's folder in the tofu home.
 value removes one. A manager adds, edits and removes.
 
     tofu boardy manager add|remove|list [name] [--board KEY]
-    tofu boardy triage list|accept|drop [request] [--reason text]
+    tofu boardy triage list|show|accept|drop [request] [--reason text]
     tofu boardy assign <ticket> <session or name>
     tofu boardy widen <ticket> <glob,glob>
     tofu boardy hand <ticket> <board> [--project dir]
@@ -69,7 +69,8 @@ value removes one. A manager adds, edits and removes.
 `hand DEMO-3 OPS` creates the next OPS ticket with DEMO-3's Log and drops
 DEMO-3 as `handed to OPS-1`. `tick` runs the due schedule hooks once;
 `tofu serve`, and so the desk app, ticks every minute while it is open.
-`fire` fires the events no board command makes.
+`fire` fires the events no board command makes. `triage show T1` prints
+who asked, when, the spec and owns, then the requested ticket's sections.
 
 Serve: `boardy.rules`, `boardy.rule.get` and `boardy.rule.remove` take
 `board`, `id` and an optional `scope`, and answer the rows `--json` prints.
@@ -80,7 +81,9 @@ an unsaved `source`, a `ticket` and an optional `to`.
 A move to `needs-decision` needs a question with a tldr, an eli5, two to
 four options and the pick with why. `tofu boardy ask` asks it,
 `tofu boardy catchup` writes `boards/<KEY>/catchup.md` for the answers, and
-`catchup --answers`, run by a manager, applies them.
+`catchup --answers`, run by a manager, applies them. An answered question
+stays on the ticket under Questions with an `Answer:` line, and catchup,
+audit and the board's rows count only the open ones.
 
 ## Check it
 

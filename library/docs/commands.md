@@ -93,7 +93,8 @@ goes one turn further back. From a terminal:
     tofu undo 2 --force
 
 `--dry-run` lists what would change and writes nothing, and `--force` puts
-back a file changed after the turn too.
+back a file changed after the turn too. `tofu undo --turn <id>` undoes that turn only while it is
+the newest recorded, and otherwise names the newest; two undos on one session run one at a time.
 
 ## Check it
 

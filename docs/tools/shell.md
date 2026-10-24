@@ -2,7 +2,7 @@
 title: Shell
 description: bash wraps your shell for one command at a time, and shell is tofu's own registry of the servers bash kept running.
 order: 3
-updated: 2026-10-09
+updated: 2026-10-24
 ---
 
 `bash` is a wrapper: it runs `<your shell> -c <command>` in the working
@@ -51,6 +51,12 @@ line. The tab reads four times a second while any shell runs, turn or no
 turn, and a kept shell keeps one name for good, so `bash-3` in a
 sub-agent's report is the one the tab shows. `shell wait` and `shell logs` say how long it
 ran and when it last printed, such as `ran 1m 1s, last output 2s ago`.
+
+A kept shell's log stays under 1 MiB however long it runs: it keeps the
+first and the last 256 KiB, with a line where the middle was dropped
+saying how many bytes went. At most 64 kept shells run at once; one more
+is refused with the way out, to stop one on the **shells** tab or with
+`tofu shells stop <name>`.
 
 When a command names its own log file, such as `-Log target/build.log`,
 `> build.log` or `tee build.log`, its row on the **shells** tab and

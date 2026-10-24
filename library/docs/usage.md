@@ -14,6 +14,12 @@ shows the fullest window in its footer, and `tofu serve` answers the same
 reading in `query.usage` and pushes it as `quota.updated`. `tofu usage`
 checks every account at once, not one after another.
 
+A new turn keeps the account that served the last one while the lead's prompt cache there lives
+(`leadCache`, 1h by default), so the cache is read rather than written again. Past that it takes the
+account with the most headroom, and the chat says why, such as `account #2 last answered 1h 20m ago,
+past its 1h cache, so this turn takes the account with the most headroom`; a signed-out or spent
+account is left the same way with its own reason.
+
 The footer names the account that served the last request, and follows a
 rotation, a pick in the model picker and a login. When a subscription's
 account is spent mid-turn, tofu asks the same step again on the next signed-in
@@ -86,10 +92,14 @@ tofu usage
 Each account card ends with a `read` line: the time of the reading, its
 age, its source, and `stale` when the endpoint could not refresh it. A
 `retry` line says when the endpoint is asked again. A turn's reading
-reads `from the reply headers`.
+reads `from the reply headers`. Each window also shows its pace, such as `12%/day, out Mon 2 Jan
+15:04; tofu 1.2M weighted, 400k/day`: the share used per day, when it fills at that pace, and what
+tofu spent in it. `lasts to the reset` means it resets first; `rate not known yet` means tofu has no
+rate for it yet.
 
 `tofu usage --json` and `query.usage` carry the same facts on each
-provider: `read_at`, `source`, `stale` and `retry_at`. `query.usage`
+provider: `read_at`, `source`, `stale` and `retry_at`, and `tofu usage --json` adds `window_spend`, each
+window's weighted tokens, rate per day, share used per day and run-out time. `query.usage`
 also carries `read_at` and `age_ms` for the whole answer, taken from its
 oldest reading.
 

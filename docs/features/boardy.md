@@ -2,7 +2,7 @@
 title: Boardy
 description: Your own Jira or Linear, kept as markdown files on your disk, with numbered tickets and sub-tickets, statuses, a thread of what happened on each, and a lint that catches two tickets claiming one file.
 order: 18
-updated: 2026-10-22
+updated: 2026-10-24
 ---
 
 Boardy is a ticket board that lives in files. Each project can hold several
@@ -83,7 +83,9 @@ recommended pick, and writes them to `catchup.md` beside the tickets with an
 empty `answer:` line under each. Write `1`, `2, but keep it short`, or your
 own words there. `tofu boardy catchup --answers` logs every answer on its
 ticket, closes the question, clears the entry, and moves the ticket back to
-where it was once nothing is left to answer. A move to `needs-decision`
+where it was once nothing is left to answer. The answered question stays on
+the ticket under Questions with an `Answer:` line beneath it, and catchup,
+the audit and the board's rows count only the questions still open. A move to `needs-decision`
 without a question carrying all of that is refused.
 
 A second board in the same project, `tofu boardy init --key OPS`, counts

@@ -2,7 +2,7 @@
 title: Cron, loops and goals
 description: One scheduler posts a prompt into your session on a timer or after each turn, and every change to a job is kept as a version with its reason.
 order: 11
-updated: 2026-10-05
+updated: 2026-10-24
 ---
 
 A cron job is a prompt tofu posts into your session by itself: on a timer,
@@ -41,7 +41,7 @@ on time too, and a job keeps firing while one long turn runs.
 ## Guards
 
 - **An expiry on every job.** A job without one expires after 24 hours.
-- **One process fires it.** A job runs in the holder of its session,
+- **One process fires it.** A job runs in the project's `tofu host`,
   whichever window made it, even a window that has sent nothing yet, and
   fires once however many windows follow, and `tofu --continue` in another
   window joins a session that holds only a job before it first fires. Past

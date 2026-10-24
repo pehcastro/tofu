@@ -2,7 +2,7 @@
 title: Sub-agent tools
 description: spawn, message, subagents and ask, the tools the lead and its sub-agents use to hand out work and talk while it runs.
 order: 7
-updated: 2026-10-04
+updated: 2026-10-24
 ---
 
 Four tools, tofu's own Go code. The lead gets `spawn`; the loop adds
@@ -35,3 +35,13 @@ limits in settings.
 
 `subAgentsPerTurn` (10) and `subAgentDepth` (2) are settings, and `tofu
 agents` lists the sub-agents `agent` can name.
+
+## What a sub-agent's shell runs
+
+A sub-agent reads its own session and board from its shell: `tofu session
+find`, `trace` and `info`, `tofu boardy show`, `list` and `triage list`,
+`tofu models` and `tofu version` run there, and every other tofu verb is
+refused. `powershell -File` on a script inside a path the sub-agent holds
+runs, and `timeout <n>` wraps any command it may run. A command the gate
+would ask you about is refused in a sub-agent rather than asked, so a
+sub-agent never waits on a question nobody sees.

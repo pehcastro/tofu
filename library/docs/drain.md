@@ -13,7 +13,12 @@ tokens went. On a session of 20 MB and 11,298 events it answers in 0.7 to
 Every call is counted in weighted tokens, so a cache read and an output
 token are not the same unit. The default weights are list price ratios:
 input 1, cache write for 5 minutes 1.25, for an hour 2, cache read 0.1 and
-output 5. A model the catalog prices uses its own ratios instead.
+output 5. A model the catalog prices uses its own ratios instead, from the price of the wire each
+request went out on, and the summary's `priced` line names the source that priced each model.
+
+It reads a Claude Code transcript too: `tofu session drain --claude <transcript.jsonl>` weighs a
+session run in the `claude` command line the same way. Where nothing recorded a cost, it says
+`no cost recorded` rather than a guess.
 
 The report opens with a short summary:
 
@@ -63,13 +68,15 @@ Over `tofu serve`, `query.drain` takes `session` and answers what
 
 There is no setting. The weights follow the prices in the model catalog:
 `tofu models reload` brings new ones, and the `--json` report names the
-default weights and where they came from under `default_weights`.
+default weights and where they came from under `default_weights`, each model's pricing source under
+`priced_by`, and `cost_recorded`.
 
 Pick the session by name, id or handle:
 
     tofu session drain
     tofu session drain brisk-amber-heron#4mhr1.2
     tofu session drain brisk-amber-heron --json
+    tofu session drain --claude ~/.claude/projects/shop/1f2e3d4c.jsonl
 
 With no name, it reads the head, the session `tofu --continue` opens.
 

@@ -52,7 +52,7 @@ writes elsewhere.
 ## Change it
 
 A session's folder that no running tofu holds and that nobody touched for
-`scratchCleanupDays` days is removed when a run starts. Past `scratchMaxGB`
+`scratchCleanupDays` days is removed when a run starts, and when the project's `tofu host` starts and every hour after. Past `scratchMaxGB`
 gigabytes the oldest session folders go first. A process still running in
 a folder is stopped before it is removed. `shared/` is never cleaned on its
 own.

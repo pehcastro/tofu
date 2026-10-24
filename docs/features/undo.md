@@ -2,7 +2,7 @@
 title: Undo
 description: Put back the files the last turn changed, or the last N turns, including changes made through bash, without touching your git history.
 order: 12
-updated: 2026-10-05
+updated: 2026-10-24
 ---
 
 Undo puts back every file a turn changed. A file the turn edited gets its old
@@ -43,10 +43,19 @@ Ignored files and new files over 10 MiB are never recorded, and undo needs
 - **Include files changed since**: `tofu undo --force`.
 - **Another session or folder**: `tofu undo --session <id>` and
   `tofu undo --dir <path>`.
+- **Name the turn**: `tofu undo --turn <id>` undoes that turn only while it
+  is the newest one recorded. When it was undone already, or a later turn
+  came after it, undo refuses and names the newest turn, so a second window
+  never puts back the wrong turn.
+
+Two undos never run at once on one session: the second waits for the first
+to finish.
 
 ## Commands
 
 ```
 /undo [N]
-tofu undo [N] [--dir path] [--session id] [--force] [--dry-run] [--json]
+tofu undo [N] [--dir path] [--session id] [--turn id] [--force] [--dry-run] [--json]
 ```
+
+Over [tofu serve](/docs/cli/serve), `undo` takes `turn` the same way.

@@ -43,13 +43,22 @@ it in one move, so a chip is never left half typed. Before an image is
 sent, tofu fits it to at most 1568 pixels on its long edge, about 1.15
 million pixels and 5 MB, whether you pasted it, a client sent it or the
 model read it from a file. A webp over 5 MB cannot be shrunk and is
-refused with a note to convert it to png or jpeg.
+refused with a note to convert it to png or jpeg. A sent message says
+`Attached 1 Image` or `Attached 3 Images` under its text, and each pasted
+text keeps its own line, such as `text, 2400 characters`.
+
+A turn's tool calls fold into one group row in the chat, such as `2 calls
+2s`: while the turn works it shows the call in progress and its time, and
+once settled it sums up the work. `ctrl+o` or a click opens it to one line
+per kind of work, with `collapse` to fold it. A failed call (`bash failed
+1 of 1`), a gate verdict and a question keep their own rows.
 
 `ctrl+c` while the lead works stops the lead at once, and its sub-agents
 keep running. With the lead idle and sub-agents working, the first press
 shows "this will stop 2 sub-agents, press Ctrl+C again to confirm" for 3
 seconds; a second press in that time stops them, and otherwise nothing
-stops. With nothing running, a second press quits tofu.
+stops. With nothing running, or only tool calls finishing, a second press
+quits tofu.
 
 ## Where it lives
 

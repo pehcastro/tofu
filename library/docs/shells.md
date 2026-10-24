@@ -43,7 +43,7 @@ status line above the composer rather than on a line of their own:
 
 Each row is a running shell: the command, who started it and its latest output. A shell that ends leaves the screen at once and tofu stops reading it;
 its record and log stay on disk for 72 hours, read by name with `tofu shells log`. The screen reads the running shells four times a second while any runs. A line reaches the log as the command writes
-it; a running shell that printed nothing says `nothing printed yet`. Python is told not to buffer its output.
+it; a running shell that printed nothing says `nothing printed yet`. Python is told not to buffer its output. A kept shell's log stays under 1 MiB: it keeps the first and last 256 KiB, with a line saying how many bytes were dropped between. At most 64 kept shells run at once; one more is refused, naming the shells screen and `tofu shells stop <name>`.
 
 When the command names its own log file, such as `-Log target/build.log`,
 `> build.log` or `tee build.log`, the row also shows the end of that file,

@@ -2,7 +2,7 @@
 title: Scratchpad
 description: Agents put probes, temporary files and build caches in a folder outside your repository, one folder per agent, cleaned on a schedule you set.
 order: 20
-updated: 2026-10-09
+updated: 2026-10-24
 ---
 
 Agents need somewhere to write a probe script, a log, a capture or a build
@@ -55,7 +55,10 @@ on your machine.
 ## Cleanup
 
 `scratchCleanupDays` (7 by default) removes the folder of a session no tofu
-holds and nobody touched for that many days, when a run starts.
+holds and nobody touched for that many days, when a run starts, and the
+project's `tofu host` runs the same sweep when it starts and every hour
+while it runs, so a window left open for days still cleans up. A session
+open in any window keeps its folder.
 `scratchMaxGB` (50 by default) removes the oldest session folders first once
 a project's scratchpad passes that size. `shared/` is cleaned only by hand.
 `.tofu/scratch` folders left in a repository by older versions are listed by

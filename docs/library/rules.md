@@ -2,7 +2,7 @@
 title: How a rule fires
 description: A rule is one instruction with triggers, and it reaches a prompt only when the task matches them.
 order: 2
-updated: 2026-10-08
+updated: 2026-10-24
 ---
 
 A rule is one YAML file, `<id>@1.yaml`, holding one instruction the model
@@ -48,6 +48,10 @@ The lead also carries tofu's working rules, the same for every project:
 
 A sub-agent carries `sub_agent_boundaries`: it opens every reference in its
 brief and reports anything more it would change rather than changing it.
+Every agent, the lead and each sub-agent, carries `act_on_stated`: a next
+action it states, it does in the same turn, and it keeps working until the
+work is done or it is blocked on something only you can settle.
+`tofu rules off act_on_stated --reason "<why>"` switches it off.
 
 `touches:` is a regular expression read against a sub-agent's task and the
 paths it owns. A rule that declares it reaches a sub-agent only when the task

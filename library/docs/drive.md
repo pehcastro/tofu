@@ -28,7 +28,7 @@ run carries the conditions it was taken under.
 `TOFU_DRIVE_CLOCK=2026-10-17T23:59:58` starts the session's clock at that
 local time and runs it on from there, so a run crosses midnight in seconds.
 It moves the date the model is told and the cron book, and is read only
-beside a cassette, in the drive and in the holder it starts.
+beside a cassette, in the drive and in the host it starts.
 
 ## Change it
 

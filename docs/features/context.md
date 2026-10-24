@@ -2,7 +2,7 @@
 title: Context
 description: How tofu keeps a conversation small and cheap to resend, from the cached prompt prefix to forks that carry the conversation and point back at every call.
 order: 5
-updated: 2026-10-22
+updated: 2026-10-24
 ---
 
 Everything the model sees on a step is resent on the next one. tofu manages
@@ -109,6 +109,11 @@ its first request, so the whole history is never sent first.
 - **See how full a session is**: `tofu context`, or the context meter in the
   status bar. It names the rules, memory, skills and tool schemas in the
   identity band with their tokens.
+- **See the prompt before it goes**: `tofu run --dir . --show-prompt
+  "anything"` prints the prompt the next task would send and sends nothing.
+  It ends with `offered tools`, how many the request sends, then each tool's
+  name and description as the model reads them. With `--agent <name>` it
+  shows a sub-agent's prompt and its tools.
 - **See what a session's tokens cost**: `tofu session drain`, see
   [Where tokens went](/docs/features/drain).
 - **See the cache at work**: `tofu session trace <name> --json` gives each

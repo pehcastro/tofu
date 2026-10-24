@@ -79,7 +79,9 @@ prints the prompt the next task would send and sends nothing. Its
 `instruction files:` line says how many bytes of instructions went in, or
 that none was found, and the end of the system message shows each file
 under the name it came from. A file that was cut or skipped is named on
-a `tofu:` line.
+a `tofu:` line. It ends with `offered tools`, how many the request sends,
+then each tool's name and description as the model reads them; with
+`--agent <name>` it shows that sub-agent's prompt and tools.
 
     tofu settings get instructionSources
     tofu settings get projectInstructionsCap

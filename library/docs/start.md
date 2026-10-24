@@ -110,6 +110,7 @@ lists the models your subscriptions serve.
 prints the version you are running, and `tofu changelog` what changed.
 Every verb that reports state takes `--json` and prints one JSON
 document, `{tofu, verb, ok, at, data, problems}`, for a script to read.
+A subcommand or flag tofu does not know prints its usage line and the closest one, as `did you mean tofu session list`.
 
 ## Undo it
 

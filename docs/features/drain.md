@@ -2,14 +2,15 @@
 title: Where tokens went
 description: tofu session drain weighs every call of a session and says what woke each agent, which context band and cache rebuilds took the most, and which of eight patterns wasted tokens.
 order: 6
-updated: 2026-10-22
+updated: 2026-10-24
 ---
 
 `tofu session drain` reads a session after the fact and says where its
 tokens went: the lead against its sub-agents, what woke each of them, how
 big the context was on each call, which cache rebuilds were paid for, and
 which habits wasted tokens. It reads the session's own record and writes
-nothing.
+nothing. It reads a Claude Code transcript the same way, so you can weigh a
+session you ran in the `claude` command line.
 
 ## Why it helps
 
@@ -21,7 +22,10 @@ runs.
 token and an output token five times one, so raw counts hide where the
 money went. Each call is counted in weighted tokens: input 1, a cache
 write kept 5 minutes 1.25, one kept an hour 2, a cache read 0.1, and
-output 5. A model the catalog prices uses its own ratios instead.
+output 5. A model the catalog prices uses its own ratios instead, taken
+from the price of the wire the request went out on, so the same model on a
+subscription and on an API key is priced each its own way. The summary
+names each model and the source that priced it.
 
 **It names the cause, not only the total.** Each finding comes from a
 rule, says the agent, the turn and the call, and gives the number behind
@@ -68,6 +72,15 @@ tofu session drain brisk-amber-heron --json
 ```
 
 With no name, it reads the head, the session `tofu --continue` opens.
+
+```sh
+tofu session drain --claude ~/.claude/projects/shop/1f2e3d4c.jsonl
+```
+
+reads a Claude Code transcript instead, a `.jsonl` file under
+`~/.claude/projects`, and prints the same report. Where nothing recorded
+a cost, the summary says `no cost recorded` rather than a guess.
+
 This is the start of a report, with made-up figures:
 
 ```text
@@ -84,5 +97,6 @@ findings
 ```
 
 `--json` names the weights it used under `default_weights`, with where
-they came from. Over [tofu serve](/docs/cli/serve), `query.drain` takes
+they came from, the source that priced each model under `priced_by`, and
+whether a cost was recorded as `cost_recorded`. Over [tofu serve](/docs/cli/serve), `query.drain` takes
 `session` and answers the same report.

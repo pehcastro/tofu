@@ -2,7 +2,7 @@
 title: Serving tofu to another program
 description: tofu serve --stdio runs one project for the desk app or a script of your own, over JSON-RPC on standard input and output, with every board, approval, question and status record the app has.
 order: 2
-updated: 2026-10-22
+updated: 2026-10-24
 ---
 
 `tofu serve --stdio` runs one project for another program: the desk app, an editor, or a script of
@@ -45,9 +45,9 @@ member leaves, the host cancels the session's turn, naming that member, and ends
 `expectedTurnId` to be refused instead. `turn.stop` stops the lead and leaves running sub-agents
 working; pass `everything: true` to stop them too. A client that attaches mid-turn gets the
 queued messages, pending approvals and working sub-agents at once, and `turn.steer` takes `images: [{path}]` like `turn.send`, so an image pasted while the lead works reaches it. `session.set` from any
-client sets the holder's asking and model for every client: the terminal's footer
+client sets the host's asking and model for every client: the terminal's footer
 shows a pick another client made and keeps it, and offers its own default only
-to a holder with none. `/loop` and `/cron` made in any client run in the holder,
+to a host with none. `/loop` and `/cron` made in any client run in the host,
 and the trace row says which process fired them. When the lead forks,
 `session.forked` names the new session in `to`, and every client moves to it.
 
@@ -72,7 +72,7 @@ tofu from a newer one. Beside the session, turn, settings and login methods, the
 | `takeover` | `shell.takeover`, `shell.input`, `shell.resize`, `shell.release` | a person borrows a kept shell: every bash command runs in a terminal once the client declares `takeover`, the take-over answers the raw output so far with its colours, keystrokes and sizes go in as base64 bytes, and the release hands it back to the agent with an optional note. Neither kills the process. A refusal is `-32000` with `data.reason`, one of `not_declared`, `unknown_shell`, `not_running`, `not_kept`, `not_in_terminal`, `other_process` and `not_held` |
 | `boardy` | `boardy.boards`, `boardy.list`, `boardy.rows` (the list's fields only, 349 KB instead of 11 MB on 1,500 tickets, each row with its `type`, `points`, `reason`, and the `model`, `tools` and `reads` of the sub-agent that worked it), `boardy.get`, `boardy.events`, `boardy.report`, `boardy.create`, `boardy.move`, `boardy.assign`, `boardy.log`, `boardy.hand`, `boardy.triage` | the project's ticket boards, a view of one, a ticket with its events and actuals, a report, and every ticket change the person may make; see [Boardy views](/docs/features/boardy-views) |
 | `scratch` | `scratch.list`, `scratch.clean` | the project's scratchpad folders with their size and when each was last touched, and a cleanup with `session`, `cache` and `dryRun` |
-| `queries` | `query.context`, `query.drain`, `query.rules`, `query.usage`, `query.settings`, `query.accounts`, `query.ledger` and the other `query.*` | the context items, named down to the rules, memory, skills and tool schemas; where a session's tokens went, as `tofu session drain --json` prints it; rule text and how often each rule fired, quota with each reading's age, each setting with its label, kind, choices and range, every credential with what each API key has spent, its limits and balance; the decisions of one session, a page of the newest 200 unless `last` asks for more, with `next` to pass back as `before` for the older page |
+| `queries` | `query.context`, `query.drain`, `query.rules`, `query.usage`, `query.settings`, `query.accounts`, `query.ledger` and the other `query.*` | the context items, named down to the rules, memory, skills and tool schemas; where a session's tokens went, as `tofu session drain --json` prints it; rule text and how often each rule fired, quota with each reading's age, each setting with its label, kind, choices and range, the `reason` its value in force differs from the one set and `custom` on a choice that also takes your own value, every credential with what each API key has spent, its limits and balance; the decisions of one session, a page of the newest 200 unless `last` asks for more, with `next` to pass back as `before` for the older page |
 
 `session.state` lists the approvals waiting, the standing answers, the open questions, the
 sub-agents, the kept shells and the cron jobs, which is what a client reads after it falls behind.
@@ -100,9 +100,13 @@ started it.
 - `turn.account`: the account a turn spends, `picked` as it starts and `moved` off a spent one.
 - `turn.started` and every `message.user` carry the images pasted into the message as
   `images: [{n, path, mime}]`, `n` being the `[Image #N]` in its text, live and in history.
-- `turn.steerQueued` when another window following the session steers it: the message waits on the
-  holder's queue, `item` its id and `text` what was typed, until `turn.steered` says the lead read it.
+- `turn.steerQueued` when another member of the session steers it: the message waits on the
+  host's queue, `item` its id and `text` what was typed, until `turn.steered` says the lead read it.
 - `session.turns.updated`: the digest of a turn just ended, the row `session.turns` answers.
+  `session.turns` pages one generation at a time, each turn's ask and summary cut to their first line,
+  with `next` naming the older generation, and `session.turn` answers one turn whole.
+- `request.sent` each time a request goes out; `query.request` answers what went into it, as
+  `tofu session request` prints it.
 - `usage.updated` after each model call, one per turn and agent, with the running `model`,
   `tokensIn`, `tokensOut`, `cacheRead`, `cacheWrite5m`, `cacheWrite1h`, `costUsd` and `decisions`, so
   a client shows what a turn costs as it runs.
@@ -125,7 +129,10 @@ started it.
 - `tool.started` carries the `title` the model gave a bash command, a few words a person reads,
   such as `rebuilt the desk binary`. `tool.completed` carries a typed `summary`: `exit`,
   `durationMs`, `hits` for a search or glob, and lines `added` and `removed` for an edit, so a
-  frontend draws a result row without parsing the output.
+  frontend draws a result row without parsing the output. Both carry a `card`, the call as a row,
+  its `group` and the `groupSummary` of the turn's tool calls, the row the terminal draws.
+- A message carries `sentAt`, when you sent it, and a note or reply its `at`. `turn.send` answers
+  the id of the turn it started, and a steer carries its pasted images.
 - `turn.started`, `message.user`, `turn.steered` and `turn.steerQueued` carry a typed `origin`:
   `kind` (`person`, `agent`, `tofu`, `cron`, `hook`, `memory`, `skill`, `library` or `plugin`) and
   `sub`, what exactly sent it, such as `typed`, `steer`, `report` or `fire`. Only a message whose

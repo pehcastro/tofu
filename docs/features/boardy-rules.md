@@ -2,7 +2,7 @@
 title: Boardy managers and hooks
 description: Who may change a ticket on a boardy board, how other sessions ask through triage, and board hooks that check, nudge or act before and after any board event.
 order: 19
-updated: 2026-10-16
+updated: 2026-10-24
 ---
 
 A boardy board has managers. A manager creates, assigns, accepts and closes
@@ -107,7 +107,7 @@ TOFU hooks · 4 hooks
 - `tofu boardy rule list|show|add|edit|remove|test`, each with `--json`.
 - `tofu serve` methods: `boardy.rules`, `boardy.rule.get`, `boardy.rule.put` (the hook's YAML as `source`), `boardy.rule.remove` and `boardy.rule.test` (a saved `id`, or an unsaved `source`).
 - `tofu boardy tick`, `tofu boardy fire`, `tofu boardy set`.
-- Managers and triage: `tofu boardy manager add|remove|list`, `tofu boardy triage list|accept|drop`, `tofu boardy assign`, `widen` and `hand`.
+- Managers and triage: `tofu boardy manager add|remove|list`, `tofu boardy triage list|show|accept|drop`, `tofu boardy assign`, `widen` and `hand`. `triage show T1` prints who asked and when, the spec and owns, then the requested ticket's sections, so a manager reads it before accepting.
 - A board rule file in the library rule shape, with `on:` and the `command` or `person_approves` checker, still loads as a before hook.
 - `board.toml` sets two checks with no file: `log_to_review = 200` refuses a move to review with a shorter Log, and `scope_cites = ["docs/research/"]` refuses a create or widen whose Scope names none of them.
 - `tofu boardy check move DEMO-7 --to doing` runs every check a move runs, hooks included, and writes nothing.

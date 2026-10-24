@@ -14,11 +14,10 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
 
 ## Where it lives
 
-- `initialize`: takes `client`, `versions` and `capabilities`, where `questions` says it answers
-  `tofu/askPerson`; answers `protocol`, `tofu`, `project` and `capabilities`, one name a family of methods
+- `initialize`: takes `client`, `versions` and `capabilities`, where `questions` says it answers `tofu/askPerson`; answers `protocol`, `tofu`, `project` and `capabilities`, one name a family of methods
 - `session.list`: takes `search`, `limit` and `kind`; answers `head` and `sessions`, each `id`, `name`,
   `handle`, `task`, `turns`, `lastAt`, `wire`, `model`, `costUsd`, `outcome`, `open` (here), `running`,
-  `members` (every tofu, desk and serve joined to it) and `kind`, `main` or `side`; a side chat adds `parent`, `owns`, `preset`
+  `members` (every tofu, desk and serve joined to it) and `kind`, `main` or `side`; a side chat adds `parent`, `owns`, `preset`, and a fork names the generation it came from as `parent`. It stops reading once `limit` rows are found
 - side chats (capability `side`): `session.branch` takes `session`, `kind: "side"`, `seed` (`summary` or
   `none`), `owns` or `preset`, `name`, `model`, `effort` and `at` `{item}`, the parent's event to branch from
   (the `item` `mention.resolve` answers), whose summary stops there; answers `session`, `handle`, `parent`
@@ -36,23 +35,22 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
   once tofu learns it and `ref`, the quote of the call that started it), the context and the cron jobs
 - `session.set`: takes `asking`, `wire`, `model` and `effort`, held for later turns and cron fires; `session.settings` tells every client
 - `session.rename`: takes `session` and `name`, and names the whole family
-- `session.compact`: answers `results`, `tokensBefore`, `tokensAfter`, `into`, and errs on a session opened
-  beside the first. `session.history`: takes `session`, `limit` and `before`; answers `lines`, each
+- `session.compact`: answers `results`, `tokensBefore`, `tokensAfter`, `into`, and errs on a session opened beside the first. `session.history`: takes `session`, `limit` and `before`; answers `lines`, each
   `{method, params}` as `session.open` sends it, from `first` of `total`
 - `session.info` and `session.trace` answer what `tofu session info` and `trace` print, `session.info` with `carried_from` `{session, handle, messages}` when it began with messages carried over. `session.find` takes
   `session` and any of `tool`, `command`, `file`, `text`, `agent`, `since`, `until`, and `failed` true for failed and refused calls only; answers `handle`, `query`, `hits`
-- `session.turns` takes `session`; answers `snapshots`, how many turns undo holds, and `turns`, each
+- `session.turns` takes `session`, one generation; answers `snapshots`, how many turns undo holds, `next`, the older generation to ask for next, and `turns`, each
   `turn`, `at`, `ended_at`, `worked_for_ms`, `origin`, `asked`, `summary` (the lead's last reply),
   `status`, `outcome` (`loop_guard`, `step_cap` and the rest), `error`, `held` (calls a `gate` or a
   `hook` refused), `agents`, `files` (`path`, `op`, `added`, `removed`, `agent`), `calls`, `tokens`
-  (`input`, `output`, `cache_read`) and `cost_usd`. `session.turns.updated` sends one when a turn ends
+  (`input`, `output`, `cache_read`) and `cost_usd`, with `asked`, `summary` and each report cut to its first line. `session.turn` takes `session` and `turn` and answers that one digest whole, with `prompt`. `session.turns.updated` sends one when a turn ends
 - `turn.send`: takes `session`, `text`, `mentions` (each a `ref`, kept where `text` has it, else added at the
   end; a path gains `@`), `images` (png, jpg, gif or webp, or the send is refused), `wire`, `model` and
-  `effort`; answers `turn`. `turn.steer` takes `session`, `expectedTurnId` and `text`; answers `turn` and `id`.
+  `effort`; answers `turn`, the id of the turn it started. `turn.steer` takes `session`, `expectedTurnId` and `text`; answers `turn` and `id`.
   `turn.sendNow` (capability `sendNow`) takes `id`, or none for every queued message; answers `ok`, errs
   `-32000` when no turn runs or the id is not queued. `turn.steered` follows each message the lead reads:
   `item` is its `id`, with `text`, `step` and `readAt`; a batch shares a `step`. `turn.steerQueued` tells the
-  holder's clients a follower's steer is queued: `item` is its `id`, with `text`. `turn.unsteer` takes `text`,
+  session's members another member's steer is queued: `item` is its `id`, with `text`. `turn.unsteer` takes `text`,
   answers `removed`. `turn.stop` takes `turn`; it stops the lead and keeps running sub-agents, `everything: true` stops them too. `turn.send` during a turn queues a steer and answers `steered`, `expectedTurnId` refuses instead. `boardy.rows` answers the list's fields only. `undo` takes `session`,
   `turns`; answers `turns`, `restored`, `removed`, `refused` (`path`, `why`) and `dry_run`
 - `mention.resolve`: takes `ref` and `session`; answers `outcome` (`item`, `not_found` or `ambiguous`), and an item's `item`, `speaker` and first `line`
@@ -65,9 +63,9 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
   `not_in_terminal`, `other_process` or `not_held` (input, resize or release on a shell nobody holds). `shell.started` and kept shells in `session.state` carry `terminal`, `holder` and `heldSince`
 - reads, `query.` and: `models` (with `wires` signed in and `stale`), `settings` (each row's
   `label`, `description`, `kind` of `bool`, `int`, `text`, `choice` or `list`, `choices`, `min`, `max`
-  with none for no ceiling, `unit`, `restart`), `commands` (each slash command's `name`, `args`,
+  with none for no ceiling, `unit`, `restart`, `reason` when the value in force differs from the one set, and `custom` on a choice that also takes your own value), `commands` (each slash command's `name`, `args`,
   `summary`, `scope` `tofu` or `interface`, and `needs`, what a client must offer to show it),
-  `rules` (each with `text`, `trigger`, `fires` and `fires_week`, seven days, today last), `agents`, `library`,
+  `request` (takes `session` and `request`; answers what went into that request, as `tofu session request` prints it, and `request.sent` tells every client when one goes out), `rules` (each with `text`, `trigger`, `fires` and `fires_week`, seven days, today last), `agents`, `library`,
   `memory`, `hooks`, `changelog` (with `seen`), `update` (it never installs), `usage` (each provider row's
   `account`, `name`, `read_at`, `source`, `stale` and `retry_at`; the answer's `read_at` and `age_ms` are its
   oldest reading's), `doctor`, `accounts`, `cron`, `docs` (takes `topic`), `context` (takes `session`, else the
@@ -83,7 +81,7 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
   account and window since its last reset (`per_hour` null on one reading, `full_at` null when the window
   resets first), `order`, each role's accounts in turn, and `spend`, today's by account and agent.
   `query.skills` answers the library's `skills` and the folders'. `query.ledger.summary` takes `since`, a week
-  back by default; answers `points`, each `count`, `week`, `would_ask`, `labeled`, `agreed`, `mean_ms`,
+  back by default, and `session` to count one session's decisions; answers `points`, each `count`, `week`, `would_ask`, `labeled`, `agreed`, `mean_ms`,
   `cost_usd` and `thresholds`
 - memory: `memory.add` takes `text`, `scope` (`user-local`, `project-local`, `project-global`, `user-global`),
   `kind`; `memory.edit` `scope`, `id`, `text`; `memory.remove` `scope`, `id`; each answers the entry, which the lead hears.

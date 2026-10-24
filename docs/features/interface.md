@@ -2,7 +2,7 @@
 title: The interface
 description: "The tofu app in the terminal: four tabs, a command palette, and a composer that keeps working while the model does."
 order: 10
-updated: 2026-10-22
+updated: 2026-10-24
 ---
 
 Run `tofu` in a project to open the app. Four tabs hold the work:
@@ -20,9 +20,13 @@ number to fix each.
 
 ## Why the chat stays clean
 
-**The chat is for you, the tabs are for the detail.** Tool calls stay out of
-the chat by default, so what you read is the lead's answer, and every call is
-one tab away. An answer streams without stutter: a code block draws plain
+**The chat is for you, the tabs are for the detail.** A turn's tool calls
+fold into one group row by default, such as `2 calls 2s`, so what you read is
+the lead's answer, and every call is one tab away. While the turn works, the
+row shows the call in progress and how long it has run; once it settles, it
+sums up the work. Click it or press `Ctrl+O` and it opens to one line per
+kind of work, with `collapse` to fold it again. A failed call, such as `bash
+failed 1 of 1`, a gate verdict and a question stand on their own rows. An answer streams without stutter: a code block draws plain
 while it is typed and gets its colours when its closing fence arrives.
 
 **You never wait on the model to type.** A message sent mid-turn reaches the
@@ -75,7 +79,9 @@ when something changed, and the welcome animations share one clock.
 - **Edit around a chip**: a pasted image, a long pasted text and a paste
   still loading each sit in the composer as one chip, such as
   `[Image #1]`. `Backspace` or `Delete` on any part of it removes the
-  whole chip, and the arrow keys step over it in one move.
+  whole chip, and the arrow keys step over it in one move. Once sent, the
+  message says `Attached 1 Image` or `Attached 3 Images` under its text,
+  and each pasted text keeps its own line, such as `text, 2400 characters`.
 - **Drop a screenshot on the terminal**: a dragged or pasted path to a png,
   jpg, gif or webp file attaches the image. Any other path stays text.
 - **Answer the gate** when a call waits for you: `1` allows once, `2`
@@ -123,7 +129,7 @@ the key each rebindable action is bound to now. Type to filter it.
 | `@` | Attach a file |
 | `Ctrl+G` | Edit the prompt in your editor |
 | `Ctrl+P` | Search the prompts you sent, in every session |
-| `Ctrl+O` | Expand the last tool call |
+| `Ctrl+O` | Open the last tool call, or the turn's group row |
 | `Ctrl+Y`, `Alt+Y` | Copy the last answer, or the last tool call |
 | `Ctrl+X`, `Alt+Up`, `Alt+Down` | Remove or pick a queued message |
 | `!` at the start | Run a shell command, read by the next prompt |

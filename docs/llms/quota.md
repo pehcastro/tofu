@@ -2,7 +2,7 @@
 title: Subscription quota
 description: How full each subscription's windows are and when they reset, read from replies tofu already gets, shared by every tofu process, and never blank after a refusal.
 order: 5
-updated: 2026-10-22
+updated: 2026-10-24
 ---
 
 `tofu usage` shows each signed-in subscription account, its quota windows,
@@ -36,6 +36,15 @@ it is asked sooner: after 2 minutes at 75% used, 1 minute at 90%, and 30
 seconds at 99%, unless a reply already said more recently.
 
 ## When a limit is reached
+
+**A turn keeps the account its cache is on.** A new turn goes to the
+account that served the last one while the lead's prompt cache there still
+lives, the `leadCache` setting, an hour by default, so the cache is read
+rather than written again. Past that, the turn takes the account with the
+most headroom, and the chat says why in one line, such as `account #2 last
+answered 1h 20m ago, past its 1h cache, so this turn takes the account with
+the most headroom`. An account that is signed out or at its limit is left
+the same way, with its own reason.
 
 **Another account of the same subscription first.** When a reply comes back
 with the rate limit, tofu asks the same step again on your next signed-in
@@ -83,6 +92,13 @@ answer stays in the work card.
 tofu usage
 ```
 
+Each window shows how fast it fills and when it runs out at that pace,
+such as `12%/day, out Mon 2 Jan 15:04; tofu 1.2M weighted, 400k/day`: the
+share used per day, the day it fills, and what tofu itself spent in that
+window, in [weighted tokens](/docs/features/drain). A window that fills
+after it resets says `lasts to the reset`, and one tofu has no rate for
+yet says `rate not known yet`.
+
 Each account card ends with a `read` line: when the reading was taken, its
 age, where it came from, and `stale` when the endpoint couldn't refresh it.
 A reading from a turn reads `from the reply headers`, and a `retry` line
@@ -93,7 +109,8 @@ beside a stale percentage, such as `read 12m ago`.
   in `~/.tofu/quota/<date>.jsonl`.
 - **For a script**: `tofu usage --json`. Each provider row carries
   `read_at`, `source` (`reply headers`, `usage endpoint` or `readings log`),
-  `stale` and `retry_at`.
+  `stale` and `retry_at`, and `window_spend` gives each window's weighted
+  tokens, their rate per day, the share used per day and the run-out time.
 - **Forget every held reading and wait**: delete `~/.tofu/quota/latest/`;
   the next check asks the endpoint.
 

@@ -2,7 +2,7 @@
 title: Guard rules
 description: tofu guard runs a repository's Claude Code and git hook rules inside the binary, so the same hooks answer the same way on Windows, Linux and macOS.
 order: 3
-updated: 2026-10-13
+updated: 2026-10-24
 ---
 
 `tofu guard <rule>` answers a [Claude Code hook](https://docs.claude.com/en/docs/claude-code/hooks)
@@ -39,6 +39,12 @@ same first line.
 
 The ticket rules read the project's boards when `projectManagement` is `boardy` and a board exists,
 and the project's ticket folders otherwise.
+
+`require-ticket` lets a read-only agent start with no ticket while its spawn names no ticket and no
+owns. An agent is read-only when the `tools:` of its definition hold no edit or patch tool, read from
+the `agents` folders under `.tofu`, `.agents` and `.claude` and from the library. The refusal names
+the read-only agents the project has, so you can spawn one to understand a problem before you write
+its ticket, and the lead's spawn tool says which agents need a ticket.
 
 ## Use it
 

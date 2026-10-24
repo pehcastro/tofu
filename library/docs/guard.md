@@ -30,7 +30,10 @@ The rules, by name:
 - `require-ticket`, `own-paths`, `ticket-log`, `research-used`: the ticket
   rules. A spawn cites a live ticket with Acceptance, owns, a matching
   owner and no overlap with a doing ticket; a sub-agent writes only a path
-  a doing ticket owns; a ticket leaves review only with a Log.
+  a doing ticket owns; a ticket leaves review only with a Log. A read-only
+  agent, one whose `tools:` hold no edit or patch tool, starts with no
+  ticket while its spawn names no ticket and no owns, and the refusal
+  names the read-only agents the project has.
 - `git commit-msg` and `git release-docs`: a conventional subject of at
   most 72 characters with no attribution trailer, and a release whose
   changelog names are all in `docs/`.

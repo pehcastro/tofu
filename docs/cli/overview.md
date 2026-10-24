@@ -2,7 +2,7 @@
 title: Reference
 description: Every tofu verb and its usage line, as tofu help and each verb print them.
 order: 1
-updated: 2026-10-09
+updated: 2026-10-24
 ---
 
 `tofu` with no arguments opens the app in the current directory. `tofu <verb>`
@@ -30,6 +30,9 @@ Run a verb with no arguments, or a wrong one, to get its usage line:
   → tofu session list|info|trace|reads|resume|rename <name|id> [--json]
 ```
 
+A subcommand or flag tofu does not know gets its usage line and then the
+closest one it does know, as `did you mean tofu session list`.
+
 `tofu help` lists every verb, and `tofu run --help`, `tofu sift --help`,
 `tofu drive --help` and `tofu serve --help` print the long forms. The usage lines below are copied
 from tofu itself.
@@ -43,11 +46,19 @@ tofu run --dir <path> [arguments] <task>
 tofu --continue [--json]
 tofu --temporary-project
 tofu --profile, with --continue or tofu run
-tofu session <name|id>, or tofu session list [--all], or tofu session info|trace|reads|resume|rename|request|find|branch <name|id> [--json]
+tofu session <name|id>, or tofu session list [--all], or tofu session clean [--dry-run], or tofu session set <name|id> --model source/model, or tofu session info|trace|drain|reads|resume|rename|request|find|branch <name|id> [--json]
+tofu session find <name|id> [--tool T] [--command C] [--file F] [--text T] [--failed] [--agent A] [--since 2h|RFC3339] [--until 2h|RFC3339] [--json]
+tofu session drain [name|id] [--claude <transcript.jsonl>] [--json]
+tofu host ensure|status|stop|run [--dir PATH] [--json]
 tofu session branch <name|id> --side [--preset read|notes|files | --owns GLOB,GLOB] [--seed summary|none] [--name NAME] [--json]
 tofu context [<name|id>] [--json]
 tofu shells list|log|stop|restart <name> [--json]
 ```
+
+`tofu host` is the one process per project that runs its sessions. The app,
+the desk and `tofu serve` start it on demand and join it; `ensure` starts it
+when none answers, `status` prints it and its members, and `stop` ends it.
+See [Sessions](/docs/features/sessions).
 
 `--temporary-project` registers a project tofu has not seen as temporary,
 `"temporary": true` in `~/.tofu/projects.json`. The first tofu started two
@@ -127,7 +138,7 @@ tofu boardy log <ticket> <text> [--as name] [--json]
 tofu boardy lint [--board KEY] [--json]
 tofu boardy boards [--json]
 tofu boardy manager add|remove|list [name] [--board KEY] [--as name] [--json]
-tofu boardy triage list|accept|drop [request] [--board KEY] [--reason text] [--as name] [--json]
+tofu boardy triage list|show|accept|drop [request] [--board KEY] [--reason text] [--as name] [--json]
 tofu boardy assign <ticket> <session or name> [--as name] [--json]
 tofu boardy hand <ticket> <board> [--project dir] [--as name] [--json]
 tofu boardy widen <ticket> <glob,glob> [--as name] [--json]
