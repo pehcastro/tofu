@@ -305,6 +305,7 @@ type App struct {
 	hits           []frame.Hit
 	listening      atomic.Bool
 	statusWatch    statusWatch
+	feedAgents     []feed.Agent
 	serving        map[string]string
 	firesDrawn     []string
 }

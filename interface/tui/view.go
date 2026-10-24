@@ -255,10 +255,11 @@ func (a *App) retention() feed.Retention {
 }
 
 func (a *App) syncFeed() {
-	agents := make([]feed.Agent, len(a.subAgents))
-	for index, subAgent := range a.subAgents {
-		agents[index] = feed.Agent{Name: subAgent.Name, Definition: subAgent.Agent, Model: subAgent.Model, State: subAgent.State, Doing: subAgent.Doing, Since: subAgent.Since, Owns: subAgent.Owns, Report: subAgent.Report}
+	agents := a.feedAgents[:0]
+	for _, subAgent := range a.subAgents {
+		agents = append(agents, feed.Agent{Name: subAgent.Name, Definition: subAgent.Agent, Model: subAgent.Model, State: subAgent.State, Doing: subAgent.Doing, Since: subAgent.Since, Owns: subAgent.Owns, Report: subAgent.Report})
 	}
+	a.feedAgents = agents
 	a.feed.SetFolded(len(a.folded), a.unfolded, widget.Until(konst.SettledSubAgentFoldMinutes*time.Minute))
 	a.feed.SetDensity(a.text(isettings.Density))
 	a.feed.SetRetention(a.retention())

@@ -34,6 +34,16 @@ type statusWatch struct {
 	seen    map[string]time.Time
 	rows    []host.SubAgentRow
 	agents  []status.Record
+	records []status.Record
+}
+
+func (w *statusWatch) askOf(agent string) (Event, bool) {
+	for _, ask := range slices.Backward(w.asks) {
+		if ask.Agent == agent {
+			return ask, true
+		}
+	}
+	return Event{}, false
 }
 
 func sameForStatus(a, b host.SubAgentRow) bool {
@@ -115,22 +125,19 @@ func (a *App) statusRecords() []status.Record {
 	if lead.State == status.Errored {
 		lead.Msg = watch.failed
 	}
-	asked := map[string]Event{}
-	for _, ask := range watch.asks {
-		asked[ask.Agent] = ask
-	}
-	if ask, blocked := asked[""]; blocked {
+	if ask, blocked := watch.askOf(""); blocked {
 		lead.State = status.Blocked
 		lead.Kind, lead.Msg = host.AskStatus(ask)
 	}
-	records := []status.Record{lead}
+	records := watch.records[:0]
+	records = append(records, lead)
 	if watch.cron != "" {
 		records = append(records, status.Record{ID: status.Path("cron", watch.cron), State: lead.State, Kind: lead.Kind, Title: watch.cron, Msg: lead.Msg})
 	}
 	agents := a.agentRecords()
 	for index, row := range a.subAgents {
 		record := agents[index]
-		if ask, blocked := asked[row.Name]; blocked {
+		if ask, blocked := watch.askOf(row.Name); blocked {
 			record.State = status.Blocked
 			record.Kind, record.Msg = host.AskStatus(ask)
 		}
@@ -144,6 +151,7 @@ func (a *App) statusRecords() []status.Record {
 			records = append(records, record)
 		}
 	}
+	watch.records = records
 	return records
 }
 
