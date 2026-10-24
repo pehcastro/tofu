@@ -11,7 +11,9 @@ import (
 	"tofu/internal/boardy"
 	"tofu/internal/judge/method"
 	"tofu/internal/judge/state"
+	"tofu/internal/llm"
 	"tofu/internal/rule"
+	"tofu/internal/session"
 	"tofu/internal/subagent"
 	shipped "tofu/library"
 )
@@ -151,7 +153,9 @@ func wholeRun(rounds []Row) Row {
 
 func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldSubAgent, subAgent Config) ([]Row, []string, subagent.State, error) {
 	agent := held.agent
+	spawned := t.writeMoves(subAgent, agent.ID)
 	first, firstErr := Run(subAgentCtx, subAgent)
+	first.Warnings = append(first.Warnings, spawned...)
 	claims, state := []Row{first}, roundState(outerCtx, firstErr)
 	held.remember(first)
 	var sentBack []string
@@ -159,6 +163,7 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 	for state == subagent.Finished {
 		last := &claims[len(claims)-1]
 		why, task := t.doneReview(subAgentCtx, held, claims, recipes)
+		last.Warnings = append(last.Warnings, t.writeMoves(subAgent, agent.ID)...)
 		if why == "" {
 			break
 		}
@@ -166,6 +171,7 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 			last.Warnings = append(last.Warnings, err.Error())
 			break
 		}
+		last.Warnings = append(last.Warnings, t.writeMoves(subAgent, agent.ID)...)
 		t.roster.Reached(agent.ID, subagent.Working, "sent back: "+why)
 		sentBack = append(sentBack, why)
 		subAgent.History = held.history
@@ -196,6 +202,7 @@ func (t *SpawnTool) doneReview(ctx context.Context, held *heldSubAgent, claims [
 		return "", ""
 	}
 	t.roster.Reached(held.agent.ID, subagent.InReview, reportOf(held.agent, held.forkedSoFar(), []Row{wholeRun(claims)}, subagent.InReview).Text(t.proseStore()))
+	t.roster.Moved(held.agent.ID, subagent.Reviewed, "")
 	reviewed := *last
 	reviewed.Task = held.agent.Brief
 	decision, err := t.decided(ctx, reviewed)
@@ -208,11 +215,40 @@ func (t *SpawnTool) doneReview(ctx context.Context, held *heldSubAgent, claims [
 	}
 	switch decision.Verdict {
 	case DoneAccepted:
+		t.roster.Moved(held.agent.ID, subagent.Accepted, decision.Reason)
 		return "", ""
 	case DoneReopen:
 		return decision.Reason, notBelieved + decision.Reason
 	}
 	panic("turn: unknown done verdict " + string(decision.Verdict))
+}
+
+type transitionNotice struct {
+	session.NoticeBody
+	Transition subagent.Transition `json:"transition"`
+}
+
+func (t *SpawnTool) writeMoves(subAgent Config, id string) []string {
+	moves := t.roster.Unwritten(id)
+	if subAgent.Log == nil {
+		return nil
+	}
+	spawner := ""
+	if t.depth > 0 {
+		spawner = t.orchestratorID
+	}
+	var failed []string
+	for _, move := range moves {
+		text := fmt.Sprintf("%s %s, round %d", move.Agent, move.Move, move.Round)
+		if move.Reason != "" {
+			text += ": " + move.Reason
+		}
+		notice := transitionNotice{NoticeBody: session.NoticeBody{Text: text, From: RecordedOrigin(llm.Origin{Source: llm.SourceNotice})}, Transition: move}
+		if _, err := subAgent.Log.Append(session.Event{Turn: subAgent.Turn, Agent: spawner, Kind: session.EventNotice}, notice); err != nil {
+			failed = append(failed, "the "+string(move.Move)+" transition was not recorded: "+err.Error())
+		}
+	}
+	return failed
 }
 
 func (t *SpawnTool) reportTaken(task string) string {

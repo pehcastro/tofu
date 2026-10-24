@@ -76,6 +76,24 @@ type SubAgent struct {
 	CallsDropped int
 	Released     bool
 	Regranted    []OwnsChange
+	Moves        []Transition
+	movesWritten int
+}
+
+type Move string
+
+const (
+	Spawned  Move = "spawned"
+	Reviewed Move = "reviewed"
+	SentBack Move = "reopened"
+	Accepted Move = "accepted"
+)
+
+type Transition struct {
+	Agent  string `json:"agent"`
+	Move   Move   `json:"move"`
+	Round  int    `json:"round"`
+	Reason string `json:"reason,omitempty"`
 }
 
 type OwnsChange struct {
@@ -175,6 +193,7 @@ func (r *Roster) Hold(agent SubAgent) error {
 		return err
 	}
 	agent.State, agent.Active, agent.Round = Working, agent.Started, 1
+	agent.Moves = []Transition{{Agent: agent.ID, Move: Spawned, Round: 1}}
 	r.add(agent)
 	return nil
 }
@@ -256,7 +275,7 @@ func (r *Roster) SubAgent(id string) (SubAgent, bool) {
 		return SubAgent{}, false
 	}
 	agent := r.agents[at]
-	agent.Calling = slices.Clone(agent.Calling)
+	agent.Calling, agent.Moves = slices.Clone(agent.Calling), slices.Clone(agent.Moves)
 	return agent, true
 }
 
@@ -319,7 +338,30 @@ func (r *Roster) Reopen(id, reason string) (int, error) {
 	}
 	agent.Round++
 	agent.State, agent.Report = Reopened, reason
+	agent.Moves = append(agent.Moves, Transition{Agent: id, Move: SentBack, Round: agent.Round, Reason: reason})
 	return agent.Round, nil
+}
+
+func (r *Roster) Moved(id string, move Move, reason string) {
+	r.held.Lock()
+	defer r.held.Unlock()
+	if at := r.index(id); at >= 0 {
+		agent := &r.agents[at]
+		agent.Moves = append(agent.Moves, Transition{Agent: id, Move: move, Round: agent.Round, Reason: reason})
+	}
+}
+
+func (r *Roster) Unwritten(id string) []Transition {
+	r.held.Lock()
+	defer r.held.Unlock()
+	at := r.index(id)
+	if at < 0 {
+		return nil
+	}
+	agent := &r.agents[at]
+	unwritten := slices.Clone(agent.Moves[agent.movesWritten:])
+	agent.movesWritten = len(agent.Moves)
+	return unwritten
 }
 
 func (r *Roster) Stepped(id string, steps int, active time.Time, calling ...string) {
@@ -353,7 +395,7 @@ func (r *Roster) SubAgents() []SubAgent {
 	defer r.held.Unlock()
 	read := slices.Clone(r.agents)
 	for i := range read {
-		read[i].Calling = slices.Clone(read[i].Calling)
+		read[i].Calling, read[i].Moves = slices.Clone(read[i].Calling), slices.Clone(read[i].Moves)
 	}
 	return read
 }

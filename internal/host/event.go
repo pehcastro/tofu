@@ -231,6 +231,7 @@ type SubAgentRow struct {
 	Ended   time.Time
 	Turn    string
 	Parent  string
+	Moves   []roster.Transition
 }
 
 func SubAgentRows(agents []roster.SubAgent, now time.Time, steps int, spent map[string]int, calls func(roster.SubAgent) []Call) []SubAgentRow {
@@ -259,6 +260,7 @@ func SubAgentRows(agents []roster.SubAgent, now time.Time, steps int, spent map[
 			State:   agent.State,
 			Calls:   watched,
 			Report:  agent.Report,
+			Moves:   agent.Moves,
 		}
 	}
 	return rows
