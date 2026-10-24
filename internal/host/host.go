@@ -3,6 +3,7 @@ package host
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -189,6 +190,7 @@ func New(cfg Config) (*Host, []string) {
 		h.play = h.run
 	}
 	var troubles []string
+	h.restorePick(cfg.Resumed)
 	if err := h.carry(cfg.Resumed); err != nil {
 		troubles = append(troubles, err.Error())
 	}
@@ -726,6 +728,59 @@ func (h *Host) carry(resumed Carry) error {
 	return err
 }
 
+func (h *Host) restorePick(resumed Carry) {
+	if resumed.Session == "" {
+		return
+	}
+	store, err := resumed.reading(h.dir)
+	if err != nil {
+		return
+	}
+	header, err := store.Header(resumed.Session)
+	if err != nil || header.Chosen == nil {
+		return
+	}
+	library := libraryAt(h.dir)
+	if model, known := library.Resolve(header.Chosen.Model); known && library.WireOf(model) == header.Chosen.Wire {
+		h.pick.Wire, h.pick.Model = header.Chosen.Wire, model.Slug()
+	}
+}
+
+func SettleHeld(project, id string, pick Pick) (bool, error) {
+	if len(MembersOf(project)[id]) == 0 {
+		return false, nil
+	}
+	conn, lines, _, err := joinHub(project, id, MemberServe)
+	if err != nil {
+		return true, err
+	}
+	defer func() { _ = conn.Close() }()
+	_ = conn.SetDeadline(time.Now().Add(followReplyWait))
+	var first followLine
+	if err := lines.Decode(&first); err != nil {
+		return true, err
+	}
+	if first.Snapshot != nil {
+		pick.Effort = cmp.Or(pick.Effort, first.Snapshot.Settings.Pick.Effort)
+	}
+	if err := json.NewEncoder(conn).Encode(followAsk{ID: 1, Op: followSettings, Pick: pick}); err != nil {
+		return true, err
+	}
+	for {
+		var line followLine
+		if err := lines.Decode(&line); err != nil {
+			return true, err
+		}
+		if line.Reply == nil || line.Reply.ID != 1 {
+			continue
+		}
+		if line.Reply.Refused != "" {
+			return true, errors.New(line.Reply.Refused)
+		}
+		return true, nil
+	}
+}
+
 func (c Carry) reading(dir string) (*session.Store, error) {
 	if c.Store != nil {
 		return c.Store, nil
@@ -756,7 +811,14 @@ func (h *Host) Resume(carry Carry) ([]Event, error) {
 		return nil, errTurnRunning
 	}
 	h.forget()
+	h.mu.Lock()
+	was := h.pick
+	h.restorePick(carry)
+	h.mu.Unlock()
 	if err := h.enter(carry.Session); err != nil {
+		h.mu.Lock()
+		h.pick = was
+		h.mu.Unlock()
 		return nil, err
 	}
 	h.mu.Lock()

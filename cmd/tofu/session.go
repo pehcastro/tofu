@@ -30,7 +30,8 @@ import (
 )
 
 const (
-	sessionSubcommands = "tofu session <name|id>, or tofu session list [--all], or tofu session clean [--dry-run], or tofu session info|trace|drain|reads|resume|rename|request|find|branch <name|id> [--json]"
+	sessionSubcommands = "tofu session <name|id>, or tofu session list [--all], or tofu session clean [--dry-run], or tofu session set <name|id> --model source/model, or tofu session info|trace|drain|reads|resume|rename|request|find|branch <name|id> [--json]"
+	sessionSetUsage    = "tofu session set <name|id> --model source/model [--json]"
 	sessionFresh       = "no session recorded here"
 	sessionDay         = 24 * time.Hour
 	sessionWeek        = 7 * sessionDay
@@ -123,6 +124,14 @@ func sessionVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	}
 	if args[0] == "clean" {
 		return sessionCleanVerb(o, args[1:], now)
+	}
+	if args[0] == "set" {
+		o.verb, o.usageLine = "session set", sessionSetUsage
+		handle, slug, err := sessionSetArgs(args[1:])
+		if err != nil {
+			return o.usage(err)
+		}
+		return sessionReport(o, func(store *session.Store) (sessionSetReport, error) { return sessionSetModel(store, handle, slug) }, sessionSetLines)
 	}
 	if args[0] == "find" {
 		o.verb, o.usageLine = "session find", sessionFindUsage
@@ -329,6 +338,62 @@ func sessionRenamed(store *session.Store, handle, to string) (sessionRow, error)
 	}
 	row.Name, row.Handle = *header.Name, handleOf(store, row.ID)
 	return row, nil
+}
+
+type sessionSetReport struct {
+	sessionRow
+	Live bool `json:"live"`
+}
+
+func sessionSetArgs(args []string) (string, string, error) {
+	slug := ""
+	if at := slices.Index(args, "--model"); at >= 0 && at+1 < len(args) {
+		slug, args = args[at+1], slices.Delete(slices.Clone(args), at, at+2)
+	}
+	handles, _, err := verbArgs(args)
+	switch {
+	case err != nil:
+		return "", "", err
+	case slug == "":
+		return "", "", errors.New("--model source/model names the model, as tofu models list prints it")
+	case len(handles) != 1:
+		return "", "", fmt.Errorf("%d operands, want <name|id>", len(handles))
+	}
+	return handles[0], slug, nil
+}
+
+func sessionSetModel(store *session.Store, handle, slug string) (sessionSetReport, error) {
+	header, err := sessionHeader(store, handle)
+	if err != nil {
+		return sessionSetReport{}, err
+	}
+	library, err := modelLibrary(".")
+	if err != nil {
+		return sessionSetReport{}, err
+	}
+	model, err := library.Select(slug)
+	if err != nil {
+		return sessionSetReport{}, err
+	}
+	pick := host.Pick{Wire: library.WireOf(model), Model: model.Slug()}
+	if _, err := store.SetModel(header.ID, pick.Wire, pick.Model); err != nil {
+		return sessionSetReport{}, err
+	}
+	live, err := host.SettleHeld(cmp.Or(store.Project(), "."), header.ID, pick)
+	if err != nil {
+		return sessionSetReport{}, fmt.Errorf("%s now names %s, and the tofu host holding it did not take the change: %w", header.ID, pick.Model, err)
+	}
+	row, err := sessionDetail(store, header.ID)
+	return sessionSetReport{sessionRow: row, Live: live}, err
+}
+
+func sessionSetLines(page cli.Page, report sessionSetReport) []string {
+	when := "it runs on it from its next resume"
+	if report.Live {
+		when = "the tofu host holding it runs its next turn on it"
+	}
+	return append([]string{page.Glyph(cli.Changed) + " " + report.Handle + " is set to " + report.Model + ", and " + when},
+		cli.Indent(page.Hint("tofu session info "+report.Handle))...)
 }
 
 func sessionHeader(store *session.Store, handle string) (session.Header, error) {

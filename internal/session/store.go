@@ -839,6 +839,12 @@ func (s *Store) SetEffort(id, effort string) (Header, error) {
 	return s.edit(id, func(header *Header) { header.Effort = effort })
 }
 
+func (s *Store) SetModel(id, wire, model string) (Header, error) {
+	return s.edit(id, func(header *Header) {
+		header.Wire, header.Model, header.Chosen = wire, model, &Chosen{Wire: wire, Model: model}
+	})
+}
+
 func (s *Store) read(id string) (Header, error) {
 	if header, kept := s.headers[id]; kept {
 		return header, nil

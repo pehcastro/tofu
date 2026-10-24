@@ -275,8 +275,9 @@ func (l *Log) save() error {
 	path := filepath.Join(l.store.Dir(l.header.ID), headerName)
 	if !l.unchangedSinceSaved(path) {
 		delete(l.store.headers, l.header.ID)
-		if kept, err := l.store.read(l.header.ID); err == nil && kept.Name != nil {
-			l.header.Name = kept.Name
+		if kept, err := l.store.read(l.header.ID); err == nil {
+			l.header.Name = cmp.Or(kept.Name, l.header.Name)
+			l.header.Chosen = cmp.Or(kept.Chosen, l.header.Chosen)
 		}
 	}
 	if err := l.store.writeHeader(l.header, l.redact); err != nil {

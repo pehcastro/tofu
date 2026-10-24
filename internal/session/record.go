@@ -290,6 +290,7 @@ type Header struct {
 	Model            string     `json:"model,omitempty"`
 	Effort           string     `json:"effort,omitempty"`
 	Models           []string   `json:"models,omitempty"`
+	Chosen           *Chosen    `json:"chosen,omitempty"`
 	Outcome          string     `json:"outcome,omitempty"`
 	Error            string     `json:"error,omitempty"`
 	Account          int64      `json:"account,omitempty"`
@@ -300,6 +301,11 @@ type Header struct {
 	Usage            Usage      `json:"usage"`
 	CostUSD          float64    `json:"cost_usd"`
 	Agents           []AgentRun `json:"agents,omitempty"`
+}
+
+type Chosen struct {
+	Wire  string `json:"wire"`
+	Model string `json:"model"`
 }
 
 func (h Header) Ended() bool { return h.EndedAt != nil }
