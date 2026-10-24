@@ -157,9 +157,11 @@ func TestLiveBatteryOverEveryRecordedStep(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the battery stopped: %v", err)
 	}
-	cheap, typed := result.Agreements()
+	cheap, typed, chained := result.Agreements()
 	t.Logf("%s", cheap.Line())
 	t.Logf("%s", typed.Line())
+	t.Logf("%s", chained.Line())
+	t.Logf("\n%s", Summary(result))
 	if typed.Total < 40 {
 		t.Errorf("the battery decided %d labelled steps, BOJI-079 asks for at least forty", typed.Total)
 	}

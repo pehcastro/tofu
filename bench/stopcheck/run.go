@@ -39,6 +39,8 @@ type StepResult struct {
 	Replayed  bool
 	LatencyMS int64
 	Cost      float64
+	Charge    ledger.ChargeSource
+	Chain     Chain
 }
 
 type TurnCost struct {
@@ -165,6 +167,12 @@ func (b Battery) Run(ctx context.Context, turns []Turn, skipped []corpus.Skipped
 				return Result{}, fmt.Errorf("%s: %w", key, err)
 			}
 			decided.Label, decided.Cheap = label, CheapArm(turn, at)
+			decided.Chain = Chain{Answer: decided.Typed}
+			if b.unsure(decided.Answers) {
+				if decided.Chain, err = b.chain(ctx, turn, at); err != nil {
+					return Result{}, fmt.Errorf("%s chain: %w", key, err)
+				}
+			}
 			result.Steps = append(result.Steps, decided)
 			if result.Build == "" {
 				result.Build = decided.Build
@@ -222,7 +230,8 @@ func (b Battery) decide(ctx context.Context, turn Turn, at int) (StepResult, err
 		}
 		in.answers = toLedgerAnswers(b.wording, decision.Answers)
 		in.build, in.requestID = decision.Build, decision.RequestID
-		in.latencyMS, in.cost = decision.Latency.Milliseconds(), decision.Usage.Cost
+		in.latencyMS, in.cost = decision.Latency.Milliseconds(), decision.Charge.USD
+		out.Charge = decision.Charge.Source
 		out.LatencyMS, out.Cost = in.latencyMS, in.cost
 	}
 

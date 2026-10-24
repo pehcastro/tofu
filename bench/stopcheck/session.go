@@ -13,6 +13,9 @@ type Call struct {
 	Tool         string
 	Command      string
 	Failed       bool
+	ExitCode     *int
+	Error        string
+	ResultBytes  int64
 	GateDecision string
 }
 
@@ -62,6 +65,9 @@ func convertTurn(recorded corpus.RecordedTurn) Turn {
 				Tool:         call.Tool,
 				Command:      call.Command,
 				Failed:       call.Error != "" || (call.ExitCode != nil && *call.ExitCode != 0),
+				ExitCode:     call.ExitCode,
+				Error:        call.Error,
+				ResultBytes:  call.ResultBytes,
 				GateDecision: call.GateDecisionID,
 			})
 		}
