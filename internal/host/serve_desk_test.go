@@ -147,7 +147,7 @@ func TestDeskAnEndedSubAgentSaysWhenItEndedTheSameLiveAndOnReplay(t *testing.T) 
 		t.Fatal(err)
 	}
 	held.Reached("research-1", roster.Finished, report)
-	watch := &watcher{held: held, now: func() time.Time { return ended.Add(time.Minute) }, ran: func(string) session.AgentRun { return run }}
+	watch := &watcher{held: held, now: func() time.Time { return ended.Add(time.Minute) }, ran: func(string) session.AgentRun { return run }, seen: &shownResults{ids: map[string]bool{}}}
 	lively := newItems(id)
 	lively.turn = "turn-later"
 	seen := agentEnded(t, lively.translate(Event{Kind: EventSubAgent, SubAgents: watch.subAgents()}, ended.Add(time.Minute)))

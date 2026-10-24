@@ -28,6 +28,7 @@ func watching(held *roster.Roster, at time.Time) (*watcher, func() []SubAgentRow
 		held: held,
 		now:  func() time.Time { return at },
 		emit: func(event Event) { drawn = event.SubAgents },
+		seen: &shownResults{ids: map[string]bool{}},
 	}
 	return watch, func() []SubAgentRow { return drawn }
 }

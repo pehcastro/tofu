@@ -69,7 +69,7 @@ func (m heldAsk) Ask(ctx context.Context, _ llm.Request) (llm.Decision, error) {
 func TestSendNowCancelsTheAskInFlightAsSentNowAndAStopStaysAStop(t *testing.T) {
 	stops, sendNow := make(chan struct{}, 1), make(chan struct{}, 1)
 	model := heldAsk{asked: make(chan struct{}, 1)}
-	watch := &watcher{held: rosterHolding(t), now: time.Now, emit: func(Event) {}, stop: &leadStop{}, inner: model}
+	watch := &watcher{held: rosterHolding(t), now: time.Now, emit: func(Event) {}, stop: &leadStop{}, inner: model, seen: &shownResults{ids: map[string]bool{}}}
 	quiet := watch.stop.listen(nil, stops, sendNow)
 	defer quiet()
 	ask := func(signal chan struct{}) error {

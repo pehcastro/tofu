@@ -348,6 +348,7 @@ func TestTheSubAgentBarFollowsTheCapTheTurnWasGiven(t *testing.T) {
 			emit:     func(event Event) { sent = append(sent, event) },
 			now:      time.Now,
 			maxSteps: one.maxSteps,
+			seen:     &shownResults{ids: map[string]bool{}},
 			held:     rosterHolding(t, roster.SubAgent{ID: "parent-c1", Mission: "do it", Owns: []string{"x"}}),
 		}
 		watch.sendSubAgents()
