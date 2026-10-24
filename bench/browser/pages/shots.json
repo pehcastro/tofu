@@ -1,0 +1,296 @@
+{
+  "date": "2026-10-24",
+  "machine": "DESKTOP-AHUN9RO",
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+  "recorder": "go run ./bench/browser/shots, tofu's own headless Chrome through browser.Endpoint and the direct CDP path, a fresh home per run",
+  "viewport": "1280x800 at device scale 1",
+  "frame": "the last Page.screencastFrame after the snapshot, JPEG, rects in CSS pixels from getBoundingClientRect over the snapshot's own element ids",
+  "pages": [
+    {
+      "id": "hotel",
+      "source": "jev-ultrafast local hotel fixture, via internal/browser/jevloop/testdata/hotel.json",
+      "source_sha256": "baf6c49bf024bbe965e25d820c3e8f94380ef90f7b007e66dc715f54171928ff",
+      "image": "hotel.jpg",
+      "image_sha256": "dda621a1cf93ab44293597d7012a24b965d3c5eb579528fb751eb9b124c88108",
+      "width": 1280,
+      "height": 800,
+      "viewport": [
+        1280,
+        800
+      ],
+      "rects": {
+        "1": {
+          "left": 52,
+          "top": 19,
+          "right": 133.859375,
+          "bottom": 54
+        },
+        "10": {
+          "left": 1104.234375,
+          "top": 706,
+          "right": 1193.984375,
+          "bottom": 740
+        },
+        "2": {
+          "left": 492.875,
+          "top": 26.5,
+          "right": 563.34375,
+          "bottom": 46.5
+        },
+        "3": {
+          "left": 591.34375,
+          "top": 26.5,
+          "right": 684.96875,
+          "bottom": 46.5
+        },
+        "4": {
+          "left": 52,
+          "top": 279,
+          "right": 1069.90625,
+          "bottom": 327
+        },
+        "5": {
+          "left": 1081.90625,
+          "top": 279,
+          "right": 1213,
+          "bottom": 327
+        },
+        "6": {
+          "left": 118.953125,
+          "top": 352,
+          "right": 211.953125,
+          "bottom": 389
+        },
+        "7": {
+          "left": 239.953125,
+          "top": 364,
+          "right": 252.953125,
+          "bottom": 377
+        },
+        "8": {
+          "left": 314.90625,
+          "top": 706,
+          "right": 404.65625,
+          "bottom": 740
+        },
+        "9": {
+          "left": 709.578125,
+          "top": 706,
+          "right": 799.328125,
+          "bottom": 740
+        }
+      },
+      "matches_recorded_page": false,
+      "differences": [
+        "text from rune 290 reads \"\\n/ night\\nView stay ↗\\nCOP\" against \" / night\\nView stay ↗\\nCOP\"",
+        "element 7 is checkbox \"Free cancellation\" \"on\" against checkbox \"Free cancellation\" \"\""
+      ]
+    },
+    {
+      "id": "shop",
+      "source": "fastbrowse src/fastbrowse/evals/fixtures/shop.html, task search-price",
+      "source_sha256": "5db26fdb808e0eaba1fdcd798dd5608488c8235f7130c66568a57040478db21c",
+      "image": "shop.jpg",
+      "image_sha256": "fbf4c88ba17dde2f56e25b66072cecf4ba8f25b04abd769780d4f1b19308dfc1",
+      "width": 1280,
+      "height": 800,
+      "viewport": [
+        1280,
+        800
+      ],
+      "rects": {
+        "1": {
+          "left": 114.640625,
+          "top": 79.875,
+          "right": 291.640625,
+          "bottom": 100.875
+        },
+        "2": {
+          "left": 295.640625,
+          "top": 79.875,
+          "right": 353.890625,
+          "bottom": 100.875
+        },
+        "3": {
+          "left": 8,
+          "top": 100.875,
+          "right": 66.234375,
+          "bottom": 117.875
+        },
+        "4": {
+          "left": 79.5625,
+          "top": 100.875,
+          "right": 129.328125,
+          "bottom": 117.875
+        }
+      },
+      "matches_recorded_page": true
+    },
+    {
+      "id": "results",
+      "source": "fastbrowse src/fastbrowse/evals/fixtures/results.html?q=kettle, task search-price",
+      "source_sha256": "57ee6b5685b33ad2ae6dad270109e3e0674a261c35fcbc47a38ccf9a8074707b",
+      "image": "results.jpg",
+      "image_sha256": "b0be285ded61c61e0db09e45f96d3a1586f56f2f6d23408a503e2db3675405a3",
+      "width": 1280,
+      "height": 800,
+      "viewport": [
+        1280,
+        800
+      ],
+      "rects": {
+        "1": {
+          "left": 48,
+          "top": 79.875,
+          "right": 116.875,
+          "bottom": 96.875
+        },
+        "2": {
+          "left": 48,
+          "top": 97.875,
+          "right": 121.3125,
+          "bottom": 114.875
+        },
+        "3": {
+          "left": 48,
+          "top": 115.875,
+          "right": 123.09375,
+          "bottom": 132.875
+        }
+      },
+      "matches_recorded_page": true
+    },
+    {
+      "id": "product",
+      "source": "fastbrowse src/fastbrowse/evals/fixtures/product.html for the Blue Kettle, task search-price",
+      "source_sha256": "0e5e37421810c0c15b5ff51a5cc236815e433ba3b5f9bf180b48d7bb0fb14691",
+      "image": "product.jpg",
+      "image_sha256": "6d640bd885506ca5836dafa03536d2f02e274ce27394c17565500031d48660bc",
+      "width": 1280,
+      "height": 800,
+      "viewport": [
+        1280,
+        800
+      ],
+      "rects": {},
+      "matches_recorded_page": true
+    },
+    {
+      "id": "contact",
+      "source": "fastbrowse src/fastbrowse/evals/fixtures/contact.html with the name, email and message filled, task contact-form",
+      "source_sha256": "5789f64ce16f87dd9ad9b5afd769ba3e5b81bfbfc4c5e64fb91c185e90c5aa4c",
+      "image": "contact.jpg",
+      "image_sha256": "3c26dc14edec9df6e0aa96b2ada960eb107fb0ccee14d8d651250caba92dfdc3",
+      "width": 1280,
+      "height": 800,
+      "viewport": [
+        1280,
+        800
+      ],
+      "rects": {
+        "1": {
+          "left": 81.9375,
+          "top": 79.875,
+          "right": 258.9375,
+          "bottom": 100.875
+        },
+        "2": {
+          "left": 50.21875,
+          "top": 116.875,
+          "right": 227.21875,
+          "bottom": 137.875
+        },
+        "3": {
+          "left": 48.203125,
+          "top": 153.875,
+          "right": 157.203125,
+          "bottom": 172.875
+        },
+        "4": {
+          "left": 67.984375,
+          "top": 188.875,
+          "right": 235.984375,
+          "bottom": 224.875
+        },
+        "5": {
+          "left": 8,
+          "top": 244.875,
+          "right": 112.9375,
+          "bottom": 265.875
+        }
+      },
+      "matches_recorded_page": true
+    },
+    {
+      "id": "cities",
+      "source": "fastbrowse src/fastbrowse/evals/fixtures/cities.html, task table-extract",
+      "source_sha256": "441e3ecc916ce1ddb6ad6775a29c67d4bce091f5acf5180aaa6d14988136e188",
+      "image": "cities.jpg",
+      "image_sha256": "f26b9ba6b2bba434dca03ccbfe853e0e719cd381d1ef30b0b877d356a38ef9ca",
+      "width": 1280,
+      "height": 800,
+      "viewport": [
+        1280,
+        800
+      ],
+      "rects": {},
+      "matches_recorded_page": true
+    },
+    {
+      "id": "account",
+      "source": "fastbrowse src/fastbrowse/evals/fixtures/account.html, task login-wall",
+      "source_sha256": "b14a7d6afdaedf536bb25e1788180f002936d1bd83c7fc838d002c3ea3df0233",
+      "image": "account.jpg",
+      "image_sha256": "2acae672775b058cbcc969f03d82a2eb58a55c8fe47353678b88d705b13518d7",
+      "width": 1280,
+      "height": 800,
+      "viewport": [
+        1280,
+        800
+      ],
+      "rects": {
+        "1": {
+          "left": 50.21875,
+          "top": 79.875,
+          "right": 227.21875,
+          "bottom": 100.875
+        },
+        "2": {
+          "left": 8,
+          "top": 153.875,
+          "right": 64.765625,
+          "bottom": 174.875
+        }
+      },
+      "matches_recorded_page": true
+    },
+    {
+      "id": "drafts",
+      "source": "fastbrowse src/fastbrowse/evals/fixtures/drafts.html, task confirm-dialog",
+      "source_sha256": "ae20199d45c61c9f4f4bd47b251775ebf0aa4d714b2eb8e389615a4b24e844b9",
+      "image": "drafts.jpg",
+      "image_sha256": "73ffce64b82400ffc732623bd59582217636b52df215d8288d71c569ead12c32",
+      "width": 1280,
+      "height": 800,
+      "viewport": [
+        1280,
+        800
+      ],
+      "rects": {
+        "1": {
+          "left": 134.21875,
+          "top": 79.875,
+          "right": 188.765625,
+          "bottom": 100.875
+        },
+        "2": {
+          "left": 134.203125,
+          "top": 100.875,
+          "right": 188.75,
+          "bottom": 121.875
+        }
+      },
+      "matches_recorded_page": true
+    }
+  ]
+}

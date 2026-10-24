@@ -50,56 +50,67 @@ func action(a browser.Action) string {
 	panic(fmt.Sprintf("browserbench: unknown op %d", int(a.Op)))
 }
 
-func Write(w io.Writer, recording Recording, readings []Reading, answersFile string) error {
-	var walls, inputs, dollars []float64
-	var builds []string
-	correct, failed, reported := 0, 0, 0.0
+const chooserHeader = "| arm | decisions | failed | correct | accuracy | wall p50 | wall p90 | wall max | median input tokens | dollars per decision |\n|---|---|---|---|---|---|---|---|---|---|\n"
+
+type summary struct {
+	decisions, failed, correct int
+	walls, inputs, dollars     []float64
+	builds                     []string
+	reported                   float64
+}
+
+func summarise(readings []Reading) summary {
+	s := summary{decisions: len(readings)}
 	for _, r := range readings {
 		if r.Error != "" {
-			failed++
+			s.failed++
 			continue
 		}
-		walls, inputs, dollars = append(walls, millis(r.Wall)), append(inputs, float64(r.Input)), append(dollars, r.Dollars())
-		reported += r.Reported
+		s.walls, s.inputs, s.dollars = append(s.walls, millis(r.Wall)), append(s.inputs, float64(r.Input)), append(s.dollars, r.Dollars())
+		s.reported += r.Reported
 		if r.Correct {
-			correct++
+			s.correct++
 		}
-		if !slices.Contains(builds, r.Build) {
-			builds = append(builds, r.Build)
+		if !slices.Contains(s.builds, r.Build) {
+			s.builds = append(s.builds, r.Build)
 		}
 	}
-	_, slowest := stat.Spread(walls)
-	medianWall, medianInput := stat.Median(walls), stat.Median(inputs)
+	return s
+}
+
+func (s summary) row(arm string) string {
+	_, slowest := stat.Spread(s.walls)
+	return fmt.Sprintf("| %s | %d | %d | %d | %.0f%% | %.0f ms | %.0f ms | %.0f ms | %.0f | $%.6f |\n",
+		arm, s.decisions, s.failed, s.correct, 100*float64(s.correct)/float64(s.decisions),
+		stat.Median(s.walls), stat.Percentile(s.walls, 90), slowest, stat.Median(s.inputs), stat.Median(s.dollars))
+}
+
+func Write(w io.Writer, recording Recording, readings []Reading, answersFile string) error {
+	s := summarise(readings)
+	medianWall, medianInput := stat.Median(s.walls), stat.Median(s.inputs)
 	conditions := recording.Conditions
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# bench browser: %s\n\n", conditions.Date)
 	fmt.Fprintf(&b, "Machine: %s. Date: %s. Wire: %s, `%s`. Credential kind: %s. Jev build: %s.\n\n",
-		conditions.Machine, conditions.Date, recording.Caps.Name, recording.Model, conditions.Credential, strings.Join(builds, ", "))
+		conditions.Machine, conditions.Date, recording.Caps.Name, recording.Model, conditions.Credential, strings.Join(s.builds, ", "))
 	b.WriteString(report.CostUnitLine([]ledger.Unit{ledger.UnitMoney, ledger.UnitListPrice}) + "\n\n")
 	fmt.Fprintf(&b, "Rebuilt from `%s`, the answers recorded by one live pass on %s, with no network call. Every page was asked once. No call was discarded as a warm up. The live pass needs the network and `TOFU_LIVE=1`, and is skipped without it.\n\n", answersFile, conditions.Date)
-	fmt.Fprintf(&b, "Wall time is measured around `jevloop.Jev.Choose`, request building included. Dollars are input tokens at tofu's Jev price, $%.3f per million, output free. The %s wire reported $%.6f for the whole pass.\n\n", jevDollarsPerMillionInput, recording.Caps.Name, reported)
+	fmt.Fprintf(&b, "Wall time is measured around `jevloop.Jev.Choose`, request building included. Dollars are input tokens at tofu's Jev price, $%.3f per million, output free. The %s wire reported $%.6f for the whole pass.\n\n", jevDollarsPerMillionInput, recording.Caps.Name, s.reported)
 
 	b.WriteString("## The chooser, tool against tool\n\n")
-	b.WriteString("| arm | decisions | failed | correct | accuracy | wall p50 | wall p90 | wall max | median input tokens | dollars per decision |\n")
-	b.WriteString("|---|---|---|---|---|---|---|---|---|---|\n")
-	fmt.Fprintf(&b, "| on: jev picks the op and the target | %d | %d | %d | %.0f%% | %.0f ms | %.0f ms | %.0f ms | %.0f | $%.6f |\n",
-		len(readings), failed, correct, 100*float64(correct)/float64(len(readings)),
-		medianWall, stat.Percentile(walls, 90), slowest, medianInput, stat.Median(dollars))
+	b.WriteString(chooserHeader)
+	b.WriteString(s.row("on: jev picks the op and the target"))
 	b.WriteString("| off: the turn's model calls `browser_act` | not measured | | | | | | | | needs Chrome and a subscription turn, see the live A/B below |\n\n")
-	fmt.Fprintf(&b, "Against jev-ultrafast (`docs/performance.md:28,32`): median wall %.0f ms against %d ms (%.2fx), median input tokens %.0f against %d (%.2fx). Theirs is TypeSafe direct over 17 Google Flights decisions; this is OpenRouter over %d recorded pages.\n\n",
-		medianWall, ultrafastMedianMillis, medianWall/ultrafastMedianMillis, medianInput, ultrafastInputTokens, medianInput/ultrafastInputTokens, len(readings))
+	fmt.Fprintf(&b, "Against jev-ultrafast (`docs/performance.md:28,32`): median wall %.0f ms against %d ms (%.2fx), median input tokens %.0f against %d (%.2fx). Theirs is TypeSafe direct over 17 Google Flights decisions; this is %s over %d recorded pages.\n\n",
+		medianWall, ultrafastMedianMillis, medianWall/ultrafastMedianMillis, medianInput, ultrafastInputTokens, medianInput/ultrafastInputTokens, recording.Caps.Name, len(readings))
 
 	b.WriteString("## Per page\n\n")
 	b.WriteString("| page | want | got | correct | wall | jev latency | attempts | input | output | dollars | build | error |\n")
 	b.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, r := range readings {
-		got := "none"
-		if r.Error == "" {
-			got = action(r.Got)
-		}
 		fmt.Fprintf(&b, "| %s | %s | %s | %t | %.0f ms | %.0f ms | %d | %d | %d | $%.6f | %s | %s |\n",
-			r.Case.ID, action(r.Case.Want), got, r.Correct, millis(r.Wall), millis(r.Latency), r.Attempts, r.Input, r.Output, r.Dollars(), r.Build, r.Error)
+			r.Case.ID, action(r.Case.Want), got(r), r.Correct, millis(r.Wall), millis(r.Latency), r.Attempts, r.Input, r.Output, r.Dollars(), r.Build, r.Error)
 	}
 
 	b.WriteString("\n## The live A/B, not run\n\n")

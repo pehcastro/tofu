@@ -100,6 +100,81 @@ func TestTheChooserOverTheCorpus(t *testing.T) {
 	t.Logf("%d of %d correct, report at %s", correct, len(readings), reportPath)
 }
 
+var replayImages = flag.String("replay-images", "", "rebuild the images report from this recorded answers file, with no network")
+
+const beforeAnswers = "answers-2026-09-28.json"
+
+func TestTheImageArmsOverTheCorpus(t *testing.T) {
+	set, err := Questions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := corpus(t)
+	shots, images, err := LoadShots("pages")
+	if err != nil {
+		t.Fatal(err)
+	}
+	answersPath := *replayImages
+	if answersPath == "" {
+		if os.Getenv("TOFU_LIVE") != "1" {
+			t.Skip("set TOFU_LIVE=1 for the live pass through TypeSafe, or pass -args -replay-images <answers file> to rebuild its report with no network")
+		}
+		sys.AllowLiveCredential(t)
+		key, err := jev.TypeSafeKey(filepath.Join("..", "..", ".env"))
+		if err != nil {
+			t.Fatalf("no credential: %v", err)
+		}
+		wire, err := api.NewWire(key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		machine, _ := os.Hostname()
+		conditions := Conditions{Date: time.Now().Format(time.DateOnly), Machine: machine, Credential: "key"}
+		recording, err := RecordImages(context.Background(), wire, key, set, cases, images, "pages/shots.json", conditions)
+		if err != nil {
+			t.Fatal(err)
+		}
+		answersPath = "answers-images-" + conditions.Date + ".json"
+		data, err := json.MarshalIndent(recording, "", "  ")
+		if err == nil {
+			err = os.WriteFile(answersPath, data, 0o644)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	raw, err := os.ReadFile(answersPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var recording ImageRecording
+	if err := json.Unmarshal(raw, &recording); err != nil {
+		t.Fatal(err)
+	}
+	textAnswers := "answers-" + recording.Conditions.Date + ".json"
+	beforeRecording, textRecording := recorded(t, beforeAnswers), recorded(t, textAnswers)
+	var readings [3][]Reading
+	for i, from := range []Recording{beforeRecording, textRecording, recording.Pictured} {
+		if readings[i], err = Replay(set, cases, from); err != nil {
+			t.Fatal(err)
+		}
+	}
+	boxes, err := ReadBoxes(cases, shots, recording)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	files := []string{"`" + beforeAnswers + "` (before)", "`" + textAnswers + "` (arm a)", "`" + filepath.Base(answersPath) + "` (arms b and c)"}
+	if err := WriteImages(&out, shots, readings[0], readings[1], readings[2], beforeRecording, textRecording, recording, boxes, files); err != nil {
+		t.Fatal(err)
+	}
+	reportPath := filepath.Join(filepath.Dir(answersPath), "report-images-"+recording.Conditions.Date+".md")
+	if err := os.WriteFile(reportPath, []byte(out.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("report at %s", reportPath)
+}
+
 type scripted struct {
 	byURL  map[string]Case
 	answer map[string]browser.Action

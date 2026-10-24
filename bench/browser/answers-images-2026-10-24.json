@@ -1,0 +1,488 @@
+{
+  "conditions": {
+    "date": "2026-10-24",
+    "machine": "DESKTOP-AHUN9RO",
+    "credential": "key"
+  },
+  "shots": "pages/shots.json",
+  "pictured": {
+    "conditions": {
+      "date": "2026-10-24",
+      "machine": "DESKTOP-AHUN9RO",
+      "credential": "key"
+    },
+    "model": "jev-latest",
+    "caps": {
+      "Name": "typesafe",
+      "MaxStateTokens": 32000,
+      "MaxRequestTokens": 64000,
+      "MaxRequestBytes": 90165,
+      "CriteriaKinds": [
+        0,
+        1,
+        3
+      ],
+      "MaxChoiceOptions": 255,
+      "MaxScoreLevels": 10,
+      "ReturnsConfidence": true,
+      "ListUSDPerInput": 4.2e-8
+    },
+    "answers": [
+      {
+        "id": "hotel",
+        "body": {
+          "model": "jev-1.14.0",
+          "answers": {
+            "operation": {
+              "type": "choice",
+              "choice": "SELECT",
+              "confidence": 0.77,
+              "probabilities": {
+                "CLICK": 0.2,
+                "TYPE_TEXT": 0.0,
+                "SELECT": 0.8,
+                "SCROLL_DOWN": 0.0,
+                "WAIT": 0.0,
+                "DONE": 0.0,
+                "BLOCKED": 0.0
+              }
+            },
+            "click_target": {
+              "type": "choice",
+              "choice": "5",
+              "confidence": 0.7,
+              "probabilities": {
+                "1": 0.02,
+                "2": 0.03,
+                "3": 0.01,
+                "4": 0.04,
+                "5": 0.73,
+                "7": 0.06,
+                "8": 0.05,
+                "9": 0.05,
+                "10": 0.01
+              }
+            },
+            "type_text_target": {
+              "type": "choice",
+              "choice": "4",
+              "confidence": 1.0,
+              "probabilities": {
+                "4": 1.0
+              }
+            },
+            "select_target": {
+              "type": "choice",
+              "choice": "6:1",
+              "confidence": 1.0,
+              "probabilities": {
+                "6:1": 1.0,
+                "6:2": 0.0,
+                "6:3": 0.0
+              }
+            }
+          },
+          "usage": {
+            "input_tokens": 5454,
+            "output_tokens": 217
+          }
+        },
+        "attempts": 1,
+        "latency_ns": 462745000,
+        "wall_ns": 472601400
+      },
+      {
+        "id": "shop",
+        "body": {
+          "model": "jev-1.14.0",
+          "answers": {
+            "operation": {
+              "type": "choice",
+              "choice": "TYPE_TEXT",
+              "confidence": 0.99,
+              "probabilities": {
+                "CLICK": 0.01,
+                "TYPE_TEXT": 0.99,
+                "WAIT": 0.0,
+                "DONE": 0.0,
+                "BLOCKED": 0.0
+              }
+            },
+            "click_target": {
+              "type": "choice",
+              "choice": "1",
+              "confidence": 1.0,
+              "probabilities": {
+                "1": 1.0,
+                "2": 0.0,
+                "3": 0.0,
+                "4": 0.0
+              }
+            },
+            "type_text_target": {
+              "type": "choice",
+              "choice": "1",
+              "confidence": 1.0,
+              "probabilities": {
+                "1": 1.0
+              }
+            }
+          },
+          "usage": {
+            "input_tokens": 4332,
+            "output_tokens": 122
+          }
+        },
+        "attempts": 1,
+        "latency_ns": 218145900,
+        "wall_ns": 218145900
+      },
+      {
+        "id": "results",
+        "body": {
+          "model": "jev-1.14.0",
+          "answers": {
+            "operation": {
+              "type": "choice",
+              "choice": "CLICK",
+              "confidence": 0.99,
+              "probabilities": {
+                "CLICK": 0.99,
+                "WAIT": 0.0,
+                "DONE": 0.0,
+                "BLOCKED": 0.01
+              }
+            },
+            "click_target": {
+              "type": "choice",
+              "choice": "2",
+              "confidence": 1.0,
+              "probabilities": {
+                "1": 0.0,
+                "2": 1.0,
+                "3": 0.0
+              }
+            }
+          },
+          "usage": {
+            "input_tokens": 3888,
+            "output_tokens": 83
+          }
+        },
+        "attempts": 1,
+        "latency_ns": 276647300,
+        "wall_ns": 277646600
+      },
+      {
+        "id": "product",
+        "body": {
+          "model": "jev-1.14.0",
+          "answers": {
+            "operation": {
+              "type": "choice",
+              "choice": "DONE",
+              "confidence": 0.98,
+              "probabilities": {
+                "WAIT": 0.0,
+                "DONE": 0.99,
+                "BLOCKED": 0.01
+              }
+            }
+          },
+          "usage": {
+            "input_tokens": 3359,
+            "output_tokens": 40
+          }
+        },
+        "attempts": 1,
+        "latency_ns": 206815800,
+        "wall_ns": 206815800
+      },
+      {
+        "id": "contact",
+        "body": {
+          "model": "jev-1.14.0",
+          "answers": {
+            "operation": {
+              "type": "choice",
+              "choice": "SELECT",
+              "confidence": 0.88,
+              "probabilities": {
+                "CLICK": 0.1,
+                "TYPE_TEXT": 0.0,
+                "SELECT": 0.9,
+                "WAIT": 0.0,
+                "DONE": 0.0,
+                "BLOCKED": 0.0
+              }
+            },
+            "click_target": {
+              "type": "choice",
+              "choice": "5",
+              "confidence": 0.51,
+              "probabilities": {
+                "1": 0.07,
+                "2": 0.05,
+                "4": 0.25,
+                "5": 0.63
+              }
+            },
+            "type_text_target": {
+              "type": "choice",
+              "choice": "4",
+              "confidence": 0.76,
+              "probabilities": {
+                "1": 0.1,
+                "2": 0.06,
+                "4": 0.84
+              }
+            },
+            "select_target": {
+              "type": "choice",
+              "choice": "3:1",
+              "confidence": 1.0,
+              "probabilities": {
+                "3:1": 1.0,
+                "3:2": 0.0
+              }
+            }
+          },
+          "usage": {
+            "input_tokens": 4951,
+            "output_tokens": 177
+          }
+        },
+        "attempts": 1,
+        "latency_ns": 229483300,
+        "wall_ns": 231479800
+      },
+      {
+        "id": "cities",
+        "body": {
+          "model": "jev-1.14.0",
+          "answers": {
+            "operation": {
+              "type": "choice",
+              "choice": "DONE",
+              "confidence": 0.98,
+              "probabilities": {
+                "WAIT": 0.0,
+                "DONE": 0.99,
+                "BLOCKED": 0.01
+              }
+            }
+          },
+          "usage": {
+            "input_tokens": 3403,
+            "output_tokens": 40
+          }
+        },
+        "attempts": 1,
+        "latency_ns": 313986800,
+        "wall_ns": 314919900
+      },
+      {
+        "id": "account",
+        "body": {
+          "model": "jev-1.14.0",
+          "answers": {
+            "operation": {
+              "type": "choice",
+              "choice": "TYPE_TEXT",
+              "confidence": 0.68,
+              "probabilities": {
+                "CLICK": 0.06,
+                "TYPE_TEXT": 0.74,
+                "WAIT": 0.0,
+                "DONE": 0.0,
+                "BLOCKED": 0.2
+              }
+            },
+            "click_target": {
+              "type": "choice",
+              "choice": "1",
+              "confidence": 1.0,
+              "probabilities": {
+                "1": 1.0,
+                "2": 0.0
+              }
+            },
+            "type_text_target": {
+              "type": "choice",
+              "choice": "1",
+              "confidence": 1.0,
+              "probabilities": {
+                "1": 1.0
+              }
+            }
+          },
+          "usage": {
+            "input_tokens": 4179,
+            "output_tokens": 108
+          }
+        },
+        "attempts": 1,
+        "latency_ns": 209672500,
+        "wall_ns": 209672500
+      },
+      {
+        "id": "drafts",
+        "body": {
+          "model": "jev-1.14.0",
+          "answers": {
+            "operation": {
+              "type": "choice",
+              "choice": "CLICK",
+              "confidence": 1.0,
+              "probabilities": {
+                "CLICK": 1.0,
+                "WAIT": 0.0,
+                "DONE": 0.0,
+                "BLOCKED": 0.0
+              }
+            },
+            "click_target": {
+              "type": "choice",
+              "choice": "1",
+              "confidence": 1.0,
+              "probabilities": {
+                "1": 1.0,
+                "2": 0.0
+              }
+            }
+          },
+          "usage": {
+            "input_tokens": 3794,
+            "output_tokens": 76
+          }
+        },
+        "attempts": 1,
+        "latency_ns": 205758500,
+        "wall_ns": 206328500
+      }
+    ]
+  },
+  "box_model": "jev-1.14.0",
+  "boxes": [
+    {
+      "id": "hotel",
+      "element": 6,
+      "body": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "target": {
+            "type": "box",
+            "box": {
+              "top": 0.45,
+              "bottom": 0.5,
+              "left": 0.08,
+              "right": 0.15
+            },
+            "confidence": 0.65
+          }
+        },
+        "usage": {
+          "input_tokens": 2995,
+          "output_tokens": 20
+        }
+      },
+      "latency_ns": 236870200
+    },
+    {
+      "id": "shop",
+      "element": 1,
+      "body": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "target": {
+            "type": "box",
+            "box": {
+              "top": 0.1,
+              "bottom": 0.14,
+              "left": 0.07,
+              "right": 0.23
+            },
+            "confidence": 0.88
+          }
+        },
+        "usage": {
+          "input_tokens": 2993,
+          "output_tokens": 20
+        }
+      },
+      "latency_ns": 342072400
+    },
+    {
+      "id": "results",
+      "element": 2,
+      "body": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "target": {
+            "type": "box",
+            "box": {
+              "top": 0.12,
+              "bottom": 0.15,
+              "left": 0.03,
+              "right": 0.08
+            },
+            "confidence": 0.87
+          }
+        },
+        "usage": {
+          "input_tokens": 2993,
+          "output_tokens": 20
+        }
+      },
+      "latency_ns": 212282800
+    },
+    {
+      "id": "contact",
+      "element": 3,
+      "body": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "target": {
+            "type": "box",
+            "box": {
+              "top": 0.17,
+              "bottom": 0.22,
+              "left": 0.03,
+              "right": 0.13
+            },
+            "confidence": 0.82
+          }
+        },
+        "usage": {
+          "input_tokens": 3010,
+          "output_tokens": 20
+        }
+      },
+      "latency_ns": 205637900
+    },
+    {
+      "id": "drafts",
+      "element": 1,
+      "body": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "target": {
+            "type": "box",
+            "box": {
+              "top": 0.1,
+              "bottom": 0.14,
+              "left": 0.07,
+              "right": 0.14
+            },
+            "confidence": 0.95
+          }
+        },
+        "usage": {
+          "input_tokens": 2989,
+          "output_tokens": 20
+        }
+      },
+      "latency_ns": 314345100
+    }
+  ]
+}
