@@ -40,7 +40,7 @@ func TestServeListsSessionsReportsStateAndKeepsTheSettingsItWasGiven(t *testing.
 		}
 	}
 	lastAt := time.Date(2026, 10, 8, 9, 0, 0, 0, time.UTC)
-	listed := func(open string) (SessionList, error) {
+	listed := func(open string, _ SessionListParams) (SessionList, error) {
 		return SessionList{Head: open, Sessions: []SessionRow{
 			{ID: open, Name: "gate", Handle: "gate", LastAt: lastAt, Open: true, Wire: "anthropic"},
 			{ID: "turn-other", Name: "docs", Handle: "docs", Task: "write the DOCS", Members: []Member{{Process: 42, Kind: MemberDesk, Joined: lastAt}}},

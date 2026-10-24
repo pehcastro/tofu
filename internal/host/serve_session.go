@@ -22,20 +22,21 @@ const (
 	attachedImageName = "%s-image-%02d%s"
 )
 
+func (p SessionListParams) Wants(row SessionRow) bool {
+	return strings.Contains(strings.ToLower(strings.Join([]string{row.ID, row.Name, row.Handle, row.Task}, "\n")), strings.ToLower(p.Search)) && (p.Kind == "" || row.Kind == p.Kind)
+}
+
 func (s *server) sessions(p SessionListParams) (any, error) {
-	list, _, err := s.listing()
-	if err != nil {
-		return nil, err
-	}
 	switch p.Kind {
 	case "", KindMain, KindSide:
 	default:
 		return nil, &Refusal{Code: CodeBadParams, Message: "kind " + p.Kind + " is neither " + KindMain + " nor " + KindSide}
 	}
-	search := strings.ToLower(p.Search)
-	list.Sessions = slices.DeleteFunc(list.Sessions, func(row SessionRow) bool {
-		return !strings.Contains(strings.ToLower(strings.Join([]string{row.ID, row.Name, row.Handle, row.Task}, "\n")), search) || p.Kind != "" && row.Kind != p.Kind
-	})
+	list, _, err := s.listing(p)
+	if err != nil {
+		return nil, err
+	}
+	list.Sessions = slices.DeleteFunc(list.Sessions, func(row SessionRow) bool { return !p.Wants(row) })
 	if p.Limit > 0 {
 		list.Sessions = list.Sessions[:min(p.Limit, len(list.Sessions))]
 	}
@@ -72,12 +73,12 @@ func (s *server) access(p SessionAccessParams) (any, error) {
 	return s.Access(p)
 }
 
-func (s *server) listing() (SessionList, []*lane, error) {
+func (s *server) listing(wanted SessionListParams) (SessionList, []*lane, error) {
 	if s.Sessions == nil {
 		return SessionList{}, nil, &Refusal{Code: CodeRefused, Message: "this tofu lists no sessions"}
 	}
 	lanes, focus := s.tracked(), s.focus()
-	list, err := s.Sessions(focus.host.ID())
+	list, err := s.Sessions(focus.host.ID(), wanted)
 	ids, families := make([]string, len(lanes)), make([]string, len(lanes))
 	store, storeErr := session.OpenIn(s.Host.dir)
 	for at, l := range lanes {
@@ -103,7 +104,7 @@ func (s *server) listing() (SessionList, []*lane, error) {
 }
 
 func (s *server) listed(l *lane) {
-	list, owners, err := s.listing()
+	list, owners, err := s.listing(SessionListParams{})
 	at := slices.Index(owners, l)
 	if err != nil || at < 0 {
 		return

@@ -41,7 +41,7 @@ type ServeConfig struct {
 	Verb     func(args []string) (VerbResult, error)
 	Quota    func() []QuotaWindow
 	Accounts func() []AccountNow
-	Sessions func(open string) (SessionList, error)
+	Sessions func(open string, wanted SessionListParams) (SessionList, error)
 	Branch   func(SessionBranchParams) (SessionBranchResult, error)
 	Access   func(SessionAccessParams) (SessionAccess, error)
 	Wires    func() []string

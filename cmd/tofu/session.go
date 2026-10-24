@@ -478,22 +478,38 @@ func sessionSummary(store *session.Store, handle string) (sessionRow, []session.
 	if err != nil {
 		return sessionRow{}, nil, err
 	}
-	var tasks []string
+	row := sessionHeadRow(store, header)
 	for _, event := range events {
 		var outcome struct {
 			Task string `json:"task"`
 		}
 		ended := event.Kind == session.EventOutcome || event.Kind == session.EventTurnEnd
 		if event.Agent == "" && ended && json.Unmarshal(event.Body, &outcome) == nil {
-			tasks = append(tasks, outcome.Task)
+			row.tasks = append(row.tasks, outcome.Task)
 		}
 	}
+	row.Turns, row.lastAt = max(header.Turns, len(row.tasks)), sessionActivity(store, header, events)
+	if header.CarriedFrom != nil {
+		part, err := store.Part(events, header.ID)
+		if err != nil {
+			return sessionRow{}, nil, err
+		}
+		given, err := turn.ConversationFrom(part)
+		if err != nil {
+			return sessionRow{}, nil, err
+		}
+		row.CarriedFrom = &host.CarriedFrom{Session: header.CarriedFrom.Session, Handle: handleOf(store, header.CarriedFrom.Session), Messages: len(given)}
+	}
+	return row, events, nil
+}
+
+func sessionHeadRow(store *session.Store, header session.Header) sessionRow {
 	row := sessionRow{SessionInfo: host.SessionInfo{
 		ID:               header.ID,
 		At:               header.At,
 		LastAt:           host.LastAt(store, header.ID),
 		Task:             header.Task,
-		Turns:            max(header.Turns, len(tasks)),
+		Turns:            header.Turns,
 		Agents:           len(header.Agents),
 		Outcome:          header.Outcome,
 		Error:            header.Error,
@@ -511,20 +527,9 @@ func sessionSummary(store *session.Store, handle string) (sessionRow, []session.
 		CostUSD:          header.CostUSD,
 		EndedAt:          header.EndedAt,
 		EndReason:        header.EndReason,
-	}, lastAt: sessionActivity(store, header, events), tasks: tasks}
+	}}
 	if header.Name != nil {
 		row.Name = *header.Name
-	}
-	if header.CarriedFrom != nil {
-		part, err := store.Part(events, header.ID)
-		if err != nil {
-			return sessionRow{}, nil, err
-		}
-		given, err := turn.ConversationFrom(part)
-		if err != nil {
-			return sessionRow{}, nil, err
-		}
-		row.CarriedFrom = &host.CarriedFrom{Session: header.CarriedFrom.Session, Handle: handleOf(store, header.CarriedFrom.Session), Messages: len(given)}
 	}
 	row.Handle = sessionShortID(header.ID)
 	if side, found, _ := store.Side(header.ID); found {
@@ -533,14 +538,14 @@ func sessionSummary(store *session.Store, handle string) (sessionRow, []session.
 	if identity, err := store.Identity(header.ID); err == nil {
 		row.Handle, row.Family, row.Generation = identity.Handle(), identity.Family, identity.Generation
 	}
-	return row, events, nil
+	return row
 }
 
 func sessionListing(store *session.Store) (sessionListReport, error) {
-	return sessionListingOf(store, sessionDetail)
+	return sessionListingOf(store, sessionDetail, func(sessionRow) bool { return false })
 }
 
-func sessionListingOf(store *session.Store, rowOf func(*session.Store, string) (sessionRow, error)) (sessionListReport, error) {
+func sessionListingOf(store *session.Store, rowOf func(*session.Store, string) (sessionRow, error), enough func(sessionRow) bool) (sessionListReport, error) {
 	listing, err := store.Listing()
 	if err != nil {
 		return sessionListReport{}, err
@@ -560,6 +565,9 @@ func sessionListingOf(store *session.Store, rowOf func(*session.Store, string) (
 		}
 		row.Head, row.Generations = slices.ContainsFunc(family.Generations, func(header session.Header) bool { return header.ID == report.Head }), len(family.Generations)
 		report.Sessions = append(report.Sessions, row)
+		if enough(row) {
+			break
+		}
 	}
 	return report, nil
 }
