@@ -35,6 +35,7 @@ type TracedInsert struct {
 	Agent    string     `json:"agent,omitempty"`
 	Turn     string     `json:"turn,omitempty"`
 	Origin   string     `json:"origin"`
+	From     *Origin    `json:"from,omitempty"`
 	Role     string     `json:"role"`
 	PostedAt *time.Time `json:"posted_at,omitempty"`
 	TakenAt  *time.Time `json:"taken_at,omitempty"`
@@ -127,7 +128,7 @@ func (s *Store) Traced(id string, events []Event) (Traced, error) {
 			if json.Unmarshal(event.Body, &message) != nil || message.Origin == "" {
 				continue
 			}
-			insert := TracedInsert{Agent: event.Agent, Turn: event.Turn, Origin: message.Origin, Role: message.Role, PostedAt: message.PostedAt,
+			insert := TracedInsert{Agent: event.Agent, Turn: event.Turn, Origin: message.Origin, From: message.From, Role: message.Role, PostedAt: message.PostedAt,
 				TakenAt: message.TakenAt, Text: message.Content}
 			hash := BlobHash(event.Body)
 			for _, exchange := range exchanges {

@@ -229,11 +229,13 @@ func (AskingMode) enum() []string { return []string{string(AskingAsk), string(As
 
 type Marker struct {
 	Identity
+	At time.Time `json:"at,omitzero"`
 }
 
 type Text struct {
 	Identity
-	Text string `json:"text"`
+	Text string    `json:"text"`
+	At   time.Time `json:"at,omitzero"`
 }
 
 type Steered struct {
@@ -293,6 +295,7 @@ type UserMessage struct {
 	Text   string         `json:"text"`
 	Origin Origin         `json:"origin"`
 	Images []MessageImage `json:"images,omitempty"`
+	SentAt time.Time      `json:"sentAt,omitzero"`
 }
 
 type TurnStarted struct {
