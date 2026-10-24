@@ -57,7 +57,7 @@ type watcher struct {
 	now       func() time.Time
 	turnID    string
 	maxSteps  int
-	seen      map[string]bool
+	seen      *shownResults
 	wrote     map[string]map[string]string
 	in        int
 	out       int
@@ -203,7 +203,9 @@ func (l *leadStop) listen(report safe.Report, stops, sendNow <-chan struct{}) (q
 
 func (a *watcher) askThrough(ctx context.Context, inner turn.Model, request llm.Request) (llm.Decision, error) {
 	asker := turn.SubAgentAsking(ctx)
-	for _, message := range request.Messages {
+	answered := sinceLastReply(request.Messages)
+	a.seen.forget(asker, request.Messages[:answered])
+	for _, message := range request.Messages[answered:] {
 		if message.Role == llm.RoleTool {
 			a.result(message, asker)
 		}
@@ -263,6 +265,41 @@ func (a *watcher) spawning(tool string) bool {
 	return a.spawner != nil && tool == a.spawner.Name()
 }
 
+type shownResults struct {
+	mu  sync.Mutex
+	ids map[string]bool
+}
+
+func (s *shownResults) forget(asker string, messages []llm.Message) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, message := range messages {
+		if message.Role == llm.RoleTool {
+			delete(s.ids, session.EventIDFor(asker, message.ToolCallID))
+		}
+	}
+}
+
+func (s *shownResults) firstTime(asker, call string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := session.EventIDFor(asker, call)
+	if s.ids[key] {
+		return false
+	}
+	s.ids[key] = true
+	return true
+}
+
+func sinceLastReply(messages []llm.Message) int {
+	for at := len(messages) - 1; at >= 0; at-- {
+		if messages[at].Role == llm.RoleAssistant {
+			return at + 1
+		}
+	}
+	return 0
+}
+
 func (a *watcher) eventID(asker, call string) string {
 	return session.EventIDFor(cmp.Or(asker, a.turnID), call)
 }
@@ -289,11 +326,10 @@ func (a *watcher) result(message llm.Message, asker string) {
 	a.marks.Lock()
 	created := a.wrote[asker][message.ToolCallID]
 	delete(a.wrote[asker], message.ToolCallID)
-	if a.seen[message.ToolCallID] || killedWithNothingToShow {
+	if killedWithNothingToShow || !a.seen.firstTime(asker, message.ToolCallID) {
 		a.marks.Unlock()
 		return
 	}
-	a.seen[message.ToolCallID] = true
 	result := Event{
 		Kind:     EventToolResult,
 		ID:       a.eventID(asker, message.ToolCallID),

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"tofu/internal/cron"
@@ -123,9 +124,55 @@ type link struct {
 
 type seat struct {
 	link
-	stream    chan []byte
-	kept      chan []byte
+	stream    seatQueue
+	kept      seatQueue
 	terminals bool
+}
+
+type seatQueue struct {
+	lines chan []byte
+	bytes atomic.Int64
+}
+
+func (q *seatQueue) offer(line []byte) bool {
+	size := int64(len(line))
+	if held := q.bytes.Add(size); held > size && held > konst.FollowQueueBytes {
+		q.bytes.Add(-size)
+		return false
+	}
+	select {
+	case q.lines <- line:
+		return true
+	default:
+		q.bytes.Add(-size)
+		return false
+	}
+}
+
+func (q *seatQueue) put(line []byte, gone <-chan struct{}) bool {
+	q.bytes.Add(int64(len(line)))
+	select {
+	case q.lines <- line:
+		return true
+	case <-gone:
+		q.bytes.Add(-int64(len(line)))
+		return false
+	}
+}
+
+func (q *seatQueue) took(line []byte) {
+	q.bytes.Add(-int64(len(line)))
+}
+
+func (q *seatQueue) drain() {
+	for {
+		select {
+		case line := <-q.lines:
+			q.took(line)
+		default:
+			return
+		}
+	}
 }
 
 type following struct {
@@ -166,12 +213,12 @@ func (h *Host) seat(conn net.Conn, in io.Reader) error {
 	if a == nil {
 		return nil
 	}
-	s := &seat{link: linked(conn), stream: make(chan []byte, konst.FollowQueue), kept: make(chan []byte, konst.FollowQueue)}
+	s := &seat{link: linked(conn), stream: seatQueue{lines: make(chan []byte, konst.FollowQueue)}, kept: seatQueue{lines: make(chan []byte, konst.FollowQueue)}}
 	h.bus.mu.Lock()
 	a.mu.Lock()
 	seated := a.seats != nil
 	if seated {
-		s.stream <- h.snapshot()
+		s.stream.put(h.snapshot(), s.gone)
 		a.seats[s] = struct{}{}
 	}
 	a.mu.Unlock()
@@ -195,26 +242,15 @@ func (a *audience) broadcast(said followLine, snapshot func() []byte) {
 	}
 	var resynced []byte
 	for s := range a.seats {
-		select {
-		case s.stream <- line:
-		default:
-			if resynced == nil {
-				resynced = snapshot()
-			}
-			s.resync(resynced)
+		if s.stream.offer(line) {
+			continue
 		}
-	}
-}
-
-func (s *seat) resync(snapshot []byte) {
-	for emptied := false; !emptied; {
-		select {
-		case <-s.stream:
-		default:
-			emptied = true
+		if resynced == nil {
+			resynced = snapshot()
 		}
+		s.stream.drain()
+		s.stream.put(resynced, s.gone)
 	}
-	s.stream <- snapshot
 }
 
 func (a *audience) attach(s *seat, terminals bool) {
@@ -251,21 +287,16 @@ func (a *audience) close() {
 	}
 }
 
-func (s *seat) send(line []byte) bool {
-	select {
-	case s.kept <- line:
-		return true
-	default:
-		return false
-	}
-}
+func (s *seat) send(line []byte) bool { return s.kept.offer(line) }
 
 func (s *seat) write() {
 	for {
 		var line []byte
 		select {
-		case line = <-s.kept:
-		case line = <-s.stream:
+		case line = <-s.kept.lines:
+			s.kept.took(line)
+		case line = <-s.stream.lines:
+			s.stream.took(line)
 		case <-s.gone:
 			return
 		}
@@ -293,9 +324,7 @@ func (h *Host) serveSeat(a *audience, s *seat, in io.Reader) error {
 		}
 		reply := h.served(a, s, raw)
 		line, _ := json.Marshal(followLine{Reply: &reply})
-		select {
-		case s.kept <- line:
-		case <-s.gone:
+		if !s.kept.put(line, s.gone) {
 			return nil
 		}
 	}

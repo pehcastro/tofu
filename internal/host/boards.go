@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	burnLookback       = 7 * 24 * time.Hour
+	burnLookback       = konst.QuotaLoggedLookbackDays * 24 * time.Hour
 	ledgerSummaryDays  = 7
 	classifierLookback = 31 * 24 * time.Hour
 	shippedLibraryRoot = "library"

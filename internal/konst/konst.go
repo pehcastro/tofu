@@ -484,6 +484,7 @@ const (
 	HostJoinMillis      = 120000
 	HostRetryMillis     = 50
 	FollowQueue         = 1024
+	FollowQueueBytes    = 8 << 20
 	FollowSettledKept   = 32
 	FollowReplyMillis   = 3000
 )

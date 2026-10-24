@@ -61,7 +61,7 @@ func resumedChat(carry Carry, dir string) []Event {
 	lead.watch = &watcher{emit: func(event Event) {
 		event.Turn, event.At = lead.turn, lead.at
 		chat = append(chat, redacted(event, mask))
-	}, turnID: carry.Session, seen: map[string]bool{}, spawner: &turn.SpawnTool{}}
+	}, turnID: carry.Session, seen: &shownResults{ids: map[string]bool{}}, spawner: &turn.SpawnTool{}}
 	labelled := Event{Kind: EventSession, Text: carry.Name, ID: carry.Session, Root: carry.Session}
 	store, err := carry.reading(dir)
 	if err == nil {

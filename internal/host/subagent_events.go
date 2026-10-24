@@ -34,7 +34,7 @@ func (h *Host) SubAgentEvents(names []string, visit func(Event) bool) error {
 	stopped := false
 	var logged *session.Event
 	mask := sys.LoadKeyRedactor().Redact
-	watch := &watcher{seen: map[string]bool{}, spawner: &turn.SpawnTool{}, emit: func(event Event) {
+	watch := &watcher{seen: &shownResults{ids: map[string]bool{}}, spawner: &turn.SpawnTool{}, emit: func(event Event) {
 		event.Logged = logged
 		stopped = stopped || !visit(redacted(event, mask))
 	}}

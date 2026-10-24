@@ -139,7 +139,7 @@ type Host struct {
 	settled []<-chan struct{}
 	roster  *roster.Roster
 	spent   *tokenTally
-	shown   map[string]bool
+	shown   *shownResults
 	asks    *asks
 
 	questions   *replies[answeredQuestion]
@@ -696,10 +696,10 @@ func (h *Host) carry(resumed Carry) error {
 		h.engine.Renew()
 	}
 	h.reads, h.inbox, h.roster, h.spent = turn.NewReadLedger(), turn.NewInbox(), &roster.Roster{}, &tokenTally{}
-	h.ran, h.carried, h.carriedOn, h.prefix, h.shown = nil, resumed.Messages, "", &turn.Prefix{}, map[string]bool{}
-	for _, message := range resumed.Messages {
-		if message.ToolCallID != "" {
-			h.shown[message.ToolCallID] = true
+	h.ran, h.carried, h.carriedOn, h.prefix, h.shown = nil, resumed.Messages, "", &turn.Prefix{}, &shownResults{ids: map[string]bool{}}
+	for _, message := range resumed.Messages[sinceLastReply(resumed.Messages):] {
+		if message.Role == llm.RoleTool {
+			h.shown.firstTime("", message.ToolCallID)
 		}
 	}
 	if resumed.Session == "" {
