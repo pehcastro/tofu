@@ -215,7 +215,7 @@ func moveHomeKeys(errOut io.Writer) {
 
 func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 	code := dispatch(args, in, out, errOut)
-	if code != exitUsage || len(args) == 0 {
+	if code != exitUsage || len(args) == 0 || slices.Contains(args, jsonFlag) {
 		return code
 	}
 	if guess, found := nearestCommand(args); found {
@@ -252,6 +252,9 @@ func nearestCommand(args []string) (string, bool) {
 		if near, found := nearestWord(arg, known); found {
 			guess[at+1] = near
 			return "tofu " + strings.Join(guess, " "), true
+		}
+		if strings.HasPrefix(arg, "-") {
+			return "", false
 		}
 	}
 	return "", false

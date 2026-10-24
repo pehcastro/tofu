@@ -1508,7 +1508,7 @@ func TestTheTurnLineOnADrivenTurnNamesTheCountNotTheSize(t *testing.T) {
 	}
 	counted := ""
 	for _, frame := range driver.frames {
-		if plain := ansi.Strip(frame); strings.Contains(plain, "(3) tools") {
+		if plain := ansi.Strip(frame); strings.Contains(plain, "3 calls") {
 			counted = plain
 		}
 	}
@@ -1518,8 +1518,8 @@ func TestTheTurnLineOnADrivenTurnNamesTheCountNotTheSize(t *testing.T) {
 	if strings.Contains(counted, widget.Size(total)) {
 		t.Errorf("the turn line carries a byte figure\n%s", counted)
 	}
-	if ended := ansi.Strip(driver.view()); strings.Contains(ended, "(3) tools") || strings.Contains(ended, "note.txt") {
-		t.Errorf("the ended turn still draws its calls in the chat\n%s", ended)
+	if ended := ansi.Strip(driver.view()); strings.Contains(ended, "note.txt") {
+		t.Errorf("the ended turn still draws one row per call in the chat\n%s", ended)
 	}
 	t.Log("\n" + counted)
 }
@@ -1903,22 +1903,22 @@ func TestTheAppResolvesTheShellOnceAndSharesItWithTheEnvironmentBlock(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	start := strings.Index(string(source), "func (e *appEngine) Prepare(")
+	start := strings.Index(string(source), "func (e *appEngine) startTurn(")
 	if start < 0 {
-		t.Fatal("app.go no longer defines appEngine.Prepare, so this test cannot check its wiring")
+		t.Fatal("app.go no longer defines appEngine.startTurn, so this test cannot check its wiring")
 	}
 	body := string(source)[start:]
 	if end := strings.Index(body, "\nfunc "); end >= 0 {
 		body = body[:end]
 	}
 	if calls := strings.Count(body, "turn.ResolveRunShell("); calls != 1 {
-		t.Fatalf("appEngine.Prepare calls turn.ResolveRunShell %d times, want 1: a second call resolves the shell again instead of sharing the first", calls)
+		t.Fatalf("appEngine.startTurn calls turn.ResolveRunShell %d times, want 1: a second call resolves the shell again instead of sharing the first", calls)
 	}
 	if !strings.Contains(body, "opts.shell = shell") {
-		t.Fatal("appEngine.Prepare resolves a shell but never carries it on opts, so buildRunToolsForRun and the environment block cannot share it")
+		t.Fatal("appEngine.startTurn resolves a shell but never carries it on opts, so buildRunToolsForRun and the environment block cannot share it")
 	}
 	if !strings.Contains(body, "buildRunToolsForRun(") {
-		t.Fatal("appEngine.Prepare still builds its tools through a path that resolves its own shell instead of the one already carried on opts")
+		t.Fatal("appEngine.startTurn still builds its tools through a path that resolves its own shell instead of the one already carried on opts")
 	}
 }
 

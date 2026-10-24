@@ -362,6 +362,7 @@ func (m *Model) Finish(id string, result Result) {
 		if entry.running() && entry.ID == id {
 			entry.Status, entry.Output, entry.Bytes, entry.Failed, entry.Ended = result.Status, result.Output, result.Bytes, result.Failed, cmp.Or(result.At, ended)
 			entry.Card, entry.Summary = cmp.Or(result.Card, entry.Card), result.Summary
+			entry.Promoted = entry.Promoted || m.Stopping
 			m.revision++
 			return
 		}
@@ -570,7 +571,7 @@ func (m *Model) Stop() {
 	for index := range m.entries {
 		entry := &m.entries[index]
 		if entry.running() {
-			entry.Status, entry.Ended = noResult, m.now()
+			entry.Status, entry.Ended, entry.Promoted = noResult, m.now(), entry.Promoted || interrupted
 		}
 		if interrupted && entry.Kind == Tool && entry.Group == "" && entry.turn == m.turns {
 			entry.Promoted = true

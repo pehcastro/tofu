@@ -469,7 +469,7 @@ func settingsSaid(t *testing.T, printed, key string) string {
 	return ""
 }
 
-const answerAfterTheRead, fullToolRow = "note.txt holds one line", "⟩ read note.txt"
+const answerAfterTheRead, fullToolRow = "note.txt holds one line", "the note says a note"
 
 func TestADrivenRunIgnoresASettingsFilePlantedInTheAmbientHome(t *testing.T) {
 	dir := drivenProject(t)

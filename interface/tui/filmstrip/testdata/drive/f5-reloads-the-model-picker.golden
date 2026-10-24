@@ -12,7 +12,7 @@
                      PROVIDERS               › claude-opus-5                                 source  claude-sub         
                      › all                     claude-sub                                    kind    llm                
                        claude-sub              claude-sonnet-4-5-20250929                    pays    subscription       
-                       Meta · key set          claude-sub · excluded                         window  5h and 7d          
+                       Meta · no key           claude-sub · excluded                         window  5h and 7d          
                                                claude-sonnet-4-6                             layer   library            
                      f5 reloads models         claude-sub · excluded                                                    
                                                claude-sonnet-5                               EFFORT                     
@@ -42,7 +42,7 @@
                      PROVIDERS               › claude-opus-5                                 source  claude-sub         
                      › all                     claude-sub                                    kind    llm                
                        claude-sub              claude-sonnet-4-5-20250929                    pays    subscription       
-                       Meta · key set          claude-sub · excluded                         window  5h and 7d          
+                       Meta · no key           claude-sub · excluded                         window  5h and 7d          
                                                claude-sonnet-4-6                             layer   library            
                      f5 reloads models         claude-sub · excluded                                                    
                                                claude-sonnet-5                               EFFORT                     
@@ -72,7 +72,7 @@
                      PROVIDERS               › claude-sonnet-5-5                                                        
                      › all                     claude-sub                                    source  claude-sub         
                        claude-sub                                                            kind    llm                
-                       Meta · key set                                                        pays    subscription       
+                       Meta · no key                                                         pays    subscription       
                                                                                              window  5h and 7d          
                      f5 reloads models                                                       layer   catalog            
                                                                                                                         

@@ -394,10 +394,10 @@ func TestABashResultCarryingAFabricatedCitationReachesTheModelRefused(t *testing
 		t.Fatal(err)
 	}
 	result := ranTool(t, dir, "bash", `{"command":"echo the fix is in real.go:900 and in missing.go:1"}`)
-	if !strings.Contains(result.Content, "citations: 2 found, 0 resolved, 2 refused") {
+	if !strings.Contains(result.Content, "citations: 2 found, 0 resolved, 1 not found, 1 refused") {
 		t.Fatalf("a bash result carrying two made up citations reached the model unchecked:\n%s", result.Content)
 	}
-	for _, want := range []string{"refused real.go:900", "refused missing.go:1"} {
+	for _, want := range []string{"refused real.go:900", "not found missing.go:1"} {
 		if !strings.Contains(result.Content, want) {
 			t.Fatalf("the verdict does not name %q:\n%s", want, result.Content)
 		}
