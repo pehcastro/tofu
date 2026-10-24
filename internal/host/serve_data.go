@@ -191,6 +191,14 @@ func (s *server) data(method string, raw json.RawMessage) (any, error) {
 		return handle(raw, s.resolveMention)
 	case "session.trace":
 		return handle(raw, func(p SessionParams) (any, error) { return verbAs[SessionTrace](s, "session", "trace", p.Session) })
+	case queryPrefix + "request":
+		return handle(raw, func(p RequestParams) (any, error) {
+			store, err := session.OpenIn(s.Host.dir)
+			if err != nil {
+				return nil, err
+			}
+			return store.RequestParts(cmp.Or(p.Session, s.focus().host.ID()), p.Request)
+		})
 	case queryPrefix + "drain":
 		return handle(raw, func(p SessionParams) (any, error) { return verbAs[DrainReport](s, "session", "drain", p.Session) })
 	case queryPrefix + "accounts":

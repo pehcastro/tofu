@@ -31,7 +31,9 @@ type PromptPart struct {
 	Agent   string
 	File    string
 	Text    string
+	Why     string
 	ByTask  bool
+	Off     bool
 }
 
 func (p PromptPart) Rule() string {
@@ -212,6 +214,7 @@ func Compose(spec ComposeSpec) (Composed, error) {
 			RuleID:  fired.ID,
 			File:    filepath.ToSlash(fired.File),
 			Text:    text,
+			Why:     match.Why,
 			ByTask:  !withoutTask[i].Fires || !reachesWithoutTask,
 		})
 	}
@@ -220,7 +223,7 @@ func Compose(spec ComposeSpec) (Composed, error) {
 		if off.Rule.Override.Reason != "" {
 			text += ": " + off.Rule.Override.Reason
 		}
-		composed.Parts = append(composed.Parts, PromptPart{Concern: off.Base.Concern, RuleID: off.Base.ID, File: filepath.ToSlash(off.Rule.File), Text: text})
+		composed.Parts = append(composed.Parts, PromptPart{Concern: off.Base.Concern, RuleID: off.Base.ID, File: filepath.ToSlash(off.Rule.File), Text: text, Off: true})
 	}
 	order := composedOrder()
 	slices.SortStableFunc(composed.Parts, func(a, b PromptPart) int {
@@ -275,9 +278,13 @@ func (c Composed) render(keep func(PromptPart) bool) string {
 		if block.Len() > 0 {
 			block.WriteString("\n\n")
 		}
-		fmt.Fprintf(&block, "[%s, from %s]\n%s", part.Concern, part.Rule(), part.Text)
+		block.WriteString(part.rendered())
 	}
 	return block.String()
+}
+
+func (p PromptPart) rendered() string {
+	return fmt.Sprintf("[%s, from %s]\n%s", p.Concern, p.Rule(), p.Text)
 }
 
 func TaskNamed(text string) rule.Task {

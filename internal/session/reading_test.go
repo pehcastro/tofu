@@ -53,6 +53,7 @@ func oneOfEachWrittenKind(t *testing.T) []Event {
 		asked(eventOf(t, EventRequest, StepBody{Index: 1, AssistantText: "looking"}), ""),
 		asked(eventOf(t, EventCompaction, map[string]any{"compaction": map[string]int{"step": 1}}), ""),
 		eventOf(t, EventMemoryRequest, StepBody{Model: "haiku", PromptTokens: 900, CompletionTokens: 80}),
+		eventOf(t, EventSent, SentBody{Messages: 1}),
 		eventOf(t, EventAttachment, Attachment{File: "shot.png", Bytes: 9, Format: "png"}),
 		eventOf(t, EventTurnEnd, map[string]string{"outcome": "stopped"}),
 		eventOf(t, EventNotice, NoticeBody{Text: "the gate is off"}),
@@ -60,7 +61,7 @@ func oneOfEachWrittenKind(t *testing.T) []Event {
 	}
 }
 
-var tracedOnly = []EventKind{EventTurnStart, EventSpawn, EventAgentEnd, EventNotice, EventListChange, EventReport, EventHook, EventMemoryRequest}
+var tracedOnly = []EventKind{EventTurnStart, EventSpawn, EventAgentEnd, EventNotice, EventListChange, EventReport, EventHook, EventMemoryRequest, EventSent}
 
 func TestAMemoryModelCallBetweenTheLeadsRequestsIsNotOneOfItsSteps(t *testing.T) {
 	events := []Event{

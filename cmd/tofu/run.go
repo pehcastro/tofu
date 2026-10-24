@@ -877,6 +877,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		Wire:          opts.wire,
 		Slug:          run.orchestrator.Slug(),
 		System:        composed.Head(),
+		Parts:         composed.Parts,
 		Environment:   composed.WithTaskRules(environment),
 		Instructions:  prompt.files,
 		Memory:        prompt.memory,

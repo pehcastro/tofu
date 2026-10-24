@@ -12,6 +12,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
+	"tofu/internal/rule"
 	"tofu/internal/session"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
@@ -92,6 +93,7 @@ type Config struct {
 	Project         string
 	SessionSource   string
 	System          string
+	Parts           []PromptPart
 	References      map[string]string
 	Environment     string
 	Instructions    string
@@ -124,6 +126,7 @@ type Config struct {
 	Step            CalledAsTheStepIsRecordedAndBeforeTheNextOneIsAsked
 	ToolResult      CalledAsEachToolCallAnswersAndBeforeTheNextRequest
 	Appended        func(session.Event)
+	Sent            CalledAsEachRequestIsSent
 	EndedSession    func(Row) error
 	Notify          func(string)
 	Now             func() time.Time
@@ -223,6 +226,14 @@ type Prefix struct {
 	held   bool
 	system string
 	tools  []llm.Tool
+	sent   messagesKept
+}
+
+func (p *Prefix) lastSent() *messagesKept {
+	if p == nil {
+		return &messagesKept{}
+	}
+	return &p.sent
 }
 
 func (p *Prefix) hold(system string, tools []llm.Tool) string {
@@ -244,6 +255,33 @@ func (p *Prefix) toolsOr(tools []llm.Tool) []llm.Tool {
 
 func (c Config) SystemMessage() string {
 	return strings.TrimSpace(c.System + "\n\n" + c.Instructions)
+}
+
+type CalledAsEachRequestIsSent func(session.Event)
+
+const partInstructions = "instructions"
+
+func (c Config) promptParts(preview recall.Config) []keptPart {
+	composed := Composed{Parts: c.Parts}
+	if len(c.Parts) == 0 || composed.Head() != c.System {
+		return nil
+	}
+	byTask := composed.render(func(part PromptPart) bool { return part.ByTask })
+	parts := []keptPart{
+		{PromptPart: session.PromptPart{Kind: string(rule.ConcernEnvironment), PerTurn: true}, text: strings.TrimSpace(strings.TrimSuffix(c.Environment, byTask))},
+		{PromptPart: session.PromptPart{Kind: partInstructions}, text: c.Instructions},
+	}
+	for _, part := range c.Parts {
+		if part.Concern != rule.ConcernEnvironment {
+			parts = append(parts, keptPart{PromptPart: session.PromptPart{Kind: string(part.Concern), Rule: part.RuleID, Agent: part.Agent, File: part.File, Why: part.Why,
+				PerTurn: part.ByTask, Off: part.Off}, text: part.rendered()})
+		}
+	}
+	parts = slices.DeleteFunc(parts, func(part keptPart) bool { return strings.TrimSpace(part.text) == "" })
+	for i := range parts {
+		parts[i].Tokens = preview.Tokens(parts[i].text)
+	}
+	return parts
 }
 
 func (c Config) MemoryMessage() []llm.Message {

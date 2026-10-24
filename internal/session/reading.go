@@ -8,7 +8,7 @@ import (
 
 func Kinds() []EventKind {
 	return []EventKind{EventTurnStart, EventPrompt, EventRequest, EventMessage, EventToolCall, EventToolResult, EventSpawn,
-		EventAgentEnd, EventCompaction, EventTurnEnd, EventAttachment, EventOutcome, EventStep, EventRead, EventNotice, EventListChange, EventReport, EventHook, EventMemoryRequest}
+		EventAgentEnd, EventCompaction, EventTurnEnd, EventAttachment, EventOutcome, EventStep, EventRead, EventNotice, EventListChange, EventReport, EventHook, EventMemoryRequest, EventSent}
 }
 
 type Step struct {
@@ -73,7 +73,7 @@ func ReadEvents(events []Event) (Reading, error) {
 			reading.Prompt = &prompt
 		case EventOutcome:
 			reading.Outcome = event.Body
-		case EventNotice, EventListChange, EventReport, EventHook, EventMemoryRequest:
+		case EventNotice, EventListChange, EventReport, EventHook, EventMemoryRequest, EventSent:
 		default:
 			if !slices.Contains(reading.Unknown, event.Kind) {
 				reading.Unknown = append(reading.Unknown, event.Kind)

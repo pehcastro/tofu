@@ -278,12 +278,17 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 				emit(entered)
 			}
 		}
-		emit(Event{Kind: EventPersisted, ID: logged.ID, Agent: logged.Agent, Logged: &logged})
+		if logged.Kind != session.EventSent {
+			emit(Event{Kind: EventPersisted, ID: logged.ID, Agent: logged.Agent, Logged: &logged})
+		}
 		forking.Lock()
 		defer forking.Unlock()
 		if awaitingSession != nil && logged.Kind == session.EventTurnStart && logged.Turn == awaitingSession.ForkedInto && announcedFromHeader(*awaitingSession) {
 			awaitingSession = nil
 		}
+	}
+	config.Sent = func(sent session.Event) {
+		emit(Event{Kind: EventRequestSent, ID: sent.ID, Agent: sent.Agent, Logged: &sent})
 	}
 	config.Step = func(step turn.StepRow) {
 		steps.Store(int64(step.Index))

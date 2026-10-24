@@ -13,6 +13,7 @@ import (
 	"tofu/internal/learn"
 	"tofu/internal/llm"
 	"tofu/internal/memory"
+	"tofu/internal/session"
 	"tofu/internal/shell"
 	"tofu/internal/snapshot"
 	roster "tofu/internal/subagent"
@@ -773,6 +774,17 @@ type Persisted struct {
 	Kind   string `json:"kind"`
 }
 
+type RequestSent struct {
+	Identity
+	Request string `json:"request"`
+	session.SentBody
+}
+
+type RequestParams struct {
+	Session string `json:"session,omitempty"`
+	Request string `json:"request"`
+}
+
 type Resync struct {
 	Identity
 	Dropped int `json:"dropped"`
@@ -1091,6 +1103,7 @@ type TurnResult struct {
 type UndoParams struct {
 	Session string `json:"session"`
 	Turns   int    `json:"turns"`
+	Turn    string `json:"turn,omitempty"`
 }
 
 type ShellParams struct {
@@ -1264,6 +1277,7 @@ func notifications() []method {
 		{name: "question.resolved", params: QuestionResolved{}},
 		{name: "memory.scoped", params: MemoryScopedEvent{}},
 		{name: "item.persisted", params: Persisted{}},
+		{name: "request.sent", params: RequestSent{}},
 		{name: statusMethod, params: StatusReport{}},
 		{name: resyncMethod, params: Resync{}},
 		{name: boardyPrefix + "changed", params: boardy.Changed{}},
@@ -1338,6 +1352,7 @@ func requests() []method {
 		{name: "session.find", params: SessionFindParams{}, result: SessionFind{}},
 		{name: "session.trace", params: SessionParams{}, result: SessionTrace{}},
 		{name: queryPrefix + "drain", params: SessionParams{}, result: DrainReport{}},
+		{name: queryPrefix + "request", params: RequestParams{}, result: session.RequestParts{}},
 		{name: "mention.resolve", params: MentionParams{}, result: MentionResolved{}},
 		{name: queryPrefix + "accounts", params: NoParams{}, result: Accounts{}},
 		{name: queryPrefix + "session", params: SessionParams{}, result: SessionDetail{}},

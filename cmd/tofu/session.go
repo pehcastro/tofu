@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -522,7 +523,7 @@ func sweepSessions(dir string, say func(string)) {
 	if err == nil {
 		report, err = sessionSweep(store, session.Lifetime(settingInt(dir, sessionStaleSetting, say)), time.Now(), false)
 	}
-	if err != nil {
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		say("the stale session sweep stopped: " + err.Error())
 	}
 	if len(report.Deleted) > 0 {
@@ -1209,21 +1210,22 @@ type requestAttempt struct {
 }
 
 type sessionRequestReport struct {
-	Session    string           `json:"session"`
-	Request    string           `json:"request"`
-	Agent      string           `json:"agent,omitempty"`
-	Turn       string           `json:"turn,omitempty"`
-	At         time.Time        `json:"at"`
-	Why        string           `json:"why,omitempty"`
-	Wire       string           `json:"wire,omitempty"`
-	Model      string           `json:"model,omitempty"`
-	ToolChoice string           `json:"tool_choice,omitempty"`
-	DurationMS int64            `json:"duration_ms"`
-	Messages   []requestMessage `json:"messages"`
-	Tools      json.RawMessage  `json:"tools,omitempty"`
-	Attempts   []requestAttempt `json:"attempts,omitempty"`
-	Response   json.RawMessage  `json:"response,omitempty"`
-	Error      string           `json:"error,omitempty"`
+	Session    string                `json:"session"`
+	Request    string                `json:"request"`
+	Agent      string                `json:"agent,omitempty"`
+	Turn       string                `json:"turn,omitempty"`
+	At         time.Time             `json:"at"`
+	Why        string                `json:"why,omitempty"`
+	Wire       string                `json:"wire,omitempty"`
+	Model      string                `json:"model,omitempty"`
+	ToolChoice string                `json:"tool_choice,omitempty"`
+	DurationMS int64                 `json:"duration_ms"`
+	Messages   []requestMessage      `json:"messages"`
+	Tools      json.RawMessage       `json:"tools,omitempty"`
+	Attempts   []requestAttempt      `json:"attempts,omitempty"`
+	Response   json.RawMessage       `json:"response,omitempty"`
+	Error      string                `json:"error,omitempty"`
+	Parts      *session.RequestParts `json:"parts,omitempty"`
 }
 
 func sessionRequest(store *session.Store, handle, request string) (sessionRequestReport, error) {
@@ -1251,7 +1253,56 @@ func sessionRequest(store *session.Store, handle, request string) (sessionReques
 		shown.Body = attempt.Body
 		report.Attempts = append(report.Attempts, shown)
 	}
-	return report, nil
+	parts, err := store.RequestParts(header.ID, view.Request)
+	if err == nil {
+		report.Parts = &parts
+	}
+	if errors.Is(err, session.ErrSentBeforeParts) {
+		err = nil
+	}
+	return report, err
+}
+
+func requestPartsLines(page cli.Page, parts *session.RequestParts) []string {
+	lines := []string{"", page.Section("what went into it", cli.Verdict{})}
+	if parts == nil {
+		return append(lines, cli.Indent("not recorded: this request was sent before tofu kept what goes into each request")...)
+	}
+	rows := make([]cli.Row, len(parts.Prompt))
+	for i, part := range parts.Prompt {
+		placed := "system prompt"
+		if part.PerTurn {
+			placed = "with the task"
+		}
+		cells := []string{part.Kind, cmp.Or(part.Rule, part.Agent, "tofu"), placed, strconv.Itoa(part.Tokens) + " tokens"}
+		if part.Off {
+			cells = append(cells, "switched off")
+		}
+		rows[i] = cli.Row{Mark: cli.Idle, Cells: cells, Detail: strings.Join(slices.DeleteFunc([]string{part.Why, part.File}, func(said string) bool { return said == "" }), " · ")}
+	}
+	var skills, memories []string
+	for _, item := range parts.Carried {
+		if item.From != nil && item.From.Kind == string(llm.OriginSkill) && !slices.Contains(skills, item.From.Name) {
+			skills = append(skills, item.From.Name)
+		}
+		for _, id := range item.Memory {
+			if !slices.Contains(memories, id) {
+				memories = append(memories, id)
+			}
+		}
+	}
+	var tokens []string
+	for _, kind := range slices.Sorted(maps.Keys(parts.Sent.Tokens)) {
+		tokens = append(tokens, kind+" "+strconv.Itoa(parts.Sent.Tokens[kind]))
+	}
+	lines = append(lines, cli.Indent(page.Rows(rows)...)...)
+	return append(lines, cli.Indent(page.Facts([]cli.Fact{
+		{Label: "skills loaded", Text: cmp.Or(strings.Join(skills, ", "), "none")},
+		{Label: "memory", Text: cmp.Or(strings.Join(memories, ", "), "none")},
+		{Label: "tokens", Text: strings.Join(tokens, " · ")},
+		{Label: "images", Text: strconv.Itoa(parts.Sent.Images)},
+		{Label: "since the last", Text: plural(len(parts.Sent.Added), "message") + " new, " + strconv.Itoa(len(parts.Sent.Dropped)) + " dropped"},
+	})...)...)
 }
 
 func wireMessageLines(body json.RawMessage, width int) []string {
@@ -1325,7 +1376,8 @@ func sessionRequestLines(page cli.Page, report sessionRequestReport) []string {
 			rows[i].Detail = widget.Size(len(message.Text)) + " of system prompt, whole in --json"
 		}
 	}
-	lines = append(append(lines, "", page.Section("messages tofu built", cli.Verdict{})), cli.Indent(page.Rows(rows)...)...)
+	lines = append(append(lines, requestPartsLines(page, report.Parts)...), "", page.Section("messages tofu built", cli.Verdict{}))
+	lines = append(lines, cli.Indent(page.Rows(rows)...)...)
 	for i, attempt := range report.Attempts {
 		facts := []cli.Fact{
 			{Label: "status", Text: strconv.Itoa(attempt.Status) + " · " + attempt.RequestID},

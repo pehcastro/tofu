@@ -209,6 +209,12 @@ type Row struct {
 	System       string        `json:"-"`
 	Tools        []string      `json:"-"`
 	ToolSchemas  string        `json:"-"`
+	Parts        []keptPart    `json:"-"`
+}
+
+type keptPart struct {
+	session.PromptPart
+	text string
 }
 
 type LoopGuardStop struct {
@@ -473,12 +479,21 @@ type record struct {
 	lastTools        toolsKept
 	task             llm.Origin
 	instructionFiles string
+	announce         CalledAsEachRequestIsSent
+	lastSent         *messagesKept
 }
 
 type toolsKept struct {
 	log   *session.Log
 	tools []llm.Tool
 	hash  string
+}
+
+type messagesKept struct {
+	session  string
+	request  string
+	hashes   []string
+	pictures []session.Picture
 }
 
 type resultRow struct {
@@ -494,7 +509,7 @@ type compactionRow struct {
 }
 
 func openRecord(config Config, row Row) (*record, error) {
-	opened := &record{store: config.Sessions, inbox: config.Inbox, log: config.Log, scope: row.ID, turn: row.ID, appended: config.Appended, said: map[string]string{}, instructionFiles: config.Instructions}
+	opened := &record{store: config.Sessions, inbox: config.Inbox, log: config.Log, scope: row.ID, turn: row.ID, appended: config.Appended, said: map[string]string{}, instructionFiles: config.Instructions, announce: config.Sent, lastSent: config.Prefix.lastSent()}
 	switch {
 	case config.Log != nil:
 		opened.turn, opened.agent, opened.spawnedBy = config.Turn, row.ID, config.SpawnedBy
@@ -530,13 +545,14 @@ func (r *record) note(err error) {
 	}
 }
 
-func (r *record) add(event session.Event, body any) {
+func (r *record) add(event session.Event, body any) session.Event {
 	if r == nil {
-		return
+		return event
 	}
 	event.Turn, event.Agent, event.SpawnedBy = r.turn, r.agent, r.spawnedBy
-	_, err := r.log.Append(event, body)
+	appended, err := r.log.Append(event, body)
 	r.note(err)
+	return appended
 }
 
 func (r *record) begin(row Row, task llm.Origin) {
@@ -549,7 +565,14 @@ func (r *record) begin(row Row, task llm.Origin) {
 		start.ContextCeiling, start.ContextTarget, start.AutoCompaction = row.Budget.CeilingTokens, row.Budget.Bands.Target(), row.Budget.Record()
 	}
 	r.add(session.Event{Kind: session.EventTurnStart}, start)
-	if prompt := (session.PromptBody{System: row.System, Tools: row.Tools, Instructions: r.instructionFiles, ToolSchemas: row.ToolSchemas}); !r.log.Prompted(r.agent, prompt) {
+	prompt := session.PromptBody{System: row.System, Tools: row.Tools, Instructions: r.instructionFiles, ToolSchemas: row.ToolSchemas}
+	for _, part := range row.Parts {
+		var err error
+		part.Blob, err = r.log.Keep(part.text)
+		r.note(err)
+		prompt.Parts = append(prompt.Parts, part.PromptPart)
+	}
+	if !r.log.Prompted(r.agent, prompt) {
 		r.add(session.Event{Kind: session.EventPrompt}, prompt)
 	}
 	if !r.own {
@@ -650,11 +673,64 @@ func (r *record) keptList(messages []llm.Message) ([]string, []session.Picture) 
 	return hashes, pictures
 }
 
+const (
+	sentToolSchemas = "tool_schemas"
+	memoryLineShape = "id"
+)
+
+func (r *record) sent(id, why string, request llm.Request, preview recall.Config) {
+	if r == nil {
+		return
+	}
+	previous, before := *r.lastSent, map[string]int{}
+	if previous.session != r.log.ID() {
+		previous = messagesKept{}
+	}
+	for _, hash := range previous.hashes {
+		before[hash]++
+	}
+	hashes, pictures := r.keptList(request.Messages)
+	*r.lastSent = messagesKept{session: r.log.ID(), request: id, hashes: hashes, pictures: pictures}
+	tools, err := json.Marshal(request.Tools)
+	r.note(err)
+	body := session.SentBody{Why: why, Messages: len(request.Messages), Images: len(pictures), Tokens: map[string]int{sentToolSchemas: preview.Tokens(string(tools))}}
+	for i, message := range request.Messages {
+		tokens, kind := HistoryTokens(preview, request.Messages[i:i+1]), cmp.Or(string(message.Origin.Kind()), message.Role.String())
+		body.Tokens[kind] += tokens
+		if before[hashes[i]] > 0 {
+			before[hashes[i]]--
+			continue
+		}
+		item := session.SentItem{Blob: hashes[i], Role: message.Role.String(), From: RecordedOrigin(message.Origin), Tokens: tokens, Images: len(message.Images)}
+		for _, cited := range memoryCitation.FindAllStringSubmatch(message.Content, -1) {
+			if cited[1] != memoryLineShape && !slices.Contains(item.Memory, cited[1]) {
+				item.Memory = append(item.Memory, cited[1])
+			}
+		}
+		body.Added = append(body.Added, item)
+	}
+	for _, hash := range previous.hashes {
+		if before[hash] > 0 {
+			before[hash]--
+			body.Dropped = append(body.Dropped, hash)
+		}
+	}
+	sent := r.add(session.Event{Kind: session.EventSent, Request: id}, body)
+	if r.announce != nil {
+		r.announce(sent)
+	}
+}
+
 func (r *record) exchange(id, why, wire string, request llm.Request, started time.Time, attempts []llm.Attempt, decision llm.Decision, failed error) {
 	if r == nil {
 		return
 	}
-	messages, pictures := r.keptList(request.Messages)
+	kept := r.lastSent
+	if kept == nil || kept.session != r.log.ID() || kept.request != id {
+		kept = &messagesKept{}
+		kept.hashes, kept.pictures = r.keptList(request.Messages)
+	}
+	messages, pictures := kept.hashes, kept.pictures
 	exchange := session.Exchange{Request: id, Agent: r.agent, Turn: r.turn, At: started, Why: why, Wire: wire, Model: decision.Build,
 		ToolChoice: request.ToolChoice.OpenAIValue(), Messages: messages, Tools: r.keptTools(request.Tools), DurationMS: time.Since(started).Milliseconds()}
 	for _, attempt := range attempts {

@@ -47,6 +47,7 @@ const (
 	EventAccount
 	EventSteerQueued
 	EventMembers
+	EventRequestSent
 )
 
 type Event struct {
@@ -126,7 +127,7 @@ func (e Event) snapshot() bool {
 		return true
 	case EventText, EventTextDelta, EventToolCall, EventToolResult, EventNote, EventFailure, EventStats, EventDone,
 		EventDecision, EventGateOff, EventAwaitPerson, EventResumed, EventSteered, EventRequesting, EventPlan,
-		EventSession, EventForkStart, EventForkEnd, EventTask, EventStreamReset, EventThinking, EventTurnStarted, EventTurnEnded, EventMemoryScoped, EventAccount:
+		EventSession, EventForkStart, EventForkEnd, EventTask, EventStreamReset, EventThinking, EventTurnStarted, EventTurnEnded, EventMemoryScoped, EventAccount, EventRequestSent:
 		return false
 	}
 	panic("host: unknown event kind")

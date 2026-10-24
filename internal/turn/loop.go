@@ -305,7 +305,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	if err != nil {
 		return Row{}, err
 	}
-	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, Account: account.ID, SpawnedFrom: config.SpawnedFrom, SpawnedBy: config.SpawnedBy, Budget: budget, System: config.System, Tools: usedTools, ToolSchemas: string(sentSchemas)}
+	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, Account: account.ID, SpawnedFrom: config.SpawnedFrom, SpawnedBy: config.SpawnedBy, Budget: budget, System: config.System, Tools: usedTools, ToolSchemas: string(sentSchemas), Parts: config.promptParts(artifacts.preview)}
 
 	upgraded := config.upgradeNote()
 	recorded, err = openRecord(config, row)
@@ -517,6 +517,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			recorded.exchange(id, why, config.Wire, request, started, nil, llm.Decision{}, err)
 			return llm.Decision{}, requestTiming{}, id, err
 		}
+		recorded.sent(id, why, request, artifacts.preview)
 		tapped, tap := llm.Tapped(ctx)
 		decision, timing, err := askCountingAttempts(tapped, model, request)
 		lastAttempts = tap.Attempts()

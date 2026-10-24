@@ -224,6 +224,12 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		request := kept(ApprovalMethod, &asked)
 		request.msg.ID, _ = json.Marshal(event.ID)
 		return append(out, request)
+	case EventRequestSent:
+		sent := RequestSent{Identity: id, Request: event.Logged.Request}
+		if json.Unmarshal(event.Logged.Body, &sent.SentBody) != nil {
+			return out
+		}
+		return append(out, notify("request.sent", &sent))
 	case EventPersisted:
 		if event.Agent == "" && event.Logged.Kind == session.EventMessage {
 			s.bind(*event.Logged)

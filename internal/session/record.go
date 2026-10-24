@@ -40,6 +40,7 @@ const (
 	EventListChange    EventKind = "list_change"
 	EventReport        EventKind = "report"
 	EventHook          EventKind = "hook"
+	EventSent          EventKind = "sent"
 )
 
 type NoticeBody struct {
@@ -57,10 +58,41 @@ type ListChangeBody struct {
 }
 
 type PromptBody struct {
-	System       string   `json:"system"`
-	Tools        []string `json:"tools,omitempty"`
-	Instructions string   `json:"instructions,omitempty"`
-	ToolSchemas  string   `json:"tool_schemas,omitempty"`
+	System       string       `json:"system"`
+	Tools        []string     `json:"tools,omitempty"`
+	Instructions string       `json:"instructions,omitempty"`
+	ToolSchemas  string       `json:"tool_schemas,omitempty"`
+	Parts        []PromptPart `json:"parts,omitempty"`
+}
+
+type PromptPart struct {
+	Kind    string `json:"kind"`
+	Rule    string `json:"rule,omitempty"`
+	Agent   string `json:"agent,omitempty"`
+	File    string `json:"file,omitempty"`
+	Why     string `json:"why,omitempty"`
+	Tokens  int    `json:"tokens"`
+	Blob    string `json:"blob,omitempty"`
+	PerTurn bool   `json:"per_turn,omitempty"`
+	Off     bool   `json:"off,omitempty"`
+}
+
+type SentBody struct {
+	Why      string         `json:"why,omitempty"`
+	Messages int            `json:"messages"`
+	Images   int            `json:"images,omitempty"`
+	Tokens   map[string]int `json:"tokens"`
+	Added    []SentItem     `json:"added,omitempty"`
+	Dropped  []string       `json:"dropped,omitempty"`
+}
+
+type SentItem struct {
+	Blob   string   `json:"blob"`
+	Role   string   `json:"role"`
+	From   *Origin  `json:"from,omitempty"`
+	Tokens int      `json:"tokens"`
+	Images int      `json:"images,omitempty"`
+	Memory []string `json:"memory,omitempty"`
 }
 
 type Attachment struct {
