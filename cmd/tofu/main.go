@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"tofu/interface/cli"
 	"tofu/internal/host"
@@ -24,6 +25,8 @@ const (
 	exitUsage        = 2
 	profileFlag      = "--profile"
 	profiledVariable = "TOFU_PROFILED"
+
+	nearestSlackDivisor = 3
 )
 
 const usage = `tofu is a coding agent harness.
@@ -211,6 +214,141 @@ func moveHomeKeys(errOut io.Writer) {
 }
 
 func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
+	code := dispatch(args, in, out, errOut)
+	if code != exitUsage || len(args) == 0 {
+		return code
+	}
+	if guess, found := nearestCommand(args); found {
+		page := cli.Detect(errOut, os.Environ())
+		_ = page.Print(errOut, cli.Indent(page.Hint("did you mean "+guess)))
+	}
+	return code
+}
+
+func nearestCommand(args []string) (string, bool) {
+	_, verbLines, _ := strings.Cut(usage, "\nVerbs:\n")
+	var verbs []string
+	for _, line := range strings.Split(verbLines, "\n") {
+		if name, indented := strings.CutPrefix(line, "  "); indented && name != "" && name[0] != ' ' {
+			verbs = append(verbs, strings.Fields(name)[0])
+		}
+	}
+	if !slices.Contains(verbs, args[0]) {
+		near, found := nearestWord(args[0], verbs)
+		return "tofu " + near, found
+	}
+	known := usageWords(verbUsage(args))
+	if len(known) == 0 {
+		return "", false
+	}
+	for at, arg := range args[1:] {
+		if slices.Contains(known, arg) || !slices.Equal(usageWords(arg), []string{arg}) {
+			continue
+		}
+		guess := slices.Clone(args)
+		if arg == "list" {
+			return "tofu " + strings.Join(slices.Delete(guess, at+1, at+2), " "), true
+		}
+		if near, found := nearestWord(arg, known); found {
+			guess[at+1] = near
+			return "tofu " + strings.Join(guess, " "), true
+		}
+	}
+	return "", false
+}
+
+func nearestWord(word string, candidates []string) (string, bool) {
+	best, distance := "", len(word)/nearestSlackDivisor+1
+	for _, candidate := range candidates {
+		if d := editDistance(word, candidate); d < distance {
+			best, distance = candidate, d
+		}
+	}
+	return best, best != ""
+}
+
+func usageWords(line string) []string {
+	var plain strings.Builder
+	for rest := line; rest != ""; {
+		before, after, _ := strings.Cut(rest, "<")
+		plain.WriteString(before + " ")
+		_, rest, _ = strings.Cut(after, ">")
+	}
+	return strings.FieldsFunc(plain.String(), func(r rune) bool { return !unicode.IsLower(r) && !unicode.IsDigit(r) && r != '-' })
+}
+
+func verbUsage(args []string) string {
+	switch args[0] {
+	case "models":
+		return modelsUsage
+	case "session":
+		return strings.Join([]string{sessionSubcommands, sessionBranchUsage, sessionDrainUsage, sessionFindUsage, sessionTraceUsage}, " ")
+	case "boardy":
+		if len(args) > 1 {
+			return boardyUsage + " " + boardyUsageOf(args[1])
+		}
+		return boardyUsage
+	case "agents":
+		return strings.Join([]string{agentsUsage, agentsAddUsage, agentsSetUsage, agentsRemoveUsage}, " ")
+	case "rules":
+		return strings.Join([]string{rulesSubcommands, rulesListUsage, rulesOverridesUsage, rulesCheckUsage, rulesAddUsage, rulesOffUsage, rulesIDUsage}, " ")
+	case "settings":
+		return settingsUsage
+	case "memory":
+		return memoryUsage + " " + memoryTreeUsage
+	case "scratch":
+		return scratchUsage
+	case "changelog":
+		return changelogUsage
+	case "docs":
+		return docsUsage
+	case "doctor":
+		return doctorUsage
+	case "update":
+		return updateUsage
+	case "migrate":
+		return migrateUsage
+	case "reload":
+		return reloadUsage
+	case "library":
+		return libraryUsage
+	case "lint":
+		return lintUsage
+	case "undo":
+		return undoUsage
+	case "why":
+		return whyUsage
+	case "label":
+		return labelUsage
+	case "check":
+		return checkUsage
+	case "judge":
+		return judgeUsage
+	case "replay":
+		return replayUsage
+	case "learn":
+		return learnUsage
+	case "frame":
+		return frameUsage
+	case "drive":
+		return driveUsage
+	case "serve":
+		return serveUsage
+	case "guard":
+		return guardUsage
+	case "login":
+		return loginUsage + " " + asideUsage
+	case "logout":
+		return logoutUsage
+	case "usage":
+		return usageFlags
+	case host.HubVerb:
+		return projectHostUsage
+	}
+	return ""
+}
+
+func dispatch(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 	if len(args) == 0 {
 		return appVerb(in, out, errOut, sessionResume{})
 	}

@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
+	"time"
 
 	"tofu/interface/cli"
 	"tofu/internal/boardy"
@@ -24,7 +26,7 @@ func boardyManageUsage(subcommand string) string {
 	case "manager":
 		return "tofu boardy manager add|remove|list [name] [--board KEY] [--as name] [--json]"
 	case "triage":
-		return "tofu boardy triage list|accept|drop [request] [--board KEY] [--reason text] [--as name] [--json]"
+		return "tofu boardy triage list|show|accept|drop [request] [--board KEY] [--reason text] [--as name] [--json]"
 	case "hand":
 		return "tofu boardy hand <ticket> <board> [--project dir] [--as name] [--json]"
 	case "assign":
@@ -137,6 +139,27 @@ func (c boardyCall) triage() int {
 			}
 			return lines
 		})
+	case len(c.args) == 2 && c.args[0] == "show":
+		requests, err := c.store.Requests(key)
+		at := slices.IndexFunc(requests, func(req boardy.Request) bool { return req.ID == c.args[1] })
+		if at < 0 {
+			ids := make([]string, len(requests))
+			for i, req := range requests {
+				ids[i] = req.ID
+			}
+			return c.o.fail(errors.Join(fmt.Errorf("no request %s in the triage of %s, which holds %s", c.args[1], key, cmp.Or(strings.Join(ids, ", "), "none")), err))
+		}
+		req := requests[at]
+		return c.o.done(true, req, func(page cli.Page) []string {
+			lines := page.Title(req.ID+" "+req.Ticket.Title, []string{string(req.Ticket.Type), string(req.Ticket.Priority)}, cli.Verdict{Mark: cli.Idle, Text: "triage of " + key})
+			lines = append(lines, page.Facts([]cli.Fact{
+				{Label: "by", Text: strings.Join(slices.DeleteFunc([]string{req.By.Alias, string(req.By.Kind), req.By.ID}, func(part string) bool { return part == "" }), " ")},
+				{Label: "at", Text: req.At.Local().Format(time.DateTime)},
+				{Label: "spec", Text: dash(req.Ticket.Spec)},
+				{Label: "owns", Text: dash(strings.Join(req.Ticket.Owns, ", "))},
+			})...)
+			return append(lines, ticketSections(page, req.Ticket)...)
+		})
 	case len(c.args) == 2 && c.args[0] == "accept":
 		ticket, err := c.managed.Accept(key, c.args[1], c.actor)
 		return c.receipt(ticket, err, cli.Added, c.args[1]+" is "+ticket.ID+" "+ticket.Title)
@@ -148,7 +171,7 @@ func (c boardyCall) triage() int {
 			return []string{page.Receipt(cli.Removed, "dropped "+c.args[1]+" from the triage of "+key, "")}
 		})
 	}
-	return c.o.usage(errors.New("list, accept <request> or drop <request>"))
+	return c.o.usage(errors.New("list, show <request>, accept <request> or drop <request>"))
 }
 
 func (c boardyCall) hand() int {

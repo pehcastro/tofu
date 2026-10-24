@@ -427,22 +427,7 @@ func (c boardyCall) show() int {
 			{Label: "updated", Text: ticket.Updated.Local().Format(time.DateTime)},
 			{Label: "file", Text: page.Path(path)},
 		})...)
-		section := func(name, body string) {
-			lines = append(lines, "", page.Subject(name))
-			if body == "" {
-				body = page.Label("empty")
-			}
-			lines = append(lines, cli.Indent(strings.Split(body, "\n")...)...)
-		}
-		section("Problem", ticket.Problem)
-		section("Scope", ticket.Scope)
-		for i, revision := range ticket.Acceptance {
-			section(boardy.RevisionHeading(i), revision)
-		}
-		if len(ticket.Questions) > 0 {
-			section(boardy.QuestionsHeading, boardy.QuestionsMarkdown(ticket.Questions))
-		}
-		section("Log", ticket.Log)
+		lines = append(lines, ticketSections(page, ticket)...)
 		if c.flags["thread"] != "" {
 			var activity []string
 			evidence := 0
@@ -456,10 +441,28 @@ func (c boardyCall) show() int {
 			if evidence > 0 {
 				activity = append(activity, fmt.Sprintf("%d evidence entries, kept in the Log for review", evidence))
 			}
-			section("Activity", strings.Join(activity, "\n"))
+			lines = append(lines, boardySection(page, "Activity", strings.Join(activity, "\n"))...)
 		}
 		return lines
 	})
+}
+
+func boardySection(page cli.Page, name, body string) []string {
+	if body == "" {
+		body = page.Label("empty")
+	}
+	return append([]string{"", page.Subject(name)}, cli.Indent(strings.Split(body, "\n")...)...)
+}
+
+func ticketSections(page cli.Page, ticket boardy.Ticket) []string {
+	lines := append(boardySection(page, "Problem", ticket.Problem), boardySection(page, "Scope", ticket.Scope)...)
+	for i, revision := range ticket.Acceptance {
+		lines = append(lines, boardySection(page, boardy.RevisionHeading(i), revision)...)
+	}
+	if len(ticket.Questions) > 0 {
+		lines = append(lines, boardySection(page, boardy.QuestionsHeading, boardy.QuestionsMarkdown(ticket.Questions))...)
+	}
+	return append(lines, boardySection(page, "Log", ticket.Log)...)
 }
 
 type boardyShown struct {
