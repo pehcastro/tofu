@@ -1,11 +1,16 @@
 package host
 
 import (
+	"bytes"
 	"cmp"
+	"encoding/json"
+	"hash/fnv"
 	"maps"
+	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
+	"sync"
 	"time"
 
 	"tofu/internal/konst"
@@ -14,14 +19,171 @@ import (
 	"tofu/internal/status"
 )
 
+const (
+	replayDir     = "replay"
+	replayPattern = "lane-*"
+)
+
 type lane struct {
-	host    *Host
-	release func()
-	items   *items
-	replay  []HistoryLine
-	status  *statusFeed
-	stop    chan struct{}
-	pumped  chan struct{}
+	host       *Host
+	release    func()
+	items      *items
+	replay     *replay
+	rebuilding sync.Mutex
+	status     *statusFeed
+	stop       chan struct{}
+	pumped     chan struct{}
+}
+
+type replay struct {
+	file  *os.File
+	size  int64
+	dead  int64
+	lines []storedLine
+}
+
+type storedLine struct {
+	method string
+	at     int64
+	length int64
+	sum    uint64
+}
+
+type frozenLine struct {
+	method string
+	params []byte
+}
+
+type changedLine struct {
+	index int
+	line  frozenLine
+}
+
+func (s *server) replayOf(lines []outgoing) *replay {
+	if err := os.MkdirAll(s.replays, 0o755); err != nil {
+		return nil
+	}
+	file, err := os.CreateTemp(s.replays, replayPattern)
+	if err != nil {
+		return nil
+	}
+	r := &replay{file: file}
+	for _, out := range lines {
+		if r.add(out) != nil {
+			r.drop()
+			return nil
+		}
+	}
+	return r
+}
+
+func frozen(out outgoing) (frozenLine, error) {
+	var written bytes.Buffer
+	encoder := json.NewEncoder(&written)
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(out.msg.Params)
+	return frozenLine{method: out.msg.Method, params: bytes.TrimSpace(written.Bytes())}, err
+}
+
+func (f frozenLine) sum() uint64 {
+	hash := fnv.New64a()
+	_, _ = hash.Write([]byte(f.method))
+	_, _ = hash.Write(f.params)
+	return hash.Sum64()
+}
+
+func (r *replay) add(out outgoing) error {
+	line, err := frozen(out)
+	if err != nil {
+		return nil
+	}
+	return r.push(line)
+}
+
+func (r *replay) push(line frozenLine) error {
+	stored, err := r.put(line)
+	if err == nil {
+		r.lines = append(r.lines, stored)
+	}
+	return err
+}
+
+func (r *replay) put(line frozenLine) (storedLine, error) {
+	if _, err := r.file.WriteAt(line.params, r.size); err != nil {
+		return storedLine{}, err
+	}
+	stored := storedLine{method: line.method, at: r.size, length: int64(len(line.params)), sum: line.sum()}
+	r.size += stored.length
+	return stored, nil
+}
+
+func (r *replay) read(stored storedLine) (frozenLine, error) {
+	params := make([]byte, stored.length)
+	_, err := r.file.ReadAt(params, stored.at)
+	return frozenLine{method: stored.method, params: params}, err
+}
+
+func (r *replay) page(first, end int) ([]HistoryLine, error) {
+	page := make([]HistoryLine, 0, end-first)
+	for _, stored := range r.lines[first:end] {
+		line, err := r.read(stored)
+		if err != nil {
+			return nil, err
+		}
+		page = append(page, HistoryLine{Method: line.method, Params: json.RawMessage(line.params)})
+	}
+	return page, nil
+}
+
+func (r *replay) merge(count int, changed []changedLine) error {
+	for _, gone := range r.lines[min(count, len(r.lines)):] {
+		r.dead += gone.length
+	}
+	r.lines = r.lines[:min(count, len(r.lines))]
+	for _, change := range changed {
+		stored, err := r.put(change.line)
+		if err != nil {
+			return err
+		}
+		if change.index < len(r.lines) {
+			r.dead += r.lines[change.index].length
+			r.lines[change.index] = stored
+		} else {
+			r.lines = append(r.lines, stored)
+		}
+	}
+	return nil
+}
+
+func (s *server) rewritten(from *replay, known []storedLine, count int, changed []changedLine) *replay {
+	built := s.replayOf(nil)
+	for index := 0; built != nil && index < count; index++ {
+		var line frozenLine
+		var err error
+		if len(changed) > 0 && changed[0].index == index {
+			line, changed = changed[0].line, changed[1:]
+		} else {
+			line, err = from.read(known[index])
+		}
+		if err != nil || built.push(line) != nil {
+			built.drop()
+			return nil
+		}
+	}
+	return built
+}
+
+func (r *replay) drop() {
+	if r == nil {
+		return
+	}
+	_ = r.file.Close()
+	_ = os.Remove(r.file.Name())
+}
+
+func (l *lane) replace(with *replay) {
+	l.replay.drop()
+	l.replay = with
 }
 
 func newLane(h *Host, release func()) *lane {
@@ -146,8 +308,10 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 			return nil, err
 		}
 		l.asks(p.Asking)
+		empty := s.replayOf(nil)
 		s.mu.Lock()
-		*l.items, l.replay = newItems(id), []HistoryLine{}
+		*l.items = newItems(id)
+		l.replace(empty)
 		s.mu.Unlock()
 		return SessionOpenResult{Session: id, Fresh: true}, nil
 	}
@@ -179,7 +343,7 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 	}
 	read := newItems(carry.Session)
 	lines := read.all(chat)
-	replay := freeze(lines)
+	replay := s.replayOf(lines)
 	if live := l.host.seen(); live.Turn != nil {
 		read.translate(*live.Turn, time.Now())
 		read.translate(Event{Kind: EventSubAgent, SubAgents: live.Agents}, time.Now())
@@ -187,7 +351,8 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 	if was == carry.Session {
 		maps.Copy(read.logged, l.items.logged)
 	}
-	*l.items, l.replay = read, replay
+	*l.items = read
+	l.replace(replay)
 	for _, line := range newest(lines, p.Replay) {
 		s.box.push(line)
 	}
@@ -202,12 +367,14 @@ func (s *server) refocus(l *lane, p SessionOpenParams) (any, error) {
 	l.asks(p.Asking)
 	read := newItems(carry.Session)
 	lines := read.all(resumedChat(carry, s.Host.dir))
-	replay := freeze(lines)
+	replay := s.replayOf(lines)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.focusOn(l)
-	if l.items.session == carry.Session {
-		l.replay = replay
+	if l.items.session != carry.Session {
+		replay.drop()
+	} else {
+		l.replace(replay)
 	}
 	for _, line := range newest(lines, p.Replay) {
 		s.box.push(line)
@@ -216,19 +383,59 @@ func (s *server) refocus(l *lane, p SessionOpenParams) (any, error) {
 }
 
 func (s *server) rebuild(l *lane) {
+	l.rebuilding.Lock()
+	defer l.rebuilding.Unlock()
 	s.mu.Lock()
-	session, since := l.items.session, len(l.replay)
+	session, was := l.items.session, l.replay
+	var known []storedLine
+	var dead int64
+	if was != nil {
+		known, dead = slices.Clone(was.lines), was.dead
+	}
 	s.mu.Unlock()
 	carry, err := s.Carry(session)
 	if err != nil {
 		return
 	}
-	read := newItems(carry.Session)
-	replay := freeze(read.all(l.host.Opening(carry)))
+	var built *replay
+	if was == nil {
+		if built = s.replayOf(nil); built == nil {
+			return
+		}
+	}
+	read, count, live, failed := newItems(carry.Session), 0, int64(0), false
+	var changed []changedLine
+	for _, event := range l.host.Opening(carry) {
+		for _, out := range read.translate(event, event.At) {
+			line, err := frozen(out)
+			switch {
+			case err != nil:
+				continue
+			case built != nil:
+				failed = failed || built.push(line) != nil
+			case count >= len(known):
+				changed = append(changed, changedLine{index: count, line: line})
+			case known[count].sum != line.sum():
+				changed, dead = append(changed, changedLine{index: count, line: line}), dead+known[count].length
+			}
+			count, live = count+1, live+int64(len(line.params))
+		}
+	}
+	for _, gone := range known[min(count, len(known)):] {
+		dead += gone.length
+	}
+	if built == nil && dead > live {
+		built = s.rewritten(was, known, count, changed)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if l.items.session == carry.Session && len(l.replay) == since {
-		l.replay = replay
+	switch {
+	case failed || l.items.session != carry.Session || l.replay != was || was != nil && len(was.lines) != len(known):
+		built.drop()
+	case built != nil:
+		l.replace(built)
+	case was.merge(count, changed) != nil:
+		l.replace(nil)
 	}
 }
 
@@ -255,6 +462,7 @@ func (s *server) closeSession(p SessionCloseParams) (any, error) {
 	}
 	l.halt()
 	s.mu.Lock()
+	l.replace(nil)
 	lanes := s.without(l)
 	s.lanes.Store(&lanes)
 	s.sendStatus(l, l.status.board.Sync(nil))

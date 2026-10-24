@@ -9,6 +9,8 @@ import (
 	"errors"
 	"io"
 	"math/rand/v2"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -78,12 +80,17 @@ type server struct {
 	accounts map[string]AccountCondition
 	seen     settingsSeen
 	lanes    atomic.Pointer[[]*lane]
+	replays  string
 }
 
 func Serve(cfg ServeConfig) error {
 	s := &server{ServeConfig: cfg, box: newOutbox(), shells: map[string]*watchedShell{}, items: newItems(cfg.Host.ID()),
 		status: statusFeed{board: status.Board{Now: time.Now}, acked: map[string]bool{}}, requota: make(chan struct{}, 1), accounts: map[string]AccountCondition{}}
 	s.seen.files = readSettingsFiles(cfg.Dir)
+	if state, err := sys.ProjectStateDirAt(cfg.Dir); err == nil {
+		s.replays = filepath.Join(state, replayDir)
+		_ = os.RemoveAll(s.replays)
+	}
 	first := s.first()
 	first.stop, first.pumped = make(chan struct{}), make(chan struct{})
 	s.lanes.Store(&[]*lane{first})
@@ -119,6 +126,9 @@ func Serve(cfg ServeConfig) error {
 	})...)
 	for _, l := range lanes {
 		l.halt()
+		s.mu.Lock()
+		l.replace(nil)
+		s.mu.Unlock()
 	}
 	close(quit)
 	workers.Wait()
@@ -342,41 +352,41 @@ func (s *server) history(p SessionHistoryParams) (any, error) {
 	if p.Limit < 1 {
 		return nil, &Refusal{Code: CodeBadParams, Message: "limit is the number of lines a page holds, at least 1"}
 	}
+	window := func(total int) (first, end int) {
+		end = total
+		if p.Before != nil {
+			end = min(max(*p.Before, 0), end)
+		}
+		return max(end-p.Limit, 0), end
+	}
 	s.mu.Lock()
 	lanes := s.tracked()
-	var lines []HistoryLine
-	if at := slices.IndexFunc(lanes, func(l *lane) bool { return l.items.session == p.Session }); at >= 0 {
-		lines = lanes[at].replay
+	var kept *SessionHistory
+	if at := slices.IndexFunc(lanes, func(l *lane) bool { return l.items.session == p.Session && l.replay != nil }); at >= 0 {
+		replay := lanes[at].replay
+		first, end := window(len(replay.lines))
+		if lines, err := replay.page(first, end); err == nil {
+			kept = &SessionHistory{Session: p.Session, First: first, Total: len(replay.lines), Lines: lines}
+		}
 	}
 	s.mu.Unlock()
-	session := p.Session
-	if lines == nil {
-		carry, err := s.Carry(p.Session)
-		if err != nil {
-			return nil, err
-		}
-		read := newItems(carry.Session)
-		lines, session = freeze(read.all(resumedChat(carry, s.Host.dir))), carry.Session
+	if kept != nil {
+		return *kept, nil
 	}
-	end := len(lines)
-	if p.Before != nil {
-		end = min(max(*p.Before, 0), end)
+	carry, err := s.Carry(p.Session)
+	if err != nil {
+		return nil, err
 	}
-	first := max(end-p.Limit, 0)
-	return SessionHistory{Session: session, First: first, Total: len(lines), Lines: lines[first:end]}, nil
-}
-
-func freeze(lines []outgoing) []HistoryLine {
-	frozen := []HistoryLine{}
-	for _, line := range lines {
-		var written bytes.Buffer
-		encoder := json.NewEncoder(&written)
-		encoder.SetEscapeHTML(false)
-		if encoder.Encode(line.msg.Params) == nil {
-			frozen = append(frozen, HistoryLine{Method: line.msg.Method, Params: json.RawMessage(bytes.TrimSpace(written.Bytes()))})
+	read := newItems(carry.Session)
+	lines := read.all(resumedChat(carry, s.Host.dir))
+	first, end := window(len(lines))
+	page := []HistoryLine{}
+	for _, out := range lines[first:end] {
+		if line, err := frozen(out); err == nil {
+			page = append(page, HistoryLine{Method: line.method, Params: json.RawMessage(line.params)})
 		}
 	}
-	return frozen
+	return SessionHistory{Session: carry.Session, First: first, Total: len(lines), Lines: page}, nil
 }
 
 func (s *server) compact(p SessionParams) (any, error) {
@@ -399,7 +409,8 @@ func (s *server) compact(p SessionParams) (any, error) {
 		labelled = labelledAs(store, labelled)
 	}
 	s.mu.Lock()
-	named.items.session, named.replay = compacted.Into, nil
+	named.items.session = compacted.Into
+	named.replace(nil)
 	s.box.push(sessionUpdated(named.items.identity("", compacted.Into), labelled))
 	s.mu.Unlock()
 	safe.Go(s.report, "serve list", func() { s.listed(named) })
@@ -886,12 +897,12 @@ func (s *server) publish(event Event) {
 	was := l.items.session
 	lines := l.items.translate(event, time.Now())
 	if l.items.session != was {
-		l.replay = nil
+		l.replace(nil)
 		safe.Go(s.report, "serve replay", func() { s.rebuild(l) })
 	}
 	for _, out := range lines {
-		if l.replay != nil && out.merge == "" && out.msg.Method != "message.delta" {
-			l.replay = append(l.replay, freeze([]outgoing{out})...)
+		if l.replay != nil && out.merge == "" && out.msg.Method != "message.delta" && l.replay.add(out) != nil {
+			l.replace(nil)
 		}
 		s.box.push(out)
 	}
