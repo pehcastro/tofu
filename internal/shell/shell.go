@@ -41,6 +41,7 @@ const (
 	dirMode            = 0o755
 	fileMode           = 0o644
 	killWait           = 2 * time.Second
+	stateSettled       = 2 * time.Second
 )
 
 type Shell struct {
@@ -102,10 +103,18 @@ type Registry struct {
 	mu        sync.Mutex
 	running   map[string]*live
 	wrote     chan struct{}
+	parsedMu  sync.Mutex
+	parsed    map[string]parsedState
+}
+
+type parsedState struct {
+	modified time.Time
+	size     int64
+	entry    Shell
 }
 
 func OpenAt(dir string) *Registry {
-	return &Registry{dir: dir, self: os.Getpid(), running: map[string]*live{}, wrote: make(chan struct{}, 1)}
+	return &Registry{dir: dir, self: os.Getpid(), running: map[string]*live{}, parsed: map[string]parsedState{}, wrote: make(chan struct{}, 1)}
 }
 
 func (r *Registry) ForSession(id string) *Registry {
@@ -301,7 +310,7 @@ func (r *Registry) Prune() error {
 		if !isState {
 			continue
 		}
-		if entry, readErr := stateAt(r.endedPath(name)); readErr == nil && entry.State != Running && (entry.Ended == nil || entry.Ended.Before(kept)) {
+		if entry, readErr := r.stateAt(r.endedPath(name)); readErr == nil && entry.State != Running && (entry.Ended == nil || entry.Ended.Before(kept)) {
 			r.removeEnded(name)
 		}
 	}
@@ -375,20 +384,32 @@ func (r *Registry) Read(name string) (Shell, error) {
 }
 
 func (r *Registry) readLocked(name string) (Shell, error) {
-	entry, err := stateAt(r.runningPath(name))
+	entry, err := r.stateAt(r.runningPath(name))
 	if errors.Is(err, os.ErrNotExist) {
-		return stateAt(r.endedPath(name))
+		return r.stateAt(r.endedPath(name))
 	}
 	return entry, err
 }
 
-func stateAt(path string) (Shell, error) {
+func (r *Registry) stateAt(path string) (Shell, error) {
+	info, err := os.Stat(path)
+	r.parsedMu.Lock()
+	defer r.parsedMu.Unlock()
+	if err != nil {
+		delete(r.parsed, path)
+		return Shell{}, err
+	}
+	if seen, ok := r.parsed[path]; ok && seen.size == info.Size() && seen.modified.Equal(info.ModTime()) {
+		return seen.entry, nil
+	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return Shell{}, err
 	}
 	var entry Shell
-	err = json.Unmarshal(raw, &entry)
+	if err = json.Unmarshal(raw, &entry); err == nil && time.Since(info.ModTime()) > stateSettled {
+		r.parsed[path] = parsedState{modified: info.ModTime(), size: info.Size(), entry: entry}
+	}
 	return entry, err
 }
 
