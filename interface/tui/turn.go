@@ -331,13 +331,17 @@ func (a *App) interrupt() tea.Cmd {
 	withinQuitWindow := a.options.Now().Sub(a.pressedAt) <= konst.QuitAgainMillis*time.Millisecond
 	a.pressedAt = a.options.Now()
 	switch {
-	case !a.busy:
-		if withinQuitWindow {
-			if a.options.Host != nil {
-				a.options.Host.ClosingBy(a.askedBy("ctrl+c twice to quit").By)
-			}
-			return tea.Quit
+	case withinQuitWindow && (!a.busy || a.view.LettingToolsFinish):
+		asked := a.askedBy("ctrl+c twice to quit")
+		if a.busy {
+			asked.Why, asked.Everything = "the person quit tofu while its tools ran", true
+			a.stopEverythingAs(asked)
 		}
+		if a.options.Host != nil {
+			a.options.Host.ClosingBy(asked.By)
+		}
+		return tea.Quit
+	case !a.busy:
 		a.view.Append(session.Entry{Kind: session.Note, Body: quitAgainNote})
 	case subAgentsRun, a.view.LettingToolsFinish, a.running == 0 || len(a.view.Spawning) > 0 || a.view.TakesAnswerDigits():
 		a.stopTurnAs(a.askedBy("ctrl+c"))
