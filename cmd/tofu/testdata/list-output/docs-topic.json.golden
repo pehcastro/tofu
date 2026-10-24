@@ -9,7 +9,7 @@ exit 0
     "topic": "settings",
     "title": "Settings",
     "summary": "every setting, its default, what it takes, and how to change it",
-    "markdown": "## What it is\n\nA setting is a named switch, like `theme` or `gatePrompt`. Each one has a\ndefault, and you only write the ones you want different.\n\nThe settings come in groups:\n\n- Appearance: theme, density, animations, statusBar, colorMode\n- Models & roles: continueOnSubscription, subscriptionOrder, continueOnAPIModel\n- Interaction: composer, gatePrompt, gateAskWaitSeconds, gateAskTimeout, askPersonWaitSeconds, readBeforeEdit, autoUpdate\n- Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images, projectInstructionsCap, contextCeiling, instructionSources, skills, memory, autoMemory, episodes, memoryFromAllUsers, memoryModel, learn\n- Files: diffContext, hyperlinks, groupByAgent\n- Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell\n- Turn: decisionCap, turnMaySpawn, oneWorkingSessionPerProject, planEveryStep, sideChatAccess, subAgentsPerTurn, subAgentDepth, leadCache, subAgentCache, subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb\n- Projects: projectManagement (boardy, the ticket board), boardFlow (the words boardy uses), scratchCleanupDays and scratchMaxGB (the scratchpad)\n- Browser: browser, browserDriver, browserSteps, browserModel, browserEffort, browserCursor, browserProfile, browserHeadless\n\n`gatePrompt` is `auto` by default, which is auto mode: Jev decides at every\ngate and the work does not stop for you. Only a call it denies is refused,\nand the model is told why. A call it would ask about runs, and shows in the\nchat with its verdict. Every decision is a ledger row `tofu why` reads.\n`tofu settings set gatePrompt ask` turns asking on: a call Jev would ask\nabout waits for your answer, `1` to allow it once, `2` to deny it, `3` to\nallow it here from now on. A project hook that asks, a rule override and\nthe model changing a setting ask you in both modes: no classifier answers\nthe first two, and the last could otherwise turn its own gate off.\n`tofu run` has nobody to ask, so there an ask is refused in both modes.\n\n`leadCache` is how long the lead's prompt cache lives on a subscription,\n`1h` by default. `5m` writes the whole cache at the cheaper five minute\nrate, and a pause past five minutes then writes it again. `history-5m`\nkeeps the tools and system prompt an hour and writes the conversation at\nfive minutes, so a pause rewrites only the conversation.\n`subAgentCache` is the same choice for a sub-agent, `1h` or `5m`.\n`tofu session trace` shows each request's write at the lifetime it got.\n\n`continueOnSubscription`, `subscriptionOrder` and `continueOnAPIModel` say\nwhere work goes when every account of a subscription is at its limit: a\nmodel on another subscription, in that order, then one paid by your key.\nWith none set the work stops and names them. `tofu docs usage` has more.\n\nA setting changed in one window, by `tofu settings set` or by hand, reaches\nevery open window and the session holder on the next turn, with no reload.\n\n## Where it lives\n\n- `~/.tofu/settings.json`: yours, in every project\n- `.tofu/settings.json` in a project: that project only\n\nThe project file wins over yours, and yours wins over the default.\n\n## Change it\n\n    tofu settings set <key> <value>\n\nwrites your file. Add `--scope project` to write the project's instead:\n\n    tofu settings set --scope project gatePrompt ask\n\nA true or false setting takes `true` or `false`. A list takes commas and no\nspaces, like `tofu,claude`. A value the setting does not take is refused and\nnothing is written. An older value a setting used to take, like\n`AGENTS.md,CLAUDE.md` for `instructionSources`, is read and written as the\nchoice it became. In the app, type `/settings` for the same list\nwith a search.\n\nA setting marked (on the next start) is read once when tofu opens, so quit\nand open it again.\n\n## Check it\n\n    tofu settings\n\nprints every setting by group, its value, and `project`, `global` or\n`default` for where it came from, with `●` on the ones you set.\n\n    tofu settings get <key>\n\nprints one value. Both take `--json` and print one JSON document. `set`\nprints one `~` line with the file and `→ undo:` with the command that puts\nthe old value back.\n\n## Undo it\n\nSet it back to the default shown below, or delete its line from the\nsettings file. With the line gone, the next file down wins.\n\n## Every setting\n",
+    "markdown": "## What it is\n\nA setting is a named switch, like `theme` or `gatePrompt`. Each one has a\ndefault, and you only write the ones you want different.\n\nThe settings come in groups:\n\n- Appearance: theme, density, animations, statusBar, colorMode\n- Models & roles: continueOnSubscription, subscriptionOrder, continueOnAPIModel\n- Interaction: composer, gatePrompt, gateAskWaitSeconds, gateAskTimeout, askPersonWaitSeconds, readBeforeEdit, autoUpdate\n- Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images, projectInstructionsCap, contextCeiling, instructionSources, skills, memory, autoMemory, episodes, memoryFromAllUsers, memoryModel, learn\n- Files: diffContext, hyperlinks, groupByAgent\n- Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell\n- Turn: decisionCap, turnMaySpawn, oneWorkingSessionPerProject, planEveryStep, sideChatAccess, subAgentsPerTurn, subAgentDepth, leadCache, subAgentCache, subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb\n- Projects: projectManagement (boardy, the ticket board), boardFlow (the words boardy uses), scratchCleanupDays and scratchMaxGB (the scratchpad)\n- Browser: browser, browserDriver, browserSteps, browserModel, browserEffort, browserCursor, browserProfile, browserHeadless\n\n`gatePrompt` is `auto` by default, which is auto mode: Jev decides at every\ngate and the work does not stop for you. Only a call it denies is refused,\nand the model is told why. A call it would ask about runs, and shows in the\nchat with its verdict. Every decision is a ledger row `tofu why` reads.\n`tofu settings set gatePrompt ask` turns asking on: a call Jev would ask\nabout waits for your answer, `1` to allow it once, `2` to deny it, `3` to\nallow it here from now on. A project hook that asks, a rule override and\nthe model changing a setting ask you in both modes: no classifier answers\nthe first two, and the last could otherwise turn its own gate off.\n`tofu run` has nobody to ask, so there an ask is refused in both modes.\n\n`leadCache` is how long the lead's prompt cache lives on a subscription,\n`1h` by default. `5m` writes the whole cache at the cheaper five minute\nrate, and a pause past five minutes then writes it again. `history-5m`\nkeeps the tools and system prompt an hour and writes the conversation at\nfive minutes, so a pause rewrites only the conversation.\n`subAgentCache` is the same choice for a sub-agent, `1h` or `5m`.\n`tofu session trace` shows each request's write at the lifetime it got.\n\n`continueOnSubscription`, `subscriptionOrder` and `continueOnAPIModel` say\nwhere work goes when every account of a subscription is at its limit: a\nmodel on another subscription, in that order, then one paid by your key.\nWith none set the work stops and names them. `tofu docs usage` has more.\n\nA setting changed in one window, by `tofu settings set` or by hand, reaches\nevery open window and the session holder on the next turn, with no reload.\n\n## The detail\n\nEach setting's own line is two sentences at most. The rest is here.\n\n- `continueOnSubscription`: when every account on the subscription a turn\n  or a sub-agent runs on is at its limit, it continues on the model picked\n  here for another subscription provider, one model per provider, the first\n  in `subscriptionOrder` with an account left. Shown, with\n  `subscriptionOrder`, when you have accounts on more than one subscription\n  provider. Empty `subscriptionOrder` tries providers in the order they were\n  picked.\n- `continueOnAPIModel`: used by a turn or a sub-agent once no subscription\n  has an account left.\n- `gatePrompt`: under `auto`, only what Jev denies is refused, and what it\n  would ask about runs and shows its verdict in the chat. Under `ask`, a\n  call waits until you answer or `gateAskWaitSeconds` passes.\n- `gateAskWaitSeconds`: applies under `auto` and `ask` alike. A cron job\n  that fires while a call waits decides it at once. The next ask reads the\n  new value.\n- `gateAskTimeout`: a call only you may allow changes settings, hooks or\n  the harness, which is why `refuse` is the default.\n- `askPersonWaitSeconds`: the question stays open and a later answer still\n  reaches the lead. Under `ask` the lead waits with no timeout. The next\n  turn reads the new value.\n- `autoUpdate`: the lookup runs at most once an hour. With it off,\n  `tofu update` installs the release. A build from source never updates.\n- `thinkingSummary`: `omitted` means no thinking reaches the sub-agents\n  feed.\n- `contextCeiling`: a model whose window is smaller stops at its window\n  less the answer's reserve. `TOFU_CONTEXT_CEILING` and `--context-ceiling`\n  win over it, and the next turn reads the new value.\n- `instructionSources`: `agents-first` sends AGENTS.md and `claude-first`\n  sends CLAUDE.md. They are read from the working directory up to its git\n  root, and the home directory gives only `~/.tofu/AGENTS.md`.\n- `skills`: the skill folders are `.tofu`, `.agents` and `.claude` in the\n  project, and only `~/.tofu/skills` in the home directory.\n- `memory`: on also lets the lead offer one short rule. `tofu memory` lists\n  the entries.\n- `autoMemory`: answering always on a memory card turns it on.\n- `episodes`: on also sends their view after the memory and through every\n  fork, and offers zoom and recall. Off keeps none and offers neither, while\n  the memory still goes.\n- `memoryFromAllUsers`: the memory lives in the repository's `.tofu`\n  folder. Project local memory applies to everyone either way.\n- `memoryModel`: each summary is one line of at most 512 bytes. Empty takes\n  the model the library marks `memory: yes` for the session's own source,\n  never the OpenRouter key.\n- `learn`: it prints how many windows and bytes it sends first, and writes\n  each proposal with your lead model.\n- `persistentRegistry`: off stops every shell on exit, even when tofu is\n  killed. Read on the next start.\n- `shell`: one of the offered values or a path to a shell. Empty resolves\n  the person's own shell.\n- `planEveryStep`: each sub-agent keeps a plan of its own and sees that\n  one. The next turn reads the new value.\n- `sideChatAccess`: `read` writes nothing, `notes` writes .md and .html\n  files, `files` writes anywhere, and any other value is a comma list of\n  globs. A side chat never spawns, schedules, remembers or changes a\n  setting, whatever this says.\n- `subAgentsPerTurn`, `subAgentDepth`, `subAgentCache` and\n  `subAgentCheckSeconds`: the next spawn reads the new value.\n- `subAgentCheckSeconds`: the check is built from what tofu records: the\n  sub-agent's steps, the files it changed, its gate and its last tool.\n- `subAgentWatchSeconds`: the chat line says what the call is doing, such as\n  waiting for the orchestrator's answer, running bash or building. A\n  sub-agent with no new output, step or request for this long is stalled.\n- `verifySubAgents`: the lead reads what the sub-agent changed, runs the\n  build or the tests again and opens what it made. Off takes the report as\n  the result unless you ask for a check. `tofu rules off verify_sub_agents`\n  turns it off too, whatever this says.\n- `agentSources`: a comma list, inside the project. The home directory\n  gives only `~/.tofu/agents`, and the library is always read.\n- `projectManagement`: a spawn names a ticket, its owns become the\n  sub-agent's paths and the sub-agent moves it to review.\n- `boardFlow`: jira says ticket, board, epic, sprint and points. linear\n  says issue, team, project, cycle and estimate.\n- `scratchCleanupDays`: only a folder with no tofu running it is deleted,\n  its processes stopped first.\n- `sessionStaleDays`: no activity means no new event, request or open. The\n  deletion runs when the project's host starts or on `tofu session clean`.\n  A session a kept one continues or branches from, the head, one open now\n  and one with a live cron job are kept.\n- `browserDriver`: `subagent` hands the steps to a browser sub-agent on\n  `browserModel`, spawned with a task and a tab. `steps` gives the model\n  `browser_observe` and `browser_act`. `goal` gives it `browser_do`, where\n  Jev picks each step toward a whole goal.\n- `browserModel`: a subscription model. Empty takes the dumb tier, then the\n  worker tier, then the turn's own model.\n- `browserEffort`: used when the model lists effort. The model's own\n  default is the lowest it lists at or above low.\n- `browserCursor`: it never changes what tofu reads or clicks, and is read\n  when Chrome starts the relay.\n- `browserProfile`: tofu starts the installed Chrome on that profile's own\n  folder under the tofu home, so a site signed in once with\n  `tofu browser profile login` stays signed in.\n- `browserHeadless`: read when that Chrome starts, and never by your own\n  Chrome.\n\n## Where it lives\n\n- `~/.tofu/settings.json`: yours, in every project\n- `.tofu/settings.json` in a project: that project only\n\nThe project file wins over yours, and yours wins over the default.\n\n## Change it\n\n    tofu settings set <key> <value>\n\nwrites your file. Add `--scope project` to write the project's instead:\n\n    tofu settings set --scope project gatePrompt ask\n\nA true or false setting takes `true` or `false`. A list takes commas and no\nspaces, like `tofu,claude`. A value the setting does not take is refused and\nnothing is written. An older value a setting used to take, like\n`AGENTS.md,CLAUDE.md` for `instructionSources`, is read and written as the\nchoice it became. In the app, type `/settings` for the same list\nwith a search.\n\nA setting marked (on the next start) is read once when tofu opens, so quit\nand open it again.\n\n## Check it\n\n    tofu settings\n\nprints every setting by group, its value, and `project`, `global` or\n`default` for where it came from, with `●` on the ones you set.\n\n    tofu settings get <key>\n\nprints one value. Both take `--json` and print one JSON document. `set`\nprints one `~` line with the file and `→ undo:` with the command that puts\nthe old value back.\n\n## Undo it\n\nSet it back to the default shown below, or delete its line from the\nsettings file. With the line gone, the next file down wins.\n\n## Every setting\n",
     "settings": [
       {
         "key": "theme",
@@ -57,7 +57,7 @@ exit 0
         "default": "empty",
         "takes": "any text",
         "restart": false,
-        "description": "when every account on the subscription a turn or a sub-agent runs on is at its limit, it continues on the model picked here for another subscription provider, one model per provider, the first in subscription order with an account left; empty stops the work. Shown when you have accounts on more than one subscription provider"
+        "description": "Where work continues, on another subscription, once every account on this one is at its limit. Empty stops it"
       },
       {
         "key": "subscriptionOrder",
@@ -65,7 +65,7 @@ exit 0
         "default": "empty",
         "takes": "a comma list of claude-sub, codex-sub",
         "restart": false,
-        "description": "the order continue on another subscription tries its providers in, as a comma list of sources; empty tries them in the order they were picked. Shown when you have accounts on more than one subscription provider"
+        "description": "The order continueOnSubscription tries providers in, as a comma list of sources. Empty keeps the order picked"
       },
       {
         "key": "continueOnAPIModel",
@@ -73,7 +73,7 @@ exit 0
         "default": "empty",
         "takes": "any text",
         "restart": false,
-        "description": "when no subscription has an account left, a turn or a sub-agent continues on this model, paid by its key; empty stops the work"
+        "description": "The model, paid by its key, that work continues on when no subscription has an account left. Empty stops it"
       },
       {
         "key": "composer",
@@ -89,7 +89,7 @@ exit 0
         "default": "auto",
         "takes": "one of auto, ask",
         "restart": false,
-        "description": "auto lets jev decide at every gate and work never stops for you: only what it denies is refused, and what it would ask about runs and shows its verdict in the chat. ask stops on what jev would ask about until you answer or gateAskWaitSeconds passes. A project hook, a rule override and the model changing a setting ask you in both"
+        "description": "auto lets Jev decide at every gate, so work never stops for you. ask waits for you on what Jev would ask about"
       },
       {
         "key": "gateAskWaitSeconds",
@@ -97,7 +97,7 @@ exit 0
         "default": "180",
         "takes": "at least 1 seconds an ask waits for you",
         "restart": false,
-        "description": "a call the gate asks you about waits this many seconds for your answer, under auto and under ask alike, and then gateAskTimeout decides it so the turn goes on; a cron job that fires while a call waits decides it at once. the next ask reads the new value"
+        "description": "Seconds a gate ask waits for your answer before gateAskTimeout decides it"
       },
       {
         "key": "gateAskTimeout",
@@ -105,7 +105,7 @@ exit 0
         "default": "refuse",
         "takes": "one of refuse, allow",
         "restart": false,
-        "description": "refuse turns down a call nobody answered in gateAskWaitSeconds and tells the lead why; allow runs it. A call only you may allow changes settings, hooks or the harness, which is why refuse is the default"
+        "description": "What an ask nobody answered in time does. refuse turns it down and tells the lead why, allow runs it"
       },
       {
         "key": "askPersonWaitSeconds",
@@ -113,7 +113,7 @@ exit 0
         "default": "120",
         "takes": "at least 1 seconds before the recommended option is taken under auto",
         "restart": false,
-        "description": "under auto, a question the lead asks you takes its recommended option after this many seconds, and the lead never stops for it; the question stays open and a later answer still reaches the lead. under ask the lead waits with no timeout. the next turn reads the new value"
+        "description": "Under auto, seconds before a question the lead asks you takes its recommended option"
       },
       {
         "key": "readBeforeEdit",
@@ -129,7 +129,7 @@ exit 0
         "default": "true",
         "takes": "true or false",
         "restart": false,
-        "description": "on installs a newer tofu release in the background, looked up at most once an hour, and the next start runs it; off only says in the chat that one is out, and tofu update installs it. A build from source never updates"
+        "description": "on installs a newer release in the background for the next start. off only says one is out"
       },
       {
         "key": "chatShowsTools",
@@ -161,7 +161,7 @@ exit 0
         "default": "summarized",
         "takes": "one of summarized, omitted",
         "restart": false,
-        "description": "summarized asks Claude for a summary of its thinking; omitted asks for none, so no thinking reaches the sub-agents feed"
+        "description": "summarized asks Claude for a summary of its thinking. omitted asks for none"
       },
       {
         "key": "images",
@@ -185,7 +185,7 @@ exit 0
         "default": "450000",
         "takes": "at least 1 tokens a request may carry",
         "restart": false,
-        "description": "the most tokens one request may carry, and the conversation forks before it; a model whose window is smaller stops at its window less the answer's reserve. TOFU_CONTEXT_CEILING and --context-ceiling win over it, and the next turn reads the new value"
+        "description": "The most tokens one request may carry. The conversation forks before it"
       },
       {
         "key": "instructionSources",
@@ -193,7 +193,7 @@ exit 0
         "default": "agents-first",
         "takes": "one of agents-first, claude-first, both",
         "restart": false,
-        "description": "a folder with both AGENTS.md and CLAUDE.md sends one: agents-first sends AGENTS.md, claude-first sends CLAUDE.md, both sends both and costs more tokens. Read from the working directory up to its git root; the home directory gives only ~/.tofu/AGENTS.md"
+        "description": "Which of AGENTS.md and CLAUDE.md a folder with both sends. both sends both and costs more tokens"
       },
       {
         "key": "skills",
@@ -201,7 +201,7 @@ exit 0
         "default": "on",
         "takes": "one of on, off",
         "restart": false,
-        "description": "on lists the skills in .tofu, .agents and .claude skill folders to the model and offers the skill tool; off sends neither. The project gives all three, the home directory only ~/.tofu/skills"
+        "description": "on lists your skills to the model and offers the skill tool. off sends neither"
       },
       {
         "key": "memory",
@@ -209,7 +209,7 @@ exit 0
         "default": "true",
         "takes": "true or false",
         "restart": false,
-        "description": "on sends what you asked tofu to remember to the lead on every request and lets the lead offer one short rule; off sends none and offers nothing. tofu memory lists the entries"
+        "description": "on sends what you asked tofu to remember on every request. off sends none"
       },
       {
         "key": "autoMemory",
@@ -217,7 +217,7 @@ exit 0
         "default": "false",
         "takes": "true or false",
         "restart": false,
-        "description": "on keeps a rule the lead offers at once and prints the undo, instead of asking first; answering always on its card turns it on"
+        "description": "on keeps a rule the lead offers at once and prints the undo, instead of asking first"
       },
       {
         "key": "episodes",
@@ -225,7 +225,7 @@ exit 0
         "default": "on",
         "takes": "one of on, off",
         "restart": false,
-        "description": "on keeps the conversation in this project as episodes, sends their view after the memory and through every fork, and offers zoom and recall; off keeps none, sends none and offers neither, while the memory still goes. Needs memory on"
+        "description": "on keeps this project's conversation as episodes and sends their view. Needs memory on"
       },
       {
         "key": "memoryFromAllUsers",
@@ -233,7 +233,7 @@ exit 0
         "default": "off",
         "takes": "one of on, off",
         "restart": false,
-        "description": "on applies the user local memory every author kept in this repository's .tofu folder; off applies only yours. Project local memory applies to everyone either way"
+        "description": "on applies the user local memory every author kept in this repository. off applies only yours"
       },
       {
         "key": "memoryModel",
@@ -241,7 +241,7 @@ exit 0
         "default": "empty",
         "takes": "any text",
         "restart": false,
-        "description": "the model that writes memory summaries, one line of at most 512 bytes each, as source/model; empty takes the model the library marks memory: yes for the session's own source; never the OpenRouter key"
+        "description": "The model that writes memory summaries, as source/model. Empty takes the library's memory model"
       },
       {
         "key": "learn",
@@ -249,7 +249,7 @@ exit 0
         "default": "false",
         "takes": "true or false",
         "restart": false,
-        "description": "on lets tofu learn send a window around each message you typed to Jev for labels, and write each proposal with your lead model, after printing how many windows and bytes; off runs tofu learn on this machine only"
+        "description": "on lets tofu learn send windows of your messages to Jev for labels. off runs it on this machine only"
       },
       {
         "key": "diffContext",
@@ -281,7 +281,7 @@ exit 0
         "default": "false",
         "takes": "true or false",
         "restart": true,
-        "description": "a running shell outlives tofu and the next launch lists it; off stops every shell on exit, even when tofu is killed"
+        "description": "A running shell outlives tofu and the next launch lists it. off stops every shell on exit"
       },
       {
         "key": "logTail",
@@ -305,7 +305,7 @@ exit 0
         "default": "empty",
         "takes": "any text",
         "restart": false,
-        "description": "a path, or the word wsl; empty resolves the person's own shell automatically"
+        "description": "The shell commands run in: wsl or a path. Empty finds your own shell"
       },
       {
         "key": "foldHidesShell",
@@ -337,7 +337,7 @@ exit 0
         "default": "true",
         "takes": "true or false",
         "restart": false,
-        "description": "while one session in this project is working, any other session waits; off lets several sessions in one repository work at once"
+        "description": "While one session in this project works, any other waits. off lets several work at once"
       },
       {
         "key": "planEveryStep",
@@ -345,7 +345,7 @@ exit 0
         "default": "true",
         "takes": "true or false",
         "restart": false,
-        "description": "the lead sees its plan, with each step's status, before every step of a turn; off shows the plan only when the plan tool answers. Each sub-agent keeps a plan of its own and sees that one, and the next turn reads the new value"
+        "description": "The lead sees its plan and each step's status before every step. off shows it only on the plan tool"
       },
       {
         "key": "sideChatAccess",
@@ -353,7 +353,7 @@ exit 0
         "default": "read",
         "takes": "any text",
         "restart": false,
-        "description": "what a new side chat may write: read writes nothing, notes writes .md and .html files, files writes anywhere, or a comma list of globs; a side chat never spawns, schedules, remembers or changes a setting, whatever this says"
+        "description": "What a new side chat may write: read, notes for .md and .html, files for anywhere, or a comma list of globs"
       },
       {
         "key": "subAgentsPerTurn",
@@ -361,7 +361,7 @@ exit 0
         "default": "10",
         "takes": "at least 1 sub-agents running at once",
         "restart": false,
-        "description": "how many sub-agents may run at once; a spawn past it is refused until one ends, and the next spawn reads the new value"
+        "description": "How many sub-agents may run at once. A spawn past it is refused until one ends"
       },
       {
         "key": "subAgentDepth",
@@ -369,7 +369,7 @@ exit 0
         "default": "2",
         "takes": "at least 1 levels of sub-agents",
         "restart": false,
-        "description": "how deep a sub-agent may spawn its own sub-agents; the next spawn reads the new value"
+        "description": "How deep a sub-agent may spawn its own sub-agents"
       },
       {
         "key": "leadCache",
@@ -377,7 +377,7 @@ exit 0
         "default": "1h",
         "takes": "one of 1h, 5m, history-5m",
         "restart": false,
-        "description": "how long the lead's prompt cache lives on a subscription; 5m writes cost less and expire after five idle minutes, 1h writes cost more and last an hour, and history-5m keeps tools and system an hour and the conversation five minutes"
+        "description": "How long the lead's prompt cache lives on a subscription. 5m costs less, 1h lasts, history-5m mixes them"
       },
       {
         "key": "subAgentCache",
@@ -385,7 +385,7 @@ exit 0
         "default": "1h",
         "takes": "one of 1h, 5m",
         "restart": false,
-        "description": "how long a sub-agent's prompt cache lives; 5m writes cost less and expire after five idle minutes, 1h writes cost more and last an hour. the lead follows lead cache, and the next spawn reads the new value"
+        "description": "How long a sub-agent's prompt cache lives. 5m writes cost less, 1h writes last an hour"
       },
       {
         "key": "subAgentCheckSeconds",
@@ -393,7 +393,7 @@ exit 0
         "default": "1800",
         "takes": "at least 0 seconds between checks on a running sub-agent, where 0 sends none",
         "restart": false,
-        "description": "every this many seconds the lead is sent a check on each running sub-agent, built from what tofu records with no model call: its steps, the files it changed, its gate and its last tool. 0 sends none; the next spawn reads the new value"
+        "description": "Seconds between the lead's checks on each running sub-agent, made with no model call. 0 sends none"
       },
       {
         "key": "subAgentWatchSeconds",
@@ -401,7 +401,7 @@ exit 0
         "default": "600",
         "takes": "at least 1 seconds before a long call is named, and before a sub-agent with no progress is stalled",
         "restart": false,
-        "description": "a sub-agent call open this many seconds gets a line in the chat saying what it is doing: waiting for the orchestrator's answer, running bash or building; a sub-agent with no new output, step or request for this long is shown as stalled"
+        "description": "Seconds before a long sub-agent call is named in the chat, and a sub-agent with no progress shows stalled"
       },
       {
         "key": "verifySubAgents",
@@ -409,7 +409,7 @@ exit 0
         "default": "true",
         "takes": "true or false",
         "restart": false,
-        "description": "the lead checks each sub-agent's work itself before it reports, reading what it changed, running the build or the tests again and opening what it made; off takes the report as the result unless you ask for a check. tofu rules off verify_sub_agents turns it off too, whatever this says"
+        "description": "The lead checks each sub-agent's work itself before it reports. off takes the report as the result"
       },
       {
         "key": "agentSources",
@@ -417,7 +417,7 @@ exit 0
         "default": "tofu,agents,claude",
         "takes": "a comma list of tofu, agents, claude",
         "restart": false,
-        "description": "the folders sub-agents are read from, in order, as a comma list of tofu, agents and claude, inside the project; the home directory gives only ~/.tofu/agents, and the library is always read"
+        "description": "The project folders sub-agents are read from, in order: tofu, agents and claude"
       },
       {
         "key": "modelTier.genius",
@@ -457,7 +457,7 @@ exit 0
         "default": "off",
         "takes": "one of off, boardy",
         "restart": false,
-        "description": "boardy runs the lead and its sub-agents from board tickets: a spawn names a ticket, its owns become the sub-agent's paths and the sub-agent moves it to review; off keeps owns a grant per spawn"
+        "description": "boardy runs the lead and its sub-agents from board tickets. off keeps owns a grant per spawn"
       },
       {
         "key": "boardFlow",
@@ -465,7 +465,7 @@ exit 0
         "default": "jira",
         "takes": "one of jira, linear",
         "restart": false,
-        "description": "the words tofu boardy uses: jira says ticket, board, epic, sprint and points; linear says issue, team, project, cycle and estimate"
+        "description": "The words tofu boardy uses. jira says ticket and sprint, linear says issue and cycle"
       },
       {
         "key": "scratchCleanupDays",
@@ -473,7 +473,7 @@ exit 0
         "default": "7",
         "takes": "at least 0 days a session's scratch folder is kept untouched",
         "restart": false,
-        "description": "a session's scratch folder untouched this many days, with no tofu running it, is deleted, its processes stopped first; shared is never cleaned"
+        "description": "Days a session's scratch folder may sit untouched before it is deleted. shared is never cleaned"
       },
       {
         "key": "scratchMaxGB",
@@ -489,7 +489,7 @@ exit 0
         "default": "90",
         "takes": "at least 0 days a session is kept with no activity",
         "restart": false,
-        "description": "a session with no activity for this many days, no new event, request or open, is deleted with its folder when the project's host starts or on tofu session clean; a session a kept one continues or branches from, the head, one open now and one with a live cron job are kept; 0 never deletes"
+        "description": "Days a session with no activity is kept before it is deleted. 0 never deletes"
       },
       {
         "key": "browser",
@@ -497,7 +497,7 @@ exit 0
         "default": "drive",
         "takes": "one of off, read, drive",
         "restart": false,
-        "description": "drive lets the model read your Chrome tabs and click and type in them; read lets it only read them; off offers no browser tool"
+        "description": "drive lets the model read and act in your Chrome tabs, read only reads them. off offers no browser tool"
       },
       {
         "key": "browserDriver",
@@ -505,7 +505,7 @@ exit 0
         "default": "subagent",
         "takes": "one of subagent, steps, goal",
         "restart": false,
-        "description": "subagent gives the browser steps to a browser sub-agent on browserModel, which the model spawns with a task and a tab; steps gives the model browser_observe and browser_act itself; goal gives it browser_do, where jev picks each step toward a whole goal"
+        "description": "Who takes the browser steps: subagent hands them to a browser sub-agent, steps to the model, goal to Jev"
       },
       {
         "key": "browserSteps",
@@ -521,7 +521,7 @@ exit 0
         "default": "empty",
         "takes": "any text",
         "restart": false,
-        "description": "the subscription model a browser task asks for the text to type and for its answer, as source/model; empty takes the dumb tier, then the worker tier, then the turn's own model"
+        "description": "The model a browser task writes its text and answer with, as source/model. Empty takes the dumb tier"
       },
       {
         "key": "browserEffort",
@@ -529,7 +529,7 @@ exit 0
         "default": "empty",
         "takes": "one of , low, medium, high, xhigh, max",
         "restart": false,
-        "description": "the effort the browser sub-agent runs at, when its model lists it; empty runs it at the model's own default, the lowest it lists at or above low"
+        "description": "The effort the browser sub-agent runs at. Empty takes the model's own default"
       },
       {
         "key": "browserCursor",
@@ -537,7 +537,7 @@ exit 0
         "default": "true",
         "takes": "true or false",
         "restart": false,
-        "description": "a small cursor labelled tofu glides to each click in tofu's own tab, so you can see where it acts; it is drawn only, and never changes what tofu reads or clicks; read when Chrome starts the relay"
+        "description": "A cursor labelled tofu glides to each click in tofu's tab. It is drawn only and changes nothing"
       },
       {
         "key": "browserProfile",
@@ -545,7 +545,7 @@ exit 0
         "default": "empty",
         "takes": "any text",
         "restart": false,
-        "description": "the browser profile tofu drives, from tofu browser profile new: tofu starts the installed Chrome on that profile's own folder under the tofu home, so a site signed in once with tofu browser profile login stays signed in. empty drives your own Chrome through the extension"
+        "description": "The browser profile tofu drives, from tofu browser profile new. Empty drives your Chrome through the extension"
       },
       {
         "key": "browserHeadless",
@@ -553,7 +553,7 @@ exit 0
         "default": "true",
         "takes": "true or false",
         "restart": false,
-        "description": "a Chrome tofu starts on a browser profile runs with no window; false shows its window. read when that Chrome starts, and never by your own Chrome"
+        "description": "A Chrome tofu starts on a browser profile runs with no window. false shows it"
       }
     ]
   },

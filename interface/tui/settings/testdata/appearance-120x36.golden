@@ -10,7 +10,7 @@
     Files           03                                                                                                  
     Shell           05      Animations                                     subtle  ▾     HOW IT WORKS                   
     Turn            17      Motion for conversational states                             Enter opens a focused          
-    Projects        04                                                                   choice. Changes preview        
+    Projects        05                                                                   choice. Changes preview        
     Browser         08      Status bar                                    compact  ▾     immediately; Esc keeps the     
                             Context, quotas, and runtime counters                        prior value.                   
   NAVIGATE                                                                                                              

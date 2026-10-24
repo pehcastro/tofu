@@ -176,6 +176,8 @@ func resolvedSetting(store *settingspkg.Store, spec settingspkg.Spec, dir string
 		row.Kind, row.Choices = host.SettingList, spec.ListOf
 	case spec.Choices != nil:
 		row.Kind, row.Choices = host.SettingChoice, spec.Choices
+	case spec.Offers != nil:
+		row.Kind, row.Choices = host.SettingChoice, spec.Offers
 	}
 	return row, because
 }

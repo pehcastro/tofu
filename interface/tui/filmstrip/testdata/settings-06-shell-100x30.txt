@@ -3,7 +3,7 @@
   Global preferences    Choose a row to inspect and change its value.                               
                                                                                                     
   CATEGORIES            › Persistent registry                                              ○ off    
-    Appearance    05      a running shell outlives tofu and the next launch lists it; off stops…    
+    Appearance    05      A running shell outlives tofu and the next launch lists it. off stops…    
     Models & rol… 03                                                                                
     Interaction   09      Log tail                                                       500  ▾     
     Context       15      Lines retained per shell                                                  
@@ -12,7 +12,7 @@
     Turn          17      Confirm process termination                                               
     Projects      05                                                                                
     Browser       08      Shell                                                      default  ▾     
-                          a path, or the word wsl; empty resolves the person's own shell automa…    
+                          The shell commands run in: wsl or a path. Empty finds your own shell      
   NAVIGATE                                                                                          
   ↑↓ setting · ←→         Fold hides shell                                                 ○ off    
   section                 the running line drops the shell count                                    

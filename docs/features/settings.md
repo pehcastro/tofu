@@ -2,7 +2,7 @@
 title: Settings and reload
 description: Two settings files, the project over yours, read again at every task, searchable in the app.
 order: 8
-updated: 2026-10-22
+updated: 2026-10-24
 ---
 
 A setting is a named switch with a default, like `gatePrompt` or
@@ -116,5 +116,17 @@ sub-agents feed. `omitted` asks for none and sends the thinking request the
 vendor's own command line sends: Claude Code's on `claude-sub` and codex's on
 `codex-sub`. Either way, the thinking tokens Sonnet spends are recorded in
 the session.
+
+`sideChatAccess` and `shell` offer their usual values as a choice and take
+any other value too. `sideChatAccess` offers `read`, which writes nothing,
+`notes`, which writes .md and .html files, and `files`, which writes
+anywhere; any other value is a comma list of globs. A side chat never
+spawns, schedules, remembers or changes a setting, whatever it says.
+`shell` offers empty, which resolves your own shell, and `wsl`; any other
+value is a path to a shell.
+
+Each setting describes itself in two sentences at most. `tofu docs settings`
+carries the rest: what a value does at the edges, when the new value is
+read, and which flag or environment variable wins over it.
 
 `tofu settings get <key>` prints one value. Both take `--json`.

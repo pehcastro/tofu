@@ -50,6 +50,8 @@ Docs · "change the colours"                                           71 matche
     → tofu docs serve-methods
   Serving a project to another program
     → tofu docs serve
+  Settings
+    → tofu docs settings
   Shells and long commands
     → tofu docs shells
   Start here
@@ -140,8 +142,6 @@ Docs · "change the colours"                                           71 matche
     → tofu docs rules
   Sessions
     → tofu docs sessions
-  Settings
-    → tofu docs settings
   Skills
     → tofu docs skills
 --- stderr

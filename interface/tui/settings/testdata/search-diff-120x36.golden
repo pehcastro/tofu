@@ -10,7 +10,7 @@
     Files           03                                                                                                  
     Shell           05                                                                        T WORKS                   
     Turn            17      Search settings                                              esc   opens a focused          
-    Projects        04      Type to filter · ↑↓ select · enter jump                           e. Changes preview        
+    Projects        05      Type to filter · ↑↓ select · enter jump                           e. Changes preview        
     Browser         08                                                                        iately; Esc keeps the     
                             › diff█                                                            value.                   
   NAVIGATE                                                                                                              

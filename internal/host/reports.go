@@ -93,6 +93,7 @@ type SettingValue struct {
 	Description string      `json:"description"`
 	Kind        SettingKind `json:"kind"`
 	Choices     []string    `json:"choices,omitempty"`
+	Custom      bool        `json:"custom,omitempty"`
 	Min         *int        `json:"min,omitempty"`
 	Max         *int        `json:"max,omitempty"`
 	Unit        string      `json:"unit,omitempty"`
