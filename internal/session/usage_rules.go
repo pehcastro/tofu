@@ -1,13 +1,18 @@
 package session
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"slices"
 	"strings"
 	"time"
+
+	"tofu/internal/konst"
 )
 
 const (
@@ -138,23 +143,64 @@ func (s *Store) RequestParts(id, handle string) (RequestParts, error) {
 }
 
 func (s *Store) eachOf(id string, kinds []EventKind, visit func(Event)) error {
-	marks := make([][]byte, len(kinds))
-	for i, kind := range kinds {
-		marks[i] = []byte(`"kind":"` + string(kind) + `"`)
+	if err := namesOneSession(id); err != nil {
+		return err
 	}
-	return s.scanEvents(id, func(event Event) bool {
-		if slices.Contains(kinds, event.Kind) {
-			visit(event)
+	if events, read := s.parsed[id]; read || s.legacy(id) {
+		var err error
+		if !read {
+			events, err = s.legacyEvents(id)
 		}
-		return true
-	}, func(line []byte, number int) (bool, error) {
-		if !slices.ContainsFunc(marks, func(mark []byte) bool { return bytes.Contains(line, mark) }) {
-			return true, nil
+		for _, event := range events {
+			if slices.Contains(kinds, event.Kind) {
+				visit(event)
+			}
+		}
+		return err
+	}
+	file, err := os.Open(s.EventsPath(id))
+	if err != nil {
+		return fmt.Errorf("session: %s has no events: %w", id, err)
+	}
+	defer func() { _ = file.Close() }()
+	reader, line := bufio.NewReaderSize(file, konst.EventScanBytes), []byte(nil)
+	for number := 0; ; {
+		chunk, err := reader.ReadSlice('\n')
+		blank, wanted := len(bytes.TrimSpace(chunk)) == 0, slices.Contains(kinds, kindOf(chunk))
+		if wanted {
+			line = append(line[:0], chunk...)
+		}
+		for errors.Is(err, bufio.ErrBufferFull) {
+			chunk, err = reader.ReadSlice('\n')
+			if wanted {
+				line = append(line, chunk...)
+			}
+		}
+		switch {
+		case errors.Is(err, io.EOF):
+			return nil
+		case err != nil:
+			return err
+		case blank:
+			continue
+		}
+		number++
+		if !wanted {
+			continue
 		}
 		event, err := parseLine[Event](line, id, number)
-		if err == nil && slices.Contains(kinds, event.Kind) {
-			visit(event)
+		if err != nil {
+			return err
 		}
-		return err == nil, err
-	})
+		visit(event)
+	}
+}
+
+func kindOf(head []byte) EventKind {
+	_, after, found := bytes.Cut(head, []byte(`"kind":"`))
+	kind, _, closed := bytes.Cut(after, []byte(`"`))
+	if !found || !closed {
+		return ""
+	}
+	return EventKind(kind)
 }
