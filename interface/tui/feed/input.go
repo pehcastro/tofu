@@ -45,6 +45,19 @@ func (m *Model) Wheel(delta int) {
 	m.scrollBy(-delta * wheelRows)
 }
 
+func (m Model) Following() bool { return m.scroll == 0 }
+
+func (m Model) OnScreen() map[string]bool {
+	s, height := m.laid(m.depth(), ""), m.pageHeight()
+	top, shown := fromTop(s.rows, height, m.scroll), map[string]bool{}
+	for index, d := range s.drafts {
+		if s.drawn(index, top, height) {
+			shown[d.id] = true
+		}
+	}
+	return shown
+}
+
 func (m *Model) SetScroll(behindNewest int) {
 	if behindNewest >= m.laid(m.depth(), "").rows-m.pageHeight() {
 		behindNewest = math.MaxInt32

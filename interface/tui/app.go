@@ -289,6 +289,10 @@ type App struct {
 	board          paste.Board
 	minted         int
 	happenedAtTurn int
+	trimmedTo      int
+	gapReadEmpty   feed.Gap
+	unheld         feed.Unheld
+	unheldCounted  bool
 	keptAnswer     string
 	updateSaid     updateMsg
 	updateChecked  bool
@@ -603,6 +607,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.view.Activity = append(a.view.Activity, a.shellActivity()...)
 	}
 	a.ageWorking()
+	a.trimFeed()
+	a.countWhatIsNotHeld()
+	a.flushFeed()
+	a.fillGap()
 	a.flushFeed()
 	a.syncFeed()
 	return a, caught(tea.Batch(cmd, a.startPulse(), a.reportStatus(), a.foldLater()))

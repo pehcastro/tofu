@@ -16,6 +16,7 @@ import (
 	"tofu/interface/tui/shells"
 	"tofu/interface/tui/subagent"
 	"tofu/internal/konst"
+	isession "tofu/internal/session"
 	isettings "tofu/internal/settings"
 	roster "tofu/internal/subagent"
 )
@@ -217,9 +218,6 @@ func TestKeystrokeToFrameWhileAReplyStreamsInALongSession(t *testing.T) {
 func TestLongSessionFramesStayInsideTheBudget(t *testing.T) {
 	size := longSizeFromEnv(t)
 	s := generatedLongSession(t, size)
-	if want := 2 * size.calls; len(s.app.happened) < want {
-		t.Fatalf("the generated session holds %d activity events, want at least %d", len(s.app.happened), want)
-	}
 	store, err := isettings.Open(filepath.Join(t.TempDir(), "settings.json"), "")
 	if err != nil {
 		t.Fatalf("Open: %v", err)
@@ -255,4 +253,33 @@ func TestLongSessionFramesStayInsideTheBudget(t *testing.T) {
 	s.frames(t, "shells, down/up", s.press("j", "up"))
 	s.frames(t, "shells, pgup/pgdown", s.press("pgup", "pgdown"))
 	s.frames(t, "shells, agents working", s.working)
+}
+
+func TestAWorkerStreamingForHoursKeepsTheFeedAWindowAndTheHeapFlat(t *testing.T) {
+	const steps, deltas, settled, pace = 6000, 60, 600, 4500 * time.Millisecond
+	at := fixedStart()
+	app := phaseApp(t, &at)
+	worker := subagent.Row{Name: "go-dev-1", Agent: "go-dev", State: roster.Working, Started: at, Doing: "keep reading the mock files"}
+	app.Update(Event{Kind: EventSubAgent, SubAgents: []subagent.Row{worker}})
+	var heldAtSettle uint64
+	for step := range steps {
+		at = at.Add(pace)
+		id, thinking := isession.EventIDFor(worker.Name, "step-"+strconv.Itoa(step)), isession.EventIDFor(worker.Name, "thinking step-"+strconv.Itoa(step))
+		for part := range deltas {
+			app.Update(Event{Kind: EventThinking, ID: thinking, Agent: worker.Name, Text: "mock worker step " + strconv.Itoa(step) + " weighs part " + strconv.Itoa(part) + " of the mock files. "})
+		}
+		app.Update(Event{Kind: EventToolCall, ID: id, Agent: worker.Name, Tool: "read", Text: "mock" + strconv.Itoa(step%10) + ".txt"})
+		app.Update(Event{Kind: EventToolResult, ID: id, Agent: worker.Name, Text: "2 lines"})
+		if step == settled {
+			heldAtSettle = heapAlloc()
+		}
+	}
+	held := heapAlloc()
+	t.Logf("%d steps: %d feed events held, heap %.1f MB at step %d, %.1f MB at the end", steps, len(app.happened), mb(heldAtSettle), settled, mb(held))
+	if len(app.happened) > 4*konst.FeedRecentEvents {
+		t.Errorf("the feed holds %d events after %d steps, not a window of about %d", len(app.happened), steps, konst.FeedRecentEvents)
+	}
+	if held > heldAtSettle+heldAtSettle/10 {
+		t.Errorf("the heap grew from %.1f MB at step %d to %.1f MB at step %d", mb(heldAtSettle), settled, mb(held), steps)
+	}
 }

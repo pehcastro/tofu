@@ -155,7 +155,7 @@ func idPrefix(task string) (string, bool) {
 }
 
 func (a *App) jumpToID(typed string) {
-	at := a.reach(func(id string) bool { return strings.HasPrefix(id, typed) || strings.HasSuffix(id, typed) })
+	at := a.reach(func(id, _ string) bool { return strings.HasPrefix(id, typed) || strings.HasSuffix(id, typed) })
 	if at < 0 {
 		a.view.Append(session.Entry{Kind: session.Note, Body: "nothing in sub-agents carries the id #" + typed})
 		return
@@ -165,33 +165,41 @@ func (a *App) jumpToID(typed string) {
 	a.feed.Focus(a.happened[at].ID)
 }
 
-func (a *App) reach(matches func(id string) bool) int {
-	shown := func(event feed.Event) bool { return matches(event.ID) }
-	if at := slices.IndexFunc(a.happened, shown); at >= 0 || len(a.hidden()) == 0 || a.options.Host == nil {
+func (a *App) reach(matches func(id, full string) bool) int {
+	shown := func(event feed.Event) bool { return matches(event.ID, event.FullID) }
+	if at := slices.IndexFunc(a.happened, shown); at >= 0 || a.options.Host == nil {
 		return at
 	}
-	actor := ""
-	err := a.options.Host.SubAgentEvents(slices.Collect(maps.Keys(a.hidden())), func(event Event) bool {
-		switch event.Kind {
-		case EventThinking, EventToolCall, EventToolResult:
-			if matches(a.shortOf(event.ID)) {
-				actor = event.Agent
-			}
-		}
-		return actor == ""
-	})
-	if err != nil {
-		a.notify(readBackFailed + err.Error())
-	}
-	if actor == "" {
+	matched := false
+	found := a.readFromSession(a.everyActor(), func(event Event) bool {
+		first := !matched && matches(a.shortOf(event.ID), event.ID)
+		matched = matched || first
+		return first
+	}, 0)
+	if len(found) == 0 {
 		return -1
 	}
-	a.unfoldFor(actor)
+	a.unfoldFor(found[0].Actor)
+	a.merge(found)
 	return slices.IndexFunc(a.happened, shown)
 }
 
+func (a *App) shownActors() []string {
+	names := []string{""}
+	for _, row := range a.subAgents {
+		names = append(names, row.Name)
+	}
+	return names
+}
+
+func (a *App) everyActor() []string {
+	return append(a.shownActors(), slices.Collect(maps.Keys(a.hidden()))...)
+}
+
 func (a *App) reachedAt(id string) int {
-	return a.reach(func(shown string) bool { return shown == id })
+	return a.reach(func(shown, full string) bool {
+		return shown == id || len(id) > len(shown) && strings.HasSuffix(full, id)
+	})
 }
 
 func (a *App) steer(task string) {
@@ -825,14 +833,26 @@ func (a *App) keepOnly(kept func(feed.Event) bool) {
 	var held []feed.Event
 	turnAt := a.happenedAtTurn
 	for index, event := range a.happened {
-		switch {
-		case kept(event):
+		if kept(event) {
 			held = append(held, event)
-		case index < a.happenedAtTurn:
+			continue
+		}
+		if a.countsAsUnheld(event) {
+			a.unheld.Add(event)
+		}
+		if index < a.happenedAtTurn {
 			turnAt--
 		}
 	}
 	a.reindex(held, turnAt)
+}
+
+func (a *App) countsAsUnheld(event feed.Event) bool {
+	switch event.Kind {
+	case feed.KindTool, feed.KindEdit, feed.KindSpawn, feed.KindThinking:
+		return a.unheldCounted && !a.hidden()[event.Actor]
+	}
+	return false
 }
 
 func (a *App) merge(back []feed.Event) {
@@ -842,6 +862,9 @@ func (a *App) merge(back []feed.Event) {
 	}
 	merged, live, turnAt := make([]feed.Event, 0, len(a.happened)+len(back)), a.happened, a.happenedAtTurn
 	for _, event := range back {
+		if a.countsAsUnheld(event) {
+			a.unheld.Remove(event)
+		}
 		for len(live) > 0 && !event.At.Before(live[0].At) {
 			merged, live = append(merged, live[0]), live[1:]
 		}
@@ -858,10 +881,18 @@ func (a *App) reindex(events []feed.Event, turnAt int) {
 	for index, event := range events {
 		a.happenedIndex[event.ID] = index
 	}
+	maps.DeleteFunc(a.lengthenedIDs, func(full, id string) bool {
+		at := a.happenedAt(id)
+		return at < 0 || a.happened[at].FullID != full
+	})
 	a.feedStale = true
 }
 
 func (a *App) readBack(names []string) []feed.Event {
+	return a.readFromSession(names, func(Event) bool { return true }, 0)
+}
+
+func (a *App) readFromSession(names []string, wanted func(Event) bool, newest int) []feed.Event {
 	if a.options.Host == nil || len(names) == 0 {
 		return nil
 	}
@@ -871,6 +902,9 @@ func (a *App) readBack(names []string) []feed.Event {
 		var held *feed.Event
 		if found, read := index[event.ID]; read {
 			held = &back[found]
+		}
+		if held == nil && (event.Kind == EventToolResult || !wanted(event)) {
+			return true
 		}
 		var made feed.Event
 		at := event.Logged.At
@@ -889,6 +923,13 @@ func (a *App) readBack(names []string) []feed.Event {
 			*held = made
 			return true
 		}
+		if newest > 0 && len(back) >= 2*newest {
+			back = slices.Clone(back[len(back)-newest:])
+			clear(index)
+			for at, kept := range back {
+				index[kept.FullID] = at
+			}
+		}
 		index[event.ID] = len(back)
 		if len(back) == cap(back) {
 			back = slices.Grow(back, len(back)+1)
@@ -903,11 +944,111 @@ func (a *App) readBack(names []string) []feed.Event {
 	return back
 }
 
+func (a *App) trimFeed() {
+	if len(a.happened)-a.trimmedTo <= konst.FeedRecentEvents {
+		return
+	}
+	first, last := len(a.happened), -1
+	if !a.feed.Following() {
+		onScreen := a.feed.OnScreen()
+		for index, event := range a.happened {
+			if onScreen[event.ID] {
+				first, last = min(first, index), max(last, index)
+			}
+		}
+	}
+	over, index := len(a.happened)-konst.FeedRecentEvents, -1
+	a.keepOnly(func(event feed.Event) bool {
+		index++
+		thisTurnsLead := index >= a.happenedAtTurn && event.Actor == orchestrator
+		onlyHere := event.Kind == feed.KindSpawn || event.Kind == feed.KindNote || event.Kind == feed.KindFailure
+		nearScreen := last >= 0 && index >= first-konst.FeedRecentEvents && index <= last+konst.FeedRecentEvents
+		evicted := over > 0 && !nearScreen && !thisTurnsLead && !onlyHere && event.State != feed.StateRunning
+		if evicted {
+			over--
+		}
+		return !evicted
+	})
+	a.trimmedTo = len(a.happened)
+}
+
+func (a *App) feedReadsTheSession() bool {
+	return a.current == screenAgents && a.options.Host != nil && a.retention() == feed.KeepAll
+}
+
+func (a *App) fillGap() {
+	if !a.feedReadsTheSession() {
+		return
+	}
+	gap, open := a.feed.Gap()
+	if !open || gap == a.gapReadEmpty {
+		return
+	}
+	names := []string{gap.Actor}
+	switch gap.Actor {
+	case "":
+		names = a.shownActors()
+	case orchestrator:
+		names = []string{""}
+	}
+	inside := func(event Event) bool {
+		return !event.Logged.At.Before(gap.After) && (gap.Before.IsZero() || !event.Logged.At.After(gap.Before))
+	}
+	var page []feed.Event
+	if gap.Upward {
+		page = a.readFromSession(names, inside, konst.FeedRecentEvents)
+		page = page[max(0, len(page)-konst.FeedRecentEvents):]
+	} else {
+		taken := 0
+		page = a.readFromSession(names, func(event Event) bool {
+			first := taken < konst.FeedRecentEvents && inside(event)
+			if first {
+				taken++
+			}
+			return first
+		}, 0)
+	}
+	held := len(a.happened)
+	a.merge(page)
+	if len(a.happened) == held {
+		a.gapReadEmpty = gap
+	}
+}
+
+func (a *App) countWhatIsNotHeld() {
+	if a.unheldCounted || !a.feedReadsTheSession() {
+		return
+	}
+	a.unheldCounted, a.feedStale = true, true
+	seen := map[string]bool{}
+	err := a.options.Host.SubAgentEvents(a.shownActors(), func(event Event) bool {
+		kind := feed.KindTool
+		switch event.Kind {
+		case EventThinking:
+			kind = feed.KindThinking
+		case EventToolCall:
+		default:
+			return true
+		}
+		at := a.happenedAt(a.shownID(event.ID))
+		if seen[event.ID] || at >= 0 && a.happened[at].FullID == event.ID {
+			return true
+		}
+		seen[event.ID] = true
+		a.unheld.Add(feed.Event{Actor: cmp.Or(event.Agent, orchestrator), Kind: kind, Title: event.Tool, Body: event.Text, At: event.Logged.At})
+		return true
+	})
+	if err != nil {
+		a.notify(readBackFailed + err.Error())
+	}
+}
+
 func (a *App) flushFeed() {
 	if !a.feedStale || a.current != screenAgents {
 		return
 	}
 	a.feedStale = false
+	a.feed.SetUnheld(a.unheld)
 	a.feed.SetEvents(a.happened)
 }
 

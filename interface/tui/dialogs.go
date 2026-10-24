@@ -5,7 +5,6 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -107,7 +106,7 @@ type searchDialog struct{ palette.Search }
 func (a *App) searchDialog() *searchDialog {
 	a.refreshSettingsRows()
 	folded := sync.OnceValue(func() *[]feed.Event {
-		read := a.readBack(slices.Collect(maps.Keys(a.hidden())))
+		read := slices.DeleteFunc(a.readBack(a.everyActor()), func(event feed.Event) bool { return a.happenedAt(event.ID) >= 0 })
 		a.searchedFolded = weak.Make(&read)
 		return &read
 	})

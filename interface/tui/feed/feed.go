@@ -151,6 +151,7 @@ type Model struct {
 	foldedOpen         bool
 	foldedAge          string
 	foldAsked          bool
+	unheld             Unheld
 	cards              *cardCache
 	rail, main         *look.PaneCache
 }
@@ -357,7 +358,7 @@ func fromTop(rows, height, scroll int) int {
 
 func (m Model) page() page {
 	s, height := m.laid(m.depth(), ""), m.pageHeight()
-	p := page{total: len(s.drafts)}
+	p := page{total: between(s.unheld, time.Time{}, time.Time{}) + len(s.drafts)}
 	if len(s.drafts) == 0 {
 		p.view = look.Muted("No events in this feed")
 		if m.filter.name == foldedName {
@@ -374,9 +375,9 @@ func (m Model) page() page {
 		if end > top {
 			c := m.card(s.key.width, s.drafts[i])
 			if p.first == 0 {
-				p.first = i + 1
+				p.first = s.place(i)
 			}
-			p.last = i + 1
+			p.last = s.place(i)
 			p.hits = append(p.hits, hit{c.id, max(0, s.starts[i]-top), min(height, end-top)})
 			lines := strings.Split(c.view, "\n")
 			shown = append(shown, lines[max(0, top-s.starts[i]):min(len(lines), bottom-s.starts[i])]...)
@@ -509,7 +510,7 @@ func (m Model) railView() (string, []railTarget) {
 	}
 	write("\n" + look.PaneTitle("Sub-agents", m.railFocused) + "\n" + look.Muted(widget.Fit(counted, width)) + "\n\n" + look.SectionLabel("Overview") + "\n")
 	targets := []railTarget{{rows, identity{}}}
-	write(look.SidebarItem(width, m.filter == identity{}, allActivity, strconv.Itoa(m.sheet().kept)) + "\n")
+	write(look.SidebarItem(width, m.filter == identity{}, allActivity, strconv.Itoa(between(m.sheet().unheldAll, time.Time{}, time.Time{})+m.sheet().kept)) + "\n")
 	entries := m.entries()
 	for g, name := range [...]string{"Active", "Waiting", "Dead"} {
 		members := slices.DeleteFunc(slices.Clone(entries), func(e entry) bool { return e.group != group(g) })

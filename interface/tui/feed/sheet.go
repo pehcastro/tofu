@@ -15,6 +15,8 @@ type sheet struct {
 	key             sheetKey
 	about           []Event
 	kept            int
+	unheld          [][]int64
+	unheldAll       [][]int64
 	drafts          []draft
 	heights, starts []int
 	frontier        int
@@ -30,6 +32,7 @@ func (m Model) sheet() *sheet {
 		return prior
 	}
 	kept, s := m.retained(), &sheet{key: key, about: about}
+	s.unheld, s.unheldAll = m.unheldShown()
 	var earlier []draft
 	if prior != nil {
 		earlier, s.drafts = prior.drafts, make([]draft, 0, len(prior.drafts))

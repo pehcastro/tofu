@@ -177,8 +177,8 @@ func TestACrowdOf180000FeedEventsSharesNoShortID(t *testing.T) {
 		seen[event.ID] = true
 	}
 	t.Logf("%d feed events held for %d streamed, %d short ids lengthened", len(app.happened), 2*heapAgents*heapCalls, len(app.lengthenedIDs))
-	if len(app.happened) != 2*heapAgents*heapCalls {
-		t.Errorf("the feed holds %d events, not the %d the crowd streamed", len(app.happened), 2*heapAgents*heapCalls)
+	if len(app.happened) > 2*konst.FeedRecentEvents {
+		t.Errorf("the feed holds %d events of the %d the crowd streamed, not a window of about %d", len(app.happened), 2*heapAgents*heapCalls, konst.FeedRecentEvents)
 	}
 }
 
