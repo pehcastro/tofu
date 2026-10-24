@@ -61,40 +61,78 @@ func Unstamped(repo string, kinds ...string) (string, []string, error) {
 	return tree, run, nil
 }
 
-func DoneRefusal(repo string, owns []string) string {
-	area := flowsArea(owns)
-	if area == "" {
-		return ""
+type DoneGate struct {
+	Area      string
+	Tree      string
+	Unread    string
+	Dirty     []string
+	Unstamped bool
+	owns      []string
+	stamps    string
+}
+
+func checkDone(repo string, owns []string) DoneGate {
+	if flowsArea(owns) == "" {
+		return DoneGate{}
 	}
-	gated := "it owns " + strings.Join(owns, ", ") + ", which touches " + area + ", and a move to done needs the owned paths committed and HEAD's tree stamped by ./bench/flows"
+	return headGate(repo).owning(repo, owns)
+}
+
+func headGate(repo string) DoneGate {
 	if repo == "" {
-		return gated + ". No repository is known for this board, so no stamp can be checked."
+		return DoneGate{Unread: "no repository is known for this board, so no stamp can be checked"}
 	}
 	tree, run, err := Unstamped(repo, FlowsStamps)
 	if err != nil {
-		return gated + ". HEAD's tree could not be read: " + err.Error()
+		return DoneGate{Unread: "HEAD's tree could not be read: " + err.Error()}
+	}
+	return DoneGate{Tree: tree, Unstamped: len(run) > 0, stamps: StampDir(repo)}
+}
+
+func (g DoneGate) owning(repo string, owns []string) DoneGate {
+	if g.Area, g.owns = flowsArea(owns), owns; g.Area == "" || g.Unread != "" {
+		return g
 	}
 	var pathspecs []string
 	for _, glob := range owns {
 		pathspecs = append(pathspecs, ":(glob,icase)"+glob)
 	}
-	dirty, err := uncommitted(repo, pathspecs...)
-	if err != nil {
-		return gated + ". The owned paths could not be checked for uncommitted work: " + err.Error()
+	var err error
+	if g.Dirty, err = uncommitted(repo, pathspecs...); err != nil {
+		g.Unread = "the owned paths could not be checked for uncommitted work: " + err.Error()
 	}
-	var why []string
-	if len(dirty) > 0 {
-		why = append(why, "These owned paths have uncommitted changes, so the work being closed is not the work a stamp covers. Commit them first:\n  "+strings.Join(dirty, "\n  "))
-	}
-	if len(run) > 0 {
-		why = append(why, "No passing flows stamp exists for HEAD's tree "+tree+". In a clean clone of HEAD, run: TOFU_STAMP_DIR="+StampDir(repo)+" go run ./bench/flows\nIt replays eight long-session flows on fresh homes in about six minutes and stamps the tree only when every flow passes.")
-	}
-	if len(why) == 0 {
+	return g
+}
+
+func (g DoneGate) Refusal() string {
+	if g.Area == "" {
 		return ""
 	}
-	return gated + ".\n\n" + strings.Join(why, "\n\n") + `
+	var causes []string
+	if g.Unread != "" {
+		causes = append(causes, g.Unread)
+	}
+	if len(g.Dirty) > 0 {
+		causes = append(causes, "uncommitted owned paths "+strings.Join(g.Dirty, ", "))
+	}
+	if g.Unstamped {
+		causes = append(causes, "HEAD's tree "+g.Tree+" has no passing flows stamp")
+	}
+	if len(causes) == 0 {
+		return ""
+	}
+	why := strings.Join(causes, ", and ") + ".\nIt owns " + strings.Join(g.owns, ", ") + ", which touches " + g.Area + ", and a move to done needs the owned paths committed and HEAD's tree stamped by ./bench/flows."
+	if len(g.Dirty) > 0 {
+		why += "\nCommit the owned paths first, so the work being closed is the work a stamp covers."
+	}
+	if g.Unstamped {
+		why += "\nIn a clean clone of HEAD, run: TOFU_STAMP_DIR=" + g.stamps + " go run ./bench/flows\nIt replays eight long-session flows on fresh homes in about six minutes and stamps the tree only when every flow passes."
+	}
+	return why + "\nOn 2026-10-15 two regressions in turn and sub-agent work reached 0.5.15-rc2 with every ticket accepted on its tests, and the owner's nine-day session waited 55 minutes on two finished agents."
+}
 
-On 2026-10-15 two regressions in turn and sub-agent work reached 0.5.15-rc2 with every ticket accepted on its tests, and the owner's nine-day session waited 55 minutes on two finished agents.`
+func DoneRefusal(repo string, owns []string) string {
+	return checkDone(repo, owns).Refusal()
 }
 
 func flowsArea(globs []string) string {

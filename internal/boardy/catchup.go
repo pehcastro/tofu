@@ -68,6 +68,10 @@ func (m Managed) OpenQuestions(key string) (Catchup, error) {
 	}
 	c := Catchup{Board: key, File: path, Open: []OpenQuestion{}, Applied: []Applied{}, Stale: []TypedAnswer{}}
 	for _, ticket := range tickets {
+		if !ticket.Status.Live() {
+			typed = slices.DeleteFunc(typed, func(a TypedAnswer) bool { return a.Ticket == ticket.ID })
+			continue
+		}
 		for _, q := range ticket.OpenQuestions() {
 			open := OpenQuestion{Ticket: ticket.ID, Title: ticket.Title, Status: ticket.Status, Question: q}
 			at := slices.IndexFunc(typed, func(a TypedAnswer) bool { return a.Ticket == ticket.ID && a.Question == q.ID })

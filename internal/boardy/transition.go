@@ -332,8 +332,8 @@ func (m Managed) validMove(board Board, ticket Ticket, to Status) error {
 		}
 	}
 	if to == Done {
-		if why := DoneRefusal(m.Store.Root, ticket.Owns); why != "" {
-			return RefusedError{Ticket: ticket.ID, Why: why}
+		if gate := m.doneGate(ticket.Owns); gate.Refusal() != "" {
+			return RefusedError{Ticket: ticket.ID, Why: gate.Refusal(), Done: &gate}
 		}
 	}
 	if to == Review || to == Done {
@@ -360,6 +360,13 @@ func (m Managed) validMove(board Board, ticket Ticket, to Status) error {
 		err = errors.Join(err, m.ownsFree(board.Key, ticket.Front, ticket.Owns, to, ""))
 	}
 	return err
+}
+
+func (m Managed) doneGate(owns []string) DoneGate {
+	if m.head == nil {
+		return checkDone(m.Store.Root, owns)
+	}
+	return m.head.owning(m.Store.Root, owns)
 }
 
 func (m Managed) referencesResolve(ticket Ticket) error {

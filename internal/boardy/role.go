@@ -22,11 +22,13 @@ type Managed struct {
 	Local
 	Person string
 	Lead   string
+	head   *DoneGate
 }
 
 type RefusedError struct {
 	Ticket string
 	Why    string
+	Done   *DoneGate
 }
 
 func (e RefusedError) Error() string {

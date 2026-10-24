@@ -10,6 +10,7 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/boardy"
+	"tofu/internal/widget"
 )
 
 const boardyReportListed = 5
@@ -22,6 +23,8 @@ func boardyViewUsageOf(subcommand string) string {
 		return "tofu boardy report [--board KEY] [--since YYYY-MM-DD|Nd] [--json]"
 	case "audit":
 		return "tofu boardy audit [--board KEY] [--json]"
+	case "attention":
+		return "tofu boardy attention [--board KEY] [--json]"
 	case "epic":
 		return "tofu boardy epic list|new <ID> <title> [--milestone M]|milestone <ID> <title> [--due YYYY-MM-DD|Nd]|done <ID> [--board KEY] [--json]"
 	case "sprint":
@@ -104,6 +107,63 @@ func (c boardyCall) report() int {
 		return c.o.fail(err)
 	}
 	return c.o.done(true, answer, func(page cli.Page) []string { return c.reportLines(page, answer.Report) })
+}
+
+func (c boardyCall) attention() int {
+	if len(c.args) > 0 {
+		return c.o.usage(fmt.Errorf("unexpected %q", c.args[0]))
+	}
+	key, err := c.board()
+	now := time.Now()
+	var a boardy.Attention
+	if err == nil {
+		a, err = c.managed.Attention(key, now)
+	}
+	if err != nil {
+		return c.o.fail(err)
+	}
+	return c.o.done(true, a, func(page cli.Page) []string {
+		var counts []string
+		for _, status := range a.Statuses {
+			if status.Tickets > 0 {
+				counts = append(counts, status.Name+" "+strconv.Itoa(status.Tickets))
+			}
+		}
+		lines := page.Title(key+" attention", counts, cli.Verdict{})
+		group := func(heading string, mark cli.Mark, needs []boardy.Need) {
+			lines = append(lines, "", page.Subject(heading+" "+strconv.Itoa(len(needs))))
+			rows := make([]cli.Row, len(needs))
+			for i, one := range needs {
+				rows[i] = cli.Row{Mark: mark, Cells: []string{one.ID, one.Title}}
+				if !one.Since.IsZero() {
+					rows[i].Cells = []string{one.ID, dash(one.Assignee), widget.Until(now.Sub(one.Since)), one.Title}
+				}
+			}
+			for i, line := range page.Rows(rows) {
+				lines = append(lines, cli.Indent(line)...)
+				if detail := cmp.Or(strings.Join(needs[i].Paths, ", "), needs[i].Why); detail != "" {
+					lines = append(lines, cli.Indent(cli.Indent(page.Label(detail))...)...)
+				}
+			}
+		}
+		group("doing", cli.Active, a.Doing)
+		group("review, closable now", cli.Done, a.Closable)
+		lines = append(lines, "", page.Subject("review, waits for a flows stamp "+strconv.Itoa(len(a.Unstamped))))
+		if len(a.Unstamped) > 0 {
+			ids := make([]string, len(a.Unstamped))
+			for i, one := range a.Unstamped {
+				ids[i] = one.ID
+			}
+			lines = append(lines, cli.Indent(page.Glyph(cli.Warn)+" "+strings.Join(ids, ", "), page.Label("HEAD's tree "+a.Tree+" has no passing flows stamp"))...)
+		}
+		group("review, waits on uncommitted owned paths", cli.Warn, a.Uncommitted)
+		if len(a.Refused) > 0 {
+			group("review, refused for another cause", cli.Fail, a.Refused)
+		}
+		group(string(boardy.NeedsDecision), cli.Warn, a.Decide)
+		group(string(boardy.Triage), cli.Idle, a.Triage)
+		return lines
+	})
 }
 
 func (c boardyCall) reportLines(page cli.Page, report boardy.Report) []string {

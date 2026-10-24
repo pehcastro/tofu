@@ -67,16 +67,6 @@ func (m Managed) assign(board Board, ticket Ticket, assignee, actor string, dept
 }
 
 func (m Managed) Plan(id, epic, sprint, actor string) (Ticket, error) {
-	ref, err := SplitID(id)
-	if err != nil {
-		return Ticket{}, err
-	}
-	if err := m.Manages(ref.Key, actor, "set a ticket's epic or sprint"); err != nil {
-		return Ticket{}, err
-	}
-	if err := m.Store.planned(ref.Key, Front{Epic: epic, Sprint: sprint}); err != nil {
-		return Ticket{}, err
-	}
 	var said []string
 	for _, field := range [][2]string{{"epic", epic}, {"sprint", sprint}} {
 		if field[1] != "" {
@@ -86,16 +76,54 @@ func (m Managed) Plan(id, epic, sprint, actor string) (Ticket, error) {
 	if said == nil {
 		return Ticket{}, fmt.Errorf("name an epic, a sprint, or both")
 	}
-	text := "set " + strings.Join(said, ", ")
-	planned, err := m.Store.Edit(id, func(t *Ticket) error {
+	return m.revise(id, "set "+strings.Join(said, ", "), actor, func(t *Ticket) error {
+		if err := m.Store.planned(t.Board(), Front{Epic: epic, Sprint: sprint}); err != nil {
+			return err
+		}
 		t.Epic, t.Sprint = cmp.Or(epic, t.Epic), cmp.Or(sprint, t.Sprint)
+		return nil
+	})
+}
+
+func (m Managed) Retitle(id, title, actor string) (Ticket, error) {
+	if title = strings.TrimSpace(title); title == "" {
+		return Ticket{}, errors.New("a ticket needs a title")
+	}
+	return m.revise(id, "set title "+title, actor, func(t *Ticket) error {
+		t.Title = title
+		return nil
+	})
+}
+
+func (m Managed) Reown(id string, owns []string, actor string) (Ticket, error) {
+	return m.revise(id, "set owns "+cmp.Or(strings.Join(owns, ", "), "to nothing"), actor, func(t *Ticket) error {
+		if err := m.ownsFree(t.Board(), t.Front, owns, t.Status, ""); err != nil {
+			return err
+		}
+		t.Owns = owns
+		return nil
+	})
+}
+
+func (m Managed) revise(id, text, actor string, change func(*Ticket) error) (Ticket, error) {
+	ref, err := SplitID(id)
+	if err != nil {
+		return Ticket{}, err
+	}
+	if err := m.Manages(ref.Key, actor, text+" on a ticket"); err != nil {
+		return Ticket{}, err
+	}
+	revised, err := m.Store.Edit(id, func(t *Ticket) error {
+		if err := change(t); err != nil {
+			return err
+		}
 		t.Log = strings.TrimSpace(t.Log + "\n" + m.Store.logLine(actor, text))
 		return nil
 	})
 	if err != nil {
-		return planned, err
+		return revised, err
 	}
-	return planned, m.Store.Record(ref.Key, Event{Ticket: id, Kind: Commented, Actor: actor, Text: text})
+	return revised, m.Store.Record(ref.Key, Event{Ticket: id, Kind: Commented, Actor: actor, Text: text})
 }
 
 func (s Store) planned(key string, front Front) error {

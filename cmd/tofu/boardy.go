@@ -19,14 +19,14 @@ import (
 	"tofu/internal/rule"
 )
 
-const boardyUsage = "tofu boardy init|new|list|show|move|log|set|lint|boards|held|manager|triage|assign|hand|widen|check|tick|fire|rule|view|audit|report|epic|sprint|ask|catchup [--json]"
+const boardyUsage = "tofu boardy init|new|list|show|move|log|set|lint|boards|held|manager|triage|assign|hand|widen|check|tick|fire|rule|view|audit|report|attention|epic|sprint|ask|catchup [--json]"
 
 func boardyUsageOf(subcommand string) string {
 	switch subcommand {
 	case "init":
 		return "tofu boardy init --key KEY [--name text] [--json]"
 	case "new":
-		return "tofu boardy new [--board KEY | --parent ID] [--type story|task|bug|subtask] [--priority P0..P4] [--status s] [--points n] [--size S|M|L] [--spec path] [--owns a,b] [--epic E] [--sprint S] [--scope text] [--acceptance text] [--as name] <title> [--json]"
+		return "tofu boardy new [--board KEY | --parent ID] [--type story|task|bug|subtask] [--priority P0..P4] [--status s] [--points n] [--size S|M|L] [--spec path] [--owns a,b] [--epic E] [--sprint S] [--scope text] [--acceptance line]... [--as name] <title> [--json]"
 	case "list":
 		return "tofu boardy list [--board KEY] [--status s] [--all] [--fields id,status,assignee,owns] [--json]"
 	case "held":
@@ -42,7 +42,7 @@ func boardyUsageOf(subcommand string) string {
 	case "boards":
 		return "tofu boardy boards [--json]"
 	case "set":
-		return "tofu boardy set <ticket> [--epic E] [--sprint S] [--as name] [--json]"
+		return "tofu boardy set <ticket> [--title text] [--owns a,b] [--epic E] [--sprint S] [--as name] [--json]"
 	case "tick":
 		return "tofu boardy tick [--board KEY] [--json]"
 	case "fire":
@@ -124,6 +124,8 @@ func (call boardyCall) run(subcommand string) int {
 		return call.audit()
 	case "report":
 		return call.report()
+	case "attention":
+		return call.attention()
 	case "epic":
 		return call.epic()
 	case "sprint":
@@ -164,6 +166,8 @@ func boardyFlags(args []string) (map[string]string, []string, error) {
 			flags[name] = "true"
 		case i+1 == len(args):
 			return nil, nil, fmt.Errorf("--%s needs a value", name)
+		case name == "acceptance" && flags[name] != "":
+			flags[name], i = flags[name]+"\n"+args[i+1], i+1
 		default:
 			flags[name], i = args[i+1], i+1
 		}
@@ -555,8 +559,21 @@ func (c boardyCall) plan() int {
 	if len(c.args) != 1 {
 		return c.o.usage(errors.New("name one " + c.words.Ticket))
 	}
-	ticket, err := c.managed.Plan(c.args[0], c.flags["epic"], c.flags["sprint"], c.actor)
-	return c.receipt(ticket, err, cli.Changed, ticket.ID+" is in "+c.words.Epic+" "+dash(ticket.Epic)+", "+c.words.Sprint+" "+dash(ticket.Sprint))
+	id := c.args[0]
+	title, retitle := c.flags["title"]
+	owns, reown := c.flags["owns"]
+	var ticket boardy.Ticket
+	var err error
+	if retitle {
+		ticket, err = c.managed.Retitle(id, title, c.actor)
+	}
+	if err == nil && reown {
+		ticket, err = c.managed.Reown(id, splitList(owns), c.actor)
+	}
+	if err == nil && (c.flags["epic"] != "" || c.flags["sprint"] != "" || !retitle && !reown) {
+		ticket, err = c.managed.Plan(id, c.flags["epic"], c.flags["sprint"], c.actor)
+	}
+	return c.receipt(ticket, err, cli.Changed, ticket.ID+" "+ticket.Title+": owns "+dash(strings.Join(ticket.Owns, ", "))+", "+c.words.Epic+" "+dash(ticket.Epic)+", "+c.words.Sprint+" "+dash(ticket.Sprint))
 }
 
 func (c boardyCall) tick() int {
