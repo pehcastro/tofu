@@ -151,6 +151,8 @@ type Model struct {
 	unshown            map[string]bool
 	entries            []Entry
 	composer           textarea.Model
+	bar                []string
+	barKey             composerKey
 	width              int
 	height             int
 	top                anchor

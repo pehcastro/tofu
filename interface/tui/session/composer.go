@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 
+	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
@@ -86,12 +87,30 @@ func (m *Model) footer() []string {
 	for _, attached := range m.attached {
 		lines = append(lines, attached.Render(m.width))
 	}
-	lines = append(lines, strings.Split(m.composerBar(), "\n")...)
+	lines = append(lines, m.composerLines()...)
 	lines = append(lines, m.commandLines()...)
 	for index, line := range lines {
 		lines[index] = widget.Pad(line, m.width)
 	}
 	return lines
+}
+
+type composerKey struct {
+	value                string
+	row, column, scroll  int
+	focused              bool
+	width, height        int
+	selectFrom, selectTo textarea.Position
+	selecting            bool
+}
+
+func (m *Model) composerLines() []string {
+	from, to, selecting := m.composer.Selection()
+	key := composerKey{m.composer.Value(), m.composer.Line(), m.composer.Column(), m.composer.ScrollYOffset(), m.composer.Focused(), m.width, m.composer.Height(), from, to, selecting}
+	if m.bar == nil || key != m.barKey {
+		m.bar, m.barKey = strings.Split(m.composerBar(), "\n"), key
+	}
+	return m.bar
 }
 
 func (m *Model) composerBar() string {
