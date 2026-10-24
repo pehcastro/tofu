@@ -88,6 +88,7 @@ type followReply struct {
 	OK       bool
 	Stands   bool
 	Steered  string
+	Turn     string `json:",omitempty"`
 	Refused  string `json:",omitempty"`
 	Cron     cron.Reply
 	Failed   string           `json:",omitempty"`
@@ -348,7 +349,9 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 			pick = ask.Pick
 		}
 		h.emitter().emit(Event{Kind: EventTask, Text: ask.Text, Origin: wireOrigin(llm.Origin{Source: llm.SourceTask}), Images: shownPending(ask.Text, ask.Images)})
-		reply.OK = h.Send(pick, ask.Text)
+		if reply.OK = h.Send(pick, ask.Text); reply.OK {
+			reply.Turn, _ = h.Turn()
+		}
 	case followStop:
 		h.Stop(ask.Stop)
 	case followStopLead:
@@ -544,10 +547,13 @@ func (f *following) send(pick Pick, task string, images []pendingImage) followRe
 func (reply followReply) delivered() bool { return reply.Refused == "" && reply.ID != 0 }
 
 func (h *Host) keepUndelivered(reply followReply, images []pendingImage) followReply {
-	if !reply.delivered() {
-		h.mu.Lock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	switch {
+	case !reply.delivered():
 		h.pending = append(h.pending, images...)
-		h.mu.Unlock()
+	case reply.OK:
+		h.turn = reply.Turn
 	}
 	return reply
 }
