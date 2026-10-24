@@ -31,6 +31,10 @@ const (
 	seedMinutesCap    = 60
 	workPace          = 4500 * time.Millisecond
 	hostLeaves        = 10 * time.Second
+	hostReady         = 10 * time.Second
+	liveArm           = "live450"
+	buildProcs        = "4"
+	spawnBatch        = 20
 )
 
 type reading struct {
@@ -50,6 +54,7 @@ type row struct {
 	Cores         float64 `json:"cores"`
 	Requests      int64   `json:"requests"`
 	WorkSteps     int64   `json:"work_steps"`
+	Resumed       int64   `json:"resumed"`
 	HostPID       int     `json:"host_pid"`
 	HostWorkingMB float64 `json:"host_working_mb"`
 	HostPrivateMB float64 `json:"host_private_mb"`
@@ -66,11 +71,13 @@ type row struct {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: longsession seed|measure|report [flags]")
+		fmt.Fprintln(os.Stderr, "usage: longsession live450|seed|measure|report [flags]")
 		os.Exit(2)
 	}
 	var err error
 	switch os.Args[1] {
+	case liveArm:
+		err = live(os.Args[2:])
 	case "seed":
 		err = seed(os.Args[2:])
 	case "measure":
@@ -128,7 +135,7 @@ func seed(args []string) error {
 	home := flags.String("home", "", "the template home, made fresh")
 	dir := flags.String("project", "", "the mock project, made fresh")
 	agents := flags.Int("agents", 450, "sub-agents the lead spawns")
-	batch := flags.Int("batch", 20, "spawns per lead step, also the running cap")
+	batch := flags.Int("batch", spawnBatch, "spawns per lead step, also the running cap")
 	ceiling := flags.Int("ceiling", 0, "the lead's context ceiling in tokens, low enough to fork the session into generations as a long session does; 0 keeps the default")
 	_ = flags.Parse(args)
 	if *exe == "" || *home == "" || *dir == "" {
@@ -147,16 +154,7 @@ func seed(args []string) error {
 		return err
 	}
 	env := freshEnv(*home, server.env()...)
-	if err := os.MkdirAll(*home, 0o755); err != nil {
-		return err
-	}
-	if err := tofu(*exe, *dir, env, mockLoginCode+"\n", "login", "llm", "claude-sub", "--paste"); err != nil {
-		return err
-	}
-	if err := tofu(*exe, *dir, env, "", "models", "bind", "classifier", "typesafe/jev-latest"); err != nil {
-		return err
-	}
-	if err := tofu(*exe, *dir, env, "", "settings", "set", "subAgentsPerTurn", strconv.Itoa(*batch)); err != nil {
+	if err := signedIn(*exe, *home, *dir, env, *batch); err != nil {
 		return err
 	}
 	started := time.Now()
@@ -167,19 +165,6 @@ func seed(args []string) error {
 	err = tofu(*exe, *dir, env, "", append(run, leadMarker+" seed: spawn the mock sub-agents")...)
 	fmt.Printf("seeded %d of %d sub-agents, %d reported, %d requests, in %s\n", server.started.Load(), *agents, server.reported.Load(), server.asked.Load(), time.Since(started).Round(time.Second))
 	return err
-}
-
-func hostOf(exe, dir string, env []string) int {
-	var status struct {
-		PID int `json:"pid"`
-	}
-	cmd := exec.Command(exe, "host", "status", "--json", "--dir", dir)
-	cmd.Dir, cmd.Env = dir, env
-	out, err := cmd.Output()
-	if err != nil || json.Unmarshal(out, &status) != nil {
-		return 0
-	}
-	return status.PID
 }
 
 func versionOf(exe string) (string, string) {
@@ -198,11 +183,11 @@ func measure(args []string) error {
 	template := flags.String("template", "", "the seeded home, copied fresh for this run")
 	dir := flags.String("project", "", "the mock project the session belongs to")
 	work := flags.String("work", "", "where the run home, the profile and the screen go")
-	phases := flags.String("phases", "idle", "in order, one process: seed spawns -agents in the app until every one reports, idle waits, work has -workers sub-agents work while the lead waits on a shell")
-	minutes := flags.Int("minutes", 10, "the window of idle and of work")
+	phases := flags.String("phases", "idle", "in order, one process: seed spawns -agents in the app until every one reports, idle waits, message has the lead message one settled sub-agent, which resumes from disk and answers, work has -workers sub-agents work while the lead waits on a shell")
+	minutes := flags.Int("minutes", 10, "the window of idle, message and work")
 	settle := flags.Duration("settle", 30*time.Second, "time from launch before the first window opens, not measured")
 	agents := flags.Int("agents", 450, "sub-agents in the session, spawned by seed or already in the template")
-	batch := flags.Int("batch", 20, "spawns per lead step in seed")
+	batch := flags.Int("batch", spawnBatch, "spawns per lead step in seed")
 	workers := flags.Int("workers", 1, "sub-agents that work through the work phase")
 	extra := flags.String("env", "", "KEY=VALUE pairs, space separated, the arm under measurement reads")
 	out := flags.String("out", "", "the jsonl the rows are appended to")
@@ -225,8 +210,19 @@ func measure(args []string) error {
 	base := row{Arm: *arm, Agents: *agents, Workers: *workers, Version: version, Commit: commit, Credential: "mock claude-sub login against a local stub",
 		Wire: "anthropic messages from a local stub, no model", GOMAXPROCS: "unset, the runtime default of " + strconv.Itoa(runtime.NumCPU()),
 		Machine: fmt.Sprintf("%s %s/%s %d cpu", machine, runtime.GOOS, runtime.GOARCH, runtime.NumCPU()), Date: time.Now().Format(time.RFC3339)}
-	env := freshEnv(home, append(append(server.env(), "TOFU_PPROF="+profile), strings.Fields(*extra)...)...)
-	c, err := launch([]string{*exe, "--continue"}, *dir, env)
+	env := freshEnv(home, append(server.env(), strings.Fields(*extra)...)...)
+	hostLog, err := os.Create(filepath.Join(*work, "host-"+label+".log"))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = hostLog.Close() }()
+	served := &hosts{exe: *exe, dir: *dir, profile: profile, env: env, log: hostLog}
+	defer served.stop()
+	hostPID, err := served.current()
+	if err != nil {
+		return err
+	}
+	c, err := launch([]string{*exe, "--continue"}, *dir, append(slices.Clone(env), "TOFU_PPROF="+filepath.Join(profile, "app")))
 	if err != nil {
 		return err
 	}
@@ -243,8 +239,6 @@ func measure(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tofu(*exe, *dir, env, "", "host", "stop", "--dir", *dir) }()
-	hostPID := hostOf(*exe, *dir, env)
 	hostLast, _ := readPID(hostPID)
 	asked, steps := server.asked.Load(), server.workSteps.Load()
 	fmt.Printf("%s opens: working %.0f MB, private %.0f MB, cpu %.1f s; host pid %d private %.0f MB, cpu %.1f s; after %s settle (not measured)\n",
@@ -257,11 +251,21 @@ func measure(args []string) error {
 			window, said = seedMinutesCap, leadMarker+" seed: spawn the mock sub-agents"
 		case "idle":
 			server.mode.Store(int32(idling))
+		case "message":
+			server.mode.Store(int32(messaging))
+			said = leadMarker + " message: message one settled mock sub-agent"
 		case "work":
 			server.mode.Store(int32(working))
 			said = leadMarker + " work: spawn one mock worker"
 		default:
 			return fmt.Errorf("unknown phase %q", phase)
+		}
+		serving, err := served.current()
+		if err != nil {
+			return err
+		}
+		if serving != hostPID {
+			hostPID, hostLast = serving, reading{}
 		}
 		if err := typed(c, said); err != nil {
 			return err
@@ -277,11 +281,10 @@ func measure(args []string) error {
 			r := base
 			r.Phase, r.Minute, r.WorkingMB, r.PrivateMB, r.CPUSeconds = phase, minute, now.workingMB, now.privateMB, now.cpuSeconds-last.cpuSeconds
 			r.Cores = r.CPUSeconds / now.at.Sub(last.at).Seconds()
-			r.Requests, r.WorkSteps = server.asked.Load()-asked, server.workSteps.Load()-steps
+			r.Requests, r.WorkSteps, r.Resumed = server.asked.Load()-asked, server.workSteps.Load()-steps, server.resumed.Load()
 			hostNow, err := readPID(hostPID)
-			if err != nil {
-				hostPID, hostLast = hostOf(*exe, *dir, env), reading{}
-				hostNow, _ = readPID(hostPID)
+			if serving := hostOf(*exe, *dir, env); err != nil || serving != hostPID {
+				return fmt.Errorf("host %d no longer serves the project at %s minute %d, host %d does, so the row would read the wrong process: %v", hostPID, phase, minute, serving, err)
 			}
 			r.HostPID, r.HostWorkingMB, r.HostPrivateMB, r.HostCPU = hostPID, hostNow.workingMB, hostNow.privateMB, hostNow.cpuSeconds-hostLast.cpuSeconds
 			r.HostCores = r.HostCPU / now.at.Sub(last.at).Seconds()
@@ -290,8 +293,8 @@ func measure(args []string) error {
 			if _, err := file.Write(append(line, '\n')); err != nil {
 				return err
 			}
-			fmt.Printf("%s %s minute %2d: working %7.0f MB  private %7.0f MB  cpu %6.1f s  cores %.2f  host %d private %7.0f MB  cpu %6.1f s  requests %d  worker steps %d  reported %d\n",
-				label, phase, minute, r.WorkingMB, r.PrivateMB, r.CPUSeconds, r.Cores, r.HostPID, r.HostPrivateMB, r.HostCPU, r.Requests, r.WorkSteps, server.reported.Load())
+			fmt.Printf("%s %s minute %2d: app working %5.0f MB private %5.0f MB cpu %6.1f s cores %.2f  host %d working %5.0f MB private %5.0f MB cpu %6.1f s  requests %d  worker steps %d  reported %d  resumed %d\n",
+				label, phase, minute, r.WorkingMB, r.PrivateMB, r.CPUSeconds, r.Cores, r.HostPID, r.HostWorkingMB, r.HostPrivateMB, r.HostCPU, r.Requests, r.WorkSteps, server.reported.Load(), r.Resumed)
 			if phase == "seed" && server.reported.Load() >= int64(*agents) {
 				break
 			}
@@ -302,7 +305,8 @@ func measure(args []string) error {
 	for deadline := time.Now().Add(hostLeaves); hostStayed != 0 && time.Now().Before(deadline); time.Sleep(time.Second) {
 		hostStayed = hostOf(*exe, *dir, env)
 	}
-	fmt.Printf("%s quit by ctrl+c: exited %v, host %d gone within %s: %v, profile in %s\n", label, quitted, hostPID, hostLeaves, hostStayed == 0, profile)
+	fmt.Printf("%s quit by ctrl+c: exited %v, host %d gone within %s: %v, app profile in %s\n",
+		label, quitted, hostPID, hostLeaves, hostStayed == 0, filepath.Join(profile, "app"))
 	return os.WriteFile(filepath.Join(*work, "screen-"+label+".ansi"), screen.bytes(), 0o644)
 }
 

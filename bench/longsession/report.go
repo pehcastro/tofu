@@ -30,8 +30,8 @@ func report(args []string) error {
 	if err := lines.Err(); err != nil || len(rows) == 0 {
 		return errors.Join(err, errors.New("no rows"))
 	}
-	fmt.Println("| arm | agents | workers | phase | minute | working MB | private MB | CPU s | cores | host pid | host private MB | host CPU s | requests | worker steps |")
-	fmt.Println("|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
+	fmt.Println("| arm | agents | workers | phase | minute | working MB | private MB | CPU s | cores | host pid | host private MB | host CPU s | requests | worker steps | resumed |")
+	fmt.Println("|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
 	var conditions []string
 	var phases [][]row
 	for _, r := range rows {
@@ -39,7 +39,7 @@ func report(args []string) error {
 		if r.HostPID != 0 {
 			host = fmt.Sprintf("| %d | %.0f | %.1f", r.HostPID, r.HostPrivateMB, r.HostCPU)
 		}
-		fmt.Printf("| %s | %d | %d | %s | %d | %.0f | %.0f | %.1f | %.2f %s | %d | %d |\n", r.Arm, r.Agents, r.Workers, r.Phase, r.Minute, r.WorkingMB, r.PrivateMB, r.CPUSeconds, r.Cores, host, r.Requests, r.WorkSteps)
+		fmt.Printf("| %s | %d | %d | %s | %d | %.0f | %.0f | %.1f | %.2f %s | %d | %d | %d |\n", r.Arm, r.Agents, r.Workers, r.Phase, r.Minute, r.WorkingMB, r.PrivateMB, r.CPUSeconds, r.Cores, host, r.Requests, r.WorkSteps, r.Resumed)
 		at := slices.IndexFunc(phases, func(p []row) bool { return p[0].Arm == r.Arm && p[0].Date == r.Date && p[0].Phase == r.Phase })
 		if at < 0 {
 			at, phases = len(phases), append(phases, nil)

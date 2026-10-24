@@ -15,6 +15,8 @@ const (
 	leadMarker     = "LONGSESSION-LEAD"
 	taskMarker     = "MOCKTASK"
 	workMarker     = "MOCKWORK"
+	resumeMarker   = "MOCKRESUME"
+	messagedAgent  = "sub-7"
 	workDeltas     = 60
 	shellLines     = 40
 	leadWait       = 5 * time.Minute
@@ -28,6 +30,7 @@ const (
 	seeding mode = iota
 	idling
 	working
+	messaging
 )
 
 type stub struct {
@@ -43,6 +46,8 @@ type stub struct {
 	polls     atomic.Int64
 	workSpawn atomic.Bool
 	workSteps atomic.Int64
+	messaged  atomic.Bool
+	resumed   atomic.Int64
 	asked     atomic.Int64
 	ids       atomic.Int64
 }
@@ -148,6 +153,10 @@ func (s *stub) answer(w http.ResponseWriter, r *http.Request) {
 		s.lead(&reply)
 	case strings.Contains(said, workMarker):
 		s.work(&reply)
+	case strings.Contains(said, resumeMarker):
+		s.resumed.Add(1)
+		reply.text(fmt.Sprintf("%s answered: I resumed with %d earlier steps of my conversation, and the first line of mock7.txt is mock line 7", resumeMarker, steps))
+		reply.stop("end_turn")
 	case strings.Contains(said, taskMarker):
 		s.task(&reply, said, steps)
 	default:
@@ -193,6 +202,15 @@ func (s *stub) lead(reply *sse) {
 		reply.text("the lead waits on the worker, as a lead waiting on a shell does")
 		reply.tool("bash", map[string]any{"command": fmt.Sprintf("sleep %d; echo lead wait %d over", int(leadWait.Seconds()), s.ids.Load())})
 		reply.stop("tool_use")
+	case messaging:
+		if s.messaged.CompareAndSwap(false, true) {
+			reply.text(fmt.Sprintf("messaging %s, which settled long ago", messagedAgent))
+			reply.tool("message", map[string]any{"to": messagedAgent, "text": resumeMarker + ": you settled long ago; what is the first line of mock7.txt?"})
+			reply.stop("tool_use")
+			return
+		}
+		reply.text(fmt.Sprintf("%s has answered %d times", messagedAgent, s.resumed.Load()))
+		reply.stop("end_turn")
 	case idling:
 		reply.text("noted")
 		reply.stop("end_turn")
