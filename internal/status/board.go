@@ -47,11 +47,17 @@ func (b *Board) Apply(r Record) bool {
 
 func (b *Board) Sync(wanted []Record) []Record {
 	wanted = wanted[:min(len(wanted), maxRecords)]
+	var gone []string
+	for id := range b.held {
+		if !slices.ContainsFunc(wanted, func(record Record) bool { return record.ID == id }) {
+			gone = append(gone, id)
+		}
+	}
+	slices.Sort(gone)
 	var sent []Record
-	for _, held := range b.List() {
-		gone := Record{ID: held.ID, State: Clear}
-		if !slices.ContainsFunc(wanted, func(record Record) bool { return record.ID == held.ID }) && b.Apply(gone) {
-			sent = append(sent, gone)
+	for _, id := range gone {
+		if cleared := (Record{ID: id, State: Clear}); b.Apply(cleared) {
+			sent = append(sent, cleared)
 		}
 	}
 	for _, record := range wanted {
