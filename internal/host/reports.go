@@ -98,6 +98,7 @@ type SettingValue struct {
 	Max         *int        `json:"max,omitempty"`
 	Unit        string      `json:"unit,omitempty"`
 	Restart     bool        `json:"restart,omitempty"`
+	Reason      string      `json:"reason,omitempty"`
 }
 
 type SettingKind string

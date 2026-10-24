@@ -22,6 +22,7 @@ import (
 type SettingsChanged struct {
 	Identity
 	SettingsSet
+	Reason string `json:"reason,omitempty"`
 }
 
 type settingsFiles map[SettingScope]map[string]string
@@ -176,7 +177,7 @@ func (s *server) settingsMoved() {
 	for _, row := range report.Settings {
 		if scope, held := changed[row.Key]; held {
 			set := SettingsSet{Key: row.Key, Value: row.Value, Scope: scope, Source: row.Source}
-			s.box.push(merged("settings.changed", row.Key, &SettingsChanged{Identity: focus.identity("", ""), SettingsSet: set}))
+			s.box.push(merged("settings.changed", row.Key, &SettingsChanged{Identity: focus.identity("", ""), SettingsSet: set, Reason: row.Reason}))
 		}
 	}
 }

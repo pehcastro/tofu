@@ -449,7 +449,8 @@ exit 0
         "choices": [
           "",
           "wsl"
-        ]
+        ],
+        "custom": true
       },
       {
         "key": "foldHidesShell",
@@ -511,7 +512,8 @@ exit 0
           "read",
           "notes",
           "files"
-        ]
+        ],
+        "custom": true
       },
       {
         "key": "subAgentsPerTurn",
@@ -654,7 +656,8 @@ exit 0
         "choices": [
           "off",
           "boardy"
-        ]
+        ],
+        "reason": "off until the project has a board: tofu boardy init"
       },
       {
         "key": "boardFlow",

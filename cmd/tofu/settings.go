@@ -88,13 +88,11 @@ func settingsVerb(args []string, out, errOut io.Writer) int {
 	}
 	if len(args) == 0 {
 		report := settingsReport{Global: store.Path(settingspkg.Global), Project: store.Path(settingspkg.Project)}
-		var why []string
 		for _, spec := range store.Table() {
-			setting, because := resolvedSetting(store, spec, dir)
-			report.Settings, why = append(report.Settings, setting), append(why, because)
+			report.Settings = append(report.Settings, resolvedSetting(store, spec, dir))
 		}
 		return show(out, o.asJSON, cli.Envelope{Verb: o.verb, OK: true, At: time.Now(), Data: report},
-			func(page cli.Page) []string { return settingsPage(page, report, why) })
+			func(page cli.Page) []string { return settingsPage(page, report) })
 	}
 	switch args[0] {
 	case "get":
@@ -113,12 +111,12 @@ func printSettingsList(out io.Writer, store *settingspkg.Store, dir string) {
 		widest, category = max(widest, len(spec.Key)), max(category, len(spec.Category))
 	}
 	for _, spec := range store.Table() {
-		setting, because := resolvedSetting(store, spec, dir)
+		setting := resolvedSetting(store, spec, dir)
 		source := setting.Source
 		if scope, fromFile := store.Source(spec.Key); fromFile {
 			source += " " + store.Path(scope)
 		}
-		_, _ = fmt.Fprintf(out, "%-*s %-*s %-6v %s\n", category, spec.Category, widest, spec.Key, setting.Value, joinedWhy(source, because))
+		_, _ = fmt.Fprintf(out, "%-*s %-*s %-6v %s\n", category, spec.Category, widest, spec.Key, setting.Value, joinedWhy(source, setting.Reason))
 	}
 }
 
@@ -151,7 +149,7 @@ func settingOf(store *settingspkg.Store, spec settingspkg.Spec) any {
 	}
 }
 
-func resolvedSetting(store *settingspkg.Store, spec settingspkg.Spec, dir string) (settingValue, string) {
+func resolvedSetting(store *settingspkg.Store, spec settingspkg.Spec, dir string) settingValue {
 	source := "default"
 	if scope, fromFile := store.Source(spec.Key); fromFile {
 		source = scope.String()
@@ -161,7 +159,7 @@ func resolvedSetting(store *settingspkg.Store, spec settingspkg.Spec, dir string
 		value, because = managementInForce(store, dir)
 	}
 	row := settingValue{Key: spec.Key, Category: spec.Category, Value: value, Source: source,
-		Label: spec.Label, Description: spec.Description, Kind: host.SettingText, Unit: spec.Unit, Restart: spec.Restart}
+		Label: spec.Label, Description: spec.Description, Kind: host.SettingText, Unit: spec.Unit, Restart: spec.Restart, Reason: because}
 	switch {
 	case spec.Kind == settingspkg.Bool:
 		row.Kind = host.SettingBool
@@ -177,16 +175,16 @@ func resolvedSetting(store *settingspkg.Store, spec settingspkg.Spec, dir string
 	case spec.Choices != nil:
 		row.Kind, row.Choices = host.SettingChoice, spec.Choices
 	case spec.Offers != nil:
-		row.Kind, row.Choices = host.SettingChoice, spec.Offers
+		row.Kind, row.Choices, row.Custom = host.SettingChoice, spec.Offers, true
 	}
-	return row, because
+	return row
 }
 
-func settingsPage(page cli.Page, report settingsReport, why []string) []string {
+func settingsPage(page cli.Page, report settingsReport) []string {
 	rows := make([]cli.Row, len(report.Settings))
 	set := 0
 	for i, setting := range report.Settings {
-		rows[i] = cli.Row{Cells: []string{setting.Key, cmp.Or(fmt.Sprint(setting.Value), "empty"), joinedWhy(setting.Source, why[i])}}
+		rows[i] = cli.Row{Cells: []string{setting.Key, cmp.Or(fmt.Sprint(setting.Value), "empty"), joinedWhy(setting.Source, setting.Reason)}}
 		if setting.Source != "default" {
 			rows[i].Mark = cli.Active
 			set++
@@ -214,7 +212,7 @@ func settingsGetVerb(o verbOutput, args []string, store *settingspkg.Store, dir 
 	if !known {
 		return o.usage(fmt.Errorf("%q is not a declared setting", args[0]))
 	}
-	setting, _ := resolvedSetting(store, spec, dir)
+	setting := resolvedSetting(store, spec, dir)
 	return show(o.out, o.asJSON, cli.Envelope{Verb: o.verb, OK: true, At: time.Now(), Data: setting},
 		func(cli.Page) []string { return []string{fmt.Sprint(setting.Value)} })
 }
