@@ -469,6 +469,12 @@ const (
 )
 
 const (
+	UndoLockWaitMillis      = 60000
+	UndoLockRetryMillis     = 25
+	UndoLockLifetimeSeconds = 600
+)
+
+const (
 	HostEventBuffer     = 256
 	HostSteeringQueue   = 64
 	HostCloseWaitMillis = 3000

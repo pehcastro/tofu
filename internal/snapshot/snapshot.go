@@ -14,6 +14,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"tofu/internal/konst"
 )
 
 const (
@@ -28,6 +30,7 @@ const (
 	prunedStampName       = "pruned"
 	gitDirName            = "undo.git"
 	ledgerName            = "undo-turns.jsonl"
+	ledgerLockName        = "undo-turns.lock"
 	indexName             = "undo.index"
 	excludeName           = "undo.exclude"
 	verbatimAttributes    = "* -text -filter -ident -working-tree-encoding\n"
@@ -122,6 +125,7 @@ func (r Repo) stampPruned() error {
 }
 
 type Ask struct {
+	Turn   string
 	Turns  int
 	Force  bool
 	DryRun bool
@@ -160,6 +164,23 @@ func (e StillRunning) Error() string {
 	return "turn " + e.Turn + " has a start and no end: it is still running, or it was killed. --force undoes it to the files as they are now"
 }
 
+type NotNewest struct {
+	Asked  string
+	Newest string
+}
+
+func (e NotNewest) Error() string {
+	return "turn " + e.Asked + " is not the newest recorded turn of this session, " + e.Newest + " is: it was undone already, or a later turn came after it"
+}
+
+type LedgerHeld struct {
+	Lock string
+}
+
+func (e LedgerHeld) Error() string {
+	return fmt.Sprintf("%s is held by another undo or turn past %d ms", e.Lock, konst.UndoLockWaitMillis)
+}
+
 type entry struct {
 	Turn  string `json:"turn,omitempty"`
 	Start string `json:"start,omitempty"`
@@ -167,48 +188,87 @@ type entry struct {
 }
 
 func (r Repo) Begin(ctx context.Context, turn string) error {
-	tree, err := r.track(ctx)
-	if err != nil {
-		return err
-	}
-	entries, err := r.entries()
-	if err != nil {
-		return err
-	}
-	if len(entries) >= undoableTurns {
-		if err := r.rewrite(entries[len(entries)-undoableTurns+1:]); err != nil {
+	return r.locked(func() error {
+		tree, err := r.track(ctx)
+		if err != nil {
 			return err
 		}
-	}
-	return r.append(entry{Turn: turn, Start: tree})
+		entries, err := r.entries()
+		if err != nil {
+			return err
+		}
+		if len(entries) >= undoableTurns {
+			if err := r.rewrite(entries[len(entries)-undoableTurns+1:]); err != nil {
+				return err
+			}
+		}
+		return r.append(entry{Turn: turn, Start: tree})
+	})
 }
 
 func (r Repo) End(ctx context.Context) error {
-	entries, err := r.entries()
-	if err != nil {
-		return err
-	}
-	tree, err := r.track(ctx)
-	if err != nil {
-		return err
-	}
-	closing := entry{End: tree}
-	if open := len(entries) - 1; open >= 0 && entries[open].End == "" {
-		closing.Turn = entries[open].Turn
-	}
-	return r.append(closing)
+	return r.locked(func() error {
+		entries, err := r.entries()
+		if err != nil {
+			return err
+		}
+		tree, err := r.track(ctx)
+		if err != nil {
+			return err
+		}
+		closing := entry{End: tree}
+		if open := len(entries) - 1; open >= 0 && entries[open].End == "" {
+			closing.Turn = entries[open].Turn
+		}
+		return r.append(closing)
+	})
 }
 
 func (r Repo) Undo(ctx context.Context, ask Ask) (Report, error) {
 	if _, err := exec.LookPath("git"); err != nil {
 		return Report{}, ErrNoGit
 	}
+	var report Report
+	err := r.locked(func() (err error) {
+		report, err = r.undo(ctx, ask)
+		return err
+	})
+	return report, err
+}
+
+func (r Repo) locked(work func() error) error {
+	if err := os.MkdirAll(r.Session, 0o755); err != nil {
+		return err
+	}
+	lock := r.path(ledgerLockName)
+	for deadline := time.Now().Add(konst.UndoLockWaitMillis * time.Millisecond); ; time.Sleep(konst.UndoLockRetryMillis * time.Millisecond) {
+		held, err := os.OpenFile(lock, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+		if err == nil {
+			_ = held.Close()
+			defer func() { _ = os.Remove(lock) }()
+			return work()
+		}
+		if !errors.Is(err, fs.ErrExist) && !errors.Is(err, fs.ErrPermission) {
+			return err
+		}
+		if info, err := os.Stat(lock); err == nil && time.Since(info.ModTime()) > konst.UndoLockLifetimeSeconds*time.Second {
+			_ = os.Remove(lock)
+		} else if time.Now().After(deadline) {
+			return LedgerHeld{Lock: lock}
+		}
+	}
+}
+
+func (r Repo) undo(ctx context.Context, ask Ask) (Report, error) {
 	entries, err := r.entries()
 	if err != nil {
 		return Report{}, err
 	}
 	if ask.Turns > len(entries) {
 		return Report{}, NothingRecorded{Asked: ask.Turns, Recorded: len(entries)}
+	}
+	if newest := entries[len(entries)-1].Turn; ask.Turn != "" && ask.Turn != newest {
+		return Report{}, NotNewest{Asked: ask.Turn, Newest: newest}
 	}
 	kept, undone := entries[:len(entries)-ask.Turns], entries[len(entries)-ask.Turns:]
 	last := undone[len(undone)-1]

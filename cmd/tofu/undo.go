@@ -18,7 +18,7 @@ import (
 	rewind "tofu/internal/snapshot"
 )
 
-const undoUsage = "tofu undo [N] [--dir path] [--session id] [--force] [--dry-run] [--json]"
+const undoUsage = "tofu undo [N] [--dir path] [--session id] [--turn id] [--force] [--dry-run] [--json]"
 
 func undoVerb(args []string, out, errOut io.Writer) int {
 	o := verbOutput{verb: "undo", usageLine: undoUsage, asJSON: jsonAsked(args), out: out, errOut: errOut}
@@ -53,6 +53,9 @@ func undoArgs(args []string) (rewind.Ask, string, string, error) {
 			ask.Force = true
 		case arg == "--dry-run":
 			ask.DryRun = true
+		case arg == "--turn" && i+1 < len(args):
+			i++
+			ask.Turn = args[i]
 		case arg == "--session" && i+1 < len(args):
 			i++
 			handle = args[i]

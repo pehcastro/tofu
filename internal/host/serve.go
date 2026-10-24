@@ -558,7 +558,11 @@ func (s *server) undo(p UndoParams) (any, error) {
 	if l.running() {
 		return nil, errTurnRunning
 	}
-	return verbAs[snapshot.Report](s, "undo", strconv.Itoa(max(p.Turns, 1)), "--session", p.Session)
+	args := []string{"undo", strconv.Itoa(max(p.Turns, 1)), "--session", p.Session}
+	if p.Turn != "" {
+		args = append(args, "--turn", p.Turn)
+	}
+	return verbAs[snapshot.Report](s, args...)
 }
 
 func (s *server) shellRead(p ShellParams) (any, error) {
