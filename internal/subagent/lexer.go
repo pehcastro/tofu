@@ -245,6 +245,7 @@ func (l *shellLexer) expansion() string {
 type simpleCommand struct {
 	words  []shellWord
 	writes []shellWord
+	reads  []shellWord
 	then   string
 }
 
@@ -268,6 +269,8 @@ func shellCommands(command string, known map[string]string) []simpleCommand {
 			switch awaiting {
 			case tokenWritesTo:
 				current.writes = append(current.writes, word)
+			case tokenReadsFrom:
+				current.reads = append(current.reads, word)
 			case tokenWord:
 				current.words = append(current.words, word)
 			}
@@ -530,7 +533,11 @@ func (b *Boundary) temp() map[string]string {
 		return nil
 	}
 	tmp := path.Join(normalizePath(b.Scratch), "tmp")
-	return map[string]string{"TMPDIR": tmp, "TMP": tmp, "TEMP": tmp}
+	known := map[string]string{"TMPDIR": tmp, "TMP": tmp, "TEMP": tmp}
+	if target := b.sharedTarget(); target != "" {
+		known["CARGO_TARGET_DIR"] = target
+	}
+	return known
 }
 
 func (b *Boundary) KeepsToScratch(command string) bool {

@@ -7,6 +7,10 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+
+	"github.com/pelletier/go-toml/v2"
+
+	"tofu/internal/sys"
 )
 
 type Grammar int
@@ -156,15 +160,28 @@ func (b *Boundary) Bash(command string, grammar Grammar) error {
 		command = strings.ReplaceAll(command, `\`, "/")
 	}
 	commands := shellCommands(command, b.temp())
+	mentioned, err := writesOf(commands, simpleCommand.mentions, nil)
+	if err != nil {
+		return err
+	}
+	pad := b.scratchpad()
+	for _, named := range mentioned {
+		if inTofuState(named) && !b.Scratched(named) && (pad == "" || !under(pad, named)) {
+			return ReadListError{Program: named, Why: "is tofu's own state, and of .tofu a sub-agent reads only .tofu/rules"}
+		}
+	}
 	left := false
 	for _, step := range commands {
 		if err := step.treeWide(b.Owns()); err != nil {
 			return err
 		}
-		if err := grammar.reads(step, left); err != nil {
+		if err := b.reads(grammar, step, left); err != nil {
 			return err
 		}
 		left = left || step.leaves()
+	}
+	if err := b.builds(commands); err != nil {
+		return err
 	}
 	if err := b.writes(commands, grammar.changes, grammar.devices()); err != nil {
 		return err
@@ -258,35 +275,209 @@ func (c simpleCommand) formats() []shellWord {
 	return files
 }
 
-func (c simpleCommand) buildsInto() []shellWord {
+const sharedTargetWhy = "builds into the project's one shared target, which $CARGO_TARGET_DIR names, so a target folder of your own is refused: private targets filled the drive"
+
+func (c simpleCommand) cargoBuilds() (string, []shellWord, bool) {
 	tool, args := c.unwrapped()
-	var into []shellWord
-	for _, word := range c.words {
-		if !shellAssignment.MatchString(word.text) {
-			break
-		}
-		if dir, set := strings.CutPrefix(word.text, "CARGO_TARGET_DIR="); set {
-			into = append(into, shellWord{text: dir, expands: word.expands})
-		}
-	}
 	if strings.HasPrefix(first(args), "+") {
 		args = args[1:]
 	}
-	if tool != "cargo" || first(args) != "build" {
-		return into
+	if tool != "cargo" || first(args) != "build" && first(args) != "run" {
+		return "", nil, false
+	}
+	if end := slices.IndexFunc(args, func(arg shellWord) bool { return arg.text == "--" }); end >= 0 {
+		args = args[:end]
+	}
+	return "cargo " + args[0].text, args[1:], true
+}
+
+func packages(args []shellWord) []shellWord {
+	var named []shellWord
+	for i, arg := range args {
+		value, joined := strings.CutPrefix(arg.text, "--package=")
+		switch {
+		case joined:
+			named = append(named, shellWord{text: value, expands: arg.expands})
+		case (arg.text == "-p" || arg.text == "--package") && i+1 < len(args):
+			named = append(named, args[i+1])
+		case strings.HasPrefix(arg.text, "-p") && len(arg.text) > 2:
+			named = append(named, shellWord{text: arg.text[2:], expands: arg.expands})
+		}
+	}
+	return named
+}
+
+func (c simpleCommand) manifests() []shellWord {
+	_, args, builds := c.cargoBuilds()
+	if !builds || len(packages(args)) > 0 {
+		return nil
 	}
 	for i, arg := range args {
-		if dir, set := strings.CutPrefix(arg.text, "--target-dir="); set {
-			return append(into, shellWord{text: dir, expands: arg.expands})
+		if value, joined := strings.CutPrefix(arg.text, "--manifest-path="); joined {
+			return []shellWord{{text: value, expands: arg.expands}}
 		}
-		if arg.text == "--target-dir" && i+1 < len(args) {
-			return append(into, args[i+1])
+		if arg.text == "--manifest-path" && i+1 < len(args) {
+			return args[i+1 : i+2]
 		}
 	}
-	if len(into) == 0 {
-		into = append(into, shellWord{text: "target"})
+	return []shellWord{{text: "Cargo.toml"}}
+}
+
+func packageName(manifest string) (string, bool) {
+	body, err := os.ReadFile(manifest)
+	var parsed struct {
+		Package struct {
+			Name string `toml:"name"`
+		} `toml:"package"`
 	}
-	return into
+	if err != nil || toml.Unmarshal(body, &parsed) != nil {
+		return "", false
+	}
+	return parsed.Package.Name, parsed.Package.Name != ""
+}
+
+func crateOf(manifest string) (string, error) {
+	for dir := path.Dir(path.Clean(manifest)); ; dir = path.Dir(dir) {
+		nearest := path.Join(dir, "Cargo.toml")
+		if _, err := os.Stat(nearest); err == nil {
+			if _, crate := packageName(nearest); !crate {
+				return "", ReadListError{Program: nearest, Why: "is a workspace with no crate of its own, so cargo builds every crate in it: name one with -p"}
+			}
+			return dir, nil
+		}
+		if dir == path.Dir(dir) {
+			return "", ReadListError{Program: manifest, Why: "names no crate: no Cargo.toml is in or above it"}
+		}
+	}
+}
+
+func crates(match func(dir, name string) bool) []string {
+	var found []string
+	for queue := []string{"."}; len(queue) > 0; queue = queue[1:] {
+		entries, err := os.ReadDir(queue[0])
+		if err != nil || slices.ContainsFunc(entries, func(entry os.DirEntry) bool { return entry.Name() == "CACHEDIR.TAG" }) {
+			continue
+		}
+		if name, crate := packageName(path.Join(queue[0], "Cargo.toml")); crate && match(queue[0], name) {
+			found = append(found, queue[0])
+		}
+		for _, entry := range entries {
+			if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") && entry.Name() != "node_modules" {
+				queue = append(queue, path.Join(queue[0], entry.Name()))
+			}
+		}
+	}
+	return found
+}
+
+func (b *Boundary) holdsEvery(what string, homes []string) error {
+	if len(homes) == 0 {
+		return ReadListError{Program: what, Why: "names no crate in this project, so what it builds or runs is held by nobody"}
+	}
+	for _, home := range homes {
+		if !slices.ContainsFunc(b.Owns(), func(glob string) bool { return Overlap(glob, home) }) {
+			return ReadListError{Program: what, Why: "builds or runs the crate in " + home + ", which this agent holds nothing in: name it in your report to ask for a path in it"}
+		}
+	}
+	return nil
+}
+
+func (b *Boundary) builds(commands []simpleCommand) error {
+	for _, command := range commands {
+		cargo, args, builds := command.cargoBuilds()
+		switch {
+		case !builds:
+			continue
+		case b.sharedTarget() == "":
+			return ReadListError{Program: cargo, Why: "runs only with a scratch folder, whose cache holds the project's shared target"}
+		case given(args, "--workspace", "--all"):
+			return ReadListError{Program: cargo, Why: "with --workspace builds every crate in the workspace: name the crate you hold with -p"}
+		}
+		for _, name := range packages(args) {
+			if name.expands {
+				return UnparseablePathError{Path: name.text}
+			}
+			if err := b.holdsEvery(cargo+" -p "+name.text, crates(func(_, crate string) bool { return crate == name.text })); err != nil {
+				return err
+			}
+		}
+	}
+	manifests, err := writesOf(commands, simpleCommand.manifests, nil)
+	if err != nil {
+		return err
+	}
+	for _, manifest := range manifests {
+		home, err := crateOf(manifest)
+		if err != nil {
+			return err
+		}
+		if err := b.holdsEvery("cargo", []string{home}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (b *Boundary) built(program shellWord) (bool, error) {
+	target := b.sharedTarget()
+	if target == "" || program.expands || !under(target, program.text) {
+		return false, nil
+	}
+	segments := strings.Split(strings.TrimPrefix(path.Clean(normalizePath(program.text)), target+"/"), "/")
+	name := strings.TrimSuffix(segments[len(segments)-1], ".exe")
+	source := func(dir, folder string) bool {
+		return slices.ContainsFunc([]string{name + ".rs", name + "/main.rs"}, func(file string) bool {
+			_, err := os.Stat(path.Join(dir, folder, file))
+			return err == nil
+		})
+	}
+	var homes []string
+	switch {
+	case len(segments) == 2:
+		homes = crates(func(dir, crate string) bool { return strings.EqualFold(crate, name) || source(dir, "src/bin") })
+	case len(segments) == 3 && segments[1] == "examples":
+		homes = crates(func(dir, _ string) bool { return source(dir, "examples") })
+	}
+	return true, b.holdsEvery(program.text, homes)
+}
+
+func (b *Boundary) scratchpad() string {
+	agents := path.Dir(normalizePath(b.Scratch))
+	if b.Scratch == "" || path.Base(agents) != sys.ScratchAgents {
+		return ""
+	}
+	return path.Dir(path.Dir(path.Dir(agents)))
+}
+
+func (b *Boundary) sharedTarget() string {
+	if pad := b.scratchpad(); pad != "" {
+		return path.Join(pad, sys.ScratchCache, "cargo")
+	}
+	return ""
+}
+
+func (c simpleCommand) mentions() []shellWord {
+	_, args := c.named()
+	var named []shellWord
+	for _, word := range append(slices.Clone(args), c.reads...) {
+		if _, value, flagged := strings.Cut(word.text, "="); flagged && strings.HasPrefix(word.text, "-") {
+			word.text = value
+		}
+		if !word.expands {
+			named = append(named, word)
+		}
+	}
+	return named
+}
+
+func inTofuState(named string) bool {
+	segments := strings.FieldsFunc(path.Clean(normalizePath(named)), func(r rune) bool { return r == '/' || r == ':' })
+	for i, segment := range segments {
+		if segment == sys.StateDirName && (i+1 == len(segments) || segments[i+1] != "rules") {
+			return true
+		}
+	}
+	return false
 }
 
 func (g Grammar) devices() []string {
@@ -301,7 +492,7 @@ func (g Grammar) devices() []string {
 
 func (g Grammar) changes(c simpleCommand) []shellWord {
 	tool, args := c.named()
-	changed := append(append(c.targets(), c.relinks()...), c.buildsInto()...)
+	changed := append(c.targets(), c.relinks()...)
 	if tool == "touch" || tool == "mkdir" || g == PowerShell && tool == "cp" {
 		changed = append(changed, operands(args)...)
 	}
@@ -324,7 +515,7 @@ func leavesTheProject(arg string) bool {
 	}
 	named := path.Clean(strings.ReplaceAll(value, `\`, "/"))
 	return path.IsAbs(named) || filepath.VolumeName(value) != "" || strings.HasPrefix(named, "~") ||
-		named == ".." || strings.HasPrefix(named, "../") || named == ".tofu" || strings.HasPrefix(named, ".tofu/")
+		named == ".." || strings.HasPrefix(named, "../") || inTofuState(named)
 }
 
 func bare(program shellWord) error {
@@ -334,12 +525,15 @@ func bare(program shellWord) error {
 	return nil
 }
 
-func (g Grammar) reads(c simpleCommand, left bool) error {
+func (b *Boundary) reads(g Grammar, c simpleCommand, left bool) error {
 	words := c.words
 	for len(words) > 0 && shellAssignment.MatchString(words[0].text) {
 		name, _, _ := strings.Cut(words[0].text, "=")
+		if name == "CARGO_TARGET_DIR" {
+			return ReadListError{Program: name, Why: sharedTargetWhy}
+		}
 		if !slices.Contains([]string{"CI", "NO_COLOR", "FORCE_COLOR", "TERM", "TZ", "LANG", "LC_ALL", "GOMAXPROCS", "GOOS", "GOARCH",
-			"CGO_ENABLED", "CARGO_TARGET_DIR", "RUST_BACKTRACE", "RUST_LOG", "NODE_ENV", "PYTHONDONTWRITEBYTECODE", "PYTHONUNBUFFERED"}, name) {
+			"CGO_ENABLED", "RUST_BACKTRACE", "RUST_LOG", "NODE_ENV", "PYTHONDONTWRITEBYTECODE", "PYTHONUNBUFFERED"}, name) {
 			return ReadListError{Program: name, Why: "is set before the command, and a variable can change what a program runs"}
 		}
 		words = words[1:]
@@ -349,6 +543,9 @@ func (g Grammar) reads(c simpleCommand, left bool) error {
 	}
 	if slices.ContainsFunc(c.words, func(word shellWord) bool { return word.runs }) {
 		return ReadListError{Program: words[0].text, Why: "has $(...), backticks or a ${...} beyond a plain name in an argument, which runs a command this check never sees"}
+	}
+	if built, err := b.built(words[0]); built {
+		return err
 	}
 	if err := bare(words[0]); err != nil {
 		return err
@@ -360,6 +557,9 @@ func (g Grammar) reads(c simpleCommand, left bool) error {
 	}
 	if left {
 		return ReadListError{Program: tool, Why: "runs after a cd out of the project, where it could run code this check never read"}
+	}
+	if _, cargoArgs, builds := c.cargoBuilds(); builds {
+		words = append([]shellWord{words[0]}, cargoArgs...)
 	}
 	for _, arg := range words[1:] {
 		if leavesTheProject(arg.text) {
@@ -464,8 +664,13 @@ func (g Grammar) readOnly(tool string, args []shellWord) (bool, error) {
 		if strings.HasPrefix(first(args), "+") {
 			args = args[1:]
 		}
-		if !slices.Contains([]string{"test", "check", "clippy", "build", "tree", "metadata"}, first(args)) && (first(args) != "fmt" || !given(args, "--check")) {
-			return true, ReadListError{Program: tool, Why: "runs here only as cargo test, check, clippy, build into a target folder you hold, tree, metadata or fmt --check"}
+		if !slices.Contains([]string{"test", "check", "clippy", "build", "run", "tree", "metadata"}, first(args)) && (first(args) != "fmt" || !given(args, "--check")) {
+			return true, ReadListError{Program: tool, Why: "runs here only as cargo test, check, clippy, build or run of a crate you hold a path in, tree, metadata or fmt --check"}
+		}
+		if slices.ContainsFunc(args, func(arg shellWord) bool {
+			return arg.text == "--target-dir" || strings.HasPrefix(arg.text, "--target-dir=")
+		}) {
+			return true, ReadListError{Program: tool, Why: sharedTargetWhy}
 		}
 		return true, g.refuses(tool, args, runnerWrites()...)
 	case "npm", "pnpm", "yarn", "bun":
@@ -517,7 +722,7 @@ func (g Grammar) wrapped(wrapper string, args []shellWord) (bool, error) {
 }
 
 func tofuReads(args []shellWord) error {
-	if first(args) == "models" && len(operands(args)) == 1 {
+	if first(args) == "models" && len(operands(args)) == 1 || len(args) == 2 && first(args) == "serve" && args[1].text == "--schema" {
 		return nil
 	}
 	for _, verb := range [][]string{{"version"}, {"session", "find"}, {"session", "trace"}, {"session", "info"}, {"boardy", "show"}, {"boardy", "list"}, {"boardy", "triage", "list"}} {
@@ -525,7 +730,7 @@ func tofuReads(args []shellWord) error {
 			return nil
 		}
 	}
-	return ReadListError{Program: "tofu", Why: "runs here only as session find, trace or info, boardy show, list or triage list, models, or version"}
+	return ReadListError{Program: "tofu", Why: "runs here only as serve --schema, session find, trace or info, boardy show, list or triage list, models, or version"}
 }
 
 func (g Grammar) refuses(tool string, args []shellWord, flags ...string) error {
