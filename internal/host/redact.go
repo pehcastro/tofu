@@ -5,6 +5,7 @@ import (
 	"maps"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -76,10 +77,14 @@ func (e *emitter) send(event Event) {
 
 func endsTheLeadReply(event Event) bool {
 	switch event.Kind {
-	case EventTextDelta, EventThinking, EventRequesting:
+	case EventRequesting, EventStats, EventText, EventToolCall, EventStreamReset, EventFailure, EventDone, EventTurnStarted, EventTurnEnded:
+		return event.Agent == ""
+	case EventTextDelta, EventThinking, EventToolResult, EventNote, EventDecision, EventGateOff, EventContext, EventForkStart, EventForkEnd,
+		EventSubAgent, EventAwaitPerson, EventResumed, EventSteered, EventPlan, EventSession, EventTask, EventPersisted, EventMemoryScoped,
+		EventAccount, EventSteerQueued, EventMembers, EventRequestSent:
 		return false
 	}
-	return event.Agent == "" && !event.snapshot()
+	panic("host: unknown event kind " + strconv.Itoa(int(event.Kind)))
 }
 
 func (s *stream) take(mask func(string) string, secrets []string, delta string) string {
@@ -127,9 +132,8 @@ func (h *Host) heard(event Event) {
 		}
 	case EventText:
 		h.answer, h.streaming = event.Text, false
-	case EventThinking, EventRequesting, EventStats:
 	default:
-		h.streaming = false
+		h.streaming = h.streaming && !endsTheLeadReply(event)
 	}
 }
 
