@@ -5,7 +5,7 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-    ● 2 calls   bash                                                                          3s    
+    ⠋ running bash · (2) steps                                                                      
     · stopping the model, and letting the running tools finish                                      
                                                                                                     
                                                                                                     
@@ -22,7 +22,7 @@
                                                                                                     
                                                                                                     
                                                                                                     
-  ⠋ stopping  |  4s  bash go test ./... · shell (1)  [tool#c2]  [request#91ccaf]                    
+  ⠋ stopping  |  4s                                                                                 
                                                                                                     
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         

@@ -1,26 +1,26 @@
  tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
-                                                                                                   |
-    v [&c2]  x [&c3]  o [&c1]                                                                      |
-      1 call                                                                                  0s   |
-                                                                                                   |
-    [&orchestrator]                                                      14:32  [message#9d4f11]   |
-    three sub-agents run: [&c1] reads the loader, [&c2] waits on review, [&c3] failed its suite.   |
-    [tool#9d4f10] is the loop I read.                                                              |
-                                                                                                   |
-      [&c2] finished and waits for its done review                                      [expand]   |
-      [&c3] failed                                                                      [expand]   |
-                                                                                                   |
-                                                                                                   |
-                                                                                                   |
-    You                                                                                    14:32   |
-    edits                                                                                          |
-                                                                                                   |
-                                                                                                   |
-      2 calls                                                                                 0s   |
-                                                                                                   |
-    [&orchestrator]                                                      14:32  [message#e5a103]   |
-    the resolver checks the lock now, and [edit#e5a102] holds the 1200 floor rows.                 |
+    You                                                                                    14:32    
+    agents                                                                                          
+                                                                                                    
+    finished . (1) steps . 3 agents . 0s                                                            
+                                                                                                    
+    [&orchestrator]                                                      14:32  [message#9d4f11]    
+    three sub-agents run: [&c1] reads the loader, [&c2] waits on review, [&c3] failed its suite.    
+    [tool#9d4f10] is the loop I read.                                                               
+                                                                                                    
+                                                                                                    
+                                                                                                    
+    You                                                                                    14:32    
+    edits                                                                                           
+                                                                                                    
+                                                                                                    
+    finished . (2) steps . 0s                                                                       
+                                                                                                    
+    [&orchestrator]                                                      14:32  [message#e5a103]    
+    the resolver checks the lock now, and [edit#e5a102] holds the 1200 floor rows.                  
+                                                                                                    
+                                                                                                    
                                                                                                     
   cooked for 0s  |  waited 0s  [request#e5a102]                                                     
                                                                                                     
@@ -150,27 +150,27 @@
  ctx 118k/250k  |  claude-sub 5h 62%                                                                
  tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
 
-                                                                                                   |
-    v [&c2]  x [&c3]  o [&c1]                                                                      |
-      1 call                                                                                  0s   |
-                  Commands                                                     esc                 |
-    [&orchestrat  Jump to a view or run an action                                   sage#9d4f11]   |
-    three sub-ag                                                                    d its suite.   |
-    [tool#9d4f10  > Type to filter                                                                 |
-                                                                                                   |
-      [&c2] fini  >  chat                                                    /chat      [expand]   |
-      [&c3] fail    the conversation and the composer                                   [expand]   |
-                                                                                                   |
-                    sub-agents                                         /sub-agents                 |
-                    every tool call and every sub-agent, in one feed                               |
-    You                                                                                    14:32   |
-    edits           file-edits                                         /file-edits                 |
-                    every changed line, who made it and where                                      |
-                                                                                                   |
-      2 calls       shells                                                 /shells            0s   |
-                    the persistent processes an agent left running                                 |
-    [&orchestrat                                                                    sage#e5a103]   |
-    the resolver    models                                                 /models                 |
+    You                                                                                    14:32
+    agents
+                                                                                    
+    finished . (  Commands                                                     esc  
+                  Jump to a view or run an action                                   
+    [&orchestrat                                                                    sage#9d4f11]
+    three sub-ag  > Type to filter                                                  d its suite.
+    [tool#9d4f10                                                                    
+                  >  chat                                                    /chat  
+                    the conversation and the composer                               
+                                                                                                  
+    You             sub-agents                                         /sub-agents         14:32  
+    edits           every tool call and every sub-agent, in one feed                              
+                                                                                                  
+                    file-edits                                         /file-edits  
+    finished . (    every changed line, who made it and where                       
+                                                                                    
+    [&orchestrat    shells                                                 /shells  sage#e5a103]
+    the resolver    the persistent processes an agent left running                  
+                                                                                    
+                    models                                                 /models  
                     every model the signed subscriptions serve, and which one the.  
   cooked for 0s                                                                     
 
@@ -188,7 +188,7 @@
     Interaction   09      Density                                                comfortable  v     
     Context       15      Spacing across lists and panels                                           
     Files         03                                                                                
-    Shell         05      Animations                                                  subtle  v     
+    Shell         04      Animations                                                  subtle  v     
     Turn          17      Motion for conversational states                                          
     Projects      05                                                                                
     Browser       08      Status bar                                                 compact  v     
@@ -218,7 +218,7 @@
     Interaction   09                                                             comfortable  v     
     Context       15     >  tofu                                                                    
     Files         03                                                                                
-    Shell         05       tofu light                                                 subtle  v     
+    Shell         04       tofu light                                                 subtle  v     
     Turn          17                                                                                
     Projects      05       tofu dusk                                                                
     Browser       08                                                                 compact  v     

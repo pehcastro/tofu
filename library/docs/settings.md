@@ -16,7 +16,7 @@ The settings come in groups:
 - Interaction: composer, gatePrompt, gateAskWaitSeconds, gateAskTimeout, askPersonWaitSeconds, readBeforeEdit, autoUpdate
 - Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images, projectInstructionsCap, contextCeiling, instructionSources, skills, memory, autoMemory, episodes, memoryFromAllUsers, memoryModel, learn
 - Files: diffContext, hyperlinks, groupByAgent
-- Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell
+- Shell: persistentRegistry, logTail, killConfirm, shell
 - Turn: decisionCap, turnMaySpawn, oneWorkingSessionPerProject, planEveryStep, sideChatAccess, subAgentsPerTurn, subAgentDepth, leadCache, subAgentCache, subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb
 - Projects: projectManagement (boardy, the ticket board), boardFlow (the words boardy uses), scratchCleanupDays and scratchMaxGB (the scratchpad)
 - Browser: browser, browserDriver, browserSteps, browserModel, browserEffort, browserCursor, browserProfile, browserHeadless

@@ -260,8 +260,6 @@ type App struct {
 	busy           bool
 	leading        bool
 	afterTurn      []func() string
-	reports        map[string]string
-	heldReports    []subagent.Row
 	forking        bool
 	gateOff        bool
 	running        int
@@ -377,7 +375,6 @@ func New(options Options) *App {
 		width:         defaultWidth,
 		height:        defaultHeight,
 		started:       options.Now(),
-		reports:       map[string]string{},
 		moves:         map[string]movement{},
 		openedFolded:  map[string]bool{},
 		steered:       map[string]string{},
@@ -807,7 +804,6 @@ func (a *App) closed() tea.Cmd {
 	a.running, a.pressedAt, a.sentNow = 0, time.Time{}, false
 	clear(a.steered)
 	a.parkSubAgentsTheTurnLeftBehind()
-	a.drawHeldReports()
 	a.stopWhatStillRuns()
 	a.view.Stop()
 	a.dropSteering()

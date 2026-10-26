@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/look"
+	"tofu/interface/tui/progress"
 	"tofu/internal/host"
 	"tofu/internal/toolcard"
 	"tofu/internal/widget"
@@ -16,124 +17,153 @@ import (
 const (
 	callIndent   = "  "
 	openIndent   = "   "
-	highlightGap = "   "
-	runningDot   = "●"
-	breathFrames = 4
+	actGap       = " · "
+	boardIcon    = "▣ "
+	gitIcon      = "◆ "
+	runningWord  = "running"
+	finishedWord = "finished"
+	createdWord  = "created"
+	pushedWord   = "pushed"
 	collapseWord = "collapse"
-	failedWord   = "failed"
+
+	openedVerb    = "opened"
+	movedVerb     = "moved"
+	committedVerb = "committed"
+	subjectEnd    = "  "
+	moveStep      = " > "
 )
 
 type group struct {
 	calls   []Entry
-	summary *host.GroupSummary
+	agents  int
 	running int
-	total   int
+	live    bool
 	headed  bool
 	open    bool
 }
 
 func (e Entry) standsAlone() bool {
-	return e.Failed || e.verdictShown() != "" || e.Card != nil && e.Card.Family == host.CardFamily(toolcard.Asked)
+	return e.asked || e.Card != nil && e.Card.Family == host.CardFamily(toolcard.Asked)
+}
+
+func (e Entry) act() (string, string, bool) {
+	card := e.Card
+	if card == nil || e.Failed || card.Tone == host.CardTone(toolcard.Fail) || card.Object == "" {
+		return "", "", false
+	}
+	switch {
+	case card.Family == host.CardFamily(toolcard.Board) && card.Verb == openedVerb:
+		return boardIcon, joined(card.Object, createdWord, card.Meta), true
+	case card.Family == host.CardFamily(toolcard.Board) && card.Verb == movedVerb && card.From != "" && card.To != "":
+		return boardIcon, joined(card.Object, movedVerb+" "+card.From+moveStep+card.To), true
+	case card.Family == host.CardFamily(toolcard.Board) && card.Verb == movedVerb:
+		return boardIcon, joined(card.Object, strings.TrimSpace(movedVerb+" "+card.Meta)), true
+	case card.Family == host.CardFamily(toolcard.Git) && card.Verb == committedVerb:
+		subject, _, _ := strings.Cut(card.Meta, subjectEnd)
+		return gitIcon, joined(card.Object, subject), true
+	case card.Family == host.CardFamily(toolcard.Git) && card.Verb == pushedWord:
+		return gitIcon, joined(pushedWord, card.Object), true
+	}
+	return "", "", false
+}
+
+func joined(words ...string) string {
+	var kept []string
+	for _, word := range words {
+		if word = strings.TrimSpace(word); word != "" {
+			kept = append(kept, word)
+		}
+	}
+	return strings.Join(kept, actGap)
 }
 
 func (m *Model) groupOf(start int) group {
 	_, end := m.blockAt(start)
-	g := group{calls: m.entries[start:end], running: -1, open: m.opened[m.entries[start].ID]}
-	var settled time.Time
+	g := group{calls: m.entries[start:end], running: -1, open: m.opened[m.entries[start].ID], live: m.Busy}
 	for at, call := range g.calls {
 		if call.running() {
 			g.running = at
 		}
-		if call.Summary != nil && !call.Ended.Before(settled) {
-			g.summary, settled = call.Summary, call.Ended
-		}
 		g.headed = g.headed || !call.standsAlone()
 	}
-	g.total = len(g.calls)
-	if g.summary != nil {
-		g.total = max(g.total, g.summary.Calls)
+	for _, later := range m.entries[end:] {
+		g.live = g.live && !later.message()
+	}
+	for before := start - 1; before >= 0 && !m.entries[before].message(); before-- {
+		g.agents += len(m.entries[before].SubAgents)
 	}
 	return g
 }
 
 func (m *Model) groupKey(key drawKey, start int) (drawKey, bool) {
 	g := m.groupOf(start)
-	key.calls, key.open, key.summary = len(g.calls), g.open, g.summary
+	key.calls, key.open, key.spawn = len(g.calls), g.open, strconv.Itoa(g.agents)
 	for _, call := range g.calls {
 		if call.standsAlone() {
 			key.verdict += call.ID + call.verdictShown() + " "
 		}
+		if _, words, acted := call.act(); acted {
+			key.verdict += words + " "
+		}
 	}
-	return key, g.running >= 0
+	return key, g.live
 }
 
 func (m *Model) groupLines(start int) []string {
 	g := m.groupOf(start)
+	room := m.textWidth()
 	var lines []string
 	if g.headed {
-		lines = append(lines, continuation+m.groupHead(g))
-		if g.open && g.summary != nil {
-			lines = append(lines, m.openLines(g.summary)...)
+		right := ""
+		if g.open {
+			right = look.Faint(collapseWord)
 		}
+		lines = append(lines, continuation+look.Sides(m.workRow(g), right, room))
 	}
-	room, failed := m.textWidth()-widget.Cells(callIndent), 0
 	for _, call := range g.calls {
+		icon, words, acted := call.act()
 		switch {
-		case !call.standsAlone():
-		case call.verdictShown() != "":
+		case call.standsAlone():
 			lines = append(lines, continuation+m.toolLine(call))
-		case call.Failed:
-			failed++
-			lines = append(lines, continuation+callIndent+ansi.Truncate(failedCall(call)+highlightGap+look.Faint(strconv.Itoa(failed)+" of "+strconv.Itoa(g.total)), room, "…"))
-		default:
-			lines = append(lines, continuation+callIndent+look.Sides(look.Style(look.Text).Render(cardWords(call, ""))+" "+look.Muted(call.Card.Meta), "", room))
+		case acted:
+			lines = append(lines, continuation+look.Style(look.ReferenceID).Render(icon)+look.Style(look.Text).Render(ansi.Truncate(words, max(room-widget.Cells(icon), 1), "…")))
+		case g.open:
+			lines = append(lines, continuation+openIndent+look.Muted(ansi.Truncate(cardWords(call), max(room-widget.Cells(openIndent), 1), "…")))
 		}
 	}
 	return lines
 }
 
-func (m *Model) groupHead(g group) string {
-	room := m.textWidth() - widget.Cells(callIndent)
-	lead, left := callIndent, look.Muted(callCount(g.total))
-	var right string
-	switch first := g.calls[0]; {
-	case g.running >= 0:
-		dot, running, doing := look.Mint, g.calls[g.running], ""
-		if m.frame/breathFrames%2 == 1 {
-			dot = look.MintMuted
-		}
-		if running.Card != nil {
-			doing = running.Card.Doing
-		}
-		lead = look.Style(dot).Render(runningDot) + " "
-		left += highlightGap + look.Style(look.Text).Render(cardWords(running, doing))
-		right = look.Faint(widget.Until(m.elapsed(first.Started)))
-	case g.open:
-		right = look.Faint(collapseWord)
-	default:
-		var ended time.Time
-		for _, call := range g.calls {
-			if call.Ended.After(ended) {
-				ended = call.Ended
-			}
-		}
-		right = look.Faint(widget.Until(ended.Sub(first.Started)))
+func (m *Model) workRow(g group) string {
+	counts := "(" + strconv.Itoa(len(g.calls)) + ") steps"
+	switch {
+	case g.agents == 1:
+		counts += actGap + "1 agent"
+	case g.agents > 1:
+		counts += actGap + strconv.Itoa(g.agents) + " agents"
 	}
-	if g.running < 0 && g.summary != nil {
-		left = fittedHead(g.summary.Head, room-widget.Cells(right)-len(highlightGap))
+	if g.live {
+		return look.Muted(progress.Spin(m.frame) + " " + m.leadDoing(g) + actGap + counts)
 	}
-	return lead + look.Sides(left, right, room)
+	var ended time.Time
+	for _, call := range g.calls {
+		if call.Ended.After(ended) {
+			ended = call.Ended
+		}
+	}
+	return look.Muted(strings.Join([]string{finishedWord, counts, widget.Until(ended.Sub(g.calls[0].Started))}, actGap))
 }
 
-func (m *Model) openLines(summary *host.GroupSummary) []string {
-	labels := widget.Column(summary.Open, func(line host.CardLine) string { return string(line.Family) }, 0)
-	room := m.textWidth() - widget.Cells(callIndent+openIndent+highlightGap) - labels
-	lines := make([]string, 0, len(summary.Open))
-	for _, line := range summary.Open {
-		label := look.Muted(widget.Pad(string(line.Family), labels))
-		lines = append(lines, continuation+callIndent+openIndent+label+highlightGap+ansi.Truncate(painted(line.Detail), max(room, 1), "…"))
+func (m *Model) leadDoing(g group) string {
+	if g.running < 0 {
+		word, _ := m.phase.drawn()
+		return word
 	}
-	return lines
+	call := g.calls[g.running]
+	if call.Card == nil || call.Card.Family == host.CardFamily(toolcard.Ran) {
+		return runningWord + " " + call.Head
+	}
+	return call.Card.Doing
 }
 
 func (m *Model) Toggle(id string) bool {
@@ -151,80 +181,9 @@ func (m *Model) Toggle(id string) bool {
 	return false
 }
 
-func failedCall(call Entry) string {
-	why := ""
-	if call.Card != nil {
-		why = strings.TrimSpace(strings.TrimPrefix(call.Card.Meta, failedWord))
-	}
-	words := look.Style(look.Text).Render(cardWords(call, "")) + highlightGap + look.Style(look.Red).Render(failedWord)
-	if why != "" {
-		words += " " + look.Muted(why)
-	}
-	return words
-}
-
-func cardWords(call Entry, verb string) string {
+func cardWords(call Entry) string {
 	if call.Card == nil {
 		return call.Head
 	}
-	if verb == "" {
-		verb = call.Card.Verb
-	}
-	return strings.TrimSpace(verb + " " + call.Card.Object)
-}
-
-func callCount(calls int) string {
-	if calls == 1 {
-		return "1 call"
-	}
-	return strconv.Itoa(calls) + " calls"
-}
-
-func fittedHead(head []host.CardPiece, room int) string {
-	fitted, cells, from := "", 0, 0
-	for at := 1; at <= len(head); at++ {
-		if at < len(head) && head[at].Text != highlightGap {
-			continue
-		}
-		chunk := head[from:at]
-		if width := phraseCells(chunk); from == 0 || cells+width <= room {
-			fitted, cells = fitted+painted(chunk), cells+width
-		}
-		from = at
-	}
-	return fitted
-}
-
-func phraseCells(pieces []host.CardPiece) int {
-	cells := 0
-	for _, piece := range pieces {
-		cells += widget.Cells(piece.Text)
-	}
-	return cells
-}
-
-func painted(pieces []host.CardPiece) string {
-	var said strings.Builder
-	for _, piece := range pieces {
-		said.WriteString(inked(piece))
-	}
-	return said.String()
-}
-
-func inked(piece host.CardPiece) string {
-	switch toolcard.Ink(piece.Ink) {
-	case toolcard.Plain:
-		return look.Style(look.Text).Render(piece.Text)
-	case toolcard.Muted:
-		return look.Muted(piece.Text)
-	case toolcard.Ref:
-		return look.Style(look.ReferenceID).Render(piece.Text)
-	case toolcard.Added:
-		return look.Style(look.Mint).Faint(true).Render(piece.Text)
-	case toolcard.Removed:
-		return look.Style(look.Red).Faint(true).Render(piece.Text)
-	case toolcard.Failed:
-		return look.Style(look.Red).Render(piece.Text)
-	}
-	panic("session: unknown card ink " + string(piece.Ink))
+	return strings.TrimSpace(call.Card.Verb + " " + call.Card.Object)
 }

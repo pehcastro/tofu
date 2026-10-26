@@ -90,28 +90,19 @@ func TestAGapBetweenTwoCallsOfOneStepNeverDrawsThinkingAndNeverChangesColour(t *
 	}
 }
 
-func TestACallShorterThanTheDwellNeverTakesTheRowAndIsStillCounted(t *testing.T) {
+func TestACallShorterThanTheDwellIsStillCountedOnTheLeadsRow(t *testing.T) {
 	at := fixedStart()
 	app := phaseApp(t, &at)
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 24})
 	app.Update(Event{Kind: EventStats, Model: "claude-opus-5"})
 	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "read", Text: "internal/turn/loop.go"})
 	at = at.Add(2 * time.Second)
-	if rows := strings.Join(plainRows(app.View()), "\n"); !strings.Contains(rows, "loop.go") {
-		t.Fatalf("the first call never took the row\n%s", rows)
-	}
-
 	app.Update(Event{Kind: EventToolResult, ID: "c1", Text: "84 lines, 2.1 KB"})
 	app.Update(Event{Kind: EventToolCall, ID: "c2", Tool: "read", Text: "CLAUDE.md"})
 	at = at.Add(20 * time.Millisecond)
-	row := turnRow(t, app)
 	app.Update(Event{Kind: EventToolResult, ID: "c2", Text: "42 lines, 1.1 KB"})
-
-	if strings.Contains(row, "CLAUDE.md") || !strings.Contains(row, "read internal/turn/loop.go") {
-		t.Errorf("a 20 ms call took the row from the call before it: %q", row)
-	}
-	if strings.Contains(row, ") tools") || !strings.Contains(ansi.Strip(app.View().Content), "2 calls") {
-		t.Errorf("the turn line does not count the short call: %q", row)
+	if chat := ansi.Strip(app.View().Content); !strings.Contains(chat, "(2) steps") {
+		t.Errorf("the lead's row does not count the 20 ms call\n%s", chat)
 	}
 }
 
@@ -220,7 +211,7 @@ func TestTheRunningRowHoldsItsPlaceWhenAStepEndsAndNoStepIsSummarised(t *testing
 	at = at.Add(2 * time.Second)
 
 	before := plainRows(app.View())
-	running := rowOf(t, before, "working")
+	running := rowOf(t, before, "working  |")
 
 	app.Update(Event{Kind: EventToolResult, ID: "c2", Text: "ok 0.4s"})
 	app.Update(Event{Kind: EventRequesting})
@@ -232,7 +223,7 @@ func TestTheRunningRowHoldsItsPlaceWhenAStepEndsAndNoStepIsSummarised(t *testing
 	if joined := strings.Join(after[:running], "\n"); strings.Contains(joined, "go test") || strings.Contains(joined, "loop.go") {
 		t.Errorf("a lead call draws a row above the status line once the step ends\n%s", joined)
 	}
-	if moved := rowOf(t, after, "working"); moved != running {
+	if moved := rowOf(t, after, "working  |"); moved != running {
 		t.Errorf("the running row moved from %d to %d when the step ended\n%s", running, moved, strings.Join(after, "\n"))
 	}
 }

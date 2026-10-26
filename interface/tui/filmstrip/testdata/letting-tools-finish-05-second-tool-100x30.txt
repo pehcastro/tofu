@@ -5,7 +5,7 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-    ● 2 calls   bash                                                                          2s    
+    ⠋ running bash · (2) steps                                                                      
                                                                                                     
                                                                                                     
                                                                                                     
@@ -22,7 +22,7 @@
                                                                                                     
                                                                                                     
                                                                                                     
-  ⠋ working  |  3s  bash go test ./... · shell (1)  [tool#c2]  [request#91ccaf]                     
+  ⠋ working  |  3s                                                                                  
                                                                                                     
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         

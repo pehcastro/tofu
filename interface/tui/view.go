@@ -172,7 +172,6 @@ func (a *App) body() string {
 	switch a.current {
 	case screenChat:
 		a.view.ChatShowsTools = a.flag(isettings.ChatShowsTools)
-		a.view.FoldHidesShell = a.flag(isettings.FoldHidesShell)
 		a.view.Welcome = nil
 		a.view.Notice, _ = a.shimmer()
 		a.view.Question = nil

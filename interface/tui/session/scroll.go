@@ -22,19 +22,15 @@ func (m *Model) folds(index int) bool {
 	return !m.ChatShowsTools && entry.Kind == Tool && !entry.Promoted
 }
 
-func (m *Model) sameGroup(index, other int) bool {
-	return m.folds(index) && m.folds(other) && m.entries[index].Group == m.entries[other].Group
-}
-
 func (m *Model) blockAt(index int) (int, int) {
 	if !m.folds(index) {
 		return index, index + 1
 	}
 	start, end := index, index+1
-	for start > 0 && m.sameGroup(start-1, index) {
+	for start > 0 && m.folds(start-1) {
 		start--
 	}
-	for end < len(m.entries) && m.sameGroup(end, index) {
+	for end < len(m.entries) && m.folds(end) {
 		end++
 	}
 	return start, end

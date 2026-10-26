@@ -13,7 +13,6 @@ import (
 	"tofu/interface/tui/progress"
 	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/trace"
-	"tofu/internal/konst"
 	roster "tofu/internal/subagent"
 	"tofu/internal/widget"
 )
@@ -22,15 +21,14 @@ const (
 	stoppingWord = "stopping"
 	spawningWord = "spawning"
 	workingWord  = "working"
-	reportHead   = "report"
-	readingWords = "reading the reports"
-	leadIdleHead = "waiting"
-	stalledWord  = "stalled"
-	stopAskTail  = ", press Ctrl+C again to confirm"
-	doneMark     = "✓ "
-	failedMark   = "✗ "
-	stoppedMark  = "○ "
-	wrapIndent   = "  "
+	reopenedWord = "reopened"
+
+	waitingAnswerWords = "waiting for answer"
+	readingWords       = "reading the reports"
+	leadIdleHead       = "waiting"
+	stalledWord        = "stalled"
+	stopAskTail        = ", press Ctrl+C again to confirm"
+	wrapIndent         = "  "
 )
 
 type phase int
@@ -221,16 +219,14 @@ func (m *Model) phaseSince() time.Duration {
 }
 
 func (m *Model) requestLine() string {
-	line, id, work, call := margin, "", "", ""
+	line, id := margin, ""
 	switch {
 	case m.Busy:
 		word, style := m.phase.drawn()
 		if m.Stopping || m.LettingToolsFinish {
 			word, style = stoppingWord, look.Style(look.Amber)
 		}
-		line += look.Accent(progress.Spin(m.frame)) + " " + style.Render(word) + look.Muted(requestSeparator+widget.Until(m.phaseSince())+metaGap)
-		id = m.turnID
-		work, call = m.turnWork()
+		return line + look.Accent(progress.Spin(m.frame)) + " " + style.Render(word) + look.Muted(requestSeparator+widget.Until(m.phaseSince()))
 	case m.leadIdle():
 		line += look.Accent(progress.Spin(m.frame)) + " " + look.Style(look.Violet).Render(m.leadIdleWords()) + look.Muted(requestSeparator+widget.Until(max(m.now().Sub(m.leadIdleSince), 0))+metaGap)
 	case m.cooked != "":
@@ -242,18 +238,10 @@ func (m *Model) requestLine() string {
 	if short := trace.Short(id); short != "" {
 		tag = look.TypedID(requestKind, short)
 	}
-	if work != "" {
-		tail := metaGap
-		if call != "" {
-			tail += call + metaGap
-		}
-		line += look.Muted(widget.Fit(work, m.width-composerPadX-widget.Cells(line+tail+tag))) + tail
-	}
 	return line + tag
 }
 
-func (m *Model) Spawn(id, tool, text string) {
-	m.latestSpawn = Entry{Kind: Tool, ID: id, Head: tool, Body: text, Started: m.now(), turn: m.turns}
+func (m *Model) Spawn(id string) {
 	m.Spawning = append(m.Spawning, id)
 }
 
@@ -265,39 +253,15 @@ func (m *Model) Spawned(name string) {
 			return
 		}
 	}
-	m.Append(Entry{Kind: Note, SubAgents: []string{name}})
-}
-
-func (m *Model) Reported(id string, row subagent.Row) {
-	m.Append(Entry{
-		Kind: Tool, ID: id, Head: reportHead, Body: m.reportWords(row), Status: row.State.String(), Detail: row.Report,
-		Failed: row.State == roster.Errored, Promoted: true,
-	})
-}
-
-func (m *Model) reportWords(row subagent.Row) string {
-	ticket := ""
-	if row.Ticket != "" {
-		ticket = " " + row.Ticket
+	at := len(m.entries)
+	for at > 0 && m.folds(at-1) {
+		at--
 	}
-	who := "the lead"
-	if !m.Busy && m.leadIdleSince.IsZero() {
-		who = "your review"
+	m.entries = slices.Insert(m.entries, at, Entry{Kind: Note, SubAgents: []string{name}, Started: m.now(), turn: m.turns})
+	if !m.following && m.top.entry >= at {
+		m.top.entry++
 	}
-	name := "[&" + row.Name + "] "
-	switch row.State {
-	case roster.Finished:
-		return name + "finished" + ticket + " and waits for " + who
-	case roster.InReview:
-		return name + "finished" + ticket + " and waits for its done review"
-	case roster.Errored:
-		return name + "failed" + ticket
-	case roster.Parked:
-		return name + "stopped before finishing" + ticket
-	case roster.Working, roster.Reopened, roster.WaitingAnswer:
-		return name + "reported on" + ticket + " and keeps working"
-	}
-	panic("session: unknown sub-agent state " + strconv.Itoa(int(row.State)))
+	m.revision++
 }
 
 type spawnBatch struct {
@@ -310,83 +274,53 @@ func (m *Model) batchOf(names []string) spawnBatch {
 		at := slices.IndexFunc(m.SubAgents, func(row subagent.Row) bool { return row.Name == name })
 		switch {
 		case at < 0:
-		case settledMark(m.SubAgents[at].State) == "":
-			batch.running = append(batch.running, m.SubAgents[at])
-		default:
+		case settled(m.SubAgents[at].State):
 			batch.settled = append(batch.settled, m.SubAgents[at])
+		default:
+			batch.running = append(batch.running, m.SubAgents[at])
 		}
 	}
 	return batch
 }
 
-func settledMark(state roster.State) string {
+func settled(state roster.State) bool {
 	switch state {
 	case roster.Working, roster.Reopened, roster.WaitingAnswer:
-		return ""
-	case roster.InReview, roster.Finished:
-		return doneMark
-	case roster.Errored:
-		return failedMark
-	case roster.Parked:
-		return stoppedMark
+		return false
+	case roster.InReview, roster.Finished, roster.Errored, roster.Parked:
+		return true
 	}
 	panic("session: unknown sub-agent state")
 }
 
 func (m *Model) batchLines(batch spawnBatch) []string {
-	var lines []string
-	if len(batch.running) > 0 {
-		word, since, names := workingWord, time.Duration(0), []string(nil)
-		for index, row := range batch.running {
-			if len(row.Calls) == 0 {
-				word = spawningWord
-			}
-			since = max(since, row.Since)
-			if index >= konst.WorkingSubAgentNamesShown {
-				continue
-			}
-			names = append(names, look.AgentRef(row.Name))
-			what := ""
-			switch {
-			case row.State == roster.Working && row.Report != "":
-				what = row.Report
-			case len(batch.running) == 1:
-				what = strings.TrimSpace(row.Ticket + " " + row.Doing)
-			}
-			if what != "" {
-				names = append(names, look.Muted(widget.Fit(oneLine(what), m.textWidth()-widget.Cells(wrapIndent))))
-			}
+	var lines, statuses []string
+	named := map[string][]string{}
+	for _, row := range batch.running {
+		status := subAgentStatus(row)
+		if named[status] == nil {
+			statuses = append(statuses, status)
+		} else {
+			last := len(named[status]) - 1
+			named[status][last] += look.Muted(",")
 		}
-		if hidden := len(batch.running) - konst.WorkingSubAgentNamesShown; hidden > 0 {
-			names = append(names, look.Muted("+"+strconv.Itoa(hidden)+" more"))
-		}
-		head := look.Style(look.Violet).Render(progress.Work(m.frame) + " " + word)
-		lines = m.wordRows(slices.Concat([]string{head}, names, []string{" " + look.Muted(widget.Until(since))}))
+		named[status] = append(named[status], look.AgentRef(row.Name))
 	}
-	var words []string
-	for _, mark := range []string{doneMark, failedMark, stoppedMark} {
-		colour, named := look.FaintColor, look.Mint
-		switch mark {
-		case doneMark:
-			named = look.MintMuted
-		case failedMark:
-			colour = look.Red
-		}
-		lead := look.Style(colour).Render(mark)
-		if words != nil {
-			lead = " " + lead
-		}
-		for _, row := range batch.settled {
-			if settledMark(row.State) == mark {
-				words = append(words, lead+look.AgentRefIn(named, row.Name))
-				lead = ""
-			}
-		}
-	}
-	if words != nil {
-		lines = append(lines, m.wordRows(words)...)
+	for _, status := range statuses {
+		head := look.Style(look.Violet).Render(progress.Work(m.frame)+" "+status) + look.Muted(" ·")
+		lines = append(lines, m.wordRows(append([]string{head}, named[status]...))...)
 	}
 	return lines
+}
+
+func subAgentStatus(row subagent.Row) string {
+	switch row.State {
+	case roster.WaitingAnswer:
+		return waitingAnswerWords
+	case roster.Reopened:
+		return reopenedWord
+	}
+	return workingWord
 }
 
 func (m *Model) wordRows(words []string) []string {

@@ -6,7 +6,7 @@
     edits                                                  │
                                                            │
                                                            │
-      2 calls                                         0s   │
+    finished · (2) steps · 0s                              ┃
                                                            ┃
     [&orchestrator]              14:32  [message#e5a103]   ┃
     the resolver checks the lock now, and [edit#e5a102]    ┃
@@ -88,7 +88,7 @@ Select an edit reference to read every changed line.
     Interaction   09                                        
     Context       15      Density        comfortable  ▾     
     Files         03      Spacing across lists and pane…    
-    Shell         05                                        
+    Shell         04                                        
     Turn          17      Animations          subtle  ▾     
     Projects      05      Motion for conversational sta…    
     Browser       08                                        
@@ -100,17 +100,17 @@ Select an edit reference to read every changed line.
   esc chat                                                  
  tofu  ./tofu/         chat   agents   edits   shells (1)         0s [settings] 
                                                                                 
+    [&orchestrator]                                  14:32  [message#9d4f11]   │
+    three sub-agents run: [&c1] reads the loader, [&c2] waits on review,       │
+    [&c3] failed its suite. [tool#9d4f10] is the loop I read.                  │
                                                                                │
-      [&c2] finished and waits for its done review                  [expand]   │
-      [&c3] failed                                                  [expand]   │
-                                                                               │
-                                                                               │
-                                                                               │
+                                                                               ┃
+                                                                               ┃
     You                                                                14:32   ┃
     edits                                                                      ┃
                                                                                ┃
                                                                                ┃
-      2 calls                                                             0s   ┃
+    finished · (2) steps · 0s                                                  ┃
                                                                                ┃
     [&orchestrator]                                  14:32  [message#e5a103]   ┃
     the resolver checks the lock now, and [edit#e5a102] holds the 1200 floor   ┃
@@ -204,7 +204,7 @@ Select an edit reference to read every changed line.
     Interaction   09      Density                            comfortable  ▾     
     Context       15      Spacing across lists and panels                       
     Files         03                                                            
-    Shell         05      Animations                              subtle  ▾     
+    Shell         04      Animations                              subtle  ▾     
     Turn          17      Motion for conversational states                      
     Projects      05                                                            
     Browser       08      Status bar                             compact  ▾     
@@ -223,15 +223,11 @@ Select an edit reference to read every changed line.
     You                                                                                        14:32    
     agents                                                                                              
                                                                                                         
-    ✓ [&c2]  ✗ [&c3]  ○ [&c1]                                                                           
-      1 call                                                                                      0s    
+    finished · (1) steps · 3 agents · 0s                                                                
                                                                                                         
     [&orchestrator]                                                          14:32  [message#9d4f11]    
     three sub-agents run: [&c1] reads the loader, [&c2] waits on review, [&c3] failed its suite.        
     [tool#9d4f10] is the loop I read.                                                                   
-                                                                                                        
-      [&c2] finished and waits for its done review                                          [expand]    
-      [&c3] failed                                                                          [expand]    
                                                                                                         
                                                                                                         
                                                                                                         
@@ -239,10 +235,14 @@ Select an edit reference to read every changed line.
     edits                                                                                               
                                                                                                         
                                                                                                         
-      2 calls                                                                                     0s    
+    finished · (2) steps · 0s                                                                           
                                                                                                         
     [&orchestrator]                                                          14:32  [message#e5a103]    
     the resolver checks the lock now, and [edit#e5a102] holds the 1200 floor rows.                      
+                                                                                                        
+                                                                                                        
+                                                                                                        
+                                                                                                        
                                                                                                         
   cooked for 0s  |  waited 0s  [request#e5a102]                                                         
                                                                                                         
@@ -356,7 +356,7 @@ Select an edit reference to read every changed line.
     Interaction   09      Density                                                    comfortable  ▾     
     Context       15      Spacing across lists and panels                                               
     Files         03                                                                                    
-    Shell         05      Animations                                                      subtle  ▾     
+    Shell         04      Animations                                                      subtle  ▾     
     Turn          17      Motion for conversational states                                              
     Projects      05                                                                                    
     Browser       08      Status bar                                                     compact  ▾     
@@ -383,14 +383,10 @@ Select an edit reference to read every changed line.
     You                                                                                                                            14:32    
     agents                                                                                                                                  
                                                                                                                                             
-    ✓ [&c2]  ✗ [&c3]  ○ [&c1]                                                                                                               
-      1 call                                                                                                                          0s    
+    finished · (1) steps · 3 agents · 0s                                                                                                    
                                                                                                                                             
     [&orchestrator]                                                                                              14:32  [message#9d4f11]    
     three sub-agents run: [&c1] reads the loader, [&c2] waits on review, [&c3] failed its suite. [tool#9d4f10] is the loop I read.          
-                                                                                                                                            
-      [&c2] finished and waits for its done review                                                                              [expand]    
-      [&c3] failed                                                                                                              [expand]    
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             
@@ -398,10 +394,14 @@ Select an edit reference to read every changed line.
     edits                                                                                                                                   
                                                                                                                                             
                                                                                                                                             
-      2 calls                                                                                                                         0s    
+    finished · (2) steps · 0s                                                                                                               
                                                                                                                                             
     [&orchestrator]                                                                                              14:32  [message#e5a103]    
     the resolver checks the lock now, and [edit#e5a102] holds the 1200 floor rows.                                                          
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             
@@ -548,7 +548,7 @@ Select an edit reference to read every changed line.
     Interaction         09      Density                                                   comfortable  ▾     CURRENT VALUE                  
     Context             15      Spacing across lists and panels                                               tofu                          
     Files               03                                                                                                                  
-    Shell               05      Animations                                                     subtle  ▾     HOW IT WORKS                   
+    Shell               04      Animations                                                     subtle  ▾     HOW IT WORKS                   
     Turn                17      Motion for conversational states                                             Enter opens a focused          
     Projects            05                                                                                   choice. Changes preview        
     Browser             08      Status bar                                                    compact  ▾     immediately; Esc keeps the     

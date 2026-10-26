@@ -51,25 +51,25 @@ func composerTopRow(t *testing.T, content string) int {
 
 func fixedStart() time.Time { return time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC) }
 
-func TestTheRunningRowSitsBetweenTheTranscriptAndTheComposer(t *testing.T) {
+func TestTheStatusLineSitsBetweenTheTranscriptAndTheComposerUnderTheLeadsRow(t *testing.T) {
 	at := fixedStart()
 	app := liveApp(t, &at)
 	view := app.View()
 	rows := plainRows(view)
 	top := composerTopRow(t, view.Content)
 	running := spinningRows(rows)
-	if len(running) != 1 {
-		t.Fatalf("the frame carries %d spinning rows, want the status line alone\n%s", len(running), strings.Join(rows, "\n"))
+	if len(running) != 2 || !strings.Contains(rows[running[0]], "running bash · (3) steps") {
+		t.Fatalf("the frame carries spinning rows %v, want the lead's row in the chat and the status line\n%s", running, strings.Join(rows, "\n"))
 	}
-	if running[0] != top-1-breathingRows {
+	if running[1] != top-1-breathingRows {
 		t.Errorf("the request row is row %d and the composer begins at row %d, want one breathing row between them\n%s",
-			running[0], top, strings.Join(rows, "\n"))
+			running[1], top, strings.Join(rows, "\n"))
 	}
-	if call := slices.IndexFunc(rows[:running[0]], func(row string) bool { return strings.Contains(row, "CLAUDE.md") }); call >= 0 {
+	if call := slices.IndexFunc(rows[:running[1]], func(row string) bool { return strings.Contains(row, "CLAUDE.md") }); call >= 0 {
 		t.Errorf("row %d draws a lead call above the status line\n%s", call, strings.Join(rows, "\n"))
 	}
-	if !strings.Contains(rows[running[0]], "[tool#") {
-		t.Errorf("the status line carries no id for the call it names\n%s", rows[running[0]])
+	if strings.Contains(rows[running[1]], "[tool#") {
+		t.Errorf("the status line names a call, want working and its elapsed time alone\n%s", rows[running[1]])
 	}
 	golden.Assert(t, "session-activity-80x24.golden", view.Content)
 }
@@ -115,7 +115,7 @@ func TestScrollingTheTranscriptDoesNotMoveTheRunningRow(t *testing.T) {
 		t.Fatalf("pgup did not scroll the transcript back\n%s", strings.Join(rows, "\n"))
 	}
 	after := spinningRows(rows)
-	if len(before) != 1 || len(after) != 1 || before[0] != after[0] {
+	if len(before) == 0 || len(after) == 0 || before[len(before)-1] != after[len(after)-1] {
 		t.Errorf("the running row moved from %v to %v when the transcript scrolled\n%s",
 			before, after, strings.Join(rows, "\n"))
 	}
@@ -151,7 +151,7 @@ func runningSubAgents() []subagent.Row {
 	}
 }
 
-func TestSubAgentWorkSpinsOnOneBatchLineAndOneStatusLineSitsAboveTheComposer(t *testing.T) {
+func TestSubAgentWorkSpinsOnOneLinePerStatusAndOneStatusLineSitsAboveTheComposer(t *testing.T) {
 	at := fixedStart()
 	app := liveApp(t, &at)
 	subAgents := runningSubAgents()
@@ -166,12 +166,12 @@ func TestSubAgentWorkSpinsOnOneBatchLineAndOneStatusLineSitsAboveTheComposer(t *
 	if !strings.Contains(rows[status], "working") || strings.TrimSpace(rows[status-1]) != "" {
 		t.Errorf("the rows above the composer are %q and %q, want one status line under a blank row\n%s", rows[status-1], rows[status], strings.Join(rows, "\n"))
 	}
-	spawn := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, "[&go-dev] [&bench] [&go-docs]") })
-	if spawn < 0 || spawn >= status || !strings.ContainsRune(progress.WorkFrames, []rune(strings.TrimSpace(rows[spawn]))[0]) || strings.Contains(rows[spawn], "toolgate.go") {
-		t.Errorf("the three running sub-agents do not spin in Dots8 on one line without their files\n%s", strings.Join(rows, "\n"))
+	working := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, "working · [&go-dev], [&bench], [&go-docs]") })
+	if working < 0 || working >= status || !strings.ContainsRune(progress.WorkFrames, []rune(strings.TrimSpace(rows[working]))[0]) || strings.Contains(rows[working], "toolgate.go") {
+		t.Errorf("the three working sub-agents, one with no call yet, do not spin in Dots8 on one line under their status without their files\n%s", strings.Join(rows, "\n"))
 	}
-	if settled := slices.IndexFunc(rows, func(row string) bool { return strings.TrimSpace(row) == "✓ [&go-rules]" }); settled != spawn+1 {
-		t.Errorf("the sub-agent in review did not settle to its done mark under the running line\n%s", strings.Join(rows, "\n"))
+	if slices.ContainsFunc(rows, func(row string) bool { return strings.Contains(row, "[&go-rules]") }) {
+		t.Errorf("the sub-agent in review still draws a row in the chat\n%s", strings.Join(rows, "\n"))
 	}
 	golden.Assert(t, "session-sub-agents-80x24.golden", view.Content)
 }
@@ -189,7 +189,7 @@ func chatRowsNaming(t *testing.T, app *App, name string) []string {
 	return named
 }
 
-func TestFiveSubAgentsShareOneChatLineAndTheFinishedMoveToOneSettledLine(t *testing.T) {
+func TestFiveSubAgentsShareOneChatLineAndTheFinishedLeaveIt(t *testing.T) {
 	at := fixedStart()
 	app := phaseApp(t, &at)
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
@@ -204,7 +204,7 @@ func TestFiveSubAgentsShareOneChatLineAndTheFinishedMoveToOneSettledLine(t *test
 		app.Update(Event{Kind: EventSubAgent, SubAgents: slices.Clone(batch)})
 	}
 	running := chatRowsNaming(t, app, "[&ts-dev-")
-	if len(running) != 1 || !strings.Contains(running[0], "working [&ts-dev-1] [&ts-dev-2] [&ts-dev-3] [&ts-dev-4] [&ts-dev-5]") {
+	if len(running) != 1 || !strings.Contains(running[0], "working · [&ts-dev-1], [&ts-dev-2], [&ts-dev-3], [&ts-dev-4], [&ts-dev-5]") {
 		t.Fatalf("five running sub-agents draw %q in the chat, want one line naming all five", running)
 	}
 	if strings.Contains(running[0], "the routes of") || strings.Contains(running[0], "index.ts") {
@@ -213,11 +213,8 @@ func TestFiveSubAgentsShareOneChatLineAndTheFinishedMoveToOneSettledLine(t *test
 	batch[0].State, batch[3].State = roster.Finished, roster.Finished
 	app.Update(Event{Kind: EventSubAgent, SubAgents: slices.Clone(batch)})
 	lines := chatRowsNaming(t, app, "[&ts-dev-")
-	if len(lines) != 2 || !strings.Contains(lines[0], "working [&ts-dev-2] [&ts-dev-3] [&ts-dev-5]") || strings.Contains(lines[0], "[&ts-dev-1]") || strings.Contains(lines[0], "[&ts-dev-4]") {
-		t.Fatalf("after two finish the chat draws %q, want one running line with three names", lines)
-	}
-	if lines[1] != "✓ [&ts-dev-1] [&ts-dev-4]" {
-		t.Errorf("the settled line reads %q, want the two finished names under one done mark", lines[1])
+	if len(lines) != 1 || !strings.Contains(lines[0], "working · [&ts-dev-2], [&ts-dev-3], [&ts-dev-5]") {
+		t.Fatalf("after two finish the chat draws %q, want one working line with the three left and no row for the finished", lines)
 	}
 	golden.Assert(t, "session-sub-agents-batch-120x30.golden", app.View().Content)
 }

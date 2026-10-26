@@ -8,7 +8,7 @@
     Interaction   09                                                             comfortable  ▾     
     Context       15       tofu                                                                     
     Files         03                                                                                
-    Shell         05       tofu light                                                 subtle  ▾     
+    Shell         04       tofu light                                                 subtle  ▾     
     Turn          17                                                                                
     Projects      05       tofu dusk                                                                
     Browser       08                                                                 compact  ▾     

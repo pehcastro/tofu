@@ -453,15 +453,6 @@ exit 0
         "custom": true
       },
       {
-        "key": "foldHidesShell",
-        "category": "Shell",
-        "value": false,
-        "source": "default",
-        "label": "Fold hides shell",
-        "description": "the running line drops the shell count",
-        "kind": "bool"
-      },
-      {
         "key": "decisionCap",
         "category": "Turn",
         "value": 0,

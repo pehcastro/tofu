@@ -2,10 +2,10 @@
 type agents
 key enter
 wait cooked for
-click 17 12
+click 17 11
 absent All activity
-click 3 12
+click 3 11
 absent All activity
-click 16 12
+click 16 11
 wait All activity
 screen

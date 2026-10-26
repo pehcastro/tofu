@@ -7,15 +7,12 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui/subagent"
 	isession "tofu/internal/session"
-	roster "tofu/internal/subagent"
 )
 
 const (
 	recordedLead   = "0f6e2c1a-aaaa-4bbb-8ccc-00000047b7e1"
 	recordedPerson = "0f6e2c1a-aaaa-4bbb-8ccc-0000009c2d40"
-	recordedReport = "0f6e2c1a-aaaa-4bbb-8ccc-000000a51c33"
 )
 
 func TestEveryMessageDrawsTheIDItWasRecordedUnder(t *testing.T) {
@@ -25,7 +22,6 @@ func TestEveryMessageDrawsTheIDItWasRecordedUnder(t *testing.T) {
 	model.Append(Entry{Kind: User, Body: "say hi"})
 	model.Append(Entry{Kind: User, Body: "say hi"})
 	model.Append(Entry{Kind: Assistant, Body: "hi"})
-	model.Reported("minted-report", subagent.Row{Name: "ts-dev-1", State: roster.Finished, Report: "wrote the file"})
 	before := ansi.Strip(model.View())
 	if strings.Contains(before, "[message#") {
 		t.Fatalf("a message draws an id before it is recorded, and nothing can quote it:\n%s", before)
@@ -33,9 +29,8 @@ func TestEveryMessageDrawsTheIDItWasRecordedUnder(t *testing.T) {
 
 	model.Recorded(isession.RoleUser, "<env>cwd</env>\n\nsay hi", recordedPerson, sent)
 	model.Recorded(isession.RoleAssistant, "hi\n", recordedLead, sent)
-	model.Recorded(isession.RoleUser, "sub-agent ts-dev-1 reports: wrote the file", recordedReport, sent)
 	drawn := ansi.Strip(model.View())
-	for _, want := range []string{"13:05  [message#9c2d40]", "13:05  [message#47b7e1]", "[message#a51c33]"} {
+	for _, want := range []string{"13:05  [message#9c2d40]", "13:05  [message#47b7e1]"} {
 		if !strings.Contains(drawn, want) {
 			t.Errorf("the chat does not draw %q:\n%s", want, drawn)
 		}

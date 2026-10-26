@@ -1,10 +1,8 @@
-# moment 7: both reports are drawn once each, after the lead's words.
+# moment 7: the reports reach the lead and draw no row of their own in the chat, so the lead's words follow its words.
 type subagents-7-each-report-drawn-once-after-the-words
 key enter
 wait waiting  |  2 sub-agents
 release
 wait both are in
-once [&c1] finished
-once [&c2] finished
-before two sub-agents run and I wait for both reports. | [&c1] finished
-before two sub-agents run and I wait for both reports. | [&c2] finished
+absent [&c1] finished
+absent [&c2] finished

@@ -32,7 +32,6 @@ const PhaseDwell = 400 * time.Millisecond
 const (
 	entryWindow      = 500
 	noResult         = "no result"
-	shellTool        = "bash"
 	minimumColumns   = 20
 	requestSeparator = "  |  "
 	Placeholder      = "Ask tofu to build, inspect, or delegate"
@@ -66,7 +65,6 @@ type Entry struct {
 	SubAgents []string
 	Card      *host.ToolCard
 	Group     string
-	Summary   *host.GroupSummary
 	recorded  string
 	askID     string
 	turn      int
@@ -85,13 +83,12 @@ type Entry struct {
 }
 
 type Result struct {
-	Status  string
-	Output  string
-	Bytes   int
-	Failed  bool
-	At      time.Time
-	Card    *host.ToolCard
-	Summary *host.GroupSummary
+	Status string
+	Output string
+	Bytes  int
+	Failed bool
+	At     time.Time
+	Card   *host.ToolCard
 }
 
 func (e Entry) assistant() bool { return e.Kind == Assistant }
@@ -131,7 +128,6 @@ type Model struct {
 	SubAgents          []subagent.Row
 	Activity           []Activity
 	Spawning           []string
-	latestSpawn        Entry
 	Question           []string
 	now                func() time.Time
 	leadIdleSince      time.Time
@@ -181,7 +177,6 @@ type Model struct {
 	rows               rowTable
 	opened             map[string]bool
 	ChatShowsTools     bool
-	FoldHidesShell     bool
 	Welcome            func(width, rows int) []string
 	Notice             string
 	FeedID             func(full string) string
@@ -292,25 +287,37 @@ func (m *Model) rerender(entry *Entry) {
 }
 
 func (m *Model) Stream(text string) {
-	last := len(m.entries) - 1
-	if last < 0 || !m.entries[last].streaming {
+	at := m.streamingAt()
+	if at < 0 {
 		m.Append(Entry{Kind: Assistant, Body: text, streaming: true, boundary: markdown.Boundary(text)})
 		return
 	}
-	entry := &m.entries[last]
+	entry := &m.entries[at]
 	entry.Body += text
 	entry.boundary = max(markdown.Boundary(entry.Body), entry.boundary)
 	entry.undrawn = true
 	m.revision++
 }
 
+func (m *Model) streamingAt() int {
+	for at := len(m.entries) - 1; at >= 0; at-- {
+		if m.entries[at].streaming {
+			return at
+		}
+		if m.entries[at].message() {
+			return -1
+		}
+	}
+	return -1
+}
+
 func (m *Model) seal() {
-	last := len(m.entries) - 1
-	if last < 0 || !m.entries[last].streaming {
+	at := m.streamingAt()
+	if at < 0 {
 		return
 	}
-	m.entries[last].streaming = false
-	m.rerender(&m.entries[last])
+	m.entries[at].streaming = false
+	m.rerender(&m.entries[at])
 }
 
 func (m *Model) mint() string {
@@ -327,7 +334,9 @@ func (m *Model) Append(entry Entry) {
 		}
 		return
 	}
-	m.seal()
+	if entry.message() {
+		m.seal()
+	}
 	m.revision++
 	entry.Started, entry.turn = cmp.Or(entry.Started, m.now()), m.turns
 	if entry.Kind == User && entry.ID == "" {
@@ -355,13 +364,12 @@ func (m *Model) Finish(id string, result Result) {
 		delete(m.unshown, id)
 		return
 	}
-	m.seal()
 	ended := m.now()
 	for index := len(m.entries) - 1; index >= 0; index-- {
 		entry := &m.entries[index]
 		if entry.running() && entry.ID == id {
 			entry.Status, entry.Output, entry.Bytes, entry.Failed, entry.Ended = result.Status, result.Output, result.Bytes, result.Failed, cmp.Or(result.At, ended)
-			entry.Card, entry.Summary = cmp.Or(result.Card, entry.Card), result.Summary
+			entry.Card = cmp.Or(result.Card, entry.Card)
 			entry.Promoted = entry.Promoted || m.Stopping
 			m.revision++
 			return
@@ -431,14 +439,10 @@ func (m *Model) Recorded(role, content, id string, at time.Time) {
 		m.link(func(entry Entry) bool {
 			return entry.Kind == User && strings.Contains(content, Expand(entry.Body, entry.Chips))
 		}, id, at)
-		for m.link(func(entry Entry) bool {
-			return entry.Head == reportHead && entry.Detail != "" && strings.Contains(content, entry.Detail)
-		}, id, time.Time{}) {
-		}
 	}
 }
 
-func (m *Model) link(matches func(Entry) bool, id string, at time.Time) bool {
+func (m *Model) link(matches func(Entry) bool, id string, at time.Time) {
 	for index := range m.entries {
 		entry := &m.entries[index]
 		if entry.recorded != "" || !matches(*entry) {
@@ -449,9 +453,8 @@ func (m *Model) link(matches func(Entry) bool, id string, at time.Time) bool {
 			entry.Started = at
 		}
 		m.revision++
-		return true
+		return
 	}
-	return false
 }
 
 func (m *Model) Update(msg tea.Msg) tea.Cmd {
@@ -551,12 +554,12 @@ func (m *Model) Close(words, id string) {
 }
 
 func (m *Model) TakePartial() (string, bool) {
-	last := len(m.entries) - 1
-	if last < 0 || !m.entries[last].streaming || m.entries[last].Body == "" {
+	at := m.streamingAt()
+	if at < 0 || m.entries[at].Body == "" {
 		return "", false
 	}
-	partial := m.entries[last].Body
-	m.entries = m.entries[:last]
+	partial := m.entries[at].Body
+	m.entries = slices.Delete(m.entries, at, at+1)
 	m.revision++
 	return partial, true
 }

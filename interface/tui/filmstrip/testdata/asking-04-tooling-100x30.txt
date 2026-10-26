@@ -5,7 +5,7 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-    ● 1 call   bash                                                                           1s    
+    ⠋ running bash · (1) steps                                                                      
                                                                                                     
                                                                                                     
                                                                                                     
@@ -22,7 +22,7 @@
                                                                                                     
                                                                                                     
                                                                                                     
-  ⠋ working  |  2s  bash git push --force origin develop · shell (1)  [tool#c1]  [request#91ccaf]   
+  ⠋ working  |  2s                                                                                  
                                                                                                     
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         

@@ -22,7 +22,7 @@
                                                                                                     
                                                                                                     
                                                                                                     
-  ⠋ working  |  4s  [request#91ccaf]                                                                
+  ⠋ working  |  4s                                                                                  
                                                                                                     
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         

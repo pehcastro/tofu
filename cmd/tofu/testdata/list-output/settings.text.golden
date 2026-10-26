@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Settings · 2 set                                                     68 declared
+Settings · 2 set                                                     67 declared
 
 Appearance
   ● theme                        Nord                project
@@ -50,7 +50,6 @@ Shell
     logTail                      500                 default
     killConfirm                  true                default
     shell                        empty               default
-    foldHidesShell               false               default
 
 Turn
     decisionCap                  0                   default

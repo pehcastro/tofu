@@ -328,3 +328,21 @@ func TestRedraftKeepsTheChipsWhoseTokensSurvive(t *testing.T) {
 		t.Fatalf("the surviving chip no longer expands: %q", model.Value())
 	}
 }
+
+func TestARowArrivingMidStreamDrawsAfterTheWholeReply(t *testing.T) {
+	model := New(fixed(), counted(new(int)))
+	model.SetSize(100, 30)
+	model.Start()
+	model.Stream("grouped tool r")
+	model.Append(Entry{Kind: Tool, ID: "c1", Head: "read", Body: "a.txt"})
+	model.Finish("c1", Result{Status: "read"})
+	model.Stream("ows, paged turns")
+	drawn := ansi.Strip(model.View())
+	reply, row := strings.Index(drawn, "grouped tool rows, paged turns"), strings.Index(drawn, "(1) steps")
+	if strings.Count(drawn, "[&orchestrator]") != 1 || reply < 0 || row < reply {
+		t.Fatalf("a row that arrived mid-stream split the reply or drew inside it:\n%s", drawn)
+	}
+	if partial, taken := model.TakePartial(); !taken || partial != "grouped tool rows, paged turns" {
+		t.Fatalf("the streaming reply behind a row is not taken back whole: %q %v", partial, taken)
+	}
+}

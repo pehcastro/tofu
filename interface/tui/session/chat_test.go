@@ -12,7 +12,6 @@ import (
 
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/subagent"
-	"tofu/internal/host"
 	roster "tofu/internal/subagent"
 )
 
@@ -130,106 +129,9 @@ func TestThreeRunningSubAgentsShareOneBatchLineAndLeaveTheStatusLineToTheLead(t 
 		t.Fatalf("the rows above the composer are %q, want one status line saying what the lead does and nothing of its sub-agents\n%s", above, strings.Join(rows, "\n"))
 	}
 	spawn := slices.IndexFunc(rows[:model.transcriptRows()], func(row string) bool {
-		return strings.Contains(row, "working [&ts-dev-1] [&ts-dev-2] [&ts-dev-3]")
+		return strings.Contains(row, "working · [&ts-dev-1], [&ts-dev-2], [&ts-dev-3]")
 	})
-	if spawn < 0 || !strings.HasPrefix(strings.TrimSpace(rows[spawn]), "⠁ ") || !strings.HasSuffix(strings.TrimSpace(rows[spawn]), "3m") || strings.Contains(rows[spawn], "products.ts") {
-		t.Errorf("the chat does not spin one Dots8 line naming all three sub-agents under the longest clock\n%s", strings.Join(rows, "\n"))
-	}
-}
-
-func TestASubAgentSentBackByItsGateKeepsItsOneChatLineAndSaysWhy(t *testing.T) {
-	at := time.Date(2026, 10, 2, 17, 5, 43, 0, time.UTC)
-	model := New(func() time.Time { return at }, counted(new(int)))
-	model.SetSize(100, 30)
-	model.Append(Entry{Kind: User, Body: "move the lab link"})
-	model.Start()
-	model.Returned()
-	model.Spawned("ts-dev-1")
-	held := roster.SubAgent{ID: "ts-dev-1", Agent: "ts-dev", State: roster.Working, Round: 1, Started: at, Calling: []string{"edit"}}
-	named := func() []string {
-		model.SubAgents = host.SubAgentRows([]roster.SubAgent{held}, at, 0, nil, nil)
-		var lines []string
-		for _, row := range strings.Split(ansi.Strip(model.View()), "\n") {
-			if strings.Contains(row, "ts-dev-1") {
-				lines = append(lines, strings.TrimSpace(row))
-			}
-		}
-		return lines
-	}
-	first := named()
-	held.Round, held.Report = 2, "sent back: test did not run"
-	at = at.Add(31 * time.Second)
-	second := named()
-	if len(first) != 1 || len(second) != 1 || !strings.Contains(second[0], "[&ts-dev-1] sent back: test did not run") || strings.Contains(second[0], "-r2") {
-		t.Fatalf("round one draws %q and round two %q, want one line for ts-dev-1 each, the second saying it was sent back and why", first, second)
-	}
-	t.Logf("round one: %s\nround two: %s", first[0], second[0])
-}
-
-func TestASubAgentRowSaysWhatItWorksOnAndWhoItsReportWaitsFor(t *testing.T) {
-	at := time.Date(2026, 10, 16, 15, 0, 0, 0, time.UTC)
-	model := New(func() time.Time { return at }, counted(new(int)))
-	model.SetSize(120, 30)
-	model.Append(Entry{Kind: User, Body: "port the canvas"})
-	model.Start()
-	model.Returned()
-	model.Spawned("rust-dev-173")
-	working := subagent.Row{Name: "rust-dev-173", Ticket: "DESK-366", Doing: "port the canvas to gpui", State: roster.Working, Calls: []subagent.Call{{ID: "r1", Tool: "read", Text: "canvas.rs"}}}
-	model.SubAgents = []subagent.Row{working}
-	rowWith := func(text string) string {
-		for _, row := range strings.Split(ansi.Strip(model.View()), "\n") {
-			if strings.Contains(row, text) {
-				return strings.TrimSpace(row)
-			}
-		}
-		t.Fatalf("no row holds %q\n%s", text, ansi.Strip(model.View()))
-		return ""
-	}
-	if row := rowWith("working [&rust-dev-173]"); !strings.Contains(row, "DESK-366 port the canvas to gpui") {
-		t.Fatalf("a running sub-agent does not say what it works on: %q", row)
-	}
-	model.Stop()
-	finished := working
-	finished.State, finished.Report = roster.Finished, "ported the canvas"
-	model.Reported("report-1", finished)
-	if row := rowWith("[&rust-dev-173] finished"); !strings.Contains(row, "[&rust-dev-173] finished DESK-366 and waits for your review") || strings.Contains(row, "report [&") {
-		t.Fatalf("a report with the lead at rest does not say it waits for the person: %q", row)
-	}
-	model.WaitOn(1)
-	model.Reported("report-2", subagent.Row{Name: "rust-dev-174", State: roster.Finished, Report: "wrote it"})
-	if row := rowWith("[&rust-dev-174]"); !strings.Contains(row, "[&rust-dev-174] finished and waits for the lead") {
-		t.Fatalf("a ticketless report while the lead still waits on a sub-agent does not say the lead reads it next: %q", row)
-	}
-	model.Reported("report-3", subagent.Row{Name: "rust-dev-175", Ticket: "DESK-367", State: roster.Errored, Report: "the build broke"})
-	if row := rowWith("[&rust-dev-175]"); !strings.Contains(row, "[&rust-dev-175] failed DESK-367") {
-		t.Fatalf("an errored report does not say it failed: %q", row)
-	}
-}
-
-func TestSettledSubAgentNameIsDrawnInADifferentColourFromARunningOne(t *testing.T) {
-	model := New(fixed(), counted(new(int)))
-	model.SetSize(100, 30)
-	model.Append(Entry{Kind: User, Body: "split the routes"})
-	model.Start()
-	model.Spawned("ts-dev-1")
-	model.Spawned("ts-dev-2")
-	model.SubAgents = []subagent.Row{
-		{Name: "ts-dev-1", State: roster.Working, Calls: []subagent.Call{{ID: "r1", Tool: "read", Text: "a.ts"}}},
-		{Name: "ts-dev-2", State: roster.Finished},
-	}
-	frame := model.View()
-	colourBefore := func(name string) string {
-		at := strings.Index(frame, name)
-		if at < 0 {
-			t.Fatalf("%s is not drawn\n%s", name, ansi.Strip(frame))
-		}
-		escape := frame[strings.LastIndex(frame[:at], "\x1b["):at]
-		if !strings.Contains(escape, "38;") {
-			t.Fatalf("%s has no foreground colour before it: %q", name, escape)
-		}
-		return escape
-	}
-	if running, settled := colourBefore("[&ts-dev-1]"), colourBefore("[&ts-dev-2]"); running == settled {
-		t.Fatalf("the settled name is drawn as %q, the same as the running name", settled)
+	if spawn < 0 || !strings.HasPrefix(strings.TrimSpace(rows[spawn]), "⠁ ") || strings.Contains(rows[spawn], "products.ts") {
+		t.Errorf("the chat does not spin one line naming all three sub-agents under their status\n%s", strings.Join(rows, "\n"))
 	}
 }

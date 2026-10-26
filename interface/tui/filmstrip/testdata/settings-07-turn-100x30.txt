@@ -8,7 +8,7 @@
     Interaction   09      Sub-agents                                                        ● on    
     Context       15      a turn may spawn a sub-agent                                              
     Files         03                                                                                
-    Shell         05      One working session per project                                   ● on    
+    Shell         04      One working session per project                                   ● on    
   › Turn          17      While one session in this project works, any other waits. off lets se…    
     Projects      05                                                                                
     Browser       08      Plan every step                                                   ● on    

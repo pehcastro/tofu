@@ -2,8 +2,6 @@ package session
 
 import (
 	"cmp"
-	"slices"
-	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -11,7 +9,6 @@ import (
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/progress"
 	"tofu/interface/tui/trace"
-	"tofu/internal/host"
 	"tofu/internal/transport"
 	"tofu/internal/widget"
 )
@@ -29,7 +26,6 @@ const (
 	orchestrator     = "orchestrator"
 	messageKind      = "message"
 	toolKind         = "tool"
-	spawnKind        = "spawn"
 	requestKind      = "request"
 	noteMarker       = "· "
 	failureMarker    = "! "
@@ -45,7 +41,6 @@ type drawKey struct {
 	latest, streaming, failed, promoted bool
 	calls                               int
 	open                                bool
-	summary                             *host.GroupSummary
 }
 
 type drawn struct {
@@ -93,7 +88,11 @@ func (m *Model) blockLines(start int) []string {
 	if !live && cached.lines != nil && cached.key == key {
 		return cached.lines
 	}
-	lines := append(make([]string, key.lead, key.lead+1), m.render(start)...)
+	body := m.render(start)
+	if len(body) == 0 {
+		return nil
+	}
+	lines := append(make([]string, key.lead, key.lead+1), body...)
 	for index, line := range lines {
 		lines[index] = widget.Pad(line, m.width-trackCells)
 	}
@@ -124,6 +123,9 @@ func (m *Model) drawKey(start int) (drawKey, bool) {
 
 func (m *Model) lead(start int) int {
 	before := start - 1
+	for before >= 0 && len(m.entries[before].SubAgents) > 0 && len(m.batchOf(m.entries[before].SubAgents).running) == 0 {
+		before--
+	}
 	switch {
 	case before < 0:
 		return 0
@@ -145,50 +147,6 @@ func (m *Model) latestUser(index int) bool {
 		}
 	}
 	return true
-}
-
-func (m *Model) turnWork() (string, string) {
-	var tools, jev, shell int
-	var named *Entry
-	for index := len(m.entries) - 1; index >= 0 && m.entries[index].turn == m.turns; index-- {
-		entry := &m.entries[index]
-		if !m.folds(index) || entry.verdictShown() != "" {
-			continue
-		}
-		if named == nil && cmp.Or(entry.Ended, m.now()).Sub(entry.Started) >= PhaseDwell {
-			named = entry
-		}
-		tools++
-		if entry.Head == shellTool && !m.FoldHidesShell {
-			shell++
-		}
-		if entry.Decision != nil {
-			jev++
-		}
-	}
-	kind, spawn := toolKind, &m.latestSpawn
-	waitsOnSpawn := slices.Contains(m.Spawning, spawn.ID) && (named == nil || !named.running())
-	if spawn.ID != "" && spawn.turn == m.turns && (named == nil || waitsOnSpawn || spawn.Started.After(named.Started)) {
-		named, kind = spawn, spawnKind
-	}
-	if tools == 0 && named == nil {
-		return "", ""
-	}
-	var fields []string
-	tag := ""
-	if named != nil {
-		fields = []string{oneLine(named.label())}
-		if short := m.FeedID(named.ID); short != "" {
-			tag = look.TypedID(kind, short)
-		}
-	}
-	if jev > 0 {
-		fields = append(fields, "jev "+strconv.Itoa(jev))
-	}
-	if shell > 0 {
-		fields = append(fields, "shell ("+strconv.Itoa(shell)+")")
-	}
-	return strings.Join(fields, foldSeparator), tag
 }
 
 func expandMark(id string) string {
@@ -320,9 +278,6 @@ func (m *Model) failureLines(entry Entry) []string {
 func (m *Model) toolLine(entry Entry) string {
 	status, statusStyle := m.callStatus(entry)
 	label := entry.label()
-	if entry.Head == reportHead {
-		label, status = entry.Body, ""
-	}
 	marker := callIndent
 	if entry.running() {
 		marker = progress.Work(m.frame) + " "

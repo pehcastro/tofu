@@ -8,7 +8,7 @@
     Interaction   09      Density                                                comfortable  ▾     
     Context       15      Spacing across lists and panels                                           
     Files         03                                                                                
-    Shell         05     Status bar                                     esc           subtle  ▾     
+    Shell         04     Status bar                                     esc           subtle  ▾     
     Turn          17     Context, quotas, and runtime counters                                      
     Projects      05                                                                                
     Browser       08       compact                                                  detailed  ▾     
@@ -38,7 +38,7 @@
     Interaction   09      Density                                                comfortable  ▾     
     Context       15      Spacing across lists and panels                                           
     Files         03                                                                                
-    Shell         05     Status bar                                     esc           subtle  ▾     
+    Shell         04     Status bar                                     esc           subtle  ▾     
     Turn          17     Context, quotas, and runtime counters                                      
     Projects      05                                                                                
     Browser       08       compact                                                    hidden  ▾     
@@ -68,7 +68,7 @@
     Interaction   09      Density                                                comfortable  ▾     
     Context       15      Spacing across lists and panels                                           
     Files         03                                                                                
-    Shell         05      Animations                                                  subtle  ▾     
+    Shell         04      Animations                                                  subtle  ▾     
     Turn          17      Motion for conversational states                                          
     Projects      05                                                                                
     Browser       08    › Status bar                                                 compact  ▾     

@@ -8,7 +8,7 @@
     Interaction   09      Images                                                        auto  ▾     
   › Context       15      auto sends a pasted image only to a model that can see, inline always…    
     Files         03                                                                                
-    Shell         05      Project instructions                                         32768  ▾     
+    Shell         04      Project instructions                                         32768  ▾     
     Turn          17      bytes of your instruction files sent each turn                            
     Projects      05                                                                                
     Browser       08      Context ceiling                                             450000  ▾     
@@ -38,7 +38,7 @@
     Interaction   09      Images                                                        auto  ▾     
   › Context       15                                                         see, inline always…    
     Files         03     Instruction files                              esc                         
-    Shell         05     Which of AGENTS.md and CLAUDE.md a folder with                32768  ▾     
+    Shell         04     Which of AGENTS.md and CLAUDE.md a folder with                32768  ▾     
     Turn          17     both sends. both sends both and costs more tokens                          
     Projects      05                                                                                
     Browser       08       agents-first                                               450000  ▾     
@@ -68,7 +68,7 @@
     Interaction   09      Images                                                        auto  ▾     
   › Context       15                                                         see, inline always…    
     Files         03     Instruction files                              esc                         
-    Shell         05     Which of AGENTS.md and CLAUDE.md a folder with                32768  ▾     
+    Shell         04     Which of AGENTS.md and CLAUDE.md a folder with                32768  ▾     
     Turn          17     both sends. both sends both and costs more tokens                          
     Projects      05                                                                                
     Browser       08       agents-first                                               450000  ▾     

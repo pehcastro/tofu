@@ -76,7 +76,6 @@ const (
 	LogTail                     = "logTail"
 	KillConfirm                 = "killConfirm"
 	Shell                       = "shell"
-	FoldHidesShell              = "foldHidesShell"
 	DecisionCap                 = "decisionCap"
 	TurnMaySpawn                = "turnMaySpawn"
 	OneWorkingSessionPerProject = "oneWorkingSessionPerProject"
@@ -310,7 +309,6 @@ func Default() []Spec {
 		{Key: KillConfirm, Label: "Kill confirm", Description: "Confirm process termination", Category: "Shell", Kind: Bool, Default: 1},
 		{Key: Shell, Label: "Shell", Description: "The shell commands run in: wsl or a path. Empty finds your own shell", Category: "Shell", Kind: Text,
 			Offers: []string{"", "wsl"}},
-		{Key: FoldHidesShell, Label: "Fold hides shell", Description: "the running line drops the shell count", Category: "Shell", Kind: Bool},
 		{Key: DecisionCap, Label: "Decision cap", Description: "decision cap per turn, zero means no cap", Category: "Turn", Kind: Int,
 			Least: 0, Most: konst.DecisionCapMost, Unit: "decisions a turn, where 0 means no cap"},
 		{Key: TurnMaySpawn, Label: "Sub-agents", Description: "a turn may spawn a sub-agent", Category: "Turn", Kind: Bool, Default: 1},

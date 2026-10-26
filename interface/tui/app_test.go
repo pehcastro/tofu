@@ -163,7 +163,7 @@ func tabColumn(t *testing.T, app *App, index int) int {
 	return 0
 }
 
-func TestARunningCallCarriesItsElapsedTimeAndTheFooterSaysWhatIsHappening(t *testing.T) {
+func TestARunningCallCarriesItsElapsedTimeAndTheLeadsRowSaysWhatIsHappening(t *testing.T) {
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	app := liveApp(t, &at)
 	early := app.View().Content
@@ -186,12 +186,12 @@ func TestARunningCallCarriesItsElapsedTimeAndTheFooterSaysWhatIsHappening(t *tes
 			t.Errorf("the frame does not say what state the turn is in\n%s", frame)
 		}
 	}
-	if !strings.Contains(plainEarly, "read CLAUDE.md") || !strings.Contains(plainLater, "bash for d in internal") {
-		t.Errorf("the status line does not name the call that has run past the dwell\n--- early ---\n%s\n--- later ---\n%s", plainEarly, plainLater)
+	if !strings.Contains(plainEarly, "running bash · (3) steps") || !strings.Contains(plainLater, "running bash · (3) steps") {
+		t.Errorf("the lead's row does not say what it runs now\n--- early ---\n%s\n--- later ---\n%s", plainEarly, plainLater)
 	}
 	before, after := spun(plainEarly), spun(plainLater)
-	if len(before) != 1 || len(after) != len(before) {
-		t.Fatalf("want the one status line spinning at both moments, got %q then %q", string(before), string(after))
+	if len(before) != 2 || len(after) != len(before) {
+		t.Fatalf("want the lead's row and the status line spinning at both moments, got %q then %q", string(before), string(after))
 	}
 	for index := range before {
 		if before[index] == after[index] {
@@ -216,7 +216,7 @@ func TestTheModelsProseIsDrawnDifferentlyFromToolActivity(t *testing.T) {
 	app.Update(Event{Kind: EventDecision, Decision: asked()})
 	at = at.Add(session.PhaseDwell)
 	content := app.View().Content
-	spoken, called := styleOf(content, prose), styleOf(content, "bash for d in internal")
+	spoken, called := styleOf(content, prose), styleOf(content, "running bash")
 	if spoken == "" || called == "" {
 		t.Fatalf("the fixture is missing a row: prose %q, tool %q\n%s", spoken, called, content)
 	}
@@ -646,29 +646,6 @@ func TestASubAgentsMessageIsNeverSpokenInTheOrchestratorsTranscript(t *testing.T
 	}
 }
 
-func TestAReportRidingTheDoneEventIsDrawnOnce(t *testing.T) {
-	const reportRow = "[&sub-1] finished and waits for your review"
-	finished := []subagent.Row{{Name: "sub-1", Owns: []string{"note.txt"}, Doing: "read note.txt", State: roster.Finished, Report: "the note holds one line"}}
-	app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: bothWires})
-	app.Init()
-	app.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
-	for _, event := range []Event{
-		{Kind: EventRequesting},
-		{Kind: EventToolCall, ID: "s1", Tool: "spawn", Text: "read note.txt", Promote: true},
-		{Kind: EventToolResult, ID: "s1", Text: "spawn sub-1 finished"},
-		{Kind: EventDone, Text: "cooked for", SubAgents: finished},
-	} {
-		app.Update(event)
-	}
-	if drawn := strings.Count(ansi.Strip(app.View().Content), reportRow); drawn != 1 {
-		t.Fatalf("a report inside the done event drew %d %q rows, want 1\n%s", drawn, reportRow, ansi.Strip(app.View().Content))
-	}
-	app.Update(Event{Kind: EventSubAgent, SubAgents: finished})
-	if drawn := strings.Count(ansi.Strip(app.View().Content), reportRow); drawn != 1 {
-		t.Fatalf("the same report arriving again drew %d %q rows, want 1\n%s", drawn, reportRow, ansi.Strip(app.View().Content))
-	}
-}
-
 func afterAFullEventChannel(afterwards ...Event) (*App, []Event) {
 	filled := make(chan struct{})
 	app := newTestApp(Options{
@@ -881,30 +858,6 @@ func TestSpacePressedOnTheKeyboardChoosesASettingsValue(t *testing.T) {
 	app.Update(spacePress)
 	if !app.store.Bool(isettings.ChatShowsTools) {
 		t.Fatal("space through App.Update did not choose the value under the cursor")
-	}
-}
-
-func TestFoldHidesShellIsASettingThatDropsTheShellCountFromTheRunningLine(t *testing.T) {
-	globalPath := filepath.Join(t.TempDir(), "settings.json")
-	app := settingsStoreApp(t, globalPath)
-	app.runCommand("chat")
-	app.Update(Event{Kind: EventRequesting})
-	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "bash", Text: "go test ./..."})
-	before := ansi.Strip(app.View().Content)
-	if !strings.Contains(before, "shell (1)") {
-		t.Fatalf("a running shell call does not carry a shell count before the setting is touched\n%s", before)
-	}
-
-	app.runCommand("settings")
-	settingsKeys(app, append(settingsWalk(t, app, isettings.FoldHidesShell), "enter", "down", "enter")...)
-	if !app.store.Bool(isettings.FoldHidesShell) {
-		t.Fatal("choosing on did not flip foldHidesShell on disk")
-	}
-
-	app.runCommand("chat")
-	after := ansi.Strip(app.View().Content)
-	if strings.Contains(after, "shell (1)") {
-		t.Fatalf("the running line still carries a shell count once foldHidesShell is on\n%s", after)
 	}
 }
 
@@ -2015,20 +1968,6 @@ func TestOnlyTheSubAgentWithNoStepForTheWatchTimeIsStalledAndAnOldCallSeenFreshI
 	app.Update(Event{Kind: EventSubAgent, SubAgents: rows})
 	if at := app.happenedAt("k1"); strings.Contains(ansi.Strip(app.View().Content), "stalled") || slices.Contains(app.happened[at].Detail, stalledDetail) {
 		t.Fatalf("sub-1 took a step and still reads stalled: %+v", app.happened[at])
-	}
-}
-
-func TestAReportThatArrivesWhileTheLeadRequestsIsDrawnOnceAfterItsWords(t *testing.T) {
-	at := fixedStart()
-	app := leadIdleOnTwo(t, &at)
-	app.Update(Event{Kind: EventRequesting})
-	app.Update(Event{Kind: EventSubAgent, SubAgents: twoWorking(1)})
-	app.Update(Event{Kind: EventText, ID: "w2", Text: "the loader reads the lock first."})
-	app.Update(Event{Kind: EventDone, Text: "cooked for"})
-	chat := ansi.Strip(app.View().Content)
-	const reportRow = "[&sub-2] finished and waits for the lead"
-	if strings.Count(chat, reportRow) != 1 || strings.Index(chat, "the loader reads the lock first.") > strings.Index(chat, reportRow) {
-		t.Fatalf("the report is not drawn once, after the lead's words\n%s", chat)
 	}
 }
 

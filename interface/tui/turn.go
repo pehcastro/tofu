@@ -459,14 +459,6 @@ func (a *App) leadTurnEnds(words string) {
 	a.view.Stop()
 	a.leading, a.running = false, 0
 	a.view.WaitOn(a.status.Agents)
-	a.drawHeldReports()
-}
-
-func (a *App) drawHeldReports() {
-	for _, held := range a.heldReports {
-		a.view.Reported(a.mintID(), held)
-	}
-	a.heldReports = nil
 }
 
 func (a *App) start(task string) {
@@ -724,7 +716,7 @@ func (a *App) called(event Event, at time.Time) {
 	}
 	a.running++
 	if event.Promote {
-		a.view.Spawn(event.ID, event.Tool, event.Text)
+		a.view.Spawn(event.ID)
 		return
 	}
 	a.view.Append(session.Entry{Kind: session.Tool, ID: event.ID, Head: event.Tool, Body: event.Text, Detail: event.Detail, Card: event.Card, Group: event.Group, Started: event.At})
@@ -753,7 +745,7 @@ func (a *App) answered(event Event, at time.Time) {
 		return
 	}
 	if done.Kind != feed.KindSpawn {
-		a.view.Finish(event.ID, session.Result{Status: status, Output: event.Detail, Bytes: event.Bytes, Failed: event.Failed, At: event.At, Card: event.Card, Summary: event.GroupSummary})
+		a.view.Finish(event.ID, session.Result{Status: status, Output: event.Detail, Bytes: event.Bytes, Failed: event.Failed, At: event.At, Card: event.Card})
 	}
 	a.rememberedByTheLead(event.Detail)
 	a.running = max(a.running-1, 0)
@@ -1093,7 +1085,6 @@ func (a *App) showSubAgents(subAgents []subagent.Row) {
 			a.status.Agents++
 		}
 		a.stepped(subAgent)
-		a.drawReport(subAgent)
 		for _, call := range subAgent.Calls[settledPrefix(callsBefore[subAgent.Name], subAgent.Calls):] {
 			a.rosterCall(subAgent.Name, call)
 		}
@@ -1178,20 +1169,6 @@ func settledAt(row subagent.Row) (time.Time, bool) {
 	panic("tui: unknown sub-agent state " + row.State.String())
 }
 
-func (a *App) drawReport(subAgent subagent.Row) {
-	seen, spawnedByTheLead := a.reports[subAgent.Name]
-	stillRunning := subAgent.State == roster.Working || subAgent.State == roster.Reopened || subAgent.State == roster.WaitingAnswer
-	if !spawnedByTheLead || stillRunning || subAgent.Report == "" || subAgent.Report == seen {
-		return
-	}
-	a.reports[subAgent.Name] = subAgent.Report
-	if a.leading {
-		a.heldReports = append(a.heldReports, subAgent)
-		return
-	}
-	a.view.Reported(a.mintID(), subAgent)
-}
-
 func (a *App) rosterCall(actor string, call subagent.Call) {
 	id := a.shortOf(call.ID)
 	if id == "" {
@@ -1219,7 +1196,6 @@ func (a *App) spawnedAs(spawn *feed.Event, subAgent subagent.Row) {
 	spawn.Target, spawn.Title = subAgent.Name, subAgent.Doing
 	if spawn.Actor == orchestrator {
 		a.view.Spawned(subAgent.Name)
-		a.reports[subAgent.Name] = ""
 	}
 }
 

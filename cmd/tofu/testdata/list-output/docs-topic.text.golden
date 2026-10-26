@@ -19,7 +19,7 @@ What it is
     projectInstructionsCap, contextCeiling, instructionSources, skills, memory,
     autoMemory, episodes, memoryFromAllUsers, memoryModel, learn
   - Files: diffContext, hyperlinks, groupByAgent
-  - Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell
+  - Shell: persistentRegistry, logTail, killConfirm, shell
   - Turn: decisionCap, turnMaySpawn, oneWorkingSessionPerProject, planEveryStep,
     sideChatAccess, subAgentsPerTurn, subAgentDepth, leadCache, subAgentCache,
     subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents, agentSources,
@@ -339,9 +339,6 @@ Shell
     shell                        empty
       any text
       The shell commands run in: wsl or a path. Empty finds your own shell
-    foldHidesShell               false
-      true or false
-      the running line drops the shell count
 
 Turn
     decisionCap                  0

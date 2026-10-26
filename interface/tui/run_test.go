@@ -130,14 +130,12 @@ func TestARunOfFourteenCallsDrawsNothingButTheTurnLineWhileItRuns(t *testing.T) 
 	content := app.View().Content
 	golden.Assert(t, "session-run-80x24.golden", content)
 	plain := ansi.Strip(content)
-	if row := turnRow(t, app); !strings.Contains(row, "bash go tool deadcode") || !strings.Contains(row, "[tool#c13]") {
-		t.Errorf("the turn line at eighty columns does not name the running call by its id: %q", row)
+	if row := turnRow(t, app); strings.Contains(row, "deadcode") || strings.Contains(row, "[tool#") || strings.Contains(row, "shell (") {
+		t.Errorf("the turn line names a call or counts shells, want working and its elapsed time alone: %q", row)
 	}
-	app.Update(tea.WindowSizeMsg{Width: 120, Height: runHeight})
-	if row := turnRow(t, app); !strings.Contains(row, "shell (7)") || strings.Contains(row, ") tools") || !strings.Contains(ansi.Strip(app.View().Content), "14 calls") {
-		t.Errorf("the turn line does not count the fourteen calls and the seven shell calls: %q", row)
+	if strings.Count(plain, "running bash · (14) steps") != 1 {
+		t.Errorf("the chat does not draw one lead row counting the fourteen calls\n%s", plain)
 	}
-	app.Update(tea.WindowSizeMsg{Width: runWidth, Height: runHeight})
 	if rows := callRows(plain); rows != 0 {
 		t.Errorf("the running run drew %d call rows, want none\n%s", rows, plain)
 	}
@@ -149,7 +147,7 @@ func TestARunOfFourteenCallsDrawsNothingButTheTurnLineWhileItRuns(t *testing.T) 
 	}
 }
 
-func TestTheTurnLineNamesTheLatestCallAndDropsTheOneBefore(t *testing.T) {
+func TestTheLeadsRowNamesTheLatestCallAndDropsTheOneBefore(t *testing.T) {
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	app := startTurn(t, &at, 120, runHeight)
 	first := runCall{tool: "read", text: "internal/turn/loop.go", result: "84 lines, 2.1 KB", bytes: 2148}
@@ -159,8 +157,8 @@ func TestTheTurnLineNamesTheLatestCallAndDropsTheOneBefore(t *testing.T) {
 	at = at.Add(callStep)
 	running := app.View().Content
 	golden.Assert(t, "session-progress-running-120x24.golden", running)
-	if row := turnRow(t, app); !strings.Contains(row, "read internal/turn/loop.go") {
-		t.Fatalf("the turn line does not name the running call: %q", row)
+	if !strings.Contains(ansi.Strip(running), "running read · (1) steps") {
+		t.Fatalf("the lead's row does not name the running call\n%s", ansi.Strip(running))
 	}
 
 	endCall(app, 0, first)
@@ -168,8 +166,8 @@ func TestTheTurnLineNamesTheLatestCallAndDropsTheOneBefore(t *testing.T) {
 	at = at.Add(callStep)
 	replaced := app.View().Content
 	golden.Assert(t, "session-progress-replaced-120x24.golden", replaced)
-	if strings.Contains(ansi.Strip(replaced), "internal/turn/loop.go") || !strings.Contains(turnRow(t, app), "bash go build ./...") {
-		t.Fatalf("the turn line still names the finished call once a new one starts\n%s", ansi.Strip(replaced))
+	if strings.Contains(ansi.Strip(replaced), "internal/turn/loop.go") || strings.Contains(ansi.Strip(replaced), "running read") || !strings.Contains(ansi.Strip(replaced), "running bash · (2) steps") {
+		t.Fatalf("the lead's row still names the finished call once a new one starts\n%s", ansi.Strip(replaced))
 	}
 	if callRows(ansi.Strip(replaced)) != 0 {
 		t.Fatalf("a second call grew the transcript with a call row\n%s", ansi.Strip(replaced))
@@ -322,7 +320,7 @@ func twelveCalls() []runCall {
 	return calls
 }
 
-func TestTheCountsOnTheTurnLineAreRight(t *testing.T) {
+func TestTheCountOnTheLeadsRowIsRight(t *testing.T) {
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	calls := twelveCalls()
 	app := startTurn(t, &at, 120, runHeight)
@@ -334,7 +332,7 @@ func TestTheCountsOnTheTurnLineAreRight(t *testing.T) {
 	last := runCall{tool: "edit", text: "internal/turn/loop.go", result: "1 hunk applied", bytes: 240}
 	startCall(app, len(calls), last)
 	endCall(app, len(calls), last)
-	if row := turnRow(t, app); !strings.Contains(row, "shell (4)") || strings.Contains(row, ") tools") || !strings.Contains(ansi.Strip(app.View().Content), "13 calls") {
-		t.Errorf("the turn line does not count the tools and the shell calls: %q", row)
+	if chat := ansi.Strip(app.View().Content); !strings.Contains(chat, "(13) steps") {
+		t.Errorf("the lead's row does not count the thirteen calls\n%s", chat)
 	}
 }
