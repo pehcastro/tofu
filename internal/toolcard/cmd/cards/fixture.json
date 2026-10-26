@@ -22,11 +22,11 @@
   {"name": "bash", "group": "bash", "args": {"command": "git switch -c fix/expiry"}, "content": "Switched to a new branch 'fix/expiry'\n"},
   {"name": "bash", "group": "bash", "args": {"command": "git commit -am \"chore(cart): round half even\" && git push"}, "content": "[develop 7c3d2e1] chore(cart): round half even\n 1 file changed, 3 insertions(+), 2 deletions(-)\nTo example.com:shop.git\n   9f8e7d6..7c3d2e1  develop -> develop\n"},
   {"name": "bash", "group": "bash", "args": {"command": "git rebase develop"}, "content": "Auto-merging internal/auth/token.go\nCONFLICT (content): Merge conflict in internal/auth/token.go\nerror: could not apply 4e1a9c2... fix(auth): expiry uses <=\n", "exit": 1, "failed": true},
-  {"name": "bash", "group": "bash", "args": {"command": "tofu boardy move DEMO-12 doing --board DEMO --reason \"picked up\""}, "content": "~ DEMO-12 is doing  ~/.demo/boards/DEMO/tickets/DEMO-12.md\n"},
+  {"name": "bash", "group": "bash", "args": {"command": "tofu boardy move DEMO-12 doing --board DEMO --reason \"picked up\""}, "content": "~ DEMO-12 is doing, was todo  ~/.demo/boards/DEMO/tickets/DEMO-12.md\n"},
   {"name": "bash", "group": "bash", "args": {"command": "tofu boardy new --board DEMO --title \"Expiry edge case\""}, "content": "+ DEMO-13 Expiry edge case  ~/.demo/boards/DEMO/tickets/DEMO-13.md\n"},
   {"name": "bash", "group": "bash", "args": {"command": "tofu boardy log DEMO-12 --evidence \"go test ./internal/auth: ok\""}, "content": "~ logged on DEMO-12  ~/.demo/boards/DEMO/tickets/DEMO-12.md\n"},
   {"name": "bash", "group": "bash", "args": {"command": "tofu boardy assign DEMO-13 go-dev"}, "content": "~ DEMO-13 is assigned to go-dev  ~/.demo/boards/DEMO/tickets/DEMO-13.md\n"},
-  {"name": "bash", "group": "bash", "args": {"command": "rtk tofu boardy move DEMO-12 review --reason \"tests pass\""}, "content": "~ DEMO-12 is review  ~/.demo/boards/DEMO/tickets/DEMO-12.md\n"},
+  {"name": "bash", "group": "bash", "args": {"command": "rtk tofu boardy move DEMO-12 review --reason \"tests pass\""}, "content": "~ DEMO-12 is review, was doing  ~/.demo/boards/DEMO/tickets/DEMO-12.md\n"},
   {"name": "bash", "group": "bash", "args": {"command": "npm run lint"}, "content": "> shop@1.0.0 lint\n> eslint src\n\n  12:3  error  'x' is not defined  no-undef\n", "exit": 2, "failed": true},
   {"name": "bash", "group": "bash", "args": {"command": "env CGO_ENABLED=0 tofu version"}, "content": "tofu 0.0.0-demo\n"},
   {"name": "edit", "group": "tools", "args": {"path": "internal/auth/token.go", "old_string": "a", "new_string": "b", "edits": [{"path": "internal/auth/token_test.go", "old_string": "c", "new_string": "d"}]}, "content": "--- internal/auth/token.go\n+++ internal/auth/token.go\n@@ -15,3 +15,4 @@\n func (t Token) Live(now time.Time) bool {\n-\treturn now.Before(t.expiry)\n+\treturn !now.After(t.expiry)\n+\n }\n--- internal/auth/token_test.go\n+++ internal/auth/token_test.go\n@@ -40,2 +40,4 @@\n \texpiry := clock.Add(time.Hour)\n+\tif !tok.Live(expiry) {\n+\t\tt.Fatal(\"edge\")\n+\t}\n"},
@@ -38,5 +38,5 @@
   {"name": "ask_person", "group": "tools", "args": {"questions": [{"id": "q1", "header": "Rounding", "question": "Round half up or half even?"}]}, "content": "{\"outcome\":\"submitted\",\"answers\":[{\"id\":\"q1\",\"status\":\"answered\",\"chosen\":[\"half even\"]}],\"next\":\"\"}"},
   {"name": "fetch", "group": "tools", "args": {"url": "https://pkg.example.dev/time?tab=doc"}, "content": "page text\n"},
   {"name": "web_search", "group": "tools", "args": {"query": "banker's rounding go"}, "content": "results\n"},
-  {"name": "ticket_move", "group": "tools", "args": {"id": "DEMO-13", "to": "review", "reason": "done"}, "content": "DEMO-13 is review"}
+  {"name": "ticket_move", "group": "tools", "args": {"id": "DEMO-13", "to": "review", "reason": "done"}, "content": "DEMO-13 is review, was doing"}
 ]

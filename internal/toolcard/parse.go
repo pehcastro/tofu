@@ -353,7 +353,11 @@ func receipted(c Card, lines []string) Card {
 			case c.kind == kindBoardMove && argument(rest, 0) == "is" && argument(rest, 1) == "already":
 				c.Meta = "already " + argument(rest, 2)
 			case c.kind == kindBoardMove && argument(rest, 0) == "is":
-				c.Meta = movedTo(argument(rest, 1))
+				to := strings.TrimRight(argument(rest, 1), ",")
+				c.Meta = movedTo(to)
+				if argument(rest, 2) == "was" {
+					c.From, c.To = argument(rest, 3), to
+				}
 			case c.kind == kindBoardAssign && argument(rest, 1) == "assigned":
 				c.Meta = "to " + argument(rest, 3)
 			}

@@ -239,6 +239,7 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 			}
 		case ticketMove:
 			var to boardy.Status
+			before, _ := t.board.Get(args.ID)
 			reason := strings.TrimSpace(args.Reason)
 			switch to, err = boardy.ParseStatus(args.To); {
 			case err != nil:
@@ -248,6 +249,9 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 				ticket, err = t.board.MoveLeaving(args.ID, to, args.Reason, t.actor, args.Leave)
 			}
 			said = ticket.ID + " is " + string(ticket.Status)
+			if before.Status != ticket.Status {
+				said += ", was " + string(before.Status)
+			}
 		case ticketAssign:
 			ticket, err = t.board.Assign(args.ID, args.To, t.actor)
 			said = ticket.ID + " is assigned to " + ticket.Assignee

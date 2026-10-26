@@ -524,11 +524,11 @@ func (c boardyCall) move() int {
 	}
 	before, _ := c.store.Get(c.args[0])
 	ticket, err := c.managed.Move(c.args[0], to, c.flags["reason"], c.actor)
-	is := " is "
-	if before.Status == to {
-		is = " is already "
+	said := ticket.ID + " is " + string(ticket.Status) + ", was " + string(before.Status)
+	if before.Status == ticket.Status {
+		said = ticket.ID + " is already " + string(ticket.Status)
 	}
-	return c.receipt(ticket, err, cli.Changed, ticket.ID+is+string(ticket.Status))
+	return c.receipt(ticket, err, cli.Changed, said)
 }
 
 func (c boardyCall) log() int {

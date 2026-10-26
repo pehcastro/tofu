@@ -14,6 +14,8 @@ type ToolCard struct {
 	Verb   string     `json:"verb"`
 	Object string     `json:"object,omitempty"`
 	Meta   string     `json:"meta,omitempty"`
+	From   string     `json:"from,omitempty"`
+	To     string     `json:"to,omitempty"`
 	Tone   CardTone   `json:"tone"`
 }
 
@@ -114,7 +116,7 @@ func endsTheRow(source llm.Source) bool {
 }
 
 func wireCard(card toolcard.Card) *ToolCard {
-	return &ToolCard{Family: CardFamily(card.Family), Doing: card.Doing, Verb: card.Verb, Object: card.Object, Meta: card.Meta, Tone: CardTone(card.Tone)}
+	return &ToolCard{Family: CardFamily(card.Family), Doing: card.Doing, Verb: card.Verb, Object: card.Object, Meta: card.Meta, From: card.From, To: card.To, Tone: CardTone(card.Tone)}
 }
 
 func maskedPieces(pieces []CardPiece, mask func(string) string) []CardPiece {

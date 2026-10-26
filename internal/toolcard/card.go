@@ -49,6 +49,8 @@ type Card struct {
 	Verb       string
 	Object     string
 	Meta       string
+	From       string
+	To         string
 	Tone       Tone
 	Fold       bool
 	Changes    []Change
