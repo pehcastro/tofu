@@ -555,7 +555,7 @@ func (m *Model) Close(words, id string) {
 
 func (m *Model) TakePartial() (string, bool) {
 	at := m.streamingAt()
-	if at < 0 || m.entries[at].Body == "" {
+	if at < 0 || m.entries[at].Body == "" || slices.ContainsFunc(m.entries[at+1:], func(after Entry) bool { return after.Kind == Tool }) {
 		return "", false
 	}
 	partial := m.entries[at].Body

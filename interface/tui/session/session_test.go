@@ -342,7 +342,7 @@ func TestARowArrivingMidStreamDrawsAfterTheWholeReply(t *testing.T) {
 	if strings.Count(drawn, "[&orchestrator]") != 1 || reply < 0 || row < reply {
 		t.Fatalf("a row that arrived mid-stream split the reply or drew inside it:\n%s", drawn)
 	}
-	if partial, taken := model.TakePartial(); !taken || partial != "grouped tool rows, paged turns" {
-		t.Fatalf("the streaming reply behind a row is not taken back whole: %q %v", partial, taken)
+	if partial, taken := model.TakePartial(); taken {
+		t.Fatalf("a reply its own call follows was taken back as a partial answer: %q", partial)
 	}
 }

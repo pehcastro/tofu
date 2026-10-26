@@ -1508,7 +1508,7 @@ func TestTheTurnLineOnADrivenTurnNamesTheCountNotTheSize(t *testing.T) {
 	}
 	counted := ""
 	for _, frame := range driver.frames {
-		if plain := ansi.Strip(frame); strings.Contains(plain, "3 calls") {
+		if plain := ansi.Strip(frame); strings.Contains(plain, "(3) steps") {
 			counted = plain
 		}
 	}
@@ -2797,7 +2797,7 @@ func (m subAgentAfterTheLead) Ask(ctx context.Context, request llm.Request) (llm
 	return m.queuedModel.Ask(ctx, request)
 }
 
-func TestASubAgentsReportTurnDrawsOneLineNamingItAndTheNextLeadTurnIsANewBlock(t *testing.T) {
+func TestASubAgentsReportTurnDrawsNoRowAndTheNextLeadTurnIsANewBlock(t *testing.T) {
 	dir := scratchProject(t)
 	driver := driveApp(t)
 	leadEnded := make(chan struct{})
@@ -2824,13 +2824,13 @@ func TestASubAgentsReportTurnDrawsOneLineNamingItAndTheNextLeadTurnIsANewBlock(t
 		return found
 	}
 	reports, onIt, didIt := at("[&sub-1] finished"), at("the sub-agent is on it"), at("the sub-agent did it")
-	if len(reports) != 1 || !strings.Contains(rows[reports[0]], "and waits for") || !strings.Contains(rows[reports[0]], "[expand]") {
-		t.Fatalf("the report draws %d lines naming sub-1, want one carrying its state and an expand mark\n%s", len(reports), strings.Join(rows, "\n"))
+	if len(reports) != 0 {
+		t.Fatalf("the hidden report draws %d rows naming sub-1, want none\n%s", len(reports), strings.Join(rows, "\n"))
 	}
-	if len(onIt) != 1 || len(didIt) != 1 || onIt[0] > reports[0] || didIt[0] < reports[0] {
-		t.Fatalf("the report line does not sit between the two lead answers\n%s", strings.Join(rows, "\n"))
+	if len(onIt) != 1 || len(didIt) != 1 || onIt[0] > didIt[0] {
+		t.Fatalf("the two lead answers are not drawn once each in order\n%s", strings.Join(rows, "\n"))
 	}
-	if headers := at("[&orchestrator]"); !slices.ContainsFunc(headers, func(row int) bool { return row > reports[0] && row < didIt[0] }) {
+	if headers := at("[&orchestrator]"); !slices.ContainsFunc(headers, func(row int) bool { return row > onIt[0] && row < didIt[0] }) {
 		t.Errorf("the report turn's answer streams into the block before it rather than one of its own\n%s", strings.Join(rows, "\n"))
 	}
 	t.Log("\n" + strings.Join(rows, "\n"))
