@@ -54,10 +54,8 @@ func (e Entry) act() (string, string, bool) {
 	switch {
 	case card.Family == host.CardFamily(toolcard.Board) && card.Verb == openedVerb:
 		return boardIcon, joined(card.Object, createdWord, card.Meta), true
-	case card.Family == host.CardFamily(toolcard.Board) && card.Verb == movedVerb && card.From != "" && card.To != "":
+	case card.Family == host.CardFamily(toolcard.Board) && card.Verb == movedVerb && card.From != "" && card.To != "" && card.From != card.To:
 		return boardIcon, joined(card.Object, movedVerb+" "+card.From+moveStep+card.To), true
-	case card.Family == host.CardFamily(toolcard.Board) && card.Verb == movedVerb:
-		return boardIcon, joined(card.Object, strings.TrimSpace(movedVerb+" "+card.Meta)), true
 	case card.Family == host.CardFamily(toolcard.Git) && card.Verb == committedVerb:
 		subject, _, _ := strings.Cut(card.Meta, subjectEnd)
 		return gitIcon, joined(card.Object, subject), true
