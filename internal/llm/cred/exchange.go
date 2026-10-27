@@ -13,11 +13,15 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const (
+	redacted            = "[redacted]"
+	newTokenNotKept     = "new token, not kept"
 	tokenRequestTimeout = 30 * time.Second
 	errorExcerptBytes   = 500
 	verifierBytes       = 96
@@ -65,6 +69,43 @@ func (r tokenRefusal) reason() string {
 		return "the server refused the refresh token (invalid_grant)"
 	}
 	return ""
+}
+
+type Attempt struct {
+	At     time.Time
+	Status int
+	Answer string
+}
+
+func attemptOf(err error, now time.Time) Attempt {
+	var refusal tokenRefusal
+	switch {
+	case err == nil:
+		return Attempt{At: now, Status: http.StatusOK, Answer: newTokenNotKept}
+	case errors.As(err, &refusal):
+		return Attempt{At: now, Status: refusal.status, Answer: refusal.body}
+	}
+	return Attempt{At: now, Answer: err.Error()}
+}
+
+func (a Attempt) Said() string {
+	var detail map[string]any
+	var said []string
+	if a.Status != 0 && json.Unmarshal([]byte(a.Answer), &detail) == nil {
+		for _, path := range []string{"error.code", "error", "error.type", "error.message", "error_description", "message"} {
+			if text := jsonPath(detail, path); text != "" && !slices.Contains(said, text) {
+				said = append(said, text)
+			}
+		}
+	}
+	if len(said) == 0 {
+		said = []string{a.Answer}
+	}
+	text := strings.Join(strings.Fields(strings.Join(said, ": ")), " ")
+	if a.Status == 0 {
+		return text
+	}
+	return strconv.Itoa(a.Status) + " " + text
 }
 
 func randomURLSafe(n int) (string, error) {
@@ -164,6 +205,11 @@ func postToken(ctx context.Context, client *http.Client, spec Spec, params, head
 		return nil, err
 	}
 	if response.StatusCode >= http.StatusBadRequest {
+		for _, secret := range []string{"refresh_token", "code", "code_verifier"} {
+			if params[secret] != "" {
+				raw = bytes.ReplaceAll(raw, []byte(params[secret]), []byte(redacted))
+			}
+		}
 		var detail map[string]any
 		_ = json.Unmarshal(raw, &detail)
 		code := cmp.Or(jsonPath(detail, "error.code"), jsonPath(detail, "error"), jsonPath(detail, "code"))

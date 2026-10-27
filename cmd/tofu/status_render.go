@@ -2,6 +2,7 @@ package main
 
 import (
 	"math"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -11,7 +12,10 @@ import (
 	"tofu/internal/widget"
 )
 
-const reloginDay = "2 Jan"
+const (
+	reloginDay = "2 Jan"
+	cardInset  = "  │ "
+)
 
 func stateLook(s accountState) (cli.Verdict, string) {
 	switch s {
@@ -30,7 +34,7 @@ func stateLook(s accountState) (cli.Verdict, string) {
 	case stateSetAside:
 		return cli.Verdict{Mark: cli.Fail, Text: "set aside"}, "set aside by hand"
 	case stateRefreshFailed:
-		return cli.Verdict{Mark: cli.Fail, Text: "set aside"}, "refresh failed, sign in again"
+		return cli.Verdict{Mark: cli.Fail, Text: "set aside"}, ""
 	case stateExpired:
 		return cli.Verdict{Mark: cli.Fail, Text: "expired"}, "login expired, sign in again"
 	case stateRefused:
@@ -41,12 +45,13 @@ func stateLook(s accountState) (cli.Verdict, string) {
 
 func statusLines(page cli.Page, data statusData, now time.Time) []string {
 	signedIn, attention := 0, 0
-	var body []string
+	var blocks [][]string
 	for _, sub := range data.Subscriptions {
-		body = append(body, cli.Indent(page.Label(sub.Source))...)
+		label := cli.Indent(page.Label(sub.Source))
 		for _, account := range sub.Accounts {
 			card, calm := accountCard(page, sub.Source, account, now)
-			body = append(append(body, card...), "")
+			blocks = append(blocks, append(label, card...))
+			label = nil
 			signedIn++
 			if !calm {
 				attention++
@@ -67,130 +72,98 @@ func statusLines(page cli.Page, data statusData, now time.Time) []string {
 		facts = []string{strconv.Itoa(signedIn) + " signed in"}
 	}
 	lines := append(page.Title("Accounts", facts, verdict), "", page.Section("language model", cli.Verdict{}))
-	lines = append(lines, body...)
-	lines = append(lines, keyRows(page, data.Keys, roleLLM, now)...)
+	lines = append(lines, separated(append(blocks, keyBlocks(page, data.Keys, roleLLM, now)...))...)
 	for _, group := range []struct {
 		title string
 		of    role
 	}{{"classifier · jev, required", roleClassifier}, {"search", roleSearch}} {
 		lines = append(lines, "", page.Section(group.title, cli.Verdict{}))
-		lines = append(lines, keyRows(page, data.Keys, group.of, now)...)
+		lines = append(lines, separated(keyBlocks(page, data.Keys, group.of, now))...)
 	}
 	return lines
 }
 
-func keyRows(page cli.Page, keys []keyStatus, of role, now time.Time) []string {
-	var rows []cli.Row
-	var shown []keyStatus
+func separated(blocks [][]string) []string {
+	var lines []string
+	for index, block := range blocks {
+		if index > 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, block...)
+	}
+	return lines
+}
+
+func cardFacts(page cli.Page, facts []cli.Fact) []string {
+	lines := page.Facts(facts)
+	for index := range lines {
+		lines[index] = widget.Fit(lines[index], page.Width-widget.Cells(cardInset))
+	}
+	return lines
+}
+
+func keyBlocks(page cli.Page, keys []keyStatus, of role, now time.Time) [][]string {
+	var blocks [][]string
+	var unset []cli.Row
 	for _, key := range keys {
 		if key.Role != of {
 			continue
 		}
 		facts := keyFactsOf(key.Role, key.Provider)
-		row := cli.Row{Mark: cli.Done, Cells: []string{facts.name, key.Key}, Detail: facts.use}
 		if key.Key == "" {
-			row.Mark, row.Cells[1], row.Hint = cli.Idle, "not set", facts.hint()
+			unset = append(unset, cli.Row{Mark: cli.Idle, Cells: []string{facts.name, "not set"}, Hint: facts.hint()})
+			continue
 		}
-		rows, shown = append(rows, row), append(shown, key)
+		head := page.Subject(facts.name) + cli.Gap + page.Label(key.Key)
+		body := cardFacts(page, []cli.Fact{{Label: "use", Text: facts.use}, {Label: "calls", Text: callsText(key, now)}, standingFact(key, now)})
+		blocks = append(blocks, page.Card(head, cli.Verdict{Mark: cli.Done, Text: "set"}, body))
 	}
-	var lines []string
-	for index, line := range page.Rows(rows) {
-		lines = append(lines, line)
-		lines = append(lines, cli.Indent(cli.Indent(page.Facts(keyLines(page, shown[index], now))...)...)...)
+	if len(unset) > 0 {
+		blocks = append(blocks, cli.Indent(page.Rows(unset)...))
 	}
-	return cli.Indent(lines...)
+	return blocks
 }
 
-func recordedLines(page cli.Page, key keyStatus, now time.Time) []cli.Fact {
+func callsText(key keyStatus, now time.Time) string {
 	if key.Calls == 0 {
-		if key.Key == "" {
-			return nil
-		}
-		return []cli.Fact{{Label: "calls", Text: page.Label("no calls yet")}}
+		return "none yet"
 	}
-	calls := plural(key.Calls, "call") + " · last used " + widget.Until(now.Sub(key.LastUsedAt)) + " ago"
-	if key.Queries > 0 {
-		calls += " · queries " + strconv.Itoa(key.Queries)
-	}
-	facts := []cli.Fact{{Label: "calls", Text: calls}}
-	for from := 0; from < len(key.Periods); {
-		to := from
-		for to+1 < len(key.Periods) && key.Periods[to+1].KeySpend == key.Periods[from].KeySpend {
-			to++
-		}
-		label := string(key.Periods[from].Period)
-		if to > from {
-			label += " to " + string(key.Periods[to].Period)
-		}
-		if key.Periods[from].Calls > 0 {
-			facts = append(facts, cli.Fact{Label: label, Text: spendText(key.Periods[from].KeySpend)})
-		}
-		from = to + 1
-	}
-	var answered []string
-	for _, model := range key.ByModel {
-		answered = append(answered, model.Model)
-		if len(key.ByModel) > 1 {
-			facts = append(facts, cli.Fact{Label: "on " + model.Model, Text: spendText(model.KeySpend)})
-		}
-	}
-	return append(facts, cli.Fact{Label: "answered by", Text: strings.Join(answered, ", ")})
-}
-
-func keyLines(page cli.Page, key keyStatus, now time.Time) []cli.Fact {
-	facts := recordedLines(page, key, now)
-	if limit := key.Limit; limit != nil {
-		text := "none"
-		if limit.Capped && limit.LimitUSD != nil && limit.RemainingUSD != nil {
-			text = usdText(*limit.RemainingUSD) + " of " + usdText(*limit.LimitUSD) + " left"
-		}
-		if spent := limit.ProviderSpend; spent != nil {
-			text += " · spent today " + usdText(spent.TodayUSD) + ", week " + usdText(spent.WeekUSD) + ", month " + usdText(spent.MonthUSD) + ", all " + usdText(spent.AllUSD)
-		}
-		facts = append(facts, cli.Fact{Label: "key limit", Text: text})
-	}
-	facts = append(facts, cli.Fact{Label: "key limit", Text: key.LimitUnread})
-	if balance := key.Balance; balance != nil {
-		facts = append(facts, cli.Fact{Label: "balance", Text: usdText(balance.BalanceUSD) + " (" + usdText(balance.CreditsUSD) + " bought, " + usdText(balance.UsedUSD) + " used)"})
-	}
-	facts = append(facts, cli.Fact{Label: "balance", Text: key.BalanceUnread})
-	for _, allowance := range key.Allowances {
-		text := strconv.Itoa(allowance.Remaining) + " of " + strconv.Itoa(allowance.Limit) + " " + string(allowance.Unit) + " left, per " + string(allowance.Scope)
-		if !allowance.ResetsAt.IsZero() {
-			text += " · resets in " + widget.Until(allowance.ResetsAt.Sub(now))
-		}
-		facts = append(facts, cli.Fact{Label: "allowance", Text: text})
-	}
-	if failure := key.LastError; failure != nil {
-		facts = append(facts, cli.Fact{Label: "last error", Text: strconv.Itoa(failure.Status) + " " + failure.What + " · " + widget.Until(now.Sub(failure.At)) + " ago"})
-	}
-	return append(facts, cli.Fact{Label: "reports", Text: page.Label(key.ProviderReports)})
-}
-
-func spendText(spend host.KeySpend) string {
-	text := plural(spend.Calls, "call")
-	if tokens := spend.Tokens; tokens.InputTokens+tokens.OutputTokens > 0 {
-		text += " · " + strconv.Itoa(tokens.InputTokens) + " in, " + strconv.Itoa(tokens.OutputTokens) + " out"
-		if tokens.CacheReadInputTokens+tokens.CacheWriteInputTokens > 0 {
-			text += ", " + strconv.Itoa(tokens.CacheReadInputTokens) + " cache read, " + strconv.Itoa(tokens.CacheWriteInputTokens) + " cache write"
-		}
-		if tokens.ReasoningOutputTokens > 0 {
-			text += ", " + strconv.Itoa(tokens.ReasoningOutputTokens) + " reasoning"
-		}
-		text += " tokens"
-	}
-	switch spend.CostSource {
+	text := plural(key.Calls, "call") + " · last " + widget.Until(now.Sub(key.LastUsedAt)) + " ago"
+	all := key.Periods[len(key.Periods)-1].KeySpend
+	switch all.CostSource {
 	case host.CostProvider:
-		text += " · " + usdText(spend.CostUSD) + " reported by the provider"
+		text += " · " + usdText(all.CostUSD)
 	case host.CostList:
-		text += " · " + usdText(spend.CostUSD) + " at list price, estimated"
+		text += " · " + usdText(all.CostUSD) + " est."
 	case host.CostNone:
-		text += " · no price"
-	}
-	if spend.UpstreamUSD > 0 {
-		text += " · " + usdText(spend.UpstreamUSD) + " charged upstream"
 	}
 	return text
+}
+
+func standingFact(key keyStatus, now time.Time) cli.Fact {
+	if failure := key.LastError; failure != nil && failure.At.After(key.LastUsedAt) {
+		return cli.Fact{Label: "error", Text: strconv.Itoa(failure.Status) + " " + failure.What + " · " + widget.Until(now.Sub(failure.At)) + " ago"}
+	}
+	var standing []string
+	if limit := key.Limit; limit != nil {
+		switch {
+		case limit.Capped && limit.LimitUSD != nil && limit.RemainingUSD != nil:
+			standing = append(standing, usdText(*limit.RemainingUSD)+" of "+usdText(*limit.LimitUSD)+" left")
+		case limit.ProviderSpend != nil:
+			standing = append(standing, "no cap · "+usdText(limit.ProviderSpend.MonthUSD)+" this month")
+		}
+	}
+	if balance := key.Balance; balance != nil {
+		standing = append(standing, "balance "+usdText(balance.BalanceUSD))
+	}
+	for _, allowance := range key.Allowances {
+		text := strconv.Itoa(allowance.Remaining) + " of " + strconv.Itoa(allowance.Limit) + " " + string(allowance.Unit) + " left"
+		if !allowance.ResetsAt.IsZero() {
+			text += ", resets in " + widget.Until(allowance.ResetsAt.Sub(now))
+		}
+		standing = append(standing, text)
+	}
+	return cli.Fact{Label: "limit", Text: strings.Join(standing, " · ")}
 }
 
 func usdText(usd float64) string {
@@ -205,6 +178,11 @@ func significantDecimals(usd float64) int {
 	return decimals + 1
 }
 
+func lastRefreshFailed(account accountStatus) bool {
+	tries := account.Attempts
+	return len(tries) > 0 && tries[len(tries)-1].Status != http.StatusOK
+}
+
 func accountCard(page cli.Page, source string, account accountStatus, now time.Time) ([]string, bool) {
 	verdict, reason := stateLook(account.State)
 	id := strconv.FormatInt(account.ID, 10)
@@ -212,6 +190,8 @@ func accountCard(page cli.Page, source string, account accountStatus, now time.T
 	switch {
 	case account.State == stateSetAside:
 		login, hint = reason, "tofu login --enable "+id
+	case account.State == stateRefreshFailed, account.State == stateRefused && lastRefreshFailed(account):
+		hint = loginHint(source)
 	case reason != "":
 		login, hint = reason, loginHint(source)
 	case !account.ReloginBy.IsZero():
@@ -228,7 +208,7 @@ func accountCard(page cli.Page, source string, account accountStatus, now time.T
 		}
 		facts = append(facts, cli.Fact{Label: window.ID, Text: text})
 	}
-	lines := page.Facts(facts)
+	lines := cardFacts(page, facts)
 	if hint != "" {
 		lines = append(lines, page.Hint(hint))
 	}

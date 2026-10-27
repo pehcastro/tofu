@@ -205,6 +205,9 @@ func (m *Manager) waitForLease(ctx context.Context, id int64) error {
 
 func (m *Manager) mint(ctx context.Context, id int64, credential Credential, stored string, stale func(Credential) bool, reloads int) (string, error) {
 	minted, err := refreshGrant(ctx, m.client, m.spec, credential, m.now())
+	if recordErr := m.store.RecordAttempt(id, attemptOf(err, m.now())); recordErr != nil {
+		m.note(fmt.Sprintf("%s #%d: the refresh attempt was not recorded: %v", m.spec.Provider, id, recordErr))
+	}
 	var refusal tokenRefusal
 	if !errors.As(err, &refusal) || refusal.reason() == "" {
 		if err != nil {

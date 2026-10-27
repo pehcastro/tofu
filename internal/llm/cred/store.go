@@ -32,7 +32,16 @@ CREATE TABLE IF NOT EXISTS credential_use (
 	credential_id INTEGER PRIMARY KEY,
 	used_at_ms INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS refresh_attempts (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	credential_id INTEGER NOT NULL,
+	at_ms INTEGER NOT NULL,
+	status INTEGER NOT NULL,
+	answer TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_refresh_attempts_credential ON refresh_attempts(credential_id, id);
 `
+	attemptsKept = 20
 )
 
 type Row struct {
@@ -272,7 +281,7 @@ func (s *Store) Delete(id int64) error {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	for _, table := range []string{"refresh_leases", "credential_use"} {
+	for _, table := range []string{"refresh_leases", "credential_use", "refresh_attempts"} {
 		if _, err := tx.Exec(`DELETE FROM `+table+` WHERE credential_id = ?`, id); err != nil {
 			return err
 		}
@@ -281,6 +290,35 @@ func (s *Store) Delete(id int64) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+func (s *Store) RecordAttempt(id int64, attempt Attempt) error {
+	if _, err := s.db.Exec(`INSERT INTO refresh_attempts (credential_id, at_ms, status, answer) VALUES (?, ?, ?, ?)`,
+		id, attempt.At.UnixMilli(), attempt.Status, attempt.Answer); err != nil {
+		return err
+	}
+	_, err := s.db.Exec(`DELETE FROM refresh_attempts WHERE credential_id = ? AND id NOT IN
+		(SELECT id FROM refresh_attempts WHERE credential_id = ? ORDER BY id DESC LIMIT ?)`, id, id, attemptsKept)
+	return err
+}
+
+func (s *Store) Attempts(id int64) ([]Attempt, error) {
+	query, err := s.db.Query(`SELECT at_ms, status, answer FROM refresh_attempts WHERE credential_id = ? ORDER BY id`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = query.Close() }()
+	var out []Attempt
+	for query.Next() {
+		var attempt Attempt
+		var at int64
+		if err := query.Scan(&at, &attempt.Status, &attempt.Answer); err != nil {
+			return nil, err
+		}
+		attempt.At = time.UnixMilli(at)
+		out = append(out, attempt)
+	}
+	return out, query.Err()
 }
 
 func (s *Store) AcquireLease(id int64, owner string, until, now time.Time) (bool, error) {

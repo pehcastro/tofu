@@ -180,9 +180,14 @@ func credentialStatus(now time.Time, redact bool, urls map[quota.Provider]string
 		chosen, _ := quota.Pick(statusCandidates(provider, rows, results, now), quota.Provider(provider), nil, now)
 		source := subscriptionStatus{Role: roleLLM, Source: string(provider)}
 		for index, row := range rows {
-			if row.Credential.Provider == provider {
-				source.Accounts = append(source.Accounts, accountOf(row, results[index], row.ID == chosen.ID, redact, library, now))
+			if row.Credential.Provider != provider {
+				continue
 			}
+			attempts, err := store.Attempts(row.ID)
+			if err != nil {
+				return data, nil, err
+			}
+			source.Accounts = append(source.Accounts, accountOf(row, results[index], attempts, row.ID == chosen.ID, redact, library, now))
 		}
 		data.Subscriptions = append(data.Subscriptions, source)
 	}
@@ -199,7 +204,7 @@ func statusCandidates(provider cred.Provider, rows []cred.Row, results []pollRes
 	return candidates
 }
 
-func accountOf(row cred.Row, result pollResult, chosen, redact bool, library models.Library, now time.Time) accountStatus {
+func accountOf(row cred.Row, result pollResult, attempts []cred.Attempt, chosen, redact bool, library models.Library, now time.Time) accountStatus {
 	refreshed := "not refreshed yet"
 	if !row.Credential.Refreshed.IsZero() {
 		refreshed = "refreshed " + widget.Until(now.Sub(row.Credential.Refreshed)) + " ago"
@@ -210,6 +215,16 @@ func accountOf(row cred.Row, result pollResult, chosen, redact bool, library mod
 		State:   stateOf(row, result, chosen, now),
 		Login:   row.Credential.Kind + " · " + refreshed + ", kept alive while tofu runs",
 		Plan:    result.report.Plan,
+	}
+	for _, attempt := range attempts {
+		account.Attempts = append(account.Attempts, host.RefreshTry{At: attempt.At.UTC(), Status: attempt.Status, Answer: attempt.Answer})
+	}
+	if account.State == stateRefreshFailed {
+		account.Login = "refresh failed, sign in again"
+	}
+	if lastRefreshFailed(account) && (account.State == stateRefreshFailed || account.State == stateRefused) {
+		last := attempts[len(attempts)-1]
+		account.Login = "refresh failed " + widget.Until(now.Sub(last.At)) + " ago · " + last.Said()
 	}
 	account.ReloginBy, _ = row.ReloginBy(now)
 	for _, window := range result.report.Windows {

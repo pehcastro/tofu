@@ -12,6 +12,7 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/golden"
+	"tofu/internal/host"
 	"tofu/internal/llm/cred"
 	"tofu/internal/sys"
 )
@@ -27,7 +28,7 @@ func fixtureMoment() time.Time { return time.Date(2026, 9, 29, 12, 0, 0, 0, time
 
 func statusFixture() statusData {
 	at := fixtureMoment()
-	return statusData{
+	data := statusData{
 		Subscriptions: []subscriptionStatus{
 			{Source: "claude-sub", Accounts: []accountStatus{
 				{ID: 1, Account: "ada@example.com", State: stateInUse, Login: "oauth", ReloginBy: time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC), Windows: []windowStatus{
@@ -38,7 +39,7 @@ func statusFixture() statusData {
 				{ID: 2, Account: "lin.marsh@example.org", State: stateStandby, Login: "oauth", ReloginBy: time.Date(2026, 11, 3, 9, 0, 0, 0, time.UTC), Windows: []windowStatus{
 					{ID: "5h", Used: 0.92, ResetsAt: at.Add(51 * time.Minute)},
 				}},
-				{ID: 3, Account: "ops@example.net", State: stateRefreshFailed, Login: "oauth"},
+				{ID: 3, Account: "ops@example.net", State: stateRefreshFailed, Login: "refresh failed 2h ago · 400 invalid_grant: Refresh token not found or invalid"},
 			}},
 			{Source: "codex-sub", Accounts: []accountStatus{
 				{ID: 4, Account: "11111111-2222-3333-4444-555555555555", State: stateSpent, Login: "oauth", Plan: "pro", Windows: []windowStatus{
@@ -53,6 +54,15 @@ func statusFixture() statusData {
 			return ""
 		}),
 	}
+	limit, left := 5.0, 3.2
+	busy := &data.Keys[1]
+	busy.Calls, busy.LastUsedAt = 12, at.Add(-3*time.Minute)
+	busy.Periods = []host.KeyPeriod{{Period: host.PeriodToday}, {Period: host.PeriodAll, KeySpend: host.KeySpend{Calls: 12, CostUSD: 0.42, CostSource: host.CostProvider}}}
+	busy.LastError = &host.KeyFailure{Status: http.StatusTooManyRequests, What: "rate limited", At: at.Add(-time.Hour)}
+	busy.Limit = &host.KeyLimit{Capped: true, LimitUSD: &limit, RemainingUSD: &left}
+	busy.Balance = &host.KeyBalance{BalanceUSD: 18.5}
+	busy.Allowances = []host.KeyAllowance{{Unit: host.UnitCalls, Limit: 2000, Remaining: 1800, ResetsAt: at.Add(72 * time.Hour)}}
+	return data
 }
 
 func printedStatus(t *testing.T, page cli.Page) string {

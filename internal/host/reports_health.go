@@ -103,6 +103,13 @@ type AccountStatus struct {
 	ReloginBy time.Time      `json:"relogin_by,omitzero"`
 	Plan      string         `json:"plan,omitempty"`
 	Windows   []WindowStatus `json:"windows,omitempty"`
+	Attempts  []RefreshTry   `json:"attempts,omitempty"`
+}
+
+type RefreshTry struct {
+	At     time.Time `json:"at"`
+	Status int       `json:"status,omitempty"`
+	Answer string    `json:"answer"`
 }
 
 type WindowStatus struct {
