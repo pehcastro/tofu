@@ -70,17 +70,20 @@ Every call on a key is one line in `~/.tofu/keyuse/<date>.jsonl`, written
 by every tofu process, with the variable the key came from and never the
 key itself.
 
+A stored key is a card of at most three lines, and a key not stored is one
+line with the command that stores it. No line wraps; a longer one is cut
+with `…`.
+
 | Row | What it says |
 |---|---|
-| `calls` | how many calls and when the key was last used |
-| `today`, `7d`, `30d`, `all` | calls, input, output, cache and reasoning tokens, and the cost; periods with the same figures fold into one row, such as `today to all` |
-| `on <model>` | the same per model, when more than one answered |
-| `answered by` | the model ids the provider said it ran |
-| `key limit` | the key's spend limit, what is left, and what the provider says it spent today, this week, this month and in all |
-| `balance` | the account's credit, bought and used |
-| `allowance` | a rate limit read from the last call, in calls or tokens, per key or per team, and when it resets |
-| `last error` | the newest refusal, such as `402 account out of credit` |
-| `reports` | what this provider reports, and what it does not |
+| `use` | what the key serves |
+| `calls` | how many calls, when the key was last used, and their cost in all, `est.` when priced from the list |
+| `limit` | the spend limit and what is left, or `no cap` and this month's spend, the account balance, and a rate limit read from the last call |
+| `error` | in place of `limit`, a refusal newer than the last good call, such as `402 account out of credit · 3m ago` |
+
+`tofu login --status --json` carries every figure behind the card: calls
+and tokens for today, 7 days, 30 days and in all, per model, the model ids
+the provider said it ran, and what each provider reports.
 
 Every cost says where it came from: `reported by the provider`,
 `at list price, estimated` when the provider gives no cost, or `no price`.
@@ -113,17 +116,13 @@ figures:
 
 ```
 language model
-  ○ Meta        not set   → tofu login llm meta
-  ✓ OpenRouter  ····a1b2  serves the openrouter models on your own key
-      calls         12 calls · last used 3m ago
-      today to all  12 calls · 48210 in, 1904 out tokens · 0.0412 USD
-        reported by the provider
-      answered by   deepseek/deepseek-v3
-      key limit     8.50 USD of 10.00 USD left · spent today 0.04 USD,
-        week 0.90 USD, month 1.50 USD, all 1.50 USD
-      balance       4.20 USD (20.00 USD bought, 15.80 USD used)
-      reports       OpenRouter reports spend and limits for the key and a
-        cost per call; per-model history needs a management key
+  ┌ OpenRouter  ····a1b2 ──────────────────────────────────── ✓ set
+  │ use       serves the openrouter models on your own key
+  │ calls     12 calls · last 3m ago · 0.0412 USD
+  │ limit     8.50 USD of 10.00 USD left · balance 4.20 USD
+  └─────────────────────────────────────────────────────────────────
+
+  ○ Meta  not set  → tofu login llm meta
 
 classifier · jev, required
   ○ TypeSafe    not set  → tofu login classifier typesafe

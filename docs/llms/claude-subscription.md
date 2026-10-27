@@ -2,7 +2,7 @@
 title: Claude subscription
 description: The claude-sub source, how tofu signs in to your Claude plan, and how its prompt is cached.
 order: 2
-updated: 2026-10-09
+updated: 2026-10-26
 ---
 
 `claude-sub` is the source for Claude models on your Claude plan. tofu signs
@@ -29,6 +29,13 @@ neighbour.
   room and moves when it runs out.
 - Set one aside or bring it back: `tofu login --disable <n>`,
   `--enable <n>`.
+- See why one was signed out: when Anthropic refuses a refresh, tofu sets
+  the account aside, and its card in `tofu login --status` says when and
+  what Anthropic answered, such as
+  `refresh failed 2h ago · 400 invalid_grant: Refresh token [redacted] not found or invalid`.
+  tofu keeps the last 20 attempts for each account, with the time, the
+  status and the answer, and never the token. `tofu login --status --json`
+  lists them under `attempts`, and `tofu logout` clears them.
 - Sign one out: `tofu logout llm claude-sub`. With two accounts signed in,
   tofu names both and asks for the number: `tofu logout llm claude-sub <n>`.
 - Pick a Claude model: **Ctrl+L**, provider `claude-sub`. `/status` shows

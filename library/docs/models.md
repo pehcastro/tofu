@@ -105,9 +105,7 @@ a `✗` line per tier that no longer resolves.
     tofu login --status
 
 prints a card per credential with a bar per quota window, then each key by
-its role, `✓` with its last four characters or `○ not set`. While the app or
-`tofu serve` runs, an account whose token expires within 10 minutes, or
-untouched for 8 days, is refreshed. Turns spread over accounts with equal
+its role, a card or one `○ not set` line. An account whose token expires within 10 minutes, or untouched for 8 days, is refreshed while the app or `tofu serve` runs. A refused refresh sets it aside, and its card says when and what the vendor answered; `--json` lists the last 20 attempts under `attempts`, never with a token. Turns spread over accounts with equal
 room, least recently used first. `tofu usage` prints the quota windows.
 
 ## Undo it

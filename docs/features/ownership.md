@@ -16,9 +16,10 @@ folder, or a glob such as `internal/turn/*.go`. The lead gives it in the
   runs only when every step reads: reading, listing, searching, inspecting,
   `git` reads, and the project's own checks such as `go test`, `cargo
   test` or `npm test`, and the formatters `gofmt` and `rustfmt`. A
-  formatter that rewrites files, `cargo build`, and a `CARGO_TARGET_DIR`
-  run only when the files or the target folder are in `owns` or the scratch
-  folder. `rm`, `mv`, a redirect, `sed -i`, `bash -c`,
+  formatter that rewrites files runs only when the files are in `owns` or
+  the scratch folder. `cargo build`, `cargo run` and a binary they built
+  run for a crate the agent holds a path in, into the project's one shared
+  target; `--target-dir` and a `CARGO_TARGET_DIR` of its own are refused. `rm`, `mv`, a redirect, `sed -i`, `bash -c`,
   PowerShell's `Set-Content` and anything the check can't read are refused
   with the reason. A write into the agent's own scratch folder is
   allowed, and `TMP`, `TEMP` and `TMPDIR` point there; the system's

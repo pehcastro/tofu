@@ -7,25 +7,24 @@ summary: tofu login --status shows each API key's calls, tokens and cost with wh
 ## What it is
 
 `tofu login --status` lists each key under its role: language model,
-classifier and search. A stored key shows `✓` and its last four
-characters; one not stored shows `○ not set` and the command that stores
-it. Under a stored key, tofu shows what it recorded and what the provider
-said:
+classifier and search. A stored key is a card of at most three lines, with
+its last four characters and `✓ set`; a key not stored is one line,
+`○ not set`, with the command that stores it. No line wraps: a line
+longer than the terminal is cut with `…`.
 
-- `calls`: how many calls tofu made on the key and when it last used it;
-  `no calls yet` before the first
-- `today`, `7d`, `30d` and `all`: calls, input, output, cache read, cache
-  write and reasoning tokens, and the cost. Periods with the same figures
-  fold into one row, such as `today to all`
-- `on <model>`: the same figures per model, when more than one answered
-- `answered by`: the model ids the provider said it ran
-- `key limit`: the key's spend limit and what is left, and what the
-  provider says the key spent today, this week, this month and in all
-- `balance`: the account's credit, bought and used
-- `allowance`: a rate limit read from the last call, in calls or tokens,
-  per key or per team, with when it resets
-- `last error`: the newest refusal, such as `402 account out of credit`
-- `reports`: what this provider reports and what it does not
+- `use`: what the key serves
+- `calls`: how many calls tofu made on the key, when it last used it, and
+  what they cost in all, `est.` when priced from the list; `none yet`
+  before the first
+- `limit`: the key's spend limit and what is left, or `no cap` and what
+  the provider says it spent this month, the account balance, and any rate
+  limit read from the last call, with when it resets
+- `error`, in place of `limit`: a refusal newer than the last good call,
+  such as `402 account out of credit · 3m ago`
+
+`tofu login --status --json` carries every figure behind the card: the
+calls and tokens for today, 7 days, 30 days and in all, per model, the
+model ids the provider said it ran, and what each provider reports.
 
 Every cost says where it came from:
 
@@ -72,16 +71,13 @@ follow the key's variable, so a replaced key keeps the history.
 
 A stored OpenRouter key reads like this, with made-up figures:
 
-    ✓ OpenRouter  ····a1b2  serves the openrouter models on your own key
-        calls         12 calls · last used 3m ago
-        today to all  12 calls · 48210 in, 1904 out tokens · 0.0412 USD
-          reported by the provider
-        answered by   deepseek/deepseek-v3
-        key limit     8.50 USD of 10.00 USD left · spent today 0.04 USD,
-          week 0.90 USD, month 1.50 USD, all 1.50 USD
-        balance       4.20 USD (20.00 USD bought, 15.80 USD used)
+    ┌ OpenRouter  ····a1b2 ──────────────────────────────────── ✓ set
+    │ use       serves the openrouter models on your own key
+    │ calls     12 calls · last 3m ago · 0.0412 USD
+    │ limit     8.50 USD of 10.00 USD left · balance 4.20 USD
+    └─────────────────────────────────────────────────────────────────
 
-`tofu login --status --json` carries the same under each key, and
+`tofu login --status --json` carries the full figures under each key, and
 `query.accounts` over `tofu serve` answers it.
 
 ## Undo it

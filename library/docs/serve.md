@@ -38,7 +38,7 @@ context. `tofu docs serve-methods` lists every request; this page is what serve 
   and `ended`; a fire that starts a turn shows in its `origin` alone, one joining a running turn sends a `note`
 - `tool.started`, `tool.completed` and `file.edit` (an append as an added hunk) by a sub-agent carry its
   `agent` and `instance`, live and replayed; `tool.started` the bash `title` the model gave, and
-  `tool.completed` a `summary`: `exit`, `durationMs`, `hits` for a search, `added` and `removed` lines. Both carry `card`, the call drawn as a row (`family`, `doing`, `verb`, `object`, `meta`, `tone`), its `group`, and `groupSummary`, the turn's group row: `calls`, `failed`, its `head` and its `open` lines
+  `tool.completed` a `summary`: `exit`, `durationMs`, `hits` for a search, `added` and `removed` lines. Both carry `card`, the call drawn as a row (`family`, `doing`, `verb`, `object`, `meta`, `tone`, and on a ticket move `from` and `to`), its `group`, and `groupSummary`, the turn's group row: `calls`, `failed`, its `head` and its `open` lines
 - `agent.ended`: `endedAt`, `durationMs`, the `turn` that spawned it;
   `turn.steered`: the lead read a message sent mid-turn, until then queued; `usage.updated`, per turn and agent after each call, the running `tokensIn`, `tokensOut`, `cacheRead`, `cacheWrite5m`, `cacheWrite1h`, `costUsd`, `decisions`
 - `quota.updated`: on open, after each turn, on an account move, every five minutes, and once a `retry_at`

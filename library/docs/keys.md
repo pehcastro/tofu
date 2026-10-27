@@ -47,11 +47,13 @@ refused with a note to convert it to png or jpeg. A sent message says
 `Attached 1 Image` or `Attached 3 Images` under its text, and each pasted
 text keeps its own line, such as `text, 2400 characters`.
 
-A turn's tool calls fold into one group row in the chat, such as `2 calls
-2s`: while the turn works it shows the call in progress and its time, and
-once settled it sums up the work. `ctrl+o` or a click opens it to one line
-per kind of work, with `collapse` to fold it. A failed call (`bash failed
-1 of 1`), a gate verdict and a question keep their own rows.
+The lead's work between two messages is one row in the chat: `running bash
+· (56) steps · 3 agents` while it works, `finished · (70) steps · 3 agents
+· 32m 12s` once settled. A commit, a push and a ticket created or moved each
+get one line, such as `▣ DASH-350 · moved todo > doing`, and every other call
+is counted; `ctrl+o` or a click lists those calls under the row, with
+`collapse` to fold it. Sub-agents share one row per status, such as `working · [&ada],
+[&bo]`.
 
 `ctrl+c` while the lead works stops the lead at once, and its sub-agents
 keep running. With the lead idle and sub-agents working, the first press

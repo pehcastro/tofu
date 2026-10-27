@@ -20,14 +20,18 @@ number to fix each.
 
 ## Why the chat stays clean
 
-**The chat is for you, the tabs are for the detail.** A turn's tool calls
-fold into one group row by default, such as `2 calls 2s`, so what you read is
-the lead's answer, and every call is one tab away. While the turn works, the
-row shows the call in progress and how long it has run; once it settles, it
-sums up the work. Click it or press `Ctrl+O` and it opens to one line per
-kind of work, with `collapse` to fold it again. A failed call, such as `bash
-failed 1 of 1`, a gate verdict and a question stand on their own rows. An answer streams without stutter: a code block draws plain
-while it is typed and gets its colours when its closing fence arrives.
+**The chat is for you, the tabs are for the detail.** The lead's work
+between two messages is one row, so what you read is the lead's answer, and
+every call is one tab away. While the lead works, the row says what it does
+now and counts the steps, such as `running bash · (56) steps · 3 agents`;
+once it settles, it reads `finished · (70) steps · 3 agents · 32m 12s`. A
+commit, a push and a ticket created or moved each get one line of their own,
+such as `▣ DASH-350 · moved todo > doing`; every other call is only counted.
+Click the row or press `Ctrl+O` and it lists those calls under it, with
+`collapse` to fold it again.
+Sub-agents share one row per status, such as `working · [&ada], [&bo]`. An
+answer streams without stutter and is never cut in two: a code block draws
+plain while it is typed and gets its colours when its closing fence arrives.
 
 **You never wait on the model to type.** A message sent mid-turn reaches the
 model at its next step.
@@ -129,7 +133,7 @@ the key each rebindable action is bound to now. Type to filter it.
 | `@` | Attach a file |
 | `Ctrl+G` | Edit the prompt in your editor |
 | `Ctrl+P` | Search the prompts you sent, in every session |
-| `Ctrl+O` | Open the last tool call, or the turn's group row |
+| `Ctrl+O` | Open the lead's last row, or the last tool call |
 | `Ctrl+Y`, `Alt+Y` | Copy the last answer, or the last tool call |
 | `Ctrl+X`, `Alt+Up`, `Alt+Down` | Remove or pick a queued message |
 | `!` at the start | Run a shell command, read by the next prompt |

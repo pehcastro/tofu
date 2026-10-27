@@ -10,6 +10,26 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.19 - 2026-10-27
+
+A clean chat again: one live row for the lead's work, one row per sub-agent status, and replies that are never cut in two.
+
+### Changed
+
+- The chat draws one row for the lead's work between two messages: `running bash · (56) steps · 3 agents` while it works, with the verb of what it does now, and `finished · (70) steps · 3 agents · 32m 12s` once it settles. A commit, a push and a ticket created or moved each get one line of their own, such as `◆ 4f50d30 · add the first note` and `▣ DASH-350 · moved todo > doing`. Every other call is counted, never drawn.
+- Sub-agents share one row per status in the chat, such as `working · [&ada], [&bo]` and `waiting for answer · [&cy]`, and a finished sub-agent leaves it. The line under the chat says only `working` and the time.
+- A ticket move over `tofu serve` carries `from` and `to` on its card, and `tofu boardy move` prints the status the ticket left.
+- In a sub-agent's shell, `.tofu/rules` can be read, and every other `.tofu` path is refused; `cargo build`, `cargo run` and a binary built from them run for a crate the agent holds a path in; every cargo command builds into the project's one shared target, and `--target-dir` is refused; `tofu serve --schema` runs.
+- `tofu login --status` draws each stored API key as a card of at most three lines, `use`, `calls` and `limit`, and a key not set as one line; no line wraps. A subscription whose refresh the vendor refused says when and what the vendor answered, such as `refresh failed 2h ago · 400 invalid_grant: ...`, and `--json` lists each recorded attempt under `attempts`, with no token in it.
+
+### Removed
+
+- The `foldHidesShell` setting, which no longer changed anything. A settings file that still holds it loads as before.
+
+### Fixed
+
+- A lead reply is no longer cut into two messages when a cron fires or a note arrives while it streams, in the app and over `tofu serve`.
+
 ## 0.5.18 - 2026-10-24
 
 Every session runs in one tofu host per project that each window joins, a long session stays light and fast, and a session keeps its model, pictures and account across resume.

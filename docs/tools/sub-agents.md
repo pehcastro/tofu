@@ -40,8 +40,11 @@ agents` lists the sub-agents `agent` can name.
 
 A sub-agent reads its own session and board from its shell: `tofu session
 find`, `trace` and `info`, `tofu boardy show`, `list` and `triage list`,
-`tofu models` and `tofu version` run there, and every other tofu verb is
-refused. `powershell -File` on a script inside a path the sub-agent holds
+`tofu models`, `tofu version` and `tofu serve --schema` run there, and
+every other tofu verb is refused. Of `.tofu`, it reads only `.tofu/rules`.
+`cargo build`, `cargo run` and a binary they built run for a crate the
+sub-agent holds a path in, and every cargo command builds into the
+project's one shared target, so `--target-dir` is refused. `powershell -File` on a script inside a path the sub-agent holds
 runs, and `timeout <n>` wraps any command it may run. A command the gate
 would ask you about is refused in a sub-agent rather than asked, so a
 sub-agent never waits on a question nobody sees.
