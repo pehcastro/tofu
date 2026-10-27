@@ -1107,6 +1107,7 @@ pub(crate) struct PaintIndex {
     cursor_styles_index: usize,
     accessed_element_states_index: usize,
     tab_handle_index: usize,
+    window_control_hitboxes_index: usize,
     line_layout_index: LineLayoutIndex,
 }
 
@@ -3729,11 +3730,18 @@ impl Window {
             cursor_styles_index: self.next_frame.cursor_styles.len(),
             accessed_element_states_index: self.next_frame.accessed_element_states.len(),
             tab_handle_index: self.next_frame.tab_stops.paint_index(),
+            window_control_hitboxes_index: self.next_frame.window_control_hitboxes.len(),
             line_layout_index: self.text_system.layout_index(),
         }
     }
 
     pub(crate) fn reuse_paint(&mut self, range: Range<PaintIndex>) {
+        self.next_frame.window_control_hitboxes.extend(
+            self.rendered_frame.window_control_hitboxes[range.start.window_control_hitboxes_index
+                ..range.end.window_control_hitboxes_index]
+                .iter()
+                .cloned(),
+        );
         self.next_frame.cursor_styles.extend(
             self.rendered_frame.cursor_styles
                 [range.start.cursor_styles_index..range.end.cursor_styles_index]
@@ -4497,7 +4505,7 @@ impl Window {
         let scale_factor = self.scale_factor();
         let filters: SmallVec<[ScaledFilter; 4]> = filters
             .iter()
-            .filter(|filter| !filter.is_identity())
+            .filter(|filter| !filter.is_identity() && !matches!(filter, Filter::Refract(_)))
             .map(|filter| filter.scale(scale_factor))
             .collect();
         if filters.is_empty() {

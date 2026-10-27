@@ -388,9 +388,5 @@ pub fn trace(id: impl Into<ElementId>, label: SharedString, theme: &Theme) -> St
         .rounded(px(RADIUS_CHIP))
         .cursor_pointer()
         .hover(move |style| style.bg(hover))
-        .child(glyph(
-            Glyph::Trace,
-            ICON_SMALL,
-            theme.color(ColorToken::Trace),
-        ))
+        .child(glyph(Glyph::At, ICON_SMALL, theme.color(ColorToken::Trace)))
 }

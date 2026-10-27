@@ -2,11 +2,11 @@ pub use crate::shaders::{
     blur::BlurUniforms,
     common::{
         BlurCompositeClip as ShaderBlurCompositeClip, Bounds as ShaderBounds,
-        Corners as ShaderCorners, DownsampleMode,
+        Corners as ShaderCorners, DownsampleMode, ShaderBool,
     },
 };
-use gpui::{Bounds, Corners, ScaledPixels};
-use wgsl_rs::std::vec2f;
+use gpui::{Bounds, Corners, ScaledPixels, ScaledRefraction};
+use wgsl_rs::std::{vec2f, vec4f};
 
 pub const DOWNSAMPLE_FACTOR: u32 = 2;
 
@@ -123,6 +123,17 @@ impl BlurUniforms {
             )
         }
     }
+
+    pub fn refracted(self, lens: ScaledRefraction, frosted: bool) -> Self {
+        Self {
+            frosted: match frosted {
+                true => ShaderBool::Enabled,
+                false => ShaderBool::Disabled,
+            },
+            lens: vec4f(lens.offset.0, lens.edge.0, lens.profile, lens.spread.0),
+            ..self
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -226,9 +237,10 @@ fn empty_uniforms(downsample_mode: DownsampleMode) -> BlurUniforms {
         source_size: vec2f(1.0, 1.0),
         target_size: vec2f(1.0, 1.0),
         corner_smoothing: 0.0,
-        padding0: 0,
+        frosted: ShaderBool::Disabled,
         padding1: 0,
         padding2: 0,
+        lens: vec4f(0.0, 0.0, 0.0, 0.0),
     }
 }
 

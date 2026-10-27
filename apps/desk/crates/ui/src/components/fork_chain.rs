@@ -8,7 +8,10 @@ use gpui::{
 use crate::components::card::inner_card;
 use crate::components::chip::{badge, mono, tabular};
 use crate::components::paint::{ink, ring};
-use crate::components::size::{FONT_BODY, FONT_CHAT, FONT_SMALL, FONT_WHO, LINE_BODY, T1, T2, T3};
+use crate::components::size::{
+    FONT_BODY, FONT_CHAT, FONT_SMALL, FONT_WHO, HOVER, LINE_BODY, RADIUS_ROW, ROW_ON, ROW_PAD_X,
+    ROW_PAD_Y, T1, T2, T3,
+};
 use crate::theme::{ColorToken, Theme};
 
 const RAIL: f32 = 22.0;
@@ -22,6 +25,7 @@ const RIBBON_MOST: f32 = 18.0;
 const FORK_HEIGHT: f32 = 46.0;
 const FACT_LEAST: f32 = 104.0;
 const DOT_RING: f32 = 0.45;
+const LISTED_DOT_TOP: f32 = 13.0;
 
 #[derive(Clone)]
 pub struct Fork {
@@ -48,6 +52,7 @@ pub struct ForkChain {
     theme: Theme,
     generations: Vec<Generation>,
     on_open: Option<OnOpen>,
+    picked: Option<usize>,
 }
 
 impl ForkChain {
@@ -56,7 +61,13 @@ impl ForkChain {
             theme: theme.clone(),
             generations,
             on_open: None,
+            picked: None,
         }
+    }
+
+    pub fn listed(mut self, picked: usize) -> Self {
+        self.picked = Some(picked);
+        self
     }
 
     pub fn on_open(mut self, open: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self {
@@ -133,13 +144,122 @@ fn dot(theme: &Theme, current: bool) -> Div {
     }
 }
 
-fn generation_row(generation: &Generation, last: bool, theme: &Theme) -> Div {
-    let marks = [
+fn marks(generation: &Generation, theme: &Theme) -> impl Iterator<Item = Div> {
+    [
         generation
             .current
             .then_some(("current", ColorToken::StatusLive)),
         generation.head.then_some(("head", ColorToken::TextStrong)),
-    ];
+    ]
+    .into_iter()
+    .flatten()
+    .map(|(mark, color)| badge(mark, theme).text_color(theme.color(color)))
+}
+
+pub fn facts(facts: &[(SharedString, SharedString)], theme: &Theme) -> Div {
+    div()
+        .flex()
+        .flex_wrap()
+        .gap_x(px(20.0))
+        .gap_y(px(8.0))
+        .children(facts.iter().map(|(label, value)| {
+            div()
+                .flex()
+                .flex_col()
+                .min_w(px(FACT_LEAST))
+                .child(
+                    div()
+                        .text_size(px(FONT_WHO))
+                        .text_color(ink(theme, T3))
+                        .child(label.clone()),
+                )
+                .child(
+                    div()
+                        .text_size(px(FONT_BODY))
+                        .line_height(px(LINE_BODY))
+                        .font_features(tabular())
+                        .whitespace_nowrap()
+                        .text_color(ink(theme, T1))
+                        .child(value.clone()),
+                )
+        }))
+}
+
+fn listed_row(generation: &Generation, (first, last): (bool, bool), theme: &Theme) -> Div {
+    let head = div()
+        .flex()
+        .items_center()
+        .gap_x(px(8.0))
+        .min_w_0()
+        .child(
+            div()
+                .min_w_0()
+                .truncate()
+                .font_family(mono(theme))
+                .text_size(px(FONT_BODY))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(ink(theme, T1))
+                .child(
+                    generation
+                        .handle
+                        .clone()
+                        .unwrap_or_else(|| generation.name.clone()),
+                ),
+        )
+        .children(marks(generation, theme))
+        .child(div().flex_1())
+        .child(
+            div()
+                .flex_none()
+                .whitespace_nowrap()
+                .text_size(px(FONT_SMALL))
+                .text_color(ink(theme, T3))
+                .child(generation.place.clone()),
+        );
+    let said = div()
+        .flex()
+        .flex_wrap()
+        .gap_x(px(12.0))
+        .text_size(px(FONT_SMALL))
+        .font_features(tabular())
+        .children(generation.facts.iter().map(|(label, value)| {
+            div()
+                .flex()
+                .gap(px(4.0))
+                .whitespace_nowrap()
+                .child(div().text_color(ink(theme, T1)).child(value.clone()))
+                .child(div().text_color(ink(theme, T3)).child(label.clone()))
+        }));
+    div()
+        .flex()
+        .gap(px(10.0))
+        .px(px(ROW_PAD_X))
+        .rounded(px(RADIUS_ROW))
+        .child(
+            div()
+                .w(px(DOT))
+                .flex_none()
+                .flex()
+                .flex_col()
+                .items_center()
+                .child(rail_line(theme, !first).flex_none().h(px(LISTED_DOT_TOP)))
+                .child(dot(theme, generation.current))
+                .child(rail_line(theme, !last)),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .flex_1()
+                .min_w_0()
+                .py(px(ROW_PAD_Y))
+                .gap(px(2.0))
+                .child(head)
+                .when(!generation.facts.is_empty(), |row| row.child(said)),
+        )
+}
+
+fn generation_row(generation: &Generation, last: bool, theme: &Theme) -> Div {
     let head = div()
         .flex()
         .flex_wrap()
@@ -161,12 +281,7 @@ fn generation_row(generation: &Generation, last: bool, theme: &Theme) -> Div {
                 .text_color(ink(theme, T3))
                 .child(handle)
         }))
-        .children(
-            marks
-                .into_iter()
-                .flatten()
-                .map(|(mark, color)| badge(mark, theme).text_color(theme.color(color))),
-        )
+        .children(marks(generation, theme))
         .child(div().flex_1())
         .child(
             div()
@@ -174,32 +289,6 @@ fn generation_row(generation: &Generation, last: bool, theme: &Theme) -> Div {
                 .text_color(ink(theme, T3))
                 .child(generation.place.clone()),
         );
-    let facts = div()
-        .flex()
-        .flex_wrap()
-        .gap_x(px(20.0))
-        .gap_y(px(8.0))
-        .children(generation.facts.iter().map(|(label, value)| {
-            div()
-                .flex()
-                .flex_col()
-                .min_w(px(FACT_LEAST))
-                .child(
-                    div()
-                        .text_size(px(FONT_WHO))
-                        .text_color(ink(theme, T3))
-                        .child(label.clone()),
-                )
-                .child(
-                    div()
-                        .text_size(px(FONT_BODY))
-                        .line_height(px(LINE_BODY))
-                        .font_features(tabular())
-                        .whitespace_nowrap()
-                        .text_color(ink(theme, T1))
-                        .child(value.clone()),
-                )
-        }));
     div()
         .flex()
         .gap(px(10.0))
@@ -224,13 +313,38 @@ fn generation_row(generation: &Generation, last: bool, theme: &Theme) -> Div {
                 .py(px(10.0))
                 .gap(px(8.0))
                 .child(head)
-                .when(!generation.facts.is_empty(), |card| card.child(facts)),
+                .when(!generation.facts.is_empty(), |card| {
+                    card.child(facts(&generation.facts, theme))
+                }),
         )
 }
 
 impl RenderOnce for ForkChain {
     fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
         let count = self.generations.len();
+        if let Some(picked) = self.picked {
+            return div().flex().flex_col().min_w_0().children(
+                self.generations
+                    .iter()
+                    .enumerate()
+                    .map(|(at, generation)| {
+                        let row = listed_row(generation, (at == 0, at + 1 == count), &self.theme)
+                            .when(at == picked, |row| row.bg(ink(&self.theme, ROW_ON)));
+                        match self.on_open.clone() {
+                            Some(open) => row
+                                .id(("fork-generation", at))
+                                .cursor_pointer()
+                                .when(at != picked, |row| {
+                                    row.hover(|row| row.bg(ink(&self.theme, HOVER)))
+                                })
+                                .on_click(move |_, window, cx| open(&at, window, cx))
+                                .into_any_element(),
+                            None => row.into_any_element(),
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+            );
+        }
         div().flex().flex_col().min_w_0().children(
             self.generations
                 .iter()

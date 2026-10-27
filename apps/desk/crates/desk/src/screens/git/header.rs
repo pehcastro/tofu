@@ -101,7 +101,7 @@ pub fn render(screen: &GitScreen, window: &mut Window, cx: &mut Context<GitScree
         &theme,
     )
     .on_click(cx.listener(|screen, _: &ClickEvent, _, cx| screen.reload(Touched::Git, cx)));
-    let busy = screen.running() || screen.reloading;
+    let busy = screen.running() || (screen.reloading && !screen.read);
     div()
         .flex()
         .flex_none()

@@ -30,7 +30,6 @@ pub const MONO: &str = "Geist Mono";
 pub const LIVE: Rgba = hex(0x86e0b3);
 pub const WARN: Rgba = hex(0xe8c98a);
 pub const SURFACE: u32 = 0x131218;
-pub const POP: Rgba = tint(0x1e1d24, 0.94);
 pub const T3: f32 = 0.38;
 
 pub const DOWN: &str = r#"<path d="M5 6.5l3 3 3-3"/>"#;
@@ -150,13 +149,6 @@ pub fn toast(
                 .line_height(px(18.0))
                 .child(glyph(ARROW, 13.0, white(T3), scale))
                 .child(div().flex_1().child(message))
-                .child(
-                    text(11.0, 15.0, white(T3), "not drawn yet")
-                        .px(px(7.0))
-                        .py(px(2.0))
-                        .rounded_full()
-                        .bg(white(0.06)),
-                )
                 .child(
                     div()
                         .id("dismiss")

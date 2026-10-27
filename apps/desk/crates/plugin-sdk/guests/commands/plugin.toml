@@ -1,0 +1,17 @@
+id = "local.commands"
+name = "Commands"
+icon = "window"
+version = "0.1.0"
+api = "desk@0.3"
+tofu = ">=0.6"
+
+[contributes]
+tile = true
+
+[[contributes.commands]]
+name = "commands.echo"
+title = "Echo the args"
+
+[[contributes.commands]]
+name = "commands.missing"
+title = "Named here, absent from the export"

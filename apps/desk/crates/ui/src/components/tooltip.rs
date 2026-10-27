@@ -13,7 +13,8 @@ use gpui::{
 };
 
 use crate::components::paint::{drop, ink, tint};
-use crate::components::size::{FONT_BODY, GLASS_BLUR, LINE_BODY, T1};
+use crate::components::size::{FONT_BODY, LINE_BODY, T1};
+use crate::glass::Glass;
 use crate::theme::{ColorToken, NumberToken, Theme};
 
 const TIP_OPEN: Duration = Duration::from_millis(300);
@@ -46,13 +47,14 @@ const CARD_BODY: &str = "desk-hover-card";
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Edge {
     Frame,
+    FrameStart,
     Text,
 }
 
 impl Edge {
     fn painted(self, line: Bounds<Pixels>, window: &Window) -> Bounds<Pixels> {
         match self {
-            Edge::Frame => line,
+            Edge::Frame | Edge::FrameStart => line,
             Edge::Text => {
                 let style = window.text_style();
                 let rem = window.rem_size();
@@ -145,7 +147,7 @@ struct Floating {
     placed: Option<Placement>,
     hull: Option<Vec<Point<Pixels>>>,
     closed: Option<Instant>,
-    hosts: Vec<EntityId>,
+    hosts: HashMap<ElementId, EntityId>,
     timer: Option<Task<gpui::Result<()>>>,
     log: VecDeque<(Instant, Event)>,
     watcher: Option<EntityId>,
@@ -173,7 +175,7 @@ impl Floating {
             placed: None,
             hull: None,
             closed: None,
-            hosts: Vec::new(),
+            hosts: HashMap::new(),
             timer: None,
             log: VecDeque::new(),
             watcher: None,
@@ -222,9 +224,7 @@ impl Floating {
         self.hull = None;
         self.timer = None;
         self.entered = Some(Instant::now());
-        if !self.hosts.contains(&view) {
-            self.hosts.push(view);
-        }
+        self.hosts.insert(key.clone(), view);
         if self.overlays.is_empty() {
             self.muted = None;
         }
@@ -322,13 +322,17 @@ impl Floating {
                 );
             }
         }
-        if self.current.as_ref() != Some(&key) {
+        let left = self
+            .current
+            .replace(key)
+            .filter(|old| Some(old) != self.current.as_ref());
+        if left.is_some() {
             self.placed = None;
         }
         self.shown = true;
-        self.current = Some(key);
         self.record(event, cx);
-        self.notify_hosts(cx);
+        self.notify_host(left.as_ref(), cx);
+        self.notify_host(self.current.as_ref(), cx);
     }
 
     fn close(&mut self, cx: &mut Context<Self>) {
@@ -344,12 +348,12 @@ impl Floating {
             at: now,
         };
         self.record(Event::Close, cx);
-        self.notify_hosts(cx);
+        self.notify_host(self.current.as_ref(), cx);
     }
 
-    fn notify_hosts(&mut self, cx: &mut Context<Self>) {
-        for host in self.hosts.clone() {
-            AppContext::notify(cx, host);
+    fn notify_host(&self, key: Option<&ElementId>, cx: &mut Context<Self>) {
+        if let Some(host) = key.and_then(|key| self.hosts.get(key)) {
+            AppContext::notify(cx, *host);
         }
     }
 
@@ -522,11 +526,7 @@ fn overlay_rim(theme: &Theme) -> Rgba {
 
 pub fn overlay_surface(theme: &Theme) -> Div {
     let shadow = tint(theme.color(ColorToken::Shadow), SHADOW_INK);
-    let base = div().bg(overlay_fill(theme));
-    let base = match theme.number(NumberToken::ShapeBlur) > 0.0 {
-        true => base.backdrop_blur(px(GLASS_BLUR)),
-        false => base,
-    };
+    let base = Glass::themed(theme).apply(div().bg(overlay_fill(theme)));
     base.rounded(px(RADIUS))
         .border(px(RIM_WIDTH))
         .border_color(overlay_rim(theme))
@@ -675,6 +675,7 @@ fn float(
     target.child(
         deferred(Placed {
             key: placed_key,
+            start: edge == Edge::FrameStart,
             alpha,
             fill: overlay_fill(theme),
             rim: overlay_rim(theme),
@@ -690,6 +691,7 @@ fn float(
 
 struct Placed {
     key: ElementId,
+    start: bool,
     alpha: f32,
     fill: Rgba,
     rim: Rgba,
@@ -762,7 +764,10 @@ impl Element for Placed {
             true => (anchor.bottom() + reach).round(),
             false => above,
         };
-        let centred = anchor.center().x - measured.width / 2.0;
+        let centred = match self.start {
+            true => anchor.left(),
+            false => anchor.center().x - measured.width / 2.0,
+        };
         let widest = (viewport.width - measured.width - px(EDGE)).max(px(EDGE));
         let x = centred.clamp(px(EDGE), widest);
         let origin = point(x.round(), y);

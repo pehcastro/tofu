@@ -1,9 +1,10 @@
 use chrono::{DateTime, Local, Utc};
 use desk_core::boardy::{Speaker, report_echoes, spoken};
-use desk_core::protocol::boardy::{Event, Row, Ticket};
+use desk_core::protocol::boardy::{AcceptanceLine, Author, Event, Row};
 use desk_core::protocol::{
-    BoardyAuthorKind as AuthorKind, BoardyEventKind as Kind, BoardyStatus as Status,
-    BoardyTicketType as TicketType,
+    BoardyAcceptanceLineState as LineState, BoardyAuthorKind as AuthorKind,
+    BoardyAuthorRole as AuthorRole, BoardyEventKind as Kind, BoardyEventVerdict as Wire,
+    BoardyStatus as Status, BoardyType as TicketType,
 };
 use desk_ui::components::avatar::{Agent, AgentKind, AgentStatus, AvatarSize, avatar, kind_avatar};
 use desk_ui::components::breadcrumb::{OnCrumb, breadcrumb};
@@ -20,7 +21,7 @@ use desk_ui::components::priority_icon::priority_icon;
 use desk_ui::components::properties::properties_panel;
 use desk_ui::components::scroll::ScrollArea;
 use desk_ui::components::size::{CAPTION_TEXT, FONT_SMALL, FONT_TITLE, HOVER, T1, T2};
-use desk_ui::components::status_icon::status_icon;
+use desk_ui::components::status_icon::{TicketStatus, status_icon};
 use desk_ui::components::tooltip::{Edge, tooltip};
 use desk_ui::theme::{ColorToken, Theme, WordToken};
 use gpui::{
@@ -78,8 +79,9 @@ const ALIAS_MOST: usize = 24;
 const PM: &str = "PM";
 const FENCE: &str = "```";
 const PARAGRAPH: &str = "\n\n";
-const NO_ANSWER: &str = "did not answer";
-const EVIDENCE_KINDS: [&str; 2] = ["evidence", "logged"];
+const LOGGED: &str = "logged";
+const LOOSE_EVIDENCE: &str = "Evidence that names no acceptance line";
+const NO_EVIDENCE: &str = "no evidence names this line yet";
 const FOLD_SECONDS: i64 = 2;
 const EXACT_TIME: &str = "%a %b %-d %Y, %H:%M:%S";
 const REPLY_GAP: f32 = 8.0;
@@ -101,20 +103,31 @@ pub(super) enum Verdict {
     Verified,
     NotVerified,
     Inconclusive,
+    Done,
+    Concerns,
+    Blocked,
+    NeedsYou,
 }
 
 impl Verdict {
-    const ALL: [Verdict; 3] = [
-        Verdict::NotVerified,
-        Verdict::Verified,
-        Verdict::Inconclusive,
+    const WORDS: [(&str, Verdict); 3] = [
+        ("NOT VERIFIED", Verdict::NotVerified),
+        ("VERIFIED", Verdict::Verified),
+        ("INCONCLUSIVE", Verdict::Inconclusive),
     ];
 
-    fn word(self) -> &'static str {
-        match self {
-            Verdict::Verified => "VERIFIED",
-            Verdict::NotVerified => "NOT VERIFIED",
-            Verdict::Inconclusive => "INCONCLUSIVE",
+    fn wired(wire: &Wire) -> Option<Verdict> {
+        match wire {
+            Wire::Done => Some(Verdict::Done),
+            Wire::DoneWithConcerns => Some(Verdict::Concerns),
+            Wire::Blocked => Some(Verdict::Blocked),
+            Wire::NeedsYou => Some(Verdict::NeedsYou),
+            Wire::Unknown(raw) => {
+                eprintln!(
+                    "desk: boardy: tofu sent the verdict {raw}, which the desk does not know"
+                );
+                None
+            }
         }
     }
 
@@ -123,14 +136,19 @@ impl Verdict {
             Verdict::Verified => "Verified",
             Verdict::NotVerified => "Not verified",
             Verdict::Inconclusive => "Inconclusive",
+            Verdict::Done => "Done",
+            Verdict::Concerns => "Done with concerns",
+            Verdict::Blocked => "Blocked",
+            Verdict::NeedsYou => "Needs you",
         }
     }
 
     fn color(self, theme: &Theme) -> Rgba {
         theme.color(match self {
-            Verdict::Verified => ColorToken::GitAdded,
-            Verdict::NotVerified => ColorToken::StatusDanger,
-            Verdict::Inconclusive => ColorToken::StatusWarn,
+            Verdict::Verified | Verdict::Done => ColorToken::GitAdded,
+            Verdict::NotVerified | Verdict::Blocked => ColorToken::StatusDanger,
+            Verdict::Inconclusive | Verdict::Concerns => ColorToken::StatusWarn,
+            Verdict::NeedsYou => ColorToken::StatusAccent,
         })
     }
 }
@@ -182,7 +200,7 @@ pub(super) fn said(events: &[Event], found: impl Fn(&str) -> Vec<Ref>) -> Vec<Sa
         .iter()
         .zip(report_echoes(events))
         .map(|(event, echo)| {
-            let (verdict, text) = verdict(event.text.as_deref().unwrap_or_default());
+            let (prefixed, text) = verdict(event.text.as_deref().unwrap_or_default());
             let text = plain_headings(text);
             match (echo, spoken(event)) {
                 (true, _) => Said::Echo,
@@ -190,8 +208,16 @@ pub(super) fn said(events: &[Event], found: impl Fn(&str) -> Vec<Ref>) -> Vec<Sa
                 (false, true) => Said::Spoken {
                     full: markdown(&text),
                     short: folded(&text).map(|short| markdown(&short)),
-                    refs: found(&text),
-                    verdict,
+                    refs: {
+                        let mut refs = found(&text);
+                        let files = found(&event.files.join(" "))
+                            .into_iter()
+                            .filter(|file| !refs.iter().any(|held| held.label == file.label))
+                            .collect::<Vec<_>>();
+                        refs.extend(files);
+                        refs
+                    },
+                    verdict: event.verdict.as_ref().and_then(Verdict::wired).or(prefixed),
                 },
             }
         })
@@ -200,10 +226,10 @@ pub(super) fn said(events: &[Event], found: impl Fn(&str) -> Vec<Ref>) -> Vec<Sa
 
 fn verdict(text: &str) -> (Option<Verdict>, &str) {
     let bare = text.trim_start().trim_start_matches(['#', '*', ' ']);
-    Verdict::ALL
+    Verdict::WORDS
         .into_iter()
-        .find_map(|verdict| {
-            bare.strip_prefix(verdict.word()).map(|rest| {
+        .find_map(|(word, verdict)| {
+            bare.strip_prefix(word).map(|rest| {
                 let rest = rest.trim_start_matches([':', '.', ',', '*', ' ']);
                 (Some(verdict), rest.trim_start())
             })
@@ -263,6 +289,10 @@ pub(super) fn thread(events: &[Event], said: &[Said]) -> Vec<Line> {
             }
             Kind::Answered if answered.contains(&at) => continue,
             Kind::Answered if unanswered(event) => Line::Unanswered { at },
+            Kind::Evidence => match quiet {
+                true => continue,
+                false => Line::Evidence { at },
+            },
             Kind::Commented | Kind::Unknown(_) if evidence(event) => match quiet {
                 true => continue,
                 false => Line::Evidence { at },
@@ -304,15 +334,22 @@ pub(super) fn thread(events: &[Event], said: &[Said]) -> Vec<Line> {
 }
 
 fn unanswered(event: &Event) -> bool {
-    event
-        .text
+    event.unanswered.is_some()
+}
+
+fn gave_up(event: &Event, asked: Option<&Event>) -> String {
+    let default = event
+        .default
         .as_deref()
-        .is_some_and(|text| text.contains(NO_ANSWER))
+        .or_else(|| asked.and_then(|asked| asked.default.as_deref()))
+        .unwrap_or_default();
+    let reason = event.unanswered.as_deref().unwrap_or_default();
+    format!("no answer: went with {default} ({reason})")
 }
 
 fn evidence(event: &Event) -> bool {
     match &event.kind {
-        Kind::Unknown(raw) => EVIDENCE_KINDS.contains(&raw.as_str()),
+        Kind::Unknown(raw) => raw == LOGGED,
         Kind::Commented => match &event.author {
             Some(author) => author.kind == AuthorKind::SubAgent,
             None => Speaker::of(event.actor.as_deref().unwrap_or_default()) == Speaker::Agent,
@@ -672,6 +709,7 @@ fn body(
             SharedString::from(format!("{}-body", ticket.id)),
             &opened.body,
             &[],
+            Some((&*window, &**cx)),
             theme,
         ))
         .child(section(
@@ -689,6 +727,7 @@ fn body(
             SharedString::from(format!("{}-acceptance", ticket.id)),
             &opened.acceptance,
             &[],
+            Some((&*window, &**cx)),
             theme,
         ))
         .children(mentions("body", &opened.body_refs, boardy, theme, cx));
@@ -722,13 +761,15 @@ fn body(
                             .text_color(ink(theme, T2))
                             .child(question.eli5.clone()),
                     )
-                    .children(
-                        question
-                            .options
-                            .iter()
-                            .enumerate()
-                            .map(|(at, option)| note(format!("{}. {option}", at + 1), theme)),
-                    )
+                    .children(question.options.iter().zip(1..).map(|(option, n)| {
+                        let mark = if i64::from(n) == question.recommend {
+                            " (recommended)"
+                        } else {
+                            ""
+                        };
+                        note(format!("{n}. {option}{mark}"), theme)
+                    }))
+                    .child(note(format!("why: {}", question.why), theme))
             }))
     }))
     .children((!subs.is_empty()).then(|| {
@@ -747,12 +788,15 @@ fn body(
             boardy,
             theme,
         };
-        opened
-            .lines
-            .iter()
-            .filter(|line| line.tab() == opened.tab)
-            .filter_map(|line| entry(line, &seen, window, cx))
-            .collect::<Vec<_>>()
+        match opened.tab {
+            Tab::Evidence => proofs(&seen, window, cx),
+            Tab::Conversation | Tab::History => opened
+                .lines
+                .iter()
+                .filter(|line| line.tab() == opened.tab)
+                .filter_map(|line| entry(line, &seen, window, cx))
+                .collect::<Vec<_>>(),
+        }
     })
     .child(
         Composer::new("boardy-comment", boardy.composer.clone()).on_send(cx.listener(
@@ -921,6 +965,7 @@ fn linked(ticket: &Row, theme: &Theme, cx: &Context<Boardy>) -> AnyElement {
 pub(super) struct Writer {
     name: String,
     kind: AgentKind,
+    model: Option<String>,
 }
 
 pub(super) fn runners(events: &[Event]) -> Vec<Option<String>> {
@@ -963,6 +1008,35 @@ fn named(name: &str, kind: AgentKind) -> Writer {
     Writer {
         name: name.to_owned(),
         kind,
+        model: None,
+    }
+}
+
+fn voiced(author: &Author) -> Option<Writer> {
+    let model = author.model.clone().filter(|model| !model.is_empty());
+    match author.role.as_ref()? {
+        AuthorRole::Pm => {
+            let session = author
+                .handle
+                .as_deref()
+                .or(author.session.as_deref())
+                .filter(|session| !session.is_empty())?;
+            let harness = String::from(author.harness.clone()?);
+            let model = model?;
+            Some(named(
+                &format!("{PM} {session} ({harness}, {model})"),
+                lettered(PM),
+            ))
+        }
+        AuthorRole::Engineer => {
+            let agent = author.agent.as_deref().filter(|agent| !agent.is_empty())?;
+            let number = author.number?;
+            Some(Writer {
+                model,
+                ..engineer(&format!("{agent}-{number}"))
+            })
+        }
+        AuthorRole::Person | AuthorRole::Hook | AuthorRole::Unknown(_) => None,
     }
 }
 
@@ -1116,7 +1190,8 @@ impl Writer {
 
 fn writer(event: &Event, ran: Option<&str>) -> Writer {
     if let Some(author) = &event.author {
-        return authored(&author.kind, &author.name, &event.ticket, ran);
+        return voiced(author)
+            .unwrap_or_else(|| authored(&author.kind, &author.name, &event.ticket, ran));
     }
     let actor = event.actor.as_deref().unwrap_or_default();
     match Speaker::of(actor) {
@@ -1226,26 +1301,184 @@ fn entry(line: &Line, seen: &Seen, window: &mut Window, cx: &mut Context<Boardy>
         Line::Evidence { at } => message(at, None, seen, window, cx),
         Line::Handoff { at } => handoff(at, seen, window, cx),
         Line::Asked { at, answer } => {
-            let reply =
-                answer.and_then(|answer| match seen.event(answer).is_some_and(unanswered) {
-                    true => muted(answer, seen, window, cx),
-                    false => message(answer, None, seen, window, cx),
-                });
+            let asked = seen.event(at)?;
+            let gave_up = answer.filter(|answer| seen.event(*answer).is_some_and(unanswered));
+            let nth = seen.opened.events[..at]
+                .iter()
+                .filter(|event| event.kind == Kind::Asked)
+                .count();
+            let mut questions: Vec<_> = seen.opened.ticket.questions.iter().collect();
+            questions.sort_by_key(|question| question.id);
+            let pointed = match questions.get(nth) {
+                Some(question) => format!("Q{} {}", question.id, question.tldr),
+                None => "a question".to_owned(),
+            };
+            let replied = match (answer, gave_up) {
+                (Some(_), None) => ", answered",
+                _ => "",
+            };
+            let theme = seen.theme;
             Some(
                 div()
                     .flex()
                     .flex_col()
                     .gap(px(REPLY_GAP))
-                    .children(message(at, None, seen, window, cx))
-                    .children(reply.map(|reply| reply.pl(px(REPLY_INDENT)))),
+                    .child(
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .items_center()
+                            .gap_2()
+                            .text_size(px(FONT_SMALL))
+                            .text_color(ink(theme, CAPTION_TEXT))
+                            .child(glyph(Glyph::Talk, ICON, ink(theme, T2)))
+                            .child(format!(
+                                "{} asked {pointed}{replied}",
+                                seen.writer(at, asked).name
+                            ))
+                            .child(when(at, asked, theme, window, cx)),
+                    )
+                    .children(
+                        gave_up
+                            .and_then(|answer| muted(answer, Some(asked), seen, window, cx))
+                            .map(|reply| reply.pl(px(REPLY_INDENT))),
+                    ),
             )
         }
-        Line::Unanswered { at } => muted(at, seen, window, cx),
+        Line::Unanswered { at } => muted(at, None, seen, window, cx),
         Line::Kept { at } => kept(at, seen, window, cx),
     }
 }
 
-fn header(writer: &Writer, said: String, theme: &Theme) -> Div {
+fn proofs(seen: &Seen, window: &mut Window, cx: &mut Context<Boardy>) -> Vec<Div> {
+    let theme = seen.theme;
+    let accounted = &seen.opened.accounted;
+    let named: Vec<(usize, Option<usize>)> = seen
+        .opened
+        .lines
+        .iter()
+        .filter_map(|line| match *line {
+            Line::Evidence { at } => Some((
+                at,
+                seen.event(at)
+                    .and_then(|event| event.line)
+                    .and_then(|line| usize::try_from(line).ok())
+                    .filter(|line| (1..=accounted.len()).contains(line)),
+            )),
+            _ => None,
+        })
+        .collect();
+    let drawn = |of: Option<usize>, window: &mut Window, cx: &mut Context<Boardy>| {
+        named
+            .iter()
+            .filter(|(_, line)| *line == of)
+            .filter_map(|(at, _)| message(*at, None, seen, window, cx))
+            .map(|shown| shown.pl(px(REPLY_INDENT)))
+            .collect::<Vec<_>>()
+    };
+    let mut groups: Vec<Div> = accounted
+        .iter()
+        .zip(1..)
+        .map(|(line, n)| {
+            let shown = drawn(Some(n), window, cx);
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(REPLY_GAP))
+                .child(acceptance_row(n, line, theme))
+                .when(shown.is_empty(), |group| {
+                    group.child(div().pl(px(REPLY_INDENT)).child(note(NO_EVIDENCE, theme)))
+                })
+                .children(shown)
+        })
+        .collect();
+    let loose = drawn(None, window, cx);
+    if !loose.is_empty() {
+        groups.push(
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(REPLY_GAP))
+                .when(!accounted.is_empty(), |group| {
+                    group.child(caption(LOOSE_EVIDENCE.to_owned(), theme))
+                })
+                .children(loose),
+        );
+    }
+    groups
+}
+
+fn acceptance_row(n: usize, line: &AcceptanceLine, theme: &Theme) -> Div {
+    let status = match &line.state {
+        LineState::Met => TicketStatus::Done,
+        LineState::Unmet => TicketStatus::Todo,
+        LineState::NotMineToProve => TicketStatus::Backlog,
+        LineState::Unknown(_) => TicketStatus::Triage,
+    };
+    div()
+        .flex()
+        .items_center()
+        .gap_1p5()
+        .min_w_0()
+        .text_size(px(FONT_SMALL))
+        .child(div().flex_none().child(status_icon(status, px(ICON))))
+        .child(
+            div()
+                .flex_none()
+                .text_color(ink(theme, CAPTION_TEXT))
+                .child(format!("{n}.")),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .text_color(ink(theme, T1))
+                .child(line.line.clone()),
+        )
+        .child(
+            div()
+                .flex_none()
+                .text_color(ink(theme, CAPTION_TEXT))
+                .child(String::from(line.state.clone())),
+        )
+}
+
+fn modeled(
+    key: String,
+    shown: AnyElement,
+    writer: &Writer,
+    theme: &Theme,
+    window: &mut Window,
+    cx: &mut App,
+) -> AnyElement {
+    let Some(model) = writer.model.clone() else {
+        return shown;
+    };
+    tooltip(
+        SharedString::from(format!("{key}-tip")),
+        div().id(SharedString::from(key)).child(shown),
+        Edge::Frame,
+        model,
+        theme,
+        window,
+        cx,
+    )
+    .into_any_element()
+}
+
+fn header(
+    at: usize,
+    writer: &Writer,
+    said: String,
+    theme: &Theme,
+    window: &mut Window,
+    cx: &mut App,
+) -> Div {
+    let name = div()
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(ink(theme, T1))
+        .child(writer.name.clone())
+        .into_any_element();
     div()
         .flex()
         .flex_wrap()
@@ -1253,12 +1486,14 @@ fn header(writer: &Writer, said: String, theme: &Theme) -> Div {
         .gap_1p5()
         .min_w_0()
         .text_size(px(FONT_SMALL))
-        .child(
-            div()
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(ink(theme, T1))
-                .child(writer.name.clone()),
-        )
+        .child(modeled(
+            format!("said-by-{at}"),
+            name,
+            writer,
+            theme,
+            window,
+            cx,
+        ))
         .child(div().text_color(ink(theme, CAPTION_TEXT)).child(said))
 }
 
@@ -1303,7 +1538,7 @@ fn message(
             .children(kit(&status).map(|kit| status_icon(kit, px(ICON))))
             .child(look::label(&status).to_owned())
     });
-    let head = header(&writer, did(event), theme)
+    let head = header(at, &writer, did(event), theme, window, cx)
         .children(
             verdict.map(|verdict| dot_chip(verdict.label(), rgb_to_hsla(verdict.color(theme)))),
         )
@@ -1328,8 +1563,18 @@ fn message(
             SharedString::from(format!("said-{at}")),
             shown,
             &[],
+            Some((&*window, &**cx)),
             theme,
         ))
+        .children((!event.acceptance.is_empty()).then(|| {
+            div().flex().flex_col().gap_1().pt_1().children(
+                event
+                    .acceptance
+                    .iter()
+                    .zip(1..)
+                    .map(|(line, n)| acceptance_row(n, line, theme)),
+            )
+        }))
         .children(
             short
                 .as_ref()
@@ -1391,6 +1636,7 @@ fn handoff(at: usize, seen: &Seen, window: &mut Window, cx: &mut Context<Boardy>
                 SharedString::from(format!("brief-{at}")),
                 full,
                 &[],
+                Some((&*window, &**cx)),
                 theme,
             ))
             .children(mentions(
@@ -1404,15 +1650,16 @@ fn handoff(at: usize, seen: &Seen, window: &mut Window, cx: &mut Context<Boardy>
     Some(div().flex().flex_col().gap_2().child(line).children(shown))
 }
 
-fn muted(at: usize, seen: &Seen, window: &mut Window, cx: &mut Context<Boardy>) -> Option<Div> {
+fn muted(
+    at: usize,
+    asked: Option<&Event>,
+    seen: &Seen,
+    window: &mut Window,
+    cx: &mut Context<Boardy>,
+) -> Option<Div> {
     let theme = seen.theme;
     let event = seen.event(at)?;
-    let said = event
-        .text
-        .as_deref()
-        .and_then(|text| text.lines().next())
-        .unwrap_or_default()
-        .to_owned();
+    let said = gave_up(event, asked);
     Some(
         div()
             .flex()
@@ -1504,6 +1751,7 @@ fn kept_glyph(kind: &Kind) -> Glyph {
         Kind::Handed | Kind::Spawned => Glyph::Agents,
         Kind::Rule | Kind::Waiting | Kind::Hook | Kind::HookFailed => Glyph::Settings,
         Kind::Requested | Kind::Accepted | Kind::RequestDropped => Glyph::Inbox,
+        Kind::Evidence => Glyph::Check,
         Kind::Commented | Kind::Asked | Kind::Answered | Kind::Messaged | Kind::Reported => {
             Glyph::Talk
         }
@@ -1550,6 +1798,10 @@ fn did(event: &Event) -> String {
         Kind::Created => format!("created it in {to}"),
         Kind::Moved => format!("moved it {from} → {to}"),
         Kind::Commented => "commented".to_owned(),
+        Kind::Evidence => match event.line.filter(|line| *line > 0) {
+            Some(line) => format!("logged evidence for line {line}"),
+            None => "logged evidence".to_owned(),
+        },
         Kind::Asked => "asked".to_owned(),
         Kind::Answered => "answered".to_owned(),
         Kind::Spawned => "spawned an agent".to_owned(),
@@ -1653,7 +1905,10 @@ fn properties(
                         String::from(ticket.r#type.clone()),
                     ),
                 ),
-                ("Assignee".into(), assignee(ticket, boardy, theme, line)),
+                (
+                    "Assignee".into(),
+                    assignee(opened, boardy, theme, line, window, cx),
+                ),
                 (
                     noun(&words.epic, false).into(),
                     match &ticket.epic {
@@ -1806,18 +2061,28 @@ fn kind_glyph(kind: &TicketType) -> Glyph {
 }
 
 fn assignee(
-    ticket: &Ticket,
+    opened: &Opened,
     boardy: &Boardy,
     theme: &Theme,
     line: impl Fn(AnyElement, String) -> AnyElement,
+    window: &mut Window,
+    cx: &mut App,
 ) -> AnyElement {
+    let ticket = &opened.ticket;
     let Some(who) = ticket.assignee.as_deref() else {
         return line(
             glyph(Glyph::Person, ICON, ink(theme, T2)).into_any_element(),
             "nobody".to_owned(),
         );
     };
-    let (writer, _) = assigned(who, &boardy.requesters);
+    let writer = opened
+        .events
+        .iter()
+        .rev()
+        .filter_map(|event| event.author.as_ref())
+        .filter(|author| author.name == who || author.handle.as_deref() == Some(who))
+        .find_map(voiced)
+        .unwrap_or_else(|| assigned(who, &boardy.requesters).0);
     let status = match ticket.status {
         Status::Doing => Some(AgentStatus::Working),
         Status::Done => Some(AgentStatus::Finished),
@@ -1841,5 +2106,13 @@ fn assignee(
         }
         None => kind_avatar(writer.kind, AvatarSize::Feed, theme).into_any_element(),
     };
-    line(mark, writer.name)
+    let shown = line(mark, writer.name.clone());
+    modeled(
+        "boardy-assignee-by".to_owned(),
+        shown,
+        &writer,
+        theme,
+        window,
+        cx,
+    )
 }

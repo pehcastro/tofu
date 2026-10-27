@@ -1,10 +1,11 @@
 use std::f32::consts::FRAC_PI_2;
+use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{
-    AnyElement, App, ClickEvent, Corners, Div, ElementId, FontWeight, SharedString, Stateful,
-    Transformation, Window, div, prelude::*, px, radians,
+    AnyElement, App, ClickEvent, Corners, Div, ElementId, FontWeight, ScrollHandle, SharedString,
+    Stateful, Transformation, Window, div, prelude::*, px, radians,
 };
 
 use crate::component::{control, icon};
@@ -12,10 +13,10 @@ use crate::components::avatar::spinner;
 use crate::components::glyph::Glyph;
 use crate::components::list::{HoverList, bare_row};
 use crate::components::overlay::{MenuIcon, MenuItem, context_menu};
-use crate::components::paint::{glyph, ink};
+use crate::components::paint::{glyph, ink, tint};
 use crate::components::size::{
     FONT_CAP, FONT_CAP2, FONT_CHAT, FONT_SMALL, GROUP_PAD_BOTTOM, HOVER, LINE_CAP, LINE_WHO,
-    RADIUS_BADGE, RADIUS_LIST, RADIUS_ROW, ROW_GAP, ROW_PAD_X, SPINNER, T1, T2, T3,
+    RADIUS_BADGE, RADIUS_LIST, RADIUS_ROW, ROW_GAP, ROW_PAD_X, ROW_PAD_Y, SPINNER, T1, T2, T3,
 };
 use crate::components::title_bar::named_stop;
 use crate::components::tooltip::{Edge, tooltip};
@@ -36,8 +37,16 @@ const CAPTION_PAD_TOP: f32 = 16.0;
 const NEW_SESSION: f32 = 16.0;
 const SESSION_GAP: f32 = 9.0;
 const SESSION_DOT: f32 = 4.0;
+const WATCHING_DOT: f32 = 5.0;
+const WATCHING_RING: f32 = WATCHING_DOT + 2.0;
+const WATCHING_HALO: f32 = 0.25;
+const WATCHING_GAP: f32 = 6.0;
 const INACTIVE_GAP: f32 = 6.0;
 const INACTIVE_INDENT: f32 = 8.0;
+const SESSION_ROW: f32 = LINE_WHO + 2.0 * ROW_PAD_Y;
+const ABOVE_INACTIVE: f32 =
+    CAPTION_PAD_TOP + LINE_CAP + GROUP_PAD_BOTTOM + INACTIVE_GAP + SESSION_ROW;
+const OVERSCAN_ROWS: usize = 2;
 const NEW_SESSION_NAME: &str = "New session";
 const UUID_LENGTH: usize = 36;
 const UUID_DASHES: [usize; 4] = [8, 13, 18, 23];
@@ -121,7 +130,7 @@ pub enum SidebarPick {
     Open(SessionAt),
     Rename(SessionAt),
     CopyId(SessionAt),
-    Docs,
+    Settings,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -230,12 +239,30 @@ impl Sidebar {
             window,
             cx,
         );
-        let alpha = match (at, selected) {
-            (_, true) => T1,
-            (SessionAt::Active(_), false) => T2,
-            (SessionAt::Inactive(_), false) => T3,
+        let alpha = match at {
+            SessionAt::Active(_) => T2,
+            SessionAt::Inactive(_) => T3,
         };
-        let session_row = row((at.key("row"), at.name()), selected, alpha, theme)
+        let accent = theme.color(ColorToken::StatusAccent);
+        let watching = selected.then(|| {
+            tooltip(
+                at.key("watching-tip"),
+                div()
+                    .id(at.key("watching"))
+                    .flex_none()
+                    .size(px(WATCHING_RING))
+                    .rounded_full()
+                    .border_1()
+                    .border_color(tint(accent, WATCHING_HALO))
+                    .child(div().size(px(WATCHING_DOT)).rounded_full().bg(accent)),
+                Edge::Frame,
+                "watching",
+                theme,
+                window,
+                cx,
+            )
+        });
+        let session_row = row((at.key("row"), at.name()), false, alpha, theme)
             .when(matches!(at, SessionAt::Inactive(_)), |row| {
                 row.child(div().flex_none().w(px(INACTIVE_INDENT)))
             })
@@ -245,11 +272,23 @@ impl Sidebar {
                 None => div()
                     .flex_1()
                     .min_w_0()
-                    .truncate()
-                    .child(match unnamed(&session.name) {
-                        true => div().text_color(ink(theme, T3)).child(NEW_SESSION_NAME),
-                        false => div().child(session.name.clone()),
-                    }),
+                    .flex()
+                    .items_center()
+                    .gap(px(WATCHING_GAP))
+                    .children(watching)
+                    .child(
+                        div()
+                            .min_w_0()
+                            .truncate()
+                            .when(selected, |name| {
+                                name.text_color(theme.color(ColorToken::TextStrong))
+                                    .font_weight(FontWeight::MEDIUM)
+                            })
+                            .child(match unnamed(&session.name) {
+                                true => div().text_color(ink(theme, T3)).child(NEW_SESSION_NAME),
+                                false => div().child(session.name.clone()),
+                            }),
+                    ),
             })
             .when(!session.age.is_empty(), |row| {
                 row.child(
@@ -373,6 +412,22 @@ fn row(
         .text_color(ink(theme, alpha))
 }
 
+fn shown_rows(rows: usize, above: usize, scroll: &ScrollHandle, window: &Window) -> Range<usize> {
+    let top = f32::from(-scroll.offset().y);
+    let bottom = top + f32::from(window.viewport_size().height);
+    let first = above as f32 * SESSION_ROW + ABOVE_INACTIVE;
+    let row_at = |y: f32| ((y - first) / SESSION_ROW).max(0.0) as usize;
+    let start = row_at(top).saturating_sub(OVERSCAN_ROWS).min(rows);
+    let end = row_at(bottom)
+        .saturating_add(OVERSCAN_ROWS + 1)
+        .clamp(start, rows);
+    start..end
+}
+
+fn gap(rows: usize) -> Div {
+    div().flex_none().h(px(rows as f32 * SESSION_ROW))
+}
+
 fn word(text: SharedString, theme: &Theme) -> Div {
     div()
         .flex_none()
@@ -390,6 +445,14 @@ impl RenderOnce for Sidebar {
             |_, _| false,
         );
         let inactive_open = *open.read(cx);
+        let scroll = window
+            .use_keyed_state(
+                ElementId::NamedChild(Arc::new(self.id.clone()), "scroll".into()),
+                cx,
+                |_, _| ScrollHandle::new(),
+            )
+            .read(cx)
+            .clone();
         let rows = HoverList::within(
             "rows",
             div().flex().flex_col().flex_grow(1.0).flex_shrink_0(),
@@ -397,9 +460,10 @@ impl RenderOnce for Sidebar {
             Corners::all(px(RADIUS_ROW)),
             &theme,
         );
-        let docs = row(("docs", "docs"), false, T2, &theme)
-            .child("Docs")
-            .on_click(self.picked(SidebarPick::Docs));
+        let settings = row(("settings", "settings"), false, T2, &theme)
+            .child(glyph(Glyph::Settings, ICON_SMALL, ink(&theme, T2)))
+            .child("Settings")
+            .on_click(self.picked(SidebarPick::Settings));
         let project = self.project.take();
         let (head, rows) = match &project {
             None => (
@@ -473,12 +537,18 @@ impl RenderOnce for Sidebar {
                             cx.notify();
                         })
                     });
+                let total = match inactive_open {
+                    true => project.inactive.len(),
+                    false => 0,
+                };
+                let drawn = shown_rows(total, project.active.len(), &scroll, window);
                 let inactive: Vec<Stateful<Div>> = project
                     .inactive
+                    .get(drawn.clone())
+                    .unwrap_or_default()
                     .iter()
-                    .enumerate()
-                    .filter(|_| inactive_open)
-                    .map(|(ix, session)| {
+                    .zip(drawn.clone())
+                    .map(|(session, ix)| {
                         let at = SessionAt::Inactive(ix);
                         let shown = project.shown == Some(at);
                         self.session(at, session, shown, &theme, window, cx)
@@ -489,7 +559,9 @@ impl RenderOnce for Sidebar {
                     rows.inert(caption)
                         .items(active)
                         .item(header)
-                        .items(inactive),
+                        .inert(gap(drawn.start))
+                        .items(inactive)
+                        .inert(gap(total.saturating_sub(drawn.end))),
                 )
             }
         };
@@ -512,7 +584,8 @@ impl RenderOnce for Sidebar {
                     .flex()
                     .flex_col()
                     .overflow_y_scroll()
-                    .child(rows.inert(div().flex_1()).item(docs)),
+                    .track_scroll(&scroll)
+                    .child(rows.inert(div().flex_1()).item(settings)),
             )
     }
 }

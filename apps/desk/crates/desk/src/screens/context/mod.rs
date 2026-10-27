@@ -7,6 +7,7 @@ use desk_core::query::{Answer, QueryError, Read};
 use desk_ui::components::card::inner_card;
 use desk_ui::components::charts::{ContextLine, DotGrid, GridPart, Said, cached, legend};
 use desk_ui::components::chip::mono;
+use desk_ui::components::context_card::band_color;
 use desk_ui::components::empty::{EmptyAction, empty_state};
 use desk_ui::components::list::row;
 use desk_ui::components::paint::ink;
@@ -23,8 +24,6 @@ use std::collections::BTreeMap;
 use frame::{Gate, ellipsis, load_fonts, note, panel, panes, reread, titled, window};
 
 const NO_TOFU: &str = "The context reads query.context from the tofu the work screen runs, and no work screen is open here.";
-const STRONG_SWATCH: f32 = 0.55;
-const SINCE_SWATCH: f32 = 0.22;
 const EMPTY_TRACK: f32 = 0.07;
 const WINDOW_LEAST: f32 = 300.0;
 const BANDS_LEAST: f32 = 300.0;
@@ -505,11 +504,12 @@ fn parts(occupancy: &ContextOccupancy, used: i64, theme: &Theme) -> Vec<(SharedS
     let mut parts: Vec<(SharedString, Rgba, i64)> = occupancy
         .bands()
         .into_iter()
-        .zip(swatches(theme))
-        .map(|((name, band), color)| (name.into(), color, band.tokens))
+        .enumerate()
+        .map(|(at, (name, band))| (name.into(), band_color(at, theme), band.tokens))
         .collect();
     if since > 0 {
-        parts.push(("since the read".into(), ink(theme, SINCE_SWATCH), since));
+        let at = parts.len();
+        parts.push(("since the read".into(), band_color(at, theme), since));
     }
     parts
 }
@@ -572,9 +572,9 @@ fn bands_panel(report: &ContextReport, occupancy: &ContextOccupancy, theme: &The
                     occupancy
                         .bands()
                         .into_iter()
-                        .zip(swatches(theme))
                         .enumerate()
-                        .map(|(at, ((name, band), color))| {
+                        .map(|(at, (name, band))| {
+                            let color = band_color(at, theme);
                             row(("band", at), false, false, theme)
                                 .flex_col()
                                 .items_stretch()
@@ -630,15 +630,6 @@ fn bands_panel(report: &ContextReport, occupancy: &ContextOccupancy, theme: &The
                         .children(notes),
                 ),
         )
-}
-
-fn swatches(theme: &Theme) -> [Rgba; 4] {
-    [
-        ink(theme, STRONG_SWATCH),
-        theme.color(ColorToken::StatusAccent),
-        theme.color(ColorToken::StatusLive),
-        theme.color(ColorToken::Trace),
-    ]
 }
 
 fn track(height: f32, theme: &Theme) -> Div {

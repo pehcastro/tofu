@@ -12,6 +12,7 @@ use desk_ui::components::overlay::MenuButton;
 use gpui::{Context, Entity, Task, UniformListScrollHandle, Window};
 
 use super::history::History;
+use super::pane::Panes;
 use super::sidebar::Sidebar;
 use super::watch::Touched;
 
@@ -29,7 +30,7 @@ pub enum Panel {
     },
 }
 
-#[derive(Default)]
+#[derive(Default, PartialEq)]
 pub struct Snapshot {
     pub branch: Option<Branch>,
     pub branches: Vec<Branch>,
@@ -84,6 +85,12 @@ pub enum Told {
     Failed { said: String, fix: Option<Action> },
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Shown {
+    Changed,
+    Same,
+}
+
 pub enum Loaded<T> {
     Waiting,
     Ready(T),
@@ -110,6 +117,7 @@ pub struct GitScreen {
     pub(super) read: bool,
     pub(super) problem: Option<String>,
     pub(super) history: History,
+    pub(super) panes: Panes,
     pub(super) panel: Panel,
     pub(super) detail: Option<(String, Loaded<CommitDetail>)>,
     pub(super) diff: Option<(String, Loaded<String>)>,
@@ -139,7 +147,8 @@ impl GitScreen {
             snapshot: Snapshot::default(),
             read: false,
             problem: None,
-            history: History::default(),
+            history: History::new(cx),
+            panes: Panes::new(cx),
             panel: Panel::Changes,
             detail: None,
             diff: None,

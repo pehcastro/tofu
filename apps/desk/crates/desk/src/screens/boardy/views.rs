@@ -1,39 +1,42 @@
+use std::collections::{BTreeMap, BTreeSet};
+use std::f32::consts::FRAC_PI_2;
 use std::ops::Range;
 use std::rc::Rc;
 use std::time::Instant;
 
-use chrono::Utc;
-use desk_core::boardy::{BoardyStore, COLUMNS, Flow, running, wants_attention};
-use desk_core::protocol::BoardyPlannedEpicStatus;
+use chrono::{DateTime, Utc};
+use desk_core::boardy::{BoardyStore, COLUMNS, running, spoken};
 use desk_core::protocol::BoardyStatus as Status;
-use desk_core::protocol::boardy::{Aging, AskedQuestion, PlanAnswer, PlannedEpic, Row};
+use desk_core::protocol::boardy::{AskedQuestion, Event, PlanAnswer, PlannedEpic, Row};
+use desk_core::protocol::{BoardyEventKind, BoardyPlannedEpicStatus};
 use desk_ui::component::{control, icon_button};
 use desk_ui::components::avatar::spinner;
-use desk_ui::components::board::{ColumnHeader, board_card, board_column};
+use desk_ui::components::board::{ColumnHeader, Moment, board_card, board_rows};
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::caption;
+use desk_ui::components::chip::tabular;
 use desk_ui::components::dot_chip::{dot_chip, icon_chip};
 use desk_ui::components::empty::empty_state;
 use desk_ui::components::flip::flip;
 use desk_ui::components::form::TextArea;
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::issue_row::{group_header, issue_row};
-use desk_ui::components::paint::ink;
-use desk_ui::components::priority_icon::priority_icon;
+use desk_ui::components::paint::{glyph, ink};
 use desk_ui::components::scroll::{ScrollArea, scrollbar};
-use desk_ui::components::size::{CAPTION_TEXT, FONT_SMALL, T1, T2};
+use desk_ui::components::size::{CAPTION_TEXT, FONT_SMALL, HOVER, RADIUS_ROW, T1, T2};
+use desk_ui::components::status_icon::RunState;
 use desk_ui::components::tooltip::{Edge, tooltip};
 use desk_ui::icon::Icon;
 use desk_ui::live::ActiveTheme;
-use desk_ui::metrics::{CONTROL, RADIUS_CONTROL};
+use desk_ui::metrics::{CONTROL, ICON_TINY, RADIUS_CONTROL};
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
     AnyElement, App, Axis, ClickEvent, Context, Div, ElementId, FontWeight, MouseButton,
-    MouseDownEvent, Rgba, SharedString, Stateful, WeakEntity, Window, canvas, div, prelude::*, px,
-    rgb_to_hsla, uniform_list,
+    MouseDownEvent, Rgba, SharedString, Stateful, Transformation, WeakEntity, Window, canvas, div,
+    prelude::*, px, radians, relative, rgb_to_hsla, uniform_list,
 };
 
-use super::look::{self, age, day, kit, noun};
+use super::look::{self, Lane, age, ago, day, kit, noun, past, span, stamp};
 use super::{Boardy, Layout, MS_PER_SECOND, Place, SCROLL_WINDOW_MS, Section};
 use crate::screens::frame::note;
 
@@ -47,11 +50,50 @@ const MARK_STROKE: f32 = 1.5;
 const MARK_GAP: f32 = 2.5;
 const LANE: f32 = 3.0;
 const LANES: [f32; 3] = [12.0, 9.0, 6.0];
-const CLOSED_SHOWN: usize = 30;
-const CARD_GAP: f32 = 6.0;
 const COLUMN_GAP: f32 = 10.0;
+const TOLD: usize = 4;
+const GIST_CHARS: usize = 200;
+const WAITING_REVIEW: &str = "Waiting for review";
+const APPROVED: &str = "approved from the desk";
+const REJECTED: &str = "rejected from the desk, do not go ahead";
+const RECOMMENDED: &str = "Approve picks";
 pub(super) const MILESTONES: &str = "Milestones";
 const NO_MILESTONE: &str = "No milestone";
+const NOT_PLANNED: &str = "Not in the plan";
+const UNPLANNED: &str = "Unplanned";
+const ACTIVE: &str = "Active";
+const PLANNED: &str = "Planned";
+const CLOSED: &str = "Closed";
+const SPRINT_PHASES: [&str; 3] = [ACTIVE, PLANNED, CLOSED];
+const EPIC_KIND: &str = "epic";
+const SPRINT_KIND: &str = "sprint";
+const MILESTONE_KIND: &str = "milestone";
+const FOLD_INDENT: f32 = 36.0;
+const PROGRESS_WIDTH: f32 = 48.0;
+const PROGRESS_HEIGHT: f32 = 4.0;
+const PROGRESS_TRACK: f32 = 0.08;
+const TALLY_WIDTH: f32 = 44.0;
+const STALE_REVIEW_DAYS: i64 = 1;
+const DIGEST_ROWS: usize = 8;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Need {
+    Decide,
+    Blocked,
+    Stale,
+}
+
+impl Need {
+    const ALL: [Need; 3] = [Need::Decide, Need::Blocked, Need::Stale];
+
+    fn label(self) -> &'static str {
+        match self {
+            Need::Decide => "Decide",
+            Need::Blocked => "Blocked",
+            Need::Stale => "In review over a day",
+        }
+    }
+}
 
 #[derive(Clone, Copy)]
 pub(super) struct Spot {
@@ -65,19 +107,125 @@ pub(super) struct Group<'a> {
     pub tickets: Vec<&'a Row>,
     spots: Vec<Spot>,
     pub folded: bool,
+    fold: Option<Fold>,
+}
+
+pub(super) struct Fold {
+    key: String,
+    glyph: Glyph,
+    chip: Option<String>,
+    note: Option<String>,
+    phase: Option<&'static str>,
+    done: usize,
+    total: usize,
+}
+
+struct Planned {
+    id: String,
+    title: String,
+    note: Option<String>,
+    phase: Option<&'static str>,
+    closed: bool,
 }
 
 pub(super) enum Line {
+    Phase(&'static str),
+    Empty(String),
     Head {
         status: Option<Status>,
         title: String,
         count: usize,
         folded: bool,
+        fold: Option<Fold>,
     },
     Row {
         spot: Spot,
         at: usize,
     },
+}
+
+#[derive(Default)]
+pub(super) struct Tail {
+    told: Vec<(String, SharedString)>,
+    doing: Option<String>,
+    moved: Option<String>,
+}
+
+impl Tail {
+    fn since(&self) -> Option<&str> {
+        self.doing.as_deref().or(self.moved.as_deref())
+    }
+
+    fn took(&self) -> Option<String> {
+        Some(span(
+            stamp(self.doing.as_deref()?)?,
+            stamp(self.moved.as_deref()?)?,
+        ))
+    }
+}
+
+pub(super) fn heard(tails: &mut BTreeMap<String, Tail>, events: &[Event]) {
+    for event in events {
+        let tail = tails.entry(event.ticket.clone()).or_default();
+        let moved = event.kind == BoardyEventKind::Moved;
+        if moved {
+            tail.moved = Some(event.at.clone());
+        }
+        let to = event.to.clone().map(|to| Status::from(String::from(to)));
+        if to == Some(Status::Doing) {
+            tail.doing = Some(event.at.clone());
+        }
+        let told = (moved || spoken(event))
+            .then(|| event.text.as_deref().and_then(gist))
+            .flatten();
+        if let Some(text) = told {
+            tail.told.push((event.at.clone(), text));
+            if tail.told.len() > TOLD {
+                tail.told.remove(0);
+            }
+        }
+    }
+}
+
+fn gist(text: &str) -> Option<SharedString> {
+    text.lines()
+        .map(|line| line.trim().trim_matches(['#', '*', '-', '>', ' ']))
+        .find(|line| !line.is_empty())
+        .map(|line| line.chars().take(GIST_CHARS).collect::<String>().into())
+}
+
+struct Slot<'a> {
+    spot: Spot,
+    ticket: &'a Row,
+    state: RunState,
+    question: Option<&'a AskedQuestion>,
+}
+
+fn lanes<'a>(boardy: &'a Boardy, key: &str) -> Vec<(Lane, Vec<Slot<'a>>)> {
+    let mut held = held(&boardy.store, Some(key));
+    held.sort_by(|(_, a), (_, b)| b.updated.cmp(&a.updated));
+    let mut lanes: Vec<(Lane, Vec<Slot<'a>>)> = Lane::ALL
+        .into_iter()
+        .map(|lane| (lane, Vec::new()))
+        .collect();
+    for (spot, ticket) in held {
+        let question = boardy
+            .questions
+            .iter()
+            .find(|question| question.ticket == ticket.id);
+        let Some((lane, state)) = look::inbox(&ticket.status, question.is_some()) else {
+            continue;
+        };
+        if let Some((_, slots)) = lanes.iter_mut().find(|(held, _)| *held == lane) {
+            slots.push(Slot {
+                spot,
+                ticket,
+                state,
+                question,
+            });
+        }
+    }
+    lanes
 }
 
 fn held<'a>(store: &'a BoardyStore, only: Option<&str>) -> Vec<(Spot, &'a Row)> {
@@ -116,82 +264,209 @@ fn by_status<'a>(boardy: &Boardy, held: &[(Spot, &'a Row)]) -> Vec<Group<'a>> {
                 tickets,
                 spots,
                 folded: boardy.layout == Layout::List && boardy.folded.contains(status),
+                fold: None,
             }
         })
         .filter(|group| !group.tickets.is_empty())
         .collect()
 }
 
+fn in_review(boardy: &Boardy, ticket: &Row) -> Option<i64> {
+    let (board, _) = ticket.id.split_once('-')?;
+    let report = boardy.reports.get(board)?;
+    let aged = report.review.iter().find(|aged| aged.id == ticket.id)?;
+    Some(aged.days)
+}
+
+fn need(boardy: &Boardy, ticket: &Row) -> Option<Need> {
+    let asked = ticket.questions.unwrap_or_default() > 0
+        || boardy
+            .questions
+            .iter()
+            .any(|question| question.ticket == ticket.id);
+    match ticket.status {
+        _ if asked => Some(Need::Decide),
+        Status::NeedsDecision => Some(Need::Decide),
+        Status::Blocked => Some(Need::Blocked),
+        Status::Review => in_review(boardy, ticket)
+            .filter(|days| *days >= STALE_REVIEW_DAYS)
+            .map(|_| Need::Stale),
+        _ => None,
+    }
+}
+
+fn needed(boardy: &Boardy) -> Vec<(Need, Vec<(Spot, &Row)>)> {
+    let mut needed: Vec<(Need, Vec<(Spot, &Row)>)> = Need::ALL
+        .into_iter()
+        .map(|want| (want, Vec::new()))
+        .collect();
+    for (spot, ticket) in held(&boardy.store, None) {
+        let Some(want) = need(boardy, ticket) else {
+            continue;
+        };
+        if let Some((_, rows)) = needed.iter_mut().find(|(held, _)| *held == want) {
+            rows.push((spot, ticket));
+        }
+    }
+    needed
+}
+
+fn deciding<'a>(boardy: &'a Boardy, rows: &[(Spot, &'a Row)]) -> Vec<&'a str> {
+    let mut ids: Vec<&str> = rows.iter().map(|(_, ticket)| ticket.id.as_str()).collect();
+    for question in &boardy.questions {
+        if !ids.contains(&question.ticket.as_str()) {
+            ids.push(&question.ticket);
+        }
+    }
+    ids
+}
+
+pub(super) fn wanting(boardy: &Boardy) -> usize {
+    needed(boardy)
+        .iter()
+        .map(|(want, rows)| match want {
+            Need::Decide => deciding(boardy, rows).len(),
+            Need::Blocked | Need::Stale => rows.len(),
+        })
+        .sum()
+}
+
+struct Plan {
+    key: String,
+    glyph: Glyph,
+    planned: Vec<Planned>,
+    name: fn(&Row) -> Option<&str>,
+    none: String,
+    loose: Option<&'static str>,
+    stray: Option<&'static str>,
+}
+
+type Bucket<'a> = (Option<String>, Planned, Vec<Spot>, Vec<&'a Row>);
+
+fn tally<'a>(tickets: impl Iterator<Item = &'a Row>) -> (usize, usize) {
+    tickets
+        .filter(|ticket| ticket.status != Status::Dropped)
+        .fold((0, 0), |(done, total), ticket| {
+            (done + usize::from(ticket.status == Status::Done), total + 1)
+        })
+}
+
 fn by_plan<'a>(
     held: Vec<(Spot, &'a Row)>,
-    planned: Vec<(String, String)>,
-    name: fn(&Row) -> Option<&str>,
-    none: &str,
+    plan: Plan,
+    flipped: &BTreeSet<String>,
 ) -> Vec<Group<'a>> {
-    let mut keyed: Vec<(Option<String>, Group<'a>)> = planned
+    let mut keyed: Vec<Bucket<'a>> = plan
+        .planned
         .into_iter()
-        .map(|(id, title)| {
-            let group = Group {
-                status: None,
-                title,
-                tickets: Vec::new(),
-                spots: Vec::new(),
-                folded: false,
-            };
-            (Some(id), group)
-        })
+        .map(|planned| (Some(planned.id.clone()), planned, Vec::new(), Vec::new()))
         .collect();
     for (spot, ticket) in held {
-        let key = name(ticket).map(str::to_owned);
-        match keyed.iter_mut().find(|(planned, _)| *planned == key) {
-            Some((_, group)) => {
-                group.tickets.push(ticket);
-                group.spots.push(spot);
+        let key = (plan.name)(ticket).map(str::to_owned);
+        let known = keyed
+            .iter_mut()
+            .find(|(id, planned, ..)| *id == key || key.as_deref() == Some(planned.title.as_str()));
+        match known {
+            Some((_, _, spots, tickets)) => {
+                spots.push(spot);
+                tickets.push(ticket);
             }
             None => {
-                let title = key.clone().unwrap_or_else(|| none.to_owned());
-                let group = Group {
-                    status: None,
-                    title,
-                    tickets: vec![ticket],
-                    spots: vec![spot],
-                    folded: false,
+                let title = match (&key, plan.stray) {
+                    (None, _) => plan.none.clone(),
+                    (Some(id), Some(_)) => id.clone(),
+                    (Some(_), None) => NOT_PLANNED.to_owned(),
                 };
-                keyed.push((key, group));
+                let planned = Planned {
+                    id: key.clone().unwrap_or_default(),
+                    title,
+                    note: None,
+                    phase: if key.is_some() {
+                        plan.stray
+                    } else {
+                        plan.loose
+                    },
+                    closed: key.is_none(),
+                };
+                keyed.push((key, planned, vec![spot], vec![ticket]));
             }
         }
     }
-    keyed.into_iter().map(|(_, group)| group).collect()
+    keyed.sort_by_key(|(key, planned, ..)| {
+        let rank = SPRINT_PHASES
+            .iter()
+            .position(|phase| Some(*phase) == planned.phase);
+        (key.is_none(), rank.unwrap_or(SPRINT_PHASES.len()))
+    });
+    let mut opened = false;
+    keyed
+        .into_iter()
+        .map(|(chip, planned, spots, tickets)| {
+            let (done, total) = tally(tickets.iter().copied());
+            let open = !planned.closed && !opened && done < total;
+            opened |= open;
+            let key = format!("{}/{}", plan.key, planned.id);
+            Group {
+                status: None,
+                title: planned.title,
+                tickets,
+                spots,
+                folded: open == flipped.contains(&key),
+                fold: Some(Fold {
+                    key,
+                    glyph: plan.glyph,
+                    chip,
+                    note: planned.note,
+                    phase: planned.phase,
+                    done,
+                    total,
+                }),
+            }
+        })
+        .collect()
 }
 
-fn planned_epics(plan: Option<&PlanAnswer>) -> Vec<(String, String)> {
+fn planned_epics(plan: Option<&PlanAnswer>) -> Vec<Planned> {
     plan.map_or_else(Vec::new, |plan| {
         plan.epics
             .iter()
-            .map(|epic| {
-                let done = if epic.status == BoardyPlannedEpicStatus::Done {
-                    " · done"
-                } else {
-                    ""
-                };
-                (epic.id.clone(), format!("{} {}{done}", epic.id, epic.title))
+            .map(|epic| Planned {
+                id: epic.id.clone(),
+                title: epic.title.clone(),
+                note: None,
+                phase: None,
+                closed: epic.status == BoardyPlannedEpicStatus::Done,
             })
             .collect()
     })
 }
 
-fn planned_sprints(plan: Option<&PlanAnswer>) -> Vec<(String, String)> {
+fn planned_sprints(plan: Option<&PlanAnswer>) -> Vec<Planned> {
+    let now = Utc::now();
     plan.map_or_else(Vec::new, |plan| {
         plan.sprints
             .iter()
             .map(|sprint| {
-                let active = if sprint.active { " · active" } else { "" };
-                let dates = match (&sprint.start, &sprint.end) {
-                    (Some(start), Some(end)) => format!(" · {} to {}", day(start), day(end)),
-                    _ => String::new(),
+                let closed =
+                    !sprint.active && sprint.end.as_deref().is_some_and(|end| past(end, now));
+                let phase = match (sprint.active, closed) {
+                    (true, _) => ACTIVE,
+                    (false, false) => PLANNED,
+                    (false, true) => CLOSED,
                 };
-                let title = format!("{} {}{active}{dates}", sprint.id, sprint.title);
-                (sprint.id.clone(), title)
+                let note = match (sprint.start.as_deref(), sprint.end.as_deref()) {
+                    (Some(start), Some(end)) => Some(format!("{} to {}", day(start), day(end))),
+                    (Some(start), None) => Some(format!("from {}", day(start))),
+                    (None, Some(end)) => Some(format!("until {}", day(end))),
+                    (None, None) => None,
+                };
+                Planned {
+                    id: sprint.id.clone(),
+                    title: sprint.title.clone(),
+                    note,
+                    phase: Some(phase),
+                    closed,
+                }
             })
             .collect()
     })
@@ -201,24 +476,62 @@ pub(super) fn groups(boardy: &Boardy) -> Vec<Group<'_>> {
     let store = &boardy.store;
     let words = &store.words;
     match &boardy.place {
+        Place::Board(key, Section::Tickets) if boardy.layout == Layout::Board => lanes(boardy, key)
+            .into_iter()
+            .map(|(lane, slots)| {
+                let (spots, tickets) = slots.iter().map(|slot| (slot.spot, slot.ticket)).unzip();
+                Group {
+                    status: None,
+                    title: lane.label().to_owned(),
+                    tickets,
+                    spots,
+                    folded: false,
+                    fold: None,
+                }
+            })
+            .collect(),
         Place::Board(key, Section::Tickets) => by_status(boardy, &held(store, Some(key))),
         Place::Board(key, Section::Epics) => by_plan(
             held(store, Some(key)),
-            planned_epics(boardy.plans.get(key)),
-            |ticket| ticket.epic.as_deref(),
-            &format!("No {}", words.epic),
+            Plan {
+                key: format!("{key}/{EPIC_KIND}"),
+                glyph: Glyph::Epic,
+                planned: planned_epics(boardy.plans.get(key)),
+                name: |ticket| ticket.epic.as_deref(),
+                none: format!("No {}", words.epic),
+                loose: None,
+                stray: None,
+            },
+            &boardy.flipped,
         ),
         Place::Board(key, Section::Sprints) => by_plan(
             held(store, Some(key)),
-            planned_sprints(boardy.plans.get(key)),
-            |ticket| ticket.sprint.as_deref(),
-            &format!("No {}", words.sprint),
+            Plan {
+                key: format!("{key}/{SPRINT_KIND}"),
+                glyph: Glyph::Sprint,
+                planned: planned_sprints(boardy.plans.get(key)),
+                name: |ticket| ticket.sprint.as_deref(),
+                none: format!("No {}", words.sprint),
+                loose: Some(UNPLANNED),
+                stray: Some(PLANNED),
+            },
+            &boardy.flipped,
         ),
-        Place::Attention => {
-            let mut attention = held(store, None);
-            attention.retain(|(_, ticket)| wants_attention(ticket));
-            by_status(boardy, &attention)
-        }
+        Place::Attention => needed(boardy)
+            .into_iter()
+            .filter(|(_, rows)| !rows.is_empty())
+            .map(|(want, rows)| {
+                let (spots, tickets) = rows.into_iter().unzip();
+                Group {
+                    status: None,
+                    title: want.label().to_owned(),
+                    tickets,
+                    spots,
+                    folded: false,
+                    fold: None,
+                }
+            })
+            .collect(),
         Place::CatchUp => {
             let (spots, tickets) = held(store, None)
                 .into_iter()
@@ -230,21 +543,46 @@ pub(super) fn groups(boardy: &Boardy) -> Vec<Group<'_>> {
                 tickets,
                 spots,
                 folded: false,
+                fold: None,
             }]
         }
         Place::Board(_, Section::Triage | Section::Milestones) | Place::Ticket(_) => Vec::new(),
     }
 }
 
+fn phases(place: &Place) -> &'static [&'static str] {
+    match place {
+        Place::Board(_, Section::Sprints) => &SPRINT_PHASES,
+        _ => &[],
+    }
+}
+
 fn lines(boardy: &Boardy) -> Vec<Line> {
     let mut lines = Vec::new();
     let mut at = 0;
+    let mut phase = None;
+    let wanted = phases(&boardy.place);
+    let mut next = 0;
+    let sprint = &boardy.store.words.sprint;
     for group in groups(boardy) {
+        let now = group.fold.as_ref().and_then(|fold| fold.phase);
+        if now != phase {
+            let rest = wanted.get(next..).unwrap_or_default();
+            let reached = now.and_then(|now| rest.iter().position(|held| *held == now));
+            let skip = reached.unwrap_or(rest.len());
+            lines.extend(empty_phases(rest.get(..skip).unwrap_or_default(), sprint));
+            next += skip + usize::from(reached.is_some());
+            if let Some(starts) = now {
+                lines.push(Line::Phase(starts));
+            }
+        }
+        phase = now;
         lines.push(Line::Head {
             status: group.status,
             title: group.title,
             count: group.tickets.len(),
             folded: group.folded,
+            fold: group.fold,
         });
         if group.folded {
             continue;
@@ -254,7 +592,17 @@ fn lines(boardy: &Boardy) -> Vec<Line> {
             at += 1;
         }
     }
+    lines.extend(empty_phases(wanted.get(next..).unwrap_or_default(), sprint));
     lines
+}
+
+fn empty_phases<'a>(phases: &'a [&'static str], noun: &'a str) -> impl Iterator<Item = Line> + 'a {
+    phases.iter().flat_map(move |phase| {
+        [
+            Line::Phase(phase),
+            Line::Empty(format!("No {} {noun}", phase.to_lowercase())),
+        ]
+    })
 }
 
 #[derive(IntoElement)]
@@ -403,6 +751,11 @@ pub(super) fn main(
         Place::Board(key, _) => !boardy.store.read(key),
         _ => false,
     };
+    let stale =
+        matches!(&boardy.place, Place::Board(key, Section::Tickets) if boardy.inbox.key != *key);
+    if stale && boardy.layout == Layout::Board {
+        boardy.set_board();
+    }
     let body = match (&boardy.place, boardy.layout) {
         _ if waiting => div()
             .p(px(PAD_X))
@@ -413,30 +766,14 @@ pub(super) fn main(
                 cx,
             ))
             .into_any_element(),
+        (Place::Attention, _) => attention(boardy, theme, cx),
         (Place::Board(key, Section::Triage), _) => triage(boardy, &key.clone(), theme, window, cx),
-        (Place::Board(key, Section::Milestones), _) => milestones(boardy, key, theme),
-        (Place::Board(key, Section::Tickets), Layout::Board) => {
-            columns(boardy, &key.clone(), cx).into_any_element()
+        (Place::Board(key, Section::Milestones), _) => milestones(boardy, key, theme, cx),
+        (Place::Board(_, Section::Tickets), Layout::Board) => {
+            columns(boardy, cx).into_any_element()
         }
         _ => list(boardy, started, theme, cx),
     };
-    let questions = (boardy.place == Place::Attention && !boardy.questions.is_empty()).then(|| {
-        div()
-            .flex()
-            .flex_none()
-            .flex_col()
-            .gap_2()
-            .px(px(PAD_X))
-            .pb_2()
-            .child(caption("Open questions", theme))
-            .children(
-                boardy
-                    .questions
-                    .iter()
-                    .map(|question| asked(boardy, question, theme, cx))
-                    .collect::<Vec<_>>(),
-            )
-    });
     div()
         .size_full()
         .flex()
@@ -444,7 +781,6 @@ pub(super) fn main(
         .min_h_0()
         .child(top)
         .children(failed)
-        .children(questions)
         .child(div().flex_1().min_h_0().px(px(LIST_INSET)).child(body))
 }
 
@@ -527,11 +863,35 @@ fn list(
 
 fn line_row(boardy: &Boardy, line: &Line, theme: &Theme, cx: &mut Context<Boardy>) -> AnyElement {
     match line {
+        Line::Phase(phase) => div()
+            .h(px(LINE))
+            .flex()
+            .items_end()
+            .px(px(PAD_X / 2.0))
+            .pb_2()
+            .child(caption(*phase, theme))
+            .into_any_element(),
+        Line::Empty(said) => div()
+            .h(px(LINE))
+            .flex()
+            .items_center()
+            .pl(px(FOLD_INDENT))
+            .child(note(said.clone(), theme))
+            .into_any_element(),
+        Line::Head {
+            title,
+            folded,
+            fold: Some(fold),
+            ..
+        } => fold_head(fold, title, *folded, theme)
+            .on_click(toggler(&fold.key, cx))
+            .into_any_element(),
         Line::Head {
             status: Some(status),
             title,
             count,
             folded,
+            ..
         } => {
             let (toggled, added) = (status.clone(), status.clone());
             let Some(shown) = kit(status) else {
@@ -571,26 +931,101 @@ fn line_row(boardy: &Boardy, line: &Line, theme: &Theme, cx: &mut Context<Boardy
             title,
             count,
             ..
-        } => div()
-            .h(px(LINE))
-            .flex()
-            .items_end()
-            .gap_2()
-            .px(px(PAD_X / 2.0))
-            .pb_2()
-            .child(caption(title.clone(), theme))
-            .child(
-                div()
-                    .text_size(px(FONT_SMALL))
-                    .text_color(ink(theme, CAPTION_TEXT))
-                    .child(count.to_string()),
-            )
-            .into_any_element(),
+        } => head(title.clone(), *count, theme).into_any_element(),
         Line::Row { spot, at } => match ticket_at(&boardy.store, *spot) {
             Some(ticket) => ticket_row(boardy, ticket, *at == boardy.at, theme, cx),
             None => div().h(px(LINE)).into_any_element(),
         },
     }
+}
+
+fn fold_head(fold: &Fold, title: &str, folded: bool, theme: &Theme) -> Stateful<Div> {
+    let hover = ink(theme, HOVER);
+    let angle = if folded { -FRAC_PI_2 } else { 0.0 };
+    div()
+        .id(SharedString::from(format!("fold-{}", fold.key)))
+        .w_full()
+        .h(px(LINE))
+        .flex()
+        .items_center()
+        .gap_3()
+        .px(px(PAD_X / 2.0))
+        .rounded(px(RADIUS_ROW))
+        .cursor_pointer()
+        .hover(move |style| style.bg(hover))
+        .child(
+            glyph(Glyph::Chevron, ICON_TINY, ink(theme, CAPTION_TEXT))
+                .with_transformation(Transformation::rotate(radians(angle))),
+        )
+        .children(fold.chip.clone().map(|chip| icon_chip(fold.glyph, chip)))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(ink(theme, T1))
+                .when(fold.chip.as_deref() != Some(title), |text| {
+                    text.child(title.to_owned())
+                }),
+        )
+        .children(fold.note.clone().map(|said| note(said, theme).flex_none()))
+        .child(progress(fold.done, fold.total, theme))
+}
+
+fn progress(done: usize, total: usize, theme: &Theme) -> Div {
+    let share = match total {
+        0 => 0.0,
+        total => done as f32 / total as f32,
+    };
+    div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap_2()
+        .child(
+            div()
+                .w(px(PROGRESS_WIDTH))
+                .h(px(PROGRESS_HEIGHT))
+                .rounded_full()
+                .bg(ink(theme, PROGRESS_TRACK))
+                .child(
+                    div()
+                        .h_full()
+                        .w(relative(share))
+                        .rounded_full()
+                        .bg(theme.color(ColorToken::StatusAccent)),
+                ),
+        )
+        .child(
+            div()
+                .flex_none()
+                .min_w(px(TALLY_WIDTH))
+                .flex()
+                .justify_end()
+                .whitespace_nowrap()
+                .text_size(px(FONT_SMALL))
+                .font_features(tabular())
+                .text_color(ink(theme, CAPTION_TEXT))
+                .child(format!("{done}/{total}")),
+        )
+}
+
+fn turn(flipped: &mut BTreeSet<String>, key: &str) {
+    if !flipped.remove(key) {
+        flipped.insert(key.to_owned());
+    }
+}
+
+fn toggler(
+    key: &str,
+    cx: &Context<Boardy>,
+) -> impl Fn(&ClickEvent, &mut Window, &mut App) + 'static {
+    let key = key.to_owned();
+    cx.listener(move |boardy: &mut Boardy, _: &ClickEvent, _, cx| {
+        turn(&mut boardy.flipped, &key);
+        cx.notify();
+    })
 }
 
 fn chips(ticket: &Row, theme: &Theme) -> Vec<AnyElement> {
@@ -694,62 +1129,116 @@ fn ticket_row(
         .into_any_element()
 }
 
-fn columns(boardy: &Boardy, key: &str, cx: &mut Context<Boardy>) -> impl IntoElement {
-    let shown: Vec<(Status, Vec<&Row>)> = boardy
-        .store
-        .columns(key)
+#[derive(Clone)]
+enum Said {
+    Fixed(SharedString),
+    Since(DateTime<Utc>),
+}
+
+pub(super) struct Card {
+    id: SharedString,
+    title: SharedString,
+    summary: Option<SharedString>,
+    state: RunState,
+    said: Said,
+    question: Option<AskedQuestion>,
+    review: bool,
+}
+
+#[derive(Default)]
+pub(super) struct Inbox {
+    pub(super) key: String,
+    lanes: Vec<(Lane, Rc<[Card]>)>,
+}
+
+pub(super) fn inbox(boardy: &Boardy, key: &str) -> Inbox {
+    let lanes = lanes(boardy, key)
         .into_iter()
-        .filter(|(status, tickets)| {
-            !tickets.is_empty()
-                || matches!(
-                    status,
-                    Status::Backlog | Status::Todo | Status::Doing | Status::Review | Status::Done
-                )
-                || (*status == Status::Triage && boardy.flow == Flow::Linear)
+        .map(|(lane, slots)| {
+            let cards: Rc<[Card]> = slots
+                .iter()
+                .map(|slot| filed(slot, boardy.tails.get(&slot.ticket.id)))
+                .collect();
+            (lane, cards)
         })
         .collect();
+    Inbox {
+        key: key.to_owned(),
+        lanes,
+    }
+}
+
+fn filed(slot: &Slot, tail: Option<&Tail>) -> Card {
+    let ticket = slot.ticket;
+    let fixed = |text: &str| Said::Fixed(SharedString::from(text.to_owned()));
+    let said = match (slot.state, slot.question) {
+        (RunState::Waiting, Some(question)) => fixed(&question.tldr),
+        (RunState::Waiting, None) if ticket.status == Status::Review => fixed(WAITING_REVIEW),
+        (RunState::Waiting | RunState::Failed, _) => fixed(look::label(&ticket.status)),
+        (RunState::Running, _) => {
+            let since = tail.and_then(Tail::since).unwrap_or(&ticket.updated);
+            stamp(since).map_or_else(|| fixed(""), Said::Since)
+        }
+        (RunState::Done, _) => fixed(
+            &tail
+                .and_then(Tail::took)
+                .unwrap_or_else(|| day(&ticket.updated)),
+        ),
+    };
+    Card {
+        id: ticket.id.clone().into(),
+        title: ticket.title.clone().into(),
+        summary: tail
+            .and_then(|tail| tail.told.last())
+            .map(|(_, said)| said.clone()),
+        state: slot.state,
+        said,
+        question: slot.question.cloned(),
+        review: ticket.status == Status::Review,
+    }
+}
+
+fn columns(boardy: &Boardy, cx: &mut Context<Boardy>) -> impl IntoElement {
     let theme = ActiveTheme::theme(cx);
-    let mut at = 0;
+    let tint = theme.color(ColorToken::StatusAccent);
+    let mut first = 0;
     let mut built = Vec::new();
-    for (status, tickets) in shown {
-        let Some(header) = kit(&status) else {
-            continue;
-        };
-        let closed = matches!(status, Status::Done | Status::Dropped);
-        let count = tickets.len();
-        let mut cards = Vec::new();
-        for (shown_at, ticket) in tickets.into_iter().enumerate() {
-            let selected = at == boardy.at;
-            at += 1;
-            if closed && shown_at >= CLOSED_SHOWN {
-                continue;
+    for (lane, cards) in &boardy.inbox.lanes {
+        let count = cards.len();
+        let tall = boardy
+            .unfolded
+            .as_deref()
+            .and_then(|open| cards.iter().position(|card| card.id.as_ref() == open));
+        let (cards, from) = (cards.clone(), first);
+        first += count;
+        let draw = cx.processor(move |boardy: &mut Boardy, range: Range<usize>, _, cx| {
+            let theme = ActiveTheme::theme(cx);
+            let now = Utc::now();
+            let shown = cards.get(range.clone()).unwrap_or_default();
+            if shown.iter().any(|card| card.state == RunState::Running) {
+                boardy.tick(cx);
             }
-            cards.push(card(boardy, ticket, selected, &theme, cx));
-        }
-        if closed && count > CLOSED_SHOWN {
-            cards.push(
-                note(
-                    format!("{} more, open the list to see them", count - CLOSED_SHOWN),
-                    &theme,
-                )
-                .px_2()
-                .into_any_element(),
-            );
-        }
-        let added = status.clone();
+            shown
+                .iter()
+                .zip(range)
+                .map(|(card, at)| {
+                    let selected = from + at == boardy.at;
+                    drawn(boardy, card, selected, now, &theme, cx)
+                })
+                .collect()
+        });
         built.push(
-            board_column(
-                ElementId::Name(format!("boardy-column-{}", look::label(&status)).into()),
+            board_rows(
+                ElementId::Name(format!("boardy-lane-{}", lane.label()).into()),
                 ColumnHeader {
-                    status: header,
-                    title: look::label(&status).to_owned().into(),
+                    status: lane.status(),
+                    title: lane.label().into(),
                     count,
                 },
-                cards,
+                tall,
+                draw,
             )
-            .on_add(cx.listener(move |boardy, _: &ClickEvent, _, cx| {
-                boardy.open_create(Some(String::from(added.clone())), cx)
-            })),
+            .inbox(tint),
         );
     }
     div()
@@ -770,48 +1259,150 @@ fn columns(boardy: &Boardy, key: &str, cx: &mut Context<Boardy>) -> impl IntoEle
         .child(scrollbar("boardy-board-bar", &boardy.board_scroll).axis(Axis::Horizontal))
 }
 
-fn card(
+fn drawn(
     boardy: &Boardy,
-    ticket: &Row,
+    shown: &Card,
     selected: bool,
+    now: DateTime<Utc>,
     theme: &Theme,
     cx: &mut Context<Boardy>,
 ) -> AnyElement {
-    let id = ElementId::Name(ticket.id.clone().into());
+    let id = ElementId::Name(shown.id.clone());
+    let said = match &shown.said {
+        Said::Fixed(said) => said.clone(),
+        Said::Since(since) => span(*since, now).into(),
+    };
     let mut card = board_card(id.clone())
-        .id_line(
-            div()
-                .flex()
-                .gap_1()
-                .child(ticket.id.clone())
-                .children(look::parent(&ticket.id).map(|parent| format!("› {parent}"))),
-        )
-        .title(ticket.title.clone())
-        .chips(
-            look::priority(&ticket.priority)
-                .map(|priority| priority_icon(priority).into_any_element())
-                .into_iter()
-                .chain(chips(ticket, theme)),
-        )
-        .footer(format!("Created {}", day(&ticket.created)))
+        .title(shown.title.clone())
+        .run(shown.state, said)
         .selected(selected)
-        .on_click(opener(&ticket.id, cx));
-    if let Some(status) = kit(&ticket.status) {
-        card = card.status(status);
+        .on_click(unfolder(&shown.id, cx));
+    if let Some(summary) = &shown.summary {
+        card = card.summary(summary.clone());
     }
-    if let Some(who) = who(ticket, boardy, theme) {
-        card = card.avatar(who);
+    if boardy.unfolded.as_deref() == Some(shown.id.as_ref()) {
+        let tail = boardy.tails.get(shown.id.as_ref());
+        let told = tail.map_or(&[][..], |tail| tail.told.as_slice());
+        let picks = shown.question.as_ref().and_then(|question| {
+            let option = recommended(question)?;
+            question.options.get(option.checked_sub(1)?)
+        });
+        let moments = told
+            .iter()
+            .map(|(at, text)| Moment {
+                text: text.clone(),
+                when: ago(at, now).into(),
+            })
+            .chain(picks.map(|option| Moment {
+                text: format!("{RECOMMENDED}: {option}").into(),
+                when: SharedString::default(),
+            }))
+            .collect();
+        card = card.unfolded(moments, actions(shown, theme, cx));
     }
     flip(
         id,
         &boardy.flips,
         div()
             .flex_none()
-            .mb(px(CARD_GAP))
-            .on_mouse_down(MouseButton::Right, aim(&ticket.id, cx))
+            .on_mouse_down(MouseButton::Right, aim(&shown.id, cx))
             .child(card),
     )
     .into_any_element()
+}
+
+fn recommended(question: &AskedQuestion) -> Option<usize> {
+    usize::try_from(question.recommended)
+        .ok()
+        .filter(|option| (1..=question.options.len()).contains(option))
+}
+
+enum Decision {
+    Answer(i64, String),
+    Move(Status),
+}
+
+fn actions(shown: &Card, theme: &Theme, cx: &mut Context<Boardy>) -> Vec<AnyElement> {
+    let id = shown.id.as_ref();
+    let (reject, approve) = match (&shown.question, shown.review) {
+        (Some(question), _) => (
+            Decision::Answer(question.id, REJECTED.to_owned()),
+            Decision::Answer(
+                question.id,
+                recommended(question).map_or_else(|| APPROVED.to_owned(), |n| n.to_string()),
+            ),
+        ),
+        (None, true) => (Decision::Move(Status::Doing), Decision::Move(Status::Done)),
+        (None, false) => {
+            let ticket = id.to_owned();
+            let open = button(
+                SharedString::from(format!("open-{id}")),
+                "Open",
+                None,
+                ButtonKind::Text,
+                theme,
+            )
+            .on_click(cx.listener(
+                move |boardy: &mut Boardy, _: &ClickEvent, _, cx| {
+                    cx.stop_propagation();
+                    boardy.open_ticket(ticket.clone(), cx);
+                    cx.notify();
+                },
+            ));
+            return vec![open.into_any_element()];
+        }
+    };
+    vec![
+        decide(id, "Reject", ButtonKind::Text, reject, theme, cx),
+        decide(id, "Approve", ButtonKind::Primary, approve, theme, cx),
+    ]
+}
+
+fn decide(
+    id: &str,
+    label: &'static str,
+    kind: ButtonKind,
+    decision: Decision,
+    theme: &Theme,
+    cx: &mut Context<Boardy>,
+) -> AnyElement {
+    let ticket = id.to_owned();
+    button(
+        SharedString::from(format!("{label}-{id}")),
+        label,
+        None,
+        kind,
+        theme,
+    )
+    .on_click(
+        cx.listener(move |boardy: &mut Boardy, _: &ClickEvent, _, cx| {
+            cx.stop_propagation();
+            eprintln!("desk: boardy {label} {ticket} from its card");
+            boardy.unfolded = None;
+            match &decision {
+                Decision::Answer(question, answer) => {
+                    boardy.answer_question(ticket.clone(), *question, answer.clone(), cx)
+                }
+                Decision::Move(to) => boardy.move_to(ticket.clone(), to.clone(), cx),
+            }
+            cx.notify();
+        }),
+    )
+    .into_any_element()
+}
+
+fn unfolder(
+    id: &str,
+    cx: &Context<Boardy>,
+) -> impl Fn(&ClickEvent, &mut Window, &mut App) + 'static {
+    let id = id.to_owned();
+    cx.listener(move |boardy: &mut Boardy, _: &ClickEvent, _, cx| {
+        boardy.unfolded = match boardy.unfolded.as_deref() == Some(id.as_str()) {
+            true => None,
+            false => Some(id.clone()),
+        };
+        cx.notify();
+    })
 }
 
 fn triage(
@@ -846,7 +1437,7 @@ fn triage(
                 .children(requests.iter().map(|request| {
                     let chip = super::ticket::asker(
                         &format!("request-by-{}", request.id),
-                        &request.by,
+                        &request.by.id,
                         &format!("· {}", age(&request.at, now)),
                         boardy,
                         theme,
@@ -910,7 +1501,7 @@ fn triage(
         .into_any_element()
 }
 
-fn milestones(boardy: &Boardy, key: &str, theme: &Theme) -> AnyElement {
+fn milestones(boardy: &Boardy, key: &str, theme: &Theme, cx: &mut Context<Boardy>) -> AnyElement {
     let Some(plan) = boardy.plans.get(key) else {
         return empty_state(
             "boardy-plan",
@@ -924,70 +1515,41 @@ fn milestones(boardy: &Boardy, key: &str, theme: &Theme) -> AnyElement {
         .into_any_element();
     };
     let tickets = boardy.store.tickets(key);
-    let epic_row = |epic: &PlannedEpic| {
-        let count = tickets
+    let in_epic = |epic: &str| {
+        tally(
+            tickets
+                .iter()
+                .filter(move |ticket| ticket.epic.as_deref() == Some(epic)),
+        )
+    };
+    let section = |id: Option<&str>, due: Option<&str>, epics: &[&PlannedEpic]| {
+        let (done, total) = epics
             .iter()
-            .filter(|ticket| ticket.epic.as_deref() == Some(epic.id.as_str()))
-            .count();
-        let done = epic.status == BoardyPlannedEpicStatus::Done;
-        div()
-            .flex()
-            .gap_2()
-            .items_center()
-            .child(icon_chip(
-                if done { Glyph::Check } else { Glyph::Epic },
-                epic.id.clone(),
-            ))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .truncate()
-                    .text_color(ink(theme, if done { T2 } else { T1 }))
-                    .child(epic.title.clone()),
-            )
-            .child(note(format!("{count} {}", plan.words.ticket), theme))
+            .map(|epic| in_epic(&epic.id))
+            .fold((0, 0), |(done, total), (more, all)| {
+                (done + more, total + all)
+            });
+        Fold {
+            key: format!("{key}/{MILESTONE_KIND}/{}", id.unwrap_or_default()),
+            glyph: Glyph::Milestone,
+            chip: id.map(str::to_owned),
+            note: due.map(|due| format!("due {}", day(due))),
+            phase: None,
+            done,
+            total,
+        }
     };
-    let group = |title: String, detail: Option<String>, epics: Vec<&PlannedEpic>| {
-        div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .p_3()
-            .rounded(px(10.0))
-            .bg(ink(theme, 0.03))
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .items_center()
-                    .child(
-                        div()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(ink(theme, T1))
-                            .child(title),
-                    )
-                    .children(detail.map(|detail| note(detail, theme))),
-            )
-            .children(epics.into_iter().map(epic_row))
-    };
-    let mut cards: Vec<Div> = plan
+    let mut sections: Vec<(Fold, String, Vec<&PlannedEpic>)> = plan
         .milestones
         .iter()
         .map(|milestone| {
-            let epics = plan
+            let epics: Vec<&PlannedEpic> = plan
                 .epics
                 .iter()
                 .filter(|epic| epic.milestone.as_deref() == Some(milestone.id.as_str()))
                 .collect();
-            group(
-                format!("{} {}", milestone.id, milestone.title),
-                milestone
-                    .due
-                    .as_deref()
-                    .map(|due| format!("due {}", day(due))),
-                epics,
-            )
+            let fold = section(Some(&milestone.id), milestone.due.as_deref(), &epics);
+            (fold, milestone.title.clone(), epics)
         })
         .collect();
     let loose: Vec<&PlannedEpic> = plan
@@ -1000,7 +1562,80 @@ fn milestones(boardy: &Boardy, key: &str, theme: &Theme) -> AnyElement {
         })
         .collect();
     if !loose.is_empty() {
-        cards.push(group(NO_MILESTONE.to_owned(), None, loose));
+        let fold = section(None, None, &loose);
+        sections.push((fold, NO_MILESTONE.to_owned(), loose));
+    }
+    let hover = ink(theme, HOVER);
+    let mut cards: Vec<AnyElement> = Vec::new();
+    for (fold, title, epics) in sections {
+        let folded = !boardy.flipped.contains(&fold.key);
+        cards.push(
+            fold_head(&fold, &title, folded, theme)
+                .on_click(toggler(&fold.key, cx))
+                .into_any_element(),
+        );
+        if folded {
+            continue;
+        }
+        if epics.is_empty() {
+            cards.push(
+                div()
+                    .h(px(LINE))
+                    .flex()
+                    .items_center()
+                    .pl(px(FOLD_INDENT))
+                    .child(note(
+                        format!("No {} yet", noun(&plan.words.epic, true)),
+                        theme,
+                    ))
+                    .into_any_element(),
+            );
+        }
+        for epic in epics {
+            let (done, total) = in_epic(&epic.id);
+            let closed = epic.status == BoardyPlannedEpicStatus::Done;
+            let (board, wanted) = (key.to_owned(), format!("{key}/{EPIC_KIND}/{}", epic.id));
+            cards.push(
+                div()
+                    .id(SharedString::from(format!("milestone-epic-{}", epic.id)))
+                    .h(px(LINE))
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .pl(px(FOLD_INDENT))
+                    .pr(px(PAD_X / 2.0))
+                    .rounded(px(RADIUS_ROW))
+                    .cursor_pointer()
+                    .hover(move |style| style.bg(hover))
+                    .on_click(
+                        cx.listener(move |boardy: &mut Boardy, _: &ClickEvent, _, cx| {
+                            boardy.go(Place::Board(board.clone(), Section::Epics), cx);
+                            let folded = groups(boardy).iter().any(|group| {
+                                group.folded
+                                    && group.fold.as_ref().is_some_and(|fold| fold.key == wanted)
+                            });
+                            if folded {
+                                turn(&mut boardy.flipped, &wanted);
+                            }
+                            cx.notify();
+                        }),
+                    )
+                    .child(icon_chip(
+                        if closed { Glyph::Check } else { Glyph::Epic },
+                        epic.id.clone(),
+                    ))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_color(ink(theme, if closed { T2 } else { T1 }))
+                            .when(epic.title != epic.id, |text| text.child(epic.title.clone())),
+                    )
+                    .child(progress(done, total, theme))
+                    .into_any_element(),
+            );
+        }
     }
     if cards.is_empty() {
         return empty_state(
@@ -1015,72 +1650,293 @@ fn milestones(boardy: &Boardy, key: &str, theme: &Theme) -> AnyElement {
         .into_any_element();
     }
     ScrollArea::new("boardy-milestones")
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .gap_3()
-                .p(px(PAD_X / 2.0))
-                .children(cards),
-        )
+        .child(div().flex().flex_col().gap_1().children(cards))
         .into_any_element()
 }
 
-fn aging(title: &str, rows: &[Aging], theme: &Theme) -> Option<Div> {
-    (!rows.is_empty()).then(|| {
-        div()
-            .flex()
-            .flex_col()
-            .gap_1()
-            .child(caption(title.to_owned(), theme))
-            .children(rows.iter().map(|row| {
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(note(row.id.clone(), theme))
-                    .child(div().flex_1().min_w_0().truncate().child(row.title.clone()))
-                    .child(note(format!("{}d", row.days), theme))
-            }))
-    })
+fn head(title: impl Into<SharedString>, count: usize, theme: &Theme) -> Div {
+    div()
+        .h(px(LINE))
+        .flex()
+        .items_end()
+        .gap_2()
+        .px(px(PAD_X / 2.0))
+        .pb_2()
+        .child(caption(title, theme))
+        .child(
+            div()
+                .text_size(px(FONT_SMALL))
+                .text_color(ink(theme, CAPTION_TEXT))
+                .child(count.to_string()),
+        )
 }
 
-pub(super) fn catch_up(boardy: &Boardy, theme: &Theme, cx: &mut Context<Boardy>) -> Div {
-    let reports = boardy.reports.values().map(|report| {
+fn facts(ticket: &Row, points: &str) -> String {
+    [
+        Some(String::from(ticket.r#type.clone())),
+        ticket
+            .points
+            .filter(|points| *points > 0)
+            .map(|n| format!("{points} {n}")),
+        ticket.model.clone().filter(|model| !model.is_empty()),
+        ticket
+            .tools
+            .filter(|tools| *tools > 0)
+            .map(|tools| format!("{tools} tools")),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(" · ")
+}
+
+fn entry(
+    boardy: &Boardy,
+    scope: &str,
+    id: &str,
+    said: Option<String>,
+    tail: String,
+    theme: &Theme,
+    cx: &Context<Boardy>,
+) -> AnyElement {
+    let ticket = boardy.store.find(id);
+    let hover = ink(theme, HOVER);
+    div()
+        .id(SharedString::from(format!("{scope}-{id}")))
+        .h(px(LINE))
+        .flex()
+        .items_center()
+        .gap_3()
+        .px(px(PAD_X / 2.0))
+        .rounded(px(RADIUS_ROW))
+        .cursor_pointer()
+        .hover(move |style| style.bg(hover))
+        .on_click(opener(id, cx))
+        .child(note(id.to_owned(), theme).flex_none())
+        .child(
+            div()
+                .min_w_0()
+                .truncate()
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(ink(theme, T1))
+                .child(ticket.map_or_else(String::new, |ticket| ticket.title.clone())),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .text_color(ink(theme, T2))
+                .child(said.unwrap_or_default()),
+        )
+        .children(
+            ticket
+                .map(|ticket| facts(ticket, &boardy.store.words.points))
+                .map(|facts| note(facts, theme).flex_none()),
+        )
+        .child(note(tail, theme).flex_none())
+        .into_any_element()
+}
+
+fn reason(ticket: Option<&Row>) -> Option<String> {
+    ticket?.reason.clone().filter(|reason| !reason.is_empty())
+}
+
+fn attention(boardy: &Boardy, theme: &Theme, cx: &mut Context<Boardy>) -> AnyElement {
+    let now = Utc::now();
+    let mut shown: Vec<AnyElement> = Vec::new();
+    for (want, rows) in needed(boardy) {
+        let ids = match want {
+            Need::Decide => deciding(boardy, &rows),
+            Need::Blocked | Need::Stale => rows.iter().map(|(_, row)| row.id.as_str()).collect(),
+        };
+        if ids.is_empty() {
+            continue;
+        }
+        shown.push(head(want.label(), ids.len(), theme).into_any_element());
+        for id in ids {
+            let ticket = boardy.store.find(id);
+            let tail = match (want, ticket) {
+                (Need::Stale, Some(ticket)) => in_review(boardy, ticket)
+                    .map_or_else(String::new, |days| format!("in review {days}d")),
+                (_, Some(ticket)) => ago(&ticket.updated, now),
+                (_, None) => String::new(),
+            };
+            shown.push(entry(
+                boardy,
+                "attention",
+                id,
+                reason(ticket),
+                tail,
+                theme,
+                cx,
+            ));
+            shown.extend(
+                boardy
+                    .questions
+                    .iter()
+                    .filter(|question| question.ticket == id)
+                    .map(|question| asked(question, theme, cx)),
+            );
+        }
+    }
+    if shown.is_empty() {
+        return empty_state(
+            "boardy-attention",
+            "Nothing needs you",
+            None,
+            &[],
+            &[],
+            theme,
+            |_, _, _| {},
+        )
+        .into_any_element();
+    }
+    ScrollArea::new("boardy-attention")
+        .child(div().flex().flex_col().children(shown))
+        .into_any_element()
+}
+
+fn digest(
+    boardy: &Boardy,
+    board: usize,
+    decide: &[&str],
+    theme: &Theme,
+    cx: &Context<Boardy>,
+) -> Vec<AnyElement> {
+    let Some(summary) = boardy.store.boards.get(board) else {
+        return Vec::new();
+    };
+    let key = summary.key.as_str();
+    let now = Utc::now();
+    let report = boardy.reports.get(key);
+    let mut shown = vec![
         div()
+            .h(px(LINE))
             .flex()
-            .flex_col()
+            .items_end()
             .gap_2()
-            .p_3()
-            .rounded(px(10.0))
-            .bg(ink(theme, 0.03))
+            .px(px(PAD_X / 2.0))
+            .pb_2()
             .child(
                 div()
-                    .flex()
-                    .gap_2()
-                    .items_center()
-                    .child(
-                        div()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(report.board.clone()),
-                    )
-                    .child(note(
+                    .flex_none()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(ink(theme, T1))
+                    .child(key.to_owned()),
+            )
+            .child(note(
+                report.map_or_else(
+                    || "Reading what moved".to_owned(),
+                    |report| {
                         format!(
                             "{} moves, {} finished, {} rounds since {}",
                             report.moves,
                             report.finished.len(),
                             report.rounds,
                             day(&report.since)
-                        ),
-                        theme,
-                    )),
-            )
-            .children(aging("In review", &report.review, theme))
-            .children(aging("Blocked", &report.blocked, theme))
-    });
-    let questions: Vec<AnyElement> = boardy
-        .questions
+                        )
+                    },
+                ),
+                theme,
+            ))
+            .into_any_element(),
+    ];
+    let Some(report) = report else {
+        return shown;
+    };
+    let on_board = |id: &&str| id.split_once('-').is_some_and(|(held, _)| held == key);
+    let decide: Vec<&str> = decide.iter().copied().filter(on_board).collect();
+    let since = stamp(&report.since);
+    let mut moved: Vec<&Row> = boardy
+        .store
+        .tickets(key)
         .iter()
-        .map(|question| asked(boardy, question, theme, cx))
+        .filter(|ticket| {
+            since.is_some_and(|since| stamp(&ticket.updated).is_some_and(|at| at > since))
+                && !report.finished.contains(&ticket.id)
+                && !decide.contains(&ticket.id.as_str())
+        })
+        .collect();
+    moved.sort_by(|a, b| b.updated.cmp(&a.updated));
+    let more = |count: usize, theme: &Theme| {
+        let board = key.to_owned();
+        count
+            .checked_sub(DIGEST_ROWS)
+            .filter(|left| *left > 0)
+            .map(|left| {
+                div()
+                    .id(SharedString::from(format!("digest-more-{board}-{count}")))
+                    .h(px(LINE))
+                    .flex()
+                    .items_center()
+                    .px(px(PAD_X / 2.0))
+                    .cursor_pointer()
+                    .on_click(
+                        cx.listener(move |boardy: &mut Boardy, _: &ClickEvent, _, cx| {
+                            boardy.go(Place::Board(board.clone(), Section::Tickets), cx)
+                        }),
+                    )
+                    .child(note(format!("{left} more on {key}"), theme))
+                    .into_any_element()
+            })
+    };
+    if !moved.is_empty() {
+        shown.push(head("Moved", moved.len(), theme).into_any_element());
+        shown.extend(moved.iter().take(DIGEST_ROWS).map(|ticket| {
+            let said = Some(look::label(&ticket.status).to_owned());
+            let tail = ago(&ticket.updated, now);
+            entry(boardy, "moved", &ticket.id, said, tail, theme, cx)
+        }));
+        shown.extend(more(moved.len(), theme));
+    }
+    if !decide.is_empty() {
+        shown.push(head("Decide", decide.len(), theme).into_any_element());
+        shown.extend(decide.iter().map(|id| {
+            let said = boardy
+                .questions
+                .iter()
+                .find(|question| question.ticket == *id)
+                .map(|question| question.tldr.clone())
+                .or_else(|| reason(boardy.store.find(id)));
+            entry(boardy, "decide", id, said, String::new(), theme, cx)
+        }));
+    }
+    if !report.finished.is_empty() {
+        shown.push(head("Finished", report.finished.len(), theme).into_any_element());
+        shown.extend(report.finished.iter().take(DIGEST_ROWS).map(|id| {
+            let tail = boardy
+                .store
+                .find(id)
+                .map_or_else(String::new, |ticket| ago(&ticket.updated, now));
+            entry(boardy, "finished", id, None, tail, theme, cx)
+        }));
+        shown.extend(more(report.finished.len(), theme));
+    }
+    if moved.is_empty() && decide.is_empty() && report.finished.is_empty() {
+        shown.push(
+            div()
+                .h(px(LINE))
+                .flex()
+                .items_center()
+                .px(px(PAD_X / 2.0))
+                .child(note(
+                    format!("Nothing moved since {}", day(&report.since)),
+                    theme,
+                ))
+                .into_any_element(),
+        );
+    }
+    shown
+}
+
+pub(super) fn catch_up(boardy: &Boardy, theme: &Theme, cx: &mut Context<Boardy>) -> Div {
+    let decide = needed(boardy)
+        .into_iter()
+        .find(|(want, _)| *want == Need::Decide)
+        .map_or_else(Vec::new, |(_, rows)| deciding(boardy, &rows));
+    let digests: Vec<AnyElement> = (0..boardy.store.boards.len())
+        .flat_map(|board| digest(boardy, board, &decide, theme, cx))
         .collect();
     let board = &boardy.store.words.board;
     let start = boardy.no_boards.then(|| {
@@ -1118,27 +1974,15 @@ pub(super) fn catch_up(boardy: &Boardy, theme: &Theme, cx: &mut Context<Boardy>)
             div()
                 .flex()
                 .flex_col()
-                .gap_3()
-                .p(px(PAD_X))
+                .px(px(PAD_X / 2.0))
+                .pb(px(PAD_X))
                 .children(start)
-                .child(caption("Since your last look", theme))
-                .children(reports)
-                .child(caption("Open questions", theme))
-                .children(questions),
+                .children(digests),
         ),
     )
 }
 
-fn asked(
-    boardy: &Boardy,
-    question: &AskedQuestion,
-    theme: &Theme,
-    cx: &mut Context<Boardy>,
-) -> AnyElement {
-    let title = boardy
-        .store
-        .find(&question.ticket)
-        .map_or_else(String::new, |ticket| ticket.title.clone());
+fn asked(question: &AskedQuestion, theme: &Theme, cx: &mut Context<Boardy>) -> AnyElement {
     let options: Vec<AnyElement> = question
         .options
         .iter()
@@ -1167,43 +2011,25 @@ fn asked(
             .into_any_element()
         })
         .collect();
-    let link = theme.color(ColorToken::FocusRing);
     div()
         .flex()
         .flex_col()
         .gap_1()
-        .p_3()
-        .rounded(px(10.0))
-        .bg(ink(theme, 0.03))
+        .pl(px(FOLD_INDENT))
+        .pr(px(PAD_X / 2.0))
+        .pb_3()
         .child(
             div()
                 .flex()
                 .items_center()
                 .gap_2()
-                .min_w_0()
+                .child(note(format!("Q{}", question.id), theme).flex_none())
                 .child(
                     div()
-                        .id(SharedString::from(format!(
-                            "q-{}-{}",
-                            question.ticket, question.id
-                        )))
-                        .flex_none()
-                        .cursor_pointer()
-                        .text_size(px(FONT_SMALL))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(link)
-                        .hover(|style| style.underline())
-                        .on_click(opener(&question.ticket, cx))
-                        .child(question.ticket.clone()),
-                )
-                .child(note(format!("Q{}", question.id), theme).flex_none())
-                .child(note(title, theme).min_w_0().truncate()),
-        )
-        .child(
-            div()
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(ink(theme, T1))
-                .child(question.tldr.clone()),
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(ink(theme, T1))
+                        .child(question.tldr.clone()),
+                ),
         )
         .child(
             div()

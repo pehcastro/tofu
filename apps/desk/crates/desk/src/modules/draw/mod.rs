@@ -24,8 +24,8 @@ use desk_ui::theme::{ColorToken, Theme};
 use draw_doc::{DocError, Look, Op, Rect, Scene, bounds, flow, flow_scene};
 use gpui::{
     AnyElement, AnyView, App, AppContext, Bounds, ClickEvent, Context, Div, ElementId, Entity,
-    Focusable, Global, KeyDownEvent, KeyUpEvent, Pixels, Point, Render, SharedString, Stateful,
-    StyleRefinement, WeakEntity, Window, div, prelude::*, px,
+    Focusable, Global, KeyDownEvent, KeyUpEvent, MouseButton, MouseDownEvent, Pixels, Point,
+    Render, SharedString, Stateful, StyleRefinement, WeakEntity, Window, div, prelude::*, px,
 };
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
@@ -297,7 +297,7 @@ pub struct Draw {
     note: Option<Note>,
     opening: Option<(Instant, usize)>,
     export: Export,
-    shown_tool: Option<Tool>,
+    switch_pressed: Option<(Instant, bool)>,
     switch_frames: Vec<f64>,
     styles_open: bool,
     picker: Option<menu::Picker>,
@@ -481,7 +481,7 @@ impl Draw {
             note: None,
             opening: None,
             export: Export::Idle,
-            shown_tool: None,
+            switch_pressed: None,
             switch_frames: Vec::new(),
             styles_open: false,
             picker: None,
@@ -601,6 +601,10 @@ impl Draw {
     }
 
     fn use_tool(&mut self, tool: Option<Tool>, window: &mut Window, cx: &mut Context<Self>) {
+        if tool.is_some_and(|tool| tool != self.canvas.read(cx).tool().0) {
+            let refocused = !self.canvas.focus_handle(cx).is_focused(window);
+            self.switch_pressed = Some((Instant::now(), refocused));
+        }
         self.canvas.update(cx, |canvas, cx| {
             match tool {
                 Some(tool) => canvas.set_tool(tool, cx),
@@ -731,8 +735,9 @@ impl Draw {
                 ICON_BOX,
                 if locked { accent } else { plain },
             ))
-            .on_click(
-                cx.listener(|draw, _: &ClickEvent, window, cx| draw.use_tool(None, window, cx)),
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|draw, _: &MouseDownEvent, window, cx| draw.use_tool(None, window, cx)),
             );
         let mut tools = vec![
             tooltip(
@@ -768,9 +773,12 @@ impl Draw {
                         .text_color(ink(theme, T2))
                         .children(tool.digit()),
                 )
-                .on_click(cx.listener(move |draw, _: &ClickEvent, window, cx| {
-                    draw.use_tool(Some(tool), window, cx)
-                }));
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |draw, _: &MouseDownEvent, window, cx| {
+                        draw.use_tool(Some(tool), window, cx)
+                    }),
+                );
             let key = tool.key().to_uppercase();
             let tip = match tool.digit() {
                 Some(digit) => format!("{}  {key} or {digit}", tool.name()),
@@ -896,11 +904,21 @@ impl Draw {
         )
     }
 
-    fn time_switch(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let started = Instant::now();
+    fn time_switch(
+        &mut self,
+        (pressed, refocused): (Instant, bool),
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let rendered = Instant::now();
         let this = cx.weak_entity();
-        window.on_next_frame(move |_, cx| {
-            let ms = started.elapsed().as_secs_f64() * 1000.0;
+        window.defer(cx, move |_, cx| {
+            let ms = pressed.elapsed().as_secs_f64() * 1000.0;
+            let wait = rendered.duration_since(pressed).as_secs_f64() * 1000.0;
+            eprintln!(
+                "desk: draw tool switch {ms:.2} ms: press to render {wait:.2} ms, render to present {:.2} ms, refocused {refocused}",
+                ms - wait
+            );
             let timed = this.update(cx, |draw, _| {
                 draw.switch_frames.push(ms);
                 let mut sorted = draw.switch_frames.clone();
@@ -932,9 +950,8 @@ impl Render for Draw {
         if self.export == Export::Asked {
             self.hide_for_export(window, cx);
         }
-        let tool = self.canvas.read(cx).tool().0;
-        if self.shown_tool.replace(tool).is_some_and(|was| was != tool) {
-            self.time_switch(window, cx);
+        if let Some(pressed) = self.switch_pressed.take() {
+            self.time_switch(pressed, window, cx);
         }
         let theme = ActiveTheme::theme(cx);
         let width = Width::of(format!("draw-width-{}", cx.entity_id()), window, cx);

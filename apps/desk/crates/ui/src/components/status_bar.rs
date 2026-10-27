@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use gpui::{
     AnyElement, AnyView, App, ClickEvent, Div, ElementId, Entity, FocusHandle, FontWeight, Rgba,
-    SharedString, Stateful, Window, div, prelude::*, px, relative,
+    SharedString, Stateful, StyleRefinement, Window, div, prelude::*, px, relative,
 };
 
 use crate::component::{icon, status_item};
@@ -11,8 +11,10 @@ use crate::components::avatar::spinner;
 use crate::components::button::{ButtonKind, button};
 use crate::components::card::caption;
 use crate::components::chip::tabular;
+use crate::components::context_card::{Bands, ContextCard};
 use crate::components::glyph::Glyph;
 use crate::components::list::{row, separator};
+use crate::components::logo::{Brand, logo};
 use crate::components::overlay::{Align, Placement, Popover, Side, toggles_on_press};
 use crate::components::paint::{glyph, ink};
 use crate::components::size::{
@@ -29,6 +31,7 @@ const NO_ACCOUNT: &str = "no account";
 const NO_BRANCH: &str = "no branch";
 const NO_SESSION: &str = "no session";
 const BRANCH_POP_WIDTH: f32 = 240.0;
+const CONTEXT_POP_WIDTH: f32 = 360.0;
 const NOT_A_REPO: &str = "This folder is not a git repository";
 const UP_TO_DATE: &str = "Up to date with its upstream";
 const NO_ACCOUNT_CONNECTED: &str = "No account connected";
@@ -47,6 +50,7 @@ const BLOCK_Y: f32 = 8.0;
 const BLOCK_GAP: f32 = 6.0;
 const SECTION_BREAK: f32 = 4.0;
 const TILE: f32 = 20.0;
+const MARK: f32 = 14.0;
 const EMPTY_GLYPH: f32 = 13.0;
 const WINDOW_ROW: f32 = 18.0;
 const WINDOW_GAP: f32 = 8.0;
@@ -72,10 +76,14 @@ pub struct Branch {
     pub ahead: usize,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct ContextUse {
     pub tokens: SharedString,
     pub share: f32,
+    pub used: i64,
+    pub ceiling: i64,
+    pub model: Option<SharedString>,
+    pub bands: Bands,
 }
 
 #[derive(Clone)]
@@ -131,7 +139,7 @@ pub enum Serving {
 #[derive(Clone, Default)]
 pub struct SessionGroup {
     pub context: Option<ContextUse>,
-    pub classifier: usize,
+    pub classifier: SharedString,
     pub cron: usize,
 }
 
@@ -157,7 +165,7 @@ pub enum StatusPick {
 }
 
 type OnPick = Rc<dyn Fn(&StatusPick, &mut Window, &mut App)>;
-type OnBranch = Rc<dyn Fn(&bool, &mut Window, &mut App)>;
+type OnOpen = Rc<dyn Fn(&bool, &mut Window, &mut App)>;
 
 #[derive(IntoElement)]
 pub struct StatusBar {
@@ -166,7 +174,8 @@ pub struct StatusBar {
     on_pick: OnPick,
     cron_menu: Option<AnyView>,
     quota_open: bool,
-    branch_popover: Option<(bool, OnBranch)>,
+    branch_popover: Option<(bool, OnOpen)>,
+    context_popover: Option<(Option<Entity<ContextCard>>, OnOpen)>,
 }
 
 pub fn controls(status: &Status) -> Vec<(&'static str, SharedString)> {
@@ -229,7 +238,58 @@ impl StatusBar {
             cron_menu: None,
             quota_open: false,
             branch_popover: None,
+            context_popover: None,
         }
+    }
+
+    pub fn context_popover(
+        mut self,
+        card: Option<Entity<ContextCard>>,
+        on_open: impl Fn(&bool, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.context_popover = Some((card, Rc::new(on_open)));
+        self
+    }
+
+    fn context(&self, theme: &Theme, cx: &App) -> AnyElement {
+        let context = self
+            .status
+            .session_group
+            .as_ref()
+            .and_then(|group| group.context.as_ref());
+        let share = context.map_or(0.0, |context| context.share);
+        let fill = |item: Stateful<Div>| {
+            item.child("ctx")
+                .child(meter_bar(share, ink(theme, BAR_FILL), theme).w(px(CTX_BAR_WIDTH)))
+                .children(context.map(|context| context.tokens.clone()))
+        };
+        let Some((card, on_open)) = self.context_popover.clone() else {
+            return fill(self.item(StatusPick::Context, "Context", theme)).into_any_element();
+        };
+        let open = card.is_some();
+        let toggle = on_open.clone();
+        let trigger = toggles_on_press(
+            fill(status_item("Context", "Context", theme)),
+            move |window, cx| toggle(&!open, window, cx),
+        );
+        let panel = card.map(|card| {
+            let height = px(card.read(cx).height(cx));
+            div()
+                .w_full()
+                .h(height)
+                .child(card.cached(StyleRefinement::default().w_full().h(height)))
+        });
+        Popover::new("status-context-pop", trigger)
+            .open(open)
+            .placement(Placement {
+                side: Side::Top,
+                align: Align::Start,
+                offset: POP_OFFSET,
+            })
+            .width(CONTEXT_POP_WIDTH)
+            .on_dismiss(move |_, window, cx| on_open(&false, window, cx))
+            .children(panel)
+            .into_any_element()
     }
 
     pub fn branch_popover(
@@ -455,7 +515,7 @@ fn dim(text: impl Into<SharedString>, theme: &Theme) -> Div {
     div().text_color(ink(theme, T3)).child(text.into())
 }
 
-fn meter_bar(share: f32, fill: Rgba, theme: &Theme) -> Div {
+pub fn meter_bar(share: f32, fill: Rgba, theme: &Theme) -> Div {
     div()
         .flex_none()
         .h(px(BAR_HEIGHT))
@@ -472,14 +532,14 @@ fn meter_bar(share: f32, fill: Rgba, theme: &Theme) -> Div {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Level {
+pub(crate) enum Level {
     Normal,
     Warning,
     NearLimit,
 }
 
 impl Level {
-    fn of(percent: u8) -> Level {
+    pub(crate) fn of(percent: u8) -> Level {
         match percent {
             NEAR_LIMIT_FROM.. => Level::NearLimit,
             WARN_FROM.. => Level::Warning,
@@ -487,7 +547,7 @@ impl Level {
         }
     }
 
-    fn fill(self, theme: &Theme) -> Rgba {
+    pub(crate) fn fill(self, theme: &Theme) -> Rgba {
         match self {
             Level::Normal => ink(theme, BAR_FILL),
             Level::Warning => theme.color(ColorToken::StatusWarn),
@@ -495,7 +555,7 @@ impl Level {
         }
     }
 
-    fn text(self, theme: &Theme) -> Rgba {
+    pub(crate) fn text(self, theme: &Theme) -> Rgba {
         match self {
             Level::Normal => ink(theme, T1),
             Level::Warning | Level::NearLimit => self.fill(theme),
@@ -517,9 +577,11 @@ fn serving_item(
         }
         Serving::Unpicked | Serving::Key(_) => None,
     };
+    let mark = |brand: Option<Brand>| brand.map(|brand| logo(brand, px(ICON_SMALL), theme));
     let (item, why) = match (serving, picked) {
         (Serving::Key(name), _) => (
-            item.child(name.clone()),
+            item.children(mark(Brand::for_name(name)))
+                .child(name.clone()),
             format!("{name}, paid by an API key with no quota window").into(),
         ),
         (_, Some((account, why, spent))) => {
@@ -538,6 +600,7 @@ fn serving_item(
                     item.text_color(theme.color(ColorToken::StatusWarn))
                         .opacity(HELD_OPACITY)
                 })
+                .children(mark(Brand::for_source(&account.source)))
                 .child(account.provider.clone())
                 .children(login)
                 .children(held);
@@ -563,7 +626,8 @@ fn serving_item(
         }
         (Serving::Unpicked | Serving::Account { .. }, None) => match accounts.first() {
             Some(account) => (
-                item.child(account.provider.clone()),
+                item.children(mark(Brand::for_source(&account.source)))
+                    .child(account.provider.clone()),
                 SharedString::from(NO_PICK),
             ),
             None => (
@@ -592,6 +656,24 @@ fn tile(theme: &Theme) -> Div {
         .justify_center()
         .rounded(px(RADIUS_CHIP_SMALL))
         .bg(ink(theme, CHIP_FILL))
+}
+
+pub fn source_mark(source: &str, theme: &Theme) -> Div {
+    match Brand::for_source(source) {
+        Some(brand) => tile(theme).child(logo(brand, px(MARK), theme)),
+        None => tile(theme)
+            .text_size(px(FONT_SMALL))
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(ink(theme, T2))
+            .child(
+                source
+                    .chars()
+                    .filter(|c| c.is_alphanumeric())
+                    .take(1)
+                    .flat_map(char::to_uppercase)
+                    .collect::<String>(),
+            ),
+    }
 }
 
 fn block(theme: &Theme) -> Div {
@@ -647,13 +729,6 @@ fn account_block(
     let key = |part: &str| -> ElementId {
         ElementId::NamedChild(Arc::new(("status-account", at).into()), part.into())
     };
-    let letter: String = account
-        .provider
-        .chars()
-        .filter(|c| c.is_alphanumeric())
-        .take(1)
-        .flat_map(char::to_uppercase)
-        .collect();
     let mark = |glyph: Icon, color: Rgba| {
         div()
             .id(key("alert"))
@@ -712,12 +787,7 @@ fn account_block(
                 .items_center()
                 .gap(px(WINDOW_GAP))
                 .min_w_0()
-                .child(
-                    tile(theme)
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(ink(theme, T2))
-                        .child(letter),
-                )
+                .child(source_mark(&account.source, theme))
                 .child(
                     div()
                         .flex_1()
@@ -848,12 +918,7 @@ impl RenderOnce for StatusBar {
                 Some(name) => item.child(name.clone()),
             });
         let group = status.session_group.clone().map(|group| {
-            let share = group.context.as_ref().map_or(0.0, |context| context.share);
-            let context = self
-                .item(StatusPick::Context, "Context", &theme)
-                .child("ctx")
-                .child(meter_bar(share, ink(&theme, BAR_FILL), &theme).w(px(CTX_BAR_WIDTH)))
-                .children(group.context.map(|context| context.tokens));
+            let context = self.context(&theme, cx);
             let classifier = self
                 .item(StatusPick::Classifier, "Classifier", &theme)
                 .child(format!("classifier {}", group.classifier));

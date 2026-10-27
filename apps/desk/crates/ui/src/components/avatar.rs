@@ -11,7 +11,7 @@ use crate::components::size::{
     AVATAR_FEED, AVATAR_LARGE, AVATAR_LIST, AVATAR_ROW, AVATAR_TINT_FEED, AVATAR_TINT_LIST,
     CAPTION_TEXT, CHECK, CHIP_FILL, DONE_MARK, DONE_OFFSET, FONT_AVATAR_FEED, FONT_AVATAR_LARGE,
     FONT_AVATAR_LIST, FONT_AVATAR_ROW, FONT_SMALL, MARK_RING, RADIUS_CHIP_SMALL, RING_OUTSET,
-    RING_TRACK, SPINNER, SPINNER_TRACK, T1, T3, WAIT_MARK, WAIT_OFFSET,
+    SPINNER, SPINNER_TRACK, T1, T3, WAIT_MARK, WAIT_OFFSET,
 };
 use crate::live::ActiveTheme;
 use crate::metrics::{ACCOUNT_GRADIENT_ANGLE, AVATAR};
@@ -346,7 +346,6 @@ pub fn avatar(id: impl Into<ElementId>, agent: &Agent, size: AvatarSize, theme: 
             .bg(fill)
             .shadow(vec![halo(backing, MARK_RING)])
     };
-    let live = theme.color(ColorToken::StatusLive);
     let working = agent.status == AgentStatus::Working;
     let inset = if working { RING_OUTSET } else { 0.0 };
     tinted(agent.kind, size, inset, theme)
@@ -354,8 +353,8 @@ pub fn avatar(id: impl Into<ElementId>, agent: &Agent, size: AvatarSize, theme: 
             disc.child(div().absolute().inset(px(MARK_BLEED)).child(spinning_arc(
                 id,
                 side - 2.0 * MARK_BLEED,
-                tint(live, RING_TRACK),
-                live,
+                ink(theme, SPINNER_TRACK),
+                ink(theme, T3),
                 theme,
             )))
         })

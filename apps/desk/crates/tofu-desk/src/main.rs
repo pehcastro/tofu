@@ -55,7 +55,10 @@ fn main() -> ExitCode {
             Err(e) => print_plain(&e.to_string(), Exit::Failure),
         };
     }
-    let (verb, rest) = alias(verb, rest);
+    let (verb, rest) = match verb {
+        "drop-tofu" => (Method::CommandRun.name().to_owned(), &["tofu.drop"][..]),
+        _ => alias(verb, rest),
+    };
     let (out, rest): (Vec<&str>, Vec<&str>) = rest
         .iter()
         .copied()
@@ -366,7 +369,7 @@ fn verb_groups() -> String {
             None => groups.push((group, vec![name])),
         }
     }
-    let mut text = "usage: tofu-desk <verb> [args] [--json]\n  schema".to_owned();
+    let mut text = "usage: tofu-desk <verb> [args] [--json]\n  schema\n  dev: drop-tofu".to_owned();
     for (group, verbs) in groups {
         text.push_str(&format!("\n  {group}: {}", verbs.join(" ")));
     }

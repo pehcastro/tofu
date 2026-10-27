@@ -1,10 +1,12 @@
+mod cards;
 pub(crate) mod cassette;
+mod feed;
 mod head;
 mod items;
 mod mention;
 mod mirror;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::io::ErrorKind;
 use std::ops::Range;
 use std::path::PathBuf;
@@ -17,35 +19,40 @@ use desk_core::bridge::{Bridge, BridgeError, Event, Exit, serve_command};
 use desk_core::model::{ModelError, PersonAsk, PersonKind, Role, Statuses, Store};
 use desk_core::protocol::turn::{PersonQuestion, PersonReply};
 use desk_core::protocol::{
-    Accounts, ApprovalAnswer, ApprovalRequest, ContextReport, CredentialReport, CronCommandParams,
-    Decision, InitializeResult, LedgerParams, ModelPick, ModelsQuery, NoParams, Notification,
-    PROTOCOL, QuestionAnswer, QuestionOutcome, Request, RequestId, SessionAsking, SessionHistory,
-    SessionHistoryParams, SessionHolder, SessionInfo, SessionListParams, SessionOpenParams,
+    Accounts, ApprovalAnswer, ApprovalRequest, ApprovalRequestDecisions, ApprovalRequestRisk,
+    ApprovalRevokeParams, ContextReport, CredentialReport, CronCommandParams, Decision,
+    InitializeResult, LedgerParams, ModelPick, ModelsQuery, NoParams, Notification, PROTOCOL,
+    QuestionAnswer, QuestionOutcome, Request, RequestId, SessionAsking, SessionForked,
+    SessionHistory, SessionHistoryParams, SessionInfo, SessionListParams, SessionOpenParams,
     SessionOpenResult, SessionParams, SessionRenameParams, SessionSetParams, SessionState,
     SessionTrace, ShellParams, StatusListParams, TurnCompleted, TurnParams, TurnSendParams,
     request, subagent,
 };
-use desk_core::query::{Answer, FilledEmails, LEDGER_READ_LAST, QueryError, Read, session_ledger};
+use desk_core::query::{Answer, FilledEmails, QueryError, Read};
 use desk_core::sessions::SessionRow;
-use desk_ui::components::ask::{Act, Ask, Asking, Choice, Pick, Question, Shape, ask_bar};
-use desk_ui::components::chat::{FIND_RESERVE, Hit, fail, find_hits, hit_marks, note};
-use desk_ui::components::composer::{Composer, picker};
+use desk_ui::components::ask::{
+    Act, Answer as Offer, Ask, Asking, Choice, Pick, Question, Risk, Shape, ask_bar,
+};
+use desk_ui::components::chat::{FIND_RESERVE, Hit, fail, find_hits};
+use desk_ui::components::composer::{Composer, inline_picker, paperclip};
 use desk_ui::components::find::FindBar;
 use desk_ui::components::form::TextArea;
-use desk_ui::components::overlay::{Align, MenuButton, MenuItem, Placement, Side};
-use desk_ui::components::transcript::{Transcript, transcript};
+use desk_ui::components::logo::Brand;
+use desk_ui::components::overlay::{Align, MenuButton, MenuIcon, MenuItem, Placement, Side};
+use desk_ui::components::tooltip::{Edge, tooltip};
 use desk_ui::components::tree::EditedFile;
 use desk_ui::live::ActiveTheme;
 use gpui::{
     AnyView, App, AppContext, ClickEvent, Context, Entity, EventEmitter, FocusHandle, Focusable,
-    IntoElement, KeyDownEvent, MouseDownEvent, Render, SharedString, Task, Window, actions, div,
-    prelude::*, px,
+    IntoElement, KeyDownEvent, MouseDownEvent, PathPromptOptions, Render, SharedString, Task,
+    Window, actions, div, prelude::*, px,
 };
 
 use cassette::{Replay, Step};
+use feed::{Feed, Seat};
 use head::SessionHead;
 use items::{Entry, Item};
-use mention::{Files, Mention, Menu};
+use mention::{List, Mention, Menu};
 pub use mention::{Trace, mention};
 pub use mirror::{ChatMirror, mirror};
 
@@ -57,6 +64,7 @@ const ANCHOR_HOLD: Duration = Duration::from_millis(1600);
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const MODEL: &str = "Model";
+const ATTACH: &str = "Attach a file";
 const PLACEHOLDER: &str = "Ask tofu to build, inspect, or delegate";
 const FIELD_LINES: usize = 8;
 const ROW_INSET: f32 = 24.0;
@@ -65,25 +73,60 @@ const COLUMN_TOP: f32 = 16.0;
 const DOCK_GAP: f32 = 8.0;
 const DOCK_INSET: f32 = 16.0;
 const OTHER: &str = "Type your own answer";
-const HISTORY_PAGE: i64 = 200;
+const PAGE_LINES: i64 = 60;
+const STATUS_LEDGER_LAST: i64 = 150;
 const WORKING: &str = "working";
 const YES_NO: [&str; 2] = ["yes", "no"];
-const DECISIONS: [Decision; 3] = [
-    Decision::AllowOnce,
-    Decision::RejectOnce,
-    Decision::AllowAlways,
-];
+const HOUR_SECONDS: i64 = 3600;
 
 type Opened = Result<(Bridge, InitializeResult), BridgeError>;
 
-fn holder(held: Option<&SessionHolder>) -> String {
-    held.map_or_else(
-        || "this desk's tofu".to_owned(),
-        |held| format!("tofu pid {} since {}", held.pid, held.since),
-    )
+actions!(desk, [Find]);
+
+#[derive(Clone, Debug, PartialEq, gpui::Action)]
+#[action(namespace = chat, no_json)]
+pub struct RevokeGrant {
+    pub target: SharedString,
 }
 
-actions!(desk, [Find]);
+fn offer(decision: &ApprovalRequestDecisions) -> Option<Offer> {
+    match decision {
+        ApprovalRequestDecisions::AllowOnce => Some(Offer::Allow),
+        ApprovalRequestDecisions::RejectOnce => Some(Offer::Deny),
+        ApprovalRequestDecisions::AllowFor => Some(Offer::Hour),
+        ApprovalRequestDecisions::AllowAlways => Some(Offer::Always),
+        ApprovalRequestDecisions::RejectAlways
+        | ApprovalRequestDecisions::Cancelled
+        | ApprovalRequestDecisions::RememberProject
+        | ApprovalRequestDecisions::RememberGlobal
+        | ApprovalRequestDecisions::RememberUserLocal
+        | ApprovalRequestDecisions::RememberProjectLocal
+        | ApprovalRequestDecisions::Unknown(_) => None,
+    }
+}
+
+fn decided(offer: Offer) -> ApprovalAnswer {
+    let (decision, for_seconds) = match offer {
+        Offer::Allow => (Decision::AllowOnce, None),
+        Offer::Deny => (Decision::RejectOnce, None),
+        Offer::Hour => (Decision::AllowFor, Some(HOUR_SECONDS)),
+        Offer::Always => (Decision::AllowAlways, None),
+    };
+    ApprovalAnswer {
+        decision,
+        for_seconds,
+    }
+}
+
+fn risk(risk: &ApprovalRequestRisk) -> Risk {
+    match risk {
+        ApprovalRequestRisk::Low => Risk::Low,
+        ApprovalRequestRisk::Risky => Risk::Risky,
+        ApprovalRequestRisk::Destructive => Risk::Destructive,
+        ApprovalRequestRisk::Unjudged => Risk::Unjudged,
+        ApprovalRequestRisk::Unknown(said) => Risk::Other(said.clone().into()),
+    }
+}
 
 enum Link {
     Starting,
@@ -93,11 +136,23 @@ enum Link {
     Fed,
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct Decisions {
+    pub count: usize,
+    pub capped: bool,
+}
+
+impl std::fmt::Display for Decisions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let more = if self.capped { "+" } else { "" };
+        write!(f, "{}{more}", self.count)
+    }
+}
+
 enum Opening {
     Closed,
     Pending,
     Open(String),
-    Held(String),
 }
 
 struct Slot {
@@ -110,13 +165,62 @@ enum Asked {
     Question(Box<PersonAsk>),
 }
 
+struct Page {
+    first: i64,
+    end: i64,
+    lines: Vec<Notification>,
+    rows: usize,
+}
+
+impl Page {
+    fn decode(page: SessionHistory, before: Option<i64>, from: Option<i64>) -> (Page, i64) {
+        let end = before.map_or(page.total, |before| before.max(0).min(page.total));
+        let first = from
+            .map_or(page.first, |from| from.max(page.first))
+            .min(end);
+        let skip = usize::try_from(first.saturating_sub(page.first)).unwrap_or(0);
+        let total = page.total;
+        let lines = page
+            .lines
+            .into_iter()
+            .skip(skip)
+            .filter_map(
+                |line| match Notification::parse(&line.method, line.params) {
+                    Ok(notification) => Some(notification.unsequenced()),
+                    Err(error) => {
+                        eprintln!("desk: session.history {}: {error}", line.method);
+                        None
+                    }
+                },
+            )
+            .collect();
+        let page = Page {
+            first,
+            end,
+            lines,
+            rows: 0,
+        };
+        (page, total)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum Paging {
+    Older,
+    Newer,
+    Drop { older: usize, newer: usize },
+}
+
 struct History {
     session: String,
     asked: Instant,
-    lines: Vec<Notification>,
+    pages: VecDeque<Page>,
     live: Vec<Notification>,
-    total: Option<i64>,
-    landed: bool,
+    total: i64,
+    tail: bool,
+    asking: bool,
+    behind: bool,
+    open_at_join: Vec<String>,
 }
 
 impl History {
@@ -124,11 +228,66 @@ impl History {
         History {
             session,
             asked,
-            lines: Vec::new(),
+            pages: VecDeque::new(),
             live: Vec::new(),
-            total: None,
-            landed: false,
+            total: 0,
+            tail: false,
+            asking: false,
+            behind: false,
+            open_at_join: Vec::new(),
         }
+    }
+
+    fn prompt_shown_by_history(&self, entry: &Entry) -> bool {
+        matches!(entry, Entry::Task(turn) if self.open_at_join.contains(turn))
+    }
+
+    fn settle_live(&mut self, landed: &[Notification]) {
+        let Some(cut) = self.live.iter().rposition(|line| landed.contains(line)) else {
+            return;
+        };
+        let mut at = 0;
+        self.live.retain(|line| {
+            let covered = at <= cut
+                && (landed.contains(line) || matches!(line, Notification::MessageDelta(_)));
+            at += 1;
+            !covered
+        });
+    }
+
+    fn held(&self) -> Range<i64> {
+        match (self.pages.front(), self.pages.back()) {
+            (Some(oldest), Some(newest)) => oldest.first..newest.end,
+            _ => 0..0,
+        }
+    }
+
+    fn lines(&self) -> usize {
+        self.pages.iter().map(|page| page.lines.len()).sum()
+    }
+
+    fn wanted(&self, visible: Range<usize>) -> Option<Paging> {
+        let last = self.pages.len().checked_sub(1)?;
+        if self.asking || visible.is_empty() {
+            return None;
+        }
+        let page_of = |row: usize| {
+            self.pages
+                .iter()
+                .position(|page| row < page.rows)
+                .unwrap_or(last)
+        };
+        let top = page_of(visible.start);
+        let bottom = page_of(visible.end.saturating_sub(1)).max(top);
+        let older = top.saturating_sub(1);
+        let newer = last.saturating_sub(bottom.saturating_add(1));
+        if older > 0 || newer > 0 {
+            return Some(Paging::Drop { older, newer });
+        }
+        if top == 0 && self.held().start > 0 {
+            return Some(Paging::Older);
+        }
+        (bottom == last && !self.tail).then_some(Paging::Newer)
     }
 }
 
@@ -147,7 +306,7 @@ pub struct Chat {
     slots: Vec<Slot>,
     opening: Opening,
     items: Rc<Vec<Item>>,
-    transcript: Transcript,
+    feed: Entity<Feed>,
     area: Entity<TextArea>,
     card: Option<Card>,
     own_answer: Entity<TextArea>,
@@ -169,17 +328,21 @@ pub struct Chat {
     defaults: Vec<String>,
     choices: Vec<Option<(String, String)>>,
     models: Entity<MenuButton>,
-    ledger: Option<(String, Option<usize>)>,
+    labelled: String,
+    ledger: Option<(String, Option<Decisions>)>,
     emails: Result<FilledEmails, String>,
     signing: Option<SigningIn>,
     mentions: Vec<Mention>,
+    attached: Vec<String>,
     menu: Option<Menu>,
     dismissed: Option<usize>,
-    files: Files,
+    files: List<String>,
+    commands: List<desk_core::protocol::command::Command>,
     _files: Option<Task<()>>,
     _signed: Option<Task<()>>,
     reopening: Option<Instant>,
     history: Option<History>,
+    heard: Option<i64>,
     painting: Option<(String, Instant)>,
     landed: Option<Instant>,
     head: Entity<SessionHead>,
@@ -390,18 +553,25 @@ impl Card {
             .get("command")
             .and_then(|command| command.as_str())
             .unwrap_or(&asked.target);
+        let offered: Vec<Offer> = asked.decisions.iter().filter_map(offer).collect();
+        let answers = Offer::ALL
+            .into_iter()
+            .filter(|answer| offered.is_empty() || offered.contains(answer))
+            .collect();
         Card {
             key: asked.approval.clone(),
             id,
             asked: Asked::Approval,
             asking: Asking::new(vec![Question {
                 header: SharedString::default(),
-                text: SharedString::default(),
+                text: asked.reason.clone().unwrap_or_default().into(),
                 shape: Shape::Approval(Ask {
                     tool: asked.tool.clone().into(),
                     command: command.to_owned().into(),
                     writes: project.to_owned().into(),
                     hint: hint.into(),
+                    risk: risk(&asked.risk),
+                    answers,
                 }),
             }]),
         }
@@ -437,9 +607,10 @@ impl Chat {
         let models = MenuButton::new(MODEL.into(), Vec::new(), cx);
         let chosen = cx.weak_entity();
         models.update(cx, |button, _| {
+            button.trigger(|_, theme| inline_picker("chat-model", None, MODEL, theme));
             button.placement(Placement {
                 side: Side::Top,
-                align: Align::Start,
+                align: Align::End,
                 ..Placement::below()
             });
             button.on_pick(move |at, _, cx| {
@@ -455,6 +626,13 @@ impl Chat {
             bar.on_close(move |window, cx| closed(&(), window, cx));
         });
         let head = cx.new(|cx| SessionHead::new(store.clone(), cx));
+        let feed = Feed::new(
+            "chat-transcript",
+            Seat::Chat,
+            cx.weak_entity(),
+            (&store, 0),
+            cx,
+        );
         Chat {
             link,
             store,
@@ -463,7 +641,7 @@ impl Chat {
             slots: Vec::new(),
             opening: Opening::Closed,
             items: Rc::default(),
-            transcript: Transcript::new(0).content_width(px(CONTENT_WIDTH)),
+            feed,
             area,
             card: None,
             own_answer,
@@ -485,17 +663,21 @@ impl Chat {
             defaults: Vec::new(),
             choices: Vec::new(),
             models,
+            labelled: MODEL.to_owned(),
             ledger: None,
             emails: load_emails(),
             signing: None,
             mentions: Vec::new(),
+            attached: Vec::new(),
             menu: None,
             dismissed: None,
-            files: Files::default(),
+            files: List::Unlisted,
+            commands: List::Unlisted,
             _files: None,
             _signed: None,
             reopening: None,
             history: None,
+            heard: None,
             painting: None,
             landed: None,
             head,
@@ -533,17 +715,24 @@ impl Chat {
     fn set_opening(&mut self, opening: Opening, cx: &mut Context<Self>) {
         let open = match &opening {
             Opening::Open(id) => Some(id.clone()),
-            Opening::Closed | Opening::Pending | Opening::Held(_) => None,
+            Opening::Closed | Opening::Pending => None,
         };
-        let opened = open.is_some();
+        let shown = open.is_some();
         self.store.update(cx, |store, cx| {
             store.open = open;
             cx.notify();
         });
         self.opening = opening;
-        if opened {
+        if shown {
             self.ask_due(cx);
         }
+        self.tell_head(cx);
+    }
+
+    fn tell_head(&mut self, cx: &mut Context<Self>) {
+        self.relabel(cx);
+        let loading = self.loading();
+        self.head.update(cx, |head, cx| head.loading(loading, cx));
     }
 
     fn opened(&mut self, opened: SessionOpenResult, asked: Instant, cx: &mut Context<Self>) {
@@ -551,12 +740,22 @@ impl Chat {
             store.trace = Answer::default();
             store.info = Answer::default();
             store.info.want();
-            store.sessions.entry(opened.session.clone()).or_default();
+            store
+                .sessions
+                .entry(opened.session.clone())
+                .or_default()
+                .members
+                .clone_from(&opened.members);
         });
         self.painting.get_or_insert((opened.session.clone(), asked));
         if opened.fresh {
-            self.ledger = Some((opened.session.clone(), Some(0)));
+            eprintln!("desk: chat open asks cron for fresh {}", opened.session);
+            self.ledger = Some((opened.session.clone(), Some(Decisions::default())));
         } else {
+            eprintln!(
+                "desk: chat open asks query.ledger session {} last {STATUS_LEDGER_LAST}, session.trace, session.history, cron",
+                opened.session
+            );
             self.ask_ledger(opened.session.clone(), cx);
             self.want_trace(cx);
             if self
@@ -565,70 +764,212 @@ impl Chat {
                 .is_none_or(|history| history.session != opened.session)
             {
                 self.history = Some(History::new(opened.session.clone(), asked));
-                self.ask_history(None, cx);
+                self.ask_page(Paging::Older, cx);
             }
         }
         self.ask_cron(opened.session.clone(), cx);
         self.set_opening(Opening::Open(opened.session), cx);
     }
 
-    fn ask_history(&mut self, before: Option<i64>, cx: &mut Context<Self>) {
-        let Some(history) = &self.history else {
+    fn page(&mut self, paging: Paging, cx: &mut Context<Self>) {
+        let Paging::Drop { older, newer } = paging else {
+            return self.ask_page(paging, cx);
+        };
+        let Some(history) = self.history.as_mut() else {
             return;
         };
+        let kept = history.pages.len().saturating_sub(newer);
+        history.pages.truncate(kept);
+        history.pages.drain(..older.min(kept));
+        if newer > 0 {
+            history.tail = false;
+            history.live = Vec::new();
+        }
+        history.asking = false;
+        self.replay(cx);
+        self.told_pages(&format!("dropped {older} older and {newer} newer"));
+    }
+
+    fn ask_page(&mut self, paging: Paging, cx: &mut Context<Self>) {
+        let Some(history) = self.history.as_mut() else {
+            return;
+        };
+        let held = history.held();
+        let (before, from) = match (history.pages.is_empty(), paging) {
+            (true, _) => (None, None),
+            (false, Paging::Newer) => (Some(held.end.saturating_add(PAGE_LINES)), Some(held.end)),
+            (false, Paging::Older | Paging::Drop { .. }) => (Some(held.start), None),
+        };
+        history.asking = true;
         let session = history.session.clone();
         let params = SessionHistoryParams {
             session: session.clone(),
-            limit: Some(before.unwrap_or(HISTORY_PAGE)),
+            limit: Some(PAGE_LINES),
             before,
         };
+        let asked = Instant::now();
         self.request::<request::SessionHistory>(&params, cx, move |chat, page, cx| {
-            chat.paged(&session, page, cx);
+            eprintln!(
+                "desk: session.history {session} page of {PAGE_LINES} before {} answered in {} ms",
+                before.map_or_else(|| "the end".to_owned(), |at| at.to_string()),
+                asked.elapsed().as_millis()
+            );
+            let page = match page {
+                Ok(page) => page,
+                Err(error) => {
+                    if chat.history.as_ref().is_some_and(|h| h.session == session) {
+                        chat.history = None;
+                        chat.tell_head(cx);
+                        chat.fail(format!("session.history {session}: {error}"), cx);
+                    }
+                    return;
+                }
+            };
+            let decoded = cx.background_spawn(async move { Page::decode(page, before, from) });
+            cx.spawn(async move |chat, cx| {
+                let landed = decoded.await;
+                if let Err(error) = chat.update(cx, |chat, cx| chat.paged(&session, landed, cx)) {
+                    eprintln!("desk: a history page came back to a closed chat: {error}");
+                }
+            })
+            .detach();
         });
     }
 
-    fn paged(
-        &mut self,
-        session: &str,
-        page: Result<SessionHistory, String>,
-        cx: &mut Context<Self>,
-    ) {
+    fn paged(&mut self, session: &str, (page, total): (Page, i64), cx: &mut Context<Self>) {
         let Some(history) = self.history.as_mut().filter(|h| h.session == session) else {
             return;
         };
-        let page = match page {
-            Ok(page) => page,
-            Err(error) => {
-                self.history = None;
-                return self.fail(format!("session.history {session}: {error}"), cx);
-            }
-        };
-        let mut lines = Vec::with_capacity(page.lines.len() + history.lines.len());
-        for line in page.lines {
-            match Notification::parse(&line.method, line.params) {
-                Ok(notification) => lines.push(notification),
-                Err(error) => eprintln!("desk: session.history {}: {error}", line.method),
+        history.asking = false;
+        let held = history.held();
+        let first = history.pages.is_empty();
+        let caught_up = !first && history.tail && page.first == held.end;
+        history.total = total;
+        let newest = first || page.first == held.end;
+        if newest {
+            history.tail = page.end >= total;
+        }
+        let reached = newest && history.tail;
+        if page.first == page.end && !first {
+            history.tail |= page.end >= total;
+            history.behind &= !history.tail;
+            return self.told_pages("nothing newer");
+        }
+        let (mut calls, mut carded, mut grouped, mut summed) = (0, 0, 0, 0);
+        for line in &page.lines {
+            match line {
+                Notification::ToolStarted(e) if e.agent.is_none() => {
+                    calls += 1;
+                    carded += usize::from(e.card.is_some());
+                    grouped += usize::from(e.group.is_some());
+                }
+                Notification::ToolCompleted(e) if e.agent.is_none() => {
+                    summed += usize::from(e.group_summary.is_some());
+                }
+                _ => {}
             }
         }
-        lines.append(&mut history.lines);
-        history.lines = lines;
-        history.total = Some(page.total);
-        history.landed = page.first == 0;
+        eprintln!(
+            "desk: session.history {session} page lead calls {calls}, with card {carded}, with group {grouped}, completed with groupSummary {summed}"
+        );
+        match (first, page.end == held.start, page.first == held.end) {
+            (true, _, _) | (false, false, true) => {
+                history.settle_live(&page.lines);
+                match history.pages.back_mut().filter(|_| caught_up) {
+                    Some(back) => {
+                        back.end = page.end;
+                        back.lines.extend(page.lines);
+                    }
+                    None => history.pages.push_back(page),
+                }
+            }
+            (false, true, _) => history.pages.push_front(page),
+            (false, false, false) => {
+                return eprintln!(
+                    "desk: session.history page {}..{} does not touch the held {}..{}, dropped",
+                    page.first, page.end, held.start, held.end
+                );
+            }
+        }
+        let replaying = Instant::now();
         let refused = self.replay(cx);
-        if page.first > 0 {
-            return self.ask_history(Some(page.first), cx);
-        }
-        if let Some(history) = self.history.as_mut() {
-            eprintln!(
-                "desk: session {session} history landed {} items in {} ms, {refused} refused",
-                history.lines.len(),
-                history.asked.elapsed().as_millis()
-            );
-            history.lines = Vec::new();
-            history.live = Vec::new();
+        let (stretches, calls, worked) = items::shapes(&self.items);
+        eprintln!(
+            "desk: paint replayed {} lines into {} rows in {} ms, {stretches} stretch rows, {calls} single call rows, {worked} worked rows, {refused} refused",
+            self.history.as_ref().map_or(0, History::lines),
+            self.items.len(),
+            replaying.elapsed().as_millis()
+        );
+        self.told_pages("page landed");
+        if first {
+            if let Some(history) = &self.history {
+                eprintln!(
+                    "desk: session {session} first history page landed in {} ms, pages of {PAGE_LINES}",
+                    history.asked.elapsed().as_millis()
+                );
+            }
             self.landed = Some(Instant::now());
+            self.ask_shells(cx);
         }
-        self.ask_shells(cx);
+        if let Some(history) = self.history.as_mut().filter(|history| history.behind) {
+            history.behind = !reached;
+            if history.behind {
+                self.ask_page(Paging::Newer, cx);
+            }
+        }
+    }
+
+    fn catch_up(&mut self, why: &str, cx: &mut Context<Self>) {
+        let Some(history) = self.history.as_mut() else {
+            return;
+        };
+        if history.pages.is_empty() {
+            return;
+        }
+        if !history.tail {
+            return eprintln!(
+                "desk: chat feed gap ({why}) while the transcript is scrolled back, paging reads it"
+            );
+        }
+        eprintln!(
+            "desk: chat feed gap ({why}), session.history {} catches up from line {}",
+            history.session,
+            history.held().end
+        );
+        history.behind = true;
+        if !history.asking {
+            self.ask_page(Paging::Newer, cx);
+        }
+    }
+
+    fn follow_fork(&mut self, fork: &SessionForked, cx: &mut Context<Self>) {
+        if fork.agent.is_some() || self.open_id() != Some(fork.from.as_str()) {
+            return;
+        }
+        eprintln!(
+            "desk: session {} continues as {} ({}), the chat follows",
+            fork.from, fork.to, fork.kind
+        );
+        self.history = Some(History::new(fork.to.clone(), Instant::now()));
+        self.set_opening(Opening::Open(fork.to.clone()), cx);
+        self.ask_page(Paging::Older, cx);
+        self.want_trace(cx);
+        self.reread_info(cx);
+    }
+
+    fn told_pages(&self, why: &str) {
+        if let Some(history) = &self.history {
+            let held = history.held();
+            eprintln!(
+                "desk: chat history {why}, holds {} pages, lines {}..{} of {}, {} lines, {} rows",
+                history.pages.len(),
+                held.start,
+                held.end,
+                history.total,
+                history.lines(),
+                self.items.len()
+            );
+        }
     }
 
     fn replay(&mut self, cx: &mut Context<Self>) -> usize {
@@ -636,18 +977,25 @@ impl Chat {
             return 0;
         };
         let id = history.session.clone();
-        let events: Vec<Event> = history
-            .lines
+        let newest = history.pages.back().map(|page| &page.lines);
+        let live = history
+            .live
             .iter()
-            .chain(
-                history
-                    .live
+            .filter(|live| newest.is_none_or(|lines| !lines.contains(live)));
+        let mut pages: Vec<Vec<Event>> = history
+            .pages
+            .iter()
+            .map(|page| {
+                page.lines
                     .iter()
-                    .filter(|live| !history.lines.contains(live)),
-            )
-            .cloned()
-            .map(Event::Notification)
+                    .cloned()
+                    .map(Event::Notification)
+                    .collect()
+            })
             .collect();
+        if let Some(newest) = pages.last_mut() {
+            newest.extend(live.cloned().map(Event::Notification));
+        }
         self.store.update(cx, |store, _| {
             store
                 .sessions
@@ -656,12 +1004,28 @@ impl Chat {
                 .reset_transcript();
         });
         self.orders.remove(&id);
-        let refused = events
-            .iter()
-            .filter(|event| self.absorb(event, cx).is_err())
-            .count();
+        let mut refused = 0;
+        let mut entries = Vec::with_capacity(pages.len());
+        for events in &pages {
+            refused += events
+                .iter()
+                .filter(|event| self.absorb(event, cx).is_err())
+                .count();
+            entries.push(self.orders.get(&id).map_or(0, Vec::len));
+        }
+        drop(pages);
         self.store.update(cx, |_, cx| cx.notify());
         self.rebuild(cx);
+        if let Some(history) = self.history.as_mut() {
+            for (page, entries) in history.pages.iter_mut().zip(entries) {
+                page.rows = self
+                    .slots
+                    .iter()
+                    .take(entries)
+                    .filter(|slot| slot.item.is_some())
+                    .count();
+            }
+        }
         refused
     }
 
@@ -669,35 +1033,33 @@ impl Chat {
         let shown = std::mem::take(&mut self.items);
         self.slots.clear();
         self.restack(cx);
-        let kept = shown
+        let head = shown
             .iter()
-            .rev()
-            .zip(self.items.iter().rev())
+            .zip(self.items.iter())
             .take_while(|(was, now)| was == now)
             .count();
-        let (old, count) = (0..shown.len() - kept, self.items.len() - kept);
-        self.transcript.splice(old.clone(), count);
+        let tail = shown
+            .iter()
+            .skip(head)
+            .rev()
+            .zip(self.items.iter().skip(head).rev())
+            .take_while(|(was, now)| was == now)
+            .count();
+        let (old, count) = (head..shown.len() - tail, self.items.len() - head - tail);
+        self.feed
+            .update(cx, |feed, cx| feed.splice(old.clone(), count, cx));
         cx.emit(Spliced::Rows {
             old,
             count,
             after: self.items.len(),
         });
         self.refresh(cx);
+        self.tell_head(cx);
     }
 
     fn loading(&self) -> Option<String> {
         match (&self.history, &self.opening) {
-            (Some(history), _) if !history.landed => {
-                Some(match (self.items.is_empty(), history.total) {
-                    (_, None) => "loading history".to_owned(),
-                    (true, Some(total)) => {
-                        format!("loading history: {} of {total}", history.lines.len())
-                    }
-                    (false, Some(total)) => {
-                        format!("loading older history: {} of {total}", history.lines.len())
-                    }
-                })
-            }
+            (Some(history), _) if history.pages.is_empty() => Some("loading history".to_owned()),
             (_, Opening::Pending) => Some("opening session".to_owned()),
             _ => None,
         }
@@ -717,7 +1079,7 @@ impl Chat {
     pub fn open_id(&self) -> Option<&str> {
         match &self.opening {
             Opening::Open(id) => Some(id),
-            Opening::Closed | Opening::Pending | Opening::Held(_) => None,
+            Opening::Closed | Opening::Pending => None,
         }
     }
 
@@ -728,7 +1090,7 @@ impl Chat {
                 .history
                 .as_ref()
                 .map(|history| history.session.as_str()),
-            Opening::Closed | Opening::Held(_) => None,
+            Opening::Closed => None,
         }
     }
 
@@ -769,7 +1131,8 @@ impl Chat {
         let asked = Instant::now();
         self.painting = session.clone().map(|id| (id, asked));
         self.history = session.clone().map(|id| History::new(id, asked));
-        self.ask_history(None, cx);
+        self.tell_head(cx);
+        self.ask_page(Paging::Older, cx);
         let wanted = session.clone().unwrap_or_default();
         eprintln!("desk: session.open asked for {wanted}");
         let params = SessionOpenParams {
@@ -785,22 +1148,14 @@ impl Chat {
                     return eprintln!("desk: session.open waits, a turn is running: {error}");
                 }
                 Err(error) => {
-                    if let Some(held) = error.held_by() {
-                        eprintln!(
-                            "desk: session attach {wanted} held by {}, which shares nothing, so tofu refused it",
-                            holder(Some(&held))
-                        );
-                        chat.set_opening(Opening::Held(wanted), cx);
-                        chat.rebuild(cx);
-                    }
-                    eprintln!("desk: session.open failed: {error:?}");
+                    eprintln!("desk: session.open {wanted} failed: {error:?}");
                     return chat.fail(error.to_string(), cx);
                 }
             };
             eprintln!(
-                "desk: session attach {} held by {}, fresh {}, in {} ms",
+                "desk: session attach {} with {} members, fresh {}, in {} ms",
                 opened.session,
-                holder(opened.held_by.as_ref()),
+                opened.members.len(),
                 opened.fresh,
                 asked.elapsed().as_millis()
             );
@@ -830,6 +1185,18 @@ impl Chat {
         self.call::<request::SessionRename>(&params, cx, |_, _, _| {});
     }
 
+    fn revoke(&mut self, grant: &RevokeGrant, _: &mut Window, cx: &mut Context<Self>) {
+        let target = grant.target.to_string();
+        eprintln!("desk: approval.revoke asked {target}");
+        let params = ApprovalRevokeParams {
+            target: target.clone(),
+        };
+        self.request::<request::ApprovalRevoke>(&params, cx, move |chat, reply, cx| match reply {
+            Ok(standing) => eprintln!("desk: approval.revoke {} answered", standing.target),
+            Err(error) => chat.fail(format!("approval.revoke {target}: {error}"), cx),
+        });
+    }
+
     fn open_find(&mut self, _: &Find, window: &mut Window, cx: &mut Context<Self>) {
         if !self.aimed {
             cx.propagate();
@@ -848,7 +1215,8 @@ impl Chat {
             (true, _) => eprintln!("desk: find chat cleared"),
             (false, None) => eprintln!("desk: find chat {query} no matches"),
             (false, Some(hit)) => {
-                self.transcript.reveal(hit.item);
+                let item = hit.item;
+                self.feed.update(cx, |feed, cx| feed.reveal(item, cx));
                 eprintln!(
                     "desk: find chat {query} {} of {}",
                     self.current + 1,
@@ -889,6 +1257,7 @@ impl Chat {
             self.current = 0;
         }
         self.find.update(cx, |bar, cx| bar.set_total(total, cx));
+        self.feed.update(cx, |_, cx| cx.notify());
     }
 
     fn closed(&mut self, cx: &mut Context<Self>) {
@@ -896,6 +1265,7 @@ impl Chat {
         self.finding = false;
         self.query.clear();
         self.hits = Rc::default();
+        self.feed.update(cx, |_, cx| cx.notify());
         cx.notify();
     }
 
@@ -922,9 +1292,11 @@ impl Chat {
         let events = bridge.events().clone();
         self.project = hello.project;
         self.link = Link::Ready(bridge);
+        self.heard = None;
         self.relist(cx);
         self.ask_models(cx);
         self.ask_due(cx);
+        cx.emit(SettingsMoved);
         cx.notify();
         Some(events)
     }
@@ -961,6 +1333,15 @@ impl Chat {
         }));
     }
 
+    pub fn drop_tofu(&self) -> Result<(), String> {
+        let Link::Ready(bridge) = &self.link else {
+            return Err("tofu is not connected".to_owned());
+        };
+        eprintln!("desk: drop-tofu: killing tofu serve pid {}", bridge.pid());
+        bridge.crash().map_err(|error| error.to_string())
+    }
+
+    #[cfg(all(feature = "screen-intro", feature = "screen-work"))]
     pub fn take_tofu(&mut self, from: &mut Chat, cx: &mut Context<Self>) -> bool {
         let Link::Ready(bridge) = std::mem::replace(&mut from.link, Link::Gone) else {
             return false;
@@ -974,10 +1355,12 @@ impl Chat {
         let events = bridge.events().clone();
         self.project = from.project.clone();
         self.link = Link::Ready(bridge);
+        self.heard = from.heard.take();
         self._drain = Some(cx.spawn(async move |this, cx| drain(this, events, cx).await));
         self.relist(cx);
         self.ask_models(cx);
         self.ask_due(cx);
+        cx.emit(SettingsMoved);
         cx.notify();
         true
     }
@@ -1008,8 +1391,23 @@ impl Chat {
     }
 
     pub fn take(&mut self, batch: &[Event], cx: &mut Context<Self>) {
+        let mut gap = None;
         for event in batch {
+            let seq = match event {
+                Event::Notification(notification) => notification.seq(),
+                Event::Request { request, .. } => request.seq(),
+                Event::Unreadable { .. } | Event::Exited(_) => None,
+            };
+            if let Some(seq) = seq
+                && let Some(last) = self.heard.replace(seq)
+                && seq > last.saturating_add(1)
+            {
+                gap = Some(format!("tofu sent line {seq} after {last}"));
+            }
             self.apply(event, cx);
+        }
+        if let Some(gap) = gap {
+            self.catch_up(&gap, cx);
         }
         self.store.update(cx, |_, cx| cx.notify());
         if let (Link::Recorded(_) | Link::Fed, Opening::Closed) = (&self.link, &self.opening)
@@ -1050,7 +1448,7 @@ impl Chat {
     fn clear_view(&mut self, cx: &mut Context<Self>) {
         self.slots.clear();
         self.items = Rc::default();
-        self.transcript.reset(0);
+        self.feed.update(cx, |feed, cx| feed.reset(0, cx));
         cx.emit(Spliced::Cleared);
     }
 
@@ -1072,6 +1470,16 @@ impl Chat {
     }
 
     fn absorb(&mut self, event: &Event, cx: &mut Context<Self>) -> Result<(), ModelError> {
+        let granted = match event {
+            Event::Notification(Notification::ApprovalResolved(resolved)) => self
+                .store
+                .read(cx)
+                .sessions
+                .get(&resolved.session)
+                .and_then(|session| items::granted(session, resolved))
+                .map(|entry| (resolved.session.clone(), entry)),
+            _ => None,
+        };
         let before = self.store.update(cx, |store, _| {
             let before: Vec<(String, usize)> = store
                 .sessions
@@ -1090,20 +1498,45 @@ impl Chat {
         }
         if let Event::Notification(notification) = event
             && let Some((session, entry)) = items::entry(notification)
+            && !self
+                .history
+                .as_ref()
+                .is_some_and(|history| history.prompt_shown_by_history(&entry))
         {
-            self.orders
-                .entry(session.to_owned())
-                .or_default()
-                .push(entry);
+            let order = self.orders.entry(session.to_owned()).or_default();
+            match self.store.read(cx).sessions.get(session) {
+                Some(found) => items::place(found, order, entry),
+                None => order.push(entry),
+            }
+        }
+        if let Some((session, entry)) = granted
+            && let Some(found) = self.store.read(cx).sessions.get(&session)
+        {
+            items::place(found, self.orders.entry(session).or_default(), entry);
+        }
+        if let Event::Notification(Notification::ApprovalRevoked(revoked)) = event
+            && let Some(order) = self.orders.get_mut(&revoked.session)
+        {
+            items::revoke(order, &revoked.target);
         }
         Ok(())
     }
 
     fn apply(&mut self, event: &Event, cx: &mut Context<Self>) {
-        if let (Some(history), Event::Notification(notification)) = (&mut self.history, event)
-            && !history.landed
-        {
-            history.live.push(notification.clone());
+        if let (Some(history), Event::Notification(notification)) = (&mut self.history, event) {
+            if let Notification::TurnStarted(started) = notification
+                && history.pages.is_empty()
+                && history.session == started.session
+            {
+                eprintln!(
+                    "desk: turn {} was open before this desk joined, its prompt draws from history only",
+                    started.turn
+                );
+                history.open_at_join.push(started.turn.clone());
+            }
+            if history.tail || history.pages.is_empty() {
+                history.live.push(notification.unsequenced());
+            }
         }
         match self.absorb(event, cx) {
             Ok(()) => {}
@@ -1170,10 +1603,23 @@ impl Chat {
                 "desk: session {} shell {} ready port {}",
                 ready.session, ready.shell, ready.port
             ),
-            Event::Notification(Notification::TurnAccount(account)) => eprintln!(
-                "desk: session {} turn {} account {} {} {}",
-                account.session, account.turn, account.source, account.account_id, account.model
-            ),
+            Event::Notification(Notification::TurnAccount(account)) => {
+                eprintln!(
+                    "desk: session {} turn {} account {} {} {}",
+                    account.session,
+                    account.turn,
+                    account.source,
+                    account.account_id,
+                    account.model
+                );
+                if self.open_id() == Some(account.session.as_str()) {
+                    self.reread_info(cx);
+                }
+                self.accounts.notified();
+                self.ask_accounts(cx);
+                self.fill_models(cx);
+                cx.emit(SettingsMoved);
+            }
             Event::Notification(
                 notification @ (Notification::AccountState(_) | Notification::QuotaUpdated(_)),
             ) => {
@@ -1229,6 +1675,14 @@ impl Chat {
                     );
                 }
             }
+            Event::Notification(Notification::Resync(resync)) => self.catch_up(
+                &format!(
+                    "tofu dropped {} lines of session {}",
+                    resync.dropped, resync.session
+                ),
+                cx,
+            ),
+            Event::Notification(Notification::SessionForked(fork)) => self.follow_fork(fork, cx),
             Event::Exited(exit) => self.exited(exit, cx),
             Event::Notification(_) | Event::Unreadable { .. } => {}
         }
@@ -1270,6 +1724,57 @@ impl Chat {
         Some((id.clone(), turn.clone()))
     }
 
+    fn status(&self, cx: &App) -> (bool, bool, String) {
+        let waiting = self
+            .card
+            .as_ref()
+            .is_some_and(|shown| shown.asking.waiting());
+        let open = self.running(cx).is_some();
+        let session = self.store.read(cx).open_session();
+        let sub_agents = session.map_or(0, items::sub_agents);
+        let lead_busy = open
+            && !session.is_some_and(|session| {
+                session
+                    .turns
+                    .values()
+                    .any(|turn| turn.status.is_none() && turn.lead_idle)
+            });
+        let phase = match (waiting, lead_busy) {
+            (true, _) => "waiting on you".to_owned(),
+            (false, true) => self.doing(cx),
+            (false, false) => format!(
+                "lead idle, free to talk · {sub_agents} sub-agent{} running",
+                if sub_agents == 1 { "" } else { "s" }
+            ),
+        };
+        (waiting || lead_busy || sub_agents > 0, !lead_busy, phase)
+    }
+
+    fn ask_card(
+        &self,
+        id: &'static str,
+        owns_field: bool,
+        answer: impl Fn(Act, &mut Window, &mut App) + 'static,
+        theme: &desk_ui::theme::Theme,
+    ) -> Option<gpui::Div> {
+        self.card.as_ref().map(|shown| {
+            div()
+                .w_full()
+                .max_w(px(CONTENT_WIDTH))
+                .mx_auto()
+                .child(ask_bar(
+                    id,
+                    &shown.asking,
+                    (owns_field && shown.asking.typing())
+                        .then(|| self.own_answer.clone().into_any_element()),
+                    1.0,
+                    owns_field,
+                    answer,
+                    theme,
+                ))
+        })
+    }
+
     fn doing(&self, cx: &App) -> String {
         let store = self.store.read(cx);
         store
@@ -1281,9 +1786,9 @@ impl Chat {
             .map_or_else(|| WORKING.to_owned(), |doing| format!("{WORKING}: {doing}"))
     }
 
-    fn shown_id(&self) -> Option<String> {
+    pub fn shown_id(&self) -> Option<String> {
         match &self.opening {
-            Opening::Open(id) | Opening::Held(id) => Some(id.clone()),
+            Opening::Open(id) => Some(id.clone()),
             Opening::Pending => self.history.as_ref().map(|history| history.session.clone()),
             Opening::Closed => None,
         }
@@ -1313,7 +1818,8 @@ impl Chat {
         let changed = !spliced.is_empty();
         for rows in spliced {
             if let Spliced::Rows { old, count, .. } = &rows {
-                self.transcript.splice(old.clone(), *count);
+                self.feed
+                    .update(cx, |feed, cx| feed.splice(old.clone(), *count, cx));
             }
             cx.emit(rows);
         }
@@ -1420,13 +1926,13 @@ impl Chat {
     }
 
     fn moved(&self, method: &str, sent: &str) -> bool {
-        let now = self.open_id();
-        if now == Some(sent) {
+        let now = self.shown_id();
+        if now.as_deref() == Some(sent) {
             return false;
         }
         eprintln!(
             "desk: dropped {method} for {sent}, now {}",
-            now.unwrap_or("none")
+            now.as_deref().unwrap_or("none")
         );
         true
     }
@@ -1515,28 +2021,87 @@ impl Chat {
 
     fn listed(&mut self, models: &ModelsQuery, cx: &mut Context<Self>) {
         self.defaults.clone_from(&models.defaults);
+        let usable: Vec<(&str, &str)> = models
+            .models
+            .iter()
+            .filter(|model| model.kind == "llm" && model.r#use != "excluded")
+            .filter_map(|model| Some((model.slug.split_once('/')?.0, model.id.as_str())))
+            .collect();
+        let mut sources: Vec<&str> = Vec::new();
+        for source in models
+            .subscriptions
+            .iter()
+            .map(String::as_str)
+            .chain(usable.iter().map(|(source, _)| *source))
+        {
+            if !sources.contains(&source) {
+                sources.push(source);
+            }
+        }
         let mut items = Vec::new();
         self.choices.clear();
-        for source in &models.subscriptions {
-            items.push(MenuItem::Caption(source.clone().into()));
-            self.choices.push(None);
-            for model in models.models.iter().filter(|model| {
-                model.kind == "llm" && model.r#use != "excluded" && model.subscription == *source
-            }) {
-                items.push(MenuItem::action(model.id.clone()));
-                self.choices.push(Some((source.clone(), model.id.clone())));
+        for source in sources {
+            let inside: Vec<&str> = usable
+                .iter()
+                .filter(|(owner, _)| *owner == source)
+                .map(|(_, model)| *model)
+                .collect();
+            if inside.is_empty() {
+                continue;
             }
+            self.choices.push(None);
+            self.choices.extend(
+                inside
+                    .iter()
+                    .map(|model| Some((source.to_owned(), (*model).to_owned()))),
+            );
+            let submenu = MenuItem::Submenu {
+                label: source.to_owned().into(),
+                icon: Brand::for_source(source).map(MenuIcon::from),
+                items: inside.into_iter().map(MenuItem::action).collect(),
+            };
+            items.push(submenu);
         }
         self.models.update(cx, |button, cx| button.items(items, cx));
         self.fill_models(cx);
     }
 
-    fn fill_models(&mut self, cx: &mut Context<Self>) {
-        let label = self.pick.model.clone().unwrap_or_else(|| MODEL.to_owned());
+    fn model_name(&self, cx: &App) -> String {
+        let session = self
+            .shown_id()
+            .and_then(|id| self.store.read(cx).sessions.get(&id)?.pick.clone());
+        let slug = |pick: &ModelPick| {
+            let model = pick.model.as_deref()?;
+            Some(match pick.wire.as_deref() {
+                Some(wire) if !model.contains('/') => format!("{wire}/{model}"),
+                _ => model.to_owned(),
+            })
+        };
+        slug(&self.pick)
+            .or_else(|| session.as_ref().and_then(slug))
+            .or_else(|| self.defaults.first().cloned())
+            .unwrap_or_else(|| MODEL.to_owned())
+    }
+
+    fn relabel(&mut self, cx: &mut Context<Self>) {
+        let label = self.model_name(cx);
+        if label == self.labelled {
+            return;
+        }
+        eprintln!("desk: the model picker reads {label}");
+        self.labelled.clone_from(&label);
+        let brand = label
+            .split_once('/')
+            .and_then(|(source, _)| Brand::for_source(source));
         self.models.update(cx, |button, cx| {
-            button.trigger(move |_, theme| picker("chat-model", label.clone(), theme));
+            button
+                .trigger(move |_, theme| inline_picker("chat-model", brand, label.clone(), theme));
             cx.notify();
         });
+    }
+
+    fn fill_models(&mut self, cx: &mut Context<Self>) {
+        self.relabel(cx);
         self.store.update(cx, |_, cx| cx.notify());
         cx.notify();
     }
@@ -1590,9 +2155,9 @@ impl Chat {
         })
     }
 
-    pub fn decisions_shown(&self, cx: &App) -> usize {
-        let Some(open) = self.open_id() else {
-            return 0;
+    pub fn decisions_shown(&self, cx: &App) -> Decisions {
+        let Opening::Open(open) = &self.opening else {
+            return Decisions::default();
         };
         let live = self
             .store
@@ -1601,43 +2166,46 @@ impl Chat {
             .get(open)
             .map_or(0, |session| session.decisions.len());
         let past = match &self.ledger {
-            Some((session, Some(rows))) if session == open => *rows,
-            Some(_) | None => 0,
+            Some((session, Some(past))) if session == open => *past,
+            Some(_) | None => Decisions::default(),
         };
-        live + past
+        Decisions {
+            count: past.count.saturating_add(live),
+            capped: past.capped,
+        }
     }
 
     fn ask_ledger(&mut self, session: String, cx: &mut Context<Self>) {
         self.ledger = Some((session.clone(), None));
         let params = LedgerParams {
-            last: Some(LEDGER_READ_LAST),
+            last: Some(STATUS_LEDGER_LAST),
+            session: Some(session.clone()),
             ..LedgerParams::default()
         };
         self.call::<request::QueryLedger>(&params, cx, move |chat, ledger, cx| {
-            let traced = SessionParams {
-                session: Some(session.clone()),
+            let rows = ledger
+                .rows
+                .iter()
+                .filter(|row| row.turn_id.is_some())
+                .count();
+            let capped =
+                i64::try_from(ledger.rows.len()).is_ok_and(|read| read >= STATUS_LEDGER_LAST);
+            let past = Decisions {
+                count: rows,
+                capped,
             };
-            chat.call::<request::SessionTrace>(&traced, cx, move |chat, trace, cx| {
-                let mut turns: Vec<&str> = trace
-                    .calls
-                    .iter()
-                    .map(|call| call.turn.as_str())
-                    .chain(trace.requests.iter().map(|asked| asked.turn.as_str()))
-                    .chain(trace.messages.iter().map(|message| message.turn.as_str()))
-                    .collect();
-                turns.sort_unstable();
-                turns.dedup();
-                let rows = session_ledger(&ledger.rows, &session, &turns).len();
-                eprintln!("desk: status bar classifier reads {rows} ledger rows for {session}");
-                if chat
-                    .ledger
-                    .as_ref()
-                    .is_some_and(|(asked, _)| *asked == session)
-                {
-                    chat.ledger = Some((session, Some(rows)));
-                    chat.store.update(cx, |_, cx| cx.notify());
-                }
-            });
+            eprintln!(
+                "desk: status bar classifier reads {past} of {} ledger rows, last {STATUS_LEDGER_LAST}, for {session}",
+                ledger.rows.len()
+            );
+            if chat
+                .ledger
+                .as_ref()
+                .is_some_and(|(asked, _)| *asked == session)
+            {
+                chat.ledger = Some((session, Some(past)));
+                chat.store.update(cx, |_, cx| cx.notify());
+            }
         });
     }
 
@@ -1683,6 +2251,17 @@ impl Chat {
             chat.fill_accounts(cx);
             chat.ask_due(cx);
         });
+    }
+
+    #[cfg(feature = "screen-settings")]
+    pub fn signed_subscriptions(&self) -> usize {
+        self.accounts.read.as_ref().map_or(0, |read| {
+            read.value
+                .subscriptions
+                .iter()
+                .filter(|source| !source.accounts.is_empty())
+                .count()
+        })
     }
 
     fn fill_accounts(&mut self, cx: &mut Context<Self>) {
@@ -1840,7 +2419,7 @@ impl Chat {
             });
         }
         let open = SessionParams {
-            session: self.open_id().map(str::to_owned),
+            session: self.shown_id(),
         };
         let sent = open.session.clone();
         self.ask::<request::QueryContext>(
@@ -1969,6 +2548,7 @@ impl Chat {
             return eprintln!("desk: send held: {held}");
         }
         let mut words = self.take_tokens();
+        words.extend(self.attached.drain(..).map(|path| format!("@{path}")));
         words.push(text.trim().to_owned());
         let text = words.join(" ").trim().to_owned();
         if text.is_empty() {
@@ -1984,10 +2564,6 @@ impl Chat {
             Opening::Open(session) => self.deliver(session.clone(), text, cx),
             Opening::Pending => {
                 self.fail("the session is still opening".to_owned(), cx);
-            }
-            Opening::Held(session) => {
-                let problem = format!("session {session} is held by another tofu");
-                self.fail(problem, cx);
             }
             Opening::Closed => {
                 self.set_opening(Opening::Pending, cx);
@@ -2042,32 +2618,57 @@ impl Chat {
         );
     }
 
-    fn flip(&mut self, cx: &mut Context<Self>) {
-        if matches!(self.opening, Opening::Pending | Opening::Held(_)) {
-            return eprintln!("desk: asking waits for the session to open");
-        }
-        let was = self.asking.clone();
-        self.asking = match was {
-            SessionAsking::Auto => SessionAsking::Ask,
-            SessionAsking::Ask | SessionAsking::Unknown(_) => SessionAsking::Auto,
-        };
-        let asking = String::from(self.asking.clone());
-        eprintln!("desk: asking {asking}");
-        cx.notify();
-        if matches!(self.opening, Opening::Closed) {
-            return;
-        }
-        let params = SessionSetParams {
-            asking: Some(self.asking.clone()),
-            ..SessionSetParams::default()
-        };
-        self.request::<request::SessionSet>(&params, cx, move |chat, reply, cx| match reply {
-            Ok(ack) => eprintln!("desk: session.set asking {asking} answered ok {}", ack.ok),
-            Err(error) => {
-                chat.asking = was;
-                chat.fail(format!("session.set asking {asking}: {error}"), cx);
-            }
+    fn attach(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let asked = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: true,
+            prompt: Some(ATTACH.into()),
         });
+        cx.spawn_in(window, async move |chat, cx| {
+            let picked = match asked.await {
+                Ok(Ok(Some(picked))) => picked,
+                Ok(Ok(None)) => return eprintln!("desk: chat attach: no file was picked"),
+                Ok(Err(error)) => {
+                    return eprintln!("desk: chat attach: the file dialog failed: {error}");
+                }
+                Err(_) => {
+                    return eprintln!(
+                        "desk: chat attach: the file dialog closed without an answer"
+                    );
+                }
+            };
+            if chat
+                .update(cx, |chat, cx| chat.attach_picked(picked, cx))
+                .is_err()
+            {
+                eprintln!("desk: the chat closed before the attached file landed");
+            }
+        })
+        .detach();
+    }
+
+    fn attach_picked(&mut self, picked: Vec<PathBuf>, cx: &mut Context<Self>) {
+        let root = PathBuf::from(&self.project);
+        for path in picked {
+            let shown = path
+                .strip_prefix(&root)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .replace('\\', "/");
+            eprintln!("desk: chat attach {shown}");
+            if !self.attached.contains(&shown) {
+                self.attached.push(shown);
+            }
+        }
+        cx.notify();
+    }
+
+    fn unattach(&mut self, at: usize, cx: &mut Context<Self>) {
+        if at < self.attached.len() {
+            self.attached.remove(at);
+            cx.notify();
+        }
     }
 
     fn act(&mut self, act: Act, window: &mut Window, cx: &mut Context<Self>) {
@@ -2097,19 +2698,12 @@ impl Chat {
         };
         let sent = match &shown.asked {
             Asked::Approval => {
-                let Some(decision) = shown
-                    .asking
-                    .said()
-                    .next()
-                    .and_then(|(picked, _)| picked.first())
-                    .and_then(|at| DECISIONS.get(*at))
-                    .cloned()
-                else {
+                let Some(answer) = shown.asking.approved().map(decided) else {
                     return;
                 };
-                let said = String::from(decision.clone());
+                let said = String::from(answer.decision.clone());
                 bridge
-                    .answer(&shown.id, &ApprovalAnswer { decision })
+                    .answer(&shown.id, &answer)
                     .map(|()| format!("approval {} answered {said}", shown.key))
             }
             Asked::Question(ask) => {
@@ -2139,6 +2733,15 @@ impl Chat {
             Err(error) => self.fail(error.to_string(), cx),
         }
         self.refocus = true;
+    }
+
+    fn want_page(&mut self, visible: Range<usize>, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(history) = self.history.as_mut()
+            && let Some(paging) = history.wanted(visible)
+        {
+            history.asking = true;
+            cx.defer_in(window, move |chat, _, cx| chat.page(paging, cx));
+        }
     }
 
     fn key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -2297,6 +2900,7 @@ impl Drop for Chat {
 
 impl Render for Chat {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        desk_perf::span!("chat");
         self.frame(window, cx);
         if !self.finding && std::mem::take(&mut self.refocus) {
             match self.card.as_ref().filter(|shown| shown.asking.waiting()) {
@@ -2325,53 +2929,35 @@ impl Render for Chat {
             );
         }
         let theme = ActiveTheme::theme(cx);
-        let (items, hits, current) = (self.items.clone(), self.hits.clone(), self.current);
-        let rows = transcript(
-            "chat-transcript",
-            &self.transcript,
+        let clip = tooltip(
+            "chat-attach-tip",
+            paperclip("chat-attach", &theme)
+                .on_click(cx.listener(|chat, _: &ClickEvent, window, cx| chat.attach(window, cx))),
+            Edge::FrameStart,
+            ATTACH,
             &theme,
-            move |at, _, cx| {
-                let theme = ActiveTheme::theme(cx);
-                items.get(at).map_or_else(
-                    || div().into_any_element(),
-                    |item| {
-                        let marks = hit_marks(&hits, current, at, &theme);
-                        div()
-                            .px(px(ROW_INSET))
-                            .child(items::render(item, at, &marks, &theme))
-                            .into_any_element()
-                    },
-                )
-            },
+            window,
+            cx,
         );
-        let waiting = self
-            .card
-            .as_ref()
-            .is_some_and(|shown| shown.asking.waiting());
-        let mode = picker("chat-asking", String::from(self.asking.clone()), &theme)
-            .on_click(cx.listener(|chat, _: &ClickEvent, _, cx| chat.flip(cx)));
+        let unattach = cx.listener(|chat, at: &usize, _, cx| chat.unattach(*at, cx));
         let stop = cx.listener(|chat, _: &(), _, cx| chat.stop(cx));
         let pick = cx.listener(|chat, at: &usize, window, cx| chat.pick(*at, window, cx));
         let unmention = cx.listener(|chat, at: &usize, _, cx| chat.remove_mention(*at, cx));
-        let lead_busy = self.running(cx).is_some();
-        let sub_agents = self
-            .store
-            .read(cx)
-            .open_session()
-            .map_or(0, items::sub_agents);
+        let (busy, quiet, phase) = self.status(cx);
         let composer = Composer::new("chat-composer", self.area.clone())
             .content_width(px(CONTENT_WIDTH))
-            .busy(lead_busy || sub_agents > 0)
-            .phase(match (waiting, lead_busy) {
-                (true, _) => "waiting on you".to_owned(),
-                (false, true) => self.doing(cx),
-                (false, false) => format!(
-                    "lead idle, free to talk · {sub_agents} sub-agent{} running",
-                    if sub_agents == 1 { "" } else { "s" }
-                ),
-            })
-            .model(self.models.clone())
-            .effort(mode)
+            .busy(busy)
+            .quiet(quiet)
+            .phase(phase)
+            .attachments(
+                self.attached
+                    .iter()
+                    .cloned()
+                    .map(SharedString::from)
+                    .collect(),
+            )
+            .below_start(clip)
+            .below_end(self.models.clone())
             .traces(self.chips())
             .held(self.held().is_some())
             .menu(self.mention_menu(), move |at, window, cx| {
@@ -2379,22 +2965,15 @@ impl Render for Chat {
             })
             .on_send(cx.listener(|chat, text: &str, _, cx| chat.send(text, cx)))
             .on_stop(move |window, cx| stop(&(), window, cx))
+            .on_remove(move |at, window, cx| unattach(&at, window, cx))
             .on_remove_trace(move |at, window, cx| unmention(&at, window, cx));
         let answer = cx.listener(|chat, act: &Act, window, cx| chat.act(*act, window, cx));
-        let ask = self.card.as_ref().map(|shown| {
-            ask_bar(
-                "chat-ask",
-                &shown.asking,
-                shown
-                    .asking
-                    .typing()
-                    .then(|| self.own_answer.clone().into_any_element()),
-                1.0,
-                true,
-                move |act, window, cx| answer(&act, window, cx),
-                &theme,
-            )
-        });
+        let ask = self.ask_card(
+            "chat-ask",
+            true,
+            move |act, window, cx| answer(&act, window, cx),
+            &theme,
+        );
         let problem = self
             .problem
             .clone()
@@ -2403,17 +2982,6 @@ impl Render for Chat {
             Link::Recorded(replay) => Some(replay.meter()),
             Link::Starting | Link::Ready(_) | Link::Gone | Link::Fed => None,
         };
-        let loading = self.loading().map(|said| {
-            div()
-                .absolute()
-                .top_0()
-                .left_0()
-                .right_0()
-                .flex()
-                .justify_center()
-                .px(px(ROW_INSET))
-                .child(note(said, &theme))
-        });
         div()
             .track_focus(&self.focus)
             .capture_key_down(cx.listener(|chat, event: &KeyDownEvent, window, cx| {
@@ -2423,6 +2991,7 @@ impl Render for Chat {
                 cx.listener(|chat, event: &KeyDownEvent, window, cx| chat.key(event, window, cx)),
             )
             .on_action(cx.listener(Self::open_find))
+            .on_action(cx.listener(Self::revoke))
             .capture_any_mouse_down(cx.listener(|chat, _: &MouseDownEvent, _, _| chat.aimed = true))
             .on_mouse_down_out(cx.listener(|chat, _: &MouseDownEvent, _, _| chat.aimed = false))
             .relative()
@@ -2436,8 +3005,7 @@ impl Render for Chat {
                     .flex_1()
                     .min_h_0()
                     .when(self.finding, |area| area.pt(px(FIND_RESERVE)))
-                    .child(rows)
-                    .children(loading)
+                    .child(Feed::cached(&self.feed))
                     .child(self.find.clone()),
             )
             .child(

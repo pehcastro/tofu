@@ -4,6 +4,8 @@ use std::fmt;
 use gpui::{Rgba, SharedString, rgba};
 use serde_json::{Map, Value};
 
+use crate::components::tree::IconPack;
+
 macro_rules! tokens {
     ($kind:ident { $($variant:ident => $path:literal),+ $(,)? }) => {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -148,6 +150,15 @@ tokens!(ColorToken {
     ChatCalls => "chat.calls",
     Separator => "separator",
     StateCloseBox => "state.close_box",
+    IntroComposerFill => "intro.composer_fill",
+    IntroComposerBorder => "intro.composer_border",
+    IntroPlaceholder => "intro.placeholder",
+    IntroIcon => "intro.icon",
+    IntroModelText => "intro.model_text",
+    IntroSendFill => "intro.send_fill",
+    IntroSendIcon => "intro.send_icon",
+    IntroLink => "intro.link",
+    IntroLinkHover => "intro.link_hover",
 });
 
 tokens!(BorderToken {
@@ -162,6 +173,9 @@ tokens!(NumberToken {
     CardsOuterGap => "cards.outer.gap",
     CardsInnerRadius => "cards.inner.radius",
     ShapeBlur => "shape.blur",
+    GlassRefraction => "glass.refraction",
+    GlassEdge => "glass.edge",
+    GlassDispersion => "glass.dispersion",
     MotionFast => "motion.fast",
     MotionBase => "motion.base",
     MotionEnter => "motion.enter",
@@ -183,9 +197,36 @@ tokens!(ChoiceToken {
     Mode => "mode",
     ShapeDensity => "shape.density",
     TabsActive => "tabs.active",
+    GlassMode => "glass.mode",
 });
 
+impl NumberToken {
+    fn unset(self) -> Option<f32> {
+        match self {
+            NumberToken::GlassRefraction => Some(40.0),
+            NumberToken::GlassEdge => Some(32.0),
+            NumberToken::GlassDispersion => Some(2.0),
+            _ => None,
+        }
+    }
+}
+
 impl ColorToken {
+    fn unset(self) -> Option<Rgba> {
+        let white = |alpha| Rgba::new(1.0, 1.0, 1.0, alpha);
+        match self {
+            ColorToken::IntroComposerFill => Some(rgba(0x18171eff)),
+            ColorToken::IntroComposerBorder => Some(white(0.16)),
+            ColorToken::IntroPlaceholder => Some(white(0.38)),
+            ColorToken::IntroIcon => Some(white(0.45)),
+            ColorToken::IntroModelText => Some(white(0.85)),
+            ColorToken::IntroSendFill => Some(white(0.92)),
+            ColorToken::IntroSendIcon => Some(rgba(0x111111ff)),
+            ColorToken::IntroLink | ColorToken::IntroLinkHover => Some(white(0.72)),
+            _ => None,
+        }
+    }
+
     fn fallback(self) -> Option<ColorToken> {
         use ColorToken::*;
         let fallback = match self {
@@ -222,6 +263,14 @@ impl ChoiceToken {
             ChoiceToken::Mode => &["dark", "light"],
             ChoiceToken::ShapeDensity => &["compact", "comfortable"],
             ChoiceToken::TabsActive => &["inner", "outer"],
+            ChoiceToken::GlassMode => &["frosted", "liquid"],
+        }
+    }
+
+    fn unset(self) -> Option<&'static str> {
+        match self {
+            ChoiceToken::GlassMode => Some("frosted"),
+            _ => None,
         }
     }
 }
@@ -242,7 +291,7 @@ impl Mode {
         }
     }
 
-    fn other(self) -> Self {
+    pub fn other(self) -> Self {
         match self {
             Mode::Light => Mode::Dark,
             Mode::Dark => Mode::Light,
@@ -279,11 +328,16 @@ pub struct Theme {
     flags: Vec<bool>,
     words: Vec<SharedString>,
     choices: Vec<&'static str>,
+    icons: Option<IconPack>,
 }
 
 impl Theme {
     pub fn mode(&self) -> Mode {
         self.mode
+    }
+
+    pub fn icons(&self) -> Option<IconPack> {
+        self.icons
     }
 
     pub fn color(&self, token: ColorToken) -> Rgba {
@@ -314,6 +368,7 @@ impl Theme {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Problem {
     Unreadable(String),
+    Unwritable(String),
     Syntax(String),
     NotAnObject,
     NotAName(String),
@@ -333,6 +388,7 @@ impl fmt::Display for Problem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Problem::Unreadable(error) => write!(f, "cannot read {error}"),
+            Problem::Unwritable(error) => write!(f, "cannot write {error}"),
             Problem::Syntax(error) => write!(f, "not JSON, {error}"),
             Problem::NotAnObject => write!(f, "not a JSON object"),
             Problem::NotAName(name) => write!(f, "{name} is not a theme file name"),
@@ -381,6 +437,7 @@ impl std::error::Error for ThemeError {}
 pub struct Layer {
     file: String,
     tokens: BTreeMap<String, Value>,
+    icons: Option<IconPack>,
 }
 
 pub struct ParsedLayer {
@@ -403,6 +460,21 @@ pub fn parse_layer(
         None => None,
         Some(Value::String(name)) => Some(name),
         Some(other) => return Err(fail("extends", Problem::NotAName(other.to_string()))),
+    };
+    let icons = match root.remove("icons") {
+        None => None,
+        Some(value) => {
+            let found = value
+                .as_str()
+                .and_then(|key| IconPack::ALL.into_iter().find(|pack| pack.key() == key));
+            if found.is_none() {
+                problems.push(fail(
+                    "icons",
+                    Problem::Expected("an icon pack name", value.to_string()),
+                ));
+            }
+            found
+        }
     };
     let name = root.remove("name");
     if let Some(name) = name.as_ref().filter(|name| !name.is_string()) {
@@ -436,7 +508,11 @@ pub fn parse_layer(
             }
             continue;
         }
-        for path in tokens.keys().filter_map(|path| other.strip(path)) {
+        for path in tokens
+            .keys()
+            .filter_map(|path| other.strip(path))
+            .filter(|path| !path.starts_with("intro."))
+        {
             let mine = format!("{}.{path}", mode.label());
             if !tokens.contains_key(&mine) {
                 problems.push(fail(&mine, Problem::OnlyIn(other)));
@@ -447,6 +523,7 @@ pub fn parse_layer(
         layer: Layer {
             file: file.to_owned(),
             tokens,
+            icons,
         },
         extends,
     })
@@ -469,7 +546,12 @@ pub fn build_mode(
     let chain = Chain { layers, mode };
     let mut choices: Vec<&'static str> = ChoiceToken::ALL
         .iter()
-        .map(|token| chain.resolve(token.path(), |value| choice(*token, value), problems))
+        .map(
+            |token| match token.unset().filter(|_| !chain.sets(token.path())) {
+                Some(default) => Ok(default),
+                None => chain.resolve(token.path(), |value| choice(*token, value), problems),
+            },
+        )
         .collect::<Result<_, _>>()?;
     choices[ChoiceToken::Mode as usize] = mode.label();
     let mut colors: Vec<Rgba> = Vec::with_capacity(ColorToken::ALL.len());
@@ -478,14 +560,16 @@ pub fn build_mode(
             .fallback()
             .filter(|_| !chain.sets(token.path()))
             .and_then(|fallback| colors.get(fallback as usize).copied());
-        let resolved = match inherited {
-            Some(inherited) => inherited,
+        let unset = token.unset().filter(|_| !chain.sets(token.path()));
+        let resolved = match inherited.or(unset) {
+            Some(resolved) => resolved,
             None => chain.resolve(token.path(), color, problems)?,
         };
         colors.push(resolved);
     }
     Ok(Theme {
         mode,
+        icons: layers.iter().find_map(|layer| layer.icons),
         choices,
         colors,
         borders: BorderToken::ALL
@@ -494,7 +578,12 @@ pub fn build_mode(
             .collect::<Result<_, _>>()?,
         numbers: NumberToken::ALL
             .iter()
-            .map(|token| chain.resolve(token.path(), number, problems))
+            .map(
+                |token| match token.unset().filter(|_| !chain.sets(token.path())) {
+                    Some(default) => Ok(default),
+                    None => chain.resolve(token.path(), number, problems),
+                },
+            )
             .collect::<Result<_, _>>()?,
         flags: FlagToken::ALL
             .iter()

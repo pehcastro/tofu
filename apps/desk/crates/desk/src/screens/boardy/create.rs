@@ -4,7 +4,7 @@ use std::time::Instant;
 use desk_core::boardy::{BoardyStore, COLUMNS};
 use desk_core::protocol::boardy::{CreateRequest, Ticket};
 use desk_core::protocol::request::BoardyCreate;
-use desk_core::protocol::{BoardyPriority, BoardyStatus as Status, BoardyTicketType};
+use desk_core::protocol::{BoardyPriority, BoardyStatus as Status, BoardyType};
 use desk_motion::Phase;
 use desk_ui::component::icon_button;
 use desk_ui::components::button::{ButtonKind, button};
@@ -303,7 +303,7 @@ impl Draft {
             sprint: None,
             status: self.status.clone(),
             title,
-            r#type: BoardyTicketType::Task,
+            r#type: BoardyType::Task,
             updated: now,
         }
     }

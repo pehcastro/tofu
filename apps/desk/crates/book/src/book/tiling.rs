@@ -35,6 +35,7 @@ fn glyph_of(module: &Module) -> Glyph {
         Module::FileEdits | Module::Editor => Glyph::File,
         Module::Shells | Module::Terminal => Glyph::Terminal,
         Module::SourceControl => Glyph::Trace,
+        Module::Viewer => Glyph::Image,
         Module::Plugin(_) => Glyph::Attach,
     }
 }

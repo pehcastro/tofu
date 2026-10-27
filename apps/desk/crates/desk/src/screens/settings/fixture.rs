@@ -1,32 +1,31 @@
-use desk_core::settings::Scope as WireScope;
 use gpui::SharedString;
 
 use super::stored::{GUIDES, VIM};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeskPage {
+    Appearance,
     Keys,
     Editor,
     Terminal,
-    Git,
 }
 
 impl DeskPage {
     pub fn name(self) -> &'static str {
         match self {
+            DeskPage::Appearance => "Appearance",
             DeskPage::Keys => "Keys",
             DeskPage::Editor => "Editor",
             DeskPage::Terminal => "Terminal",
-            DeskPage::Git => "Git",
         }
     }
 
     pub fn page(self) -> &'static Page {
         match self {
+            DeskPage::Appearance => &APPEARANCE,
             DeskPage::Keys => &KEYS,
             DeskPage::Editor => &EDITOR,
             DeskPage::Terminal => &TERMINAL,
-            DeskPage::Git => &GIT,
         }
     }
 }
@@ -44,101 +43,101 @@ pub const PLUGINS_GENERAL: &str = "General";
 pub const DESK_NAV: (&str, [DeskPage; 4]) = (
     "Desk",
     [
+        DeskPage::Appearance,
         DeskPage::Keys,
         DeskPage::Editor,
         DeskPage::Terminal,
-        DeskPage::Git,
     ],
 );
-pub const TOFU_NAV: &str = "tofu";
-pub const FIRST_TOFU_PAGE: &str = "Turn";
-pub const TOFU_PAGES: [&str; 8] = [
-    "Appearance",
-    "Interaction",
-    "Context",
-    "Files",
-    "Shell",
-    "Turn",
-    "Projects",
-    "Browser",
-];
+pub const TOFU_NAV: &str = "Tofu";
+pub const TOFU_EVERYWHERE: &str =
+    "Applies to tofu everywhere: this desk's sessions, the terminal and every other window.";
+pub const TERMINAL_ONLY: [&str; 1] = ["Appearance"];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Scope {
-    Everywhere,
-    Project,
+pub enum Models {
+    Any,
+    Keyed,
+    Subscriptions,
+    OnePerSubscription,
 }
 
-impl Scope {
-    pub fn wire(self) -> WireScope {
-        match self {
-            Scope::Everywhere => WireScope::Global,
-            Scope::Project => WireScope::Project,
-        }
-    }
+pub const MODEL_SETTINGS: [(&str, Models); 8] = [
+    ("continueOnSubscription", Models::OnePerSubscription),
+    ("continueOnAPIModel", Models::Keyed),
+    ("memoryModel", Models::Any),
+    ("modelTier.genius", Models::Any),
+    ("modelTier.smart", Models::Any),
+    ("modelTier.worker", Models::Any),
+    ("modelTier.dumb", Models::Any),
+    ("browserModel", Models::Subscriptions),
+];
+
+pub struct Fixed {
+    pub values: &'static [(&'static str, &'static str)],
+    pub custom: &'static str,
 }
 
-pub enum Control {
-    Switch(bool),
-    Stored,
-    Pack,
-}
+pub const FIXED_SETTINGS: [(&str, Fixed); 2] = [
+    (
+        "sideChatAccess",
+        Fixed {
+            values: &[("read", "read"), ("notes", "notes"), ("files", "files")],
+            custom: "Custom globs\u{2026}",
+        },
+    ),
+    (
+        "shell",
+        Fixed {
+            values: &[("", "Your own shell"), ("wsl", "wsl")],
+            custom: "Custom path\u{2026}",
+        },
+    ),
+];
 
 pub struct Setting {
     pub key: &'static str,
     pub name: &'static str,
     pub desc: &'static str,
-    pub control: Control,
 }
 
 pub struct Page {
     pub title: &'static str,
     pub desc: &'static str,
-    pub groups: &'static [(&'static str, &'static [Setting])],
+    pub groups: &'static [Group],
 }
 
-const fn switch(key: &'static str, name: &'static str, desc: &'static str) -> Setting {
-    Setting {
-        key,
-        name,
-        desc,
-        control: Control::Switch(true),
-    }
+pub struct Group {
+    pub title: &'static str,
+    pub about: &'static str,
+    pub settings: &'static [Setting],
 }
 
-pub const FILE_ICONS: &str = "file-icons";
+const APPEARANCE: Page = Page {
+    title: "Appearance",
+    desc: "How this desk looks. Changes apply at once and go to ~/.tofu/desk/config/theme.",
+    groups: &[],
+};
 
 const EDITOR: Page = Page {
     title: "Editor",
     desc: "How the editor draws your files. Changes go to ~/.tofu/desk/config/settings.json.",
-    groups: &[
-        (
-            "Files",
-            &[Setting {
-                key: FILE_ICONS,
-                name: "File icons",
-                desc: "The icon pack the file tree and the file tabs draw.",
-                control: Control::Pack,
-            }],
-        ),
-        (
-            "Editing",
-            &[
-                Setting {
-                    key: VIM,
-                    name: "Vim",
-                    desc: "Normal, insert and visual modes, and :w to save. A file opened after the change uses it.",
-                    control: Control::Stored,
-                },
-                Setting {
-                    key: GUIDES,
-                    name: "Whitespace guides",
-                    desc: "A thin line at each indent level.",
-                    control: Control::Stored,
-                },
-            ],
-        ),
-    ],
+    groups: &[Group {
+        title: "Editing",
+        about: "How the editor behaves while you type.",
+        settings: &[
+            Setting {
+                key: VIM,
+                name: "Vim",
+                desc: "Normal, insert and visual modes, and :w to save. A file opened after the change uses it.",
+            },
+            Setting {
+                key: GUIDES,
+                name: "Whitespace guides",
+                desc: "A thin line at each indent level.",
+            },
+        ],
+    }],
 };
 
 const TERMINAL: Page = Page {
@@ -147,95 +146,8 @@ const TERMINAL: Page = Page {
     groups: &[],
 };
 
-const GIT: Page = Page {
-    title: "Git",
-    desc: "How the desk reads and shows your repository. tofu itself never commits.",
-    groups: &[
-        (
-            "Changes",
-            &[
-                switch("autoRefresh", "Refresh on file and git events", ""),
-                switch("untracked", "Show untracked files", ""),
-                switch(
-                    "agentMarks",
-                    "Mark agent changes",
-                    "Violet marks on lines and rows an agent wrote this session.",
-                ),
-                switch("confirmDiscard", "Confirm before discarding", ""),
-            ],
-        ),
-        (
-            "Blame",
-            &[
-                switch("gitBlame", "Git blame on the current line", ""),
-                switch("agentBlame", "Agent blame on the current line", ""),
-            ],
-        ),
-    ],
-};
-
 const KEYS: Page = Page {
     title: "Keys",
     desc: "Click a binding and press the new chord. Changes go to ~/.tofu/desk/config/keymap.json.",
     groups: &[],
 };
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Effect {
-    Dither,
-    Fade,
-    Duotone,
-    Halftone,
-    Grain,
-    Scan,
-    Glow,
-}
-
-impl Effect {
-    pub const ALL: [Effect; 7] = [
-        Effect::Dither,
-        Effect::Fade,
-        Effect::Duotone,
-        Effect::Halftone,
-        Effect::Grain,
-        Effect::Scan,
-        Effect::Glow,
-    ];
-
-    pub fn name(self) -> &'static str {
-        match self {
-            Effect::Dither => "Dithered fade",
-            Effect::Fade => "Soft fade",
-            Effect::Duotone => "Duotone",
-            Effect::Halftone => "Halftone",
-            Effect::Grain => "Film grain",
-            Effect::Scan => "Scanlines",
-            Effect::Glow => "Glow",
-        }
-    }
-
-    pub fn sub(self) -> &'static str {
-        match self {
-            Effect::Dither => "the image dissolves into the window through ordered dots",
-            Effect::Fade => "a plain gradient into the window color",
-            Effect::Duotone => "grey, mapped between two theme colors",
-            Effect::Halftone => "a dot screen rising from the middle",
-            Effect::Grain => "fine noise over everything",
-            Effect::Scan => "thin lines, strongest at the top",
-            Effect::Glow => "a soft light rising from the bottom",
-        }
-    }
-
-    pub fn on_at_start(self) -> bool {
-        matches!(self, Effect::Dither | Effect::Scan)
-    }
-}
-
-pub const IMAGES: [&str; 3] = ["street.jpg", "room.jpg", "dusk.png"];
-pub const IMAGE_DIR: &str = "../../../../.local/desk-app/mockups/canvas/bg";
-pub const ADD_IMAGE_TELL: &str = "Picks an image or a short video from disk; it is copied to ~/.tofu/intro/ and never leaves the machine.";
-pub const OPEN_INTRO_TELL: &str = "Opens the intro screen in a new tab.";
-pub const PROJECT: &str = "notes-app";
-pub const LATEST_SESSION: &str = "clear-sable-eagle";
-pub const MODEL: &str = "Opus 5";
-pub const EFFORT: &str = "High";

@@ -11,7 +11,7 @@ use desk_ui::components::chat::{self, Block};
 use desk_ui::components::chip::{badge, chip};
 use desk_ui::components::code_editor::CodeEditor;
 use desk_ui::components::empty::empty_state;
-use desk_ui::components::form::{TextArea, segmented, switch_bare};
+use desk_ui::components::form::{TextArea, segmented, switch};
 use desk_ui::components::list::{CellKind, Column, Width, row, table};
 use desk_ui::components::scroll::scrollbar;
 use desk_ui::live::ActiveTheme;
@@ -566,9 +566,7 @@ impl Parts {
             Kind::Chip(text) => chip(text.clone(), None, theme).into_any_element(),
             Kind::Switch(toggle) => {
                 let flipped = Event::Change((key, (!toggle.on).to_string()));
-                switch_bare(id, toggle.label.clone(), toggle.on, theme)
-                    .gap_2()
-                    .child(toggle.label.clone())
+                switch(id, toggle.label.clone(), toggle.on, theme)
                     .on_click(on_click(&self.this, flipped))
                     .into_any_element()
             }
@@ -614,7 +612,7 @@ impl Parts {
             },
             Kind::Markdown(text) => {
                 let blocks = self.prose(&key, text);
-                chat::lead(id, "", &blocks, &[], theme).into_any_element()
+                chat::lead(id, "", &blocks, &[], Some((&*window, &**cx)), theme).into_any_element()
             }
             Kind::Table(shape) if !*windowed => {
                 *windowed = true;

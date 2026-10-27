@@ -1,4 +1,6 @@
 mod blame;
+#[cfg(feature = "screen-work")]
+mod docks;
 mod kit;
 mod listing;
 mod surfaces;
@@ -17,16 +19,18 @@ use desk_core::symbols::{Index, Symbol, indexed};
 use desk_core::syntax::Language;
 use desk_ui::component::{control, icon};
 use desk_ui::components::button::{ButtonKind, button};
-use desk_ui::components::card::{Header, inner_card, shell};
+use desk_ui::components::card::{Header, header_control, inner_card, shell};
 use desk_ui::components::code::{GutterMark, LineMarks, Marks};
 use desk_ui::components::code_editor::{Asked, CodeEditor, Highlight, Jump, Way, open_phase};
+use desk_ui::components::composer::picker;
 use desk_ui::components::empty::empty_state;
 use desk_ui::components::find::{Matching, compile};
 use desk_ui::components::form::TextInput;
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::history::inline_blame;
 use desk_ui::components::keymap::{Keymap, host};
-use desk_ui::components::overlay::{MenuItem, context_menu};
+use desk_ui::components::media_view::{self, MediaView};
+use desk_ui::components::overlay::{MenuButton, MenuItem, actions, context_menu};
 use desk_ui::components::sheet::Sheet;
 use desk_ui::components::tabs::{Tab, TabEvent, TabMark, connected_tabs};
 use desk_ui::components::title_bar::Github;
@@ -41,9 +45,10 @@ use desk_ui::live::ActiveTheme;
 use desk_ui::motion::reduced_motion;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    AnyElement, AnyView, App, AppContext, Bounds, ClickEvent, ClipboardItem, Context, CursorStyle,
-    Entity, Focusable, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point,
-    Render, SharedString, Subscription, Task, Window, canvas, div, prelude::*, px, relative,
+    AnyElement, AnyView, App, AppContext, Axis, Bounds, ClickEvent, ClipboardItem, Context,
+    CursorStyle, Div, Entity, Focusable, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
+    Pixels, Point, Render, SharedString, Stateful, Subscription, Task, Window, canvas, div,
+    prelude::*, px, relative,
 };
 use std::cell::Cell;
 
@@ -127,7 +132,12 @@ pub fn open_dir(
         .into())
 }
 
-type Opened = Result<Entity<CodeEditor>, SharedString>;
+type Opened = Result<Entity<CodeEditor>, NotCode>;
+
+enum NotCode {
+    Media(Entity<MediaView>),
+    Failed(SharedString),
+}
 type Shown<'a> = (&'a [Page], usize, Option<&'a PathBuf>);
 
 struct Repo {
@@ -147,7 +157,30 @@ struct Page {
     dirty: bool,
     stale: bool,
     on_disk: Option<u64>,
+    picture: Option<Picture>,
     _changes: Option<Subscription>,
+}
+
+struct Picture {
+    media: Entity<MediaView>,
+    face: Face,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Face {
+    Preview,
+    Source,
+}
+
+const FACES: [Face; 2] = [Face::Preview, Face::Source];
+
+impl Face {
+    fn label(self) -> &'static str {
+        match self {
+            Face::Preview => "Preview",
+            Face::Source => "Source",
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -297,8 +330,12 @@ pub struct Editor {
     choosing: Option<(Spot, Vec<Symbol>)>,
     choices_at: Option<Point<Pixels>>,
     surfaces: Surfaces,
+    face_menu: Entity<MenuButton>,
+    face_shown: Rc<Cell<Face>>,
+    #[cfg(feature = "screen-work")]
+    docks: docks::Docks,
     _tree: Subscription,
-    _pack: Subscription,
+    _pack: [Subscription; 2],
     _project: Subscription,
     _edited: Subscription,
     _watching: Option<Task<()>>,
@@ -312,7 +349,27 @@ pub struct Editor {
 impl Editor {
     fn new(folder: Folder, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let home = Home::find();
+        let face_shown = Rc::new(Cell::new(Face::Preview));
+        let face_menu = MenuButton::new(
+            Face::Preview.label().into(),
+            actions(FACES.map(Face::label)),
+            cx,
+        );
+        let (shown, desk) = (face_shown.clone(), cx.weak_entity());
+        face_menu.update(cx, |button, _| {
+            button.trigger(move |_, theme| picker("editor-svg-face", shown.get().label(), theme));
+            button.on_pick(move |at, window, cx| {
+                let Some(face) = FACES.get(*at).copied() else {
+                    return;
+                };
+                if let Err(error) = desk.update(cx, |desk, cx| desk.show_face(face, window, cx)) {
+                    eprintln!("desk: editor closed before its svg view was picked: {error}");
+                }
+            });
+        });
         let mut editor = Editor {
+            face_menu,
+            face_shown,
             _tree: cx.subscribe_in(&folder.tree, window, Self::tree_event),
             surfaces: Surfaces::new(window, cx),
             folder,
@@ -358,7 +415,12 @@ impl Editor {
             ahead: Vec::new(),
             choosing: None,
             choices_at: None,
-            _pack: cx.observe_global::<PickedPack>(Self::repack),
+            #[cfg(feature = "screen-work")]
+            docks: docks::Docks::closed(),
+            _pack: [
+                cx.observe_global::<PickedPack>(Self::repack),
+                cx.observe_global::<ActiveTheme>(Self::repack),
+            ],
             _project: cx.observe_global_in::<OpenProject>(window, Self::reroot),
             _edited: cx.observe_global::<EditedFile>(Self::edited),
             _watching: None,
@@ -419,6 +481,8 @@ impl Editor {
         self.asking = None;
         self.back.clear();
         self.ahead.clear();
+        #[cfg(feature = "screen-work")]
+        self.close_docks();
         self.start_watching(cx);
         self.refresh(cx);
         self.index(cx);
@@ -1034,7 +1098,11 @@ impl Editor {
             code.update(cx, |code, cx| code.follow(&before, path, seen, cx));
         }
         if let Some(page) = self.pages.get_mut(at) {
+            let face = page.picture.as_ref().map(|picture| picture.face);
             *page = fresh;
+            if let (Some(face), Some(picture)) = (face, &mut page.picture) {
+                picture.face = face;
+            }
         }
         if at == self.active {
             self.focus_changed(cx);
@@ -1101,7 +1169,7 @@ impl Editor {
     }
 
     fn repack(&mut self, cx: &mut Context<Self>) {
-        let PickedPack(pack) = *cx.global::<PickedPack>();
+        let pack = picked_pack(cx);
         if pack == self.folder.pack {
             return;
         }
@@ -1569,7 +1637,18 @@ impl Editor {
     }
 
     fn page(&self, full: PathBuf, git: Option<Arc<GitBinary>>, cx: &mut Context<Self>) -> Page {
-        let code = file_editor(&full, self, cx);
+        let picture = media_view::svg(&full).then(|| Picture {
+            media: cx.new(|cx| MediaView::new(Arc::from(full.as_path()), cx)),
+            face: Face::Preview,
+        });
+        let code = match media_view::shows(&full) && picture.is_none() {
+            true => {
+                eprintln!("desk: editor shows {} in the media view", full.display());
+                let path = Arc::from(full.as_path());
+                Err(NotCode::Media(cx.new(|cx| MediaView::new(path, cx))))
+            }
+            false => file_editor(&full, self, cx),
+        };
         let changes = code
             .as_ref()
             .ok()
@@ -1589,8 +1668,24 @@ impl Editor {
             dirty: false,
             stale: false,
             on_disk,
+            picture,
             _changes: changes,
         }
+    }
+
+    fn show_face(&mut self, face: Face, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(page) = self.pages.get_mut(self.active) else {
+            return;
+        };
+        let Some(picture) = &mut page.picture else {
+            return;
+        };
+        picture.face = face;
+        eprintln!("desk: editor {} shows {}", page.name, face.label());
+        if let (Face::Source, Ok(code)) = (face, &page.code) {
+            window.focus(&code.focus_handle(cx), cx);
+        }
+        cx.notify();
     }
 
     fn open_path(&mut self, full: PathBuf, how: Open, window: &mut Window, cx: &mut Context<Self>) {
@@ -1836,6 +1931,10 @@ impl Editor {
         if !dirty {
             page.stale = false;
             page.on_disk = Some(content_hash(&code.read(cx).buffer().text()));
+            if let Some(picture) = &mut page.picture {
+                let path = Arc::from(page.path.as_path());
+                picture.media = cx.new(|cx| MediaView::new(path, cx));
+            }
             if let Some(repo) = &mut page.repo {
                 repo.absent_from_head = false;
                 repo.wanted = None;
@@ -2273,31 +2372,13 @@ impl Editor {
             Ok(pair) => pair,
             Err(one) => return one,
         };
-        let line = theme.color(ColorToken::Separator);
-        let lit = theme.color(ColorToken::FocusRing);
-        let divider = div()
-            .id("editor-divider")
-            .group("editor-divider")
-            .flex()
-            .flex_none()
-            .justify_center()
-            .w(px(DIVIDER_HIT))
-            .h_full()
-            .cursor(CursorStyle::ResizeLeftRight)
-            .child(
-                div()
-                    .w(px(1.0))
-                    .h_full()
-                    .bg(line)
-                    .group_hover("editor-divider", move |mark| mark.bg(lit)),
-            )
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|editor, _: &MouseDownEvent, _, cx| {
-                    cx.stop_propagation();
-                    editor.dividing = true;
-                }),
-            );
+        let divider = divider("editor-divider", Axis::Horizontal, false, theme).on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|editor, _: &MouseDownEvent, _, cx| {
+                cx.stop_propagation();
+                editor.dividing = true;
+            }),
+        );
         let wrap = |pane: AnyElement| div().flex().min_w(px(PANE_LEAST)).min_h_0().child(pane);
         vec![
             wrap(left)
@@ -2362,7 +2443,24 @@ impl Editor {
     }
 }
 
+fn media_area(media: &Entity<MediaView>) -> AnyElement {
+    AnyView::from(media.clone())
+        .cached(
+            gpui::StyleRefinement::default()
+                .size_full()
+                .flex()
+                .flex_col(),
+        )
+        .into_any_element()
+}
+
 fn code_area(page: Option<&Page>, theme: &Theme) -> AnyElement {
+    let drawn = page
+        .and_then(|page| page.picture.as_ref())
+        .filter(|picture| picture.face == Face::Preview);
+    if let Some(picture) = drawn {
+        return media_area(&picture.media);
+    }
     match page.map(|page| &page.code) {
         None => empty_state(
             "editor-shut",
@@ -2385,7 +2483,8 @@ fn code_area(page: Option<&Page>, theme: &Theme) -> AnyElement {
                 .child(code.clone())
                 .into_any_element()
         }
-        Some(Err(error)) => empty_state(
+        Some(Err(NotCode::Media(media))) => media_area(media),
+        Some(Err(NotCode::Failed(error))) => empty_state(
             "editor-failure",
             "Could not open the file",
             Some(error.clone()),
@@ -2400,6 +2499,8 @@ fn code_area(page: Option<&Page>, theme: &Theme) -> AnyElement {
 
 impl Render for Editor {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(feature = "screen-work")]
+        let started = Instant::now();
         let theme = ActiveTheme::theme(cx);
         let asked = self.menu.asked.take();
         let painted = canvas(
@@ -2487,9 +2588,38 @@ impl Render for Editor {
             )
             .children(self.divided(panes, &theme, cx))
             .child(self.choices_menu(cx));
+        #[cfg(feature = "screen-work")]
+        let (main, controls, cover) = (
+            self.docked(main, started, &theme, cx),
+            Some(self.dock_buttons(window, cx)),
+            self.dock_cover(cx),
+        );
+        #[cfg(not(feature = "screen-work"))]
+        let (controls, cover) = (None::<AnyElement>, None::<Div>);
+        let faces = self
+            .pages
+            .get(self.active)
+            .and_then(|page| page.picture.as_ref())
+            .map(|picture| {
+                self.face_shown.set(picture.face);
+                header_control(self.face_menu.clone())
+            });
+        let controls = match faces {
+            None => controls,
+            Some(faces) => Some(
+                div()
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .gap_1()
+                    .child(faces)
+                    .children(controls)
+                    .into_any_element(),
+            ),
+        };
         let asking = self.asking.is_some();
         shell(
-            Header::Title(Some(Glyph::Code), "Editor".into(), None),
+            Header::Title(Some(Glyph::Code), "Editor".into(), controls),
             &theme,
         )
         .size_full()
@@ -2534,6 +2664,7 @@ impl Render for Editor {
         )
         .children(self.alerts(cx))
         .children(self.surfaces.palettes())
+        .children(cover)
     }
 }
 
@@ -2711,6 +2842,31 @@ fn spot_path(spot: &TreeSpot) -> &str {
 
 fn parent_of(path: &str) -> &str {
     path.rsplit_once('/').map_or("", |(parent, _)| parent)
+}
+
+fn divider(id: &'static str, sides: Axis, dragged: bool, theme: &Theme) -> Stateful<Div> {
+    let lit = theme.color(ColorToken::FocusRing);
+    let ink = match dragged {
+        true => lit,
+        false => theme.color(ColorToken::Separator),
+    };
+    let hit = div().id(id).group(id).flex().flex_none().justify_center();
+    let (hit, line) = match sides {
+        Axis::Horizontal => (
+            hit.w(px(DIVIDER_HIT))
+                .h_full()
+                .cursor(CursorStyle::ResizeLeftRight),
+            div().w(px(1.0)).h_full(),
+        ),
+        Axis::Vertical => (
+            hit.flex_col()
+                .h(px(DIVIDER_HIT))
+                .w_full()
+                .cursor(CursorStyle::ResizeUpDown),
+            div().h(px(1.0)).w_full(),
+        ),
+    };
+    hit.child(line.bg(ink).group_hover(id, move |mark| mark.bg(lit)))
 }
 
 fn name_of(path: &str) -> &str {
@@ -2927,7 +3083,7 @@ fn file_editor(path: &Path, owner: &Editor, cx: &mut Context<Editor>) -> Opened 
         Ok(editor) => editor,
         Err(error) => {
             eprintln!("desk: editor could not open {shown}: {error}");
-            return Err(error.into());
+            return Err(NotCode::Failed(error.into()));
         }
     };
     eprintln!(

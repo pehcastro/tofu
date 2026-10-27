@@ -4,7 +4,8 @@ use crate::desk::resets;
 use crate::modules::chat::Chat;
 use desk_core::model::Store;
 use desk_core::protocol::{
-    AccountStatus, Accounts, QuotaWindow, UsageAnswer, UsageAnswerState, WindowStatus,
+    AccountStatus, Accounts, CredentialReport, KeyStatus, QuotaWindow, Role, UsageAnswer,
+    UsageAnswerState, WindowStatus,
 };
 use desk_core::query::{Answer, display_name};
 use desk_ui::component::icon;
@@ -14,8 +15,8 @@ use desk_ui::components::charts::{DotMeter, cached};
 use desk_ui::components::chip::badge;
 use desk_ui::components::empty::{EmptyAction, empty_state};
 use desk_ui::components::paint::ink;
-use desk_ui::components::size::T3;
-use desk_ui::components::status_bar::Reset;
+use desk_ui::components::size::{T2, T3};
+use desk_ui::components::status_bar::{Reset, source_mark};
 use desk_ui::components::tooltip::{Edge, tooltip};
 use desk_ui::icon::Icon;
 use desk_ui::live::ActiveTheme;
@@ -35,6 +36,8 @@ const READING: &str =
     "tofu asks every signed-in provider for its windows, which takes about ten seconds.";
 const NO_TOFU: &str =
     "Limits reads quota from the tofu the work screen runs, and no work screen is open here.";
+const NO_KEY_USAGE: &str = "tofu reports no spend, calls or limit for this key";
+const SECTION_TITLE: f32 = 13.5;
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     if let Some(board) = board {
@@ -80,6 +83,7 @@ struct MeterKey {
 
 struct Block {
     source: String,
+    role: Role,
     account: AccountStatus,
     email: Option<String>,
     windows: Vec<WindowStatus>,
@@ -142,7 +146,8 @@ impl Limits {
                         .map(|window| format!("{} {:.0}%", window.id, window.used * 100.0))
                         .collect();
                     format!(
-                        "{} #{} {} [{}]",
+                        "{} {} #{} {} [{}]",
+                        String::from(block.role.clone()),
                         block.source,
                         block.account.id,
                         block.account.account,
@@ -150,9 +155,16 @@ impl Limits {
                     )
                 })
                 .collect();
+            let keys: Vec<String> = read
+                .value
+                .keys
+                .iter()
+                .map(|key| format!("{} {}", String::from(key.role.clone()), key.provider))
+                .collect();
             eprintln!(
-                "desk: limits shows {} from query.accounts at {} and {} quota.updated windows",
+                "desk: limits shows {} and keys {} from query.accounts at {} and {} quota.updated windows",
                 said.join("; "),
+                keys.join("; "),
                 read.at,
                 self.seen.quota.len()
             );
@@ -170,6 +182,7 @@ impl Limits {
             .flat_map(|subscription| {
                 subscription.accounts.iter().map(|account| Block {
                     source: subscription.source.clone(),
+                    role: subscription.role.clone(),
                     account: account.clone(),
                     email: account.email().map(str::to_owned),
                     windows: account.live(&subscription.source, &self.seen.quota),
@@ -364,6 +377,7 @@ impl Limits {
                         .flex()
                         .items_start()
                         .gap(px(8.0))
+                        .child(source_mark(&block.source, theme))
                         .child(
                             div()
                                 .flex_1()
@@ -373,7 +387,7 @@ impl Limits {
                                 .gap(px(2.0))
                                 .child(
                                     div()
-                                        .text_size(px(13.5))
+                                        .text_size(px(SECTION_TITLE))
                                         .font_weight(FontWeight::SEMIBOLD)
                                         .child(display_name(&block.source)),
                                 )
@@ -416,20 +430,27 @@ impl Limits {
                 .text_color(theme.color(ColorToken::StatusWarn))
         });
         let blocks = self.blocks();
+        let keys = self
+            .seen
+            .accounts
+            .read
+            .as_ref()
+            .map(|read| read.value.keys.clone())
+            .unwrap_or_default();
+        let line = usage
+            .missing
+            .iter()
+            .map(|missing| {
+                format!(
+                    "{}: {}, run {}",
+                    missing.label, missing.what, missing.command
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
         let body = if self.seen.accounts.read.is_none() {
             note("reading query.accounts", theme).into_any_element()
-        } else if blocks.is_empty() {
-            let line = usage
-                .missing
-                .iter()
-                .map(|missing| {
-                    format!(
-                        "{}: {}, run {}",
-                        missing.label, missing.what, missing.command
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
+        } else if blocks.is_empty() && keys.is_empty() {
             empty_state(
                 "limits-none",
                 "No subscription window to show",
@@ -441,11 +462,40 @@ impl Limits {
             )
             .into_any_element()
         } else {
-            let cards: Vec<Div> = blocks
-                .iter()
-                .map(|block| self.account(block, theme, window, cx))
+            let subscriptions: Vec<Div> = roles(blocks.iter().map(|block| &block.role))
+                .into_iter()
+                .map(|role| {
+                    let cards: Vec<Div> = blocks
+                        .iter()
+                        .filter(|block| block.role == role)
+                        .map(|block| self.account(block, theme, window, cx))
+                        .collect();
+                    let none = match (&role, line.is_empty()) {
+                        (Role::Llm, false) => line.clone(),
+                        _ => format!("no subscription serves the {}", role_name(&role)),
+                    };
+                    role_group(&role, cards, none, theme)
+                })
                 .collect();
-            panes().children(cards).into_any_element()
+            let keyed: Vec<Div> = roles(keys.iter().map(|key| &key.role))
+                .into_iter()
+                .map(|role| {
+                    let cards: Vec<Div> = keys
+                        .iter()
+                        .filter(|key| key.role == role)
+                        .map(|key| key_card(key, &usage.providers, theme))
+                        .collect();
+                    let none = format!("no API key set for the {}", role_name(&role));
+                    role_group(&role, cards, none, theme)
+                })
+                .collect();
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(18.0))
+                .child(section("Subscriptions", subscriptions, theme))
+                .child(section("API keys", keyed, theme))
+                .into_any_element()
         };
         div()
             .flex()
@@ -473,6 +523,112 @@ impl Limits {
         )
         .into_any_element()
     }
+}
+
+fn roles<'a>(present: impl Iterator<Item = &'a Role>) -> Vec<Role> {
+    let mut roles = vec![Role::Llm, Role::Classifier];
+    for role in present {
+        if !roles.contains(role) {
+            roles.push(role.clone());
+        }
+    }
+    roles
+}
+
+fn role_name(role: &Role) -> String {
+    match role {
+        Role::Llm => "LLM".to_owned(),
+        Role::Classifier => "Classifier".to_owned(),
+        Role::Search => "Search".to_owned(),
+        Role::Unknown(raw) => raw.clone(),
+    }
+}
+
+fn section(title: &'static str, groups: Vec<Div>, theme: &Theme) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(10.0))
+        .child(
+            div()
+                .px(px(4.0))
+                .text_size(px(SECTION_TITLE))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(ink(theme, T2))
+                .child(title),
+        )
+        .children(groups)
+}
+
+fn role_group(role: &Role, cards: Vec<Div>, none: String, theme: &Theme) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(6.0))
+        .child(caption(role_name(role), theme).px(px(4.0)))
+        .map(|group| {
+            if cards.is_empty() {
+                group.child(note(none, theme).px(px(4.0)))
+            } else {
+                group.child(panes().children(cards))
+            }
+        })
+}
+
+fn key_card(key: &KeyStatus, reports: &[CredentialReport], theme: &Theme) -> Div {
+    let report = reports.iter().find(|report| {
+        report.provider == key.provider || report.source.as_deref() == Some(&key.provider)
+    });
+    let used = match report {
+        None => NO_KEY_USAGE.to_owned(),
+        Some(report) => {
+            let windows: Vec<String> = report
+                .windows
+                .iter()
+                .filter(|window| window.used_reported)
+                .map(|window| format!("{} {:.0}%", window.id, window.used_fraction * 100.0))
+                .collect();
+            if windows.is_empty() {
+                format!("tofu reports it {}, with no spend or limit", report.state)
+            } else {
+                format!("tofu reports it {}, {}", report.state, windows.join(", "))
+            }
+        }
+    };
+    fraction(panel("API key", None, theme), 1.0, CARD_LEAST).child(
+        inner_card(theme)
+            .flex_col()
+            .gap(px(10.0))
+            .p(px(14.0))
+            .child(
+                div()
+                    .flex()
+                    .items_start()
+                    .gap(px(8.0))
+                    .child(source_mark(&key.provider, theme))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.0))
+                            .child(
+                                div()
+                                    .text_size(px(SECTION_TITLE))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .child(display_name(&key.provider)),
+                            )
+                            .child(
+                                ellipsis(div())
+                                    .text_size(px(12.0))
+                                    .text_color(ink(theme, T3))
+                                    .child(format!("from {}", key.variable)),
+                            ),
+                    ),
+            )
+            .child(note(used, theme)),
+    )
 }
 
 impl Render for Limits {

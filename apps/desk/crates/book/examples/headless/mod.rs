@@ -6,6 +6,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use desk_ui::components::glyph::Glyph;
+use desk_ui::components::logo::Brand;
 use desk_ui::icon::Icon;
 use desk_ui::theme::Mode;
 use gpui::{
@@ -61,6 +62,7 @@ fn assets() -> Result<Assets, String> {
     let mut registry = Icon::registry();
     registry
         .extend(glyphs)
+        .and_then(|()| registry.extend(Brand::entries()))
         .map_err(|duplicates| format!("two assets under one path: {duplicates:?}"))?;
     Ok(Assets { registry, paths })
 }

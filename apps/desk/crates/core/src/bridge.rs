@@ -15,7 +15,7 @@ use serde_json::Value;
 use crate::limits;
 use crate::protocol::{
     InitializeParams, InitializeResult, Notification, Refusal, Request, RequestId, ServerRequest,
-    SessionHolder, request,
+    request,
 };
 
 #[cfg(windows)]
@@ -109,13 +109,7 @@ impl fmt::Display for BridgeError {
     }
 }
 
-const SESSION_HELD: i64 = -32001;
-
-const REFUSAL_SENTENCES: [(i64, &str); 3] = [
-    (
-        SESSION_HELD,
-        "Another tofu holds this session and does not share it, so the desk shows its history and cannot follow it live.",
-    ),
+const REFUSAL_SENTENCES: [(i64, &str); 2] = [
     (
         -32700,
         "tofu could not read what the desk sent. Restart the desk; if it keeps happening, update the desk and tofu to the same version.",
@@ -147,17 +141,6 @@ const TURN_RUNNING: &str = "a turn is running";
 impl BridgeError {
     pub fn turn_running(&self) -> bool {
         matches!(self, BridgeError::Refused(refusal) if refusal.code == -32000 && refusal.message.starts_with(TURN_RUNNING))
-    }
-
-    pub fn held_by(&self) -> Option<SessionHolder> {
-        match self {
-            BridgeError::Refused(Refusal {
-                code: SESSION_HELD,
-                data: Some(data),
-                ..
-            }) => serde_json::from_value(data.clone()).ok(),
-            _ => None,
-        }
     }
 }
 
@@ -393,6 +376,10 @@ impl Bridge {
 
     pub fn pid(&self) -> u32 {
         lock(&self.child).id()
+    }
+
+    pub fn crash(&self) -> io::Result<()> {
+        lock(&self.child).kill()
     }
 
     pub fn stop(self) -> Result<ExitStatus, BridgeError> {

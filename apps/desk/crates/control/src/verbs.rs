@@ -160,6 +160,8 @@ verbs! {
     PluginGrant "plugin.grant" p::PluginGrant => r::Granted, [NotFound];
     PluginActivity "plugin.activity" p::PluginActivity => Vec<r::Activity>, [NotFound];
     PluginState "plugin.state" p::PluginStateQuery => r::PluginDump, [PluginUnavailable];
+    PluginCommands "plugin.commands" p::PluginRef => Vec<r::PluginCommand>, [NotFound, Refused];
+    PluginRun "plugin.run" p::PluginRun => r::CommandResult, [NotFound, UnknownCommand, BadParams, Refused, PluginTrapped, Timeout];
     CommandList "command.list" p::CommandList => r::CommandPage, [];
     CommandDescribe "command.describe" p::CommandName => r::Command, [UnknownCommand];
     CommandRun "command.run" p::CommandRun => r::CommandResult, [UnknownCommand, BadParams, DeniedByConsent, DeniedByGate, NeedsApproval, Busy, Timeout, PluginTrapped];

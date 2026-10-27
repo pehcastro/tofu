@@ -1,21 +1,22 @@
 use gpui::{
-    AnyElement, App, Bounds, FontWeight, PathBuilder, Pixels, Rgba, SharedString, Window, canvas,
-    div, point, prelude::*, px, relative, rgb,
+    AnyElement, App, Bounds, FontWeight, PathBuilder, Pixels, Point, Rgba, SharedString, Window,
+    canvas, div, point, prelude::*, px, relative,
 };
 
 use crate::components::glyph::Glyph;
-use crate::components::paint::{glyph, halo, ink, tint};
+use crate::components::paint::{glyph, ink, tint};
 use crate::components::size::{CHIP_FILL, T2};
-use crate::theme::{ColorToken, Mode, Theme};
+use crate::theme::{ColorToken, Theme};
 
 pub const ROW_HEIGHT: f32 = 32.0;
 pub const LANE_WIDTH: f32 = 16.0;
 pub const REF_BAND: f32 = 180.0;
 const EDGE_WIDTH: f32 = 2.0;
-const AVATAR: f32 = 20.0;
-const AVATAR_RING: f32 = 2.0;
-const HEAD_RING: f32 = 2.5;
-const FONT_INITIALS: f32 = 9.0;
+const DOT_RADIUS: f32 = 4.0;
+const DOT_STROKE: f32 = 2.0;
+const HEAD_DOT: f32 = 4.5;
+const HEAD_HALO: f32 = 7.0;
+const HEAD_HALO_STROKE: f32 = 1.5;
 const PILL_HEIGHT: f32 = 18.0;
 const PILL_PAD_X: f32 = 7.0;
 const PILL_GAP: f32 = 4.0;
@@ -24,13 +25,17 @@ const PILL_TINT: f32 = 0.18;
 const PILL_EDGE: f32 = 0.12;
 const PILL_MARK: f32 = 11.0;
 const LANE_COLORS: u8 = 10;
-const DARK_LANES: [u32; LANE_COLORS as usize] = [
-    0x4f8cff, 0xf2994a, 0x9b6dff, 0x43b97f, 0xe5534b, 0x3ec6c0, 0xe8c341, 0xf26d9c, 0x7a86ff,
-    0x8fbf4d,
-];
-const LIGHT_LANES: [u32; LANE_COLORS as usize] = [
-    0x2f6fe0, 0xc4661a, 0x7348e0, 0x1f8a57, 0xc4372f, 0x1a8f8a, 0x9a7a12, 0xc43f74, 0x4a56d0,
-    0x5a8a22,
+const LANE_TOKENS: [ColorToken; LANE_COLORS as usize] = [
+    ColorToken::AnsiBlue,
+    ColorToken::AnsiYellow,
+    ColorToken::AnsiMagenta,
+    ColorToken::AnsiGreen,
+    ColorToken::AnsiRed,
+    ColorToken::AnsiCyan,
+    ColorToken::AnsiBrightYellow,
+    ColorToken::AnsiBrightMagenta,
+    ColorToken::AnsiBrightGreen,
+    ColorToken::AnsiBrightBlue,
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -75,7 +80,7 @@ impl LaneRow {
             .map_or(0, |edge| edge.color)
     }
 
-    fn span(&self) -> u16 {
+    pub fn span(&self) -> u16 {
         let through = self.lanes_through.iter().map(|&(lane, _)| lane);
         let edges = self
             .edges
@@ -201,11 +206,7 @@ fn lane_index(ix: usize) -> u16 {
 }
 
 fn lane_rgba(color: u8, theme: &Theme) -> Rgba {
-    let palette = match theme.mode() {
-        Mode::Dark => DARK_LANES,
-        Mode::Light => LIGHT_LANES,
-    };
-    rgb(palette[usize::from(color % LANE_COLORS)])
+    theme.color(LANE_TOKENS[usize::from(color % LANE_COLORS)])
 }
 
 fn center(lane: u16) -> f32 {
@@ -215,114 +216,143 @@ fn center(lane: u16) -> f32 {
 struct Stroke {
     from: (f32, f32),
     to: (f32, f32),
-    color: Rgba,
+    lane: u8,
 }
 
 #[derive(IntoElement)]
 pub struct GraphCell {
-    span: u16,
-    node_lane: u16,
+    lanes: u16,
+    shift: u16,
+    node: f32,
     strokes: Vec<Stroke>,
-    initials: SharedString,
-    fill: Rgba,
-    ring: Rgba,
-    text: Rgba,
+    inks: [Rgba; LANE_COLORS as usize],
+    ring: u8,
     head: Option<Rgba>,
 }
 
-pub fn graph_cell(row: &LaneRow, initials: SharedString, head: bool, theme: &Theme) -> GraphCell {
-    let (top, middle, bottom) = (0.0, ROW_HEIGHT / 2.0, ROW_HEIGHT);
+pub fn graph_cell(
+    row: &LaneRow,
+    head: bool,
+    (lanes, shift): (u16, u16),
+    theme: &Theme,
+) -> GraphCell {
+    let gap = match head {
+        true => HEAD_HALO + HEAD_HALO_STROKE / 2.0,
+        false => DOT_RADIUS + DOT_STROKE / 2.0,
+    };
+    let (top, above, below, bottom) = (
+        0.0,
+        ROW_HEIGHT / 2.0 - gap,
+        ROW_HEIGHT / 2.0 + gap,
+        ROW_HEIGHT,
+    );
     let through = row.lanes_through.iter().map(|&(lane, color)| Stroke {
         from: (center(lane), top),
         to: (center(lane), bottom),
-        color: lane_rgba(color, theme),
+        lane: color,
     });
-    let edges = row.edges.iter().map(|edge| {
-        let (from_y, to_y) = match edge.kind {
-            EdgeKind::Straight => (top, bottom),
-            EdgeKind::BranchOut => (top, middle),
-            EdgeKind::MergeIn => (middle, bottom),
+    let edges = row.edges.iter().flat_map(|edge| {
+        let segments = match edge.kind {
+            EdgeKind::Straight => [Some((top, above)), Some((below, bottom))],
+            EdgeKind::BranchOut => [Some((top, above)), None],
+            EdgeKind::MergeIn => [Some((below, bottom)), None],
         };
-        Stroke {
-            from: (center(edge.from_lane), from_y),
-            to: (center(edge.to_lane), to_y),
-            color: lane_rgba(edge.color, theme),
-        }
+        segments
+            .into_iter()
+            .flatten()
+            .map(move |(from_y, to_y)| Stroke {
+                from: (center(edge.from_lane), from_y),
+                to: (center(edge.to_lane), to_y),
+                lane: edge.color,
+            })
     });
-    let author = initials.bytes().fold(0u8, |hash, byte| {
-        hash.wrapping_mul(31).wrapping_add(byte) % LANE_COLORS
-    });
+    let mut strokes: Vec<Stroke> = through.chain(edges).collect();
+    strokes.sort_by_key(|stroke| stroke.lane);
     GraphCell {
-        span: row.span(),
-        node_lane: row.node_lane,
-        strokes: through.chain(edges).collect(),
-        initials,
-        fill: lane_rgba(author, theme),
-        ring: lane_rgba(row.node_color(), theme),
-        text: theme.color(ColorToken::ButtonPrimaryText),
+        lanes,
+        shift,
+        node: center(row.node_lane),
+        strokes,
+        inks: LANE_TOKENS.map(|token| theme.color(token)),
+        ring: row.node_color(),
         head: head.then(|| theme.color(ColorToken::TextStrong)),
     }
 }
 
 impl RenderOnce for GraphCell {
     fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
-        let strokes = self.strokes;
         div()
-            .relative()
             .flex_none()
-            .w(px(f32::from(self.span) * LANE_WIDTH))
+            .w(px(f32::from(self.lanes) * LANE_WIDTH))
             .h(px(ROW_HEIGHT))
+            .overflow_hidden()
             .child(
                 canvas(
                     |_, _, _| (),
-                    move |bounds, (), window, _| paint_strokes(&strokes, bounds, window),
+                    move |bounds, (), window, _| self.paint(bounds, window),
                 )
-                .absolute()
-                .inset_0(),
-            )
-            .child(
-                div()
-                    .absolute()
-                    .left(px(center(self.node_lane) - AVATAR / 2.0))
-                    .top(px((ROW_HEIGHT - AVATAR) / 2.0))
-                    .size(px(AVATAR))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded_full()
-                    .bg(self.fill)
-                    .border(px(AVATAR_RING))
-                    .border_color(self.ring)
-                    .when_some(self.head, |disc, ring| {
-                        disc.shadow(vec![halo(ring, HEAD_RING)])
-                    })
-                    .text_size(px(FONT_INITIALS))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .line_height(relative(1.0))
-                    .text_color(self.text)
-                    .child(self.initials),
+                .size_full(),
             )
     }
 }
 
-fn paint_strokes(strokes: &[Stroke], bounds: Bounds<Pixels>, window: &mut Window) {
-    let at = |(x, y): (f32, f32)| bounds.origin + point(px(x), px(y));
-    for stroke in strokes {
-        let mut path = PathBuilder::stroke(px(EDGE_WIDTH));
-        path.move_to(at(stroke.from));
-        if stroke.from.0 == stroke.to.0 {
-            path.line_to(at(stroke.to));
-        } else {
-            let bend = (stroke.from.1 + stroke.to.1) / 2.0;
-            path.cubic_bezier_to(
-                at(stroke.to),
-                at((stroke.from.0, bend)),
-                at((stroke.to.0, bend)),
-            );
+impl GraphCell {
+    fn ink(&self, lane: u8) -> Rgba {
+        self.inks[usize::from(lane % LANE_COLORS)]
+    }
+
+    fn paint(&self, bounds: Bounds<Pixels>, window: &mut Window) {
+        let left = f32::from(self.shift) * LANE_WIDTH;
+        let at = |(x, y): (f32, f32)| bounds.origin + point(px(x - left), px(y));
+        for group in self.strokes.chunk_by(|a, b| a.lane == b.lane) {
+            let Some(first) = group.first() else {
+                continue;
+            };
+            let mut path = PathBuilder::stroke(px(EDGE_WIDTH));
+            for stroke in group {
+                path.move_to(at(stroke.from));
+                let bend = (stroke.from.1 + stroke.to.1) / 2.0;
+                path.cubic_bezier_to(
+                    at(stroke.to),
+                    at((stroke.from.0, bend)),
+                    at((stroke.to.0, bend)),
+                );
+            }
+            if let Ok(path) = path.build() {
+                window.paint_path(path, self.ink(first.lane));
+            }
         }
-        if let Ok(path) = path.build() {
-            window.paint_path(path, stroke.color);
+        let node = at((self.node, ROW_HEIGHT / 2.0));
+        let ring = self.ink(self.ring);
+        match self.head {
+            Some(halo) => {
+                paint_circle(PathBuilder::fill(), node, HEAD_DOT, ring, window);
+                let stroke = PathBuilder::stroke(px(HEAD_HALO_STROKE));
+                paint_circle(stroke, node, HEAD_HALO, halo, window);
+            }
+            None => {
+                let stroke = PathBuilder::stroke(px(DOT_STROKE));
+                paint_circle(stroke, node, DOT_RADIUS, ring, window);
+            }
         }
+    }
+}
+
+fn paint_circle(
+    mut path: PathBuilder,
+    at: Point<Pixels>,
+    radius: f32,
+    color: Rgba,
+    window: &mut Window,
+) {
+    let radii = point(px(radius), px(radius));
+    let side = |sign: f32| point(at.x + px(sign * radius), at.y);
+    path.move_to(side(1.0));
+    path.arc_to(radii, px(0.0), false, true, side(-1.0));
+    path.arc_to(radii, px(0.0), false, true, side(1.0));
+    path.close();
+    if let Ok(path) = path.build() {
+        window.paint_path(path, color);
     }
 }
 

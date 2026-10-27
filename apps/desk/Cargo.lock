@@ -1481,6 +1481,7 @@ dependencies = [
  "flume",
  "gpui-ce",
  "gpui_ce_platform",
+ "image",
  "serde",
  "serde_json",
  "toml",

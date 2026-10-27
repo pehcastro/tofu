@@ -20,15 +20,17 @@ use crate::components::card::caption;
 use crate::components::chip::{chip, flat_chip, kbd};
 use crate::components::glyph::Glyph;
 use crate::components::list::{HoverList, Marker, separator};
+use crate::components::logo::{Brand, logo};
 use crate::components::paint::{drop, glyph, ink, ring, tint};
 use crate::components::size::{
-    BADGE_FILL, CAPTION_TEXT, CHIP_FILL, FONT_BODY, GLASS_BLUR, GLASS_FILL, HEADER,
-    HEADER_PAD_LEFT, HOVER, MENU_PAD, MENU_WIDTH, POP_RING, POP_SHADOW_BLUR, POP_SHADOW_Y,
-    POPOVER_PAD_X, POPOVER_PAD_Y, POPOVER_WIDTH, RADIUS_POP, RADIUS_ROW, RISE, ROW_PAD_X,
-    ROW_PAD_Y, SHEET_HANDLE, SHEET_HANDLE_HEIGHT, SHEET_HANDLE_WIDTH, SHEET_INSET, SHEET_RING,
-    SHEET_SHADOW_Y, SHEET_SHARE, T1, TOAST_BOTTOM, TOAST_RIGHT, TOAST_WIDTH,
+    BADGE_FILL, CAPTION_TEXT, CHIP_FILL, FONT_BODY, GLASS_FILL, HEADER, HEADER_PAD_LEFT, HOVER,
+    MENU_PAD, MENU_WIDTH, POP_RING, POP_SHADOW_BLUR, POP_SHADOW_Y, POPOVER_PAD_X, POPOVER_PAD_Y,
+    POPOVER_WIDTH, RADIUS_POP, RADIUS_ROW, RISE, ROW_PAD_X, ROW_PAD_Y, SHEET_HANDLE,
+    SHEET_HANDLE_HEIGHT, SHEET_HANDLE_WIDTH, SHEET_INSET, SHEET_RING, SHEET_SHADOW_Y, SHEET_SHARE,
+    T1, TOAST_BOTTOM, TOAST_RIGHT, TOAST_WIDTH,
 };
 use crate::components::tooltip::overlay_shown;
+use crate::glass::Glass;
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
 use crate::metrics::{ICON_SMALL, ICON_TINY, RADIUS_CONTROL, TOAST_DISMISS};
@@ -76,17 +78,16 @@ fn floating(ring_alpha: f32, shadow_y: f32, theme: &Theme) -> Div {
 
 pub fn menu_surface(theme: &Theme) -> Div {
     let shadow = theme.color(ColorToken::Shadow);
-    floating(POP_RING, POP_SHADOW_Y, theme)
-        .bg(tint(theme.color(ColorToken::ToastFill), GLASS_FILL))
-        .backdrop_blur(px(GLASS_BLUR))
-        .shadow(vec![
-            ring(ink(theme, POP_RING)),
-            drop(
-                tint(shadow, shadow.alpha * MENU_SHADOW_SHARE),
-                MENU_SHADOW_Y,
-                MENU_SHADOW_BLUR,
-            ),
-        ])
+    let base = floating(POP_RING, POP_SHADOW_Y, theme)
+        .bg(tint(theme.color(ColorToken::ToastFill), GLASS_FILL));
+    Glass::themed(theme).apply(base).shadow(vec![
+        ring(ink(theme, POP_RING)),
+        drop(
+            tint(shadow, shadow.alpha * MENU_SHADOW_SHARE),
+            MENU_SHADOW_Y,
+            MENU_SHADOW_BLUR,
+        ),
+    ])
 }
 
 pub fn sheet(title: SharedString, actions: impl IntoElement, theme: &Theme) -> Div {
@@ -395,8 +396,16 @@ pub struct Popover {
     open: bool,
     placement: Placement,
     width: PanelWidth,
+    dismiss: Option<Dismiss>,
     children: Vec<AnyElement>,
 }
+
+pub enum Dismissed {
+    Escape,
+    Outside,
+}
+
+type Dismiss = Rc<dyn Fn(&Dismissed, &mut Window, &mut App)>;
 
 #[derive(Clone, Copy)]
 enum PanelWidth {
@@ -420,8 +429,17 @@ impl Popover {
             open: false,
             placement: Placement::below(),
             width: PanelWidth::Fixed(POPOVER_WIDTH),
+            dismiss: None,
             children: Vec::new(),
         }
+    }
+
+    pub fn on_dismiss(
+        mut self,
+        dismiss: impl Fn(&Dismissed, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.dismiss = Some(Rc::new(dismiss));
+        self
     }
 
     pub fn open(mut self, open: bool) -> Self {
@@ -462,6 +480,24 @@ impl RenderOnce for Popover {
                 PanelWidth::Fit { min } => panel.w_auto().min_w(px(min)),
             };
             let panel = panel.id("popover-panel").children(self.children);
+            let panel = match self.dismiss {
+                None => panel,
+                Some(dismiss) => {
+                    let (escaped, trigger) = (dismiss.clone(), self.anchor.clone());
+                    panel
+                        .on_key_down(move |event: &KeyDownEvent, window, cx| {
+                            if event.keystroke.key == "escape" {
+                                cx.stop_propagation();
+                                escaped(&Dismissed::Escape, window, cx);
+                            }
+                        })
+                        .on_mouse_down_out(move |event: &MouseDownEvent, window, cx| {
+                            if !trigger.get().contains(&event.position) {
+                                dismiss(&Dismissed::Outside, window, cx);
+                            }
+                        })
+                }
+            };
             open_beside(self.id, self.anchor, self.placement, panel, cx)
         });
         div().child(self.trigger).children(panel)
@@ -472,6 +508,13 @@ impl RenderOnce for Popover {
 pub enum MenuIcon {
     Icon(Icon),
     Glyph(Glyph),
+    Logo(Brand),
+}
+
+impl From<Brand> for MenuIcon {
+    fn from(brand: Brand) -> Self {
+        MenuIcon::Logo(brand)
+    }
 }
 
 impl From<Icon> for MenuIcon {
@@ -654,7 +697,7 @@ fn menu_entry(id: impl Into<ElementId>, item: &MenuItem, theme: &Theme) -> MenuR
                 menu_row(id, theme)
                     .aria_label(label.clone())
                     .text_color(danger)
-                    .children(lead.map(|lead| leading_in(lead, danger)))
+                    .children(lead.map(|lead| leading_in(lead, danger, theme)))
                     .child(div().flex_1().child(label.clone()))
                     .children(keys.clone().map(|keys| kbd(keys, theme))),
             )
@@ -720,13 +763,14 @@ pub fn menu(
 }
 
 fn leading(lead: MenuIcon, theme: &Theme) -> Div {
-    leading_in(lead, ink(theme, CAPTION_TEXT))
+    leading_in(lead, ink(theme, CAPTION_TEXT), theme)
 }
 
-fn leading_in(lead: MenuIcon, color: Rgba) -> Div {
+fn leading_in(lead: MenuIcon, color: Rgba, theme: &Theme) -> Div {
     let mark = match lead {
-        MenuIcon::Icon(mark) => icon(mark, ICON_SMALL, color),
-        MenuIcon::Glyph(mark) => glyph(mark, ICON_SMALL, color),
+        MenuIcon::Icon(mark) => icon(mark, ICON_SMALL, color).into_any_element(),
+        MenuIcon::Glyph(mark) => glyph(mark, ICON_SMALL, color).into_any_element(),
+        MenuIcon::Logo(mark) => logo(mark, px(ICON_SMALL), theme).into_any_element(),
     };
     div().flex_none().mr(px(ROW_PAD_X)).child(mark)
 }

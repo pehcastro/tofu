@@ -181,7 +181,16 @@ pub fn modes(id: &str, dir: &Path) -> Result<Modes, String> {
                 })
                 .collect::<Result<Modes, String>>()?
         }
-        Err(error) if error.kind() == ErrorKind::NotFound => Modes::new(),
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            match super::find(id).filter(|plugin| plugin.built_in().is_some()) {
+                Some(plugin) => manifest_of(plugin)?
+                    .capabilities
+                    .keys()
+                    .map(|&capability| (capability, Mode::Allow))
+                    .collect(),
+                None => Modes::new(),
+            }
+        }
         Err(error) => return Err(format!("{}: {error}", path.display())),
     };
     GRANTS

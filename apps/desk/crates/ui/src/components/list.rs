@@ -474,9 +474,9 @@ pub fn group_header(
     theme: &Theme,
 ) -> Stateful<Div> {
     let turn = if open {
-        std::f32::consts::FRAC_PI_2
-    } else {
         0.0
+    } else {
+        -std::f32::consts::FRAC_PI_2
     };
     pressed(
         div()

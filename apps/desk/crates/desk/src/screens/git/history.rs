@@ -12,22 +12,22 @@ use desk_ui::components::paint::ink;
 use desk_ui::components::scroll::scrollbar;
 use desk_ui::components::size::{FONT_BODY, FONT_SMALL, RADIUS_ROW, T2, T3};
 use desk_ui::components::skeleton::{pulse, skeleton_bar};
-use desk_ui::components::tooltip::{Edge, hover_card};
+use desk_ui::components::tooltip::{Edge, hover_card, tooltip};
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    AnyElement, App, ClickEvent, Context, Div, SharedString, Window, div, prelude::*, px,
-    uniform_list,
+    AnyElement, App, ClickEvent, Context, Div, Entity, Render, ScrollWheelEvent, SharedString,
+    StyleRefinement, Window, div, prelude::*, px, uniform_list,
 };
 
-use super::model::{GitScreen, Loaded, Panel};
+use super::model::{GitScreen, Loaded, Panel, Shown};
 use super::sync::short;
 
 const PAGE: usize = 200;
 const AHEAD: usize = 60;
 const SKELETON_ROWS: usize = 14;
 const PILLS_SHOWN: usize = 2;
-const MAX_LANES: u16 = 12;
+const MAX_LANES: u16 = 8;
 const SHA_WIDTH: f32 = 64.0;
 const TIME_WIDTH: f32 = 40.0;
 const ROW_PAD: f32 = 10.0;
@@ -41,19 +41,34 @@ const SECONDS: [(i64, &str); 5] = [
 ];
 const MINUTE: i64 = 60;
 
-#[derive(Default)]
 pub struct History {
     commits: Vec<Commit>,
+    authors: Vec<SharedString>,
     lanes: Vec<LaneRow>,
     state: LaneState,
-    span: u16,
+    hidden: u16,
+    shift: u16,
+    drift: f32,
     more: bool,
     paging: bool,
     filled: bool,
     generation: u64,
+    pointer: Entity<Pointer>,
 }
 
-type Laid = (Vec<Commit>, Vec<LaneRow>, LaneState);
+#[derive(Clone, Copy)]
+struct Spot {
+    at: usize,
+    top: f32,
+}
+
+#[derive(Default)]
+struct Pointer {
+    lit: Option<Spot>,
+    tip: Option<(Spot, SharedString)>,
+}
+
+type Laid = (Vec<Commit>, Vec<SharedString>, Vec<LaneRow>, LaneState);
 
 fn lay(commits: Vec<Commit>, mut state: LaneState) -> Laid {
     let rows: Vec<(String, Vec<String>)> = commits
@@ -61,40 +76,73 @@ fn lay(commits: Vec<Commit>, mut state: LaneState) -> Laid {
         .map(|commit| (commit.sha.clone(), commit.parents.clone()))
         .collect();
     let lanes = lay_out_from(&mut state, &rows);
-    (commits, lanes, state)
-}
-
-fn span(lanes: &[LaneRow]) -> u16 {
-    lanes
+    let authors = commits
         .iter()
-        .flat_map(|row| {
-            row.lanes_through
-                .iter()
-                .map(|&(lane, _)| lane)
-                .chain(
-                    row.edges
-                        .iter()
-                        .flat_map(|edge| [edge.from_lane, edge.to_lane]),
-                )
-                .chain([row.node_lane])
-        })
-        .max()
-        .map_or(1, |widest| widest.saturating_add(1))
-        .min(MAX_LANES)
+        .map(|commit| format!("{} <{}>", commit.author, commit.email).into())
+        .collect();
+    (commits, authors, lanes, state)
 }
 
 impl History {
-    fn keep(&mut self, (commits, lanes, state): Laid, asked: usize, appended: bool) {
+    pub(super) fn new(cx: &mut Context<GitScreen>) -> History {
+        History {
+            commits: Vec::new(),
+            authors: Vec::new(),
+            lanes: Vec::new(),
+            state: LaneState::default(),
+            hidden: 0,
+            shift: 0,
+            drift: 0.0,
+            more: false,
+            paging: false,
+            filled: false,
+            generation: 0,
+            pointer: cx.new(|_| Pointer::default()),
+        }
+    }
+
+    fn keep(&mut self, (commits, authors, lanes, state): Laid, asked: usize, appended: bool) {
         if !appended {
             self.commits.clear();
+            self.authors.clear();
             self.lanes.clear();
-            self.span = 0;
         }
         self.more = commits.len() == asked;
-        self.span = self.span.max(span(&lanes));
         self.commits.extend(commits);
+        self.authors.extend(authors);
         self.lanes.extend(lanes);
         self.state = state;
+    }
+
+    fn frame(&mut self, rows: impl Iterator<Item = usize>) -> (u16, u16) {
+        let wide = rows
+            .filter_map(|at| self.lanes.get(at))
+            .map(LaneRow::span)
+            .max()
+            .unwrap_or(1)
+            .max(1);
+        let shown = wide.min(MAX_LANES);
+        self.hidden = wide.saturating_sub(shown);
+        self.shift = self.shift.min(self.hidden);
+        (shown, self.shift)
+    }
+
+    fn slide(&mut self, by: f32) -> bool {
+        let before = self.shift;
+        self.drift += by;
+        while self.drift >= LANE_WIDTH && self.shift < self.hidden {
+            self.drift -= LANE_WIDTH;
+            self.shift += 1;
+        }
+        while self.drift <= -LANE_WIDTH && self.shift > 0 {
+            self.drift += LANE_WIDTH;
+            self.shift -= 1;
+        }
+        if (self.shift == self.hidden && self.drift > 0.0) || (self.shift == 0 && self.drift < 0.0)
+        {
+            self.drift = 0.0;
+        }
+        self.shift != before
     }
 }
 
@@ -108,10 +156,16 @@ impl GitScreen {
             move |git| Ok(lay(git.log(0, asked)?, LaneState::default())),
             move |screen, read, _| {
                 if screen.history.generation != generation {
-                    return;
+                    return Shown::Same;
                 }
                 screen.history.paging = false;
                 match read {
+                    Loaded::Ready(laid)
+                        if screen.history.filled && laid.0 == screen.history.commits =>
+                    {
+                        screen.history.keep(laid, asked, false);
+                        Shown::Same
+                    }
                     Loaded::Ready(laid) => {
                         if !screen.history.filled {
                             eprintln!(
@@ -123,12 +177,14 @@ impl GitScreen {
                         }
                         screen.history.filled = true;
                         screen.history.keep(laid, asked, false);
+                        Shown::Changed
                     }
                     Loaded::Failed(error) => {
                         eprintln!("desk: git: history was not read: {error}");
                         screen.history.filled = true;
+                        Shown::Changed
                     }
-                    Loaded::Waiting => {}
+                    Loaded::Waiting => Shown::Same,
                 }
             },
             cx,
@@ -147,16 +203,20 @@ impl GitScreen {
             move |git| Ok(lay(git.log(skip, PAGE)?, state)),
             move |screen, read, _| {
                 if screen.history.generation != generation {
-                    return;
+                    return Shown::Same;
                 }
                 screen.history.paging = false;
                 match read {
-                    Loaded::Ready(laid) => screen.history.keep(laid, PAGE, true),
+                    Loaded::Ready(laid) => {
+                        screen.history.keep(laid, PAGE, true);
+                        Shown::Changed
+                    }
                     Loaded::Failed(error) => {
                         screen.history.more = false;
                         eprintln!("desk: git: the next history page was not read: {error}");
+                        Shown::Same
                     }
-                    Loaded::Waiting => {}
+                    Loaded::Waiting => Shown::Same,
                 }
             },
             cx,
@@ -175,16 +235,6 @@ fn ago(when: i64) -> String {
         || format!("{}m", past / MINUTE),
         |(unit, name)| format!("{}{name}", past / unit),
     )
-}
-
-fn initials(author: &str) -> SharedString {
-    author
-        .split_whitespace()
-        .filter_map(|word| word.chars().next())
-        .take(2)
-        .flat_map(char::to_uppercase)
-        .collect::<String>()
-        .into()
 }
 
 fn pills(screen: &GitScreen, commit: &Commit) -> Vec<(SharedString, PillKind)> {
@@ -278,8 +328,15 @@ fn band(
         .children(more)
 }
 
-fn row_base(id: impl Into<gpui::ElementId>, picked: bool, theme: &Theme) -> gpui::Stateful<Div> {
-    let hover = theme.color(ColorToken::StateActive);
+fn row_base(
+    id: impl Into<gpui::ElementId>,
+    screen: &GitScreen,
+    at: usize,
+    author: Option<SharedString>,
+    picked: bool,
+    theme: &Theme,
+) -> gpui::Stateful<Div> {
+    let (pointer, list) = (screen.history.pointer.clone(), screen.list.clone());
     div()
         .id(id)
         .flex()
@@ -291,25 +348,98 @@ fn row_base(id: impl Into<gpui::ElementId>, picked: bool, theme: &Theme) -> gpui
         .px(px(ROW_PAD))
         .cursor_pointer()
         .text_size(px(FONT_BODY))
-        .when(picked, |row| row.bg(hover))
-        .hover(move |row| row.bg(hover))
+        .when(picked, |row| row.bg(theme.color(ColorToken::StateActive)))
+        .on_hover(move |inside, _, cx| {
+            let scrolled = list.0.borrow().base_handle.offset().y.as_f32();
+            let spot = Spot {
+                at,
+                top: at as f32 * ROW_HEIGHT + scrolled,
+            };
+            pointer.update(cx, |pointer, cx| {
+                pointer.hover(spot, author.clone(), *inside, cx)
+            });
+        })
+}
+
+impl Pointer {
+    fn hover(
+        &mut self,
+        spot: Spot,
+        author: Option<SharedString>,
+        inside: bool,
+        cx: &mut Context<Self>,
+    ) {
+        match inside {
+            true => {
+                self.lit = Some(spot);
+                if let Some(author) = author {
+                    self.tip = Some((spot, author));
+                }
+            }
+            false if self.lit.is_some_and(|lit| lit.at == spot.at) => self.lit = None,
+            false => return,
+        }
+        cx.notify();
+    }
+}
+
+impl Render for Pointer {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        desk_perf::span!("git-hover");
+        let theme = ActiveTheme::theme(cx);
+        let lit = self.lit.map(|spot| {
+            div()
+                .absolute()
+                .left_0()
+                .top(px(spot.top))
+                .w_full()
+                .h(px(ROW_HEIGHT))
+                .bg(theme.color(ColorToken::StateActive))
+        });
+        let tip = self.tip.clone().map(|(spot, author)| {
+            let target = div()
+                .id("git-hover")
+                .top(px(spot.top))
+                .w_full()
+                .h(px(ROW_HEIGHT));
+            tooltip(
+                "git-commit-author",
+                target,
+                Edge::FrameStart,
+                author,
+                &theme,
+                window,
+                cx,
+            )
+        });
+        div()
+            .size_full()
+            .overflow_hidden()
+            .children(lit)
+            .children(tip)
+    }
 }
 
 fn graph_width(span: u16) -> f32 {
     f32::from(span) * LANE_WIDTH
 }
 
-fn uncommitted(screen: &GitScreen, theme: &Theme, cx: &mut Context<GitScreen>) -> AnyElement {
+fn uncommitted(
+    screen: &GitScreen,
+    lanes: u16,
+    theme: &Theme,
+    cx: &mut Context<GitScreen>,
+) -> AnyElement {
     let count = screen.snapshot().changes.len();
     let picked = matches!(screen.panel(), Panel::Changes);
     let files = match count {
         1 => "1 file".to_owned(),
         count => format!("{count} files"),
     };
-    row_base("git-uncommitted", picked, theme)
+    row_base("git-uncommitted", screen, 0, None, picked, theme)
         .on_click(cx.listener(|screen, _: &ClickEvent, _, cx| screen.show(Panel::Changes, cx)))
         .child(div().flex_none().w(px(REF_BAND)))
-        .child(div().flex_none().w(px(graph_width(screen.history.span))))
+        .child(div().flex_none().w(px(graph_width(lanes))))
         .child(
             div()
                 .flex()
@@ -325,7 +455,8 @@ fn uncommitted(screen: &GitScreen, theme: &Theme, cx: &mut Context<GitScreen>) -
 
 fn commit_row(
     screen: &GitScreen,
-    at: usize,
+    (ix, at): (usize, usize),
+    graph: (u16, u16),
     theme: &Theme,
     window: &mut Window,
     cx: &mut Context<GitScreen>,
@@ -336,46 +467,67 @@ fn commit_row(
     let picked = matches!(screen.panel(), Panel::Commit(sha) if *sha == commit.sha);
     let lane = lanes.node_color();
     let sha = commit.sha.clone();
-    Some(
-        row_base(("git-commit", at), picked, theme)
-            .on_click(cx.listener(move |screen, _: &ClickEvent, _, cx| {
-                screen.show(Panel::Commit(sha.clone()), cx)
-            }))
-            .child(band(screen, at, commit, lane, theme, window, cx))
-            .child(
-                div()
-                    .flex_none()
-                    .w(px(graph_width(screen.history.span)))
-                    .overflow_hidden()
-                    .child(graph_cell(lanes, initials(&commit.author), head, theme)),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .truncate()
-                    .child(commit.subject.clone()),
-            )
-            .child(
-                div()
-                    .flex_none()
-                    .w(px(SHA_WIDTH))
-                    .font_family(mono(theme))
-                    .text_size(px(FONT_SMALL))
-                    .text_color(ink(theme, T2))
-                    .child(short(&commit.sha).to_owned()),
-            )
-            .child(
-                div()
-                    .flex_none()
-                    .w(px(TIME_WIDTH))
-                    .text_right()
-                    .text_size(px(FONT_SMALL))
-                    .text_color(ink(theme, T3))
-                    .child(ago(commit.when)),
-            )
-            .into_any_element(),
-    )
+    let slides = screen.history.hidden > 0;
+    let author = screen.history.authors.get(at).cloned();
+    let row = row_base(("git-commit", at), screen, ix, author, picked, theme)
+        .on_click(cx.listener(move |screen, _: &ClickEvent, _, cx| {
+            screen.show(Panel::Commit(sha.clone()), cx)
+        }))
+        .child(band(screen, at, commit, lane, theme, window, cx))
+        .child(
+            div()
+                .flex_none()
+                .when(slides, |column| {
+                    column.on_scroll_wheel(cx.listener(slide_graph))
+                })
+                .child(graph_cell(lanes, head, graph, theme)),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .child(commit.subject.clone()),
+        )
+        .child(
+            div()
+                .flex_none()
+                .w(px(SHA_WIDTH))
+                .font_family(mono(theme))
+                .text_size(px(FONT_SMALL))
+                .text_color(ink(theme, T2))
+                .child(short(&commit.sha).to_owned()),
+        )
+        .child(
+            div()
+                .flex_none()
+                .w(px(TIME_WIDTH))
+                .text_right()
+                .text_size(px(FONT_SMALL))
+                .text_color(ink(theme, T3))
+                .child(ago(commit.when)),
+        );
+    Some(row.into_any_element())
+}
+
+fn slide_graph(
+    screen: &mut GitScreen,
+    event: &ScrollWheelEvent,
+    window: &mut Window,
+    cx: &mut Context<GitScreen>,
+) {
+    let delta = event.delta.pixel_delta(window.line_height());
+    let across = match event.modifiers.shift && delta.x == px(0.0) {
+        true => delta.y,
+        false => delta.x,
+    };
+    if across == px(0.0) {
+        return;
+    }
+    cx.stop_propagation();
+    if screen.history.slide(-f32::from(across)) {
+        cx.notify();
+    }
 }
 
 fn skeleton(theme: &Theme, cx: &App) -> AnyElement {
@@ -412,22 +564,36 @@ fn rows(
     window: &mut Window,
     cx: &mut Context<GitScreen>,
 ) -> Vec<AnyElement> {
+    desk_perf::span!("git-rows");
     let dirty = usize::from(!screen.snapshot().changes.is_empty());
     if range.end.saturating_add(AHEAD) >= screen.history.commits.len().saturating_add(dirty) {
         screen.next_page(cx);
     }
     let theme = ActiveTheme::theme(cx);
+    let graph = screen
+        .history
+        .frame(range.clone().filter_map(|at| at.checked_sub(dirty)));
     range
-        .filter_map(|at| match at.checked_sub(dirty) {
-            None => Some(uncommitted(screen, &theme, cx)),
-            Some(at) => commit_row(screen, at, &theme, window, cx),
+        .filter_map(|ix| match ix.checked_sub(dirty) {
+            None => Some(uncommitted(screen, graph.0, &theme, cx)),
+            Some(at) => commit_row(screen, (ix, at), graph, &theme, window, cx),
         })
         .collect()
 }
 
-pub fn render(screen: &GitScreen, theme: &Theme, cx: &mut Context<GitScreen>) -> AnyElement {
+pub fn pointer(screen: &GitScreen) -> AnyElement {
+    screen
+        .history
+        .pointer
+        .clone()
+        .cached(StyleRefinement::default().absolute().inset_0())
+        .into_any_element()
+}
+
+pub fn list(screen: &GitScreen, cx: &mut Context<GitScreen>) -> AnyElement {
+    let theme = ActiveTheme::theme(cx);
     if !screen.history.filled {
-        return skeleton(theme, cx);
+        return skeleton(&theme, cx);
     }
     let dirty = usize::from(!screen.snapshot().changes.is_empty());
     let count = screen.history.commits.len().saturating_add(dirty);

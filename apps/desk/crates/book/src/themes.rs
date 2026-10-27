@@ -51,7 +51,7 @@ pub fn set_mode(name: &SharedString, mode: Mode, cx: &mut App) -> Result<(), Str
 }
 
 pub fn apply(choice: &Choice, mode: Option<Mode>, cx: &mut App) -> Result<(), String> {
-    live::start(choice.dir.clone(), choice.name.to_string(), cx)
+    live::start(vec![choice.dir.clone()], choice.name.to_string(), cx)
         .map_err(|error| format!("theme {} does not load: {error}", choice.name))?;
     if let Some(mode) = mode.filter(|mode| *mode != ActiveTheme::mode(cx)) {
         set_mode(&choice.name, mode, cx)?;

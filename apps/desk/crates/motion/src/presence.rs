@@ -35,6 +35,17 @@ impl Presence {
         }
     }
 
+    pub fn shown(enter: Duration, exit: Duration) -> Self {
+        Self {
+            open: true,
+            from: SpringState {
+                position: 1.0,
+                velocity: 0.0,
+            },
+            ..Self::new(enter, exit)
+        }
+    }
+
     pub fn set_open(&mut self, open: bool, now: Instant) {
         if open != self.open {
             self.from = self.state(now);

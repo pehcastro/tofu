@@ -77,10 +77,14 @@ pub enum Glyph {
     Image,
     Sun,
     Moon,
+    At,
+    Fork,
+    Search,
+    Arrow,
 }
 
 impl Glyph {
-    const ALL: [Glyph; 59] = [
+    const ALL: [Glyph; 63] = [
         Glyph::Pin,
         Glyph::Lock,
         Glyph::Check,
@@ -140,6 +144,10 @@ impl Glyph {
         Glyph::Image,
         Glyph::Sun,
         Glyph::Moon,
+        Glyph::At,
+        Glyph::Fork,
+        Glyph::Search,
+        Glyph::Arrow,
     ];
 
     pub const WORKSPACE: [(&'static str, Glyph); 12] = [
@@ -225,6 +233,10 @@ impl Glyph {
             Glyph::Image => "glyphs/image.svg",
             Glyph::Sun => "glyphs/sun.svg",
             Glyph::Moon => "glyphs/moon.svg",
+            Glyph::At => "glyphs/at.svg",
+            Glyph::Fork => "glyphs/fork.svg",
+            Glyph::Search => "glyphs/search.svg",
+            Glyph::Arrow => "glyphs/arrow.svg",
         }
     }
 
@@ -335,6 +347,16 @@ impl Glyph {
                 r#"<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>"#
             ),
             Glyph::Moon => stroked!(r#"<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>"#),
+            Glyph::At => stroked!(
+                r#"<circle cx="12" cy="12" r="3.5"/><path d="M15.5 12v1.5a2.5 2.5 0 0 0 5 0V12a8.5 8.5 0 1 0-3.3 6.7"/>"#
+            ),
+            Glyph::Fork => stroked!(
+                r#"<circle cx="12" cy="5" r="2"/><path d="M12 7v4M12 11l-6 8M12 11l6 8"/><path d="M6 15v4h4M18 15v4h-4"/>"#
+            ),
+            Glyph::Search => {
+                stroked!(r#"<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>"#)
+            }
+            Glyph::Arrow => stroked!(r#"<path d="M4 12h15M13 6l6 6-6 6"/>"#),
         }
     }
 

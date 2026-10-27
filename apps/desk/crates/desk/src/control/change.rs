@@ -80,6 +80,12 @@ fn tile_open(open: &TileOpen, work: &Entity<Work>, cx: &mut App) -> Answered {
         ));
     }
     let module = tiled_module(&open.module, open.plugin.as_deref())?;
+    if module == Module::Viewer {
+        return Err((
+            ErrorCode::BadParams,
+            "a viewer tile opens from a file, not from tile.open".to_owned(),
+        ));
+    }
     let target = open.target.as_ref().map(target).transpose()?;
     apply(
         work,
@@ -237,6 +243,7 @@ fn tiled_module(
         shapes::Module::Terminal => Module::Terminal,
         shapes::Module::Browser => Module::Browser,
         shapes::Module::SourceControl => Module::SourceControl,
+        shapes::Module::Viewer => Module::Viewer,
         shapes::Module::Plugin => Module::Plugin(
             plugin
                 .ok_or_else(|| {

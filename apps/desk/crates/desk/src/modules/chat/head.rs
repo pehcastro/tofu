@@ -2,7 +2,9 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use desk_core::model::Store;
+use desk_core::protocol::{Member, MemberKind};
 use desk_core::sessions::SessionRow;
+use desk_ui::components::avatar::spinner;
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::paint::{glyph, ink};
 use desk_ui::components::size::{FONT_SMALL, HOVER, RADIUS_CHIP, T2, T3, TRACE};
@@ -10,26 +12,59 @@ use desk_ui::components::tooltip::{Edge, tooltip};
 use desk_ui::live::ActiveTheme;
 use desk_ui::metrics::ICON_SMALL;
 use gpui::{
-    ClipboardItem, Context, Entity, IntoElement, Render, Task, Window, div, prelude::*, px,
+    App, ClipboardItem, Context, Entity, IntoElement, Render, Task, Window, div, prelude::*, px,
 };
 
 const TICK: Duration = Duration::from_secs(1);
 const COPY: &str = "Copy the session name";
 const FORKS: &str = "forks in this session's line";
+const FORKS_SCREEN: &str = "forks";
 const OPENING: &str = "Opening session";
+const NONE_OPEN: &str = "No session open";
 const PENDING: &str = "--";
 const DURATION_WIDTH: f32 = 48.0;
+
+fn forks_in(generations: Option<i64>) -> i64 {
+    generations.map_or(0, |line| line.saturating_sub(1).max(0))
+}
+
+pub(super) fn forks(store: &Store) -> Option<i64> {
+    store
+        .info
+        .read
+        .as_ref()
+        .filter(|read| store.open.as_ref() == Some(&read.value.id))
+        .map(|read| forks_in(read.value.generations))
+}
+
+fn member_word(kind: &MemberKind) -> &str {
+    match kind {
+        MemberKind::Tui => "TUI",
+        MemberKind::Desk => "Desk",
+        MemberKind::Serve => "Serve",
+        MemberKind::Unknown(kind) => kind,
+    }
+}
 
 pub struct SessionHead {
     store: Entity<Store>,
     row: Option<SessionRow>,
+    loading: Option<String>,
     _tick: Task<()>,
 }
 
 struct Known {
     handle: String,
-    generations: Option<i64>,
+    generation: Option<i64>,
     at: String,
+}
+
+impl Known {
+    fn count(&self) -> String {
+        self.generation
+            .or_else(|| self.handle.rsplit_once('.')?.1.parse().ok())
+            .map_or_else(|| PENDING.to_owned(), |generation| generation.to_string())
+    }
 }
 
 impl SessionHead {
@@ -50,8 +85,31 @@ impl SessionHead {
         SessionHead {
             store,
             row: None,
+            loading: None,
             _tick: tick,
         }
+    }
+
+    pub(super) fn loading(&mut self, loading: Option<String>, cx: &mut Context<Self>) {
+        if self.loading != loading {
+            self.loading = loading;
+            cx.notify();
+        }
+    }
+
+    fn members<'a>(&'a self, store: &'a Store) -> &'a [Member] {
+        let row = self
+            .row
+            .as_ref()
+            .filter(|row| store.open.as_ref().is_none_or(|open| *open == row.id));
+        store
+            .open
+            .as_ref()
+            .and_then(|open| store.sessions.get(open))
+            .map(|session| session.members.as_slice())
+            .filter(|members| !members.is_empty())
+            .or_else(|| row.map(|row| row.members.as_slice()))
+            .unwrap_or_default()
     }
 
     pub fn show(&mut self, row: SessionRow, cx: &mut Context<Self>) {
@@ -68,17 +126,29 @@ impl SessionHead {
         match (&store.info.read, row) {
             (Some(read), _) if read.value.id == *wanted => Some(Known {
                 handle: read.value.handle.clone(),
-                generations: read.value.generations,
+                generation: read.value.generation,
                 at: read.value.at.clone(),
             }),
             (_, Some(row)) => Some(Known {
                 handle: row.handle.clone(),
-                generations: row.generations,
+                generation: row.generation,
                 at: row.at.clone(),
             }),
             (_, None) => None,
         }
     }
+}
+
+fn open_forks(window: &mut Window, cx: &mut App) {
+    let Some(Some(desk)) = window.root::<crate::desk::Desk>() else {
+        return eprintln!("desk: chat head is not inside the desk, so it cannot open forks");
+    };
+    eprintln!("desk: chat head opens forks");
+    window.defer(cx, move |window, cx| {
+        if let Err(error) = desk.update(cx, |desk, cx| desk.open_screen(FORKS_SCREEN, window, cx)) {
+            eprintln!("desk: chat head could not open forks: {error}");
+        }
+    });
 }
 
 fn took(since: &str) -> Option<String> {
@@ -97,23 +167,31 @@ impl Render for SessionHead {
         let theme = ActiveTheme::theme(cx);
         let store = self.store.read(cx);
         let info = self.known(store);
+        let members: Vec<(String, String)> = self
+            .members(store)
+            .iter()
+            .map(|member| {
+                (
+                    member_word(&member.kind).to_owned(),
+                    format!("process {}", member.process),
+                )
+            })
+            .collect();
         let name = info
             .as_ref()
             .map(|info| info.handle.clone())
             .or_else(|| store.open.clone());
         let title = match &name {
             Some(name) => div().child(name.clone()),
-            None => div().text_color(ink(&theme, T3)).child(OPENING),
+            None => div().text_color(ink(&theme, T3)).child(match self.row {
+                Some(_) => OPENING,
+                None => NONE_OPEN,
+            }),
         };
         let dim = ink(&theme, T3);
-        let forks_text = info.as_ref().map_or_else(
-            || PENDING.to_owned(),
-            |info| {
-                info.generations
-                    .map_or(0, |line| line.saturating_sub(1).max(0))
-                    .to_string()
-            },
-        );
+        let forks_text = info
+            .as_ref()
+            .map_or_else(|| PENDING.to_owned(), Known::count);
         let took_text = info.as_ref().and_then(|info| took(&info.at));
         let pending = info.is_none();
         let hover = ink(&theme, HOVER);
@@ -139,12 +217,53 @@ impl Render for SessionHead {
             .flex()
             .items_center()
             .gap_1()
+            .px_1()
+            .rounded(px(RADIUS_CHIP))
+            .cursor_pointer()
+            .hover(move |style| style.bg(hover))
+            .on_click(|_, window, cx| open_forks(window, cx))
             .child(glyph(Glyph::Fork, ICON_SMALL, ink(&theme, T3)))
             .child(
                 div()
                     .when(pending, |count| count.text_color(dim))
                     .child(forks_text),
             );
+        let loading = self.loading.clone().map(|said| {
+            tooltip(
+                "chat-head-loading-tip",
+                div()
+                    .id("chat-head-loading")
+                    .flex()
+                    .items_center()
+                    .child(spinner("chat-head-spinner", &theme)),
+                Edge::FrameStart,
+                said,
+                &theme,
+                window,
+                cx,
+            )
+        });
+        let members = members
+            .into_iter()
+            .enumerate()
+            .map(|(at, (word, process))| {
+                tooltip(
+                    ("chat-head-member-tip", at),
+                    div()
+                        .id(("chat-head-member", at))
+                        .flex()
+                        .items_center()
+                        .px_1()
+                        .rounded(px(RADIUS_CHIP))
+                        .text_color(dim)
+                        .child(word),
+                    Edge::Frame,
+                    process,
+                    &theme,
+                    window,
+                    cx,
+                )
+            });
         let duration = div()
             .min_w(px(DURATION_WIDTH))
             .when(pending, |duration| duration.text_color(dim))
@@ -156,6 +275,8 @@ impl Render for SessionHead {
             .text_size(px(FONT_SMALL))
             .text_color(ink(&theme, T2))
             .child(title)
+            .children(loading)
+            .children(members)
             .child(tooltip(
                 "chat-head-copy-tip",
                 copy,

@@ -11,7 +11,7 @@ use desk_tiling::{
 use gpui::{
     AnyElement, App, Bounds, Context, CursorStyle, Deferred, Div, KeyDownEvent, MouseButton,
     MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString, Stateful, Window,
-    canvas, deferred, div, point, prelude::*, px, relative, size,
+    canvas, deferred, div, point, prelude::*, px, size,
 };
 
 use crate::component::{control, icon};
@@ -954,7 +954,7 @@ impl<V: 'static> TilingBoard<V> {
         let expand = tile_control(
             SharedString::from(format!("tiling-expand-{}", tile.0)),
             (Icon::Expand, "Expand"),
-            headed,
+            true,
             theme,
             (window, &mut **cx),
             move |window, cx| {
@@ -970,7 +970,7 @@ impl<V: 'static> TilingBoard<V> {
         let close = tile_control(
             SharedString::from(format!("tiling-close-{}", tile.0)),
             (Icon::Close, "Close tile"),
-            headed,
+            true,
             theme,
             (window, &mut **cx),
             move |_, cx| {
@@ -982,15 +982,21 @@ impl<V: 'static> TilingBoard<V> {
                 }
             },
         );
-        let controls = div().flex().items_center().child(expand).child(close);
+        let controls = div()
+            .flex()
+            .flex_none()
+            .items_center()
+            .opacity(if headed { 1.0 } else { 0.5 })
+            .child(expand)
+            .child(close);
         if let [module] = shown.modules.as_slice() {
             let tab = (self.host.title)(tile, module, mark, cx);
             let trailing = div()
-                .relative()
                 .flex()
                 .items_center()
+                .gap_1()
                 .children((self.host.subtitle)(tile, module, cx))
-                .child(controls.absolute().top_0().bottom_0().right(relative(1.0)));
+                .child(controls);
             return Header::Title(tab.icon, tab.label, Some(trailing.into_any_element()));
         }
         let tabs: Vec<Tab> = shown

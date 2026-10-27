@@ -1,8 +1,13 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use crate::protocol::boardy::{BoardSummary, BoardsAnswer, Event, Row, RowsAnswer, Ticket, Words};
-use crate::protocol::{BoardyAuthorKind, BoardyEventKind, BoardyStatus as Status};
+use crate::protocol::boardy::{
+    AcceptanceLine, BoardSummary, BoardsAnswer, Event, Row, RowsAnswer, Ticket, Words,
+};
+use crate::protocol::{
+    BoardyAcceptanceLineState as LineState, BoardyAuthorKind, BoardyEventKind,
+    BoardyStatus as Status,
+};
 use crate::settings::{Settings, Value};
 
 pub const MANAGEMENT: &str = "projectManagement";
@@ -12,6 +17,10 @@ const BOARDY: &str = "boardy";
 const OFF: &str = "off";
 const PERSON: &str = "person";
 const REPORT_ECHO: &str = "report:";
+const BULLET: &str = "- ";
+const WRAPPED: &str = "  ";
+const NEXT_SECTION: &str = "## ";
+const REVIEW: &str = "review";
 const SESSION_ID_LEN: usize = 36;
 const SESSION_ID_DASHES: [usize; 4] = [8, 13, 18, 23];
 
@@ -141,6 +150,7 @@ fn session_id(actor: &str) -> bool {
 pub fn spoken(event: &Event) -> bool {
     match event.kind {
         BoardyEventKind::Commented
+        | BoardyEventKind::Evidence
         | BoardyEventKind::Asked
         | BoardyEventKind::Answered
         | BoardyEventKind::Spawned
@@ -161,6 +171,74 @@ pub fn spoken(event: &Event) -> bool {
         | BoardyEventKind::Hook
         | BoardyEventKind::HookFailed => false,
     }
+}
+
+pub fn in_force(revisions: &[String]) -> Vec<String> {
+    let mut found = Vec::new();
+    let mut current = String::new();
+    let flush = |current: &mut String, found: &mut Vec<String>| {
+        let held = std::mem::take(current);
+        if !held.is_empty() {
+            found.push(held.trim().to_owned());
+        }
+    };
+    for line in revisions.last().map_or("", String::as_str).lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with(NEXT_SECTION) {
+            break;
+        }
+        if let Some(rest) = line.strip_prefix(BULLET) {
+            flush(&mut current, &mut found);
+            current.push_str(rest);
+        } else if !current.is_empty() && line.starts_with(WRAPPED) && !trimmed.is_empty() {
+            current.push(' ');
+            current.push_str(trimmed);
+        } else {
+            flush(&mut current, &mut found);
+        }
+    }
+    flush(&mut current, &mut found);
+    found
+}
+
+pub fn accounted(lines: &[String], events: &[Event]) -> Vec<AcceptanceLine> {
+    let mut proved = BTreeSet::new();
+    let mut unnamed = 0_usize;
+    let mut left: &[i64] = &[];
+    for event in events {
+        match (&event.kind, event.line.filter(|line| *line > 0)) {
+            (BoardyEventKind::Evidence, Some(line)) => {
+                proved.insert(line);
+            }
+            (BoardyEventKind::Evidence, None) => unnamed = unnamed.saturating_add(1),
+            (BoardyEventKind::Moved, _)
+                if event.to.clone().map(String::from).as_deref() == Some(REVIEW) =>
+            {
+                left = &event.leave;
+            }
+            _ => {}
+        }
+    }
+    lines
+        .iter()
+        .zip(1_i64..)
+        .map(|(line, at)| {
+            let state = if proved.contains(&at) {
+                LineState::Met
+            } else if left.contains(&at) {
+                LineState::NotMineToProve
+            } else if unnamed > 0 {
+                unnamed -= 1;
+                LineState::Met
+            } else {
+                LineState::Unmet
+            };
+            AcceptanceLine {
+                line: line.clone(),
+                state,
+            }
+        })
+        .collect()
 }
 
 pub fn engineers(events: &[Event]) -> BTreeMap<String, String> {
@@ -228,6 +306,12 @@ pub fn row(ticket: Ticket) -> Row {
         questions: i64::try_from(ticket.questions.len()).ok(),
         created: ticket.created,
         updated: ticket.updated,
+        model: None,
+        points: ticket.points,
+        reads: None,
+        reason: ticket.reason,
+        tools: None,
+        r#type: ticket.r#type,
     }
 }
 

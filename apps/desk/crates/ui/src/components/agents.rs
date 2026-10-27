@@ -1,29 +1,32 @@
+use std::ops::Range;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use desk_motion::tokens::{EASE_OUT, TOGGLE_MS};
 use gpui::{
     Animation, AnimationExt, AnyElement, App, ClickEvent, Context, Div, ElementId, FocusHandle,
-    FontWeight, KeyDownEvent, MouseDownEvent, Pixels, Rgba, SharedString, Stateful, Transformation,
-    Window, canvas, div, prelude::*, px, radians, relative,
+    FontWeight, KeyDownEvent, MouseDownEvent, Pixels, Rgba, ScrollStrategy, SharedString, Stateful,
+    Transformation, UniformListScrollHandle, Window, canvas, div, prelude::*, px, radians,
+    relative, uniform_list,
 };
 
 use crate::component::icon;
 use crate::components::avatar::{Agent, AgentStatus, AvatarSize, avatar};
 use crate::components::button::{ButtonKind, button};
 use crate::components::card::{Header, caption, inner_card, shell};
-use crate::components::chip::{Tone, mono, tabular, trace};
+use crate::components::chat::name_tone;
+use crate::components::chip::{Tone, badge, mono, tabular, trace};
 use crate::components::empty::empty_state;
 use crate::components::glyph::Glyph;
 use crate::components::list::{HoverVariant, RowGlide};
 use crate::components::paint::{glyph, ink, ring, solid, tint};
-use crate::components::scroll::ScrollArea;
+use crate::components::scroll::{ScrollArea, scrollbar};
 use crate::components::sheet::Drawer;
 use crate::components::size::{
     AVATAR_TINT_FEED, CAPTION_TEXT, CHIP, DIM_TEXT, FAIL_TINT, FCHIP_PAD, FONT_BODY, FONT_CHAT,
-    FONT_KBD, FONT_SMALL, FONT_TAB, FONT_TREE, FONT_WHO, GRID_GAP, GRID_ON, GRID_PAD_X, GRID_ROW,
-    GRID_WHEN, GRID_WHO, GROUP_PAD_BOTTOM, GROUP_PAD_TOP, HOVER, ICON_BUTTON, LINE_BODY, LINE_WHO,
-    RADIUS_CHIP, RADIUS_CHIP_SMALL, RADIUS_LIST, RADIUS_TAB, ROW_GAP, ROW_PAD_X, SHELL_TEXT, T1,
-    T2, T3,
+    FONT_KBD, FONT_SMALL, FONT_TAB, FONT_TREE, FONT_WHO, GRID_GAP, GRID_ON, GRID_PAD_X, GRID_WHEN,
+    GRID_WHO, HOVER, ICON_BUTTON, LINE_BODY, LINE_WHO, RADIUS_CHIP, RADIUS_CHIP_SMALL, RADIUS_LIST,
+    RADIUS_TAB, ROW_GAP, ROW_PAD_X, SHELL_TEXT, T1, T2, T3,
 };
 use crate::components::tooltip::{Edge, tooltip};
 use crate::components::width::Width;
@@ -32,7 +35,6 @@ use crate::live::ActiveTheme;
 use crate::metrics::{HAIRLINE, ICON_SMALL, ICON_TINY};
 use crate::theme::{ColorToken, Theme};
 
-const OPEN_AT_START: [bool; 4] = [true; 4];
 const COUNT_FADE: f32 = 0.7;
 const TRACE_FADE: f32 = 0.7;
 const DONE_INK: f32 = 0.4;
@@ -53,6 +55,7 @@ const COLUMNS_PAD_BOTTOM: f32 = 4.0;
 const TILE_ROW_PAD_Y: f32 = 3.0;
 const TILE_AVATAR_GAP: f32 = 8.0;
 const LINE_TASK: f32 = 17.0;
+const TILE_LINE: f32 = 2.0 * LINE_TASK + 2.0 * TILE_ROW_PAD_Y;
 const DOING_LEAST: f32 = 48.0;
 const LINES_FROM: f32 = 560.0;
 const FILES_FROM: f32 = 640.0;
@@ -68,6 +71,10 @@ const DRAWER_HEAD_LINE: f32 = 19.0;
 const DRAWER_NAME: f32 = 14.0;
 const DRAWER_META_GAP: f32 = 8.0;
 const DRAWER_PAD_BOTTOM: f32 = 14.0;
+const DRAWER_ONE_LINE_FROM: f32 = 440.0;
+const CLAMP_LINES: usize = 6;
+const CLAMP_CHARS: usize = 360;
+const CLAMP_GAP: f32 = 2.0;
 const THINK_PAD_X: f32 = 12.0;
 const THINK_PAD_Y: f32 = 10.0;
 const THINK_FILL: f32 = 0.035;
@@ -152,6 +159,88 @@ const BUCKET_PAD_TOP: f32 = 18.0;
 const BUCKET_PAD_BOTTOM: f32 = 4.0;
 
 type AgentAction = Rc<dyn Fn(&Agent, &mut Window, &mut App)>;
+pub type TicketAction = Rc<dyn Fn(&str, &mut Window, &mut App)>;
+
+fn ticket_ids(text: &str) -> Vec<Range<usize>> {
+    let bytes = text.as_bytes();
+    let byte = |at: usize| bytes.get(at).copied();
+    let run = |from: usize, keep: fn(&u8) -> bool| {
+        bytes
+            .get(from..)
+            .map_or(0, |rest| rest.iter().take_while(|b| keep(b)).count())
+    };
+    let word = |at: Option<usize>| at.and_then(byte).is_some_and(|b| b.is_ascii_alphanumeric());
+    let mut found = Vec::new();
+    let mut at = 0;
+    while at < bytes.len() {
+        let letters = run(at, u8::is_ascii_uppercase);
+        if letters == 0 || word(at.checked_sub(1)) {
+            at += letters.max(1);
+            continue;
+        }
+        let mut end = at + letters;
+        let mut parts = 0;
+        while parts < 2 && byte(end) == Some(b'-') && run(end + 1, u8::is_ascii_digit) > 0 {
+            end += 1 + run(end + 1, u8::is_ascii_digit);
+            parts += 1;
+        }
+        if parts > 0 && !word(Some(end)) {
+            found.push(at..end);
+            at = end;
+        } else {
+            at += letters;
+        }
+    }
+    found
+}
+
+fn mission(
+    id: impl Into<ElementId>,
+    text: &str,
+    open: Option<&TicketAction>,
+    theme: &Theme,
+) -> Stateful<Div> {
+    let piece = |words: &str| {
+        (!words.trim().is_empty()).then(|| {
+            div()
+                .flex_shrink_1()
+                .min_w_0()
+                .truncate()
+                .child(words.trim().to_owned())
+        })
+    };
+    let mut row = div()
+        .id(id)
+        .flex()
+        .items_center()
+        .gap(px(WORD_GAP))
+        .min_w_0()
+        .overflow_hidden()
+        .whitespace_nowrap();
+    let mut from = 0;
+    for (ix, span) in ticket_ids(text).into_iter().enumerate() {
+        let (Some(before), Some(ticket)) = (text.get(from..span.start), text.get(span.clone()))
+        else {
+            break;
+        };
+        from = span.end;
+        let ticket = ticket.to_owned();
+        let chip = badge(ticket.clone(), theme).id(("mission-ticket", ix));
+        let chip = match open {
+            Some(open) => {
+                let open = open.clone();
+                chip.cursor_pointer()
+                    .on_click(move |_: &ClickEvent, window, cx| {
+                        cx.stop_propagation();
+                        open(&ticket, window, cx);
+                    })
+            }
+            None => chip,
+        };
+        row = row.children(piece(before)).child(chip);
+    }
+    row.children(text.get(from..).and_then(piece))
+}
 
 #[derive(Clone)]
 pub struct AgentLine {
@@ -407,9 +496,9 @@ fn group_head(
     theme: &Theme,
 ) -> Stateful<Div> {
     let turn = if open {
-        std::f32::consts::FRAC_PI_2
-    } else {
         0.0
+    } else {
+        -std::f32::consts::FRAC_PI_2
     };
     div()
         .id(id)
@@ -460,6 +549,49 @@ fn pill(theme: &Theme) -> Div {
         .bg(ink(theme, PILL_FILL))
         .shadow(vec![ring(ink(theme, PILL_RING))])
         .text_size(px(FONT_TAB))
+}
+
+fn clamped(
+    key: (&'static str, usize),
+    text: SharedString,
+    theme: &Theme,
+    window: &mut Window,
+    cx: &mut App,
+) -> Div {
+    let body = div().min_w_0();
+    if text.lines().count() <= CLAMP_LINES && text.chars().count() <= CLAMP_CHARS {
+        return body.child(text);
+    }
+    let key = ElementId::from(key);
+    let open = window.use_keyed_state(key.clone(), cx, |_, _| false);
+    let shown = *open.read(cx);
+    let brighter = ink(theme, T2);
+    body.flex()
+        .flex_col()
+        .gap(px(CLAMP_GAP))
+        .child(
+            div()
+                .min_w_0()
+                .when(!shown, |text| text.text_ellipsis().line_clamp(CLAMP_LINES))
+                .child(text),
+        )
+        .child(
+            div()
+                .id(ElementId::NamedChild(Arc::new(key), "more".into()))
+                .self_start()
+                .cursor_pointer()
+                .text_size(px(FONT_SMALL))
+                .text_color(ink(theme, T3))
+                .hover(move |style| style.text_color(brighter))
+                .on_click(move |_, _, cx| {
+                    cx.stop_propagation();
+                    open.update(cx, |open, cx| {
+                        *open = !*open;
+                        cx.notify();
+                    });
+                })
+                .child(if shown { "less" } else { "more" }),
+        )
 }
 
 fn mono_text(text: SharedString, size: f32, theme: &Theme) -> Div {
@@ -543,7 +675,14 @@ fn diff_line(line: &DiffLine, theme: &Theme) -> Div {
         .child(div().min_w_0().truncate().child(line.text.clone()))
 }
 
-fn step_body(step: &AgentStep, theme: &Theme) -> Option<Div> {
+fn step_body(
+    ix: usize,
+    step: &AgentStep,
+    theme: &Theme,
+    window: &mut Window,
+    cx: &mut App,
+) -> Option<Div> {
+    let key = ("event-clamp", ix);
     let t2 = ink(theme, T2);
     let t3 = ink(theme, T3);
     let body =
@@ -768,7 +907,7 @@ fn step_body(step: &AgentStep, theme: &Theme) -> Option<Div> {
                     .py(px(NOTE_PAD_Y))
                     .text_size(px(FONT_TREE))
                     .line_height(px(LINE_NOTE))
-                    .child(question.clone())
+                    .child(clamped(key, question.clone(), theme, window, cx))
                     .child(
                         div()
                             .mt(px(NOTE_AFTER_GAP))
@@ -785,7 +924,7 @@ fn step_body(step: &AgentStep, theme: &Theme) -> Option<Div> {
                     .font_family(mono(theme))
                     .text_size(px(FONT_BODY))
                     .line_height(px(LINE_BODY))
-                    .child(text.clone())
+                    .child(clamped(key, text.clone(), theme, window, cx))
             }
             AgentStep::Report { text, worked } => {
                 let added = Tone::Added.color(theme);
@@ -805,13 +944,20 @@ fn step_body(step: &AgentStep, theme: &Theme) -> Option<Div> {
                             .child(div().text_color(added).child("done"))
                             .child(div().text_color(t3).child(format!("· {worked}"))),
                     )
-                    .child(text.clone())
+                    .child(clamped(key, text.clone(), theme, window, cx))
             }
         };
     Some(body)
 }
 
-fn event_row(ix: usize, event: &AgentEvent, mention: &AgentAction, theme: &Theme) -> Div {
+fn event_row(
+    ix: usize,
+    event: &AgentEvent,
+    mention: &AgentAction,
+    theme: &Theme,
+    window: &mut Window,
+    cx: &mut App,
+) -> Div {
     let agent = event.agent;
     let spawned = match &event.step {
         AgentStep::Spawn { task, owns } => Some((task.clone(), owns.clone())),
@@ -823,7 +969,7 @@ fn event_row(ix: usize, event: &AgentEvent, mention: &AgentAction, theme: &Theme
             theme.color(ColorToken::TextBase),
         )
     } else {
-        (agent.name(), agent.kind.color(theme))
+        (agent.name(), name_tone(&agent.name(), theme))
     };
     let initial: SharedString = name
         .chars()
@@ -890,10 +1036,13 @@ fn event_row(ix: usize, event: &AgentEvent, mention: &AgentAction, theme: &Theme
                                     .child(
                                         div()
                                             .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(agent.kind.color(theme))
+                                            .text_color(name_tone(&agent.name(), theme))
                                             .child(agent.name()),
                                     )
-                                    .child(div().text_color(ink(theme, T2)).child(task))
+                                    .child(
+                                        clamped(("event-clamp", ix), task, theme, window, cx)
+                                            .text_color(ink(theme, T2)),
+                                    )
                                     .when(!owns.is_empty(), |words| {
                                         words.child(
                                             div()
@@ -908,7 +1057,7 @@ fn event_row(ix: usize, event: &AgentEvent, mention: &AgentAction, theme: &Theme
                             ),
                     )
                 })
-                .children(step_body(&event.step, theme)),
+                .children(step_body(ix, &event.step, theme, window, cx)),
         )
 }
 
@@ -960,6 +1109,7 @@ fn tile_row(
     ix: usize,
     line: &AgentLine,
     (picked, fit): (bool, Fit),
+    ticket: Option<&TicketAction>,
     theme: &Theme,
     window: &mut Window,
     cx: &mut App,
@@ -974,7 +1124,7 @@ fn tile_row(
             .child(value.to_string())
     };
     grid(("tile-row", ix))
-        .min_h(px(GRID_ROW))
+        .h(px(TILE_LINE))
         .py(px(TILE_ROW_PAD_Y))
         .cursor_pointer()
         .text_size(px(FONT_TAB))
@@ -990,7 +1140,7 @@ fn tile_row(
                     div()
                         .min_w_0()
                         .truncate()
-                        .text_color(agent.kind.color(theme))
+                        .text_color(name_tone(&agent.name(), theme))
                         .child(agent.name()),
                 ),
         )
@@ -998,7 +1148,12 @@ fn tile_row(
             row.child(
                 doing()
                     .line_height(px(LINE_TASK))
-                    .child(div().truncate().child(first_line(&line.task)))
+                    .child(mission(
+                        ("tile-task", ix),
+                        &first_line(&line.task),
+                        ticket,
+                        theme,
+                    ))
                     .child(
                         div()
                             .truncate()
@@ -1091,14 +1246,48 @@ impl Fit {
     }
 }
 
+enum TileLine {
+    Head {
+        at: usize,
+        status: AgentStatus,
+        count: usize,
+        open: bool,
+    },
+    Row(usize),
+}
+
+fn open_at_start() -> [bool; 4] {
+    AgentStatus::ALL.map(|status| matches!(status, AgentStatus::Working | AgentStatus::Asking))
+}
+
+fn tile_lines(board: &AgentBoard, open_groups: [bool; 4]) -> Rc<Vec<TileLine>> {
+    let mut lines = Vec::new();
+    for (at, status, members) in board.groups() {
+        let open = open_groups.get(at).copied().unwrap_or(false);
+        lines.push(TileLine::Head {
+            at,
+            status,
+            count: members.len(),
+            open,
+        });
+        if open {
+            lines.extend(members.into_iter().map(TileLine::Row));
+        }
+    }
+    Rc::new(lines)
+}
+
 pub struct AgentTile {
     board: Rc<AgentBoard>,
+    lines: Rc<Vec<TileLine>>,
+    list: UniformListScrollHandle,
     open: bool,
     shown: usize,
     open_groups: [bool; 4],
     focus: FocusHandle,
     mention: AgentAction,
     expand: AgentAction,
+    ticket: Option<TicketAction>,
 }
 
 impl AgentTile {
@@ -1109,14 +1298,22 @@ impl AgentTile {
         cx: &mut Context<Self>,
     ) -> Self {
         AgentTile {
+            lines: tile_lines(&board, open_at_start()),
+            list: UniformListScrollHandle::new(),
             board,
             open: false,
             shown: 0,
-            open_groups: OPEN_AT_START,
+            open_groups: open_at_start(),
             focus: cx.focus_handle(),
             mention: Rc::new(mention),
             expand: Rc::new(expand),
+            ticket: None,
         }
+    }
+
+    pub fn link_tickets(&mut self, open: Option<TicketAction>, cx: &mut Context<Self>) {
+        self.ticket = open;
+        cx.notify();
     }
 
     pub fn set_board(&mut self, board: impl Into<Rc<AgentBoard>>, cx: &mut Context<Self>) {
@@ -1127,6 +1324,7 @@ impl AgentTile {
             None => self.open = false,
         }
         self.board = board;
+        self.lines = tile_lines(&self.board, self.open_groups);
         cx.notify();
     }
 
@@ -1149,6 +1347,14 @@ impl AgentTile {
         {
             *group = true;
         }
+        self.lines = tile_lines(&self.board, self.open_groups);
+        if let Some(slot) = self
+            .lines
+            .iter()
+            .position(|line| matches!(line, TileLine::Row(ix) if *ix == at))
+        {
+            self.list.scroll_to_item(slot, ScrollStrategy::Center);
+        }
         self.show(at, window, cx);
         true
     }
@@ -1163,7 +1369,69 @@ impl AgentTile {
     fn toggle(&mut self, at: usize, cx: &mut Context<Self>) {
         if let Some(open) = self.open_groups.get_mut(at) {
             *open = !*open;
+            self.lines = tile_lines(&self.board, self.open_groups);
             cx.notify();
+        }
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one tile line needs its slot, the fit, the glide, the theme and both contexts"
+    )]
+    fn line(
+        &self,
+        slot: usize,
+        line: &TileLine,
+        fit: Fit,
+        glide: &RowGlide,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        match *line {
+            TileLine::Head {
+                at,
+                status,
+                count,
+                open,
+            } => {
+                let head = group_head(
+                    ("tile-group", at),
+                    open,
+                    caption(status.group(), theme),
+                    count_caption(count, theme).opacity(COUNT_FADE),
+                    theme,
+                )
+                .px(px(GRID_PAD_X));
+                div()
+                    .h(px(TILE_LINE))
+                    .flex()
+                    .flex_col()
+                    .justify_center()
+                    .child(glide.row(slot, head).on_click(
+                        cx.listener(move |tile, _: &ClickEvent, _, cx| tile.toggle(at, cx)),
+                    ))
+                    .into_any_element()
+            }
+            TileLine::Row(ix) => {
+                let Some(member) = self.board.lines.get(ix) else {
+                    return div().into_any_element();
+                };
+                let picked = self.open && self.shown == ix;
+                let row = tile_row(
+                    ix,
+                    member,
+                    (picked, fit),
+                    self.ticket.as_ref(),
+                    theme,
+                    window,
+                    cx,
+                )
+                .on_click(
+                    cx.listener(move |tile, _: &ClickEvent, window, cx| tile.show(ix, window, cx)),
+                );
+                glide.row(slot, row).into_any_element()
+            }
         }
     }
 
@@ -1174,94 +1442,136 @@ impl AgentTile {
         }
     }
 
-    fn drawer_head(&self, line: &AgentLine, theme: &Theme, cx: &mut Context<Self>) -> Div {
+    fn drawer_head(
+        &self,
+        line: &AgentLine,
+        wide: bool,
+        theme: &Theme,
+        cx: &mut Context<Self>,
+    ) -> Div {
         let agent = line.agent;
         let expand = self.expand.clone();
         let t3 = ink(theme, T3);
         let hover = ink(theme, HOVER);
-        div()
+        let face = avatar("drawer-avatar", &agent, AvatarSize::Large, theme);
+        let named = div()
+            .flex()
+            .items_baseline()
+            .gap(px(DRAWER_META_GAP))
+            .min_w_0()
+            .whitespace_nowrap()
+            .text_size(px(FONT_SMALL))
+            .child(
+                div()
+                    .text_size(px(DRAWER_NAME))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(name_tone(&agent.name(), theme))
+                    .child(agent.name()),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .text_color(status_color(agent.status, theme))
+                    .child(status_word(agent.status)),
+            )
+            .child(
+                div()
+                    .min_w_0()
+                    .truncate()
+                    .text_color(t3)
+                    .child(format!("· {}", line.time)),
+            );
+        let task = mission(
+            "drawer-task",
+            &first_line(&line.task),
+            self.ticket.as_ref(),
+            theme,
+        )
+        .text_size(px(FONT_BODY));
+        let mention = mention_button("drawer-mention", agent, &self.mention, theme);
+        let expand = button("drawer-expand", "Expand", None, ButtonKind::Text, theme)
+            .text_size(px(FONT_SMALL))
+            .on_click(cx.listener(move |tile, _: &ClickEvent, window, cx| {
+                tile.close(cx);
+                expand(&agent, window, cx);
+            }));
+        let close = div()
+            .id("drawer-close")
+            .aria_label("Close")
+            .flex()
+            .flex_none()
+            .items_center()
+            .justify_center()
+            .size(px(ICON_BUTTON))
+            .rounded(px(RADIUS_CHIP))
+            .cursor_pointer()
+            .hover(move |style| style.bg(hover))
+            .on_click(cx.listener(|tile, _: &ClickEvent, _, cx| tile.close(cx)))
+            .child(icon(Icon::Close, ICON_TINY, ink(theme, CAPTION_TEXT)));
+        let head = div()
             .flex_none()
             .flex()
-            .items_center()
-            .gap(px(DRAWER_HEAD_GAP))
             .px(px(DRAWER_PAD_X))
-            .pb(px(DRAWER_HEAD_PAD_BOTTOM))
-            .child(avatar("drawer-avatar", &agent, AvatarSize::Large, theme))
+            .pb(px(DRAWER_HEAD_PAD_BOTTOM));
+        if wide {
+            return head
+                .items_center()
+                .gap(px(DRAWER_HEAD_GAP))
+                .child(face)
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .line_height(px(DRAWER_HEAD_LINE))
+                        .child(named)
+                        .child(task),
+                )
+                .child(mention)
+                .child(expand)
+                .child(close);
+        }
+        head.flex_col()
+            .gap(px(DRAWER_META_GAP))
+            .line_height(px(DRAWER_HEAD_LINE))
             .child(
                 div()
-                    .flex_1()
-                    .min_w_0()
-                    .line_height(px(DRAWER_HEAD_LINE))
-                    .child(
-                        div()
-                            .flex()
-                            .items_baseline()
-                            .gap(px(DRAWER_META_GAP))
-                            .text_size(px(FONT_SMALL))
-                            .child(
-                                div()
-                                    .text_size(px(DRAWER_NAME))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(agent.kind.color(theme))
-                                    .child(agent.name()),
-                            )
-                            .child(
-                                div()
-                                    .text_color(status_color(agent.status, theme))
-                                    .child(status_word(agent.status)),
-                            )
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .truncate()
-                                    .text_color(t3)
-                                    .child(format!("· {}", line.time)),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .truncate()
-                            .text_size(px(FONT_BODY))
-                            .child(line.task.clone()),
-                    ),
-            )
-            .child(mention_button(
-                "drawer-mention",
-                agent,
-                &self.mention,
-                theme,
-            ))
-            .child(
-                button("drawer-expand", "Expand", None, ButtonKind::Text, theme)
-                    .text_size(px(FONT_SMALL))
-                    .on_click(cx.listener(move |tile, _: &ClickEvent, window, cx| {
-                        tile.close(cx);
-                        expand(&agent, window, cx);
-                    })),
-            )
-            .child(
-                div()
-                    .id("drawer-close")
-                    .aria_label("Close")
                     .flex()
-                    .flex_none()
                     .items_center()
-                    .justify_center()
-                    .size(px(ICON_BUTTON))
-                    .rounded(px(RADIUS_CHIP))
-                    .cursor_pointer()
-                    .hover(move |style| style.bg(hover))
-                    .on_click(cx.listener(|tile, _: &ClickEvent, _, cx| tile.close(cx)))
-                    .child(icon(Icon::Close, ICON_TINY, ink(theme, CAPTION_TEXT))),
+                    .gap(px(DRAWER_HEAD_GAP))
+                    .child(face)
+                    .child(named.flex_1()),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(DRAWER_META_GAP))
+                    .child(task.flex_1())
+                    .child(mention)
+                    .child(expand)
+                    .child(close),
             )
     }
 
-    fn drawer_body(&self, line: &AgentLine, theme: &Theme) -> impl IntoElement {
+    fn drawer_body(
+        &self,
+        line: &AgentLine,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> impl IntoElement {
         let events = self
             .board
             .feed(Some(line.agent))
-            .map(|(ix, event)| event_row(ix, event, &self.mention, theme))
+            .map(|(ix, event)| event_row(ix, event, &self.mention, theme, window, cx))
             .collect::<Vec<_>>();
+        let thinking = clamped(
+            ("drawer-thinking", self.shown),
+            line.thinking.clone(),
+            theme,
+            window,
+            cx,
+        );
         ScrollArea::new(("drawer-scroll", self.shown)).child(
             div()
                 .px(px(DRAWER_PAD_X))
@@ -1276,7 +1586,7 @@ impl AgentTile {
                         .line_height(px(LINE_BODY))
                         .text_color(ink(theme, T2))
                         .child(caption("thinking", theme).mb(px(THINK_CAPTION_GAP)))
-                        .child(div().italic().child(line.thinking.clone())),
+                        .child(thinking),
                 )
                 .children(events),
         )
@@ -1289,47 +1599,38 @@ impl Render for AgentTile {
         let glide = RowGlide::new("tile-glide", HoverVariant::Glide, &theme, window, cx);
         let width = Width::of(format!("tile-width-{}", cx.entity_id()), window, cx);
         let fit = Fit::of(width.get(cx), self.board.attributed);
-        let mut table = div()
-            .flex()
-            .flex_col()
-            .min_w_0()
-            .pt(px(TILE_PAD_TOP))
-            .pb(px(TILE_PAD_BOTTOM))
-            .child(columns(fit, &theme));
-        let mut slot = 0;
-        for (at, status, members) in self.board.groups() {
-            let open = self.open_groups.get(at).copied().unwrap_or(false);
-            let head = group_head(
-                ("tile-group", at),
-                open,
-                caption(status.group(), &theme),
-                count_caption(members.len(), &theme).opacity(COUNT_FADE),
-                &theme,
-            )
-            .px(px(GRID_PAD_X))
-            .pt(px(GROUP_PAD_TOP))
-            .pb(px(GROUP_PAD_BOTTOM));
-            table = table.child(
-                glide
-                    .row(slot, head)
-                    .on_click(cx.listener(move |tile, _: &ClickEvent, _, cx| tile.toggle(at, cx))),
-            );
-            slot += 1;
-            if !open {
-                continue;
-            }
-            for ix in members {
-                let Some(line) = self.board.lines.get(ix) else {
-                    continue;
-                };
-                let picked = self.open && self.shown == ix;
-                let row = tile_row(ix, line, (picked, fit), &theme, window, cx).on_click(
-                    cx.listener(move |tile, _: &ClickEvent, window, cx| tile.show(ix, window, cx)),
-                );
-                table = table.child(glide.row(slot, row));
-                slot += 1;
-            }
-        }
+        let wide = width
+            .get(cx)
+            .is_none_or(|width| width.as_f32() >= DRAWER_ONE_LINE_FROM);
+        let measured = self
+            .lines
+            .iter()
+            .position(|line| matches!(line, TileLine::Row(_)));
+        let painter = glide.clone();
+        let rows = uniform_list(
+            "tile-list",
+            self.lines.len(),
+            cx.processor(
+                move |tile: &mut AgentTile, range: Range<usize>, window, cx| {
+                    let theme = ActiveTheme::theme(cx);
+                    let lines = tile.lines.clone();
+                    lines
+                        .get(range.clone())
+                        .unwrap_or_default()
+                        .iter()
+                        .zip(range)
+                        .map(|(line, slot)| {
+                            tile.line(slot, line, fit, &painter, &theme, window, cx)
+                        })
+                        .collect::<Vec<_>>()
+                },
+            ),
+        )
+        .with_width_from_item(measured)
+        .track_scroll(&self.list)
+        .pb(px(TILE_PAD_BOTTOM))
+        .size_full();
+        let base = self.list.0.borrow().base_handle.clone();
         let close = cx.listener(|tile, _: &(), _, cx| tile.close(cx));
         let shown = self.board.lines.get(self.shown).cloned();
         let drawer = Drawer::new("tile-drawer")
@@ -1337,8 +1638,8 @@ impl Render for AgentTile {
             .on_close(move |window, cx| close(&(), window, cx))
             .when_some(shown, |drawer, line| {
                 drawer
-                    .child(self.drawer_head(&line, &theme, cx))
-                    .child(self.drawer_body(&line, &theme))
+                    .child(self.drawer_head(&line, wide, &theme, cx))
+                    .child(self.drawer_body(&line, &theme, window, cx))
             });
         div()
             .id("agents-tile")
@@ -1366,7 +1667,21 @@ impl Render for AgentTile {
                 .left_0()
                 .size_full(),
             )
-            .child(ScrollArea::new("tile-scroll").child(glide.frame("tile-rows", table)))
+            .child(
+                div()
+                    .flex_none()
+                    .min_w_0()
+                    .pt(px(TILE_PAD_TOP))
+                    .child(columns(fit, &theme)),
+            )
+            .child(
+                div()
+                    .relative()
+                    .flex_1()
+                    .min_h_0()
+                    .child(glide.frame("tile-rows", rows).size_full())
+                    .child(scrollbar("tile-scroll-bar", &base)),
+            )
             .child(drawer)
     }
 }
@@ -1376,6 +1691,7 @@ pub struct AgentScreen {
     picked: Option<usize>,
     open_groups: [bool; 4],
     mention: AgentAction,
+    ticket: Option<TicketAction>,
 }
 
 impl AgentScreen {
@@ -1386,9 +1702,15 @@ impl AgentScreen {
         AgentScreen {
             board,
             picked: None,
-            open_groups: OPEN_AT_START,
+            open_groups: open_at_start(),
             mention: Rc::new(mention),
+            ticket: None,
         }
+    }
+
+    pub fn link_tickets(&mut self, open: Option<TicketAction>, cx: &mut Context<Self>) {
+        self.ticket = open;
+        cx.notify();
     }
 
     pub fn set_board(&mut self, board: impl Into<Rc<AgentBoard>>, cx: &mut Context<Self>) {
@@ -1488,10 +1810,18 @@ impl AgentScreen {
                 let Some(line) = self.board.lines.get(ix) else {
                     continue;
                 };
-                let row = screen_row(ix, line, self.picked == Some(ix), theme, window, cx)
-                    .on_click(
-                        cx.listener(move |screen, _: &ClickEvent, _, cx| screen.pick(Some(ix), cx)),
-                    );
+                let row = screen_row(
+                    ix,
+                    line,
+                    self.picked == Some(ix),
+                    self.ticket.as_ref(),
+                    theme,
+                    window,
+                    cx,
+                )
+                .on_click(
+                    cx.listener(move |screen, _: &ClickEvent, _, cx| screen.pick(Some(ix), cx)),
+                );
                 rows = rows.child(glide.row(slot, row));
                 slot += 1;
             }
@@ -1559,8 +1889,9 @@ impl AgentScreen {
                     .child(
                         div()
                             .flex()
-                            .flex_wrap()
                             .items_baseline()
+                            .min_w_0()
+                            .whitespace_nowrap()
                             .gap_x(px(ALL_HEAD_GAP))
                             .text_size(px(FONT_TAB))
                             .child(
@@ -1568,7 +1899,7 @@ impl AgentScreen {
                                     .text_size(px(TITLE_AGENT))
                                     .line_height(relative(TITLE_AGENT_LINE))
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(agent.kind.color(theme))
+                                    .text_color(name_tone(&agent.name(), theme))
                                     .child(agent.name()),
                             )
                             .child(
@@ -1581,6 +1912,7 @@ impl AgentScreen {
                                     .flex()
                                     .items_baseline()
                                     .min_w_0()
+                                    .overflow_hidden()
                                     .text_color(t3)
                                     .child(line.time.clone())
                                     .when(!line.owns.is_empty(), |time| {
@@ -1593,10 +1925,13 @@ impl AgentScreen {
                             ),
                     )
                     .child(
-                        div()
-                            .truncate()
-                            .text_size(px(FONT_CHAT))
-                            .child(line.task.clone()),
+                        mission(
+                            "screen-head-task",
+                            &first_line(&line.task),
+                            self.ticket.as_ref(),
+                            theme,
+                        )
+                        .text_size(px(FONT_CHAT)),
                     ),
             )
             .child(mention_button(
@@ -1618,7 +1953,7 @@ impl AgentScreen {
             )
     }
 
-    fn feed(&self, theme: &Theme) -> Vec<AnyElement> {
+    fn feed(&self, theme: &Theme, window: &mut Window, cx: &mut App) -> Vec<AnyElement> {
         let agent = self
             .picked
             .and_then(|ix| self.board.lines.get(ix))
@@ -1636,7 +1971,7 @@ impl AgentScreen {
                         .into_any_element(),
                 );
             }
-            shown.push(event_row(ix, event, &self.mention, theme).into_any_element());
+            shown.push(event_row(ix, event, &self.mention, theme, window, cx).into_any_element());
         }
         shown
     }
@@ -1646,13 +1981,13 @@ fn screen_row(
     ix: usize,
     line: &AgentLine,
     picked: bool,
+    ticket: Option<&TicketAction>,
     theme: &Theme,
     window: &mut Window,
     cx: &mut App,
 ) -> Stateful<Div> {
     let agent = &line.agent;
     let t3 = ink(theme, T3);
-    let mission = line.task.lines().next().unwrap_or_default().to_owned();
     let place = line.owns.split(", ").next().unwrap_or_default().to_owned();
     let tip: SharedString = match agent.status {
         AgentStatus::Finished if line.time == UNKNOWN_TIME => UNKNOWN_TIME_WHY.into(),
@@ -1697,6 +2032,7 @@ fn screen_row(
                 .child(
                     div()
                         .flex()
+                        .items_center()
                         .gap(px(EVENT_HEAD_GAP))
                         .child(
                             div()
@@ -1704,7 +2040,7 @@ fn screen_row(
                                 .min_w_0()
                                 .truncate()
                                 .text_size(px(FONT_BODY))
-                                .text_color(agent.kind.color(theme))
+                                .text_color(name_tone(&agent.name(), theme))
                                 .child(agent.name()),
                         )
                         .child(clock),
@@ -1715,12 +2051,9 @@ fn screen_row(
                         .gap(px(EVENT_HEAD_GAP))
                         .text_size(px(FONT_WHO))
                         .child(
-                            div()
+                            mission(("screen-task", ix), &first_line(&line.task), ticket, theme)
                                 .flex_shrink_1()
-                                .min_w_0()
-                                .truncate()
-                                .text_color(ink(theme, T2))
-                                .child(mission),
+                                .text_color(ink(theme, T2)),
                         )
                         .when(!place.is_empty(), |second| {
                             second.child(
@@ -1773,7 +2106,7 @@ impl Render for AgentScreen {
                         .px(px(FEED_PAD_X))
                         .pb(px(FEED_PAD_BOTTOM))
                         .child(self.head(&theme, cx))
-                        .children(self.feed(&theme)),
+                        .children(self.feed(&theme, window, cx)),
                 ),
             )
             .with_animation(

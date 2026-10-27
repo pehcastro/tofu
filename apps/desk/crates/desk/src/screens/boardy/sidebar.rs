@@ -12,7 +12,7 @@ use desk_ui::theme::ColorToken;
 use gpui::{ClickEvent, Context, Div, div, prelude::*, px};
 
 use super::look::{kit, noun};
-use super::views::opener;
+use super::views::{opener, wanting};
 use super::{Boardy, MS_PER_SECOND, NEWEST, Place, Section};
 
 const RULE: f32 = 0.35;
@@ -36,7 +36,6 @@ pub(super) fn sidebar(boardy: &Boardy, cx: &mut Context<Boardy>) -> Div {
             });
         })
     };
-    let attention = store.attention();
     let questions = boardy.questions.len();
     let nav = NavSidebar::new("boardy-nav")
         .item(
@@ -50,7 +49,7 @@ pub(super) fn sidebar(boardy: &Boardy, cx: &mut Context<Boardy>) -> Div {
         .item(
             Glyph::Attention,
             "Need attention",
-            Some(attention.len()),
+            Some(wanting(boardy)),
             false,
             boardy.place == Place::Attention,
             go(Place::Attention),
@@ -95,7 +94,7 @@ pub(super) fn sidebar(boardy: &Boardy, cx: &mut Context<Boardy>) -> Div {
             .item(
                 Glyph::Sprint,
                 noun(&words.sprint, true),
-                Some(count(|ticket| ticket.sprint.is_some())),
+                boardy.plans.get(&key).map(|plan| plan.sprints.len()),
                 false,
                 on(Section::Sprints),
                 go(at(Section::Sprints)),

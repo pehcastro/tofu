@@ -26,7 +26,6 @@ use crate::metrics::{ICON_SMALL, ICON_TINY};
 use crate::theme::{ColorToken, Theme};
 
 const VISIBLE: usize = 3;
-const REFUSED: &str = "tofu does not give this shell a terminal yet";
 const SHELL_TAB: f32 = 108.0;
 const SHELL_MORE: f32 = 80.0;
 const ROW_PAD_LEFT: f32 = 12.0;
@@ -140,6 +139,12 @@ pub enum ShellEvent {
     Keep,
 }
 
+#[derive(Clone)]
+pub enum Take {
+    Offered,
+    Refused(SharedString),
+}
+
 type OnShell = Rc<dyn Fn(&ShellEvent, &mut Window, &mut App)>;
 type OnAt = Rc<dyn Fn(&usize, &mut Window, &mut App)>;
 
@@ -154,7 +159,14 @@ enum Hold<'a> {
     Unavailable,
     Offered(&'a OnAt),
     Refused(AnyElement),
-    Held(AnyView, &'a OnAt),
+    Held(AnyView, Option<AnyView>, &'a OnAt),
+}
+
+struct Held {
+    at: usize,
+    terminal: AnyView,
+    note: Option<AnyView>,
+    release: OnAt,
 }
 
 #[derive(IntoElement)]
@@ -167,8 +179,9 @@ pub struct Shells {
     kill: Option<OnAt>,
     asking: Option<usize>,
     traced: Option<Vec<bool>>,
-    take: Option<(Vec<bool>, OnAt)>,
-    held: Option<(usize, AnyView, OnAt)>,
+    take: Option<(Vec<Take>, OnAt)>,
+    held: Option<Held>,
+    yours: Vec<bool>,
 }
 
 impl Shells {
@@ -190,12 +203,13 @@ impl Shells {
             traced: None,
             take: None,
             held: None,
+            yours: Vec::new(),
         }
     }
 
     pub fn on_take_over(
         mut self,
-        takeable: Vec<bool>,
+        takeable: Vec<Take>,
         take: impl Fn(&usize, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.take = Some((takeable, Rc::new(take)));
@@ -206,9 +220,20 @@ impl Shells {
         mut self,
         at: usize,
         terminal: AnyView,
+        note: Option<AnyView>,
         release: impl Fn(&usize, &mut Window, &mut App) + 'static,
     ) -> Self {
-        self.held = Some((at, terminal, Rc::new(release)));
+        self.held = Some(Held {
+            at,
+            terminal,
+            note,
+            release: Rc::new(release),
+        });
+        self
+    }
+
+    pub fn yours(mut self, yours: Vec<bool>) -> Self {
+        self.yours = yours;
         self
     }
 
@@ -412,6 +437,7 @@ fn panel(
     ending: Ending<'_>,
     traced: bool,
     hold: Hold<'_>,
+    yours: bool,
 ) -> Stateful<Div> {
     let (offered, asked) = match ending {
         Ending::Hidden => (false, None),
@@ -420,8 +446,8 @@ fn panel(
     };
     let wide = fit == Fit::Wide;
     let group = SharedString::from(format!("{id}-panel-{ix}"));
-    let (hold_action, terminal) = match hold {
-        Hold::Unavailable => (None, None),
+    let (hold_action, terminal, note) = match hold {
+        Hold::Unavailable => (None, None, None),
         Hold::Offered(take) => {
             let take = take.clone();
             let button = action(
@@ -442,10 +468,10 @@ fn panel(
                     transitions.opacity(Motion::new(HOVER_MS).with_easing(EASE_OUT))
                 })
                 .child(button);
-            (Some(shown_on_hover.into_any_element()), None)
+            (Some(shown_on_hover.into_any_element()), None, None)
         }
-        Hold::Refused(button) => (Some(button), None),
-        Hold::Held(terminal, release) => {
+        Hold::Refused(button) => (Some(button), None, None),
+        Hold::Held(terminal, note, release) => {
             let release = release.clone();
             let button = action(
                 format!("{id}-release").into(),
@@ -456,7 +482,15 @@ fn panel(
                     release(&ix, window, cx)
                 },
             );
-            (Some(button), Some(terminal))
+            let note = note.map(|note| {
+                div()
+                    .w_full()
+                    .min_w_0()
+                    .px(px(PANEL_PAD_X))
+                    .pb(px(PANEL_PAD_BOTTOM))
+                    .child(note)
+            });
+            (Some(button), Some(terminal), note)
         }
     };
     let header = div()
@@ -524,6 +558,10 @@ fn panel(
         .font_family(mono(theme))
         .text_size(px(FONT_SMALL))
         .child(meta(shell.state.word(), theme).text_color(shell.state.color(theme)))
+        .when(yours, |facts| {
+            facts
+                .child(meta("held by you", theme).text_color(theme.color(ColorToken::StatusAccent)))
+        })
         .child(
             div()
                 .flex_1()
@@ -599,6 +637,7 @@ fn panel(
         .rounded(px(RADIUS_TAB))
         .bg(ink(theme, PANEL_FILL))
         .child(header)
+        .children(note)
         .child(facts)
         .children(confirm)
         .child(div().p(px(BADGE_PAD_X)).child(body))
@@ -617,6 +656,7 @@ impl RenderOnce for Shells {
             traced,
             take,
             held,
+            yours,
         } = self;
         let theme = ActiveTheme::theme(cx);
         let width = Width::of(format!("{id}-width"), window, cx);
@@ -692,13 +732,13 @@ impl RenderOnce for Shells {
                 .as_ref()
                 .is_none_or(|traced| traced.get(active).copied().unwrap_or(false));
             let hold = match (&held, &take) {
-                (Some((at, terminal, release)), _) if *at == active => {
-                    Hold::Held(terminal.clone(), release)
+                (Some(held), _) if held.at == active => {
+                    Hold::Held(held.terminal.clone(), held.note.clone(), &held.release)
                 }
                 (_, Some((takeable, take))) if shell.state.endable() => {
-                    match takeable.get(active).copied().unwrap_or(false) {
-                        true => Hold::Offered(take),
-                        false => Hold::Refused(
+                    match takeable.get(active) {
+                        Some(Take::Offered) => Hold::Offered(take),
+                        Some(Take::Refused(why)) => Hold::Refused(
                             tooltip(
                                 ElementId::Name(format!("{id}-take-tip").into()),
                                 div()
@@ -708,18 +748,22 @@ impl RenderOnce for Shells {
                                     .text_color(ink(&theme, DIM_TEXT))
                                     .child("take over"),
                                 Edge::Frame,
-                                REFUSED,
+                                why.clone(),
                                 &theme,
                                 window,
                                 cx,
                             )
                             .into_any_element(),
                         ),
+                        None => Hold::Unavailable,
                     }
                 }
                 _ => Hold::Unavailable,
             };
-            panel(&id, active, shell, fit, &theme, &on, ending, traced, hold)
+            let yours = yours.get(active).copied().unwrap_or(false);
+            panel(
+                &id, active, shell, fit, &theme, &on, ending, traced, hold, yours,
+            )
         });
         div()
             .relative()

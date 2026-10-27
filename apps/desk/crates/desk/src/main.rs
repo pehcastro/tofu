@@ -17,6 +17,8 @@ mod screens {
     pub mod classifier;
     #[cfg(feature = "screen-context")]
     pub mod context;
+    #[cfg(feature = "screen-drain")]
+    pub mod drain;
     #[cfg(feature = "screen-forks")]
     pub mod forks;
     #[cfg(any(
@@ -26,12 +28,19 @@ mod screens {
         feature = "screen-library",
         feature = "screen-context",
         feature = "screen-session",
+        feature = "screen-intro-setup",
         feature = "screen-forks",
-        feature = "screen-boardy"
+        feature = "screen-drain",
+        feature = "screen-boardy",
+        feature = "screen-glass-bench"
     ))]
     pub mod frame;
+    #[cfg(feature = "screen-glass-bench")]
+    pub mod glass_bench;
     #[cfg(feature = "screen-intro")]
     pub mod intro;
+    #[cfg(feature = "screen-intro-setup")]
+    pub mod intro_setup;
     #[cfg(feature = "screen-library")]
     pub mod library;
     #[cfg(feature = "screen-limits")]
@@ -139,15 +148,16 @@ const USAGE: &str = "usage: desk [<folder>] | [--screen <name> [--board <ID>] [-
 DESK_PROFILE=<path> writes a Chrome trace of the run to <path> when the desk quits\n\
 --file opens a file in the editor screen\n\
 --dir lists a folder in the editor screen's file tree\n\
-screens: work settings boardy accounts theme library classifier usage limits context session forks intro onboarding platforms\n\
+screens: work settings boardy accounts theme intro-setup library classifier usage limits context session forks drain intro onboarding platforms\n\
 modules: chat subagents file-edits shells git editor browser data-studio";
-const SCREENS: [&str; 16] = [
+const SCREENS: [&str; 18] = [
     "work",
     "settings",
     "boardy",
     "editor",
     "accounts",
     "theme",
+    "intro-setup",
     "library",
     "classifier",
     "usage",
@@ -155,6 +165,7 @@ const SCREENS: [&str; 16] = [
     "context",
     "session",
     "forks",
+    "drain",
     "intro",
     "onboarding",
     "platforms",
@@ -187,6 +198,7 @@ struct ScreenLaunch {
 }
 
 enum Launch {
+    Intro,
     Desk,
     Screen(ScreenLaunch),
     Bench(Scenario, ScreenLaunch),
@@ -220,6 +232,7 @@ fn screen(name: &str) -> Result<Open, String> {
         "boardy" => gated!("screen-boardy", screens::boardy::open),
         "accounts" => gated!("screen-accounts", screens::accounts::open),
         "theme" => gated!("screen-theme", screens::theme::open),
+        "intro-setup" => gated!("screen-intro-setup", screens::intro_setup::open),
         "library" => gated!("screen-library", screens::library::open),
         "classifier" => gated!("screen-classifier", screens::classifier::open),
         "usage" => gated!("screen-usage", screens::usage::open),
@@ -227,6 +240,7 @@ fn screen(name: &str) -> Result<Open, String> {
         "context" => gated!("screen-context", screens::context::open),
         "session" => gated!("screen-session", screens::session::open),
         "forks" => gated!("screen-forks", screens::forks::open),
+        "drain" => gated!("screen-drain", screens::drain::open),
         "intro" => gated!("screen-intro", screens::intro::open),
         "onboarding" => gated!("screen-onboarding", screens::onboarding::open),
         "chat" => ("chat", Some(modules::chat::open as Open)),
@@ -238,6 +252,7 @@ fn screen(name: &str) -> Result<Open, String> {
         "browser" => gated!("module-browser", modules::browser::open),
         "data-studio" => gated!("module-data-studio", modules::data_studio::open),
         "platforms" => gated!("screen-platforms", screens::platforms::open),
+        "glass-bench" => gated!("screen-glass-bench", screens::glass_bench::open),
         _ => return Err(format!("unknown screen {name}\n{USAGE}")),
     };
     open.ok_or_else(|| {
@@ -251,7 +266,7 @@ fn parse(args: &[String]) -> Result<Launch, Refused> {
             let scenario = Scenario::named(name).ok_or(Refused::Bench(bench::KNOWN))?;
             Ok(Launch::Bench(scenario, scenario.launch()?))
         }
-        [] => Ok(Launch::Desk),
+        [] => Ok(Launch::Intro),
         [folder] if !folder.starts_with("--") => Ok(Launch::Desk),
         [flag, folder] if flag == "--install-plugin" => Ok(Launch::Screen(ScreenLaunch {
             open: screen("settings")?,
@@ -323,18 +338,18 @@ fn route(
     window: &mut Window,
     cx: &mut Context<Desk>,
 ) -> Result<String, String> {
-    match desk.open_screens().first() {
-        Some(&"work") => {}
+    let first = match desk.open_screens().first() {
+        Some(&first @ ("work" | "intro")) => first,
         Some(shown) => return Ok(format!("{shown}, kept because it changed first")),
         None => return Err("the desk shows no screen".to_owned()),
-    }
+    };
     let tofu = project::tofu();
     let looked = match tofu.components().count() {
         1 => format!("{} on your PATH", tofu.display()),
         _ => tofu.display().to_string(),
     };
     let (title, line, command) = match run {
-        FirstRun::Ready => return Ok("work".to_owned()),
+        FirstRun::Ready => return Ok(first.to_owned()),
         FirstRun::NoProject | FirstRun::UnknownStep { .. } => {
             return onboarding(None, desk, window, cx);
         }
@@ -438,15 +453,31 @@ fn open_launch(launch: Launch, cx: &mut App) -> Result<WindowHandle<Desk>, Strin
             })
         })
         .collect();
+    let named = !matches!(launch, Launch::Desk | Launch::Intro);
+    let intro = match launch {
+        Launch::Intro => screen("intro")
+            .inspect(|_| {
+                eprintln!("desk: intro opens because the launch names no folder or session")
+            })
+            .inspect_err(|why| eprintln!("desk: intro skipped, work opens: {why}"))
+            .ok(),
+        _ => None,
+    };
     let (title, client, name, board, target, open): (String, _, String, _, _, Open) = match launch {
-        Launch::Desk => (
-            desk::WINDOW_TITLE.to_owned(),
-            desk::board_client(),
-            "work".to_owned(),
-            None,
-            None,
-            screen("work")?,
-        ),
+        Launch::Intro | Launch::Desk => {
+            let (name, open) = match intro {
+                Some(open) => ("intro", open),
+                None => ("work", screen("work")?),
+            };
+            (
+                desk::WINDOW_TITLE.to_owned(),
+                desk::board_client(),
+                name.to_owned(),
+                None,
+                None,
+                open,
+            )
+        }
         Launch::Screen(launch) | Launch::Bench(_, launch) => (
             format!("{} {}", desk::WINDOW_TITLE, launch.name),
             if launch.name == "chat" {
@@ -476,7 +507,7 @@ fn open_launch(launch: Launch, cx: &mut App) -> Result<WindowHandle<Desk>, Strin
                 refused = Some(error);
                 cx.new(|_| EmptyView).into()
             });
-            cx.new(|cx| desk::Desk::new(screens, name.into(), view, window, cx))
+            cx.new(|cx| desk::Desk::new(screens, (name.into(), named), view, window, cx))
         },
     );
     if let Some(error) = refused {
@@ -504,7 +535,7 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
     let (explicit, scenario) = match &launch {
-        Launch::Desk => (None, None),
+        Launch::Intro | Launch::Desk => (None, None),
         Launch::Screen(launch) => (Some(launch.name.clone()), None),
         Launch::Bench(scenario, launch) => (Some(launch.name.clone()), Some(*scenario)),
     };
@@ -526,7 +557,10 @@ fn main() -> ExitCode {
     #[cfg(feature = "screen-work")]
     plugins::start();
     let mut assets = Icon::registry();
-    if let Err(duplicates) = assets.extend(desk_ui::components::glyph::Glyph::entries()) {
+    if let Err(duplicates) = assets
+        .extend(desk_ui::components::glyph::Glyph::entries())
+        .and_then(|()| assets.extend(desk_ui::components::logo::Brand::entries()))
+    {
         eprintln!("the desk has two assets under one path: {duplicates:?}");
         return ExitCode::FAILURE;
     }
@@ -561,6 +595,11 @@ fn main() -> ExitCode {
                             path.to_string_lossy()
                         );
                     }
+                }
+            } else {
+                desk_perf::profiled! {
+                    on { desk_perf::Profiler::install(None, cx); }
+                    off {}
                 }
             }
             #[cfg(feature = "screen-work")]

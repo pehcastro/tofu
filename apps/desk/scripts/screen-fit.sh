@@ -67,6 +67,25 @@ tile_breaks() {
         END { for (file in count) if (count[file] > 1) print file ":inner_card\t" lines[file] }'
 }
 
+slop_roots=(crates/desk/src crates/ui/src)
+slop_kinds=(
+    "fixture	fixture"
+    "tell	Self::tell"
+    "not_drawn	not drawn yet"
+    "no_surface	no surface yet"
+    "static_api	pub fn .*&'static|pub .*: &'static"
+    "raw_colour	(^|[^_a-zA-Z0-9])(rgba?|hsla)\\(|0x([0-9a-fA-F]{8}|[0-9a-fA-F]{6})([^0-9a-fA-F_]|$)"
+)
+
+slop_hits() {
+    for entry in "${slop_kinds[@]}"; do
+        kind=${entry%%	*}
+        grep -rnE --include='*.rs' "${entry#*	}" "${slop_roots[@]}" |
+            grep -vE '^[^:]*(/tests?/|/tests?\.rs|_tests?\.rs|/theme/|/theme\.rs):' |
+            awk -F: -v kind="$kind" '{ print $1 ":" $2 ": " kind }'
+    done
+}
+
 tiles=$(tile_breaks | sort)
 hits=$( { wide_consts; placed_offsets; printf '%s\n' "$tiles" | cut -f1; } | sed '/^$/d' | sort -u)
 
@@ -103,6 +122,16 @@ if [ -n "$broken" ]; then
     echo "screen-fit: a screen carries board coordinates (an absolute left or top in px, or an f32 const over $most):"
     printf '%s\n' "$broken" | sed 's/^/  /'
     echo "lay it out with flex in the area it is given, or add 'path:key  reason' to $allow"
+    failed=1
+fi
+
+slop=$(slop_hits | sort)
+if [ -n "$slop" ]; then
+    echo "screen-fit: a fixture, placeholder, closed &'static api or raw colour literal ships as real:"
+    printf '%s\n' "$slop" | sed 's/^/  /'
+    echo "per kind:"
+    printf '%s\n' "$slop" | awk '{ print $NF }' | sort | uniq -c | sed 's/^/  /'
+    echo "wire it to real data, take an owned or generic value, or read the colour from the theme"
     failed=1
 fi
 

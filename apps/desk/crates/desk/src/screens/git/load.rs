@@ -5,7 +5,7 @@ use std::time::Instant;
 use desk_core::git::{DiffOf, Git, GitBinary, GitError, PullHow, Side};
 use gpui::{AppContext, Context};
 
-use super::model::{Action, GitScreen, Loaded, Snapshot, Told};
+use super::model::{Action, GitScreen, Loaded, Shown, Snapshot, Told};
 use super::sync::{plural, short};
 use super::watch::{self, Touched};
 
@@ -218,7 +218,7 @@ impl GitScreen {
     pub(super) fn fetch<T: Send + 'static>(
         &self,
         read: impl FnOnce(&GitBinary) -> Result<T, GitError> + Send + 'static,
-        keep: impl FnOnce(&mut GitScreen, Loaded<T>, &mut Context<GitScreen>) + 'static,
+        keep: impl FnOnce(&mut GitScreen, Loaded<T>, &mut Context<GitScreen>) -> Shown + 'static,
         cx: &mut Context<Self>,
     ) {
         let Some(git) = self.binary() else {
@@ -228,8 +228,9 @@ impl GitScreen {
         cx.spawn(async move |screen, cx| {
             let read = loaded(read.await);
             let kept = screen.update(cx, |screen, cx| {
-                keep(screen, read, cx);
-                cx.notify();
+                if keep(screen, read, cx) == Shown::Changed {
+                    cx.notify();
+                }
             });
             if let Err(error) = kept {
                 eprintln!("desk: git: an answer came back to a closed screen: {error}");
@@ -293,7 +294,12 @@ impl GitScreen {
         let started = Instant::now();
         self.fetch(read_snapshot, move |screen, read, cx| {
             screen.reloading = false;
-            match read {
+            let shown = match read {
+                Loaded::Ready(snapshot)
+                    if screen.read && screen.problem.is_none() && snapshot == screen.snapshot =>
+                {
+                    Shown::Same
+                }
                 Loaded::Ready(snapshot) => {
                     if !screen.read {
                         eprintln!(
@@ -306,16 +312,19 @@ impl GitScreen {
                     screen.snapshot = snapshot;
                     screen.read = true;
                     screen.problem = None;
+                    Shown::Changed
                 }
                 Loaded::Failed(error) => {
                     eprintln!("desk: git: the snapshot was not read: {error}");
                     screen.problem = Some(error);
+                    Shown::Changed
                 }
-                Loaded::Waiting => {}
-            }
+                Loaded::Waiting => Shown::Same,
+            };
             if let Some(next) = screen.wanted.take() {
                 screen.reload(next, cx);
             }
+            shown
         }, cx);
     }
 
@@ -363,6 +372,7 @@ impl GitScreen {
                 if matches!(&screen.detail, Some((loaded, _)) if *loaded == sha) {
                     screen.detail = Some((sha, read));
                 }
+                Shown::Changed
             },
             cx,
         );
@@ -377,6 +387,7 @@ impl GitScreen {
                 if matches!(&screen.diff, Some((loaded, _)) if *loaded == path) {
                     screen.diff = Some((path, read));
                 }
+                Shown::Changed
             },
             cx,
         );
@@ -386,7 +397,10 @@ impl GitScreen {
         self.undo = Loaded::Waiting;
         self.fetch(
             |git| git.undo_steps(UNDO_STEPS),
-            |screen, read, _| screen.undo = read,
+            |screen, read, _| {
+                screen.undo = read;
+                Shown::Changed
+            },
             cx,
         );
     }
@@ -395,7 +409,10 @@ impl GitScreen {
         self.outgoing = Loaded::Waiting;
         self.fetch(
             GitBinary::outgoing,
-            |screen, read, _| screen.outgoing = read,
+            |screen, read, _| {
+                screen.outgoing = read;
+                Shown::Changed
+            },
             cx,
         );
     }

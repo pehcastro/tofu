@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashSet};
 use std::f32::consts::FRAC_PI_2;
+use std::rc::Rc;
 
 use desk_core::git::{DiffOf, Entry, Mark, State};
 use desk_motion::tokens::{EASE_OUT, HOVER_MS};
@@ -19,8 +20,8 @@ use desk_ui::live::ActiveTheme;
 use desk_ui::metrics::{ICON_SMALL, ICON_TINY};
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    AnyElement, ClickEvent, Context, Div, Entity, Motion, SharedString, Stateful, Transformation,
-    Window, div, prelude::*, px, radians,
+    AnyElement, ClickEvent, Context, Div, Entity, ListAlignment, ListState, Motion, SharedString,
+    Stateful, Transformation, Window, div, list, prelude::*, px, radians,
 };
 
 use super::commit_box;
@@ -38,8 +39,9 @@ const ACT: f32 = 22.0;
 const ACT_GAP: f32 = 2.0;
 const ROW_GAP: f32 = 6.0;
 const ROW_GROUP: &str = "git-row";
+const OVERDRAW: f32 = 200.0;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(super) struct Letter {
     text: &'static str,
     color: ColorToken,
@@ -277,68 +279,169 @@ fn changes(
         (true, true) => Some("Nothing to commit. Every file matches the last commit."),
         (true, false) => None,
     };
-    let list = div()
-        .id("git-changes")
-        .flex()
-        .flex_col()
-        .size_full()
-        .overflow_y_scroll()
-        .px(px(LIST_PAD))
-        .pb(px(LIST_PAD));
-    let list = match quiet {
-        Some(said) => list.child(
+    if let Some(said) = quiet {
+        return div().flex_1().min_h_0().px(px(LIST_PAD)).child(
             div()
                 .p(px(ROW_PAD))
                 .text_size(px(FONT_SMALL))
                 .text_color(ink(theme, DIM_TEXT))
                 .child(said),
-        ),
-        None => list
-            .children(section(screen, Section::Staged, staged, theme, window, cx))
-            .children(section(
-                screen,
-                Section::Changes,
-                changed,
-                theme,
-                window,
-                cx,
-            )),
-    };
-    div().flex_1().min_h_0().child(list)
+        );
+    }
+    let mut items = Vec::new();
+    for (section, changes) in [(Section::Staged, staged), (Section::Changes, changed)] {
+        if changes.is_empty() {
+            continue;
+        }
+        let folds = window.use_keyed_state(section.folds(), cx, |_, _| HashSet::<String>::new());
+        items.push(Item::Header(section));
+        items.extend(
+            tree(changes, folds.read(cx))
+                .into_iter()
+                .map(|row| match row {
+                    Row::Folder {
+                        label,
+                        key,
+                        open,
+                        depth,
+                        ..
+                    } => Item::Folder {
+                        section,
+                        label,
+                        key,
+                        open,
+                        depth,
+                        folds: folds.clone(),
+                    },
+                    Row::File {
+                        name,
+                        change,
+                        depth,
+                    } => Item::File {
+                        section,
+                        name: name.to_owned(),
+                        path: change.path.to_owned(),
+                        letter: change.letter,
+                        discardable: change.discardable,
+                        depth,
+                    },
+                }),
+        );
+    }
+    let shown = window.use_keyed_state("git-change-list", cx, |_, _| ChangeList {
+        state: ListState::new(0, ListAlignment::Top, px(OVERDRAW)),
+        items: Rc::from([]),
+    });
+    let (state, items) = shown.update(cx, |shown, _| shown.replace(items));
+    let row = cx.processor(move |screen: &mut GitScreen, at: usize, window, cx| {
+        items.get(at).map_or_else(
+            || div().into_any_element(),
+            |item| item_row(screen, item, window, cx),
+        )
+    });
+    div().flex_1().min_h_0().child(
+        list(state, row)
+            .size_full()
+            .px(px(LIST_PAD))
+            .pb(px(LIST_PAD)),
+    )
 }
 
-fn section(
+#[derive(Clone, PartialEq)]
+enum Item {
+    Header(Section),
+    Folder {
+        section: Section,
+        label: String,
+        key: String,
+        open: bool,
+        depth: u16,
+        folds: Entity<HashSet<String>>,
+    },
+    File {
+        section: Section,
+        name: String,
+        path: String,
+        letter: Letter,
+        discardable: bool,
+        depth: u16,
+    },
+}
+
+struct ChangeList {
+    state: ListState,
+    items: Rc<[Item]>,
+}
+
+impl ChangeList {
+    fn replace(&mut self, items: Vec<Item>) -> (ListState, Rc<[Item]>) {
+        let old = &self.items;
+        let front = old.iter().zip(&items).take_while(|(a, b)| a == b).count();
+        let back = old
+            .iter()
+            .skip(front)
+            .rev()
+            .zip(items.iter().skip(front).rev())
+            .take_while(|(a, b)| a == b)
+            .count();
+        if front != old.len() || old.len() != items.len() {
+            let gone = old.len().saturating_sub(back);
+            let came = items.len().saturating_sub(front).saturating_sub(back);
+            self.state.splice(front..gone.max(front), came);
+            self.items = Rc::from(items);
+        }
+        (self.state.clone(), Rc::clone(&self.items))
+    }
+}
+
+fn item_row(
     screen: &GitScreen,
-    section: Section,
-    changes: &[Change],
-    theme: &Theme,
+    item: &Item,
     window: &mut Window,
     cx: &mut Context<GitScreen>,
-) -> Option<Div> {
-    if changes.is_empty() {
-        return None;
+) -> AnyElement {
+    let theme = ActiveTheme::theme(cx);
+    match item {
+        Item::Header(section) => {
+            let (staged, changed) = split(&screen.snapshot().changes);
+            let changes = match section {
+                Section::Staged => staged,
+                Section::Changes => changed,
+            };
+            section_header(screen, *section, &changes, &theme, window, cx).into_any_element()
+        }
+        Item::Folder {
+            section,
+            label,
+            key,
+            open,
+            depth,
+            folds,
+        } => folder_row(
+            *section,
+            label.clone(),
+            key.clone(),
+            *open,
+            *depth,
+            folds,
+            &theme,
+        ),
+        Item::File {
+            section,
+            name,
+            path,
+            letter,
+            discardable,
+            depth,
+        } => {
+            let change = Change {
+                path,
+                letter: *letter,
+                discardable: *discardable,
+            };
+            file_row(screen, *section, name, &change, *depth, window, cx)
+        }
     }
-    let folds = window.use_keyed_state(section.folds(), cx, |_, _| HashSet::<String>::new());
-    let rows = tree(changes, folds.read(cx));
-    let header = section_header(screen, section, changes, theme, window, cx);
-    let rows: Vec<AnyElement> = rows
-        .into_iter()
-        .map(|row| match row {
-            Row::Folder {
-                label,
-                key,
-                open,
-                depth,
-                ..
-            } => folder_row(section, label, key, open, depth, &folds, theme),
-            Row::File {
-                name,
-                change,
-                depth,
-            } => file_row(screen, section, name, change, depth, window, cx),
-        })
-        .collect();
-    Some(div().flex().flex_col().child(header).children(rows))
 }
 
 fn tree<'a>(changes: &'a [Change<'a>], shut: &HashSet<String>) -> Vec<Row<'a>> {

@@ -1,3 +1,4 @@
+use desk_ui::components::context_card::Bands;
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::overlay::{MenuItem, menu};
 use desk_ui::components::sidebar::{
@@ -9,7 +10,7 @@ use desk_ui::components::status_bar::{
 };
 use desk_ui::components::tabs::{Tab, TabEvent, TabMark, header_tabs};
 use desk_ui::components::title_bar::{
-    Github, GithubUser, Notice, Title, TitleBar, TitlePick, TitlePop, WindowKeys,
+    Github, GithubUser, Title, TitleBar, TitlePick, TitlePop, WindowKeys,
 };
 use desk_ui::icon::Icon;
 use desk_ui::theme::Theme;
@@ -34,48 +35,9 @@ const POP_ROOM: f32 = 250.0;
 const SESSIONS_HEIGHT: f32 = 300.0;
 
 fn board_title(open: Option<TitlePop>) -> Title {
-    let notice = |glyph, text: &str, code: Option<&str>, detail: &str, (needs_you, fresh)| Notice {
-        glyph,
-        text: text.to_owned().into(),
-        code: code.map(|code| code.to_owned().into()),
-        detail: detail.to_owned().into(),
-        needs_you,
-        fresh,
-    };
     Title {
         sidebar_open: true,
         palette_keys: "Ctrl K".into(),
-        notices: vec![
-            notice(
-                Glyph::Lock,
-                "shell wants to run",
-                Some("rm -rf build/"),
-                "2m ago",
-                (true, true),
-            ),
-            notice(
-                Glyph::Agents,
-                "ts-dev finished",
-                Some("sort order is now by date"),
-                "12m ago",
-                (false, true),
-            ),
-            notice(
-                Glyph::Cron,
-                "Cron nightly fired",
-                None,
-                "1h ago",
-                (false, false),
-            ),
-            notice(
-                Glyph::Trace,
-                "A turn failed",
-                Some("fix the build"),
-                "2h ago",
-                (false, false),
-            ),
-        ],
-        unread: true,
         github: Github::SignedIn(GithubUser {
             login: "pehcastro".into(),
             name: Some("Luiz".into()),
@@ -118,8 +80,6 @@ fn empty_title(open: Option<TitlePop>) -> Title {
     Title {
         sidebar_open: true,
         palette_keys: "Ctrl K".into(),
-        notices: Vec::new(),
-        unread: false,
         github: Github::SignedOut,
         keys: WindowKeys::Shown,
         open,
@@ -351,8 +311,12 @@ pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
             context: Some(ContextUse {
                 tokens: "20k".into(),
                 share: 0.08,
+                used: 20_000,
+                ceiling: 250_000,
+                model: Some("claude-sub/claude-opus-5".into()),
+                bands: Bands::Reading,
             }),
-            classifier: 4,
+            classifier: "4".into(),
             cron: 1,
         }),
         accounts: Accounts::Read(vec![claude.clone()]),
@@ -436,19 +400,9 @@ pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
     ];
     let opened = [
         (
-            "Title bar, IWIN-1, bell open",
-            "chrome-title-bell",
-            board_title(Some(TitlePop::Notifications)),
-        ),
-        (
             "Title bar, IWIN-1, account open",
             "chrome-title-account",
             board_title(Some(TitlePop::Account)),
-        ),
-        (
-            "Title bar, empty, bell open",
-            "chrome-title-bell-empty",
-            empty_title(Some(TitlePop::Notifications)),
         ),
         (
             "Title bar, empty, account open",

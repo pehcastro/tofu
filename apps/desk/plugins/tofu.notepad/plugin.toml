@@ -11,3 +11,9 @@ fs.write = ["picked"]
 
 [contributes]
 tile = true
+
+[[contributes.commands]]
+name = "notepad.new"
+title = "New note"
+description = "Open a Notepad tile on an untitled note."
+agent = true

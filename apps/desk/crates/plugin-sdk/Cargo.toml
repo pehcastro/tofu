@@ -11,6 +11,12 @@ wit-bindgen = "0.57.1"
 
 [dev-dependencies]
 wit-component = { version = "=0.254.2", default-features = false }
+desk_plugin = { workspace = true }
+
+[[example]]
+name = "commands"
+test = true
+harness = false
 
 [lints.clippy]
 unwrap_used = "deny"

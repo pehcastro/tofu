@@ -1,10 +1,10 @@
+mod appearance;
 pub mod board;
 mod fixture;
-mod intro;
 mod keys;
 mod plugins;
 mod rows;
-mod stored;
+pub mod stored;
 mod terminal;
 
 pub use rows::Rows;
@@ -30,9 +30,6 @@ pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView
     board::load_fonts(cx)?;
     match board {
         None | Some("ISET-1") => Ok(cx.new(|cx| rows::Rows::new(&ActiveTheme::theme(cx))).into()),
-        Some("ISET-3") => Ok(cx.new(|_| intro::Intro::new()).into()),
-        Some(other) => Err(format!(
-            "the settings screen draws ISET-1 and ISET-3, not {other}"
-        )),
+        Some(other) => Err(format!("the settings screen draws ISET-1, not {other}")),
     }
 }

@@ -111,6 +111,7 @@ replies! {
         exports: Vec<String>,
     }
     PluginStateReply { state: PluginState }
+    PluginCommand { id: String, title: String, args_schema: Value }
     Reloaded { state: PluginState, load_ms: u64 }
     Installed { id: String, consent_needed: bool }
     Uninstalled { removed: bool, kept_data: bool }

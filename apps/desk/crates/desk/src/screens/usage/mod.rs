@@ -13,6 +13,7 @@ use desk_ui::components::chip::mono;
 use desk_ui::components::empty::empty_state;
 use desk_ui::components::paint::ink;
 use desk_ui::components::size::T2;
+use desk_ui::components::status_bar::source_mark;
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::Theme;
 use gpui::{
@@ -469,12 +470,17 @@ impl UsageScreen {
             || "not reported".to_owned(),
             |cost| format!("{cost:.2} USD"),
         );
+        let source = whole
+            .model
+            .as_deref()
+            .and_then(|model| model.split_once('/'))
+            .map(|(source, _)| source_mark(source, theme));
         panes().flex_none().children(
             [
-                ("Turns", grouped(whole.turns), 1.0),
-                ("Sub-agents", grouped(whole.sub_agents), 1.0),
-                ("Steps", grouped(whole.steps), 1.0),
-                ("Cost", cost, 1.0),
+                ("Turns", grouped(whole.turns), 1.0, None),
+                ("Sub-agents", grouped(whole.sub_agents), 1.0, None),
+                ("Steps", grouped(whole.steps), 1.0, None),
+                ("Cost", cost, 1.0, None),
                 (
                     "Model",
                     whole
@@ -482,10 +488,11 @@ impl UsageScreen {
                         .clone()
                         .unwrap_or_else(|| "not reported".to_owned()),
                     2.0,
+                    source,
                 ),
             ]
             .into_iter()
-            .map(|(label, value, grow)| count(label, value, grow, theme)),
+            .map(|(label, value, grow, mark)| count(label, value, grow, mark, theme)),
         )
     }
 
@@ -630,7 +637,7 @@ fn valued(split: &Split, theme: &Theme, cx: &App) -> Div {
         )
 }
 
-fn count(label: &'static str, value: String, grow: f32, theme: &Theme) -> Div {
+fn count(label: &'static str, value: String, grow: f32, mark: Option<Div>, theme: &Theme) -> Div {
     fraction(outer_card(theme), grow, COUNT_LEAST * grow)
         .flex_col()
         .px(px(3.0))
@@ -651,7 +658,14 @@ fn count(label: &'static str, value: String, grow: f32, theme: &Theme) -> Div {
                 .text_size(px(FIGURE))
                 .line_height(relative(1.0))
                 .font_weight(FontWeight::SEMIBOLD)
-                .child(value),
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.0))
+                        .children(mark)
+                        .child(value),
+                ),
         )
 }
 

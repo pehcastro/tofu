@@ -115,12 +115,88 @@ impl TicketStatus {
     }
 
     pub(crate) fn entries() -> impl Iterator<Item = (String, Cow<'static, [u8]>)> {
-        TicketStatus::ALL.into_iter().map(|status| {
-            (
-                status.path().to_owned(),
-                Cow::Borrowed(status.svg().as_bytes()),
-            )
+        let statuses = TicketStatus::ALL
+            .into_iter()
+            .map(|status| (status.path(), status.svg()));
+        let runs = RunState::ALL
+            .into_iter()
+            .map(|state| (state.path(), state.svg()));
+        statuses
+            .chain(runs)
+            .map(|(path, svg)| (path.to_owned(), Cow::Borrowed(svg.as_bytes())))
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum RunState {
+    Waiting,
+    Failed,
+    Running,
+    Done,
+}
+
+impl RunState {
+    pub const ALL: [RunState; 4] = [
+        RunState::Waiting,
+        RunState::Failed,
+        RunState::Running,
+        RunState::Done,
+    ];
+
+    pub fn color(self, theme: &Theme) -> Rgba {
+        theme.color(match self {
+            RunState::Waiting => ColorToken::StatusWarn,
+            RunState::Failed => ColorToken::StatusDanger,
+            RunState::Running => ColorToken::StatusAccent,
+            RunState::Done => ColorToken::StatusLive,
         })
+    }
+
+    fn path(self) -> &'static str {
+        match self {
+            RunState::Waiting => "run/waiting.svg",
+            RunState::Failed => "run/failed.svg",
+            RunState::Running => "run/running.svg",
+            RunState::Done => "run/done.svg",
+        }
+    }
+
+    fn svg(self) -> &'static str {
+        match self {
+            RunState::Waiting => ringed!(
+                r##"<defs><mask id="warn"><rect width="16" height="16" fill="#fff" stroke="none"/><path d="M8 6.4v2.9" stroke-width="1.7"/><circle cx="8" cy="11.6" r=".95" fill="#000" stroke="none"/></mask></defs><path d="M8 1.6c.42 0 .8.22 1 .58l5.75 10.1c.42.74-.1 1.66-.95 1.66H2.2c-.85 0-1.37-.92-.95-1.66L7 2.18c.2-.36.58-.58 1-.58z" fill="#000" stroke="none" mask="url(#warn)"/>"##
+            ),
+            RunState::Failed => ringed!(
+                r##"<defs><mask id="fail"><rect width="16" height="16" fill="#fff" stroke="none"/><path d="M8 4.6v4" stroke-width="1.7"/><circle cx="8" cy="11.3" r=".95" fill="#000" stroke="none"/></mask></defs><circle cx="8" cy="8" r="7" fill="#000" stroke="none" mask="url(#fail)"/>"##
+            ),
+            RunState::Running => ringed!(
+                r##"<circle cx="8" cy="8" r="6.25" stroke-opacity=".3"/><path d="M8 1.75A6.25 6.25 0 0 1 14.25 8"/>"##
+            ),
+            RunState::Done => {
+                ringed!(r##"<circle cx="8" cy="8" r="5" fill="#000" stroke="none"/>"##)
+            }
+        }
+    }
+}
+
+#[derive(IntoElement)]
+pub struct RunMark {
+    state: RunState,
+    size: Pixels,
+}
+
+pub fn run_mark(state: RunState, size: Pixels) -> impl IntoElement {
+    RunMark { state, size }
+}
+
+impl RenderOnce for RunMark {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let theme = ActiveTheme::theme(cx);
+        svg()
+            .path(self.state.path())
+            .size(self.size)
+            .flex_none()
+            .text_color(self.state.color(&theme))
     }
 }
 

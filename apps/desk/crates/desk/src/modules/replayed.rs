@@ -42,8 +42,12 @@ pub struct Replayed {
 pub fn whole() -> Result<Vec<Event>, String> {
     let mut replay = Replay::read()?;
     let mut events = Vec::new();
-    while let Step::Feed(event) = replay.step()? {
-        events.push(event);
+    loop {
+        match replay.step() {
+            Ok(Step::Feed(event)) => events.push(event),
+            Ok(Step::Restart | Step::Report) => break,
+            Err(error) => eprintln!("desk: the cassette has a bad line, skipped: {error}"),
+        }
     }
     Ok(events)
 }
@@ -111,8 +115,7 @@ impl Replayed {
 impl Render for Replayed {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if let Err(error) = self.frame(window, cx) {
-            eprintln!("desk: the cassette has a bad line: {error}");
-            cx.quit();
+            eprintln!("desk: the cassette has a bad line, skipped: {error}");
         }
         let theme = ActiveTheme::theme(cx);
         let tile = shell(

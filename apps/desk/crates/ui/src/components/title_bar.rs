@@ -3,19 +3,17 @@ use std::rc::Rc;
 use desk_core::control::Control;
 use gpui::{
     AnyElement, App, ClickEvent, Div, ElementId, Entity, FocusHandle, FontWeight, ImageSource,
-    KeyContext, SharedString, Stateful, Window, WindowControlArea, div, img, prelude::*, px,
+    KeyContext, Rgba, SharedString, Size, Stateful, Window, WindowControlArea, div, img,
+    prelude::*, px,
 };
 
 use crate::component::{control, icon, icon_button};
 use crate::components::avatar::{Face, PersonSize, person_avatar};
-use crate::components::card::caption;
 use crate::components::chip::mono;
-use crate::components::empty::empty_state;
 use crate::components::glyph::Glyph;
-use crate::components::list::bare_row;
 use crate::components::overlay::{Align, Placement, Popover, Side, toggles_on_press};
 use crate::components::paint::{focus_ring, glyph, ink};
-use crate::components::size::{FONT_SMALL, MENU_PAD, POPOVER_PAD_X, POPOVER_PAD_Y, T2, T3};
+use crate::components::size::{FONT_SMALL, MENU_PAD, POPOVER_PAD_X, POPOVER_PAD_Y, T3};
 use crate::components::tooltip::{Edge, tooltip};
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
@@ -31,23 +29,19 @@ const MARK_HEIGHT: f32 = 18.0;
 const MARK_WIDTH: f32 = 17.0;
 const TO_LIGHT: &str = "Switch to light theme";
 const TO_DARK: &str = "Switch to dark theme";
-const BELL_DOT: f32 = 6.0;
-const BELL_DOT_INSET: f32 = 6.0;
 const POP_OFFSET: f32 = 4.0;
-const BELL_POP_WIDTH: f32 = 330.0;
 const ACCOUNT_POP_WIDTH: f32 = 250.0;
-const NOTICE_LINE: f32 = 18.0;
 const ACCOUNT_LINE: f32 = 17.0;
 const POP_CAPTION_X: f32 = 10.0;
 const POP_CAPTION_TOP: f32 = 8.0;
-const POP_CAPTION_GROUP_TOP: f32 = 10.0;
-const POP_CAPTION_BOTTOM: f32 = 6.0;
 const ACCOUNT_HEAD_BOTTOM: f32 = 10.0;
-const NO_NOTICES: &str = "No notices";
 const ASKING: &str = "Asking gh who is signed in";
 const SIGNED_OUT: &str = "Not signed in to GitHub";
 const SIGN_IN: &str = "gh auth login";
 const FOCUS_NAME: &str = "focus";
+const CAPTION_GAP: f32 = 2.0;
+const CAPTION_MARGIN: f32 = 6.0;
+const DARK_GLYPH_ALPHA: f32 = 0.8;
 
 pub fn named_stop(
     element: Stateful<Div>,
@@ -72,14 +66,12 @@ pub enum TitlePick {
     Sidebar,
     NewWorkspace,
     Palette,
-    Notice(usize),
-    NoticesRead,
     Theme,
+    Close,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TitlePop {
-    Notifications,
     Account,
 }
 
@@ -87,16 +79,6 @@ pub enum TitlePop {
 pub enum WindowKeys {
     Live,
     Shown,
-}
-
-#[derive(Clone)]
-pub struct Notice {
-    pub glyph: Glyph,
-    pub text: SharedString,
-    pub code: Option<SharedString>,
-    pub detail: SharedString,
-    pub needs_you: bool,
-    pub fresh: bool,
 }
 
 #[derive(Clone)]
@@ -138,8 +120,6 @@ impl Github {
 pub struct Title {
     pub sidebar_open: bool,
     pub palette_keys: SharedString,
-    pub notices: Vec<Notice>,
-    pub unread: bool,
     pub github: Github,
     pub keys: WindowKeys,
     pub open: Option<TitlePop>,
@@ -152,6 +132,50 @@ pub struct Marks {
     pub on_light: ImageSource,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Shade {
+    Light,
+    Dark,
+}
+
+#[derive(Clone, Copy)]
+pub struct CaptionInk {
+    pub glyph: ColorToken,
+    pub glyph_alpha: f32,
+    pub strong: ColorToken,
+    pub hover: ColorToken,
+}
+
+impl CaptionInk {
+    pub const DESK: Self = Self {
+        glyph: ColorToken::TextCaption,
+        glyph_alpha: 1.0,
+        strong: ColorToken::TextStrong,
+        hover: ColorToken::StateCaptionHover,
+    };
+
+    pub const fn intro(under: Shade) -> Self {
+        let (glyph, glyph_alpha) = match under {
+            Shade::Light => (ColorToken::IntroSendIcon, DARK_GLYPH_ALPHA),
+            Shade::Dark => (ColorToken::IntroModelText, 1.0),
+        };
+        Self {
+            glyph,
+            glyph_alpha,
+            strong: ColorToken::IntroSendFill,
+            hover: ColorToken::IntroComposerFill,
+        }
+    }
+}
+
+pub fn captions_span(scale: f32) -> Size<u32> {
+    let width = 3.0 * CAPTION_WIDTH + 2.0 * CAPTION_GAP + 2.0 * CAPTION_MARGIN;
+    Size {
+        width: (width * scale).ceil() as u32,
+        height: (TITLE_BAR_HEIGHT * scale).ceil() as u32,
+    }
+}
+
 type OnPick = Rc<dyn Fn(&TitlePick, &mut Window, &mut App)>;
 
 #[derive(IntoElement)]
@@ -162,6 +186,7 @@ pub struct TitleBar {
     on_pick: OnPick,
     controls_only: bool,
     marks: Option<Marks>,
+    ink: CaptionInk,
 }
 
 impl TitleBar {
@@ -178,7 +203,13 @@ impl TitleBar {
             on_pick: Rc::new(on_pick),
             controls_only: false,
             marks: None,
+            ink: CaptionInk::DESK,
         }
+    }
+
+    pub fn caption_ink(mut self, ink: CaptionInk) -> Self {
+        self.ink = ink;
+        self
     }
 
     pub fn marks(mut self, marks: Marks) -> Self {
@@ -215,18 +246,9 @@ fn shut(state: &Entity<Opened>, cx: &mut App) {
 #[derive(Clone)]
 struct PopRow {
     state: Entity<Opened>,
-    on_pick: OnPick,
 }
 
 impl PopRow {
-    fn picked(&self, pick: TitlePick) -> impl Fn(&ClickEvent, &mut Window, &mut App) + 'static {
-        let PopRow { state, on_pick } = self.clone();
-        move |_, window, cx| {
-            shut(&state, cx);
-            on_pick(&pick, window, cx);
-        }
-    }
-
     fn body(&self, focus: &FocusHandle) -> Div {
         let (escaper, outside) = (self.state.clone(), self.state.clone());
         div()
@@ -243,96 +265,6 @@ impl PopRow {
             })
             .on_mouse_down_out(move |_, _, cx| shut(&outside, cx))
     }
-}
-
-fn pop_caption(text: &'static str, top: f32, theme: &Theme) -> Div {
-    div()
-        .pt(px(top))
-        .px(px(POP_CAPTION_X))
-        .pb(px(POP_CAPTION_BOTTOM))
-        .child(caption(text, theme))
-}
-
-fn notice_row(ix: usize, notice: &Notice, rows: &PopRow, theme: &Theme) -> impl IntoElement {
-    let mark = match notice.needs_you {
-        true => theme.color(ColorToken::StatusWarn),
-        false => ink(theme, T3),
-    };
-    bare_row(("title-notice", ix), false, false, theme)
-        .items_start()
-        .line_height(px(NOTICE_LINE))
-        .on_click(rows.picked(TitlePick::Notice(ix)))
-        .child(div().h(px(NOTICE_LINE)).flex().items_center().child(glyph(
-            notice.glyph,
-            ICON_SMALL,
-            mark,
-        )))
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .gap_x_1()
-                        .when(!notice.needs_you, |line| line.text_color(ink(theme, T2)))
-                        .child(notice.text.clone())
-                        .children(
-                            notice
-                                .code
-                                .clone()
-                                .map(|code| div().font_family(mono(theme)).child(code)),
-                        ),
-                )
-                .child(
-                    div()
-                        .text_size(px(FONT_SMALL))
-                        .text_color(ink(theme, T3))
-                        .child(notice.detail.clone()),
-                ),
-        )
-}
-
-fn notices(title: &Title, rows: &PopRow, theme: &Theme) -> Vec<AnyElement> {
-    if title.notices.is_empty() {
-        return vec![
-            empty_state(
-                "title-no-notices",
-                NO_NOTICES,
-                None,
-                &[],
-                &[],
-                theme,
-                |_, _, _| {},
-            )
-            .into_any_element(),
-        ];
-    }
-    let mut out = Vec::new();
-    let group_of = |notice: &Notice| match (notice.needs_you, notice.fresh) {
-        (true, _) => "Needs you",
-        (false, true) => "New",
-        (false, false) => "Earlier",
-    };
-    for (name, top) in [
-        ("Needs you", POP_CAPTION_TOP),
-        ("New", POP_CAPTION_GROUP_TOP),
-        ("Earlier", POP_CAPTION_GROUP_TOP),
-    ] {
-        let group: Vec<AnyElement> = title
-            .notices
-            .iter()
-            .enumerate()
-            .filter(|(_, notice)| group_of(notice) == name)
-            .map(|(ix, notice)| notice_row(ix, notice, rows, theme).into_any_element())
-            .collect();
-        if !group.is_empty() {
-            out.push(pop_caption(name, top, theme).into_any_element());
-            out.extend(group);
-        }
-    }
-    out
 }
 
 fn person_menu(github: &Github, theme: &Theme) -> Div {
@@ -395,19 +327,39 @@ impl Caption {
         }
     }
 
-    fn hover(self) -> ColorToken {
+    fn hover(self, ink: CaptionInk) -> ColorToken {
         match self {
-            Caption::Minimize | Caption::Maximize | Caption::Restore => {
-                ColorToken::StateCaptionHover
-            }
+            Caption::Minimize | Caption::Maximize | Caption::Restore => ink.hover,
             Caption::Close => ColorToken::StateCloseHover,
         }
     }
 
-    fn button(self, keys: WindowKeys, theme: &Theme) -> impl IntoElement {
+    fn act(self, on_pick: &OnPick, window: &mut Window, cx: &mut App) {
+        eprintln!("desk: caption {} click reached the client", self.label());
+        cx.stop_propagation();
+        match self {
+            Caption::Minimize => window.minimize_window(),
+            Caption::Maximize | Caption::Restore => window.zoom_window(),
+            Caption::Close => on_pick(&TitlePick::Close, window, cx),
+        }
+    }
+
+    fn button(
+        self,
+        keys: WindowKeys,
+        ink: CaptionInk,
+        on_pick: &OnPick,
+        theme: &Theme,
+    ) -> impl IntoElement {
         let label = self.label();
-        let hover = theme.color(self.hover());
-        let strong = theme.color(ColorToken::TextStrong);
+        let on_pick = on_pick.clone();
+        let hover = theme.color(self.hover(ink));
+        let strong = theme.color(ink.strong);
+        let glyph = theme.color(ink.glyph);
+        let glyph = Rgba {
+            alpha: glyph.alpha * ink.glyph_alpha,
+            ..glyph
+        };
         div()
             .id(label)
             .aria_label(label)
@@ -421,20 +373,23 @@ impl Caption {
             .rounded(px(RADIUS_CAPTION))
             .when(keys == WindowKeys::Live, |key| {
                 key.window_control_area(self.area())
+                    .on_click(move |_, window, cx| self.act(&on_pick, window, cx))
             })
             .hover(move |style| style.bg(hover))
             .child(
-                icon(
-                    self.icon(),
-                    ICON_SMALL,
-                    theme.color(ColorToken::TextCaption),
-                )
-                .group_hover(label, move |style| style.text_color(strong)),
+                icon(self.icon(), ICON_SMALL, glyph)
+                    .group_hover(label, move |style| style.text_color(strong)),
             )
     }
 }
 
-fn captions(keys: WindowKeys, maximized: bool, theme: &Theme) -> impl IntoElement {
+fn captions(
+    keys: WindowKeys,
+    ink: CaptionInk,
+    maximized: bool,
+    on_pick: &OnPick,
+    theme: &Theme,
+) -> impl IntoElement {
     let middle = if maximized {
         Caption::Restore
     } else {
@@ -443,11 +398,11 @@ fn captions(keys: WindowKeys, maximized: bool, theme: &Theme) -> impl IntoElemen
     div()
         .flex()
         .items_center()
-        .gap_0p5()
-        .mx_1p5()
-        .child(Caption::Minimize.button(keys, theme))
-        .child(middle.button(keys, theme))
-        .child(Caption::Close.button(keys, theme))
+        .gap(px(CAPTION_GAP))
+        .mx(px(CAPTION_MARGIN))
+        .child(Caption::Minimize.button(keys, ink, on_pick, theme))
+        .child(middle.button(keys, ink, on_pick, theme))
+        .child(Caption::Close.button(keys, ink, on_pick, theme))
 }
 
 fn product_name(marks: Option<&Marks>, theme: &Theme) -> Div {
@@ -479,8 +434,15 @@ impl RenderOnce for TitleBar {
             .when(self.title.keys == WindowKeys::Live, |bar| {
                 bar.window_control_area(WindowControlArea::Drag)
             });
-        let controls = (!cfg!(target_os = "macos"))
-            .then(|| captions(self.title.keys, window.is_maximized(), &theme));
+        let controls = (!cfg!(target_os = "macos")).then(|| {
+            captions(
+                self.title.keys,
+                self.ink,
+                window.is_maximized(),
+                &self.on_pick,
+                &theme,
+            )
+        });
         if self.controls_only {
             return bar
                 .child(product_name(self.marks.as_ref(), &theme).flex_1().pl_4())
@@ -524,10 +486,9 @@ impl RenderOnce for TitleBar {
         };
         let rows = PopRow {
             state: state.clone(),
-            on_pick: self.on_pick.clone(),
         };
         let toggle = |pop: TitlePop| {
-            let (state, focus, on_pick) = (state.clone(), focus.clone(), self.on_pick.clone());
+            let (state, focus) = (state.clone(), focus.clone());
             move |window: &mut Window, cx: &mut App| {
                 let next = (shown != Some(pop)).then_some(pop);
                 state.update(cx, |opened, cx| {
@@ -537,9 +498,6 @@ impl RenderOnce for TitleBar {
                 if next.is_some() {
                     window.focus(&focus, cx);
                 }
-                if next == Some(TitlePop::Notifications) {
-                    on_pick(&TitlePick::NoticesRead, window, cx);
-                }
             }
         };
         let under = Placement {
@@ -548,42 +506,6 @@ impl RenderOnce for TitleBar {
             offset: POP_OFFSET,
         };
         let column = title.tabs_x.max(SIDEBAR_CLOSED_WIDTH + TITLE_GAP) - TITLE_GAP;
-        let warn = theme.color(ColorToken::StatusWarn);
-        let unread = title.unread;
-        let bell = toggles_on_press(
-            named_stop(
-                icon_button(
-                    "notifications",
-                    Icon::Bell,
-                    Control::Notifications.label(),
-                    &theme,
-                ),
-                "bell",
-                &theme,
-            )
-            .occlude()
-            .when(unread, |bell| {
-                bell.child(
-                    div()
-                        .absolute()
-                        .top(px(BELL_DOT_INSET))
-                        .right(px(BELL_DOT_INSET))
-                        .size(px(BELL_DOT))
-                        .rounded_full()
-                        .bg(warn),
-                )
-            }),
-            toggle(TitlePop::Notifications),
-        );
-        let bell = tooltip(
-            "title-bell-tip",
-            bell,
-            Edge::Frame,
-            Control::Notifications.label(),
-            &theme,
-            window,
-            cx,
-        );
         let (theme_glyph, theme_tip) = match theme.mode() {
             Mode::Dark => (Glyph::Sun, TO_LIGHT),
             Mode::Light => (Glyph::Moon, TO_DARK),
@@ -675,13 +597,6 @@ impl RenderOnce for TitleBar {
             .on_click(self.picked(TitlePick::Palette)),
         )
         .child(switch_theme)
-        .child(
-            Popover::new("title-bell-pop", bell)
-                .open(shown == Some(TitlePop::Notifications))
-                .placement(under)
-                .width(BELL_POP_WIDTH)
-                .child(rows.body(&focus).children(notices(title, &rows, &theme))),
-        )
         .child(
             Popover::new("title-account-pop", account)
                 .open(shown == Some(TitlePop::Account))

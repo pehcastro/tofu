@@ -96,7 +96,7 @@ pub fn shell(header: Header, theme: &Theme) -> Div {
                 .items_end()
                 .pl(px(HEADER_PAD_LEFT_TABBED))
                 .child(tab_slot(tabs).flex_1())
-                .children(trailing.map(|trailing| div().self_center().child(trailing)));
+                .children(trailing.map(trailing_slot));
             return outer_card(theme).flex_col().child(top);
         }
     };
@@ -106,11 +106,33 @@ pub fn shell(header: Header, theme: &Theme) -> Div {
         .children(icon.map(|icon| glyph(icon, ICON_SMALL, ink(theme, SHELL_TEXT))))
         .child(div().flex_1().min_w_0().truncate().child(title))
         .children(tabs.map(|tabs| tab_slot(tabs).flex_none().self_end()))
-        .children(trailing);
+        .children(trailing.map(trailing_slot));
     outer_card(theme).flex_col().child(top)
 }
 
+fn trailing_slot(trailing: AnyElement) -> Div {
+    div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .h(px(HEADER))
+        .overflow_hidden()
+        .child(trailing)
+}
+
 const HEADER_ACTION_INSET: f32 = 4.0;
+
+pub const HEADER_CONTROL: f32 = HEADER - 2.0 * HEADER_ACTION_INSET;
+
+pub fn header_control(child: impl IntoElement) -> Div {
+    div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .h(px(HEADER_CONTROL))
+        .overflow_hidden()
+        .child(child)
+}
 
 pub fn header_action(
     id: impl Into<ElementId>,
@@ -119,7 +141,7 @@ pub fn header_action(
     theme: &Theme,
 ) -> Stateful<Div> {
     control(id, label, theme)
-        .size(px(HEADER - 2.0 * HEADER_ACTION_INSET))
+        .size(px(HEADER_CONTROL))
         .rounded(px(RADIUS_CHIP_SMALL))
         .child(icon(glyph, ICON_SMALL, theme.color(ColorToken::TextIcon)))
 }
@@ -155,11 +177,11 @@ pub fn strip_tab(
 
 pub fn header_button(
     id: impl Into<ElementId>,
-    label: &'static str,
+    label: impl Into<SharedString>,
     theme: &Theme,
 ) -> Stateful<Div> {
     button(id, label, None, ButtonKind::Text, theme)
-        .h(px(HEADER - 2.0 * HEADER_ACTION_INSET))
+        .h(px(HEADER_CONTROL))
         .px_2()
         .rounded(px(RADIUS_CHIP_SMALL))
         .text_size(px(FONT_SMALL))

@@ -1,9 +1,11 @@
 use std::time::{Duration, Instant};
 
 use desk_ui::components::card::{Header, inner_card, shell};
+use desk_ui::components::form::TextInput;
 use desk_ui::components::shells::{Runtime, Shell, ShellEvent, ShellState, Shells};
+use desk_ui::components::term::TermReplay;
 use desk_ui::theme::Theme;
-use gpui::{Context, Div, SharedString, Window, div, prelude::*, px};
+use gpui::{AnyView, Context, Div, SharedString, Window, div, prelude::*, px};
 
 use super::Book;
 use super::kit::label;
@@ -15,6 +17,7 @@ const LEFT_OVER_PICK: usize = 1;
 const FAILED_PICK: usize = 2;
 const EXITED_PICK: usize = 3;
 const KILLED_PICK: usize = 4;
+const NOTE_PLACEHOLDER: &str = "note for the agent";
 
 #[derive(Clone, Copy)]
 enum Kept {
@@ -144,6 +147,8 @@ struct Tile {
     listing: bool,
     asking: Option<usize>,
     modules: Strip,
+    holding: bool,
+    held: Option<(AnyView, AnyView)>,
 }
 
 impl Tile {
@@ -154,6 +159,15 @@ impl Tile {
             listing,
             asking: None,
             modules: Strip::modules(),
+            holding: false,
+            held: None,
+        }
+    }
+
+    fn holding() -> Self {
+        Tile {
+            holding: true,
+            ..Tile::new(0, false)
         }
     }
 
@@ -203,7 +217,7 @@ impl Tile {
 }
 
 pub(super) struct ShellsPage {
-    tiles: [Tile; 6],
+    tiles: [Tile; 8],
     killed: SharedString,
 }
 
@@ -220,12 +234,27 @@ impl ShellsPage {
                 Tile::new(EXITED_PICK, false),
                 Tile::new(KILLED_PICK, false),
                 Tile::new(0, true),
+                Tile::holding(),
+                Tile::holding(),
             ],
             killed: "on_kill: not called yet".into(),
         }
     }
 
-    pub(super) fn render(&mut self, theme: &Theme, _: &mut Window, cx: &mut Context<Book>) -> Div {
+    pub(super) fn render(
+        &mut self,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut Context<Book>,
+    ) -> Div {
+        for tile in self.tiles.iter_mut().filter(|tile| tile.holding) {
+            if tile.held.is_none() {
+                let (_, _, lines, _) = shown(Kept::Running, 0);
+                let terminal = cx.new(|cx| TermReplay::new("bun run dev", lines, 0, cx));
+                let note = TextInput::new(NOTE_PLACEHOLDER.into(), window, cx);
+                tile.held = Some((terminal.into(), note.into()));
+            }
+        }
         let tile = |at: usize, width: f32, caption: &'static str, cx: &mut Context<Book>| {
             let id = SharedString::from(format!("shells-{at}"));
             let Some(tile) = self.tiles.get(at) else {
@@ -238,6 +267,8 @@ impl ShellsPage {
                 "shells-tabs-3",
                 "shells-tabs-4",
                 "shells-tabs-5",
+                "shells-tabs-6",
+                "shells-tabs-7",
             ]
             .get(at)
             .copied()
@@ -277,6 +308,21 @@ impl ShellsPage {
                 this.shells.killed = format!("on_kill({picked}) from tile {at}: {name}").into();
                 cx.notify();
             }));
+            let shells = match (tile.holding, tile.held.clone()) {
+                (true, Some((terminal, note))) => shells.yours(vec![true]).held(
+                    0,
+                    terminal,
+                    Some(note),
+                    cx.listener(move |this, picked: &usize, _, cx| {
+                        if let Some(tile) = this.shells.tiles.get_mut(at) {
+                            tile.holding = false;
+                        }
+                        this.tell(format!("shell {picked} released to its agent"), cx);
+                        cx.notify();
+                    }),
+                ),
+                _ => shells,
+            };
             div()
                 .flex()
                 .flex_col()
@@ -328,6 +374,18 @@ impl ShellsPage {
                 5,
                 NARROW_WIDTH,
                 "320 px: every kept shell listed under N more",
+                cx,
+            ))
+            .child(tile(
+                6,
+                BOARD_WIDTH,
+                "held by you: open, release and kill in the header, the note on its own row",
+                cx,
+            ))
+            .child(tile(
+                7,
+                NARROW_WIDTH,
+                "held by you at 320 px: release and kill stay visible, the note keeps its row",
                 cx,
             ))
     }

@@ -2,7 +2,10 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use gpui::prelude::FluentBuilder;
-use gpui::{App, FrameTiming, IntoElement, ParentElement, Styled, div, px, rgba};
+use gpui::{
+    App, Context, Entity, FrameTiming, IntoElement, ParentElement, Render, Styled, Window, div, px,
+    rgba,
+};
 
 use crate::frames::{FrameSummary, ms};
 use crate::limits::{FRAME_BUDGET, OVERLAY_TOP_SPANS};
@@ -27,13 +30,22 @@ const GRAPH_HEIGHT: f32 = 48.0;
 const GRAPH_BUDGETS: f32 = 2.0;
 const MIB: f64 = 1024.0 * 1024.0;
 
-pub fn overlay(cx: &App) -> Option<impl IntoElement> {
-    let profiler = cx.try_global::<Profiler>()?;
-    let recording = profiler.recorder.is_some();
-    if !profiler.overlay_open && !recording {
-        return None;
-    }
-    Some(
+pub struct Overlay;
+
+pub fn overlay(cx: &App) -> Option<Entity<Overlay>> {
+    cx.try_global::<Profiler>()
+        .map(|profiler| profiler.view.clone())
+}
+
+impl Render for Overlay {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let Some(profiler) = cx.try_global::<Profiler>() else {
+            return div().absolute();
+        };
+        let recording = profiler.recorder.is_some();
+        if !profiler.overlay_open && !recording {
+            return div().absolute();
+        }
         div()
             .absolute()
             .top_0()
@@ -51,8 +63,8 @@ pub fn overlay(cx: &App) -> Option<impl IntoElement> {
                         .bg(rgba(RECORDING)),
                 )
                 .child(ProbeElement)
-            }),
-    )
+            })
+    }
 }
 
 fn panel(profiler: &Profiler) -> impl IntoElement {

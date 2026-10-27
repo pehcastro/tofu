@@ -3,7 +3,7 @@ mod change;
 mod dispatch;
 #[cfg(feature = "plugin-draw")]
 mod draw;
-mod editor;
+pub(crate) mod editor;
 mod plugins;
 mod state;
 mod tabs;

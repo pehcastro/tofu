@@ -9,7 +9,7 @@ use gpui::{
 
 use crate::components::avatar::spinner;
 use crate::components::button::{ButtonKind, button};
-use crate::components::chip::{kbd, mono};
+use crate::components::chip::{badge, kbd, mono};
 use crate::components::glyph::Glyph;
 use crate::components::paint::{glyph, ink, ring, tint};
 use crate::components::size::{
@@ -44,19 +44,21 @@ const MORE_ID: usize = 200;
 const SEND_ID: usize = 201;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Answer {
+pub enum Answer {
     Allow,
     Deny,
+    Hour,
     Always,
 }
 
 impl Answer {
-    const ALL: [Answer; 3] = [Answer::Allow, Answer::Deny, Answer::Always];
+    pub const ALL: [Answer; 4] = [Answer::Allow, Answer::Deny, Answer::Hour, Answer::Always];
 
     fn label(self) -> &'static str {
         match self {
             Answer::Allow => "Allow once",
             Answer::Deny => "Deny",
+            Answer::Hour => "1 hour",
             Answer::Always => "Always here",
         }
     }
@@ -65,8 +67,34 @@ impl Answer {
         match self {
             Answer::Allow => "allowed once · building",
             Answer::Deny => "denied · the lead picks another way",
+            Answer::Hour => "1 hour · this runs without asking for the next hour",
             Answer::Always => "always here · this kind of build runs without asking",
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Risk {
+    Low,
+    Risky,
+    Destructive,
+    Unjudged,
+    Other(SharedString),
+}
+
+impl Risk {
+    fn label(&self) -> SharedString {
+        match self {
+            Risk::Low => "low risk".into(),
+            Risk::Risky => "risky".into(),
+            Risk::Destructive => "destructive".into(),
+            Risk::Unjudged => "unjudged".into(),
+            Risk::Other(said) => said.clone(),
+        }
+    }
+
+    fn standing(&self) -> bool {
+        matches!(self, Risk::Low | Risk::Risky | Risk::Unjudged)
     }
 }
 
@@ -75,6 +103,21 @@ pub struct Ask {
     pub command: SharedString,
     pub writes: SharedString,
     pub hint: SharedString,
+    pub risk: Risk,
+    pub answers: Vec<Answer>,
+}
+
+impl Ask {
+    fn offered(&self) -> impl Iterator<Item = Answer> + '_ {
+        self.answers
+            .iter()
+            .copied()
+            .filter(|answer| *answer != Answer::Always || self.risk.standing())
+    }
+
+    fn offer(&self, at: usize) -> Option<Answer> {
+        self.offered().nth(at)
+    }
 }
 
 pub struct Choice {
@@ -103,7 +146,7 @@ pub struct Question {
 impl Question {
     fn rows(&self) -> usize {
         match &self.shape {
-            Shape::Approval(_) => Answer::ALL.len(),
+            Shape::Approval(ask) => ask.offered().count(),
             Shape::Pick(pick) => pick.rows(),
             Shape::Typed(_) => 0,
         }
@@ -115,7 +158,7 @@ impl Question {
 
     fn told(&self, said: &Said) -> String {
         let picked = said.picked.iter().filter_map(|at| match &self.shape {
-            Shape::Approval(_) => Answer::ALL.get(*at).map(|answer| answer.said()),
+            Shape::Approval(ask) => ask.offer(*at).map(Answer::said),
             Shape::Pick(pick) => pick.choices.get(*at).map(|choice| choice.label.as_ref()),
             Shape::Typed(_) => None,
         });
@@ -204,6 +247,16 @@ impl Asking {
             .map(|said| (said.picked.as_slice(), said.typed.as_str()))
     }
 
+    pub fn approved(&self) -> Option<Answer> {
+        let (Some(question), Some(said)) = (self.questions.first(), self.said.first()) else {
+            return None;
+        };
+        match &question.shape {
+            Shape::Approval(ask) => ask.offer(*said.picked.first()?),
+            Shape::Pick(_) | Shape::Typed(_) => None,
+        }
+    }
+
     fn question(&self) -> Option<&Question> {
         self.questions.get(self.said.len())
     }
@@ -262,7 +315,7 @@ impl Asking {
             (_, Act::Light(at)) if at < question.rows() => self.lit = at,
             (_, Act::More) => self.more = !self.more,
             (Shape::Pick(_), Act::Back) => self.typing = false,
-            (Shape::Approval(_), Act::Pick(at)) if at < Answer::ALL.len() => {
+            (Shape::Approval(ask), Act::Pick(at)) if ask.offer(at).is_some() => {
                 return self.answer(vec![at], String::new(), now);
             }
             (Shape::Pick(pick), Act::Pick(at)) if pick.other_at(at) => {
@@ -362,12 +415,12 @@ fn number(at: usize) -> &'static str {
 }
 
 fn approval(id: &'static str, ask: &Ask, on: &Rc<OnAct>, theme: &Theme) -> Div {
-    let buttons = Answer::ALL.iter().enumerate().map(|(at, answer)| {
+    let buttons = ask.offered().enumerate().map(|(at, answer)| {
         keyed(
             (id, APPROVAL_IDS + at).into(),
             answer.label(),
             number(at),
-            *answer == Answer::Allow,
+            answer == Answer::Allow,
             Act::Pick(at),
             on,
             theme,
@@ -390,6 +443,11 @@ fn approval_top(ask: &Ask, theme: &Theme) -> Div {
                 .font_family(mono(theme))
                 .text_size(px(FONT_TAB))
                 .child(ask.command.clone()),
+        )
+        .child(
+            badge(ask.risk.label(), theme).when(!ask.risk.standing(), |badge| {
+                badge.text_color(theme.color(ColorToken::GitDeleted))
+            }),
         )
         .child(faint(format!("writes {}", ask.writes), theme).ml_auto())
 }

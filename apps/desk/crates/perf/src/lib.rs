@@ -2,6 +2,8 @@ mod bench;
 mod capture;
 #[cfg(feature = "profiler")]
 mod cells;
+#[cfg(feature = "profiler")]
+mod check;
 mod frames;
 mod grab;
 pub mod limits;

@@ -21,6 +21,7 @@ mod foundations;
 mod graph;
 mod kit;
 mod lists;
+mod logos;
 mod nav;
 mod palette;
 mod settings;
@@ -407,6 +408,7 @@ impl Book {
         cx: &mut Context<Self>,
     ) -> Div {
         match page {
+            Page::Logos => logos::logos_page(theme),
             Page::Type | Page::Icons | Page::Surfaces | Page::Motion => {
                 self.foundations.render(page, theme, window, cx)
             }

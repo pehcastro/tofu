@@ -67,7 +67,7 @@ impl ChatMarkdownPage {
             div()
                 .w(px(COLUMN))
                 .min_w_0()
-                .child(lead(id, "now", body, &[], theme))
+                .child(lead(id, "now", body, &[], None, theme))
         };
         div()
             .flex()
@@ -82,6 +82,7 @@ impl ChatMarkdownPage {
                     &self.flow,
                     &[],
                     Some(self.on_flow.clone()),
+                    None,
                     theme,
                 )),
             ))

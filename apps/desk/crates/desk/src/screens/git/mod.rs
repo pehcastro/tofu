@@ -8,6 +8,7 @@ mod header;
 mod history;
 mod load;
 mod model;
+mod pane;
 mod sidebar;
 mod sync;
 mod undo;
@@ -28,6 +29,7 @@ use gpui::{
 };
 
 use model::{Drag, Edge, GitScreen, Loaded, Told};
+use pane::Part;
 
 const LEFT_RANGE: (f32, f32) = (180.0, 360.0);
 const RIGHT_RANGE: (f32, f32) = (300.0, 640.0);
@@ -100,7 +102,8 @@ impl GitScreen {
 }
 
 impl Render for GitScreen {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        desk_perf::span!("git-screen");
         let theme = ActiveTheme::theme(cx);
         if let Loaded::Failed(why) = &self.git {
             return empty_state(
@@ -127,7 +130,7 @@ impl Render for GitScreen {
                     .flex_none()
                     .w(px(self.left))
                     .h_full()
-                    .child(sidebar::render(self, window, cx)),
+                    .child(self.panes.element(Part::Sidebar)),
             )
             .child(grip(Edge::Left, self.left, cx))
             .child(
@@ -135,7 +138,9 @@ impl Render for GitScreen {
                     .flex_1()
                     .min_w_0()
                     .h_full()
-                    .child(history::render(self, &theme, cx)),
+                    .relative()
+                    .child(history::pointer(self))
+                    .child(self.panes.element(Part::History)),
             )
             .child(grip(Edge::Right, self.right, cx))
             .child(
@@ -143,7 +148,7 @@ impl Render for GitScreen {
                     .flex_none()
                     .w(px(self.right))
                     .h_full()
-                    .child(changes::panel(self, window, cx)),
+                    .child(self.panes.element(Part::Changes)),
             );
         inner_card(&theme)
             .size_full()
@@ -156,8 +161,8 @@ impl Render for GitScreen {
                     }
                 }),
             )
-            .child(header::render(self, window, cx))
-            .children(banner::render(self, window, cx))
+            .child(self.panes.element(Part::Header))
+            .child(self.panes.element(Part::Banner))
             .child(body)
             .children(done.map(|said| {
                 div()

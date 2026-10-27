@@ -5,16 +5,18 @@ use gpui::{
     prelude::*, px,
 };
 
+use crate::component::control;
 use crate::components::button::{ButtonKind, button};
 use crate::components::card::caption;
 use crate::components::chip::{GitStatus, Tone, badge, git_name, mono, tabular};
 use crate::components::diff::{DiffCard, FileChange, FileDiff};
 use crate::components::glyph::Glyph;
 use crate::components::list::{HoverList, group_header};
-use crate::components::paint::ink;
+use crate::components::paint::{focus_ring, glyph, ink};
 use crate::components::size::{
     DIM_TEXT, FONT_SMALL, FONT_TAB, FONT_WHO, GRID_PAD_X, GRID_ROW, GRID_WHO, ROW_GAP, T1, T2, T3,
 };
+use crate::metrics::{CONTROL, ICON, RADIUS_CONTROL};
 use crate::theme::{ColorToken, Theme};
 
 const HEAD_ROW: f32 = 25.0;
@@ -27,6 +29,9 @@ const HISTORY_HEAD_GAP: f32 = 3.0;
 const COMMIT_PAD_Y: f32 = 10.0;
 const DRAWER_PAD_X: f32 = 16.0;
 const DRAWER_PAD_BOTTOM: f32 = 14.0;
+const ROW_GROUP: &str = "file-edit-row";
+const OPEN_LABEL: &str = "Open in editor";
+const MENTION_LABEL: &str = "Mention this file in chat";
 
 #[derive(Clone)]
 pub struct EditedFile {
@@ -39,7 +44,22 @@ pub struct EditedFile {
 pub struct FileEdit {
     pub agent: Option<SharedString>,
     pub at: SharedString,
+    pub line: usize,
     pub diff: Rc<FileDiff>,
+}
+
+fn small_control(id: impl Into<ElementId>, label: &'static str, theme: &Theme) -> Stateful<Div> {
+    control(id, label, theme)
+        .size(px(CONTROL))
+        .rounded(px(RADIUS_CONTROL))
+}
+
+fn open_button(id: impl Into<ElementId>, theme: &Theme) -> Stateful<Div> {
+    small_control(id, OPEN_LABEL, theme).child(glyph(
+        Glyph::Code,
+        ICON,
+        theme.color(ColorToken::TextIcon),
+    ))
 }
 
 impl EditedFile {
@@ -125,7 +145,8 @@ fn path_cell(name: Div, dir: SharedString, theme: &Theme) -> Div {
 fn file_row(ix: usize, file: &EditedFile, theme: &Theme) -> Stateful<Div> {
     let (name, dir) = name_and_dir(&file.path);
     let dim = ink(theme, T3);
-    grid_line(("file-row", ix))
+    focus_ring(grid_line(("file-row", ix)), theme)
+        .group(ROW_GROUP)
         .h(px(GRID_ROW))
         .cursor_pointer()
         .text_color(ink(theme, T1))
@@ -196,16 +217,38 @@ fn head_row(files: &[EditedFile], theme: &Theme) -> Stateful<Div> {
         )
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RowPick {
+    Detail,
+    Editor,
+}
+
 pub fn file_edits(
     id: impl Into<ElementId>,
     files: &[EditedFile],
     theme: &Theme,
-    on_open: impl Fn(usize, &mut Window, &mut App) + 'static,
+    on_pick: impl Fn(usize, RowPick, &mut Window, &mut App) + 'static,
 ) -> AnyElement {
-    let on_open = Rc::new(on_open);
+    let on_pick = Rc::new(on_pick);
     let rows = files.iter().enumerate().map(|(ix, file)| {
-        let on_open = on_open.clone();
-        file_row(ix, file, theme).on_click(move |_, window, cx| on_open(ix, window, cx))
+        let (on_row, on_button) = (on_pick.clone(), on_pick.clone());
+        let button = open_button(("file-row-open", ix), theme)
+            .opacity(0.0)
+            .group_hover(ROW_GROUP, |style| style.opacity(1.0))
+            .on_click(move |_, window, cx| {
+                cx.stop_propagation();
+                on_button(ix, RowPick::Editor, window, cx);
+            });
+        file_row(ix, file, theme)
+            .child(button)
+            .on_click(move |event, window, cx| {
+                let pick = match (event, event.click_count()) {
+                    (ClickEvent::Keyboard(_), _) => RowPick::Editor,
+                    (_, 2..) => RowPick::Editor,
+                    _ => RowPick::Detail,
+                };
+                on_row(ix, pick, window, cx);
+            })
     });
     HoverList::new(id, theme)
         .inert(head_row(files, theme))
@@ -223,6 +266,8 @@ pub fn file_edits(
 
 fn edit_line(edit: &FileEdit, theme: &Theme) -> Div {
     div()
+        .flex_1()
+        .min_w_0()
         .flex()
         .items_baseline()
         .gap_1p5()
@@ -233,12 +278,28 @@ fn edit_line(edit: &FileEdit, theme: &Theme) -> Div {
                 .clone()
                 .map(|agent| div().text_color(ink(theme, T2)).child(agent)),
         )
-        .child(format!("edited \u{b7} {}", edit.at))
+        .child(format!(
+            "edited \u{b7} {} \u{b7} line {}",
+            edit.at, edit.line
+        ))
 }
 
-pub fn file_history(id: impl Into<ElementId>, file: &EditedFile, theme: &Theme) -> AnyElement {
+pub fn file_history(
+    id: impl Into<ElementId>,
+    file: &EditedFile,
+    theme: &Theme,
+    on_mention: impl Fn(&mut Window, &mut App) + 'static,
+    on_open: impl Fn(usize, &mut Window, &mut App) + 'static,
+) -> AnyElement {
     let (name, dir) = name_and_dir(&file.path);
-    let head = div()
+    let mention = small_control("file-history-mention", MENTION_LABEL, theme)
+        .text_size(px(FONT_TAB))
+        .text_color(theme.color(ColorToken::TextIcon))
+        .child("@")
+        .on_click(move |_, window, cx| on_mention(window, cx));
+    let titles = div()
+        .flex_1()
+        .min_w_0()
         .flex()
         .flex_col()
         .gap(px(HISTORY_HEAD_GAP))
@@ -263,12 +324,30 @@ pub fn file_history(id: impl Into<ElementId>, file: &EditedFile, theme: &Theme) 
                 .text_color(ink(theme, T3))
                 .child(file.edit_count()),
         );
+    let head = div()
+        .flex()
+        .items_start()
+        .gap(px(ROW_GAP))
+        .child(titles)
+        .child(mention);
+    let on_open = Rc::new(on_open);
     let edits = file.edits.iter().enumerate().rev().map(|(ix, edit)| {
+        let on_open = on_open.clone();
         div()
             .flex()
             .flex_col()
             .gap(px(EDIT_GAP))
-            .child(edit_line(edit, theme))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(ROW_GAP))
+                    .child(edit_line(edit, theme))
+                    .child(
+                        open_button(("file-edit-open", ix), theme)
+                            .on_click(move |_, window, cx| on_open(ix, window, cx)),
+                    ),
+            )
             .child(DiffCard::new(("file-edit", ix), edit.diff.clone()))
     });
     div()

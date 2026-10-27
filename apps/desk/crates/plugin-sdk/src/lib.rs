@@ -3,17 +3,20 @@ use std::ops::Range;
 
 pub mod bindings {
     wit_bindgen::generate!({
-        path: "../../wit/since_v0.2.0",
+        path: "../../wit/since_v0.3.0",
         world: "plugin",
         pub_export_macro: true,
         default_bindings_module: "desk_plugin_sdk::bindings",
     });
 }
 
+pub use bindings::exports::tofu::desk::commands::Command;
 pub use bindings::tofu::desk::fs;
 pub use bindings::tofu::desk::host::{Denied, notify};
 pub use bindings::tofu::desk::types::{Badge, Choice, Editor, Kind, Node, Table, Toggle, Tone};
 pub use bindings::{Event, Guest, Tree};
+
+pub const NO_ARGS: &str = "{}";
 
 pub trait Plugin: Default {
     fn view(&self) -> Part;
@@ -23,6 +26,22 @@ pub trait Plugin: Default {
     }
 
     fn handle(&mut self, event: Event);
+
+    fn commands(&self) -> Vec<Command> {
+        Vec::new()
+    }
+
+    fn run(&mut self, id: &str, _args: &str) -> Result<String, String> {
+        Err(format!("this plugin has no command {id}"))
+    }
+}
+
+pub fn command(id: impl Into<String>, title: impl Into<String>) -> Command {
+    Command {
+        id: id.into(),
+        title: title.into(),
+        args_schema: NO_ARGS.to_owned(),
+    }
 }
 
 pub struct Part {
@@ -118,6 +137,19 @@ macro_rules! plugin {
 
             fn handle(event: $crate::Event) {
                 DESK_PLUGIN.with_borrow_mut(|plugin| $crate::Plugin::handle(plugin, event))
+            }
+        }
+
+        impl $crate::bindings::exports::tofu::desk::commands::Guest for DeskPluginExport {
+            fn list() -> ::std::vec::Vec<$crate::Command> {
+                DESK_PLUGIN.with_borrow(|plugin| $crate::Plugin::commands(plugin))
+            }
+
+            fn run(
+                id: ::std::string::String,
+                args: ::std::string::String,
+            ) -> ::core::result::Result<::std::string::String, ::std::string::String> {
+                DESK_PLUGIN.with_borrow_mut(|plugin| $crate::Plugin::run(plugin, &id, &args))
             }
         }
 

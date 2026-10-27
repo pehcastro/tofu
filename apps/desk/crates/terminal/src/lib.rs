@@ -9,6 +9,7 @@ mod palette;
 mod pty;
 mod scrollbar;
 pub mod shells;
+pub mod wire;
 
 use crate::find::Find;
 pub use crate::kept::{Attachment, Kept};
@@ -44,8 +45,8 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 const START_SETTLE: Duration = Duration::from_millis(150);
-const INITIAL_COLS: u16 = 80;
-const INITIAL_ROWS: u16 = 24;
+pub const INITIAL_COLS: u16 = 80;
+pub const INITIAL_ROWS: u16 = 24;
 const MIN_COLS: f32 = 2.;
 const MIN_ROWS: f32 = 1.;
 const GUTTER: f32 = 8.;
@@ -120,6 +121,7 @@ pub struct Terminal {
     font: u8,
     scrolled: f32,
     last_output: Option<Instant>,
+    echoes: Vec<wire::Echo>,
     sync_at: Option<Instant>,
     focus: FocusHandle,
     _pump: Option<Task<()>>,
@@ -177,6 +179,7 @@ impl Terminal {
             font: font::saved(),
             scrolled: 0.,
             last_output: None,
+            echoes: Vec::new(),
             sync_at: None,
             focus: cx.focus_handle(),
             _pump: None,
@@ -225,8 +228,28 @@ impl Terminal {
         self.title.clone()
     }
 
+    pub fn grid(&self) -> (u16, u16) {
+        self.grid
+    }
+
     pub fn last_output(&self) -> Option<Instant> {
         self.last_output
+    }
+
+    pub fn text(&self) -> Vec<SharedString> {
+        let grid = self.term.grid();
+        let start = GridPoint::new(grid.topmost_line(), Column(0));
+        let end = GridPoint::new(grid.bottommost_line(), grid.last_column());
+        let mut lines: Vec<SharedString> = self
+            .term
+            .bounds_to_string(start, end)
+            .lines()
+            .map(|line| line.trim_end().to_owned().into())
+            .collect();
+        while lines.last().is_some_and(|line| line.is_empty()) {
+            lines.pop();
+        }
+        lines
     }
 
     pub fn restart(&mut self, cx: &mut Context<Self>) {
@@ -276,11 +299,21 @@ impl Terminal {
         }));
     }
 
-    fn replay_painted(&mut self) {
+    fn painted(&mut self) {
         if let Some((bytes, at)) = self.replayed.take() {
             eprintln!(
                 "desk: terminal replay {bytes} bytes painted in {} ms",
                 at.elapsed().as_millis()
+            );
+        }
+        let ms = |took: Duration| took.as_secs_f64() * 1000.;
+        for wire::Echo { key, batched, back } in self.echoes.drain(..) {
+            eprintln!(
+                "desk: shell key {} batched {:.1} ms, raw back {:.1} ms, painted {:.1} ms",
+                key.seq,
+                ms(batched),
+                ms(back),
+                ms(key.down.elapsed())
             );
         }
     }
@@ -293,6 +326,7 @@ impl Terminal {
         for output in batch {
             match output {
                 Output::Bytes(bytes) => self.parser.advance(&mut self.term, &bytes),
+                Output::Echoed(echoes) => self.echoes.extend(echoes),
                 Output::Exited(code) => {
                     self.process = None;
                     let shown = code.map_or_else(|| "unknown".to_owned(), |code| code.to_string());
@@ -862,9 +896,13 @@ impl Terminal {
             self._blink = None;
             self.cursor_lit = true;
         }
-        if self.term.mode().contains(TermMode::FOCUS_IN_OUT) {
-            self.send(if focused { FOCUS_IN } else { FOCUS_OUT }.to_vec());
+        if !self.term.mode().contains(TermMode::FOCUS_IN_OUT) {
+            return;
         }
+        if self.attached {
+            return eprintln!("terminal: focus report not sent into an attached shell");
+        }
+        self.send(if focused { FOCUS_IN } else { FOCUS_OUT }.to_vec());
     }
 }
 
@@ -1009,7 +1047,7 @@ impl Render for Terminal {
                             }
                         });
                         painted.paint(window, cx);
-                        painted_by.update(cx, |terminal, _| terminal.replay_painted());
+                        painted_by.update(cx, |terminal, _| terminal.painted());
                     },
                 )
                 .size_full(),

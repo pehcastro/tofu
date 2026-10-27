@@ -224,12 +224,18 @@ fn theme_set(set: &ThemeSet, cx: &mut App) -> Answered {
                 Path::new(&file).components().collect::<Vec<_>>()[..],
                 [Component::Normal(_)]
             );
-            if !single || !pick::folder().join(format!("{file}.json")).is_file() {
+            let found = pick::folders()
+                .map_err(|error| (Refused, error))?
+                .iter()
+                .any(|dir| dir.join(format!("{file}.json")).is_file());
+            if !single || !found {
                 return Err((
                     NotFound,
                     format!(
                         "no theme {file} in {}; the names are light, dark or a theme file there",
-                        pick::folder().display()
+                        pick::person_at()
+                            .map_err(|error| (Refused, error))?
+                            .display()
                     ),
                 ));
             }

@@ -9,6 +9,8 @@ pub mod consent;
 mod view;
 mod wasm;
 
+use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, OnceLock};
 use std::thread;
@@ -18,18 +20,14 @@ use desk_tiling::Module;
 use desk_ui::components::glyph::Glyph;
 use gpui::{AnyView, App};
 use serde::Deserialize;
+use serde_json::{Map, Value};
 
 const API: &str = "desk@0.1";
+pub const ENABLED_KEY: &str = "plugins.enabled";
+const SETTINGS_FILE: &str = "settings.json";
 
 pub type Mount = fn(&'static Plugin, &mut App) -> AnyView;
 
-#[cfg_attr(
-    not(feature = "screen-settings"),
-    expect(
-        dead_code,
-        reason = "a native plugin's manifest text is read only by Settings > Plugins, built with screen-settings"
-    )
-)]
 enum Kind {
     Native(Mount, &'static str),
     Wasm(wasm::Guest),
@@ -106,9 +104,32 @@ pub fn find(id: &str) -> Option<&'static Plugin> {
     all().find(|plugin| plugin.id == id)
 }
 
+pub fn switched_off(settings: &Map<String, Value>, id: &str) -> bool {
+    settings
+        .get(ENABLED_KEY)
+        .and_then(|enabled| enabled.get(id))
+        == Some(&Value::Bool(false))
+}
+
+fn settings() -> Map<String, Value> {
+    let read = Home::find()
+        .map_err(|error| error.to_string())
+        .map(|home| home.config.join(SETTINGS_FILE))
+        .and_then(|path| match fs::read_to_string(&path) {
+            Ok(text) => serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display())),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(Map::new()),
+            Err(error) => Err(format!("{}: {error}", path.display())),
+        });
+    read.unwrap_or_else(|error| {
+        eprintln!("desk: plugins: no plugin is switched off, the settings did not read: {error}");
+        Map::new()
+    })
+}
+
 pub fn modules() -> impl Iterator<Item = Module> {
+    let settings = settings();
     all()
-        .filter(|plugin| plugin.enabled())
+        .filter(move |plugin| plugin.enabled() && !switched_off(&settings, &plugin.id))
         .map(|plugin| Module::Plugin(plugin.id.clone()))
 }
 
@@ -129,13 +150,13 @@ impl Plugin {
         }
     }
 
-    #[cfg_attr(
-        not(feature = "screen-settings"),
-        expect(
-            dead_code,
-            reason = "only Settings > Plugins asks for a native plugin's manifest, built with screen-settings"
-        )
-    )]
+    pub fn guest(&self) -> Option<&desk_plugin::Plugin> {
+        match &self.kind {
+            Kind::Native(..) => None,
+            Kind::Wasm(guest) => guest.running(),
+        }
+    }
+
     pub fn built_in(&self) -> Option<&'static str> {
         match &self.kind {
             Kind::Native(_, manifest) => Some(*manifest),

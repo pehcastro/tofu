@@ -20,6 +20,7 @@ desk_tiling.workspace = true
 draw_doc = { workspace = true, optional = true }
 flume = { version = "0.11.1", default-features = false, features = ["async"] }
 gpui.workspace = true
+image = { version = "=0.25.10", default-features = false, features = ["jpeg", "png", "gif", "webp", "bmp", "ico"] }
 gpui_platform.workspace = true
 serde.workspace = true
 serde_json = "1.0.149"
@@ -33,13 +34,14 @@ path = "src/main.rs"
 embed-resource = "3.0.11"
 
 [features]
-default = ["screen-work", "module-subagents", "module-file-edits", "module-shells", "screen-limits", "screen-classifier", "screen-library", "screen-context", "screen-session", "screen-forks", "screen-usage", "screen-boardy"]
+default = ["screen-work", "module-subagents", "module-file-edits", "module-shells", "screen-limits", "screen-classifier", "screen-library", "screen-context", "screen-session", "screen-forks", "screen-drain", "screen-usage", "screen-boardy", "profiler"]
 profiler = ["desk_perf/profiler"]
 screen-work = []
 screen-boardy = ["screen-work"]
 screen-settings = []
 screen-accounts = []
 screen-theme = []
+screen-intro-setup = ["screen-settings", "screen-intro"]
 screen-library = []
 screen-classifier = []
 screen-usage = []
@@ -47,6 +49,7 @@ screen-limits = []
 screen-context = []
 screen-session = []
 screen-forks = []
+screen-drain = []
 module-subagents = []
 module-file-edits = []
 module-shells = []
@@ -54,11 +57,12 @@ module-editor = []
 module-browser = []
 module-data-studio = []
 screen-platforms = []
+screen-glass-bench = []
 screen-intro = []
 screen-onboarding = ["screen-intro"]
 plugin-notepad = ["screen-work"]
 plugin-draw = ["screen-work", "dep:desk_canvas", "dep:draw_doc"]
-all-screens = ["plugin-notepad", "plugin-draw", "screen-work", "screen-boardy", "screen-settings", "screen-accounts", "screen-theme", "screen-library", "screen-classifier", "screen-usage", "screen-limits", "screen-context", "screen-session", "screen-forks", "module-subagents", "module-file-edits", "module-shells", "module-editor", "module-browser", "module-data-studio", "screen-platforms", "screen-intro", "screen-onboarding"]
+all-screens = ["plugin-notepad", "plugin-draw", "screen-work", "screen-boardy", "screen-settings", "screen-accounts", "screen-theme", "screen-intro-setup", "screen-library", "screen-classifier", "screen-usage", "screen-limits", "screen-context", "screen-session", "screen-forks", "screen-drain", "module-subagents", "module-file-edits", "module-shells", "module-editor", "module-browser", "module-data-studio", "screen-platforms", "screen-intro", "screen-onboarding", "screen-glass-bench"]
 
 [lints]
 workspace = true

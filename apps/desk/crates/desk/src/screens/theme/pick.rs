@@ -5,18 +5,44 @@ use std::{env, fs};
 use desk_core::home::Home;
 use desk_ui::live::{self, ActiveTheme, THEME_VARIABLE};
 use desk_ui::theme::Mode;
-use gpui::App;
+use gpui::{App, Global};
 
 const DEFAULT_THEME: &str = "tofu-glass";
 const FILE: &str = "theme";
+
+#[cfg_attr(
+    not(feature = "screen-theme"),
+    expect(
+        dead_code,
+        reason = "only the theme screen changes the theme list; Appearance still observes it"
+    )
+)]
+pub struct Listing;
+
+impl Global for Listing {}
 
 pub struct Pick {
     pub theme: String,
     pub mode: Option<Mode>,
 }
 
-pub fn folder() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../themes")
+pub fn person_at() -> Result<PathBuf, String> {
+    Home::find()
+        .map(|home| home.config.with_file_name("themes"))
+        .map_err(|error| error.to_string())
+}
+
+pub fn person() -> Result<PathBuf, String> {
+    let folder = person_at()?;
+    fs::create_dir_all(&folder).map_err(|error| format!("{}: {error}", folder.display()))?;
+    Ok(folder)
+}
+
+pub fn folders() -> Result<Vec<PathBuf>, String> {
+    Ok(vec![
+        person()?,
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../themes"),
+    ])
 }
 
 fn saved_at() -> Result<PathBuf, String> {
@@ -48,8 +74,12 @@ pub fn chosen() -> Result<Pick, String> {
             .iter()
             .copied()
             .find(|known| known.label() == mode)?;
+        let stored = folders()
+            .ok()?
+            .iter()
+            .any(|dir| dir.join(format!("{theme}.json")).is_file());
         Some(Pick {
-            theme: theme.to_owned(),
+            theme: if stored { theme } else { DEFAULT_THEME }.to_owned(),
             mode: Some(mode),
         })
     });
@@ -72,7 +102,7 @@ pub fn save(theme: &str, mode: Mode) -> Result<(), String> {
 }
 
 pub fn start(theme: &str, cx: &mut App) -> Result<(), String> {
-    live::start(folder(), theme.to_owned(), cx)
+    live::start(folders()?, theme.to_owned(), cx)
         .map_err(|error| format!("tofu desk has no theme {theme} to draw with: {error}"))?;
     for problem in ActiveTheme::problems(cx).iter() {
         eprintln!("theme {theme}: {problem}");

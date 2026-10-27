@@ -79,7 +79,8 @@ impl RenderOnce for PropertiesPanel {
                 .children(rows)
         });
         div()
-            .w(px(PROPERTIES_WIDTH))
+            .w_full()
+            .max_w(px(PROPERTIES_WIDTH))
             .flex_none()
             .flex()
             .flex_col()

@@ -31,7 +31,6 @@ codes! {
     InvalidRequest "invalid_request" -32600,
     UnknownMethod "unknown_method" -32601,
     InvalidParams "invalid_params" -32602,
-    BadParams "bad_params" -32001,
     UnknownCommand "unknown_command" -32002,
     DeniedByConsent "denied_by_consent" -32003,
     DeniedByGate "denied_by_gate" -32004,
@@ -53,4 +52,5 @@ codes! {
     NoSuchTile "no_such_tile" -32020,
     NoHistory "no_history" -32021,
     NothingClosed "nothing_closed" -32022,
+    BadParams "bad_params" -32023,
 }

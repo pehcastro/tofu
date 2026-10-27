@@ -6,10 +6,10 @@ use desk_motion::tokens::{PRESS, TOGGLE};
 use gpui::{
     App, Bounds, ClipboardItem, Context, Corners, Div, ElementId, ElementInputHandler, Entity,
     EntityInputHandler, FocusHandle, Focusable, FontWeight, HighlightStyle, KeyDownEvent,
-    Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point,
-    ScrollHandle, SharedString, Stateful, StyledText, Subscription, Task, TextLayout,
-    UTF16Selection, UnderlineStyle, Window, canvas, combine_highlights, div, fill, point,
-    prelude::*, px, rgb_to_hsla, size,
+    KeyUpEvent, Keystroke, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    Pixels, PlatformInput, Point, ScrollHandle, SharedString, Stateful, StyledText, Subscription,
+    Task, TextLayout, UTF16Selection, UnderlineStyle, Window, canvas, combine_highlights, div,
+    fill, point, prelude::*, px, rgb_to_hsla, size,
 };
 
 use crate::components::list::HoverList;
@@ -163,11 +163,19 @@ fn segment_group(
 
 pub fn switch(
     id: impl Into<ElementId>,
-    label: &'static str,
+    label: impl Into<SharedString>,
     on: bool,
     theme: &Theme,
 ) -> Stateful<Div> {
-    switch_bare(id, label, on, theme).gap_2().child(label)
+    let label = label.into();
+    switch_bare(id, label.clone(), on, theme).child(
+        div()
+            .id("label")
+            .pl_2()
+            .cursor(gpui::CursorStyle::Arrow)
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .child(label),
+    )
 }
 
 pub fn switch_bare(
@@ -186,6 +194,32 @@ pub fn switch_bare(
     focus_ring(div().id(id), theme)
         .group(SWITCH_GROUP)
         .aria_label(label)
+        .on_key_down(|event, window, cx| {
+            let stroke = &event.keystroke;
+            if stroke.key != "space" || stroke.modifiers.modified() {
+                return;
+            }
+            cx.stop_propagation();
+            if event.is_held {
+                return;
+            }
+            window.defer(cx, |window, cx| {
+                let enter = Keystroke {
+                    modifiers: Modifiers::default(),
+                    key: "enter".into(),
+                    key_char: None,
+                };
+                window.dispatch_event(
+                    PlatformInput::KeyDown(KeyDownEvent {
+                        keystroke: enter.clone(),
+                        is_held: false,
+                        prefer_character_input: false,
+                    }),
+                    cx,
+                );
+                window.dispatch_event(PlatformInput::KeyUp(KeyUpEvent { keystroke: enter }), cx);
+            });
+        })
         .flex()
         .items_center()
         .rounded(px(RADIUS_ROW))
@@ -495,6 +529,7 @@ trait Editable: Sized + 'static {
 
 struct Editor {
     placeholder: SharedString,
+    placeholder_ink: Option<ColorToken>,
     span: Span,
     lines: Lines,
     marked: Option<Range<usize>>,
@@ -560,6 +595,7 @@ impl Editor {
         });
         Editor {
             placeholder,
+            placeholder_ink: None,
             span: Span::new(String::new()),
             lines,
             marked: None,
@@ -868,10 +904,15 @@ fn typed<T: Editable + EntityInputHandler>(
     let head = editor.span.head();
     let focus = editor.focus.clone();
     let color = ink(theme, T1);
+    let hint = match editor.placeholder_ink {
+        Some(token) => theme.color(token),
+        None => ink(theme, T3),
+    };
     div()
         .relative()
         .flex_1()
-        .text_color(ink(theme, if empty { T3 } else { T1 }))
+        .min_w_0()
+        .text_color(if empty { hint } else { color })
         .child(text)
         .child(
             canvas(
@@ -902,8 +943,16 @@ fn typed<T: Editable + EntityInputHandler>(
         )
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum FieldWidth {
+    Fixed(f32),
+    Fill,
+    Fit { least: f32, most: f32 },
+}
+
 pub struct TextInput {
     editor: Editor,
+    width: FieldWidth,
 }
 
 editable!(TextInput);
@@ -912,11 +961,16 @@ impl TextInput {
     pub fn new(placeholder: SharedString, window: &mut Window, cx: &mut App) -> Entity<TextInput> {
         cx.new(|cx| TextInput {
             editor: Editor::new(placeholder, Lines::One, window, cx),
+            width: FieldWidth::Fixed(FIELD_WIDTH),
         })
     }
 
     pub fn text(&self) -> &str {
         &self.editor.span.text
+    }
+
+    pub fn sized(&mut self, width: FieldWidth) {
+        self.width = width;
     }
 
     fn key_down(&mut self, event: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
@@ -936,7 +990,11 @@ impl Render for TextInput {
             .track_focus(&self.editor.focus)
             .flex()
             .items_center()
-            .w(px(FIELD_WIDTH))
+            .map(|field| match self.width {
+                FieldWidth::Fixed(width) => field.w(px(width)),
+                FieldWidth::Fill => field.w_full().min_w_0(),
+                FieldWidth::Fit { least, most } => field.min_w(px(least)).max_w(px(most)),
+            })
             .h(px(FIELD))
             .px(px(FIELD_PAD))
             .overflow_hidden()
@@ -946,7 +1004,9 @@ impl Render for TextInput {
             .text_size(px(FONT_BODY))
             .on_key_down(cx.listener(Self::key_down))
             .child(body);
-        edit_menu("text-input-menu", field, cx)
+        edit_menu("text-input-menu", field, cx).when(self.width == FieldWidth::Fill, |menu| {
+            menu.w_full().min_w_0()
+        })
     }
 }
 
@@ -975,6 +1035,11 @@ impl TextArea {
 
     pub fn bare(mut self) -> Self {
         self.bare = true;
+        self
+    }
+
+    pub fn placeholder_ink(mut self, token: ColorToken) -> Self {
+        self.editor.placeholder_ink = Some(token);
         self
     }
 

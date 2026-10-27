@@ -138,7 +138,7 @@ impl Source {
             .map(Self::from)
             .or_else(|| match path.extension()?.to_str()? {
                 "css" => Some(Self::Css),
-                "html" | "htm" => Some(Self::Html),
+                "html" | "htm" | "svg" | "xml" => Some(Self::Html),
                 "yml" | "yaml" => Some(Self::Yaml),
                 _ => None,
             })

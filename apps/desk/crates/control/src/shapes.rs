@@ -15,6 +15,7 @@ pub enum Module {
     Terminal,
     Browser,
     SourceControl,
+    Viewer,
     Plugin,
 }
 

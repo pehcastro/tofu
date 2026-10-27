@@ -127,6 +127,13 @@ fn respond(
         Call::PluginCommands(_) | Call::PluginRun(_) => {
             super::plugins::answer(&call, work.as_ref(), cx)
         }
+        Call::CommandRun(run) if run.name == "tofu.drop" => Some(
+            work.as_ref()
+                .ok_or_else(|| "the work screen is not open".to_owned())
+                .and_then(|work| work.read(cx).chat().read(cx).drop_tofu())
+                .map(|()| serde_json::json!({ "dropped": true }))
+                .map_err(|message| (ErrorCode::Refused, message)),
+        ),
         #[cfg(feature = "plugin-draw")]
         Call::CommandRun(run) if run.name.starts_with("draw.") => {
             Some(super::draw::answer(run, work.as_ref(), cx))
@@ -394,6 +401,7 @@ pub(super) fn module(module: &Module) -> ModuleInfo {
         Module::Terminal => (shapes::Module::Terminal, None),
         Module::Browser => (shapes::Module::Browser, None),
         Module::SourceControl => (shapes::Module::SourceControl, None),
+        Module::Viewer => (shapes::Module::Viewer, None),
         Module::Plugin(id) => (shapes::Module::Plugin, Some(id.clone())),
     };
     let name = match plugin.as_deref().and_then(plugins::find) {

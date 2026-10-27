@@ -1,3 +1,5 @@
+mod detail;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
@@ -5,11 +7,16 @@ use super::frame;
 
 use crate::modules::chat::Chat;
 use desk_core::model::Store;
-use desk_core::protocol::{CarriedFrom, SessionInfo};
+use desk_core::protocol::boardy::EventsRequest;
+use desk_core::protocol::{
+    CarriedFrom, ForkGeneration, NoParams, Request, SessionInfo, SessionParams, request,
+};
 use desk_core::query::{Answer, QueryError};
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::empty::empty_state;
-use desk_ui::components::fork_chain::{Fork, ForkChain, Generation};
+use desk_ui::components::fork_chain::{ForkChain, Generation};
+use desk_ui::components::paint::ink;
+use desk_ui::components::scroll::ScrollArea;
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
@@ -17,13 +24,18 @@ use gpui::{
     WeakEntity, Window, div, prelude::*, px,
 };
 
-use frame::{ellipsis, load_fonts, note, reread, titled, window};
+use detail::{Digest, Index, Loaded, dollars};
+use frame::{ellipsis, load_fonts, note, reread, tile, titled, window};
 
 const NO_TOFU: &str =
     "Forks reads session.info from the tofu the work screen runs, and no work screen is open here.";
 const NO_SESSION: &str = "Open a session in the work screen. Forks walks its session.info parent back toward the root, ten generations at a time.";
 const PAGE: usize = 10;
 const OPEN_PATIENCE: Duration = Duration::from_secs(10);
+const LIST_WIDTH: f32 = 380.0;
+const LIST_PAD: f32 = 10.0;
+const PANE_PAD: f32 = 20.0;
+const DIVIDER_INK: f32 = 0.08;
 
 type Lineage = BTreeMap<String, Answer<SessionInfo>>;
 
@@ -42,6 +54,10 @@ pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView
             shown: PAGE,
             asked: None,
             queued: None,
+            picked: None,
+            turns: BTreeMap::new(),
+            family: None,
+            tickets: None,
         })
         .into())
 }
@@ -53,6 +69,10 @@ pub struct ForksScreen {
     shown: usize,
     asked: Option<Instant>,
     queued: Option<String>,
+    picked: Option<String>,
+    turns: BTreeMap<String, Loaded<Digest>>,
+    family: Option<Loaded<Vec<ForkGeneration>>>,
+    tickets: Option<Loaded<Index>>,
 }
 
 struct Source {
@@ -64,15 +84,6 @@ struct Source {
 enum Link<'a> {
     Read(&'a SessionInfo),
     Waiting(&'a str, Option<&'a QueryError>),
-}
-
-impl<'a> Link<'a> {
-    fn info(&self) -> Option<&'a SessionInfo> {
-        match self {
-            Link::Read(info) => Some(info),
-            Link::Waiting(..) => None,
-        }
-    }
 }
 
 struct Chain<'a> {
@@ -222,6 +233,8 @@ impl ForksScreen {
         if moved {
             self.shown = PAGE;
             self.asked = Some(Instant::now());
+            self.picked = None;
+            self.family = None;
         }
         self.told();
         let wanted = match (moved, &self.open) {
@@ -238,6 +251,9 @@ impl ForksScreen {
             }
         });
         cx.notify();
+        if moved {
+            self.ask_pane(cx);
+        }
         if moved
             && let Some(open) = self.open.clone()
             && let Some(queued) = self.queued.take()
@@ -307,6 +323,172 @@ impl ForksScreen {
         };
         eprintln!("desk: forks: read again");
         chat.update(cx, |chat, cx| chat.reread_lineage(cx));
+        self.turns.clear();
+        self.family = None;
+        self.tickets = None;
+        self.ask_pane(cx);
+    }
+
+    fn pick(&mut self, id: &str, cx: &mut Context<Self>) {
+        eprintln!("desk: forks: pick {id}");
+        self.picked = Some(id.to_owned());
+        self.ask_pane(cx);
+        cx.notify();
+    }
+
+    fn ask_pane(&mut self, cx: &mut Context<Self>) {
+        let Some(open) = self.open.clone() else {
+            return;
+        };
+        if self.family.is_none() {
+            self.ask_family(open.clone(), cx);
+        }
+        let picked = self.picked.clone().unwrap_or(open);
+        if !self.turns.contains_key(&picked) {
+            self.ask_turns(picked, cx);
+        }
+        if self.tickets.is_none() {
+            self.ask_tickets(cx);
+        }
+    }
+
+    fn ask<R: Request, T: Send + 'static>(
+        &mut self,
+        params: &R::Params,
+        shape: fn(R::Result) -> T,
+        cx: &mut Context<Self>,
+        land: impl FnOnce(&mut Self, Result<T, String>, &mut Context<Self>) + 'static,
+    ) {
+        let Some(chat) = self.chat() else {
+            return land(
+                self,
+                Err("the work screen that ran tofu is closed".to_owned()),
+                cx,
+            );
+        };
+        let (sent, reply) = flume::bounded(1);
+        chat.update(cx, |chat, cx| {
+            chat.request::<R>(params, cx, move |_, reply, _| {
+                if sent.send(reply).is_err() {
+                    eprintln!("desk: forks closed before {} answered", R::METHOD);
+                }
+            });
+        });
+        cx.spawn(async move |screen, cx| {
+            let Ok(reply) = reply.recv_async().await else {
+                return;
+            };
+            let shaped = cx
+                .background_executor()
+                .spawn(async move { reply.map(shape) })
+                .await;
+            let landed = screen.update(cx, |screen, cx| {
+                land(screen, shaped, cx);
+                cx.notify();
+            });
+            if let Err(error) = landed {
+                eprintln!("desk: forks closed before {} landed: {error}", R::METHOD);
+            }
+        })
+        .detach();
+    }
+
+    fn ask_family(&mut self, open: String, cx: &mut Context<Self>) {
+        self.family = Some(Loaded::Reading);
+        let params = SessionParams {
+            session: Some(open.clone()),
+        };
+        self.ask::<request::QuerySession, _>(
+            &params,
+            |detail| detail.generations,
+            cx,
+            move |screen, rows, _| {
+                if screen.open.as_deref() != Some(open.as_str()) {
+                    return;
+                }
+                match &rows {
+                    Ok(rows) => eprintln!(
+                        "desk: forks: query.session lists {} generations for {open}",
+                        rows.len()
+                    ),
+                    Err(error) => eprintln!("desk: forks: query.session for {open}: {error}"),
+                }
+                screen.family = Some(rows.map_or_else(Loaded::Failed, Loaded::Read));
+            },
+        );
+    }
+
+    fn ask_turns(&mut self, id: String, cx: &mut Context<Self>) {
+        self.turns.insert(id.clone(), Loaded::Reading);
+        let asked = Instant::now();
+        let params = SessionParams {
+            session: Some(id.clone()),
+        };
+        self.ask::<request::SessionTurns, _>(
+            &params,
+            detail::digest,
+            cx,
+            move |screen, turns, _| {
+                eprintln!(
+                    "desk: forks: session.turns for {id} landed in {} ms, read {}",
+                    asked.elapsed().as_millis(),
+                    turns.is_ok()
+                );
+                screen
+                    .turns
+                    .insert(id, turns.map_or_else(Loaded::Failed, Loaded::Read));
+            },
+        );
+    }
+
+    fn ask_tickets(&mut self, cx: &mut Context<Self>) {
+        self.tickets = Some(Loaded::Reading);
+        let asked = Instant::now();
+        self.ask::<request::BoardyBoards, _>(
+            &NoParams {},
+            |answer| answer.boards.into_iter().map(|board| board.key).collect(),
+            cx,
+            move |screen, boards: Result<Vec<String>, String>, cx| match boards {
+                Ok(boards) => screen.read_boards(boards, Index::new(), asked, cx),
+                Err(error) => screen.tickets = Some(Loaded::Failed(error)),
+            },
+        );
+    }
+
+    fn read_boards(
+        &mut self,
+        mut left: Vec<String>,
+        mut index: Index,
+        asked: Instant,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(board) = left.pop() else {
+            eprintln!(
+                "desk: forks: boardy.events names {} sessions in {} ms",
+                index.len(),
+                asked.elapsed().as_millis()
+            );
+            self.tickets = Some(Loaded::Read(index));
+            return;
+        };
+        let params = EventsRequest {
+            board: Some(board.clone()),
+            since: None,
+        };
+        self.ask::<request::BoardyEvents, _>(
+            &params,
+            detail::sessions_of,
+            cx,
+            move |screen, found, cx| match found {
+                Ok(found) => {
+                    for (session, tickets) in found {
+                        index.entry(session).or_default().extend(tickets);
+                    }
+                    screen.read_boards(left, index, asked, cx);
+                }
+                Err(error) => screen.tickets = Some(Loaded::Failed(format!("{board}: {error}"))),
+            },
+        );
     }
 
     fn about(&self, open: &str, links: &[Link]) -> String {
@@ -359,13 +541,23 @@ impl ForksScreen {
                 Link::Waiting(id, _) => (*id).to_owned(),
             })
             .collect();
-        let chain = ForkChain::new(theme, generations(open, &shown.links)).on_open(cx.listener(
-            move |screen, at: &usize, _, cx| {
+        let picked = self.picked.as_deref().unwrap_or(open);
+        let at = ids.iter().position(|id| id == picked).unwrap_or(0);
+        let rows = match &self.family {
+            Some(Loaded::Read(rows)) => rows.as_slice(),
+            Some(Loaded::Reading | Loaded::Failed(_)) | None => &[],
+        };
+        let chain = ForkChain::new(theme, generations(open, &shown.links, rows))
+            .listed(at)
+            .on_open(cx.listener(move |screen, at: &usize, _, cx| {
                 if let Some(id) = ids.get(*at) {
-                    screen.open_fork(id, cx);
+                    screen.pick(id, cx);
                 }
-            },
-        ));
+            }));
+        let family = match &self.family {
+            Some(Loaded::Failed(error)) => Some(warn(format!("query.session: {error}"), theme)),
+            Some(Loaded::Read(_) | Loaded::Reading) | None => None,
+        };
         let earlier = shown.earlier.then(|| {
             div().px(px(4.0)).child(
                 button(
@@ -378,10 +570,11 @@ impl ForksScreen {
                 .on_click(cx.listener(|screen, _, _, cx| screen.earlier(cx))),
             )
         });
-        div()
+        let list = div()
             .flex()
             .flex_col()
             .gap(px(8.0))
+            .p(px(LIST_PAD))
             .child(ellipsis(note(self.about(open, &shown.links), theme)).px(px(4.0)))
             .child(
                 div()
@@ -390,10 +583,28 @@ impl ForksScreen {
                     .children(never.map(|never| div().pt(px(10.0)).child(note(never, theme)))),
             )
             .children(failures)
-            .children(earlier)
-            .child(note(
-                "every value is a field of session.info, one read per generation",
-                theme,
+            .children(family)
+            .children(earlier);
+        div()
+            .flex()
+            .size_full()
+            .min_h_0()
+            .child(
+                div()
+                    .flex_none()
+                    .w(px(LIST_WIDTH))
+                    .h_full()
+                    .child(ScrollArea::new("forks-list").child(list)),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .w(px(1.0))
+                    .h_full()
+                    .bg(ink(theme, DIVIDER_INK)),
+            )
+            .child(div().flex_1().min_w_0().h_full().child(
+                ScrollArea::new("forks-pane").child(self.pane(picked, theme, cx).p(px(PANE_PAD))),
             ))
     }
 
@@ -454,22 +665,18 @@ impl ForksScreen {
     }
 }
 
-fn generations(open: &str, links: &[Link]) -> Vec<Generation> {
-    let mut out = Vec::with_capacity(links.len());
-    for (at, link) in links.iter().enumerate() {
-        let into = at
-            .checked_sub(1)
-            .and_then(|newer| links.get(newer))
-            .map(|newer| fork(link.info(), newer.info()));
-        out.push(match link {
+fn generations(open: &str, links: &[Link], rows: &[ForkGeneration]) -> Vec<Generation> {
+    links
+        .iter()
+        .map(|link| match link {
             Link::Read(info) => Generation {
                 name: info.name.clone().unwrap_or_else(|| info.id.clone()).into(),
                 handle: Some(info.handle.clone().into()),
-                place: place(info).into(),
+                place: span(info).into(),
                 current: info.id == open,
                 head: info.head == Some(true),
-                facts: facts(info),
-                into,
+                facts: listed(info, rows.iter().find(|row| row.session == info.id)),
+                into: None,
             },
             Link::Waiting(id, failed) => Generation {
                 name: SharedString::from((*id).to_owned()),
@@ -482,11 +689,10 @@ fn generations(open: &str, links: &[Link]) -> Vec<Generation> {
                 current: *id == open,
                 head: false,
                 facts: Vec::new(),
-                into,
+                into: None,
             },
-        });
-    }
-    out
+        })
+        .collect()
 }
 
 fn place(info: &SessionInfo) -> String {
@@ -497,59 +703,35 @@ fn place(info: &SessionInfo) -> String {
     }
 }
 
-fn fork(older: Option<&SessionInfo>, newer: Option<&SessionInfo>) -> Fork {
-    let carry = newer
-        .and_then(carried)
-        .filter(|from| older.is_some_and(|older| older.id == from.session));
-    if let Some(from) = carry {
-        return Fork {
-            kind: "carried".into(),
-            tokens: Some(
-                format!(
-                    "{} message{} carried from {}",
-                    grouped(from.messages),
-                    if from.messages == 1 { "" } else { "s" },
-                    from.handle
-                )
-                .into(),
-            ),
-            fill: None,
-        };
-    }
-    let kind = newer
-        .and_then(|info| info.fork_kind.clone())
-        .or_else(|| older.and_then(|info| info.fork_into_kind.clone()))
-        .unwrap_or_else(|| "fork".to_owned());
-    let counts = older.and_then(|info| info.fork_tokens_before.zip(info.fork_tokens_after));
-    let ceiling = older
-        .and_then(|info| info.context_ceiling)
-        .filter(|ceiling| *ceiling > 0);
-    Fork {
-        kind: kind.into(),
-        tokens: counts.map(|(before, after)| {
-            format!(
-                "{} → {} tokens, {} dropped",
-                grouped(before),
-                grouped(after),
-                grouped(before.saturating_sub(after))
-            )
-            .into()
-        }),
-        fill: counts.zip(ceiling).map(|((before, after), ceiling)| {
-            let share = |tokens: i64| (tokens as f64 / ceiling as f64) as f32;
-            (share(after), share(before))
-        }),
+fn span(info: &SessionInfo) -> String {
+    let short = |stamp: &str| {
+        chrono::DateTime::parse_from_rfc3339(stamp).map_or_else(
+            |_| stamp.to_owned(),
+            |at| {
+                at.with_timezone(&chrono::Local)
+                    .format("%m-%d %H:%M")
+                    .to_string()
+            },
+        )
+    };
+    match info.ended_at.as_deref() {
+        Some(ended) => format!("{} → {}", short(&info.at), short(ended)),
+        None => format!("since {}", short(&info.at)),
     }
 }
 
-fn facts(info: &SessionInfo) -> Vec<(SharedString, SharedString)> {
+fn listed(info: &SessionInfo, row: Option<&ForkGeneration>) -> Vec<(SharedString, SharedString)> {
+    let fork = row
+        .and_then(|row| row.tokens_before.zip(row.tokens_after))
+        .or_else(|| info.fork_tokens_before.zip(info.fork_tokens_after))
+        .map(|(before, after)| format!("{} → {}", grouped(before), grouped(after)));
     [
         ("turns", Some(grouped(info.turns))),
-        ("steps", Some(grouped(info.steps))),
-        ("outcome", info.outcome.clone()),
-        ("end reason", info.end_reason.clone()),
-        ("started", Some(clock(&info.at))),
-        ("ended", info.ended_at.as_deref().map(clock)),
+        (
+            "cost",
+            row.map(|row| row.cost_usd).or(info.cost_usd).map(dollars),
+        ),
+        ("tokens at fork", fork),
     ]
     .into_iter()
     .filter_map(|(label, value)| Some((label.into(), value?.into())))
@@ -621,20 +803,32 @@ impl Render for ForksScreen {
             empty_state(id, head, Some(text.into()), &[], &[], &theme, |_, _, _| {})
                 .into_any_element()
         };
-        let body = match (&self.source, self.open.clone()) {
-            (None, _) => empty("forks-no-tofu", "No tofu to ask", NO_TOFU),
-            (Some(_), None) => empty("forks-no-session", "No session open", NO_SESSION),
-            (Some(_), Some(open)) => self.body(&open, &theme, cx).into_any_element(),
-        };
         let asking = self.lineage.values().any(|answer| answer.asking);
         let trailing = self
             .source
             .is_some()
             .then(|| reread("forks", asking, &theme, cx, ForksScreen::reread).into_any_element());
-        window(
-            titled("forks", trailing),
-            &theme,
-            div().flex_1().flex().flex_col().child(body),
-        )
+        let header = titled("forks", trailing);
+        match (&self.source, self.open.clone()) {
+            (None, _) => window(
+                header,
+                &theme,
+                div().flex_1().flex().flex_col().child(empty(
+                    "forks-no-tofu",
+                    "No tofu to ask",
+                    NO_TOFU,
+                )),
+            ),
+            (Some(_), None) => window(
+                header,
+                &theme,
+                div().flex_1().flex().flex_col().child(empty(
+                    "forks-no-session",
+                    "No session open",
+                    NO_SESSION,
+                )),
+            ),
+            (Some(_), Some(open)) => tile(header, &theme, self.body(&open, &theme, cx)),
+        }
     }
 }

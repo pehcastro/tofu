@@ -330,6 +330,7 @@ fn module(key: &str) -> Result<Module, String> {
     }
     Module::BUILT_IN
         .into_iter()
+        .chain([Module::Viewer])
         .find(|module| module.key() == key)
         .ok_or_else(|| format!("unknown module {key}"))
 }

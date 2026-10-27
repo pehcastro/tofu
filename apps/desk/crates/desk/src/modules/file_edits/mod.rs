@@ -1,15 +1,16 @@
 use super::chat::{Trace, mention};
 use super::replayed::{self, Replayed};
 
+use std::path::{Component, Path, PathBuf};
 use std::rc::Rc;
 
 use desk_core::model::{Session, Store};
 use desk_core::protocol::{FileEdit as Edit, FileEditOp, HunkLineKind};
-use desk_ui::components::chip;
 use desk_ui::components::diff::{FileChange, FileDiff};
-use desk_ui::components::file_edits::{EditedFile, FileEdit, file_edits, file_history};
+use desk_ui::components::file_edits::{EditedFile, FileEdit, RowPick, file_edits, file_history};
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::sheet::Drawer;
+use desk_ui::components::tree::OpenProject;
 use desk_ui::live::ActiveTheme;
 use gpui::{
     AnyView, App, AppContext, Context, Entity, IntoElement, Render, SharedString, Subscription,
@@ -18,11 +19,13 @@ use gpui::{
 
 const BOARD: &str = "36-agents";
 const TILE_WIDTH: f32 = 513.0;
+#[cfg(feature = "module-editor")]
+const EDITOR_SCREEN: &str = "editor";
 
 pub struct FileEdits {
     store: Entity<Store>,
     files: Vec<EditedFile>,
-    traces: Vec<Vec<(SharedString, Trace)>>,
+    mentions: Vec<Option<Trace>>,
     opened: usize,
     drawer: bool,
     _watch: Subscription,
@@ -62,7 +65,7 @@ pub fn mount(store: Entity<Store>, cx: &mut App) -> Entity<FileEdits> {
         }),
         store,
         files: Vec::new(),
-        traces: Vec::new(),
+        mentions: Vec::new(),
         opened: 0,
         drawer: false,
     })
@@ -91,6 +94,21 @@ fn patch(edit: &Edit) -> String {
     text
 }
 
+fn first_changed_line(edit: &Edit) -> usize {
+    edit.hunks.first().map_or(1, |hunk| {
+        let offset = hunk
+            .lines
+            .iter()
+            .filter(|line| line.kind != HunkLineKind::Removed)
+            .position(|line| line.kind == HunkLineKind::Added)
+            .unwrap_or_default();
+        usize::try_from(hunk.new_start)
+            .unwrap_or_default()
+            .max(1)
+            .saturating_add(offset)
+    })
+}
+
 fn shown(session: &Session, edit: &Edit) -> Result<FileEdit, String> {
     let change = match &edit.op {
         FileEditOp::Create => FileChange::Added,
@@ -108,6 +126,7 @@ fn shown(session: &Session, edit: &Edit) -> Result<FileEdit, String> {
     Ok(FileEdit {
         agent,
         at: shown_at(session, edit).into(),
+        line: first_changed_line(edit),
         diff: Rc::new(diff),
     })
 }
@@ -120,10 +139,8 @@ fn shown_at(session: &Session, edit: &Edit) -> String {
         .map_or_else(|| format!("seq {}", edit.seq), str::to_owned)
 }
 
-type EditMentions = Vec<(SharedString, Trace)>;
-
-fn files(session: &Session) -> Vec<(EditedFile, EditMentions)> {
-    let mut files: Vec<(i64, EditedFile, EditMentions)> = session
+fn files(session: &Session) -> Vec<(EditedFile, Option<Trace>)> {
+    let mut files: Vec<(i64, EditedFile, Option<Trace>)> = session
         .files
         .iter()
         .filter(|(path, _)| !path.is_empty())
@@ -143,33 +160,88 @@ fn files(session: &Session) -> Vec<(EditedFile, EditMentions)> {
                 }
             }
             let newest = edits.iter().map(|edit| edit.seq).max().unwrap_or_default();
-            let traces = edits
+            let mention = edits
                 .iter()
-                .filter_map(|edit| {
-                    let token = edit.r#ref.clone()?;
-                    let at = shown_at(session, edit);
-                    let trace = Trace {
-                        token,
-                        glyph: Glyph::Pencil,
+                .filter(|edit| edit.r#ref.is_some())
+                .max_by_key(|edit| edit.seq)
+                .and_then(|edit| {
+                    Some(Trace {
+                        token: edit.r#ref.clone()?,
+                        glyph: Glyph::File,
                         label: path.clone(),
-                        detail: format!("edited at {at}"),
-                    };
-                    Some((format!("Mention the edit at {at}").into(), trace))
-                })
-                .collect();
+                        detail: format!("edited at {}", shown_at(session, edit)),
+                    })
+                });
             let file = EditedFile {
                 path: path.clone().into(),
                 edits: shown,
                 by,
             };
-            (newest, file, traces)
+            (newest, file, mention)
         })
         .collect();
     files.sort_by_key(|(newest, ..)| std::cmp::Reverse(*newest));
     files
         .into_iter()
-        .map(|(_, file, traces)| (file, traces))
+        .map(|(_, file, mention)| (file, mention))
         .collect()
+}
+
+fn on_disk(path: &str, cx: &App) -> Result<PathBuf, String> {
+    let path = Path::new(path);
+    if path.is_absolute() {
+        return Ok(path.to_path_buf());
+    }
+    if !path
+        .components()
+        .all(|part| matches!(part, Component::Normal(_)))
+    {
+        return Err(format!("{} leaves the project", path.display()));
+    }
+    let root = match cx.try_global::<OpenProject>() {
+        Some(OpenProject(root)) => root.clone(),
+        None => std::env::current_dir()
+            .map_err(|error| format!("no project folder for {}: {error}", path.display()))?,
+    };
+    Ok(root.join(path))
+}
+
+#[cfg(feature = "module-editor")]
+fn open_in_editor(path: &str, line: usize, window: &mut Window, cx: &mut App) {
+    let full = match on_disk(path, cx) {
+        Ok(full) => full,
+        Err(error) => return eprintln!("desk: file edits cannot open the editor: {error}"),
+    };
+    let Some(Some(desk)) = window.root::<crate::desk::Desk>() else {
+        return eprintln!("desk: file edits is not inside the desk, so it cannot open the editor");
+    };
+    eprintln!("desk: file edits opens {} at line {line}", full.display());
+    window.defer(cx, move |window, cx| {
+        let opened = desk.update(cx, |desk, cx| {
+            desk.open_screen(EDITOR_SCREEN, window, cx)?;
+            let editor = desk
+                .editor()
+                .ok_or_else(|| "the editor screen holds no editor".to_owned())?;
+            editor.update(cx, |editor, cx| {
+                editor.land(&full, line.saturating_sub(1), 0, window, cx);
+            });
+            Ok::<(), String>(())
+        });
+        if let Err(error) = opened {
+            eprintln!("desk: file edits could not open the editor: {error}");
+        }
+    });
+}
+
+#[cfg(not(feature = "module-editor"))]
+fn open_in_editor(path: &str, line: usize, _: &mut Window, cx: &mut App) {
+    match on_disk(path, cx) {
+        Ok(full) => eprintln!(
+            "desk: {}:{line} needs the editor: rebuild with --features module-editor",
+            full.display()
+        ),
+        Err(error) => eprintln!("desk: file edits cannot open the editor: {error}"),
+    }
 }
 
 impl FileEdits {
@@ -188,7 +260,7 @@ impl FileEdits {
     }
 
     fn rebuild(&mut self, cx: &mut Context<Self>) {
-        (self.files, self.traces) = self
+        (self.files, self.mentions) = self
             .store
             .read(cx)
             .open_session()
@@ -220,34 +292,55 @@ impl Render for FileEdits {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
         let (opener, closer) = (cx.weak_entity(), cx.weak_entity());
-        let open = move |at: usize, _: &mut Window, cx: &mut App| {
-            opener
-                .update(cx, |module, cx| {
-                    module.opened = at;
-                    module.drawer = true;
-                    cx.notify();
-                })
-                .ok();
-        };
-        let history = self
+        let picked: Vec<(SharedString, usize)> = self
             .files
-            .get(self.opened)
-            .map(|file| file_history(("file-history", self.opened), file, &theme));
-        let mentions = self
-            .traces
-            .get(self.opened)
-            .into_iter()
-            .flatten()
-            .enumerate()
-            .map(|(at, (words, trace))| {
-                let trace = trace.clone();
-                chip::trace(("file-edit-mention", at), words.clone(), &theme)
-                    .on_click(move |_, window, cx| mention(trace.clone(), window, cx))
-            });
+            .iter()
+            .map(|file| {
+                let line = file.edits.last().map_or(1, |edit| edit.line);
+                (file.path.clone(), line)
+            })
+            .collect();
+        let pick = move |at: usize, pick: RowPick, window: &mut Window, cx: &mut App| match pick {
+            RowPick::Editor => {
+                if let Some((path, line)) = picked.get(at) {
+                    open_in_editor(path, *line, window, cx);
+                }
+            }
+            RowPick::Detail => {
+                opener
+                    .update(cx, |module, cx| {
+                        module.opened = at;
+                        module.drawer = true;
+                        cx.notify();
+                    })
+                    .ok();
+            }
+        };
+        let trace = self.mentions.get(self.opened).cloned().flatten();
+        let history = self.files.get(self.opened).map(|file| {
+            let path = file.path.clone();
+            let lines: Vec<usize> = file.edits.iter().map(|edit| edit.line).collect();
+            let on_mention = move |window: &mut Window, cx: &mut App| match &trace {
+                Some(trace) => mention(trace.clone(), window, cx),
+                None => eprintln!("desk: file edits has no mention token for this file"),
+            };
+            let on_open = move |ix: usize, window: &mut Window, cx: &mut App| {
+                if let Some(line) = lines.get(ix) {
+                    open_in_editor(&path, *line, window, cx);
+                }
+            };
+            file_history(
+                ("file-history", self.opened),
+                file,
+                &theme,
+                on_mention,
+                on_open,
+            )
+        });
         div()
             .relative()
             .size_full()
-            .child(file_edits("file-edits", &self.files, &theme, open))
+            .child(file_edits("file-edits", &self.files, &theme, pick))
             .child(
                 Drawer::new("file-edits-drawer")
                     .open(self.drawer && history.is_some())
@@ -264,7 +357,6 @@ impl Render for FileEdits {
                             .id("file-history-scroll")
                             .size_full()
                             .overflow_y_scroll()
-                            .child(div().flex().flex_wrap().gap_2().p_3().children(mentions))
                             .children(history),
                     ),
             )

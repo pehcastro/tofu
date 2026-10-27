@@ -3,8 +3,10 @@ use super::replayed::{self, Replayed};
 
 use std::rc::Rc;
 
+#[cfg(feature = "screen-boardy")]
+use crate::screens::boardy::OpenTicket;
 use desk_core::model::{Session, Store};
-use desk_ui::components::agents::{AgentBoard, AgentScreen, AgentTile};
+use desk_ui::components::agents::{AgentBoard, AgentScreen, AgentTile, TicketAction};
 use desk_ui::components::avatar::{Agent, AgentKind, AgentStatus};
 use desk_ui::components::glyph::Glyph;
 
@@ -21,6 +23,7 @@ const TILE_WIDTH: f32 = 513.0;
 pub struct Subagents {
     store: Entity<Store>,
     board: Rc<AgentBoard>,
+    seen: Option<u64>,
     tile: Entity<AgentTile>,
     screen: Entity<AgentScreen>,
     _watch: Subscription,
@@ -69,9 +72,11 @@ pub fn mount(store: Entity<Store>, cx: &mut App) -> Entity<Subagents> {
         };
         let tile = cx.new(|cx| AgentTile::new(board.clone(), mentioner(&store), expand, cx));
         let screen = cx.new(|_| AgentScreen::new(board.clone(), mentioner(&store)));
-        Subagents {
+        let module = Subagents {
             _watch: cx.observe(&store, |module, _, cx| {
-                module.rebuild(cx);
+                if !module.rebuild(cx) {
+                    return;
+                }
                 eprintln!(
                     "desk: tile sub-agents rebuilt {} rows, {} ends from session.trace",
                     module.board.lines.len(),
@@ -81,10 +86,31 @@ pub fn mount(store: Entity<Store>, cx: &mut App) -> Entity<Subagents> {
             }),
             store,
             board,
+            seen: None,
             tile,
             screen,
-        }
+        };
+        module.link_tickets(true, cx);
+        module
     })
+}
+
+#[cfg(feature = "screen-boardy")]
+fn ticket_opener() -> Option<TicketAction> {
+    Some(Rc::new(|id: &str, window: &mut Window, cx: &mut App| {
+        eprintln!("desk: sub-agents: open {id} in boardy");
+        window.dispatch_action(
+            Box::new(OpenTicket {
+                id: id.to_owned().into(),
+            }),
+            cx,
+        );
+    }))
+}
+
+#[cfg(not(feature = "screen-boardy"))]
+fn ticket_opener() -> Option<TicketAction> {
+    None
 }
 
 fn empty() -> AgentBoard {
@@ -100,9 +126,9 @@ fn mentioner(store: &Entity<Store>) -> impl Fn(&Agent, &mut Window, &mut App) + 
     move |agent, window, cx| {
         let found = store.upgrade().and_then(|store| {
             let session = store.read(cx).open_session()?;
-            let member = session.agents.values().find(|member| {
-                let shown = board::shown(member);
-                shown.kind == agent.kind && shown.instance == agent.instance
+            let member = session.agents.iter().find_map(|(name, member)| {
+                let shown = board::shown(name, member);
+                (shown.kind == agent.kind && shown.instance == agent.instance).then_some(member)
             })?;
             Some(Trace {
                 token: member.mention.clone()?,
@@ -123,8 +149,12 @@ fn session(store: &Store) -> Option<&Session> {
 }
 
 impl Subagents {
-    pub fn live(&self) -> usize {
-        self.board.live()
+    pub fn link_tickets(&self, on: bool, cx: &mut Context<Self>) {
+        let open = ticket_opener().filter(|_| on);
+        self.tile
+            .update(cx, |tile, cx| tile.link_tickets(open.clone(), cx));
+        self.screen
+            .update(cx, |screen, cx| screen.link_tickets(open, cx));
     }
 
     pub fn screen(&self, agent: Option<Agent>, cx: &mut Context<Self>) -> Entity<AgentScreen> {
@@ -139,15 +169,20 @@ impl Subagents {
     pub fn reveal(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let agent = session(self.store.read(cx))
             .and_then(|open| open.agents.get(id))
-            .map(board::shown);
+            .map(|member| board::shown(id, member));
         agent.is_some_and(|agent| {
             self.tile
                 .update(cx, |tile, cx| tile.reveal(agent, window, cx))
         })
     }
 
-    fn rebuild(&mut self, cx: &mut Context<Self>) {
+    fn rebuild(&mut self, cx: &mut Context<Self>) -> bool {
         let store = self.store.read(cx);
+        let seen = session(store).map(|open| board::seen(open, store.agent_runs()));
+        if seen.is_some() && seen == self.seen {
+            return false;
+        }
+        self.seen = seen;
         self.board = Rc::new(
             session(store).map_or_else(empty, |open| board::board(open, store.agent_runs())),
         );
@@ -156,6 +191,7 @@ impl Subagents {
             .update(cx, |tile, cx| tile.set_board(board.clone(), cx));
         self.screen
             .update(cx, |screen, cx| screen.set_board(board, cx));
+        true
     }
 
     pub fn counted(&mut self, cx: &mut Context<Self>) -> String {
@@ -173,7 +209,7 @@ impl Subagents {
         let unknown = session
             .agents
             .values()
-            .filter(|agent| matches!(board::shown(agent).kind, AgentKind::Other(_)))
+            .filter(|agent| matches!(AgentKind::named(&agent.kind), AgentKind::Other(_)))
             .count();
         format!(
             "Working {working} Asking {asking} Failed {failed} Finished {finished} of {}, {unknown} with no desk_ui kind",

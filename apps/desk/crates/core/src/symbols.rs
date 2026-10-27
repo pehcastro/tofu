@@ -9,8 +9,35 @@ use tree_sitter::{Parser, Query, QueryCursor, StreamingIterator};
 use crate::syntax::{Language, SyntaxError};
 
 const LARGEST_FILE: u64 = 1024 * 1024;
+const INDEXED: [Language; 3] = [Language::Rust, Language::TypeScript, Language::Tsx];
 const RUST_TAGS: &str = include_str!("../queries/rust/tags.scm");
 const TYPESCRIPT_TAGS: &str = include_str!("../queries/typescript/tags.scm");
+const GO_TAGS: &str = "
+(function_declaration name: (identifier) @name) @definition.function
+(method_declaration name: (field_identifier) @name) @definition.method
+(type_spec name: (type_identifier) @name) @definition.type
+(type_alias name: (type_identifier) @name) @definition.type
+(const_spec name: (identifier) @name) @definition.constant
+(source_file (var_declaration (var_spec name: (identifier) @name) @definition.constant))
+";
+const RUST_LOCALS: &str = "
+(let_declaration pattern: (identifier) @name) @definition.local
+(parameter pattern: (identifier) @name) @definition.local
+(closure_parameters (identifier) @name) @definition.local
+(for_expression pattern: (identifier) @name) @definition.local
+";
+const GO_LOCALS: &str = "
+(short_var_declaration left: (expression_list (identifier) @name)) @definition.local
+(var_spec name: (identifier) @name) @definition.local
+(parameter_declaration name: (identifier) @name) @definition.local
+(range_clause left: (expression_list (identifier) @name)) @definition.local
+";
+const TYPESCRIPT_LOCALS: &str = "
+(variable_declarator name: (identifier) @name) @definition.local
+(required_parameter pattern: (identifier) @name) @definition.local
+(optional_parameter pattern: (identifier) @name) @definition.local
+(arrow_function parameter: (identifier) @name) @definition.local
+";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SymbolKind {
@@ -20,6 +47,7 @@ pub enum SymbolKind {
     Constant,
     Module,
     Macro,
+    Local,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -37,11 +65,22 @@ pub struct Index {
     files: Vec<Arc<Path>>,
 }
 
+#[derive(Default)]
+pub struct Outline {
+    symbols: Vec<Symbol>,
+}
+
 #[derive(Clone, Copy)]
 enum Role {
     Name,
     Definition(SymbolKind),
     Other,
+}
+
+struct Grammar {
+    grammar: tree_sitter::Language,
+    tags: &'static str,
+    locals: &'static str,
 }
 
 struct Tags {
@@ -57,17 +96,40 @@ struct Tagger {
 }
 
 pub fn indexed(path: &Path) -> bool {
-    Language::from_path(path).is_some_and(|language| {
-        matches!(
-            language,
-            Language::Rust | Language::TypeScript | Language::Tsx
-        )
-    })
+    Language::from_path(path).is_some_and(|language| INDEXED.contains(&language))
 }
 
 fn kin(a: Language, b: Language) -> bool {
     let script = |language| matches!(language, Language::TypeScript | Language::Tsx);
     a == b || script(a) && script(b)
+}
+
+fn grammar(language: Language) -> Option<Grammar> {
+    let (grammar, tags, locals): (tree_sitter::Language, _, _) = match language {
+        Language::Rust => (tree_sitter_rust::LANGUAGE.into(), RUST_TAGS, RUST_LOCALS),
+        Language::Go => (tree_sitter_go::LANGUAGE.into(), GO_TAGS, GO_LOCALS),
+        Language::TypeScript => (
+            tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+            TYPESCRIPT_TAGS,
+            TYPESCRIPT_LOCALS,
+        ),
+        Language::Tsx => (
+            tree_sitter_typescript::LANGUAGE_TSX.into(),
+            TYPESCRIPT_TAGS,
+            TYPESCRIPT_LOCALS,
+        ),
+        Language::JavaScript
+        | Language::Python
+        | Language::Json
+        | Language::Toml
+        | Language::Markdown
+        | Language::Bash => return None,
+    };
+    Some(Grammar {
+        grammar,
+        tags,
+        locals,
+    })
 }
 
 fn role(capture: &str) -> Role {
@@ -79,6 +141,7 @@ fn role(capture: &str) -> Role {
         "definition.constant" => Role::Definition(SymbolKind::Constant),
         "definition.module" => Role::Definition(SymbolKind::Module),
         "definition.macro" => Role::Definition(SymbolKind::Macro),
+        "definition.local" => Role::Definition(SymbolKind::Local),
         _ => Role::Other,
     }
 }
@@ -91,36 +154,79 @@ fn read(path: &Path) -> Result<String, String> {
     fs::read_to_string(path).map_err(|error| error.to_string())
 }
 
+impl Tags {
+    fn new(
+        language: Language,
+        grammar: tree_sitter::Language,
+        source: &str,
+    ) -> Result<Self, SyntaxError> {
+        let query = Query::new(&grammar, source).map_err(SyntaxError::Query)?;
+        let roles = query
+            .capture_names()
+            .iter()
+            .map(|name| role(name))
+            .collect();
+        Ok(Tags {
+            language,
+            grammar,
+            query,
+            roles,
+        })
+    }
+
+    fn tag(
+        &self,
+        parser: &mut Parser,
+        path: &Arc<Path>,
+        text: &str,
+        found: &mut Vec<Symbol>,
+    ) -> Result<(), SyntaxError> {
+        parser
+            .set_language(&self.grammar)
+            .map_err(SyntaxError::Language)?;
+        let tree = parser
+            .parse(text, None)
+            .ok_or(SyntaxError::ParseCancelled)?;
+        let mut cursor = QueryCursor::new();
+        let mut matches = cursor.matches(&self.query, tree.root_node(), text.as_bytes());
+        while let Some(matched) = matches.next() {
+            let (mut name, mut kind) = (None, None);
+            for capture in matched.captures {
+                match self.roles.get(capture.index as usize) {
+                    Some(Role::Name) => name = Some(capture.node),
+                    Some(Role::Definition(defined)) => kind = Some(*defined),
+                    Some(Role::Other) | None => {}
+                }
+            }
+            let (Some(node), Some(kind)) = (name, kind) else {
+                continue;
+            };
+            let Some(spelled) = text.get(node.byte_range()) else {
+                continue;
+            };
+            let (start, at) = (node.start_byte(), node.start_position());
+            let line = start.saturating_sub(at.column);
+            found.push(Symbol {
+                name: spelled.into(),
+                kind,
+                path: path.clone(),
+                row: at.row,
+                col: text
+                    .get(line..start)
+                    .map_or(0, |before| before.chars().count()),
+            });
+        }
+        Ok(())
+    }
+}
+
 impl Tagger {
     fn new() -> Result<Self, SyntaxError> {
-        let grammars: [(Language, tree_sitter::Language, &str); 3] = [
-            (Language::Rust, tree_sitter_rust::LANGUAGE.into(), RUST_TAGS),
-            (
-                Language::TypeScript,
-                tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
-                TYPESCRIPT_TAGS,
-            ),
-            (
-                Language::Tsx,
-                tree_sitter_typescript::LANGUAGE_TSX.into(),
-                TYPESCRIPT_TAGS,
-            ),
-        ];
-        let tags = grammars
+        let tags = INDEXED
             .into_iter()
-            .map(|(language, grammar, source)| {
-                let query = Query::new(&grammar, source).map_err(SyntaxError::Query)?;
-                let roles = query
-                    .capture_names()
-                    .iter()
-                    .map(|name| role(name))
-                    .collect();
-                Ok(Tags {
-                    language,
-                    grammar,
-                    query,
-                    roles,
-                })
+            .filter_map(|language| {
+                let found = grammar(language)?;
+                Some(Tags::new(language, found.grammar, found.tags))
             })
             .collect::<Result<_, SyntaxError>>()?;
         Ok(Self {
@@ -145,43 +251,41 @@ impl Tagger {
                 return Ok(false);
             }
         };
-        self.parser
-            .set_language(&tags.grammar)
-            .map_err(SyntaxError::Language)?;
-        let tree = self
-            .parser
-            .parse(&text, None)
-            .ok_or(SyntaxError::ParseCancelled)?;
-        let mut cursor = QueryCursor::new();
-        let mut matches = cursor.matches(&tags.query, tree.root_node(), text.as_bytes());
-        while let Some(matched) = matches.next() {
-            let (mut name, mut kind) = (None, None);
-            for capture in matched.captures {
-                match tags.roles.get(capture.index as usize) {
-                    Some(Role::Name) => name = Some(capture.node),
-                    Some(Role::Definition(defined)) => kind = Some(*defined),
-                    Some(Role::Other) | None => {}
-                }
-            }
-            let (Some(node), Some(kind)) = (name, kind) else {
-                continue;
-            };
-            let Some(spelled) = text.get(node.byte_range()) else {
-                continue;
-            };
-            let (start, at) = (node.start_byte(), node.start_position());
-            let line = start.saturating_sub(at.column);
-            found.push(Symbol {
-                name: spelled.into(),
-                kind,
-                path: path.clone(),
-                row: at.row,
-                col: text
-                    .get(line..start)
-                    .map_or(0, |before| before.chars().count()),
-            });
-        }
+        tags.tag(&mut self.parser, path, &text, found)?;
         Ok(true)
+    }
+}
+
+impl Outline {
+    pub fn build(path: &Path, text: &str) -> Result<Self, SyntaxError> {
+        let Some(language) = Language::from_path(path) else {
+            return Ok(Self::default());
+        };
+        let Some(found) = grammar(language) else {
+            return Ok(Self::default());
+        };
+        let source = format!("{}\n{}", found.tags, found.locals);
+        let tags = Tags::new(language, found.grammar, &source)?;
+        let mut symbols = Vec::new();
+        tags.tag(&mut Parser::new(), &Arc::from(path), text, &mut symbols)?;
+        Ok(Self { symbols })
+    }
+
+    pub fn definitions(&self, name: &str, (row, col): (usize, usize)) -> Vec<Symbol> {
+        let named = || self.symbols.iter().filter(|symbol| &*symbol.name == name);
+        let defined: Vec<Symbol> = named()
+            .filter(|symbol| symbol.kind != SymbolKind::Local)
+            .cloned()
+            .collect();
+        if !defined.is_empty() {
+            return defined;
+        }
+        named()
+            .filter(|symbol| (symbol.row, symbol.col) <= (row, col))
+            .max_by_key(|symbol| (symbol.row, symbol.col))
+            .cloned()
+            .into_iter()
+            .collect()
     }
 }
 
@@ -263,8 +367,9 @@ impl Index {
 mod tests {
     use std::error::Error;
     use std::fs;
+    use std::time::Instant;
 
-    use super::SymbolKind::{Constant, Function, Macro, Method, Module, Type};
+    use super::SymbolKind::{Constant, Function, Local, Macro, Method, Module, Type};
     use super::*;
 
     const RUST: &str = "mod inner {}
@@ -287,7 +392,41 @@ type Id = string;
 enum Mode { On }
 ";
 
+    const OUTLINED_RUST: &str = "fn main() { let x = 1; let x = later(x); helper(x) }
+fn later(y: u8) -> u8 { y }
+impl A { fn new() {} }
+impl B { fn new() {} }
+fn f() { z; let z = 1; }
+";
+
+    const OUTLINED_GO: &str = "package p
+
+func run() { v := 1; helper(v) }
+
+func helper(n int) int { return n }
+
+type T struct{}
+
+func (t T) M() {}
+
+const C = 1
+
+var V = 2
+";
+
+    const OUTLINED_TS: &str = "const top = 1;
+function run(a: number) { const b = a; return b + top + later(); }
+function later() { return 1; }
+";
+
     type Row<'a> = (&'a str, &'a str, SymbolKind, usize, usize);
+    type Outlined<'a> = (
+        &'a str,
+        &'a str,
+        &'a str,
+        (usize, usize),
+        &'a [(usize, usize, SymbolKind)],
+    );
 
     fn place(index: &Index, name: &str, from: Language) -> Vec<(String, SymbolKind, usize, usize)> {
         let file = |symbol: &Symbol| {
@@ -391,6 +530,78 @@ enum Mode { On }
         let index = Index::build(&[dir.path().join("gone.rs"), notes, kept])?;
         single(&index, Language::Rust, &[("kept", "k.rs", Function, 0, 3)]);
         assert_eq!((index.files(), index.symbols()), (1, 1));
+        Ok(())
+    }
+
+    #[test]
+    fn an_outline_answers_from_the_text_in_hand() -> Result<(), Box<dyn Error>> {
+        let table: &[Outlined] = &[
+            ("a.rs", OUTLINED_RUST, "later", (0, 31), &[(1, 3, Function)]),
+            ("a.rs", OUTLINED_RUST, "x", (0, 37), &[(0, 27, Local)]),
+            ("a.rs", OUTLINED_RUST, "x", (0, 16), &[(0, 16, Local)]),
+            ("a.rs", OUTLINED_RUST, "y", (1, 24), &[(1, 9, Local)]),
+            (
+                "a.rs",
+                OUTLINED_RUST,
+                "new",
+                (0, 0),
+                &[(2, 12, Function), (3, 12, Function)],
+            ),
+            ("a.rs", OUTLINED_RUST, "z", (4, 9), &[]),
+            ("a.rs", OUTLINED_RUST, "missing", (0, 0), &[]),
+            ("h.go", OUTLINED_GO, "helper", (2, 21), &[(4, 5, Function)]),
+            ("h.go", OUTLINED_GO, "M", (0, 0), &[(8, 11, Method)]),
+            ("h.go", OUTLINED_GO, "T", (0, 0), &[(6, 5, Type)]),
+            ("h.go", OUTLINED_GO, "C", (0, 0), &[(10, 6, Constant)]),
+            ("h.go", OUTLINED_GO, "V", (0, 0), &[(12, 4, Constant)]),
+            ("h.go", OUTLINED_GO, "v", (2, 28), &[(2, 13, Local)]),
+            ("h.go", OUTLINED_GO, "n", (4, 32), &[(4, 12, Local)]),
+            ("a.ts", OUTLINED_TS, "top", (1, 50), &[(0, 6, Constant)]),
+            ("a.ts", OUTLINED_TS, "later", (1, 56), &[(2, 9, Function)]),
+            ("a.ts", OUTLINED_TS, "a", (1, 36), &[(1, 13, Local)]),
+            ("a.ts", OUTLINED_TS, "b", (1, 46), &[(1, 32, Local)]),
+            ("a.tsx", OUTLINED_TS, "later", (1, 56), &[(2, 9, Function)]),
+            ("n.md", "# later\n", "later", (0, 2), &[]),
+        ];
+        for &(file, text, name, at, wanted) in table {
+            let outline = Outline::build(Path::new(file), text)?;
+            let got: Vec<_> = outline
+                .definitions(name, at)
+                .iter()
+                .map(|symbol| (symbol.row, symbol.col, symbol.kind))
+                .collect();
+            assert_eq!(got, wanted, "{file} {name} at {at:?}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn an_outline_of_two_thousand_lines_is_timed_built_and_asked() -> Result<(), Box<dyn Error>> {
+        let text: String = (0..667)
+            .map(|at| {
+                format!(
+                    "fn f{at}(x: u8) -> u8 {{\n    let y = x; f{} (y)\n}}\n",
+                    at + 1
+                )
+            })
+            .collect();
+        assert_eq!(text.lines().count(), 2001);
+        let median = |mut taken: Vec<f64>| {
+            taken.sort_by(f64::total_cmp);
+            taken.get(taken.len() / 2).copied().unwrap_or(f64::MAX)
+        };
+        let (mut built, mut asked) = (Vec::new(), Vec::new());
+        for _ in 0..10 {
+            let started = Instant::now();
+            let outline = Outline::build(Path::new("big.rs"), &text)?;
+            built.push(started.elapsed().as_secs_f64() * 1000.0);
+            let started = Instant::now();
+            let found = outline.definitions("f666", (1997, 15));
+            asked.push(started.elapsed().as_secs_f64() * 1000.0);
+            assert_eq!(found.len(), 1);
+        }
+        let (built, asked) = (median(built), median(asked));
+        eprintln!("outline of 2001 lines, median of 10: built {built:.2} ms, asked {asked:.3} ms");
         Ok(())
     }
 

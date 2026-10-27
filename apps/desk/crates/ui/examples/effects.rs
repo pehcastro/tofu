@@ -25,6 +25,7 @@ const EFFECTS: [(&str, Stage); 6] = [
                 light: [240, 200, 146],
             },
             strength: 255,
+            opacity: 255,
         },
     ),
     (
@@ -33,22 +34,31 @@ const EFFECTS: [(&str, Stage); 6] = [
             effect: Effect::Glow {
                 threshold: 150,
                 radius: 6,
+                color: [255; 3],
+                anchor: 0,
             },
             strength: 255,
+            opacity: 255,
         },
     ),
     (
         "halftone",
         Stage {
-            effect: Effect::Halftone { cell: 6 },
+            effect: Effect::Halftone { cell: 6, anchor: 0 },
             strength: 150,
+            opacity: 255,
         },
     ),
     (
         "dither",
         Stage {
-            effect: Effect::Dither { levels: 6 },
+            effect: Effect::Dither {
+                levels: 6,
+                cell: 1,
+                anchor: 0,
+            },
             strength: 210,
+            opacity: 255,
         },
     ),
     (
@@ -56,6 +66,7 @@ const EFFECTS: [(&str, Stage); 6] = [
         Stage {
             effect: Effect::Scanlines { period: 3 },
             strength: 90,
+            opacity: 255,
         },
     ),
     (
@@ -63,9 +74,11 @@ const EFFECTS: [(&str, Stage); 6] = [
         Stage {
             effect: Effect::Grain {
                 amount: 14,
+                size: 1,
                 seed: 7,
             },
             strength: 255,
+            opacity: 255,
         },
     ),
 ];

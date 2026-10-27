@@ -10,6 +10,7 @@ use std::rc::Rc;
 
 use desk_perf::{ALLOCATOR, CountingAllocator, Profiler};
 use desk_ui::components::glyph::Glyph;
+use desk_ui::components::logo::Brand;
 use desk_ui::icon::Icon;
 use desk_ui::metrics::{WINDOW_HEIGHT, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH, WINDOW_WIDTH};
 use desk_ui::theme::Mode;
@@ -116,7 +117,10 @@ fn main() -> ExitCode {
         }
     };
     let mut assets = Icon::registry();
-    if let Err(duplicates) = assets.extend(Glyph::entries()) {
+    if let Err(duplicates) = assets
+        .extend(Glyph::entries())
+        .and_then(|()| assets.extend(Brand::entries()))
+    {
         eprintln!("the book has two assets under one path: {duplicates:?}");
         return ExitCode::FAILURE;
     }

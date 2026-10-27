@@ -66,11 +66,18 @@ fn generate(schema: &Value) -> Fallible<String> {
     for ((_, values), name) in &enums {
         write_enum(&mut out, name, values)?;
     }
-    write_methods(&mut out, "Notification", object(schema, "x-notifications")?)?;
+    let defs = object(schema, "$defs")?;
+    write_methods(
+        &mut out,
+        "Notification",
+        object(schema, "x-notifications")?,
+        defs,
+    )?;
     write_methods(
         &mut out,
         "ServerRequest",
         object(schema, "x-serverRequests")?,
+        defs,
     )?;
     writeln!(out, "pub mod request {{")?;
     for (method, entry) in object(schema, "x-requests")? {
@@ -268,13 +275,16 @@ fn field_type(field: &str, property: &Value, enums: &Enums) -> Fallible<FieldTyp
 }
 
 fn write_enum(out: &mut String, name: &str, values: &[String]) -> Fallible<()> {
-    let variants: Vec<(String, &String)> =
-        values.iter().map(|value| (pascal(value), value)).collect();
-    if variants.iter().any(|(variant, _)| variant == "Unknown") {
-        return Err(
-            format!("{name} has a value named unknown, which Unknown(raw) already is").into(),
-        );
-    }
+    let variants: Vec<(String, &String)> = values
+        .iter()
+        .map(|value| match pascal(value) {
+            digit if digit.starts_with(|c: char| c.is_ascii_digit()) => {
+                (format!("Last{digit}"), value)
+            }
+            variant => (variant, value),
+        })
+        .filter(|(variant, _)| variant != "Unknown")
+        .collect();
     let list: String = variants
         .iter()
         .map(|(variant, _)| format!("{variant}, "))
@@ -296,9 +306,16 @@ fn write_enum(out: &mut String, name: &str, values: &[String]) -> Fallible<()> {
     Ok(())
 }
 
-fn write_methods(out: &mut String, name: &str, methods: &Map<String, Value>) -> Fallible<()> {
+fn write_methods(
+    out: &mut String,
+    name: &str,
+    methods: &Map<String, Value>,
+    defs: &Map<String, Value>,
+) -> Fallible<()> {
     let mut variants = String::new();
     let mut arms = String::new();
+    let mut seqs = String::new();
+    let mut unstamps = String::new();
     for (method, entry) in methods {
         let variant = pascal(method);
         let params = entry.get("params").unwrap_or(entry);
@@ -307,13 +324,32 @@ fn write_methods(out: &mut String, name: &str, methods: &Map<String, Value>) -> 
             arms,
             "            {method:?} => Self::{variant}(serde_json::from_value(params)?),"
         )?;
+        if stamped(params, defs) {
+            writeln!(seqs, "            Self::{variant}(e) => Some(e.seq),")?;
+            writeln!(unstamps, "            Self::{variant}(e) => e.seq = 0,")?;
+        }
     }
     writeln!(
         out,
         "#[derive(Clone, Debug, PartialEq)]\npub enum {name} {{\n{variants}    Unknown {{ method: String, params: serde_json::Value }},\n}}\n\
-         impl {name} {{\n    pub fn parse(method: &str, params: serde_json::Value) -> Result<Self, serde_json::Error> {{\n        Ok(match method {{\n{arms}            _ => Self::Unknown {{ method: method.to_owned(), params }},\n        }})\n    }}\n}}"
+         impl {name} {{\n    pub fn parse(method: &str, params: serde_json::Value) -> Result<Self, serde_json::Error> {{\n        Ok(match method {{\n{arms}            _ => Self::Unknown {{ method: method.to_owned(), params }},\n        }})\n    }}\n\
+         pub fn seq(&self) -> Option<i64> {{\n        match self {{\n{seqs}            _ => None,\n        }}\n    }}\n\
+         pub fn unsequenced(&self) -> Self {{\n        let mut line = self.clone();\n        match &mut line {{\n{unstamps}            _ => {{}}\n        }}\n        line\n    }}\n}}"
     )?;
     Ok(())
+}
+
+fn stamped(params: &Value, defs: &Map<String, Value>) -> bool {
+    params["$ref"]
+        .as_str()
+        .and_then(|path| path.strip_prefix("#/$defs/"))
+        .and_then(|name| defs.get(name))
+        .is_some_and(|def| {
+            def["properties"]["seq"]["type"] == "integer"
+                && def["required"]
+                    .as_array()
+                    .is_some_and(|required| required.iter().any(|field| field == "seq"))
+        })
 }
 
 fn pascal(name: &str) -> String {

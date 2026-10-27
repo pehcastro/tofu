@@ -131,7 +131,6 @@ pub const MENU_PAD: f32 = 6.0;
 pub const MENU_GAP: f32 = 4.0;
 pub const MENU_GROW_FROM: f32 = 0.9;
 pub const GLASS_FILL: f32 = 0.72;
-pub const GLASS_BLUR: f32 = 24.0;
 pub const SELECTION_FILL: f32 = 0.35;
 pub const CARET_BLINK_MS: u64 = 530;
 pub const POPOVER_WIDTH: f32 = 360.0;

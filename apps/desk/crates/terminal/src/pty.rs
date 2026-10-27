@@ -1,4 +1,5 @@
 use crate::shells;
+use crate::wire::Echo;
 use flume::Receiver;
 use portable_pty::{ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use std::env;
@@ -19,6 +20,7 @@ const POWERSHELLS: [&str; 2] = ["pwsh", "powershell"];
 
 pub enum Output {
     Bytes(Vec<u8>),
+    Echoed(Vec<Echo>),
     Exited(Option<u32>),
 }
 

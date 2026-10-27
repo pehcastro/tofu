@@ -1,9 +1,11 @@
 use std::path::Path;
-use std::process::Command;
+use std::process;
 use std::rc::Rc;
 
-use desk_core::model::Session;
-use desk_core::protocol::{MentionParams, MentionResolvedOutcome, request};
+use desk_core::model::{Session, Tool};
+use desk_core::protocol::command::Command;
+use desk_core::protocol::{MentionParams, MentionResolvedOutcome, NoParams, request};
+use desk_ui::components::chat::Object;
 use desk_ui::components::composer::{MentionGroup, MentionMenu, MentionRow, TraceChip};
 use desk_ui::components::glyph::Glyph;
 use gpui::{
@@ -12,10 +14,12 @@ use gpui::{
 };
 
 use super::Chat;
-use super::items::argument;
+use super::cards::card;
+use super::items::brief;
 
 const MENU_FILES: usize = 8;
 const MENU_TRACES: usize = 6;
+const MENU_COMMANDS: usize = 10;
 const NOT_FOUND: &str = "not found: tofu has no recorded item with this id";
 const AMBIGUOUS: &str = "ambiguous: more than one recorded item ends in this id";
 const ASKING: &str = "asking tofu what this points to";
@@ -43,9 +47,17 @@ enum Resolve {
 enum Pick {
     File(String),
     Trace(Trace),
+    Command(Command),
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Trigger {
+    At,
+    Slash,
 }
 
 pub(super) struct Menu {
+    trigger: Trigger,
     start: usize,
     end: usize,
     query: String,
@@ -53,12 +65,10 @@ pub(super) struct Menu {
     rows: Vec<Pick>,
 }
 
-#[derive(Default)]
-pub(super) enum Files {
-    #[default]
+pub(super) enum List<T> {
     Unlisted,
     Listing,
-    Listed(Rc<Vec<String>>),
+    Listed(Rc<Vec<T>>),
     Failed,
 }
 
@@ -123,7 +133,19 @@ pub(super) fn tool_glyph(name: &str) -> Glyph {
     match name {
         "edit" | "write" => Glyph::Pencil,
         "bash" | "shell" => Glyph::Terminal,
-        "read" | "glob" | "search" => Glyph::File,
+        "read" | "typecheck" => Glyph::File,
+        "search" | "symbols" => Glyph::Search,
+        "glob" => Glyph::Folder,
+        "fetch" | "web_search" => Glyph::Globe,
+        "message" => Glyph::Arrow,
+        "spawn" | "subagents" => Glyph::Agents,
+        "ask_person" => Glyph::Person,
+        "plan" => Glyph::Check,
+        "test" => Glyph::Beaker,
+        "remember" => Glyph::Brain,
+        "cron" => Glyph::Cron,
+        name if name.starts_with("ticket_") => Glyph::Inbox,
+        name if name.starts_with("browser_") => Glyph::Window,
         _ => Glyph::Code,
     }
 }
@@ -132,16 +154,33 @@ fn first_line(text: &str) -> String {
     text.lines().next().unwrap_or_default().to_owned()
 }
 
+fn words(tool: &Tool) -> String {
+    let card = card(tool);
+    let objects = card.objects.iter().map(Object::text);
+    let said: Vec<&str> = tool
+        .agent
+        .as_deref()
+        .into_iter()
+        .chain([card.verb.as_ref()])
+        .chain(objects)
+        .chain(card.meta.as_deref())
+        .collect();
+    first_line(&said.join(" "))
+}
+
 fn session_traces(session: &Session) -> Vec<Trace> {
     let mut found: Vec<(Option<&str>, Trace)> = Vec::new();
-    for agent in session.agents.values() {
+    for (id, agent) in &session.agents {
         if let Some(token) = &agent.mention {
-            let label = format!("{} {}", agent.kind, agent.number);
+            let summary = match brief(agent.report.as_deref().unwrap_or_default()) {
+                "" => first_line(&agent.task),
+                said => said.to_owned(),
+            };
             let trace = Trace {
                 token: token.clone(),
                 glyph: Glyph::Agents,
-                label,
-                detail: first_line(&agent.task),
+                label: id.clone(),
+                detail: summary,
             };
             found.push((agent.started_at.as_deref(), trace));
         }
@@ -152,7 +191,7 @@ fn session_traces(session: &Session) -> Vec<Trace> {
                 token: token.clone(),
                 glyph: tool_glyph(&tool.name),
                 label: tool.name.clone(),
-                detail: first_line(&argument(&tool.args)),
+                detail: words(tool),
             };
             found.push((tool.started_at.as_deref(), trace));
         }
@@ -217,8 +256,22 @@ fn ranked<'a>(files: &'a [String], query: &str) -> Vec<&'a String> {
         .collect()
 }
 
+fn commanded<'a>(commands: &'a [Command], query: &str) -> Vec<&'a Command> {
+    let mut hits: Vec<(bool, String, &Command)> = commands
+        .iter()
+        .map(|command| (command.name.trim_start_matches('/').to_lowercase(), command))
+        .filter(|(name, _)| name.contains(query))
+        .map(|(name, command)| (!name.starts_with(query), name, command))
+        .collect();
+    hits.sort_by(|left, right| (left.0, &left.1).cmp(&(right.0, &right.1)));
+    hits.into_iter()
+        .take(MENU_COMMANDS)
+        .map(|(_, _, command)| command)
+        .collect()
+}
+
 fn git_files(root: &Path) -> Result<Vec<String>, String> {
-    let mut command = Command::new("git");
+    let mut command = process::Command::new("git");
     command
         .args([
             "ls-files",
@@ -350,21 +403,26 @@ impl Chat {
                 label: trace.label.clone().into(),
                 detail: trace.detail.clone().into(),
             },
+            Pick::Command(command) => MentionRow {
+                glyph: Glyph::Code,
+                label: format!("/{}", command.name.trim_start_matches('/')).into(),
+                detail: first_line(&command.summary).into(),
+            },
         };
-        let (files, traces): (Vec<&Pick>, Vec<&Pick>) = menu
-            .rows
-            .iter()
-            .partition(|pick| matches!(pick, Pick::File(_)));
+        let group = |title: &str, kept: fn(&Pick) -> bool| MentionGroup {
+            title: title.to_owned().into(),
+            rows: menu
+                .rows
+                .iter()
+                .filter(|pick| kept(pick))
+                .map(row)
+                .collect(),
+        };
         Some(MentionMenu {
             groups: vec![
-                MentionGroup {
-                    title: "Files".into(),
-                    rows: files.into_iter().map(row).collect(),
-                },
-                MentionGroup {
-                    title: "Traces".into(),
-                    rows: traces.into_iter().map(row).collect(),
-                },
+                group("Files", |pick| matches!(pick, Pick::File(_))),
+                group("Traces", |pick| matches!(pick, Pick::Trace(_))),
+                group("Commands", |pick| matches!(pick, Pick::Command(_))),
             ],
             at: menu.at,
         })
@@ -377,7 +435,7 @@ impl Chat {
             let range = start..start + units(token);
             let trace = Trace {
                 token: token.to_owned(),
-                glyph: Glyph::Trace,
+                glyph: Glyph::At,
                 label: token.trim_matches(['[', ']']).to_owned(),
                 detail: String::new(),
             };
@@ -392,17 +450,32 @@ impl Chat {
             .filter(|selection| selection.range.is_empty())
             .map(|selection| selection.range.end);
         let before = caret.map(|caret| prefix(&text, caret));
-        let opened = before.and_then(|before| {
+        let slash = |before: &str| {
+            let query = before.strip_prefix('/')?;
+            (!query.contains(char::is_whitespace))
+                .then(|| (Trigger::Slash, 0, 1 + units(query), query.to_lowercase()))
+        };
+        let mentioned = |before: &str| {
             let at = before.rfind('@')?;
             let head = before.get(..at)?;
             let query = before.get(at + 1..)?;
             let free = head.chars().next_back().is_none_or(char::is_whitespace);
             (free && !query.contains(char::is_whitespace)).then(|| {
                 let start = units(head);
-                (start, start + 1 + units(query), query.to_lowercase())
+                (
+                    Trigger::At,
+                    start,
+                    start + 1 + units(query),
+                    query.to_lowercase(),
+                )
             })
-        });
-        let Some((start, end, query)) = opened.filter(|(start, ..)| self.dismissed != Some(*start))
+        };
+        let opened = before.and_then(|before| slash(before).or_else(|| mentioned(before)));
+        if opened.is_none() {
+            self.dismissed = None;
+        }
+        let Some((trigger, start, end, query)) =
+            opened.filter(|(_, start, ..)| self.dismissed != Some(*start))
         else {
             if self.menu.take().is_some() {
                 cx.notify();
@@ -412,12 +485,24 @@ impl Chat {
         if self.dismissed.is_some_and(|dismissed| dismissed != start) {
             self.dismissed = None;
         }
+        if self
+            .menu
+            .as_ref()
+            .is_none_or(|menu| menu.start != start || menu.trigger != trigger)
+        {
+            let key = match trigger {
+                Trigger::At => '@',
+                Trigger::Slash => '/',
+            };
+            eprintln!("desk: the {key} menu opens at {start} for {query:?}");
+        }
         let at = self
             .menu
             .as_ref()
             .filter(|menu| menu.start == start && menu.query == query)
             .map_or(0, |menu| menu.at);
         self.menu = Some(Menu {
+            trigger,
             start,
             end,
             query,
@@ -428,40 +513,78 @@ impl Chat {
     }
 
     fn fill(&mut self, cx: &mut Context<Self>) {
-        if matches!(self.files, Files::Unlisted) {
-            self.list_files(cx);
+        let Some(trigger) = self.menu.as_ref().map(|menu| menu.trigger) else {
+            return;
+        };
+        match trigger {
+            Trigger::At if matches!(self.files, List::Unlisted) => self.list_files(cx),
+            Trigger::Slash if matches!(self.commands, List::Unlisted) => self.list_commands(cx),
+            Trigger::At | Trigger::Slash => {}
         }
-        let traces = self
-            .store
-            .read(cx)
-            .open_session()
-            .map_or_else(Vec::new, session_traces);
+        let traces = match trigger {
+            Trigger::At => self
+                .store
+                .read(cx)
+                .open_session()
+                .map_or_else(Vec::new, session_traces),
+            Trigger::Slash => Vec::new(),
+        };
         let Some(menu) = &mut self.menu else {
             return;
         };
-        let files = match &self.files {
-            Files::Listed(files) => ranked(files, &menu.query)
-                .into_iter()
-                .map(|path| Pick::File(path.clone()))
-                .collect(),
-            Files::Unlisted | Files::Listing | Files::Failed => Vec::new(),
-        };
         let query = menu.query.as_str();
-        let traces = traces
-            .into_iter()
-            .filter(|trace| {
-                trace.label.to_lowercase().contains(query)
-                    || trace.detail.to_lowercase().contains(query)
-            })
-            .take(MENU_TRACES)
-            .map(Pick::Trace);
-        menu.rows = files.into_iter().chain(traces).collect();
+        menu.rows = match (trigger, &self.files, &self.commands) {
+            (Trigger::Slash, _, List::Listed(commands)) => commanded(commands, query)
+                .into_iter()
+                .map(|command| Pick::Command(command.clone()))
+                .collect(),
+            (Trigger::Slash, ..) => Vec::new(),
+            (Trigger::At, files, _) => {
+                let files = match files {
+                    List::Listed(files) => ranked(files, query),
+                    List::Unlisted | List::Listing | List::Failed => Vec::new(),
+                };
+                let traces = traces
+                    .into_iter()
+                    .filter(|trace| {
+                        trace.label.to_lowercase().contains(query)
+                            || trace.detail.to_lowercase().contains(query)
+                    })
+                    .take(MENU_TRACES)
+                    .map(Pick::Trace);
+                files
+                    .into_iter()
+                    .map(|path| Pick::File(path.clone()))
+                    .chain(traces)
+                    .collect()
+            }
+        };
         menu.at = menu.at.min(menu.rows.len().saturating_sub(1));
         cx.notify();
     }
 
+    fn list_commands(&mut self, cx: &mut Context<Self>) {
+        self.commands = List::Listing;
+        self.request::<request::QueryCommands>(&NoParams {}, cx, |chat, reply, cx| {
+            chat.commands = match reply {
+                Ok(listed) => {
+                    eprintln!(
+                        "desk: the / menu lists {} commands tofu reports",
+                        listed.commands.len()
+                    );
+                    List::Listed(Rc::new(listed.commands))
+                }
+                Err(error) => {
+                    eprintln!("desk: the / menu has no commands: {error}");
+                    List::Failed
+                }
+            };
+            chat.fill(cx);
+        });
+    }
+
     fn list_files(&mut self, cx: &mut Context<Self>) {
-        self.files = Files::Listing;
+        self.files = List::Listing;
         let root = std::path::PathBuf::from(&self.project);
         self._files = Some(cx.spawn(async move |this, cx| {
             let listed = cx
@@ -472,11 +595,11 @@ impl Chat {
                 chat.files = match listed {
                     Ok(files) => {
                         eprintln!("desk: the @ menu lists {} project files", files.len());
-                        Files::Listed(Rc::new(files))
+                        List::Listed(Rc::new(files))
                     }
                     Err(error) => {
                         eprintln!("desk: the @ menu has no files: {error}");
-                        Files::Failed
+                        List::Failed
                     }
                 };
                 chat.fill(cx);
@@ -495,6 +618,7 @@ impl Chat {
         let typed = match &pick {
             Pick::File(path) => format!("@{path} "),
             Pick::Trace(_) => String::new(),
+            Pick::Command(command) => format!("/{} ", command.name.trim_start_matches('/')),
         };
         self.area.update(cx, |area, cx| {
             area.replace_text_in_range(Some(menu.start..menu.end), &typed, window, cx)

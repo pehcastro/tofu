@@ -481,6 +481,39 @@ impl BoxShadow {
 pub enum Filter {
     /// A gaussian blur with the given radius, in logical pixels. Maps to CSS `blur(<px>)`.
     Blur(Pixels),
+    /// A liquid-glass lens at the rim of the backdrop shape. Only a backdrop filter reads it:
+    /// a content filter drops it, and a renderer without a lens pass draws the blur alone.
+    Refract(Refraction),
+}
+
+/// The lens of a [`Filter::Refract`]: the backdrop shifts along the shape's normal inside a
+/// band at the rim, by `offset` scaled by the band's cross-section profile.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Refraction {
+    /// How far the backdrop shifts at the rim, in logical pixels.
+    pub offset: Pixels,
+    /// Depth of the lens band inside the rim, in logical pixels.
+    pub edge: Pixels,
+    /// Cross-section of the band: 0 linear, 1 circular, 2 superellipse, blending between.
+    pub profile: f32,
+    /// Spectral spread inside the band; 0 skips the dispersion taps.
+    pub dispersion: f32,
+}
+
+const DISPERSION_BASE_SPREAD: f32 = 2.0;
+const DISPERSION_OFFSET_SPREAD: f32 = 0.12;
+
+/// The scene-space form of a [`Refraction`], in device pixels.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ScaledRefraction {
+    /// How far the backdrop shifts at the rim.
+    pub offset: ScaledPixels,
+    /// Depth of the lens band inside the rim.
+    pub edge: ScaledPixels,
+    /// Cross-section of the band, 0 to 2.
+    pub profile: f32,
+    /// Distance between the outermost dispersion taps at the rim; zero skips them.
+    pub spread: ScaledPixels,
 }
 
 impl Filter {
@@ -493,6 +526,9 @@ impl Filter {
     pub fn is_identity(&self) -> bool {
         match self {
             Filter::Blur(radius) => *radius <= Pixels::ZERO,
+            Filter::Refract(lens) => {
+                lens.edge <= Pixels::ZERO || (lens.offset == Pixels::ZERO && lens.dispersion <= 0.0)
+            }
         }
     }
 
@@ -501,6 +537,16 @@ impl Filter {
     pub fn scale(&self, factor: f32) -> ScaledFilter {
         match self {
             Filter::Blur(radius) => ScaledFilter::Blur(radius.scale(factor)),
+            Filter::Refract(lens) => ScaledFilter::Refract(ScaledRefraction {
+                offset: lens.offset.scale(factor),
+                edge: lens.edge.scale(factor),
+                profile: lens.profile.clamp(0.0, 2.0),
+                spread: ScaledPixels(
+                    lens.dispersion.max(0.0)
+                        * (DISPERSION_BASE_SPREAD + lens.offset.0.abs() * DISPERSION_OFFSET_SPREAD)
+                        * factor,
+                ),
+            }),
         }
     }
 }
@@ -516,6 +562,8 @@ impl Filter {
 pub enum ScaledFilter {
     /// A gaussian blur with the given radius, in scaled (device) pixels.
     Blur(ScaledPixels),
+    /// A liquid-glass lens, in scaled (device) pixels.
+    Refract(ScaledRefraction),
 }
 
 /// How to handle whitespace in text

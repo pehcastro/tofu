@@ -4,15 +4,20 @@ use std::thread::{self, JoinHandle};
 use std::time::Instant;
 
 use gpui::profiler::hang::{HangDetector, SerializedHangIncident};
-use gpui::{App, FrameEvent, FrameTiming, FrameTimingCollector, Global, KeystrokeEvent, Window};
+use gpui::{
+    App, AppContext, Entity, FrameEvent, FrameTiming, FrameTimingCollector, Global, KeystrokeEvent,
+    Window,
+};
 use serde::Serialize;
 
+use crate::check::FrameCheck;
 use crate::frames::ms;
 use crate::limits::{
     HANG_CONTRIBUTORS, HANG_THRESHOLD, MEMORY_INTERVAL, POLL_INTERVAL, RECENT_FRAMES, RECENT_SPANS,
     RECORD_MAX,
 };
 use crate::memory::{self, MemorySample};
+use crate::overlay::Overlay;
 use crate::record::{Input, InputKind, Recorder, Stop};
 use crate::span::{self, SpanRecord};
 use crate::trace::Recording;
@@ -30,8 +35,11 @@ pub struct Profiler {
     recording: Option<Recording>,
     trace_path: Option<PathBuf>,
     pub(crate) overlay_open: bool,
+    pub(crate) view: Entity<Overlay>,
+    echo_owed: bool,
     pub(crate) recorder: Option<Recorder>,
     writer: Option<JoinHandle<()>>,
+    check: Option<FrameCheck>,
 }
 
 impl Global for Profiler {}
@@ -65,8 +73,11 @@ impl Profiler {
             recording: trace_path.as_ref().map(|_| Recording::new()),
             trace_path,
             overlay_open: false,
+            view: cx.new(|_| Overlay),
+            echo_owed: false,
             recorder: None,
             writer: None,
+            check: FrameCheck::from_env(),
         };
         profiler.retrace();
         cx.set_global(profiler);
@@ -127,7 +138,7 @@ impl Profiler {
         profiler.poll();
         profiler.recorder = Some(recorder);
         profiler.retrace();
-        cx.refresh_windows();
+        Self::repaint(cx);
     }
 
     fn stop_recording(stop: Stop, cx: &mut App) {
@@ -143,7 +154,14 @@ impl Profiler {
             Ok(folder) => eprintln!("recording written to {}", folder.display()),
             Err(error) => eprintln!("the recording could not be written: {error}"),
         }));
-        cx.refresh_windows();
+        Self::repaint(cx);
+    }
+
+    fn repaint(cx: &mut App) {
+        let profiler = cx.global_mut::<Profiler>();
+        profiler.echo_owed = true;
+        let view = profiler.view.clone();
+        view.update(cx, |_, cx| cx.notify());
     }
 
     fn join_writer(&mut self) {
@@ -161,7 +179,7 @@ impl Profiler {
         let profiler = cx.global_mut::<Profiler>();
         profiler.overlay_open = !profiler.overlay_open;
         profiler.retrace();
-        cx.refresh_windows();
+        Self::repaint(cx);
     }
 
     fn tick(cx: &mut App) -> bool {
@@ -169,29 +187,42 @@ impl Profiler {
             return false;
         }
         let profiler = cx.global_mut::<Profiler>();
-        profiler.poll();
-        let overlay_open = profiler.overlay_open;
+        let drawn = profiler.poll();
+        let checked = profiler
+            .check
+            .as_mut()
+            .is_some_and(|check| check.advance(Instant::now()));
+        let echo = profiler.echo_owed && drawn == 1;
+        if echo {
+            profiler.echo_owed = false;
+        }
+        let stale = profiler.overlay_open && drawn > 0 && !echo;
         if profiler
             .recorder
             .as_ref()
             .is_some_and(|recorder| recorder.started.elapsed() >= RECORD_MAX)
         {
             Self::stop_recording(Stop::Limit, cx);
+        } else if stale {
+            Self::repaint(cx);
         }
-        if overlay_open {
-            cx.refresh_windows();
+        if checked {
+            cx.quit();
         }
         true
     }
 
     fn retrace(&mut self) {
-        let wanted = self.overlay_open || self.recording.is_some() || self.recorder.is_some();
+        let wanted = self.overlay_open
+            || self.recording.is_some()
+            || self.recorder.is_some()
+            || self.check.is_some();
         if gpui::set_trace_enabled(wanted) && wanted {
             self.collector = FrameTimingCollector::new();
         }
     }
 
-    fn poll(&mut self) {
+    fn poll(&mut self) -> usize {
         let now = Instant::now();
         let (spans, dropped) = span::drain();
         let events = self.collector.collect_unseen();
@@ -209,11 +240,15 @@ impl Profiler {
             recorder.extend(&spans, &frames, dropped, &events);
         }
         let allocations = memory::allocations();
+        let fresh = allocations.saturating_sub(self.allocations_seen);
         if !frames.is_empty() {
-            self.allocations_per_frame =
-                allocations.saturating_sub(self.allocations_seen) as f64 / frames.len() as f64;
+            self.allocations_per_frame = fresh as f64 / frames.len() as f64;
+        }
+        if let Some(check) = &mut self.check {
+            check.extend(&frames, fresh);
         }
         self.allocations_seen = allocations;
+        let drawn = frames.len();
         if self
             .memory_at
             .is_none_or(|at| now.duration_since(at) >= MEMORY_INTERVAL)
@@ -259,6 +294,7 @@ impl Profiler {
                 Err(error) => eprintln!("hang that could not be written: {error}"),
             }
         }
+        drawn
     }
 
     fn sample_memory(&mut self, now: Instant) {

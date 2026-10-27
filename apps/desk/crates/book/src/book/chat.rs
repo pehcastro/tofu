@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use desk_motion::tokens::{EASE_OUT, PANEL_IN_MS, PANEL_OUT_MS, TOGGLE_MS};
 use desk_motion::{Phase, Presence, reduced_motion};
 use desk_ui::components::ask::{
-    Act, Ask, Asking, Choice, Pick, Question, Shape, ask_bar, phase_line,
+    Act, Answer, Ask, Asking, Choice, Pick, Question, Risk, Shape, ask_bar, phase_line,
 };
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::chat::{
@@ -226,6 +226,7 @@ fn member(
         name: name.into(),
         summary: summary.into(),
         link: link.map(Into::into),
+        tone: None,
     }
 }
 
@@ -504,6 +505,8 @@ fn build_question() -> Question {
             command: "npm run build".into(),
             writes: "web/dist".into(),
             hint: "the chat still takes what you type".into(),
+            risk: Risk::Low,
+            answers: Answer::ALL.to_vec(),
         }),
     }
 }
@@ -864,7 +867,7 @@ fn paint(
             theme,
         ),
         Some(Row::Queued(text)) => queued(*text, theme),
-        Some(Row::Lead { time, body }) => lead(id, *time, body, marks, theme),
+        Some(Row::Lead { time, body }) => lead(id, *time, body, marks, None, theme),
         Some(Row::Tools {
             count,
             summary,
@@ -981,6 +984,7 @@ fn streamed(at: usize, theme: &Theme) -> AnyElement {
                 Span::new(Face::Plain, " and moved on."),
             ])],
             &[],
+            None,
             theme,
         ),
         3 => note(format!("· row {at} kept in sub-agents"), theme),
@@ -1041,7 +1045,7 @@ impl Typing {
                     .bg(theme.color(ColorToken::CardsInnerFill))
                     .px(px(NARROW_PAD))
                     .pb(px(COLUMN_BOTTOM))
-                    .child(lead("chat-components", "15:10", body, &[], theme)),
+                    .child(lead("chat-components", "15:10", body, &[], None, theme)),
             )
     }
 }

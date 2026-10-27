@@ -190,6 +190,12 @@ pub struct PickedPack(pub IconPack);
 impl Global for PickedPack {}
 
 pub fn picked_pack(cx: &mut App) -> IconPack {
+    if let Some(pack) = cx
+        .try_global::<ActiveTheme>()
+        .and_then(|_| ActiveTheme::theme(cx).icons())
+    {
+        return pack;
+    }
     if let Some(PickedPack(pack)) = cx.try_global::<PickedPack>() {
         return *pack;
     }

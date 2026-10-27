@@ -55,6 +55,7 @@ pub enum Module {
     Terminal,
     Browser,
     SourceControl,
+    Viewer,
     Plugin(String),
 }
 
@@ -80,6 +81,7 @@ impl Module {
             Module::Terminal => "Terminal",
             Module::Browser => "Browser",
             Module::SourceControl => "Source control",
+            Module::Viewer => "Viewer",
             Module::Plugin(id) => id,
         }
     }
@@ -94,6 +96,7 @@ impl Module {
             | Module::FileEdits
             | Module::Shells
             | Module::Terminal
+            | Module::Viewer
             | Module::Plugin(_) => TILE_MINIMUM,
         }
     }
@@ -108,6 +111,7 @@ impl Module {
             Module::Terminal => "terminal",
             Module::Browser => "browser",
             Module::SourceControl => "source-control",
+            Module::Viewer => "viewer",
             Module::Plugin(_) => "plugin",
         }
     }

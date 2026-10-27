@@ -6,6 +6,7 @@ use desk_ui::components::agents::{
 use desk_ui::components::avatar::{Agent, AgentKind, AgentStatus};
 use gpui::SharedString;
 use serde_json::Value;
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 const ARGUMENT_KEYS: [&str; 5] = ["command", "path", "pattern", "query", "url"];
 const OUTPUT_LINES: usize = 8;
@@ -20,10 +21,14 @@ pub fn status(state: &AgentState) -> AgentStatus {
     }
 }
 
-pub fn shown(member: &Member) -> Agent {
+pub fn shown(name: &str, member: &Member) -> Agent {
     Agent {
         kind: AgentKind::named(&member.kind),
-        instance: u32::try_from(member.number).unwrap_or_default(),
+        instance: name
+            .rsplit_once('-')
+            .and_then(|(_, number)| number.parse().ok())
+            .or_else(|| u32::try_from(member.number).ok())
+            .unwrap_or_default(),
         status: status(&member.state),
     }
 }
@@ -34,10 +39,21 @@ pub fn board(session: &Session, runs: &[AgentRun]) -> AgentBoard {
         let at = at.as_deref().and_then(seconds).unwrap_or(now);
         now.saturating_sub(at) as f32 / SECONDS_PER_MINUTE
     };
+    let running = |at: &Option<String>| {
+        let wall = chrono::Utc::now().timestamp().max(now);
+        let at = at.as_deref().and_then(seconds).unwrap_or(wall);
+        wall.saturating_sub(at) as f32 / SECONDS_PER_MINUTE
+    };
     let mut lines = Vec::new();
     let mut events = Vec::new();
     for (id, member) in &session.agents {
-        let agent = shown(member);
+        let agent = shown(id, member);
+        let task = match &member.ticket {
+            Some(ticket) if !member.task.contains(ticket.as_str()) => {
+                format!("{ticket}: {}", member.task)
+            }
+            _ => member.task.clone(),
+        };
         let tools: Vec<(&String, &Tool)> = session
             .tools
             .iter()
@@ -80,7 +96,7 @@ pub fn board(session: &Session, runs: &[AgentRun]) -> AgentBoard {
                     .iter()
                     .max_by(|(_, a), (_, b)| a.started_at.cmp(&b.started_at))
                     .map_or_else(|| "starting".to_owned(), |(_, tool)| doing(tool)),
-                lasted(since(&member.started_at)),
+                lasted(running(&member.started_at)),
             ),
             AgentStatus::Asking => (
                 format!("asked: {}", asked.clone().unwrap_or_default()),
@@ -99,7 +115,7 @@ pub fn board(session: &Session, runs: &[AgentRun]) -> AgentBoard {
         let mut steps = vec![(
             since(&member.started_at),
             AgentStep::Spawn {
-                task: member.task.clone().into(),
+                task: task.clone().into(),
                 owns: member.owns.join(", ").into(),
             },
         )];
@@ -128,7 +144,7 @@ pub fn board(session: &Session, runs: &[AgentRun]) -> AgentBoard {
         }));
         lines.push(AgentLine {
             agent,
-            task: member.task.clone().into(),
+            task: task.into(),
             now: now_doing.into(),
             time,
             owns: member.owns.join(", ").into(),
@@ -276,14 +292,44 @@ fn latest(session: &Session, runs: &[AgentRun]) -> i64 {
         .unwrap_or_default()
 }
 
+pub fn seen(session: &Session, runs: &[AgentRun]) -> u64 {
+    let mut hash = DefaultHasher::new();
+    session.name.hash(&mut hash);
+    for (id, member) in &session.agents {
+        (
+            id,
+            status(&member.state) as u8,
+            &member.report,
+            &member.ticket,
+        )
+            .hash(&mut hash);
+        (&member.started_at, &member.ended_at, &member.task).hash(&mut hash);
+        (member.thinking.len(), &member.owns, member.number).hash(&mut hash);
+    }
+    for (item, tool) in &session.tools {
+        (
+            item,
+            &tool.name,
+            &tool.agent,
+            &tool.started_at,
+            &tool.ended_at,
+        )
+            .hash(&mut hash);
+        (tool.output.as_ref().map(String::len), tool.failed).hash(&mut hash);
+    }
+    for (key, (_, asked)) in &session.approvals {
+        (key, &asked.agent, &asked.tool).hash(&mut hash);
+    }
+    for edit in session.files.values().flatten() {
+        let lines: usize = edit.hunks.iter().map(|hunk| hunk.lines.len()).sum();
+        (&edit.item, &edit.agent, lines).hash(&mut hash);
+    }
+    for run in runs {
+        (&run.agent, &run.ended_at).hash(&mut hash);
+    }
+    hash.finish()
+}
+
 fn seconds(at: &str) -> Option<i64> {
-    let field = |range: std::ops::Range<usize>| at.get(range)?.parse::<i64>().ok();
-    let (year, month, day) = (field(0..4)?, field(5..7)?, field(8..10)?);
-    let (hour, minute, second) = (field(11..13)?, field(14..16)?, field(17..19)?);
-    let year = if month <= 2 { year - 1 } else { year };
-    let era = year.div_euclid(400);
-    let of_era = year - era * 400;
-    let of_year = (153 * ((month + 9) % 12) + 2) / 5 + day - 1;
-    let days = era * 146_097 + of_era * 365 + of_era / 4 - of_era / 100 + of_year - 719_468;
-    Some(((days * 24 + hour) * 60 + minute) * 60 + second)
+    Some(chrono::DateTime::parse_from_rfc3339(at).ok()?.timestamp())
 }

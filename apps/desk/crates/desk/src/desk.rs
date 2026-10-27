@@ -19,6 +19,8 @@ use crate::screens::boardy::Boardy as BoardyScreen;
 use crate::screens::classifier::Classifier;
 #[cfg(all(feature = "screen-work", feature = "screen-context"))]
 use crate::screens::context::ContextScreen;
+#[cfg(all(feature = "screen-work", feature = "screen-drain"))]
+use crate::screens::drain::DrainScreen;
 #[cfg(all(feature = "screen-work", feature = "screen-forks"))]
 use crate::screens::forks::ForksScreen;
 #[cfg(all(feature = "screen-work", feature = "screen-library"))]
@@ -36,7 +38,7 @@ use crate::screens::work::split::timed;
 #[cfg(feature = "screen-work")]
 use crate::screens::work::{self, Work};
 use crate::status_bar::status_bar;
-use crate::title_bar::{self, Bell, ask_github, github, title_bar};
+use crate::title_bar::{self, ask_github, github, title_bar};
 #[cfg(feature = "screen-work")]
 use desk_core::boardy::Gate;
 use desk_core::control::{Control, TELL_BADGE};
@@ -57,15 +59,20 @@ use desk_core::settings::Settings;
 #[cfg(feature = "screen-work")]
 use desk_tiling::WORKSPACE_EDGE;
 use desk_tiling::{Action, Key, SHORTCUTS};
+use desk_ui::components::context_card::ContextCard;
+#[cfg(feature = "screen-work")]
+use desk_ui::components::context_card::{Band, Bands};
 use desk_ui::components::empty::{EmptyAction, empty_state};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::form::TextInput;
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::keymap::editor_claims;
+#[cfg(feature = "screen-work")]
+use desk_ui::components::media_view::OpenMedia;
 use desk_ui::components::overlay::toast;
 #[cfg(feature = "screen-work")]
 use desk_ui::components::overlay::{Align, MenuButton, MenuItem, Placement, Side, context_menu};
-use desk_ui::components::paint::{ink, ring};
+use desk_ui::components::paint::{SpinLayer, ink, ring};
 use desk_ui::components::palette::{Palette, PaletteEntry, PaletteItem};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::sheet::Sheet;
@@ -84,7 +91,7 @@ use desk_ui::components::status_bar::{Accounts, Status};
 use desk_ui::components::tabs::{ScreenTabMenu, Tab, TabFlag, TabMark};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::tiling_board::Reopened;
-use desk_ui::components::title_bar::{Github, Marks, TitleBar};
+use desk_ui::components::title_bar::{CaptionInk, Github, Marks, Shade, TitleBar};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::tree::OpenProject;
 #[cfg(feature = "screen-work")]
@@ -123,10 +130,14 @@ const WINDOW_RADIUS: f32 = 8.0;
 const WINDOW_RING: f32 = 0.1;
 const SETTINGS: &str = "settings";
 const LIMITS_SCREEN: &str = "limits";
-const WHOLE_SCREENS: [&str; 3] = ["intro", "onboarding", "no-tofu"];
+const CONTEXT_SCREEN: &str = "context";
+const INTRO_SCREEN: &str = "intro";
+const WHOLE_SCREENS: [&str; 3] = [INTRO_SCREEN, "onboarding", "no-tofu"];
 const SCREEN_ID: &str = "screen.";
 const LAYOUT_ID: &str = "layout.";
 const OPEN_SETTINGS_ID: &str = "settings.open";
+#[cfg(feature = "profiler")]
+const FRAME_OVERLAY_ID: &str = "perf.overlay";
 #[cfg(feature = "screen-work")]
 const REOPEN_ID: &str = "tab.reopen";
 #[cfg(feature = "screen-work")]
@@ -167,8 +178,11 @@ const fn mark(
 #[cfg(feature = "screen-work")]
 #[path = "screens/git/mod.rs"]
 pub mod git;
+#[cfg(feature = "screen-work")]
+#[path = "screens/viewer/mod.rs"]
+pub mod viewer;
 
-pub const SCREEN_MARKS: [ScreenMark; 13] = [
+pub const SCREEN_MARKS: [ScreenMark; 15] = [
     mark("editor", "Editor", Glyph::Code, ScreenGroup::Top),
     mark("boardy", "Boardy", Glyph::Inbox, ScreenGroup::Top),
     mark("git", "Git", Glyph::Branch, ScreenGroup::Top),
@@ -176,6 +190,7 @@ pub const SCREEN_MARKS: [ScreenMark; 13] = [
     mark("settings", "Settings", Glyph::Settings, ScreenGroup::Top),
     mark("accounts", "Accounts", Glyph::Person, ScreenGroup::Top),
     mark("theme", "Theme", Glyph::Palette, ScreenGroup::Top),
+    mark("intro-setup", "Intro setup", Glyph::Image, ScreenGroup::Top),
     mark(
         "classifier",
         "Classifier",
@@ -187,6 +202,7 @@ pub const SCREEN_MARKS: [ScreenMark; 13] = [
     mark("context", "Context", Glyph::Attach, ScreenGroup::Insights),
     mark("session", "Session", Glyph::Chat, ScreenGroup::Insights),
     mark("forks", "Forks", Glyph::Branch, ScreenGroup::Insights),
+    mark("drain", "Drain", Glyph::Trace, ScreenGroup::Insights),
 ];
 
 pub fn screen_mark(name: &str) -> Option<&'static ScreenMark> {
@@ -327,14 +343,17 @@ pub struct Desk {
     toast: Option<Toast>,
     toasts: u64,
     branch_open: bool,
+    context_card: Option<Entity<ContextCard>>,
+    context_watch: Vec<gpui::Subscription>,
     screens: Vec<Screen>,
     shown: Shown,
     parked: Vec<Shown>,
     palette: Entity<Palette>,
+    spinners: Entity<SpinLayer>,
     focus: FocusHandle,
-    bell: Bell,
     marks: Marks,
     github: Github,
+    intro_shade: Shade,
     #[cfg(feature = "screen-work")]
     projects: Projects,
     #[cfg(feature = "screen-work")]
@@ -371,9 +390,11 @@ struct Projects {
     confirming: bool,
     active: Vec<String>,
     renaming: Option<Renaming>,
+    inactive_rows: std::cell::RefCell<project::InactiveRows>,
     refused: Option<Option<SharedString>>,
     restored: bool,
     restoring: Option<String>,
+    family: Option<String>,
     resumed: Option<String>,
     named: Option<SharedString>,
     written: Option<project::Remembered>,
@@ -765,14 +786,17 @@ pub(crate) fn resets(stamp: &str, now: chrono::DateTime<chrono::Local>) -> Optio
 }
 
 fn commands(screens: &[Screen]) -> Vec<PaletteItem> {
-    let screens = screens.iter().map(|screen| PaletteItem {
-        id: format!("{SCREEN_ID}{}", screen.name).into(),
-        label: screen_mark(screen.name)
-            .map_or(screen.name, |mark| mark.label)
-            .into(),
-        group: "Screens".into(),
-        keys: None,
-    });
+    let screens = screens
+        .iter()
+        .filter(|screen| screen.name != INTRO_SCREEN)
+        .map(|screen| PaletteItem {
+            id: format!("{SCREEN_ID}{}", screen.name).into(),
+            label: screen_mark(screen.name)
+                .map_or(screen.name, |mark| mark.label)
+                .into(),
+            group: "Screens".into(),
+            keys: None,
+        });
     let layout = SHORTCUTS
         .iter()
         .filter(|shortcut| shortcut.key != Key::Digit && shortcut.action != Action::ReopenTab)
@@ -795,6 +819,13 @@ fn commands(screens: &[Screen]) -> Vec<PaletteItem> {
         label: "Reopen closed tab".into(),
         group: "Tabs".into(),
         keys: Some("Ctrl Shift T".into()),
+    });
+    #[cfg(feature = "profiler")]
+    items.push(PaletteItem {
+        id: FRAME_OVERLAY_ID.into(),
+        label: "Toggle frame overlay".into(),
+        group: "Performance".into(),
+        keys: Some("F12".into()),
     });
     items.push(settings);
     items
@@ -848,14 +879,17 @@ impl Desk {
             toast: None,
             toasts: 0,
             branch_open: false,
+            context_card: None,
+            context_watch: Vec::new(),
             screens,
             shown: Shown::new(name, view),
             parked: Vec::new(),
             palette,
+            spinners: SpinLayer::new(window, cx),
             focus: cx.focus_handle(),
-            bell: Bell::default(),
             marks: title_bar::marks(),
             github: Github::Asking,
+            intro_shade: Shade::Dark,
             #[cfg(feature = "screen-work")]
             projects: Projects {
                 named,
@@ -898,6 +932,15 @@ impl Desk {
         {
             cx.observe_in(&intro, window, |desk, _, window, cx| {
                 desk.leave_intro(window, cx)
+            })
+            .detach();
+            let backdrop = intro.read(cx).backdrop().clone();
+            cx.observe(&backdrop, |desk, backdrop, cx| {
+                let shade = backdrop.read(cx).shade();
+                if desk.intro_shade != shade {
+                    desk.intro_shade = shade;
+                    cx.notify();
+                }
             })
             .detach();
         }
@@ -991,6 +1034,7 @@ impl Desk {
                 feature = "screen-context",
                 feature = "screen-session",
                 feature = "screen-forks",
+                feature = "screen-drain",
                 feature = "screen-usage",
                 feature = "screen-accounts",
                 feature = "screen-settings",
@@ -1078,6 +1122,11 @@ impl Desk {
                 .open_screen(SETTINGS, window, cx)
                 .map_err(Unpicked::Failed);
         }
+        #[cfg(feature = "profiler")]
+        if id == FRAME_OVERLAY_ID {
+            desk_perf::Profiler::toggle_overlay(cx);
+            return Ok(());
+        }
         #[cfg(feature = "screen-work")]
         if id == REOPEN_ID {
             self.reopen(window, cx);
@@ -1126,6 +1175,27 @@ impl Desk {
             Body::View(_) | Body::Whole(_) => {
                 eprintln!("desk: escape: {} has no composer", self.shown.name)
             }
+        }
+    }
+
+    #[cfg(feature = "screen-work")]
+    fn open_media(&mut self, open: &OpenMedia, window: &mut Window, cx: &mut Context<Self>) {
+        let path = match viewer::resolve(&open.path, cx) {
+            Ok(path) => path,
+            Err(why) => return eprintln!("desk: viewer: {why}"),
+        };
+        let Some(work) = self.work().cloned() else {
+            return eprintln!(
+                "desk: viewer: {NO_TOFU}, so {} is not shown",
+                path.display()
+            );
+        };
+        eprintln!("desk: viewer opens {}", path.display());
+        if let Err(why) = work.update(cx, |work, cx| work.show_media(path, cx)) {
+            return eprintln!("desk: viewer: {why}");
+        }
+        if self.shown.name != WORK_SCREEN {
+            self.show(WORK_SCREEN, window, cx);
         }
     }
 
@@ -1377,7 +1447,7 @@ impl Desk {
                     .flex_1()
                     .min_w_0()
                     .relative()
-                    .child(work.clone())
+                    .child(work.clone().cached(StyleRefinement::default().size_full()))
                     .children(stopped)
                     .into_any_element()
             }
@@ -1477,12 +1547,14 @@ impl Desk {
                     self.sidebar_open,
                     self.tiles_x(),
                     self.github.clone(),
-                    &self.bell,
                     &self.marks,
                     tabs,
                     cx,
                 )
                 .when(whole, TitleBar::controls_only)
+                .when(self.shown.name == INTRO_SCREEN, |bar| {
+                    bar.caption_ink(CaptionInk::intro(self.intro_shade))
+                })
                 .into_any_element()
             }
             Part::Sidebar => self.sidebar(cx).into_any_element(),
@@ -1495,6 +1567,12 @@ impl Desk {
                     .branch_popover(
                         self.branch_open,
                         cx.listener(|desk, open: &bool, _, cx| desk.open_branch(*open, cx)),
+                    )
+                    .context_popover(
+                        self.context_card.clone(),
+                        cx.listener(|desk, open: &bool, window, cx| {
+                            desk.open_context(*open, window, cx)
+                        }),
                     )
                     .into_any_element()
             }
@@ -1527,6 +1605,19 @@ impl Desk {
         cx.notify();
     }
 
+    #[cfg_attr(
+        not(feature = "screen-work"),
+        expect(
+            unused_variables,
+            reason = "cx only saves the project with screen-work"
+        )
+    )]
+    pub fn close_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        #[cfg(feature = "screen-work")]
+        self.save_now(cx);
+        window.remove_window();
+    }
+
     pub fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
         self.sidebar_open = !self.sidebar_open;
         let state = if self.sidebar_open { "open" } else { "closed" };
@@ -1537,6 +1628,11 @@ impl Desk {
     fn global_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let stroke = &event.keystroke;
         let held = stroke.modifiers;
+        #[cfg(feature = "profiler")]
+        if stroke.key == "f12" && !held.modified() {
+            desk_perf::Profiler::toggle_overlay(cx);
+            return cx.stop_propagation();
+        }
         if !held.control || held.alt || held.platform || editor_claims(event, window, cx) {
             return;
         }
@@ -1553,13 +1649,88 @@ impl Desk {
         cx.stop_propagation();
     }
 
-    pub fn read_notices(&mut self, cx: &mut Context<Self>) {
-        self.bell.read();
+    pub fn tell(&mut self, control: Control, cx: &mut Context<Self>) {
+        self.toast(control.tell().into(), Some(TELL_BADGE), cx);
+    }
+
+    pub fn open_context(&mut self, open: bool, window: &mut Window, cx: &mut Context<Self>) {
+        eprintln!("desk: status context card open {open}");
+        if !open {
+            self.context_watch.clear();
+            if let Some(card) = self.context_card.take()
+                && card.focus_handle(cx).is_focused(window)
+            {
+                self.focus_shown(window, cx);
+            }
+            return cx.notify();
+        }
+        let Some(shown) = self
+            .status(cx)
+            .session_group
+            .and_then(|group| group.context)
+        else {
+            return eprintln!("desk: status context: no session is open, so no window to show");
+        };
+        #[cfg(feature = "screen-work")]
+        if let Some(chat) = self.work().map(|work| work.read(cx).chat().clone()) {
+            let store = chat.read(cx).store().clone();
+            self.context_watch = vec![
+                cx.observe(&store, |desk, _, cx| desk.refresh_context(cx)),
+                cx.observe(&chat, |desk, _, cx| desk.refresh_context(cx)),
+            ];
+            chat.update(cx, |chat, cx| {
+                chat.want_context(cx);
+                let shown = chat.shown_id();
+                let context = &chat.store().read(cx).context;
+                let stale = !context.asking
+                    && context
+                        .read
+                        .as_ref()
+                        .is_none_or(|read| read.value.session != shown);
+                if stale {
+                    chat.reread_context(cx);
+                }
+            });
+        }
+        let desk = cx.entity().downgrade();
+        let card = cx.new(|cx| {
+            ContextCard::new(
+                shown,
+                move |window, cx| {
+                    let opened = desk.update(cx, |desk, cx| {
+                        desk.open_context(false, window, cx);
+                        desk.show(CONTEXT_SCREEN, window, cx);
+                    });
+                    if let Err(error) = opened {
+                        eprintln!("desk: open context outlived the desk: {error}");
+                    }
+                },
+                cx,
+            )
+        });
+        window.focus(&card.focus_handle(cx), cx);
+        self.context_card = Some(card);
         cx.notify();
     }
 
-    pub fn tell(&mut self, control: Control, cx: &mut Context<Self>) {
-        self.toast(control.tell().into(), Some(TELL_BADGE), cx);
+    #[cfg(feature = "screen-work")]
+    fn refresh_context(&mut self, cx: &mut Context<Self>) {
+        let Some(card) = self.context_card.clone() else {
+            return;
+        };
+        match self
+            .status(cx)
+            .session_group
+            .and_then(|group| group.context)
+        {
+            Some(context) => card.update(cx, |card, cx| card.set(context, cx)),
+            None => {
+                eprintln!("desk: status context: the session closed, so the card closes");
+                self.context_watch.clear();
+                self.context_card = None;
+                cx.notify();
+            }
+        }
     }
 
     pub fn open_branch(&mut self, open: bool, cx: &mut Context<Self>) {
@@ -1627,14 +1798,19 @@ impl Desk {
     }
 
     #[cfg(not(feature = "screen-work"))]
-    fn pick_from_sidebar(&mut self, pick: &SidebarPick, _: &mut Window, cx: &mut Context<Self>) {
+    fn pick_from_sidebar(
+        &mut self,
+        pick: &SidebarPick,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         match pick {
             SidebarPick::Project => self.tell(Control::OpenProject, cx),
+            SidebarPick::Settings => self.show(SETTINGS, window, cx),
             SidebarPick::NewSession
             | SidebarPick::Open(_)
             | SidebarPick::CopyId(_)
-            | SidebarPick::Rename(_)
-            | SidebarPick::Docs => eprintln!("desk: sidebar: {pick:?} needs the work screen"),
+            | SidebarPick::Rename(_) => eprintln!("desk: sidebar: {pick:?} needs the work screen"),
         }
     }
 
@@ -1751,17 +1927,6 @@ impl Desk {
             return eprintln!("desk: sign in {source}: no work screen runs tofu");
         };
         chat.update(cx, |chat, cx| chat.sign_in(source, cx));
-    }
-
-    pub fn open_notice(&mut self, ix: usize, cx: &mut Context<Self>) {
-        let Some(id) = self.bell.session(ix).map(str::to_owned) else {
-            return eprintln!("desk: bell: notice {ix} is gone");
-        };
-        let Some(chat) = self.work().map(|work| work.read(cx).chat().clone()) else {
-            return eprintln!("desk: bell: no work screen for session {id}");
-        };
-        eprintln!("desk: bell: open {id}");
-        chat.update(cx, |chat, cx| chat.open_session(Some(id), cx));
     }
 
     #[cfg(feature = "module-editor")]
@@ -1906,6 +2071,7 @@ impl Desk {
         let resumed = self.projects.resumed.take();
         if resumed.is_none() {
             self.projects.restoring = saved.session.clone();
+            self.projects.family = saved.family.clone();
         }
         self.projects.restored = true;
         eprintln!(
@@ -1949,13 +2115,28 @@ impl Desk {
         let Some(id) = self.projects.restoring.take() else {
             return;
         };
-        if chat.read(cx).rows().iter().any(|row| row.id == id) {
+        let rows = chat.read(cx).rows();
+        if rows.iter().any(|row| row.id == id) {
             eprintln!("desk: restore: session {id}");
-            chat.update(cx, |chat, cx| chat.open_session(Some(id), cx));
-        } else {
-            eprintln!(
+            return chat.update(cx, |chat, cx| chat.open_session(Some(id), cx));
+        }
+        let family = self.projects.family.as_ref();
+        let continued = rows
+            .iter()
+            .filter(|row| family.is_some() && row.family.as_ref() == family)
+            .max_by(|one, two| {
+                (one.generation, one.last_at.as_ref().unwrap_or(&one.at))
+                    .cmp(&(two.generation, two.last_at.as_ref().unwrap_or(&two.at)))
+            })
+            .map(|row| row.id.clone());
+        match continued {
+            Some(next) => {
+                eprintln!("desk: restore: session {next} continues {id}");
+                chat.update(cx, |chat, cx| chat.open_session(Some(next), cx));
+            }
+            None => eprintln!(
                 "desk: restore: the last session {id} is no longer in this project, so none is opened"
-            );
+            ),
         }
     }
 
@@ -1996,8 +2177,27 @@ impl Desk {
                     .as_ref()
                     .and_then(|written| written.session.clone())
             });
+        let family = self
+            .work()
+            .and_then(|work| {
+                work.read(cx)
+                    .chat()
+                    .read(cx)
+                    .rows()
+                    .iter()
+                    .find(|row| Some(&row.id) == session.as_ref())
+                    .and_then(|row| row.family.clone())
+            })
+            .or_else(|| self.projects.family.clone())
+            .or_else(|| {
+                self.projects
+                    .written
+                    .as_ref()
+                    .and_then(|written| written.family.clone())
+            });
         project::Remembered {
             session,
+            family,
             screens,
             focus,
         }
@@ -2119,12 +2319,7 @@ impl Desk {
                 cx.notify();
             }),
             cx.observe(work, |_, _, cx| cx.notify()),
-            cx.observe(&store, |desk, store, cx| {
-                for (id, session) in &store.read(cx).sessions {
-                    desk.bell.gather(id, session);
-                }
-                cx.notify();
-            }),
+            cx.observe(&store, |_, _, cx| cx.notify()),
         ];
         match project::remember(&folder) {
             Ok(recents) => self.projects.recents = recents,
@@ -2136,6 +2331,7 @@ impl Desk {
         }
         self.projects.restored = false;
         self.projects.restoring = None;
+        self.projects.family = None;
         self.projects.resumed = None;
         self.projects.written = None;
         self.projects.stopped = None;
@@ -2165,6 +2361,7 @@ impl Desk {
             feature = "screen-context",
             feature = "screen-session",
             feature = "screen-forks",
+            feature = "screen-drain",
             feature = "screen-usage",
             feature = "screen-accounts",
             feature = "screen-settings",
@@ -2234,6 +2431,7 @@ impl Desk {
         feature = "screen-context",
         feature = "screen-session",
         feature = "screen-forks",
+        feature = "screen-drain",
         feature = "screen-usage",
         feature = "screen-accounts",
         feature = "screen-settings",
@@ -2274,6 +2472,10 @@ impl Desk {
             #[cfg(feature = "screen-forks")]
             if let Ok(forks) = view.clone().downcast::<ForksScreen>() {
                 forks.update(cx, |forks, cx| forks.read_from(&chat, cx));
+            }
+            #[cfg(feature = "screen-drain")]
+            if let Ok(drain) = view.clone().downcast::<DrainScreen>() {
+                drain.update(cx, |drain, cx| drain.read_from(&chat, cx));
             }
             #[cfg(feature = "screen-accounts")]
             if let Ok(accounts) = view.clone().downcast::<AccountsScreen>() {
@@ -2393,12 +2595,18 @@ impl Desk {
     fn sidebar_project(&self, cx: &App) -> Option<Project> {
         let head = self.projects.head.as_ref()?;
         let chat = self.work()?.read(cx).chat().read(cx);
+        let shown = chat.shown_id();
         let opened = project::Opened {
             active: &self.projects.active,
-            open: chat.open_id(),
+            open: shown.as_deref(),
             statuses: &chat.store().read(cx).statuses,
         };
-        let mut project = project::sidebar(head, chat.rows(), &opened);
+        let mut project = project::sidebar(
+            head,
+            chat.rows(),
+            &opened,
+            &mut self.projects.inactive_rows.borrow_mut(),
+        );
         let running = running(chat.store().read(cx));
         for (id, session) in self.projects.active.iter().zip(&mut project.active) {
             if running.contains(&id.as_str()) && session.state != SessionState::Waiting {
@@ -2496,8 +2704,9 @@ impl Desk {
             };
         };
         let store = chat.store().read(cx);
-        let open = chat
-            .open_id()
+        let shown = chat.shown_id();
+        let open = shown
+            .as_deref()
             .and_then(|id| Some((id, store.sessions.get(id)?)));
         let source = chat.source(cx);
         let (mut accounts, mut serving, ids) =
@@ -2529,12 +2738,54 @@ impl Desk {
             .filter(|name| !unnamed(name))
             .or_else(|| Some(session.name.clone()).filter(|name| !unnamed(name)))
             .unwrap_or_default();
-        let replayed = store
+        let read = store
             .context
             .read
             .as_ref()
-            .filter(|read| read.value.session.as_deref() == Some(id))
-            .and_then(|read| Some((read.value.occupancy.as_ref()?.total, read.value.ceiling?)));
+            .filter(|read| read.value.session.as_deref() == Some(id));
+        let replayed =
+            read.and_then(|read| Some((read.value.occupancy.as_ref()?.total, read.value.ceiling?)));
+        let bands = |used: i64| match (read, &store.context.failed) {
+            (Some(read), _) => match &read.value.occupancy {
+                Some(occupancy) => {
+                    let since = used.saturating_sub(occupancy.total);
+                    let mut bands: Vec<Band> = occupancy
+                        .bands()
+                        .into_iter()
+                        .map(|(name, band)| Band {
+                            name: name.into(),
+                            tokens: band.tokens,
+                        })
+                        .collect();
+                    if since > 0 {
+                        bands.push(Band {
+                            name: "since the read".into(),
+                            tokens: since,
+                        });
+                    }
+                    Bands::Read {
+                        bands,
+                        mark: occupancy.mark,
+                    }
+                }
+                None => Bands::Unread(
+                    read.value
+                        .unmeasured
+                        .clone()
+                        .unwrap_or_else(|| "query.context reported no occupancy".to_owned())
+                        .into(),
+                ),
+            },
+            (None, Some(error)) if !store.context.asking => Bands::Unread(error.to_string().into()),
+            (None, _) => Bands::Reading,
+        };
+        let model = session.pick.as_ref().and_then(|pick| {
+            let model = pick.model.as_deref()?;
+            Some(SharedString::from(match pick.wire.as_deref() {
+                Some(wire) if !model.contains('/') => format!("{wire}/{model}"),
+                _ => model.to_owned(),
+            }))
+        });
         Status {
             branch,
             session: Some(name.into()),
@@ -2549,8 +2800,12 @@ impl Desk {
                         } else {
                             0.0
                         },
+                        used,
+                        ceiling: budget,
+                        model,
+                        bands: bands(used),
                     }),
-                classifier: chat.decisions_shown(cx),
+                classifier: chat.decisions_shown(cx).to_string().into(),
                 cron: session
                     .cron
                     .as_ref()
@@ -2568,11 +2823,15 @@ impl Desk {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if *pick == SidebarPick::Settings {
+            return self.show(SETTINGS, window, cx);
+        }
         let Some(chat) = self.work().map(|work| work.read(cx).chat().clone()) else {
             return self.open_projects(window, cx);
         };
         match pick {
             SidebarPick::Project => self.open_projects(window, cx),
+            SidebarPick::Settings => self.show(SETTINGS, window, cx),
             SidebarPick::NewSession => chat.update(cx, |chat, cx| chat.open_session(None, cx)),
             SidebarPick::Open(at) | SidebarPick::CopyId(at) => {
                 let id = self.session_id(*at, chat.read(cx));
@@ -2612,7 +2871,6 @@ impl Desk {
                 self.projects.renaming = Some(Renaming { id, at: *at, input });
                 cx.notify();
             }
-            SidebarPick::Docs => eprintln!("desk: sidebar: Docs has no source yet"),
         }
     }
 
@@ -2809,6 +3067,14 @@ impl Render for Desk {
         let content = timed("screen", content).into_any_element();
         let sheet = self.switch_sheet(cx);
         let bar = self.chrome(Part::Title, cx);
+        let bleeds = whole && self.shown.name == INTRO_SCREEN;
+        let (above, over) = match bleeds {
+            true => (
+                None,
+                Some(div().absolute().top_0().left_0().right_0().child(bar)),
+            ),
+            false => (Some(bar), None),
+        };
         let body = match whole {
             true => div()
                 .flex_1()
@@ -2825,7 +3091,9 @@ impl Render for Desk {
         let menu: Option<Entity<Palette>> = None;
         let root = div();
         #[cfg(feature = "screen-work")]
-        let root = root.on_action(cx.listener(Self::screen_menu));
+        let root = root
+            .on_action(cx.listener(Self::screen_menu))
+            .on_action(cx.listener(Self::open_media));
         #[cfg(feature = "screen-boardy")]
         let root = root.on_action(cx.listener(Self::open_ticket));
         let root = root
@@ -2844,12 +3112,17 @@ impl Render for Desk {
             .shadow(vec![ring(ink(&theme, WINDOW_RING))])
             .text_size(px(TEXT))
             .text_color(theme.color(ColorToken::TextBase))
-            .child(bar)
+            .children(above)
             .child(body)
+            .children(over)
+            .child(self.spinners.clone())
+            .when(bleeds, |root| root.overflow_hidden())
             .child(timed("palette", self.palette.clone()))
             .children(menu)
             .children(sheet)
             .children(toast_layer);
+        #[cfg(feature = "profiler")]
+        let root = root.children(desk_perf::overlay(cx));
         timed("window", root)
     }
 }

@@ -34,6 +34,7 @@ impl Group {
 pub enum Page {
     Type,
     Icons,
+    Logos,
     Surfaces,
     Motion,
     Tabs,
@@ -112,9 +113,10 @@ pub const UNBUILT: [(Group, &str); 7] = [
 ];
 
 impl Page {
-    pub const ALL: [Page; 56] = [
+    pub const ALL: [Page; 57] = [
         Page::Type,
         Page::Icons,
+        Page::Logos,
         Page::StatusIcon,
         Page::PriorityIcon,
         Page::Surfaces,
@@ -206,6 +208,16 @@ impl Page {
                 "icon.rs, components/glyph.rs",
                 "rest, hover on an icon button",
                 "press, focus, disabled",
+            ),
+            Page::Logos => sheet(
+                "logos",
+                "Logos",
+                Group::Foundations,
+                "Company marks for providers, subscriptions and tools, tinted to the theme when they are one colour.",
+                "DESK-505",
+                "components/logo.rs",
+                "static",
+                "",
             ),
             Page::Surfaces => sheet(
                 "surfaces",
@@ -544,7 +556,7 @@ impl Page {
                 "Kept shells only, dev servers and watchers: a status dot, a mono name, state, dir and ready under the command, kill asked before it runs, N more with every shell.",
                 "IWY-4 IWY-9 S-WORK-7",
                 "components/shells.rs, components/width.rs, components/tabs.rs, components/term.rs",
-                "running, left over, exited 1, exited 0, killed; kill confirm open; N more closed and open; pid, starter, port shown wide; board width and 320 px",
+                "running, left over, exited 1, exited 0, killed, held by you; kill confirm open; N more closed and open; pid, starter, port shown wide; board width and 320 px",
                 "",
             ),
             Page::Terminal => sheet(

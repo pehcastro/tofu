@@ -1,4 +1,4 @@
-use std::f32::consts::PI;
+use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -6,24 +6,26 @@ use desk_motion::GlideKind;
 use gpui::{
     AnyElement, App, ClickEvent, Context, Corners, Div, ElementId, Entity, FontWeight, Image,
     ImageFormat, Img, MouseButton, MouseDownEvent, Pixels, Point, Rgba, SharedString, Stateful,
-    Transformation, Window, div, img, prelude::*, px, radians,
+    Window, canvas, div, img, prelude::*, px,
 };
 
 use crate::component::icon;
-use crate::components::avatar::spinner;
 use crate::components::chip::{file_chip, kbd, mention, mono, remove_x};
 use crate::components::form::TextArea;
 use crate::components::glyph::Glyph;
 use crate::components::list::{HoverList, Marker};
-use crate::components::overlay::{Align, Placement, Popover, Side};
-use crate::components::paint::{drop, glyph, ink, pressed, ring, tint};
+use crate::components::logo::{Brand, logo};
+use crate::components::overlay::{Align, Placement, Popover, Side, popover};
+use crate::components::paint::{Spinner, drop, glyph, ink, pressed, ring, tint};
 use crate::components::size::{
     CAPTION_TEXT, CHIP, CHIP_PAD, COMPOSER_PAD_BOTTOM, COMPOSER_PAD_LEFT, COMPOSER_PAD_RIGHT,
     COMPOSER_PAD_TOP, COMPOSER_RING, FCHIP, FCHIP_PAD, FONT_BADGE, FONT_CAP2, FONT_CHAT,
     FONT_SMALL, FONT_TAB, HOVER, LINE_CHAT, MENTION_TINT, MENU_PAD, POPOVER_PAD_X, POPOVER_PAD_Y,
-    RADIUS_BADGE, RADIUS_CHIP, RADIUS_COMPOSER, RADIUS_ROW, ROW_PAD_X, ROW_PAD_Y, T1, T2, T3,
+    RADIUS_BADGE, RADIUS_CHIP, RADIUS_COMPOSER, RADIUS_ROW, ROW_PAD_X, ROW_PAD_Y, SPINNER,
+    SPINNER_TRACK, T1, T2, T3,
 };
 use crate::components::tooltip::{Edge, tooltip};
+use crate::glass::Glass;
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
 use crate::metrics::{HAIRLINE, ICON, ICON_SMALL};
@@ -33,7 +35,6 @@ const SEND: f32 = 28.0;
 const SEND_IDLE: f32 = 0.18;
 const SEND_IDLE_MARK: f32 = 0.6;
 const ATTACH: f32 = 26.0;
-const ATTACH_ONE_LINE: f32 = 28.0;
 const ONE_LINE_PAD: f32 = 6.0;
 const ONE_LINE_GAP: f32 = 4.0;
 const ONE_LINE_FIELD_MIN: f32 = 240.0;
@@ -57,7 +58,6 @@ const WHO_GAP: f32 = 8.0;
 const HOME_STACK_GAP: f32 = 10.0;
 const HOME_RADIUS: f32 = 18.0;
 const HOME_FILL: f32 = 0.55;
-const HOME_BLUR: f32 = 26.0;
 const HOME_RING: f32 = 0.16;
 const HOME_DROP_Y: f32 = 24.0;
 const HOME_DROP_BLUR: f32 = 70.0;
@@ -162,10 +162,6 @@ impl ComposerVariant {
     }
 }
 
-fn up() -> Transformation {
-    Transformation::rotate(radians(PI))
-}
-
 pub fn picker(
     id: impl Into<ElementId>,
     label: impl Into<SharedString>,
@@ -187,7 +183,45 @@ pub fn picker(
         .text_color(ink(theme, CHIP_TEXT))
         .hover(move |style| style.bg(hover))
         .child(label.into())
-        .child(glyph(Glyph::Chevron, ICON_SMALL, ink(theme, T3)).with_transformation(up()))
+        .child(glyph(Glyph::Chevron, ICON_SMALL, ink(theme, T3)))
+}
+
+pub fn inline_picker(
+    id: impl Into<ElementId>,
+    brand: Option<Brand>,
+    label: impl Into<SharedString>,
+    theme: &Theme,
+) -> Stateful<Div> {
+    let hover = ink(theme, T1);
+    div()
+        .id(id)
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap_1()
+        .cursor_pointer()
+        .text_size(px(FONT_SMALL))
+        .text_color(ink(theme, T3))
+        .hover(move |style| style.text_color(hover))
+        .children(brand.map(|brand| logo(brand, px(ICON_SMALL), theme)))
+        .child(label.into())
+        .child(glyph(Glyph::Chevron, ICON_SMALL, ink(theme, T3)))
+}
+
+pub fn paperclip(id: impl Into<ElementId>, theme: &Theme) -> Stateful<Div> {
+    let hover = ink(theme, HOVER);
+    div()
+        .id(id)
+        .aria_label("Attach a file")
+        .flex()
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .size(px(ATTACH))
+        .rounded(px(RADIUS_CHIP))
+        .cursor_pointer()
+        .hover(move |style| style.bg(hover))
+        .child(glyph(Glyph::Attach, ICON_SMALL, ink(theme, T3)))
 }
 
 fn circle(id: &'static str, label: &'static str, size: f32, fill: Rgba) -> Stateful<Div> {
@@ -247,17 +281,18 @@ pub struct Composer {
     area: Entity<TextArea>,
     variant: ComposerVariant,
     busy: bool,
+    quiet: bool,
     phase: Option<SharedString>,
     files: Vec<SharedString>,
     traces: Vec<TraceChip>,
     held: bool,
     menu: Option<(MentionMenu, OnIndex)>,
+    menu_in_flow: bool,
     queued: Vec<SharedString>,
-    model: Option<AnyElement>,
-    effort: Option<AnyElement>,
+    below_start: Vec<AnyElement>,
+    below_end: Vec<AnyElement>,
     on_send: Option<OnText>,
     on_stop: Option<OnAction>,
-    on_attach: Option<OnAction>,
     on_remove: Option<OnIndex>,
     on_remove_trace: Option<OnIndex>,
     on_unqueue: Option<OnIndex>,
@@ -271,17 +306,18 @@ impl Composer {
             area,
             variant: ComposerVariant::default(),
             busy: false,
+            quiet: false,
             phase: None,
             files: Vec::new(),
             traces: Vec::new(),
             held: false,
             menu: None,
+            menu_in_flow: false,
             queued: Vec::new(),
-            model: None,
-            effort: None,
+            below_start: Vec::new(),
+            below_end: Vec::new(),
             on_send: None,
             on_stop: None,
-            on_attach: None,
             on_remove: None,
             on_remove_trace: None,
             on_unqueue: None,
@@ -301,6 +337,11 @@ impl Composer {
 
     pub fn busy(mut self, busy: bool) -> Self {
         self.busy = busy;
+        self
+    }
+
+    pub fn quiet(mut self, quiet: bool) -> Self {
+        self.quiet = quiet;
         self
     }
 
@@ -334,18 +375,23 @@ impl Composer {
         self
     }
 
+    pub fn menu_in_flow(mut self) -> Self {
+        self.menu_in_flow = true;
+        self
+    }
+
     pub fn queued(mut self, queued: Vec<SharedString>) -> Self {
         self.queued = queued;
         self
     }
 
-    pub fn model(mut self, picker: impl IntoElement) -> Self {
-        self.model = Some(picker.into_any_element());
+    pub fn below_start(mut self, element: impl IntoElement) -> Self {
+        self.below_start.push(element.into_any_element());
         self
     }
 
-    pub fn effort(mut self, picker: impl IntoElement) -> Self {
-        self.effort = Some(picker.into_any_element());
+    pub fn below_end(mut self, element: impl IntoElement) -> Self {
+        self.below_end.push(element.into_any_element());
         self
     }
 
@@ -356,11 +402,6 @@ impl Composer {
 
     pub fn on_stop(mut self, on_stop: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.on_stop = Some(Rc::new(on_stop));
-        self
-    }
-
-    pub fn on_attach(mut self, on_attach: impl Fn(&mut Window, &mut App) + 'static) -> Self {
-        self.on_attach = Some(Rc::new(on_attach));
         self
     }
 
@@ -396,10 +437,6 @@ impl RenderOnce for Composer {
             ComposerVariant::OneLine => false,
             ComposerVariant::Grown => true,
         };
-        let size = if grown { ATTACH } else { ATTACH_ONE_LINE };
-        let attach = self
-            .on_attach
-            .map(|on_attach| attach("composer-attach", size, Some(on_attach), &theme));
         let action = send(
             &self.area,
             (typed || !self.traces.is_empty()) && !self.held,
@@ -414,13 +451,6 @@ impl RenderOnce for Composer {
             .text_size(px(FONT_CHAT))
             .line_height(px(LINE_CHAT))
             .child(self.area);
-        let pickers = div()
-            .flex()
-            .flex_none()
-            .items_center()
-            .gap(px(ROW_GAP))
-            .children(self.model)
-            .children(self.effort);
         let on_remove = self.on_remove;
         let on_remove_trace = self.on_remove_trace;
         let files: Vec<Stateful<Div>> = self
@@ -445,7 +475,7 @@ impl RenderOnce for Composer {
                 tooltip(
                     ("composer-file-tip", ix),
                     chip,
-                    Edge::Frame,
+                    Edge::FrameStart,
                     name,
                     &theme,
                     window,
@@ -499,9 +529,7 @@ impl RenderOnce for Composer {
                         .flex()
                         .items_center()
                         .gap(px(ROW_GAP))
-                        .children(attach)
                         .child(div().flex_1())
-                        .child(pickers)
                         .child(action),
                 )
         } else {
@@ -510,34 +538,63 @@ impl RenderOnce for Composer {
                 .items_center()
                 .gap(px(ONE_LINE_GAP))
                 .p(px(ONE_LINE_PAD))
-                .children(attach)
                 .child(
                     field
                         .min_w(px(ONE_LINE_FIELD_MIN))
                         .pl(px(ONE_LINE_GAP / 2.0)),
                 )
-                .child(pickers)
                 .child(action)
         };
+        let room = window
+            .use_keyed_state(
+                ElementId::from((self.id.clone(), "menu-room")),
+                cx,
+                |_, _| Rc::new(Cell::new(Pixels::ZERO)),
+            )
+            .read(cx)
+            .clone();
+        let cap = room.get() - px(2.0 * MENU_PAD);
+        let shell = shell.child(
+            canvas(
+                move |bounds, _, _| room.set(bounds.size.width),
+                |_, _, _, _| {},
+            )
+            .absolute()
+            .size_full(),
+        );
         let menu = self
             .menu
             .map(|(menu, on_pick)| mention_rows(&menu, &on_pick, &theme));
-        let shell = Popover::new("composer-mention-menu", shell)
-            .open(menu.is_some())
-            .placement(Placement {
-                side: Side::Top,
-                align: Align::Start,
-                offset: MENU_OFFSET,
-            })
-            .fit(MENU_MIN)
-            .children(menu.map(|menu| {
-                div()
-                    .flex()
-                    .flex_col()
-                    .mx(px(MENU_PAD - POPOVER_PAD_X))
-                    .my(px(MENU_PAD - POPOVER_PAD_Y))
+        let menu = menu.map(|menu| {
+            div()
+                .flex()
+                .flex_col()
+                .mx(px(MENU_PAD - POPOVER_PAD_X))
+                .my(px(MENU_PAD - POPOVER_PAD_Y))
+                .when(cap > Pixels::ZERO, |menu| menu.max_w(cap))
+                .child(menu)
+        });
+        let (shell, in_flow) = if self.menu_in_flow {
+            let panel = menu.map(|menu| {
+                popover(&theme)
+                    .w_auto()
+                    .min_w(px(MENU_MIN))
+                    .self_start()
                     .child(menu)
-            }));
+            });
+            (shell.into_any_element(), panel)
+        } else {
+            let shell = Popover::new("composer-mention-menu", shell)
+                .open(menu.is_some())
+                .placement(Placement {
+                    side: Side::Top,
+                    align: Align::Start,
+                    offset: MENU_OFFSET,
+                })
+                .fit(MENU_MIN)
+                .children(menu);
+            (shell.into_any_element(), None)
+        };
         let on_unqueue = self.on_unqueue;
         let waiting = self.queued.len();
         let queued =
@@ -582,7 +639,16 @@ impl RenderOnce for Composer {
                 .pb(px(STATUS_PAD_BOTTOM))
                 .text_size(px(FONT_SMALL))
                 .text_color(ink(&theme, T3))
-                .child(spinner("composer-busy", &theme))
+                .child(
+                    Spinner::new(
+                        "composer-busy",
+                        SPINNER,
+                        ink(&theme, SPINNER_TRACK),
+                        ink(&theme, T3),
+                        &theme,
+                    )
+                    .still(self.quiet),
+                )
                 .child(self.phase.unwrap_or_else(|| WORKING.into()))
                 .child(div().flex_1())
                 .when(waiting > 0, |status| {
@@ -602,6 +668,16 @@ impl RenderOnce for Composer {
                         })
                 })
         });
+        let below = (!self.below_start.is_empty() || !self.below_end.is_empty()).then(|| {
+            div()
+                .flex()
+                .items_center()
+                .gap(px(ROW_GAP))
+                .px(px(UNDER_PAD_X))
+                .children(self.below_start)
+                .child(div().flex_1())
+                .children(self.below_end)
+        });
         div()
             .id(self.id)
             .when_some(self.content_width, |column, width| {
@@ -612,7 +688,9 @@ impl RenderOnce for Composer {
             .gap(px(ROW_GAP))
             .children(queued)
             .children(status)
+            .children(in_flow)
             .child(shell)
+            .children(below)
     }
 }
 
@@ -640,8 +718,11 @@ fn trace_chip(
     );
     tooltip(
         ElementId::Name(format!("{id}-tip-{ix}").into()),
-        body.id(ElementId::Name(format!("{id}-chip-{ix}").into())),
-        Edge::Frame,
+        div()
+            .id(ElementId::Name(format!("{id}-chip-{ix}").into()))
+            .flex_none()
+            .child(body),
+        Edge::FrameStart,
         chip.broken.clone().unwrap_or_else(|| chip.label.clone()),
         theme,
         window,
@@ -753,7 +834,9 @@ fn mention_rows(menu: &MentionMenu, on_pick: &OnIndex, theme: &Theme) -> HoverLi
             )
             .child(
                 div()
-                    .flex_none()
+                    .flex_1()
+                    .min_w(px(0.0))
+                    .truncate()
                     .pl(px(ROW_INNER_GAP))
                     .text_size(px(FONT_SMALL))
                     .text_color(ink(theme, T3))
@@ -1511,13 +1594,13 @@ impl Render for HomeComposer {
             theme.color(ColorToken::ButtonPrimaryText),
         ))
         .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.send(window, cx)));
-        let surface = div()
+        let surface = Glass::themed(&theme)
+            .apply(div())
             .flex()
             .flex_col()
             .gap(px(HOME_GAP))
             .rounded(px(HOME_RADIUS))
             .bg(fill)
-            .backdrop_blur(px(HOME_BLUR))
             .shadow(vec![ring(ink(&theme, HOME_RING)), shadow])
             .pt(px(HOME_PAD_TOP))
             .pr(px(HOME_PAD_RIGHT))

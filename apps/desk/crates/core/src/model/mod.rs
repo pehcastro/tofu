@@ -103,6 +103,8 @@ impl Store {
         if let Some(turn) = state.turn.as_ref().filter(|_| state.running) {
             session.running_now(turn);
         }
+        session.members.clone_from(&state.members);
+        session.agents_now(&state.agents)?;
         session.shells_now(&state.shells)
     }
 
@@ -176,6 +178,8 @@ fn session_of(notification: &Notification) -> Result<Option<&str>, ModelError> {
         N::AgentStarted(e) => &e.session,
         N::AgentUpdated(e) => &e.session,
         N::ApprovalResolved(e) => &e.session,
+        N::ApprovalRevoked(e) => &e.session,
+        N::ModelsChanged(e) => &e.session,
         N::ContextUpdated(e) => &e.session,
         N::CronUpdated(e) => &e.session,
         N::Decision(e) => &e.session,
@@ -190,6 +194,8 @@ fn session_of(notification: &Notification) -> Result<Option<&str>, ModelError> {
         N::TurnSteerQueued(e) => &e.session,
         N::SessionListed(e) => &e.session,
         N::SessionSettings(e) => &e.session,
+        N::SessionMember(e) => &e.session,
+        N::RequestSent(e) => &e.session,
         N::MessageUser(e) => &e.session,
         N::MessageReset(e) | N::MessageStarted(e) => &e.session,
         N::PlanUpdated(e) => &e.session,

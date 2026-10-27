@@ -517,6 +517,7 @@
         "decision": {
           "enum": [
             "allow_once",
+            "allow_for",
             "allow_always",
             "reject_once",
             "reject_always",
@@ -527,6 +528,9 @@
             "remember_project_local"
           ],
           "type": "string"
+        },
+        "forSeconds": {
+          "type": "integer"
         }
       },
       "required": [
@@ -548,6 +552,7 @@
           "items": {
             "enum": [
               "allow_once",
+              "allow_for",
               "allow_always",
               "reject_once",
               "reject_always",
@@ -564,13 +569,28 @@
             "null"
           ]
         },
+        "forSeconds": {
+          "type": "integer"
+        },
         "item": {
           "type": "string"
         },
         "judged": {
           "$ref": "#/$defs/Judgement"
         },
+        "reason": {
+          "type": "string"
+        },
         "ref": {
+          "type": "string"
+        },
+        "risk": {
+          "enum": [
+            "low",
+            "risky",
+            "destructive",
+            "unjudged"
+          ],
           "type": "string"
         },
         "seq": {
@@ -598,6 +618,7 @@
         "tool",
         "target",
         "args",
+        "risk",
         "decisions"
       ],
       "type": "object"
@@ -617,6 +638,7 @@
         "decision": {
           "enum": [
             "allow_once",
+            "allow_for",
             "allow_always",
             "reject_once",
             "reject_always",
@@ -645,6 +667,10 @@
         },
         "turn": {
           "type": "string"
+        },
+        "until": {
+          "format": "date-time",
+          "type": "string"
         }
       },
       "required": [
@@ -653,6 +679,76 @@
         "item",
         "seq",
         "approval",
+        "decision",
+        "by"
+      ],
+      "type": "object"
+    },
+    "ApprovalRevokeParams": {
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "type": "object"
+    },
+    "ApprovalRevoked": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "by": {
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "allow_once",
+            "allow_for",
+            "allow_always",
+            "reject_once",
+            "reject_always",
+            "cancelled",
+            "remember_project",
+            "remember_global",
+            "remember_user_local",
+            "remember_project_local"
+          ],
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        },
+        "until": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "target",
         "decision",
         "by"
       ],
@@ -667,6 +763,84 @@
       },
       "required": [
         "path"
+      ],
+      "type": "object"
+    },
+    "CardLine": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "items": {
+            "$ref": "#/$defs/CardPiece"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "family": {
+          "enum": [
+            "explored",
+            "edited",
+            "tests",
+            "git",
+            "board",
+            "memory",
+            "agents",
+            "asked",
+            "web",
+            "ran"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "family",
+        "detail"
+      ],
+      "type": "object"
+    },
+    "CardPiece": {
+      "additionalProperties": false,
+      "properties": {
+        "ink": {
+          "enum": [
+            "plain",
+            "muted",
+            "ref",
+            "added",
+            "removed",
+            "failed"
+          ],
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "ink"
+      ],
+      "type": "object"
+    },
+    "CarriedFrom": {
+      "additionalProperties": false,
+      "properties": {
+        "handle": {
+          "type": "string"
+        },
+        "messages": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "handle",
+        "messages"
       ],
       "type": "object"
     },
@@ -1620,6 +1794,144 @@
       ],
       "type": "object"
     },
+    "DrainReport": {
+      "additionalProperties": false,
+      "properties": {
+        "agent_types": {
+          "items": {
+            "$ref": "#/$defs/drain.Line"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "agents": {
+          "items": {
+            "$ref": "#/$defs/drain.Agent"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "bands": {
+          "items": {
+            "$ref": "#/$defs/drain.Line"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "child_wakes": {
+          "items": {
+            "$ref": "#/$defs/drain.Line"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "context_ceiling": {
+          "type": "integer"
+        },
+        "cost_recorded": {
+          "type": "boolean"
+        },
+        "default_weights": {
+          "$ref": "#/$defs/drain.Weights"
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/drain.Finding"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "handle": {
+          "type": "string"
+        },
+        "lead": {
+          "$ref": "#/$defs/drain.Spend"
+        },
+        "memory": {
+          "$ref": "#/$defs/drain.Spend"
+        },
+        "priced_by": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "rebuilds": {
+          "items": {
+            "$ref": "#/$defs/drain.Rebuild"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "residency": {
+          "items": {
+            "$ref": "#/$defs/drain.Resident"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "session": {
+          "type": "string"
+        },
+        "tokens": {
+          "$ref": "#/$defs/drain.Tokens"
+        },
+        "total": {
+          "$ref": "#/$defs/drain.Spend"
+        },
+        "unread_weighted": {
+          "type": "number"
+        },
+        "wakes": {
+          "items": {
+            "$ref": "#/$defs/drain.Line"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "handle",
+        "session",
+        "context_ceiling",
+        "default_weights",
+        "priced_by",
+        "cost_recorded",
+        "total",
+        "tokens",
+        "lead",
+        "memory",
+        "unread_weighted",
+        "wakes",
+        "child_wakes",
+        "bands",
+        "residency",
+        "rebuilds",
+        "findings",
+        "agents",
+        "agent_types"
+      ],
+      "type": "object"
+    },
     "FileChange": {
       "additionalProperties": false,
       "properties": {
@@ -1776,6 +2088,42 @@
         "question",
         "value",
         "max"
+      ],
+      "type": "object"
+    },
+    "GroupSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "calls": {
+          "type": "integer"
+        },
+        "failed": {
+          "type": "integer"
+        },
+        "head": {
+          "items": {
+            "$ref": "#/$defs/CardPiece"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "open": {
+          "items": {
+            "$ref": "#/$defs/CardLine"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "calls",
+        "failed",
+        "head",
+        "open"
       ],
       "type": "object"
     },
@@ -1993,14 +2341,281 @@
       ],
       "type": "object"
     },
+    "KeyAllowance": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer"
+        },
+        "read_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "remaining": {
+          "type": "integer"
+        },
+        "resets_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "key",
+            "team"
+          ],
+          "type": "string"
+        },
+        "unit": {
+          "enum": [
+            "calls",
+            "tokens"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "scope",
+        "unit",
+        "limit",
+        "remaining",
+        "read_at"
+      ],
+      "type": "object"
+    },
+    "KeyBalance": {
+      "additionalProperties": false,
+      "properties": {
+        "balance_usd": {
+          "type": "number"
+        },
+        "credits_usd": {
+          "type": "number"
+        },
+        "from": {
+          "type": "string"
+        },
+        "read_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "used_usd": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "from",
+        "credits_usd",
+        "used_usd",
+        "balance_usd",
+        "read_at"
+      ],
+      "type": "object"
+    },
+    "KeyFailure": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "status": {
+          "type": "integer"
+        },
+        "what": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "what",
+        "at"
+      ],
+      "type": "object"
+    },
+    "KeyLimit": {
+      "additionalProperties": false,
+      "properties": {
+        "capped": {
+          "type": "boolean"
+        },
+        "free_tier": {
+          "type": "boolean"
+        },
+        "from": {
+          "type": "string"
+        },
+        "limit_usd": {
+          "type": "number"
+        },
+        "provider_spend": {
+          "$ref": "#/$defs/ProviderSpend"
+        },
+        "read_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "remaining_usd": {
+          "type": "number"
+        },
+        "resets": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "capped",
+        "read_at"
+      ],
+      "type": "object"
+    },
+    "KeyModelUse": {
+      "additionalProperties": false,
+      "properties": {
+        "calls": {
+          "type": "integer"
+        },
+        "cost_source": {
+          "enum": [
+            "provider",
+            "list",
+            "none"
+          ],
+          "type": "string"
+        },
+        "cost_usd": {
+          "type": "number"
+        },
+        "model": {
+          "type": "string"
+        },
+        "tokens": {
+          "$ref": "#/$defs/KeyTokens"
+        },
+        "upstream_usd": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "model",
+        "calls",
+        "tokens",
+        "cost_source"
+      ],
+      "type": "object"
+    },
+    "KeyPeriod": {
+      "additionalProperties": false,
+      "properties": {
+        "calls": {
+          "type": "integer"
+        },
+        "cost_source": {
+          "enum": [
+            "provider",
+            "list",
+            "none"
+          ],
+          "type": "string"
+        },
+        "cost_usd": {
+          "type": "number"
+        },
+        "period": {
+          "enum": [
+            "today",
+            "7d",
+            "30d",
+            "all"
+          ],
+          "type": "string"
+        },
+        "tokens": {
+          "$ref": "#/$defs/KeyTokens"
+        },
+        "upstream_usd": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "period",
+        "calls",
+        "tokens",
+        "cost_source"
+      ],
+      "type": "object"
+    },
     "KeyStatus": {
       "additionalProperties": false,
       "properties": {
+        "allowances": {
+          "items": {
+            "$ref": "#/$defs/KeyAllowance"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "balance": {
+          "$ref": "#/$defs/KeyBalance"
+        },
+        "balance_unread": {
+          "type": "string"
+        },
+        "by_model": {
+          "items": {
+            "$ref": "#/$defs/KeyModelUse"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "calls": {
+          "type": "integer"
+        },
         "key": {
           "type": "string"
         },
+        "label": {
+          "type": "string"
+        },
+        "last_error": {
+          "$ref": "#/$defs/KeyFailure"
+        },
+        "last_used_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "limit": {
+          "$ref": "#/$defs/KeyLimit"
+        },
+        "limit_unread": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "periods": {
+          "items": {
+            "$ref": "#/$defs/KeyPeriod"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "provider": {
           "type": "string"
+        },
+        "provider_reports": {
+          "type": "string"
+        },
+        "queries": {
+          "type": "integer"
         },
         "role": {
           "enum": [
@@ -2017,7 +2632,37 @@
       "required": [
         "role",
         "provider",
-        "variable"
+        "variable",
+        "provider_reports",
+        "calls"
+      ],
+      "type": "object"
+    },
+    "KeyTokens": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_read_input_tokens": {
+          "type": "integer"
+        },
+        "cache_write_input_tokens": {
+          "type": "integer"
+        },
+        "input_tokens": {
+          "type": "integer"
+        },
+        "output_tokens": {
+          "type": "integer"
+        },
+        "reasoning_output_tokens": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "input_tokens",
+        "output_tokens",
+        "cache_read_input_tokens",
+        "cache_write_input_tokens",
+        "reasoning_output_tokens"
       ],
       "type": "object"
     },
@@ -2117,6 +2762,9 @@
     "LedgerParams": {
       "additionalProperties": false,
       "properties": {
+        "before": {
+          "type": "string"
+        },
         "id": {
           "type": "string"
         },
@@ -2179,6 +2827,9 @@
         "call": {
           "$ref": "#/$defs/LedgerCall"
         },
+        "next": {
+          "type": "string"
+        },
         "rows": {
           "items": {
             "$ref": "#/$defs/LedgerRow"
@@ -2222,6 +2873,9 @@
         "chain": {
           "$ref": "#/$defs/ledger.Row"
         },
+        "charge": {
+          "$ref": "#/$defs/ledger.Charge"
+        },
         "cost": {
           "type": "number"
         },
@@ -2229,6 +2883,9 @@
           "type": "string"
         },
         "id": {
+          "type": "string"
+        },
+        "key": {
           "type": "string"
         },
         "latency_ms": {
@@ -2257,6 +2914,9 @@
             "array",
             "null"
           ]
+        },
+        "provider": {
+          "type": "string"
         },
         "questions": {
           "type": "string"
@@ -2288,6 +2948,9 @@
         },
         "turn_id": {
           "type": "string"
+        },
+        "usage": {
+          "$ref": "#/$defs/ledger.Usage"
         },
         "verdict": {
           "type": "string"
@@ -2345,6 +3008,9 @@
     "LedgerSummaryParams": {
       "additionalProperties": false,
       "properties": {
+        "session": {
+          "type": "string"
+        },
         "since": {
           "format": "date-time",
           "type": "string"
@@ -2608,6 +3274,10 @@
         "agent": {
           "type": "string"
         },
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
         "item": {
           "type": "string"
         },
@@ -2629,6 +3299,32 @@
         "turn",
         "item",
         "seq"
+      ],
+      "type": "object"
+    },
+    "Member": {
+      "additionalProperties": false,
+      "properties": {
+        "joined": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "tui",
+            "desk",
+            "serve"
+          ],
+          "type": "string"
+        },
+        "process": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "process",
+        "kind",
+        "joined"
       ],
       "type": "object"
     },
@@ -2936,6 +3632,26 @@
       ],
       "type": "object"
     },
+    "MessageImage": {
+      "additionalProperties": false,
+      "properties": {
+        "mime": {
+          "type": "string"
+        },
+        "n": {
+          "type": "integer"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "n",
+        "path",
+        "mime"
+      ],
+      "type": "object"
+    },
     "ModelChange": {
       "additionalProperties": false,
       "properties": {
@@ -3112,6 +3828,65 @@
       ],
       "type": "object"
     },
+    "ModelsChanged": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "global",
+            "project"
+          ],
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        },
+        "what": {
+          "enum": [
+            "role",
+            "agent",
+            "model"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "what",
+        "name",
+        "model",
+        "scope",
+        "file"
+      ],
+      "type": "object"
+    },
     "ModelsQuery": {
       "additionalProperties": false,
       "properties": {
@@ -3198,15 +3973,29 @@
     "Origin": {
       "additionalProperties": false,
       "properties": {
+        "durationMs": {
+          "type": "integer"
+        },
+        "exit": {
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
         "job": {
           "type": "string"
         },
         "kind": {
           "enum": [
             "person",
-            "cron",
             "agent",
-            "tofu"
+            "tofu",
+            "cron",
+            "hook",
+            "memory",
+            "skill",
+            "library",
+            "plugin"
           ],
           "type": "string"
         },
@@ -3216,12 +4005,54 @@
         "schedule": {
           "type": "string"
         },
-        "source": {
+        "sub": {
+          "enum": [
+            "task",
+            "typed",
+            "steer",
+            "answer",
+            "fork.task",
+            "brief",
+            "report",
+            "report.lead",
+            "ask",
+            "message",
+            "shell.exit",
+            "nudge.answer_first",
+            "nudge.slots",
+            "nudge.handback",
+            "nudge.check",
+            "nudge.step_cap",
+            "nudge.blank_answer",
+            "nudge.last_word",
+            "continue",
+            "fork.carry",
+            "fork.state",
+            "plan",
+            "reply_cut",
+            "environment",
+            "notice",
+            "failure",
+            "gate",
+            "spawn.line",
+            "fire",
+            "session_start",
+            "prompt_submit",
+            "pre_tool",
+            "post_tool",
+            "stop",
+            "view",
+            "episodes",
+            "saved",
+            "load",
+            "reference"
+          ],
           "type": "string"
         }
       },
       "required": [
-        "kind"
+        "kind",
+        "sub"
       ],
       "type": "object"
     },
@@ -3422,6 +4253,34 @@
         "item",
         "seq",
         "items"
+      ],
+      "type": "object"
+    },
+    "ProviderSpend": {
+      "additionalProperties": false,
+      "properties": {
+        "all_usd": {
+          "type": "number"
+        },
+        "byok_usd": {
+          "type": "number"
+        },
+        "month_usd": {
+          "type": "number"
+        },
+        "today_usd": {
+          "type": "number"
+        },
+        "week_usd": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "today_usd",
+        "week_usd",
+        "month_usd",
+        "all_usd",
+        "byok_usd"
       ],
       "type": "object"
     },
@@ -3763,6 +4622,93 @@
       ],
       "type": "object"
     },
+    "RequestParams": {
+      "additionalProperties": false,
+      "properties": {
+        "request": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "type": "object"
+    },
+    "RequestSent": {
+      "additionalProperties": false,
+      "properties": {
+        "added": {
+          "items": {
+            "$ref": "#/$defs/session.SentItem"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "agent": {
+          "type": "string"
+        },
+        "dropped": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "images": {
+          "type": "integer"
+        },
+        "item": {
+          "type": "string"
+        },
+        "messages": {
+          "type": "integer"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "request": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "tokens": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "turn": {
+          "type": "string"
+        },
+        "why": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "request",
+        "messages",
+        "tokens"
+      ],
+      "type": "object"
+    },
     "Requirement": {
       "additionalProperties": false,
       "properties": {
@@ -3979,6 +4925,9 @@
           ],
           "type": "string"
         },
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
         "ref": {
           "type": "string"
         },
@@ -4001,7 +4950,8 @@
         "item",
         "seq",
         "kind",
-        "text"
+        "text",
+        "origin"
       ],
       "type": "object"
     },
@@ -4290,6 +5240,9 @@
         "command": {
           "type": "string"
         },
+        "failed": {
+          "type": "boolean"
+        },
         "file": {
           "type": "string"
         },
@@ -4412,23 +5365,6 @@
       ],
       "type": "object"
     },
-    "SessionHolder": {
-      "additionalProperties": false,
-      "properties": {
-        "pid": {
-          "type": "integer"
-        },
-        "since": {
-          "format": "date-time",
-          "type": "string"
-        }
-      },
-      "required": [
-        "pid",
-        "since"
-      ],
-      "type": "object"
-    },
     "SessionInfo": {
       "additionalProperties": false,
       "properties": {
@@ -4438,6 +5374,9 @@
         },
         "auto_compaction": {
           "type": "string"
+        },
+        "carried_from": {
+          "$ref": "#/$defs/CarriedFrom"
         },
         "carried_messages": {
           "type": "integer"
@@ -4622,9 +5561,6 @@
         "handle": {
           "type": "string"
         },
-        "heldBy": {
-          "$ref": "#/$defs/SessionHolder"
-        },
         "id": {
           "type": "string"
         },
@@ -4637,6 +5573,15 @@
         "lastAt": {
           "format": "date-time",
           "type": "string"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/Member"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "model": {
           "type": "string"
@@ -4710,6 +5655,46 @@
       ],
       "type": "object"
     },
+    "SessionMembers": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/Member"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "ref": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "members"
+      ],
+      "type": "object"
+    },
     "SessionOpenParams": {
       "additionalProperties": false,
       "properties": {
@@ -4739,8 +5724,14 @@
         "fresh": {
           "type": "boolean"
         },
-        "heldBy": {
-          "$ref": "#/$defs/SessionHolder"
+        "members": {
+          "items": {
+            "$ref": "#/$defs/Member"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "session": {
           "type": "string"
@@ -4825,9 +5816,6 @@
         "handle": {
           "type": "string"
         },
-        "heldBy": {
-          "$ref": "#/$defs/SessionHolder"
-        },
         "id": {
           "type": "string"
         },
@@ -4837,6 +5825,15 @@
         "lastAt": {
           "format": "date-time",
           "type": "string"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/Member"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "model": {
           "type": "string"
@@ -5008,6 +6005,15 @@
         "cron": {
           "$ref": "#/$defs/CronState"
         },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/Member"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "pick": {
           "$ref": "#/$defs/ModelPick"
         },
@@ -5057,6 +6063,7 @@
         "questions",
         "agents",
         "shells",
+        "members",
         "cron"
       ],
       "type": "object"
@@ -5233,6 +6240,9 @@
     "SessionTurns": {
       "additionalProperties": false,
       "properties": {
+        "next": {
+          "type": "string"
+        },
         "session": {
           "type": "string"
         },
@@ -5358,6 +6368,9 @@
             "null"
           ]
         },
+        "custom": {
+          "type": "boolean"
+        },
         "description": {
           "type": "string"
         },
@@ -5382,6 +6395,9 @@
         },
         "min": {
           "type": "integer"
+        },
+        "reason": {
+          "type": "string"
         },
         "restart": {
           "type": "boolean"
@@ -5415,6 +6431,9 @@
           "type": "string"
         },
         "key": {
+          "type": "string"
+        },
+        "reason": {
           "type": "string"
         },
         "ref": {
@@ -5601,6 +6620,9 @@
           ],
           "type": "string"
         },
+        "offset": {
+          "type": "integer"
+        },
         "shell": {
           "type": "string"
         },
@@ -5612,7 +6634,8 @@
       "required": [
         "shell",
         "holder",
-        "since"
+        "since",
+        "offset"
       ],
       "type": "object"
     },
@@ -5634,6 +6657,9 @@
         },
         "note": {
           "type": "string"
+        },
+        "offset": {
+          "type": "integer"
         },
         "ref": {
           "type": "string"
@@ -5663,6 +6689,7 @@
         "shell",
         "holder",
         "since",
+        "offset",
         "note"
       ],
       "type": "object"
@@ -5775,6 +6802,9 @@
           "type": "string"
         },
         "ref": {
+          "type": "string"
+        },
+        "session": {
           "type": "string"
         },
         "shell": {
@@ -6099,6 +7129,9 @@
         "next": {
           "type": "integer"
         },
+        "offset": {
+          "type": "integer"
+        },
         "replay": {
           "contentEncoding": "base64",
           "type": "string"
@@ -6118,6 +7151,7 @@
         "shell",
         "holder",
         "since",
+        "offset",
         "cols",
         "rows",
         "base",
@@ -6160,6 +7194,7 @@
         "decision": {
           "enum": [
             "allow_once",
+            "allow_for",
             "allow_always",
             "reject_once",
             "reject_always",
@@ -6172,6 +7207,10 @@
           "type": "string"
         },
         "target": {
+          "type": "string"
+        },
+        "until": {
+          "format": "date-time",
           "type": "string"
         }
       },
@@ -6356,8 +7395,20 @@
         "agent": {
           "type": "string"
         },
+        "images": {
+          "items": {
+            "$ref": "#/$defs/MessageImage"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "item": {
           "type": "string"
+        },
+        "origin": {
+          "$ref": "#/$defs/Origin"
         },
         "ref": {
           "type": "string"
@@ -6380,7 +7431,8 @@
         "turn",
         "item",
         "seq",
-        "text"
+        "text",
+        "origin"
       ],
       "type": "object"
     },
@@ -6406,8 +7458,20 @@
         "agent": {
           "type": "string"
         },
+        "images": {
+          "items": {
+            "$ref": "#/$defs/MessageImage"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "item": {
           "type": "string"
+        },
+        "origin": {
+          "$ref": "#/$defs/Origin"
         },
         "readAt": {
           "format": "date-time",
@@ -6438,6 +7502,7 @@
         "item",
         "seq",
         "text",
+        "origin",
         "step",
         "readAt"
       ],
@@ -6480,6 +7545,10 @@
         "agent": {
           "type": "string"
         },
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
         "item": {
           "type": "string"
         },
@@ -6508,6 +7577,59 @@
       ],
       "type": "object"
     },
+    "ToolCard": {
+      "additionalProperties": false,
+      "properties": {
+        "doing": {
+          "type": "string"
+        },
+        "family": {
+          "enum": [
+            "explored",
+            "edited",
+            "tests",
+            "git",
+            "board",
+            "memory",
+            "agents",
+            "asked",
+            "web",
+            "ran"
+          ],
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        },
+        "meta": {
+          "type": "string"
+        },
+        "object": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "tone": {
+          "enum": [
+            "ok",
+            "warn",
+            "fail"
+          ],
+          "type": "string"
+        },
+        "verb": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "family",
+        "doing",
+        "verb",
+        "tone"
+      ],
+      "type": "object"
+    },
     "ToolCompleted": {
       "additionalProperties": false,
       "properties": {
@@ -6517,6 +7639,9 @@
         "bytes": {
           "type": "integer"
         },
+        "card": {
+          "$ref": "#/$defs/ToolCard"
+        },
         "durationMs": {
           "type": "integer"
         },
@@ -6525,6 +7650,12 @@
         },
         "failed": {
           "type": "boolean"
+        },
+        "group": {
+          "type": "string"
+        },
+        "groupSummary": {
+          "$ref": "#/$defs/GroupSummary"
         },
         "instance": {
           "type": "string"
@@ -6547,6 +7678,9 @@
         "session": {
           "type": "string"
         },
+        "summary": {
+          "$ref": "#/$defs/ToolSummary"
+        },
         "tool": {
           "type": "string"
         },
@@ -6564,7 +7698,8 @@
         "bytes",
         "lines",
         "durationMs",
-        "output"
+        "output",
+        "summary"
       ],
       "type": "object"
     },
@@ -6575,6 +7710,12 @@
           "type": "string"
         },
         "args": {},
+        "card": {
+          "$ref": "#/$defs/ToolCard"
+        },
+        "group": {
+          "type": "string"
+        },
         "instance": {
           "type": "string"
         },
@@ -6594,6 +7735,9 @@
           "format": "date-time",
           "type": "string"
         },
+        "title": {
+          "type": "string"
+        },
         "tool": {
           "type": "string"
         },
@@ -6609,6 +7753,32 @@
         "tool",
         "args",
         "startedAt"
+      ],
+      "type": "object"
+    },
+    "ToolSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "added": {
+          "type": "integer"
+        },
+        "durationMs": {
+          "type": "integer"
+        },
+        "exit": {
+          "type": "integer"
+        },
+        "hits": {
+          "type": "integer"
+        },
+        "removed": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "durationMs",
+        "added",
+        "removed"
       ],
       "type": "object"
     },
@@ -6718,6 +7888,9 @@
         "result_bytes": {
           "type": "integer"
         },
+        "start_ms": {
+          "type": "integer"
+        },
         "tool": {
           "type": "string"
         },
@@ -6729,7 +7902,8 @@
         "call",
         "turn",
         "tool",
-        "result_bytes"
+        "result_bytes",
+        "start_ms"
       ],
       "type": "object"
     },
@@ -6898,6 +8072,9 @@
         "request": {
           "type": "string"
         },
+        "start_ms": {
+          "type": "integer"
+        },
         "status": {
           "type": "integer"
         },
@@ -6915,7 +8092,8 @@
         "request",
         "turn",
         "usage",
-        "cost_usd"
+        "cost_usd",
+        "start_ms"
       ],
       "type": "object"
     },
@@ -7121,8 +8299,12 @@
             "forked",
             "error",
             "truncated",
-            "loop_guard"
+            "loop_guard",
+            "cancelled"
           ],
+          "type": "string"
+        },
+        "prompt": {
           "type": "string"
         },
         "status": {
@@ -7244,6 +8426,21 @@
       ],
       "type": "object"
     },
+    "TurnReadParams": {
+      "additionalProperties": false,
+      "properties": {
+        "session": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn"
+      ],
+      "type": "object"
+    },
     "TurnResult": {
       "additionalProperties": false,
       "properties": {
@@ -7311,6 +8508,15 @@
         "agent": {
           "type": "string"
         },
+        "images": {
+          "items": {
+            "$ref": "#/$defs/MessageImage"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "item": {
           "type": "string"
         },
@@ -7354,6 +8560,15 @@
         "expectedTurnId": {
           "type": "string"
         },
+        "images": {
+          "items": {
+            "$ref": "#/$defs/AttachedImage"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "session": {
           "type": "string"
         },
@@ -7392,6 +8607,9 @@
       "additionalProperties": false,
       "properties": {
         "session": {
+          "type": "string"
+        },
+        "turn": {
           "type": "string"
         },
         "turns": {
@@ -7588,6 +8806,15 @@
         "cacheRead": {
           "type": "integer"
         },
+        "cacheWrite1h": {
+          "type": "integer"
+        },
+        "cacheWrite5m": {
+          "type": "integer"
+        },
+        "costUsd": {
+          "type": "number"
+        },
         "decisions": {
           "type": "integer"
         },
@@ -7625,6 +8852,9 @@
         "tokensIn",
         "tokensOut",
         "cacheRead",
+        "cacheWrite5m",
+        "cacheWrite1h",
+        "costUsd",
         "decisions"
       ],
       "type": "object"
@@ -7635,6 +8865,15 @@
         "agent": {
           "type": "string"
         },
+        "images": {
+          "items": {
+            "$ref": "#/$defs/MessageImage"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "item": {
           "type": "string"
         },
@@ -7642,6 +8881,10 @@
           "$ref": "#/$defs/Origin"
         },
         "ref": {
+          "type": "string"
+        },
+        "sentAt": {
+          "format": "date-time",
           "type": "string"
         },
         "seq": {
@@ -7761,6 +9004,27 @@
       "required": [
         "changes",
         "undo"
+      ],
+      "type": "object"
+    },
+    "boardy.AcceptanceLine": {
+      "additionalProperties": false,
+      "properties": {
+        "line": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "met",
+            "unmet",
+            "not mine to prove"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "line",
+        "state"
       ],
       "type": "object"
     },
@@ -8006,17 +9270,54 @@
     "boardy.Author": {
       "additionalProperties": false,
       "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "alias": {
+          "type": "string"
+        },
+        "handle": {
+          "type": "string"
+        },
+        "harness": {
+          "enum": [
+            "tofu",
+            "claude-code",
+            "codex",
+            "other"
+          ],
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
         "kind": {
           "enum": [
             "person",
             "claude-code",
             "lead",
             "sub-agent",
-            "hook"
+            "hook",
+            "unknown"
           ],
           "type": "string"
         },
+        "model": {
+          "type": "string"
+        },
         "name": {
+          "type": "string"
+        },
+        "number": {
+          "type": "integer"
+        },
+        "role": {
+          "enum": [
+            "pm",
+            "engineer",
+            "person",
+            "hook"
+          ],
           "type": "string"
         },
         "session": {
@@ -8027,6 +9328,8 @@
         }
       },
       "required": [
+        "id",
+        "alias",
         "kind",
         "name"
       ],
@@ -8190,10 +9493,22 @@
     "boardy.Event": {
       "additionalProperties": false,
       "properties": {
+        "acceptance": {
+          "items": {
+            "$ref": "#/$defs/boardy.AcceptanceLine"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "actor": {
           "type": "string"
         },
         "agent": {
+          "type": "string"
+        },
+        "assignee": {
           "type": "string"
         },
         "at": {
@@ -8203,7 +9518,13 @@
         "author": {
           "$ref": "#/$defs/boardy.Author"
         },
+        "brief": {
+          "type": "string"
+        },
         "call": {
+          "type": "string"
+        },
+        "default": {
           "type": "string"
         },
         "files": {
@@ -8234,6 +9555,7 @@
             "created",
             "moved",
             "commented",
+            "evidence",
             "rule",
             "waiting",
             "requested",
@@ -8252,6 +9574,21 @@
             "hook-failed"
           ],
           "type": "string"
+        },
+        "leave": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "line": {
+          "type": "integer"
+        },
+        "question": {
+          "type": "integer"
         },
         "session": {
           "type": "string"
@@ -8274,6 +9611,21 @@
             "blocked",
             "needs-decision"
           ],
+          "type": "string"
+        },
+        "unanswered": {
+          "type": "string"
+        },
+        "verdict": {
+          "enum": [
+            "done",
+            "done with concerns",
+            "blocked",
+            "needs you"
+          ],
+          "type": "string"
+        },
+        "why": {
           "type": "string"
         }
       },
@@ -8809,6 +10161,9 @@
     "boardy.Question": {
       "additionalProperties": false,
       "properties": {
+        "answer": {
+          "type": "string"
+        },
         "eli5": {
           "type": "string"
         },
@@ -8984,7 +10339,7 @@
           "type": "string"
         },
         "by": {
-          "type": "string"
+          "$ref": "#/$defs/boardy.Author"
         },
         "id": {
           "type": "string"
@@ -9026,6 +10381,12 @@
             "null"
           ]
         },
+        "model": {
+          "type": "string"
+        },
+        "points": {
+          "type": "integer"
+        },
         "priority": {
           "enum": [
             "P0",
@@ -9038,6 +10399,12 @@
         },
         "questions": {
           "type": "integer"
+        },
+        "reads": {
+          "type": "integer"
+        },
+        "reason": {
+          "type": "string"
         },
         "sprint": {
           "type": "string"
@@ -9059,6 +10426,18 @@
         "title": {
           "type": "string"
         },
+        "tools": {
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "story",
+            "task",
+            "bug",
+            "subtask"
+          ],
+          "type": "string"
+        },
         "updated": {
           "format": "date-time",
           "type": "string"
@@ -9067,6 +10446,7 @@
       "required": [
         "id",
         "title",
+        "type",
         "status",
         "priority",
         "created",
@@ -9847,6 +11227,33 @@
               "const": "2.0"
             },
             "method": {
+              "const": "approval.revoke"
+            },
+            "params": {
+              "$ref": "#/$defs/ApprovalRevokeParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
               "const": "session.set"
             },
             "params": {
@@ -10148,6 +11555,33 @@
             },
             "params": {
               "$ref": "#/$defs/SessionParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "session.turn"
+            },
+            "params": {
+              "$ref": "#/$defs/TurnReadParams"
             }
           },
           "required": [
@@ -11386,6 +12820,60 @@
               "const": "2.0"
             },
             "method": {
+              "const": "query.drain"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.request"
+            },
+            "params": {
+              "$ref": "#/$defs/RequestParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
               "const": "mention.resolve"
             },
             "params": {
@@ -12599,6 +14087,254 @@
       ],
       "type": "object"
     },
+    "drain.Agent": {
+      "additionalProperties": false,
+      "properties": {
+        "calls": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "peak_context": {
+          "type": "integer"
+        },
+        "rebuilt_weighted": {
+          "type": "number"
+        },
+        "type": {
+          "type": "string"
+        },
+        "unread_weighted": {
+          "type": "number"
+        },
+        "usd": {
+          "type": "number"
+        },
+        "weighted_tokens": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "calls",
+        "weighted_tokens",
+        "usd",
+        "peak_context",
+        "rebuilt_weighted",
+        "unread_weighted"
+      ],
+      "type": "object"
+    },
+    "drain.Finding": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string"
+        },
+        "evidence": {
+          "type": "string"
+        },
+        "rule": {
+          "type": "string"
+        },
+        "severity": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule",
+        "severity",
+        "title",
+        "evidence",
+        "turn"
+      ],
+      "type": "object"
+    },
+    "drain.Line": {
+      "additionalProperties": false,
+      "properties": {
+        "calls": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "usd": {
+          "type": "number"
+        },
+        "weighted_tokens": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "name",
+        "calls",
+        "weighted_tokens",
+        "usd"
+      ],
+      "type": "object"
+    },
+    "drain.Rebuild": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "cause": {
+          "type": "string"
+        },
+        "differs": {
+          "type": "string"
+        },
+        "gap_ms": {
+          "type": "integer"
+        },
+        "request": {
+          "type": "string"
+        },
+        "ttl_ms": {
+          "type": "integer"
+        },
+        "turn": {
+          "type": "string"
+        },
+        "weighted_tokens": {
+          "type": "number"
+        },
+        "written": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "turn",
+        "request",
+        "cause",
+        "gap_ms",
+        "ttl_ms",
+        "written",
+        "weighted_tokens"
+      ],
+      "type": "object"
+    },
+    "drain.Resident": {
+      "additionalProperties": false,
+      "properties": {
+        "blocks": {
+          "type": "integer"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "token_calls": {
+          "type": "integer"
+        },
+        "tokens": {
+          "type": "integer"
+        },
+        "weighted_tokens": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "kind",
+        "blocks",
+        "tokens",
+        "token_calls",
+        "weighted_tokens"
+      ],
+      "type": "object"
+    },
+    "drain.Spend": {
+      "additionalProperties": false,
+      "properties": {
+        "calls": {
+          "type": "integer"
+        },
+        "usd": {
+          "type": "number"
+        },
+        "weighted_tokens": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "calls",
+        "weighted_tokens",
+        "usd"
+      ],
+      "type": "object"
+    },
+    "drain.Tokens": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_read": {
+          "type": "integer"
+        },
+        "cache_write_1h": {
+          "type": "integer"
+        },
+        "cache_write_5m": {
+          "type": "integer"
+        },
+        "input": {
+          "type": "integer"
+        },
+        "output": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "input",
+        "output",
+        "cache_read",
+        "cache_write_5m",
+        "cache_write_1h"
+      ],
+      "type": "object"
+    },
+    "drain.Weights": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_read": {
+          "type": "number"
+        },
+        "cache_write_1h": {
+          "type": "number"
+        },
+        "cache_write_5m": {
+          "type": "number"
+        },
+        "from": {
+          "type": "string"
+        },
+        "input": {
+          "type": "number"
+        },
+        "output": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "input",
+        "cache_write_5m",
+        "cache_write_1h",
+        "cache_read",
+        "output",
+        "from"
+      ],
+      "type": "object"
+    },
     "hook.Hook": {
       "additionalProperties": false,
       "properties": {
@@ -13307,6 +15043,21 @@
       ],
       "type": "object"
     },
+    "ledger.Charge": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "usd": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "type": "object"
+    },
     "ledger.Outcome": {
       "additionalProperties": false,
       "properties": {
@@ -13453,6 +15204,9 @@
         "build": {
           "type": "string"
         },
+        "charge": {
+          "$ref": "#/$defs/ledger.Charge"
+        },
         "cost": {
           "type": "number"
         },
@@ -13460,6 +15214,9 @@
           "type": "string"
         },
         "id": {
+          "type": "string"
+        },
+        "key": {
           "type": "string"
         },
         "latency_ms": {
@@ -13479,6 +15236,9 @@
         },
         "policy_version": {
           "type": "integer"
+        },
+        "provider": {
+          "type": "string"
         },
         "questions": {
           "type": "string"
@@ -13507,6 +15267,9 @@
         },
         "turn_id": {
           "type": "string"
+        },
+        "usage": {
+          "$ref": "#/$defs/ledger.Usage"
         },
         "verdict": {
           "type": "string"
@@ -13586,6 +15349,31 @@
       "required": [
         "comparison",
         "value"
+      ],
+      "type": "object"
+    },
+    "ledger.Usage": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_read_input_tokens": {
+          "type": "integer"
+        },
+        "cache_write_input_tokens": {
+          "type": "integer"
+        },
+        "input_tokens": {
+          "type": "integer"
+        },
+        "output_tokens": {
+          "type": "integer"
+        },
+        "reasoning_output_tokens": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "input_tokens",
+        "output_tokens"
       ],
       "type": "object"
     },
@@ -13764,6 +15552,9 @@
         "spawn_turn": {
           "type": "string"
         },
+        "start_ms": {
+          "type": "integer"
+        },
         "started_at": {
           "format": "date-time",
           "type": "string"
@@ -13836,6 +15627,74 @@
       ],
       "type": "object"
     },
+    "session.Origin": {
+      "additionalProperties": false,
+      "properties": {
+        "duration_ms": {
+          "type": "integer"
+        },
+        "exit": {
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "schedule": {
+          "type": "string"
+        },
+        "sub": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "sub"
+      ],
+      "type": "object"
+    },
+    "session.PromptPart": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "blob": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "off": {
+          "type": "boolean"
+        },
+        "per_turn": {
+          "type": "boolean"
+        },
+        "rule": {
+          "type": "string"
+        },
+        "tokens": {
+          "type": "integer"
+        },
+        "why": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "tokens"
+      ],
+      "type": "object"
+    },
     "session.Query": {
       "additionalProperties": false,
       "properties": {
@@ -13844,6 +15703,9 @@
         },
         "command": {
           "type": "string"
+        },
+        "failed": {
+          "type": "boolean"
         },
         "file": {
           "type": "string"
@@ -13880,10 +15742,141 @@
         },
         "outcome": {
           "type": "string"
+        },
+        "refused": {
+          "type": "boolean"
         }
       },
       "required": [
         "bytes"
+      ],
+      "type": "object"
+    },
+    "session.RequestParts": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "carried": {
+          "items": {
+            "$ref": "#/$defs/session.SentItem"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "prompt": {
+          "items": {
+            "$ref": "#/$defs/session.PromptPart"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "request": {
+          "type": "string"
+        },
+        "sent": {
+          "$ref": "#/$defs/session.SentBody"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "request",
+        "at",
+        "prompt",
+        "sent",
+        "carried"
+      ],
+      "type": "object"
+    },
+    "session.SentBody": {
+      "additionalProperties": false,
+      "properties": {
+        "added": {
+          "items": {
+            "$ref": "#/$defs/session.SentItem"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "dropped": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "images": {
+          "type": "integer"
+        },
+        "messages": {
+          "type": "integer"
+        },
+        "tokens": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "why": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "messages",
+        "tokens"
+      ],
+      "type": "object"
+    },
+    "session.SentItem": {
+      "additionalProperties": false,
+      "properties": {
+        "blob": {
+          "type": "string"
+        },
+        "from": {
+          "$ref": "#/$defs/session.Origin"
+        },
+        "images": {
+          "type": "integer"
+        },
+        "memory": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "role": {
+          "type": "string"
+        },
+        "tokens": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "blob",
+        "role",
+        "tokens"
       ],
       "type": "object"
     },
@@ -13944,6 +15937,9 @@
         },
         "first_sent_in": {
           "type": "string"
+        },
+        "from": {
+          "$ref": "#/$defs/session.Origin"
         },
         "origin": {
           "type": "string"
@@ -14794,6 +16790,9 @@
         "gate_verdict": {
           "type": "string"
         },
+        "hits": {
+          "type": "integer"
+        },
         "hooks": {
           "items": {
             "$ref": "#/$defs/turn.HookRun"
@@ -15601,6 +17600,26 @@
           "const": "2.0"
         },
         "method": {
+          "const": "session.member"
+        },
+        "params": {
+          "$ref": "#/$defs/SessionMembers"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
           "const": "settings.changed"
         },
         "params": {
@@ -15621,10 +17640,50 @@
           "const": "2.0"
         },
         "method": {
+          "const": "models.changed"
+        },
+        "params": {
+          "$ref": "#/$defs/ModelsChanged"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
           "const": "approval.resolved"
         },
         "params": {
           "$ref": "#/$defs/ApprovalResolved"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "approval.revoked"
+        },
+        "params": {
+          "$ref": "#/$defs/ApprovalRevoked"
         }
       },
       "required": [
@@ -15685,6 +17744,26 @@
         },
         "params": {
           "$ref": "#/$defs/Persisted"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "request.sent"
+        },
+        "params": {
+          "$ref": "#/$defs/RequestSent"
         }
       },
       "required": [
@@ -15859,6 +17938,9 @@
               "$ref": "#/$defs/SessionState"
             },
             {
+              "$ref": "#/$defs/StandingAnswer"
+            },
+            {
               "$ref": "#/$defs/SessionBranchResult"
             },
             {
@@ -15881,6 +17963,9 @@
             },
             {
               "$ref": "#/$defs/SessionTurns"
+            },
+            {
+              "$ref": "#/$defs/TurnDigest"
             },
             {
               "$ref": "#/$defs/ShellRunResult"
@@ -15989,6 +18074,12 @@
             },
             {
               "$ref": "#/$defs/SessionTrace"
+            },
+            {
+              "$ref": "#/$defs/DrainReport"
+            },
+            {
+              "$ref": "#/$defs/session.RequestParts"
             },
             {
               "$ref": "#/$defs/MentionResolved"
@@ -16106,6 +18197,7 @@
   "title": "tofu.host/1, every line tofu serve --stdio writes; clientMessage is every line it reads",
   "x-capabilities": [
     "approvals",
+    "revoke",
     "questions",
     "resync",
     "shells",
@@ -16140,6 +18232,7 @@
     "info",
     "find",
     "trace",
+    "drain",
     "accounts",
     "writes",
     "status",
@@ -16167,6 +18260,9 @@
     },
     "approval.resolved": {
       "$ref": "#/$defs/ApprovalResolved"
+    },
+    "approval.revoked": {
+      "$ref": "#/$defs/ApprovalRevoked"
     },
     "boardy.changed": {
       "$ref": "#/$defs/boardy.Changed"
@@ -16207,6 +18303,9 @@
     "message.user": {
       "$ref": "#/$defs/UserMessage"
     },
+    "models.changed": {
+      "$ref": "#/$defs/ModelsChanged"
+    },
     "note": {
       "$ref": "#/$defs/Said"
     },
@@ -16219,6 +18318,9 @@
     "quota.updated": {
       "$ref": "#/$defs/QuotaUpdated"
     },
+    "request.sent": {
+      "$ref": "#/$defs/RequestSent"
+    },
     "resync": {
       "$ref": "#/$defs/Resync"
     },
@@ -16230,6 +18332,9 @@
     },
     "session.listed": {
       "$ref": "#/$defs/SessionListed"
+    },
+    "session.member": {
+      "$ref": "#/$defs/SessionMembers"
     },
     "session.settings": {
       "$ref": "#/$defs/SessionSettings"
@@ -16315,6 +18420,14 @@
       },
       "result": {
         "$ref": "#/$defs/WriteReceipt"
+      }
+    },
+    "approval.revoke": {
+      "params": {
+        "$ref": "#/$defs/ApprovalRevokeParams"
+      },
+      "result": {
+        "$ref": "#/$defs/StandingAnswer"
       }
     },
     "boardy.answer": {
@@ -16709,6 +18822,14 @@
         "$ref": "#/$defs/DoctorReport"
       }
     },
+    "query.drain": {
+      "params": {
+        "$ref": "#/$defs/SessionParams"
+      },
+      "result": {
+        "$ref": "#/$defs/DrainReport"
+      }
+    },
     "query.hooks": {
       "params": {
         "$ref": "#/$defs/NoParams"
@@ -16763,6 +18884,14 @@
       },
       "result": {
         "$ref": "#/$defs/ModelsQuery"
+      }
+    },
+    "query.request": {
+      "params": {
+        "$ref": "#/$defs/RequestParams"
+      },
+      "result": {
+        "$ref": "#/$defs/session.RequestParts"
       }
     },
     "query.rules": {
@@ -16979,6 +19108,14 @@
       },
       "result": {
         "$ref": "#/$defs/SessionTrace"
+      }
+    },
+    "session.turn": {
+      "params": {
+        "$ref": "#/$defs/TurnReadParams"
+      },
+      "result": {
+        "$ref": "#/$defs/TurnDigest"
       }
     },
     "session.turns": {

@@ -8,7 +8,7 @@ use desk_ui::components::paint::{glyph, ink, pressed, ring, tint};
 use desk_ui::components::size::{T2, T3};
 use desk_ui::live::ActiveTheme;
 use desk_ui::metrics::ICON_SMALL;
-use desk_ui::theme::ColorToken;
+use desk_ui::theme::{ColorToken, Mode};
 use gpui::{
     ClickEvent, Context, PathPromptOptions, Render, SharedString, Window, div, prelude::*, px,
 };
@@ -140,7 +140,10 @@ impl Render for TerminalPage {
                     .flex_col()
                     .mb_2p5()
                     .rounded(px(CARD_RADIUS))
-                    .bg(tint(theme.color(ColorToken::Shadow), CARD_FILL))
+                    .bg(match theme.mode() {
+                        Mode::Dark => tint(theme.color(ColorToken::Shadow), CARD_FILL),
+                        Mode::Light => theme.color(ColorToken::CardsInnerFill),
+                    })
                     .shadow(vec![ring(ink(&theme, CARD_RING))])
                     .children(rows),
             )

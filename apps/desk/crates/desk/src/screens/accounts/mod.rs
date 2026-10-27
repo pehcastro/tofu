@@ -18,6 +18,7 @@ use desk_ui::components::form::TextArea;
 use desk_ui::components::overlay::{popover, toast};
 use desk_ui::components::paint::{ink, tint};
 use desk_ui::components::size::T3;
+use desk_ui::components::status_bar::source_mark;
 use desk_ui::live::ActiveTheme;
 use desk_ui::metrics::TOAST_BOTTOM;
 use desk_ui::theme::{ColorToken, Theme};
@@ -101,7 +102,7 @@ enum Row {
         account: AccountStatus,
         filled: bool,
     },
-    Key(KeyStatus),
+    Key(Box<KeyStatus>),
 }
 
 type Click = Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
@@ -151,7 +152,7 @@ impl Accounts {
                 })
         });
         Ok(subscriptions
-            .chain(read.value.keys.iter().cloned().map(Row::Key))
+            .chain(read.value.keys.iter().cloned().map(|key| Row::Key(Box::new(key))))
             .collect())
     }
 
@@ -335,6 +336,7 @@ impl Accounts {
             ),
         };
         row(theme)
+            .child(source_mark(source, theme))
             .child(
                 div()
                     .flex_1()
@@ -382,6 +384,7 @@ impl Accounts {
             None => small(format!("{held} \u{b7} {role}"), theme),
         };
         row(theme)
+            .child(source_mark(&key.provider, theme))
             .child(
                 div()
                     .flex_1()

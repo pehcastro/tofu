@@ -105,6 +105,7 @@ pub struct Kept {
 #[derive(Clone, PartialEq)]
 pub struct Remembered {
     pub session: Option<String>,
+    pub family: Option<String>,
     pub screens: Vec<Kept>,
     pub focus: String,
 }
@@ -151,6 +152,7 @@ fn parse_state(text: &str) -> Result<Remembered, String> {
         .collect::<Result<Vec<Kept>, String>>()?;
     Ok(Remembered {
         session: text_at(&state, "session"),
+        family: text_at(&state, "family"),
         screens,
         focus: text_at(&state, "focus").ok_or("it has no focus")?,
     })
@@ -170,6 +172,7 @@ pub fn write_state(folder: &Path, state: &Remembered) -> Result<(), String> {
     let text = serde_json::to_string_pretty(&json!({
         "version": STATE_VERSION,
         "session": state.session,
+        "family": state.family,
         "screens": screens,
         "focus": state.focus,
     }))
@@ -249,6 +252,18 @@ pub fn head(folder: PathBuf) -> Head {
     })
 }
 
+pub fn branches(folder: &Path) -> Result<Vec<String>, String> {
+    GitBinary::open(folder)
+        .and_then(|git| git.branches())
+        .map_err(|error| error.to_string())
+}
+
+pub fn switch(folder: &Path, branch: &str) -> Result<(), String> {
+    GitBinary::open(folder)
+        .and_then(|git| git.switch(branch))
+        .map_err(|error| error.to_string())
+}
+
 pub const ACTIVE_FOR: Duration = Duration::from_secs(3600);
 
 pub struct Opened<'a> {
@@ -257,7 +272,37 @@ pub struct Opened<'a> {
     pub statuses: &'a Statuses,
 }
 
-pub fn sidebar(head: &Head, rows: &[SessionRow], opened: &Opened) -> Project {
+#[derive(Default)]
+pub struct InactiveRows {
+    rows: Vec<SessionRow>,
+    active: Vec<String>,
+    sessions: Vec<Session>,
+}
+
+impl InactiveRows {
+    pub fn sessions(&mut self, rows: &[SessionRow], active: &[String]) -> Vec<Session> {
+        if self.rows != rows || self.active != active {
+            let now = SystemTime::now();
+            self.sessions = inactive(rows, active)
+                .map(|row| Session {
+                    name: row.title().to_owned().into(),
+                    state: SessionState::Stopped,
+                    age: row.age(now).unwrap_or_default().into(),
+                })
+                .collect();
+            self.rows = rows.to_vec();
+            self.active = active.to_vec();
+        }
+        self.sessions.clone()
+    }
+}
+
+pub fn sidebar(
+    head: &Head,
+    rows: &[SessionRow],
+    opened: &Opened,
+    inactive_rows: &mut InactiveRows,
+) -> Project {
     let now = SystemTime::now();
     let active = opened.active.iter().map(|id| {
         let row = rows.iter().find(|row| row.id == *id);
@@ -292,13 +337,7 @@ pub fn sidebar(head: &Head, rows: &[SessionRow], opened: &Opened) -> Project {
         changed: head.changed,
         shown,
         active: active.collect(),
-        inactive: inactive(rows, opened.active)
-            .map(|row| Session {
-                name: row.title().to_owned().into(),
-                state: SessionState::Stopped,
-                age: row.age(now).unwrap_or_default().into(),
-            })
-            .collect(),
+        inactive: inactive_rows.sessions(rows, opened.active),
     }
 }
 

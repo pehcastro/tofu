@@ -4,7 +4,7 @@ use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::inner_card;
 use desk_ui::components::composer::{
     Composer, ComposerVariant, HomeComposer, HomeProject, HomeSession, MentionGroup, MentionMenu,
-    MentionRow, SessionStatus, TraceChip,
+    MentionRow, SessionStatus, TraceChip, paperclip,
 };
 use desk_ui::components::form::TextArea;
 use desk_ui::components::glyph::Glyph;
@@ -39,14 +39,14 @@ const MENTIONED: [(Glyph, &str); 5] = [
     (Glyph::Trace, "quote#zzzzzz"),
 ];
 const BROKEN: &str = "not found: tofu has no recorded item with this id";
-const SAMPLES: [&str; 4] = [
-    "one chip",
-    "three chips",
-    "five chips, one broken",
-    "the @ menu",
+const SAMPLES: [(&str, usize); 5] = [
+    ("one chip", 1),
+    ("three chips", 3),
+    ("five chips, one broken", 5),
+    ("the @ menu", 1),
+    ("the / menu", 0),
 ];
 const SAMPLE_WIDTH: f32 = 520.0;
-const MENU_ROOM: f32 = 220.0;
 
 fn chips(count: usize) -> Vec<TraceChip> {
     let (broken, sound): (Vec<_>, Vec<_>) = MENTIONED
@@ -81,8 +81,8 @@ fn sample_menu(at: usize) -> Option<MentionMenu> {
         title: title.to_owned().into(),
         rows: rows(entries),
     };
-    (at == 3).then(|| MentionMenu {
-        groups: vec![
+    let groups = match at {
+        3 => vec![
             group(
                 "Files",
                 &[
@@ -92,8 +92,21 @@ fn sample_menu(at: usize) -> Option<MentionMenu> {
             ),
             group("Traces", &[(Glyph::Terminal, "dev-server", "bun run dev")]),
         ],
-        at: 0,
-    })
+        4 => vec![group(
+            "Commands",
+            &[
+                (
+                    Glyph::Code,
+                    "/compact",
+                    "fold the session so far into a summary",
+                ),
+                (Glyph::Code, "/model", "pick the model for the next turn"),
+                (Glyph::Code, "/review", "ask a reviewer to read the diff"),
+            ],
+        )],
+        _ => return None,
+    };
+    Some(MentionMenu { groups, at: 0 })
 }
 
 fn shared(names: &[&str]) -> Vec<SharedString> {
@@ -417,11 +430,14 @@ impl ComposerPage {
                     .collect(),
             )
             .queued(self.queued.clone())
-            .model(model)
-            .effort(effort)
+            .below_start(
+                paperclip("composer-clip", theme)
+                    .on_click(move |_, window, cx| attach(&(), window, cx)),
+            )
+            .below_end(model)
+            .below_end(effort)
             .on_send(cx.listener(|this, text: &str, _, cx| send(this, text, cx)))
             .on_stop(move |window, cx| stop(&(), window, cx))
-            .on_attach(move |window, cx| attach(&(), window, cx))
             .on_remove(move |at, window, cx| remove(&at, window, cx))
             .on_remove_trace(move |at, window, cx| untrace(&at, window, cx))
             .on_unqueue(move |at, window, cx| unqueue(&at, window, cx));
@@ -448,7 +464,7 @@ impl ComposerPage {
                 ),
         );
         let tile = block(
-            "ICHAT-1 idle and ICHAT-5 in a turn: Enter or Send starts a 3 s turn, Enter during it queues, Stop ends it and drops the queue",
+            "ICHAT-1 idle and ICHAT-5 in a turn: Enter or Send starts a 3 s turn, Enter during it queues, Stop ends it and drops the queue; the paperclip and the pickers sit below the box",
             theme,
             div()
                 .w(px(COMPOSER_WIDTH))
@@ -466,24 +482,27 @@ impl ComposerPage {
                 .map(|_| cx.new(|cx| TextArea::new(ASK.into(), window, cx).bare()))
                 .collect();
         }
-        let samples = self.samples.iter().enumerate().map(|(at, area)| {
-            let count = [1, 3, 5, 1].get(at).copied().unwrap_or(0);
-            let menu = sample_menu(at);
-            let room = if menu.is_some() { MENU_ROOM } else { 0.0 };
-            named(
-                SAMPLES.get(at).copied().unwrap_or_default(),
-                theme,
-                div().w(px(SAMPLE_WIDTH)).pt(px(room)).child(
-                    Composer::new(("composer-sample", at), area.clone())
-                        .variant(ComposerVariant::Grown)
-                        .traces(chips(count))
-                        .held(count == MENTIONED.len())
-                        .menu(menu, |_, _, _| {}),
-                ),
-            )
-        });
+        let samples =
+            self.samples
+                .iter()
+                .zip(SAMPLES)
+                .enumerate()
+                .map(|(at, (area, (name, count)))| {
+                    named(
+                        name,
+                        theme,
+                        div().w(px(SAMPLE_WIDTH)).child(
+                            Composer::new(("composer-sample", at), area.clone())
+                                .variant(ComposerVariant::Grown)
+                                .traces(chips(count))
+                                .held(count == MENTIONED.len())
+                                .menu(sample_menu(at), |_, _, _| {})
+                                .menu_in_flow(),
+                        ),
+                    )
+                });
         let states = block(
-            "DESK-250 mentions: 1, 3 and 5 chips with the +2 and a broken chip and the @ menu",
+            "DESK-250 mentions: 1, 3 and 5 chips with the +2 and a broken chip, the @ menu and the / menu",
             theme,
             div().flex().flex_col().gap_4().children(samples),
         );

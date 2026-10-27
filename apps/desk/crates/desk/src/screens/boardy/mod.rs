@@ -7,14 +7,16 @@ mod views;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
-use desk_core::boardy::{ALL_VIEW, BoardyStore, COLUMNS, Flow, Gate, engineers};
+use desk_core::boardy::{
+    ALL_VIEW, BoardyStore, COLUMNS, Flow, Gate, accounted, engineers, in_force,
+};
 use desk_core::limits::TOAST_LIFETIME;
 use desk_core::protocol::boardy::{
-    Actual, AnswerRequest, AskedQuestion, BoardsAnswer, Event, EventsRequest, GetRequest,
-    InitRequest, ListRequest, LogRequest, MoveRequest, PlanAnswer, PlanRequest, QuestionsRequest,
-    ReportAnswer, ReportRequest, Request as Asked, Ticket, TriageRequest,
+    AcceptanceLine, Actual, AnswerRequest, AskedQuestion, BoardsAnswer, Event, EventsRequest,
+    GetRequest, InitRequest, ListRequest, LogRequest, MoveRequest, PlanAnswer, PlanRequest,
+    QuestionsRequest, ReportAnswer, ReportRequest, Request as Asked, Ticket, TriageRequest,
 };
 use desk_core::protocol::request::{
     BoardyAnswer, BoardyBoards, BoardyEvents, BoardyGet, BoardyInit, BoardyLog, BoardyMove,
@@ -45,6 +47,7 @@ const DROPPED: &str = "dropped from the desk";
 const SCROLL_WINDOW_MS: u128 = 150;
 const MS_PER_SECOND: f64 = 1000.0;
 const COMMENT_LINES: usize = 8;
+const TICK: Duration = Duration::from_secs(1);
 
 #[derive(Clone, Debug, PartialEq, gpui::Action)]
 #[action(namespace = boardy, no_json)]
@@ -97,6 +100,7 @@ struct Opened {
     origin: Origin,
     body: Vec<Block>,
     acceptance: Vec<Block>,
+    accounted: Vec<AcceptanceLine>,
     said: Vec<ticket::Said>,
     ran: Vec<Option<String>>,
     lines: Vec<ticket::Line>,
@@ -116,6 +120,11 @@ pub struct Boardy {
     triage: BTreeMap<String, Vec<Asked>>,
     requesters: BTreeMap<String, Option<String>>,
     events_read: BTreeMap<String, i64>,
+    tails: BTreeMap<String, views::Tail>,
+    unfolded: Option<String>,
+    inbox: views::Inbox,
+    ticking: bool,
+    running_shown: bool,
     plans: BTreeMap<String, PlanAnswer>,
     questions: Vec<AskedQuestion>,
     naming: Option<Entity<TextInput>>,
@@ -127,6 +136,7 @@ pub struct Boardy {
     at: usize,
     opened: Option<Opened>,
     folded: Vec<Status>,
+    flipped: BTreeSet<String>,
     lines: Rc<Vec<views::Line>>,
     aimed: Option<String>,
     menu_at: Option<Point<Pixels>>,
@@ -151,6 +161,7 @@ pub struct Boardy {
     painted: bool,
     wheel: Option<Instant>,
     _toast: Option<Task<()>>,
+    _tick: Option<Task<()>>,
 }
 
 impl Boardy {
@@ -177,6 +188,11 @@ impl Boardy {
             triage: BTreeMap::new(),
             requesters: BTreeMap::new(),
             events_read: BTreeMap::new(),
+            tails: BTreeMap::new(),
+            unfolded: None,
+            inbox: views::Inbox::default(),
+            ticking: false,
+            running_shown: false,
             plans: BTreeMap::new(),
             questions: Vec::new(),
             naming: None,
@@ -188,6 +204,7 @@ impl Boardy {
             at: 0,
             opened: None,
             folded: Vec::new(),
+            flipped: BTreeSet::new(),
             lines: Rc::default(),
             aimed: None,
             menu_at: None,
@@ -212,6 +229,7 @@ impl Boardy {
             painted: false,
             wheel: None,
             _toast: None,
+            _tick: None,
         }
     }
 
@@ -230,6 +248,7 @@ impl Boardy {
         self.tofu = Some((chat.downgrade(), chat.entity_id()));
         chat.read(cx).project().clone_into(&mut self.project);
         self.events_read.clear();
+        self.tails.clear();
         self.requesters.clear();
         eprintln!(
             "desk: boardy reads from tofu in {}, flow {:?}",
@@ -335,6 +354,7 @@ impl Boardy {
                 Ok(answer) => {
                     eprintln!("desk: boardy questions {}", answer.questions.len());
                     boardy.questions = answer.questions;
+                    boardy.set_board();
                 }
                 Err(error) => boardy.fail(error),
             }
@@ -343,8 +363,17 @@ impl Boardy {
 
     fn answer_question(&mut self, ticket: String, id: i64, answer: String, cx: &mut Context<Self>) {
         eprintln!("desk: boardy answer {ticket} Q{id} with {answer}");
-        let params = AnswerRequest { answer, id, ticket };
-        self.send::<BoardyAnswer>(params, cx, |boardy, reply, cx| {
+        let params = AnswerRequest {
+            answer,
+            id,
+            ticket: ticket.clone(),
+        };
+        self.send::<BoardyAnswer>(params, cx, move |boardy, reply, cx| {
+            if reply.is_ok() {
+                boardy
+                    .questions
+                    .retain(|question| question.ticket != ticket || question.id != id);
+            }
             boardy.landed(reply, cx);
             boardy.ask_questions(cx);
         });
@@ -410,6 +439,7 @@ impl Boardy {
                 Ok(Err(error)) => boardy.fail(error.to_string()),
                 Err(error) => boardy.fail(error),
             }
+            boardy.set_board();
             cx.notify();
         });
         let events = EventsRequest {
@@ -419,7 +449,9 @@ impl Boardy {
         self.send::<BoardyEvents>(events, cx, |boardy, reply, cx| match reply {
             Ok(answer) => {
                 boardy.named(&answer.events);
+                views::heard(&mut boardy.tails, &answer.events);
                 boardy.events_read.insert(answer.board, answer.next);
+                boardy.set_board();
                 cx.notify();
             }
             Err(error) => boardy.fail(error),
@@ -467,7 +499,7 @@ impl Boardy {
         }
         let unread: BTreeSet<String> = requests
             .iter()
-            .filter_map(|request| request.by.split_once('/'))
+            .filter_map(|request| request.by.id.split_once('/'))
             .map(|(_, ticket)| ticket)
             .filter(|ticket| {
                 !self.requesters.contains_key(*ticket)
@@ -503,7 +535,7 @@ impl Boardy {
         eprintln!("desk: boardy reads request {id} in {board}");
         let origin = Origin::Request {
             id: request.id.clone(),
-            by: request.by.clone(),
+            by: request.by.id.clone(),
             at: request.at.clone(),
             board,
         };
@@ -685,6 +717,7 @@ impl Boardy {
             .collect();
         body_refs.extend(more);
         let said = ticket::said(&events, found);
+        let accounted = accounted(&in_force(&ticket.acceptance), &events);
         let ran = ticket::runners(&events);
         let lines = ticket::thread(&events, &said);
         let owned = ticket
@@ -699,6 +732,7 @@ impl Boardy {
         Opened {
             body,
             acceptance,
+            accounted,
             said,
             ran,
             lines,
@@ -751,6 +785,7 @@ impl Boardy {
                 );
                 let fresh = self.store.find(&id).is_none();
                 self.store.ticket_landed(answer.ticket);
+                self.set_board();
                 if fresh {
                     let board = id.split_once('-').map(|(board, _)| board.to_owned());
                     if let Some(board) = board {
@@ -922,6 +957,40 @@ impl Boardy {
             return;
         };
         self.move_to(id, to, cx);
+    }
+
+    fn set_board(&mut self) {
+        if let Some(key) = self.visible_board() {
+            self.inbox = views::inbox(self, &key);
+        }
+    }
+
+    fn tick(&mut self, cx: &mut Context<Self>) {
+        self.running_shown = true;
+        if self.ticking {
+            return;
+        }
+        self.ticking = true;
+        self._tick = Some(cx.spawn(async move |boardy, cx| {
+            loop {
+                cx.background_executor().timer(TICK).await;
+                let going = boardy.update(cx, |boardy, cx| {
+                    boardy.ticking = std::mem::take(&mut boardy.running_shown);
+                    if boardy.ticking {
+                        cx.notify();
+                    }
+                    boardy.ticking
+                });
+                match going {
+                    Ok(true) => {}
+                    Ok(false) => break,
+                    Err(error) => {
+                        eprintln!("desk: boardy closed while its timers ticked: {error}");
+                        break;
+                    }
+                }
+            }
+        }));
     }
 
     fn timed(&mut self, started: Instant) -> impl IntoElement + use<> {

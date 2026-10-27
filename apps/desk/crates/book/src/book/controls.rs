@@ -620,7 +620,7 @@ impl ControlsState {
             named(
                 if on { "on" } else { "off" },
                 theme,
-                switch(("switch", at), name, on, theme).on_click(cx.listener(
+                switch(("switch", at), *name, on, theme).on_click(cx.listener(
                     move |this, _: &ClickEvent, _, cx| {
                         if let Some(slot) = this.controls.switches.get_mut(at) {
                             *slot = !*slot;

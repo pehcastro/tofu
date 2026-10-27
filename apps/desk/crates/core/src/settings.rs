@@ -31,6 +31,7 @@ pub enum Value {
     Switch(bool),
     Number(i64),
     Text(String),
+    Choice(String, Vec<String>),
 }
 
 impl Value {
@@ -38,7 +39,7 @@ impl Value {
         match self {
             Value::Switch(on) => on.to_string(),
             Value::Number(number) => number.to_string(),
-            Value::Text(text) => text.clone(),
+            Value::Text(text) | Value::Choice(text, _) => text.clone(),
         }
     }
 }
@@ -124,7 +125,8 @@ impl TryFrom<SettingsReport> for Settings {
                 Json::Number(number) => number
                     .as_i64()
                     .map_or_else(|| Value::Text(number.to_string()), Value::Number),
-                Json::String(text) => Value::Text(text),
+                Json::String(text) if setting.choices.is_empty() => Value::Text(text),
+                Json::String(text) => Value::Choice(text, setting.choices),
                 other @ (Json::Null | Json::Array(_) | Json::Object(_)) => {
                     return Err(SettingsError::Value {
                         key: setting.key,

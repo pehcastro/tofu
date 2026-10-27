@@ -1,14 +1,19 @@
+use std::rc::Rc;
+
 use desk_ui::components::charts::{
-    AMBER, BarLayout, BarLook, Bars, ContextLine, ContextRibbon, Donut, DotColumns, DotGrid,
-    DotMeter, GridPart, LILAC, MINT, Mark, ROSE, Radar, RadarGrid, RadarLook, Radial, RadialShape,
-    RibbonBranch, RibbonNote, RibbonSegment, SKY, Said, Series, Slice, Sparkline, Trend, TrendFill,
-    TrendStroke, cached, hues, legend,
+    AMBER, BarLayout, BarLook, BarTick, Bars, ContextLine, ContextRibbon, Donut, DotColumns,
+    DotGrid, DotMeter, GridPart, LILAC, MINT, Mark, PartHovered, ROSE, Radar, RadarGrid, RadarLook,
+    Radial, RadialShape, RibbonBranch, RibbonNote, RibbonSegment, SKY, Said, Series, Slice,
+    Sparkline, Trend, TrendFill, TrendStroke, cached, hues, legend, segment_bar,
 };
 use desk_ui::components::chip::mono;
 use desk_ui::components::form::segmented;
 use desk_ui::components::paint::{ink, tint};
 use desk_ui::components::size::{T2, T3};
-use desk_ui::theme::Theme;
+use desk_ui::components::status_bar::meter_bar;
+use desk_ui::components::status_icon::{TicketStatus, status_icon};
+use desk_ui::live::ActiveTheme;
+use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
     AnyElement, App, Context, Div, Entity, FontWeight, Rgba, SharedString, Window, div, prelude::*,
     px, rgb,
@@ -513,6 +518,129 @@ const SKILL_USE: [(&str, u32, [f32; 6]); 2] = [
     ("codex-sub", SKY, [70.0, 84.0, 88.0, 52.0, 20.0, 34.0]),
 ];
 const ROUND_GAP: f32 = 16.0;
+const TICK_ICON: f32 = 12.0;
+const BREAKDOWN_TYPES: [&str; 3] = ["Feature", "Bug", "Chore"];
+const BREAKDOWN: [(TicketStatus, [f32; 3]); 6] = [
+    (TicketStatus::Backlog, [37.0, 32.0, 5.0]),
+    (TicketStatus::Todo, [72.0, 23.0, 14.0]),
+    (TicketStatus::Doing, [44.0, 37.0, 13.0]),
+    (TicketStatus::Review, [13.0, 22.0, 1.0]),
+    (TicketStatus::Done, [172.0, 69.0, 78.0]),
+    (TicketStatus::Dropped, [2.0, 9.0, 11.0]),
+];
+const BREAKDOWN_LIT: usize = 3;
+const BREAKDOWN_FOCUS: usize = 1;
+const SPENT: [(&str, f32, f32); 4] = [
+    ("Chat", 3881.0, 1.0),
+    ("Search", 1599.0, 0.7),
+    ("Image", 1092.0, 0.5),
+    ("API", 663.0, 0.35),
+];
+const ALLOWANCE: f32 = 10000.0;
+const SEATS: f32 = 0.8;
+const ISOLATED: usize = 5;
+
+fn breakdown_series(theme: &Theme) -> Vec<Series> {
+    let colors = [
+        theme.color(ColorToken::AnsiBlue),
+        theme.color(ColorToken::AnsiRed),
+        ink(theme, T2),
+    ];
+    BREAKDOWN_TYPES
+        .iter()
+        .zip(colors)
+        .enumerate()
+        .map(|(kind, (&name, color))| Series {
+            name: name.into(),
+            color,
+            values: BREAKDOWN
+                .iter()
+                .map(|(_, values)| values.get(kind).copied().unwrap_or(0.0))
+                .collect(),
+        })
+        .collect()
+}
+
+fn breakdown_tips(series: &[Series]) -> Vec<Said> {
+    BREAKDOWN
+        .iter()
+        .enumerate()
+        .map(|(slot, (status, values))| {
+            let mut rows: Vec<(&Series, f32)> = series
+                .iter()
+                .filter_map(|line| line.values.get(slot).map(|&value| (line, value)))
+                .collect();
+            rows.sort_by(|a, b| b.1.total_cmp(&a.1));
+            rows.iter().fold(
+                Said::titled(format!(
+                    "{} · {:.0}",
+                    status.label(),
+                    values.iter().sum::<f32>()
+                ))
+                .mark(Mark::Dot),
+                |said, (line, value)| {
+                    said.row(line.name.clone(), format!("{value:.0}"), Some(line.color))
+                },
+            )
+        })
+        .collect()
+}
+
+fn breakdown_bars(theme: &Theme, icons: bool) -> Bars {
+    let series = breakdown_series(theme);
+    let tips = breakdown_tips(&series);
+    let ticks = BREAKDOWN
+        .iter()
+        .map(|&(status, _)| BarTick {
+            name: status.label().into(),
+            icon: icons.then(|| {
+                Rc::new(move || status_icon(status, px(TICK_ICON)).into_any_element())
+                    as Rc<dyn Fn() -> AnyElement>
+            }),
+        })
+        .collect();
+    let labels = BREAKDOWN
+        .iter()
+        .map(|(status, _)| status.label().into())
+        .collect();
+    let mut bars =
+        Bars::new(series, labels, tips, BarLook::Split, BarLayout::Columns).ticked(ticks);
+    if icons {
+        bars.light(Some(BREAKDOWN_LIT));
+    } else {
+        bars.focus(Some(BREAKDOWN_FOCUS));
+    }
+    bars
+}
+
+fn spent(theme: &Theme) -> Vec<Slice> {
+    let blue = theme.color(ColorToken::AnsiBlue);
+    SPENT
+        .iter()
+        .map(|&(name, value, alpha)| Slice {
+            name: name.into(),
+            value,
+            color: tint(blue, alpha),
+        })
+        .collect()
+}
+
+fn meter_block(theme: &Theme) -> Div {
+    let parts = spent(theme);
+    div()
+        .flex()
+        .flex_col()
+        .gap_3()
+        .min_w_0()
+        .child(small("7,235 of 10,000 credits", T2, theme))
+        .child(segment_bar(&parts, ALLOWANCE, theme))
+        .child(legend(
+            parts.iter().map(|part| (part.name.clone(), part.color)),
+            theme,
+        ))
+        .child(small("Seats · 8 of 10 · meter_bar", T3, theme))
+        .child(meter_bar(SEATS, theme.color(ColorToken::StatusWarn), theme))
+}
 
 fn usage(lines: usize) -> Vec<Series> {
     USAGE
@@ -708,6 +836,8 @@ struct Charts {
     ribbon: Entity<ContextRibbon>,
     trends: Vec<Entity<Trend>>,
     bars: Vec<Entity<Bars>>,
+    breakdown: [Entity<Bars>; 2],
+    isolated: Entity<DotGrid>,
     agents: Entity<Bars>,
     donuts: [Entity<Donut>; 2],
     radials: [Entity<Radial>; 2],
@@ -716,7 +846,18 @@ struct Charts {
 
 impl Charts {
     fn new(ribbon_scale: f32, cx: &mut Context<Book>) -> Self {
+        let theme = ActiveTheme::theme(cx);
+        let isolated = cx.new(|_| DotGrid::new(parts(false), CAPACITY, FORK_AT, Some(ISOLATED)));
+        cx.subscribe(&isolated, |_, grid, hovered: &PartHovered, cx| {
+            grid.update(cx, |grid, cx| {
+                grid.highlight(hovered.0.or(Some(ISOLATED)));
+                cx.notify();
+            });
+        })
+        .detach();
         Charts {
+            breakdown: [true, false].map(|icons| cx.new(|_| breakdown_bars(&theme, icons))),
+            isolated,
             trends: TRENDS
                 .iter()
                 .map(|&(_, fill, stroke, lines, stacked, resting, tell)| {
@@ -1331,6 +1472,40 @@ impl ChartsPage {
                 plotted(cached(chart, cx).into_any_element(), keyed_usage(row.2)),
             )
         }));
+        let [lit, focused] = &charts.breakdown;
+        set.extend([
+            (
+                "Bars, split stack with ticks · a bar lit from outside, a series focused (breakdown-chart)",
+                plotted(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(ROUND_GAP))
+                        .min_w_0()
+                        .child(cached(lit, cx))
+                        .child(cached(focused, cx))
+                        .into_any_element(),
+                    breakdown_series(theme)
+                        .into_iter()
+                        .map(|line| (line.name, line.color))
+                        .collect(),
+                ),
+            ),
+            (
+                "segment_bar, one track in parts · meter_bar (usage-meter)",
+                meter_block(theme).into_any_element(),
+            ),
+            (
+                "DotGrid, one part lit, hover isolates a part (context-window)",
+                plotted(
+                    cached(&charts.isolated, cx).into_any_element(),
+                    parts(false)
+                        .into_iter()
+                        .map(|part| (part.name, part.color))
+                        .collect(),
+                ),
+            ),
+        ]);
         set.push((
             AGENT_BARS,
             plotted(

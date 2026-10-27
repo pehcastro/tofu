@@ -1,13 +1,16 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, App, Div, ElementId, FontWeight, Rgba, SharedString, Window, div, prelude::*, px,
+    AnyElement, App, AppContext, Div, ElementId, FontWeight, Rgba, SharedString, Stateful, Window,
+    div, prelude::*, px, relative,
 };
 
+use crate::components::avatar::NameTip;
 use crate::components::card::caption;
 use crate::components::chip::{Tone, kbd};
+use crate::components::overlay::{actions, context_menu};
 use crate::components::paint::{ink, pressed, ring, tint};
-use crate::components::size::T3;
+use crate::components::size::{FIELD_WIDTH, T3};
 use crate::theme::{ColorToken, Mode, Theme};
 
 const TITLE: f32 = 18.0;
@@ -27,17 +30,16 @@ const ROW_NAME: f32 = 13.5;
 const ROW_NAME_LINE: f32 = 16.0;
 const ROW_ABOUT: f32 = 12.5;
 const ROW_ABOUT_GAP: f32 = 3.0;
-const CONTROL_MIN: f32 = 96.0;
+const SCOPE_WIDTH: f32 = 88.0;
 const PILL_PAD_X: f32 = 7.0;
 const PILL_PAD_Y: f32 = 1.0;
 const PILL_TEXT: f32 = 11.0;
-const PILL_FILL: f32 = 0.06;
-const PILL_INK: f32 = 0.45;
 const TONE_LIVE: f32 = 0.12;
 const TONE_LINK: f32 = 0.14;
 const TONE_WARN: f32 = 0.14;
 const KEY_GAP: f32 = 4.0;
 const LIGHT_RULE_GAIN: f32 = 2.5;
+const HALF: f32 = 0.5;
 
 fn rule(theme: &Theme, alpha: f32) -> f32 {
     match theme.mode() {
@@ -54,11 +56,11 @@ pub enum Source {
 }
 
 impl Source {
-    fn label(self) -> &'static str {
+    fn written(self) -> &'static str {
         match self {
-            Source::Default => "default",
-            Source::Global => "global",
-            Source::Project => "project",
+            Source::Default => "Built in: nothing written for it yet",
+            Source::Global => "Written to your settings for every project",
+            Source::Project => "Written to this project's settings",
         }
     }
 }
@@ -88,12 +90,61 @@ fn toned(text: impl Into<SharedString>, tone: Tone, alpha: f32, theme: &Theme) -
     pill(text, tint(color, alpha), color)
 }
 
-pub fn source_pill(source: Source, theme: &Theme) -> Div {
-    match source {
-        Source::Default => pill(source.label(), ink(theme, PILL_FILL), ink(theme, PILL_INK)),
-        Source::Global => toned(source.label(), Tone::Link, TONE_LINK, theme),
-        Source::Project => toned(source.label(), Tone::Live, TONE_LIVE, theme),
-    }
+pub type OnScope = Rc<dyn Fn(&SharedString, Source, &mut Window, &mut App)>;
+
+const SCOPE_CHOICES: [(&str, Source); 2] = [
+    ("Set for this project", Source::Project),
+    ("Set globally", Source::Global),
+];
+
+fn scope_column(
+    id: &SharedString,
+    source: Source,
+    on_scope: Option<OnScope>,
+    theme: &Theme,
+) -> AnyElement {
+    let said = SharedString::from(source.written());
+    let pill = match source {
+        Source::Default => None,
+        Source::Global => Some(toned("Global", Tone::Link, TONE_LINK, theme)),
+        Source::Project => Some(toned("Project", Tone::Live, TONE_LIVE, theme)),
+    };
+    let column = div()
+        .id(SharedString::from(format!("{id}-scope")))
+        .flex_none()
+        .w(px(SCOPE_WIDTH))
+        .h_full()
+        .flex()
+        .items_center()
+        .justify_end()
+        .children(pill);
+    let Some(on_scope) = on_scope else {
+        return column
+            .tooltip(move |_, cx| cx.new(|_| NameTip(said.clone())).into())
+            .into_any_element();
+    };
+    let picked = id.clone();
+    context_menu(actions(SCOPE_CHOICES.map(|(label, _)| label)))
+        .id(SharedString::from(format!("{id}-scope-menu")))
+        .flex_none()
+        .self_stretch()
+        .on_pick(move |at, window, cx| {
+            if let Some((_, scope)) = SCOPE_CHOICES.get(*at) {
+                on_scope(&picked, *scope, window, cx);
+            }
+        })
+        .child(column)
+        .into_any_element()
+}
+
+fn control_column(id: SharedString, control: AnyElement) -> Stateful<Div> {
+    div()
+        .id(id)
+        .flex_none()
+        .w(px(FIELD_WIDTH))
+        .flex()
+        .justify_end()
+        .child(control)
 }
 
 pub fn page_title(
@@ -155,39 +206,102 @@ pub fn setting_row(row: SettingRow, theme: &Theme) -> Div {
                     )
                 }),
         )
-        .child(source_pill(row.source, theme))
-        .child(
-            div()
-                .id(row.id)
-                .min_w(px(CONTROL_MIN))
-                .flex()
-                .justify_end()
-                .child(row.control),
-        )
+        .child(scope_column(&row.id, row.source, None, theme))
+        .child(control_column(row.id, row.control))
 }
 
 pub fn setting_group(title: impl Into<SharedString>, rows: Vec<SettingRow>, theme: &Theme) -> Div {
     group_card(
         title,
+        None,
         rows.into_iter()
             .map(|row| setting_row(row, theme).into_any_element()),
         theme,
     )
 }
 
-pub fn setting_group_clickable(
-    title: impl Into<SharedString>,
-    rows: Vec<SettingRow>,
+pub struct Badge {
+    pub text: SharedString,
+    pub tone: Tone,
+}
+
+pub struct SettingSection {
+    pub title: SharedString,
+    pub about: Option<SharedString>,
+    pub rows: Vec<(SettingRow, Option<Badge>)>,
+}
+
+fn half_row(
+    row: SettingRow,
+    badge: Option<Badge>,
+    on_scope: Option<OnScope>,
+    theme: &Theme,
+) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap_x(px(ROW_GAP))
+        .py(px(ROW_PAD_Y))
+        .px_4()
+        .border_b_1()
+        .border_color(ink(theme, rule(theme, ROW_RULE)))
+        .child(
+            div()
+                .w(relative(HALF))
+                .min_w(px(LABEL_MIN))
+                .flex()
+                .flex_col()
+                .line_height(px(ROW_LINE))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(KEY_GAP))
+                        .text_size(px(ROW_NAME))
+                        .line_height(px(ROW_NAME_LINE))
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(row.name)
+                        .children(badge.map(|badge| {
+                            toned(badge.text, badge.tone, TONE_WARN, theme)
+                                .font_weight(FontWeight::NORMAL)
+                        })),
+                )
+                .when(!row.about.is_empty(), |text| {
+                    text.child(
+                        div()
+                            .mt(px(ROW_ABOUT_GAP))
+                            .text_size(px(ROW_ABOUT))
+                            .text_color(ink(theme, T3))
+                            .child(row.about),
+                    )
+                }),
+        )
+        .child(div().flex_1())
+        .child(scope_column(&row.id, row.source, on_scope, theme))
+        .child(control_column(row.id, row.control))
+}
+
+pub fn setting_section(section: SettingSection, on_scope: Option<OnScope>, theme: &Theme) -> Div {
+    let rows = section
+        .rows
+        .into_iter()
+        .map(|(row, badge)| half_row(row, badge, on_scope.clone(), theme).into_any_element());
+    group_card(section.title, section.about, rows, theme)
+}
+
+pub fn setting_section_clickable(
+    section: SettingSection,
     on_row_click: impl Fn(&SharedString, &mut Window, &mut App) + 'static,
+    on_scope: Option<OnScope>,
     theme: &Theme,
 ) -> Div {
     let on_row_click = Rc::new(on_row_click);
     let hover = theme.color(ColorToken::StateHover);
-    let rows = rows.into_iter().map(|row| {
+    let rows = section.rows.into_iter().map(|(row, badge)| {
         let id = row.id.clone();
         let click = on_row_click.clone();
         pressed(
-            setting_row(row, theme)
+            half_row(row, badge, on_scope.clone(), theme)
                 .id(ElementId::Name(id.clone()))
                 .cursor_pointer()
                 .hover(move |style| style.bg(hover)),
@@ -196,11 +310,12 @@ pub fn setting_group_clickable(
         .on_click(move |_, window, cx| click(&id, window, cx))
         .into_any_element()
     });
-    group_card(title, rows, theme)
+    group_card(section.title, section.about, rows, theme)
 }
 
 fn group_card(
     title: impl Into<SharedString>,
+    about: Option<SharedString>,
     rows: impl IntoIterator<Item = AnyElement>,
     theme: &Theme,
 ) -> Div {
@@ -208,7 +323,22 @@ fn group_card(
         .flex()
         .flex_col()
         .gap_1p5()
-        .child(caption(title, theme).pt_2p5().px(px(GROUP_PAD_X)).pb_2())
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .pt_2p5()
+                .px(px(GROUP_PAD_X))
+                .pb_2()
+                .child(caption(title, theme))
+                .children(about.map(|about| {
+                    div()
+                        .mt(px(ROW_ABOUT_GAP))
+                        .text_size(px(ROW_ABOUT))
+                        .text_color(ink(theme, T3))
+                        .child(about)
+                })),
+        )
         .child(
             div()
                 .flex()

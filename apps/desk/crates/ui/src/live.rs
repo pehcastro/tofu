@@ -5,6 +5,9 @@ use std::{fs, thread};
 
 use flume::{Receiver, RecvTimeoutError, Sender};
 use gpui::{App, Global};
+use serde_json::Value;
+
+use crate::components::tree::IconPack;
 
 use crate::metrics::THEME_POLL;
 use crate::theme::{Layer, Mode, Problem, Theme, ThemeError, build, build_mode, parse_layer};
@@ -47,12 +50,12 @@ struct Loaded {
     files: Vec<PathBuf>,
 }
 
-pub fn start(dir: PathBuf, name: String, cx: &mut App) -> Result<(), ThemeError> {
+pub fn start(dirs: Vec<PathBuf>, name: String, cx: &mut App) -> Result<(), ThemeError> {
     let Loaded {
         layers,
         mut problems,
         files,
-    } = load(&dir, &name);
+    } = load(&dirs, &name);
     let built = layers.and_then(|layers| match build(&layers, &mut problems) {
         Ok(theme) => Some((layers, theme)),
         Err(error) => {
@@ -71,7 +74,7 @@ pub fn start(dir: PathBuf, name: String, cx: &mut App) -> Result<(), ThemeError>
     });
     let watcher = thread::Builder::new()
         .name("theme watch".into())
-        .spawn(move || watch(&dir, &name, files, &sender, &stopped));
+        .spawn(move || watch(&dirs, &name, files, &sender, &stopped));
     if let Err(error) = watcher {
         problems.push(ThemeError::new(
             THEME_VARIABLE,
@@ -110,6 +113,28 @@ pub fn set_mode(mode: Mode, cx: &mut App) -> Result<(), ThemeError> {
     Ok(())
 }
 
+pub fn preview(dirs: &[PathBuf], name: &str, mode: Mode) -> Result<Theme, ThemeError> {
+    let mut problems = Vec::new();
+    let layers = chain(dirs, name, &mut Vec::new(), &mut problems)?;
+    build_mode(&layers, mode, &mut problems)
+}
+
+pub fn set_icons(file: &Path, pack: IconPack) -> Result<(), ThemeError> {
+    let fail = |problem| ThemeError::new(&file.display().to_string(), "icons", problem);
+    let text =
+        fs::read_to_string(file).map_err(|error| fail(Problem::Unreadable(error.to_string())))?;
+    let mut root: Value =
+        serde_json::from_str(&text).map_err(|error| fail(Problem::Syntax(error.to_string())))?;
+    let Some(object) = root.as_object_mut() else {
+        return Err(fail(Problem::NotAnObject));
+    };
+    object.insert("icons".to_owned(), Value::String(pack.key().to_owned()));
+    let written = serde_json::to_string_pretty(&root)
+        .map_err(|error| error.to_string())
+        .and_then(|json| fs::write(file, json + "\n").map_err(|error| error.to_string()));
+    written.map_err(|error| fail(Problem::Unwritable(error)))
+}
+
 fn apply(loaded: Loaded, cx: &mut App) {
     let Loaded {
         layers,
@@ -137,7 +162,7 @@ fn apply(loaded: Loaded, cx: &mut App) {
 }
 
 fn watch(
-    dir: &Path,
+    dirs: &[PathBuf],
     name: &str,
     mut files: Vec<PathBuf>,
     sender: &Sender<Loaded>,
@@ -149,7 +174,7 @@ fn watch(
         if current == seen {
             continue;
         }
-        let loaded = load(dir, name);
+        let loaded = load(dirs, name);
         seen = if loaded.files == files {
             current
         } else {
@@ -179,10 +204,10 @@ fn built_in() -> Result<(Vec<Layer>, Theme), ThemeError> {
     }
 }
 
-fn load(dir: &Path, name: &str) -> Loaded {
+fn load(dirs: &[PathBuf], name: &str) -> Loaded {
     let mut problems = Vec::new();
     let mut files = Vec::new();
-    let layers = match chain(dir, name, &mut files, &mut problems) {
+    let layers = match chain(dirs, name, &mut files, &mut problems) {
         Ok(layers) => Some(layers),
         Err(error) => {
             problems.insert(0, error);
@@ -197,7 +222,7 @@ fn load(dir: &Path, name: &str) -> Loaded {
 }
 
 fn chain(
-    dir: &Path,
+    dirs: &[PathBuf],
     name: &str,
     files: &mut Vec<PathBuf>,
     problems: &mut Vec<ThemeError>,
@@ -213,8 +238,14 @@ fn chain(
             return Err(fail(Problem::ExtendsLoop(trail)));
         }
         let file = file_name(&name).ok_or_else(|| fail(Problem::NotAName(name.clone())))?;
-        let path = dir.join(&file);
-        files.push(path.clone());
+        let candidates: Vec<PathBuf> = dirs.iter().map(|dir| dir.join(&file)).collect();
+        let path = candidates
+            .iter()
+            .find(|path| path.is_file())
+            .or(candidates.first())
+            .cloned()
+            .ok_or_else(|| fail(Problem::NotAName(name.clone())))?;
+        files.extend(candidates);
         let text = fs::read_to_string(&path)
             .map_err(|error| fail(Problem::Unreadable(format!("{}: {error}", path.display()))))?;
         let parsed = parse_layer(&file, &text, problems)?;

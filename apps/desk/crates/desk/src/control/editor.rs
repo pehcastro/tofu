@@ -4,7 +4,7 @@ use gpui::{AnyWindowHandle, App};
 use super::change::Answered;
 
 #[cfg(feature = "module-editor")]
-pub use enabled::answer;
+pub use enabled::{answer, open_cited};
 
 #[cfg(not(feature = "module-editor"))]
 pub fn answer(_: &Call, _: AnyWindowHandle, _: &mut App) -> Answered {
@@ -371,34 +371,14 @@ mod enabled {
                     .to_owned(),
             ));
         }
-        let (path, spot) = spot(path);
-        let line = line.or(spot.first().copied()).unwrap_or(1);
-        let col = col.or(spot.get(1).copied()).unwrap_or(1);
-        let (Some(row), Some(column)) = (from_one(line), from_one(col)) else {
-            return Err((ErrorCode::BadParams, "line and col count from 1".to_owned()));
-        };
-        let full = inside_project(path, cx)?;
+        let (full, caret, dirty) = desk
+            .update(cx, |desk, window, cx| {
+                land(path, *line, *col, desk, window, cx)
+            })
+            .map_err(gone)??;
         let size = std::fs::metadata(&full)
             .map_err(|error| (ErrorCode::NotFound, format!("{}: {error}", full.display())))?
             .len();
-        let (caret, dirty) = desk
-            .update(cx, |desk, window, cx| {
-                desk.open_screen("editor", window, cx)
-                    .map_err(|error| (ErrorCode::Refused, error))?;
-                let editor = desk.editor().ok_or((
-                    ErrorCode::Refused,
-                    "the editor screen holds no editor".to_owned(),
-                ))?;
-                editor.update(cx, |editor, cx| {
-                    editor.land(&full, row, column, window, cx);
-                    let caret = caret_of(editor, &full, cx)?;
-                    let dirty = editor
-                        .active_code()
-                        .is_some_and(|(_, code)| code.read(cx).buffer().is_dirty());
-                    Ok::<_, Refused>((caret, dirty))
-                })
-            })
-            .map_err(gone)??;
         json(&FileOpened {
             tile: 0,
             tab: 0,
@@ -407,6 +387,50 @@ mod enabled {
             col: caret.c,
             size,
             dirty,
+        })
+    }
+
+    pub fn open_cited(
+        cited: &str,
+        desk: &mut Desk,
+        window: &mut Window,
+        cx: &mut Context<Desk>,
+    ) -> Result<(), String> {
+        land(cited, None, None, desk, window, cx)
+            .map(|(full, caret, _)| {
+                eprintln!("desk: chat opened {}:{}", full.display(), caret.l);
+            })
+            .map_err(|(_, why)| why)
+    }
+
+    fn land(
+        asked: &str,
+        line: Option<u32>,
+        col: Option<u32>,
+        desk: &mut Desk,
+        window: &mut Window,
+        cx: &mut Context<Desk>,
+    ) -> Result<(PathBuf, Position, bool), Refused> {
+        let (path, spot) = spot(asked);
+        let line = line.or(spot.first().copied()).unwrap_or(1);
+        let col = col.or(spot.get(1).copied()).unwrap_or(1);
+        let (Some(row), Some(column)) = (from_one(line), from_one(col)) else {
+            return Err((ErrorCode::BadParams, "line and col count from 1".to_owned()));
+        };
+        let full = inside_project(path, cx)?;
+        desk.open_screen("editor", window, cx)
+            .map_err(|error| (ErrorCode::Refused, error))?;
+        let editor = desk.editor().ok_or((
+            ErrorCode::Refused,
+            "the editor screen holds no editor".to_owned(),
+        ))?;
+        editor.update(cx, |editor, cx| {
+            editor.land(&full, row, column, window, cx);
+            let caret = caret_of(editor, &full, cx)?;
+            let dirty = editor
+                .active_code()
+                .is_some_and(|(_, code)| code.read(cx).buffer().is_dirty());
+            Ok((full.clone(), caret, dirty))
         })
     }
 

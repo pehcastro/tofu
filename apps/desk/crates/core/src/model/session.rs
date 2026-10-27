@@ -1,17 +1,19 @@
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use super::ModelError;
 use crate::protocol::{
-    AccountStateChanged, AgentState, ApprovalRequest, CronState, DecisionMade, FileEdit,
-    FileEditOp, ModelPick, Notification, Origin, OriginKind, PlanStep, QuestionRequest,
-    QuotaWindow, RequestId, RunningTurn, SessionForked, SettingsChanged, ShellHolder, ShellKept,
-    ShellNow, ShellNowState, ShellReady, TurnAccount, TurnCompletedStatus, TurnDigest,
-    UsageUpdated,
+    AccountStateChanged, AgentNow, AgentState, ApprovalRequest, CronState, DecisionMade, FileEdit,
+    FileEditOp, GroupSummary, Member, MessageImage, ModelPick, Notification, Origin, OriginKind,
+    OriginSub, PlanStep, QuestionRequest, QuotaWindow, RequestId, RunningTurn, SessionForked,
+    SettingsChanged, ShellHolder, ShellKept, ShellNow, ShellNowState, ShellReady, ToolCard,
+    ToolSummary, TurnAccount, TurnCompletedStatus, TurnDigest, UsageUpdated,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Role {
     User,
+    Inbox,
     Cron { job: String, schedule: String },
     Assistant,
     Thinking,
@@ -20,6 +22,7 @@ pub enum Role {
     Taken,
     Note,
     Failure,
+    Harness(OriginSub),
 }
 
 #[derive(Debug, Clone)]
@@ -28,15 +31,19 @@ pub struct Message {
     pub agent: Option<String>,
     pub role: Role,
     pub text: String,
+    pub images: Vec<(u32, PathBuf)>,
     pub complete: bool,
+    pub at: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Turn {
     pub task: String,
+    pub images: Vec<(u32, PathBuf)>,
     pub origin: Origin,
     pub started_at: String,
     pub status: Option<TurnCompletedStatus>,
+    pub lead_idle: bool,
     pub worked_for_ms: i64,
     pub account: Option<TurnAccount>,
     pub digest: Option<TurnDigest>,
@@ -45,11 +52,15 @@ pub struct Turn {
 #[derive(Debug, Clone)]
 pub struct Tool {
     pub name: String,
+    pub title: Option<String>,
     pub agent: Option<String>,
     pub instance: Option<String>,
     pub mention: Option<String>,
     pub args: serde_json::Value,
     pub output: Option<String>,
+    pub summary: Option<ToolSummary>,
+    pub card: Option<ToolCard>,
+    pub group: Option<String>,
     pub failed: bool,
     pub started_at: Option<String>,
     pub ended_at: Option<String>,
@@ -70,6 +81,7 @@ pub struct Agent {
     pub ended_at: Option<String>,
     pub thinking: String,
     pub mention: Option<String>,
+    pub ticket: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -94,6 +106,40 @@ pub struct Shell {
     pub holder: ShellHolder,
     pub held_since: Option<String>,
     pub raw: Option<Vec<(i64, String)>>,
+    pub output_end: i64,
+    pub released_at: Option<i64>,
+}
+
+impl Shell {
+    pub fn output_at(&self, offset: i64) -> usize {
+        let behind = self
+            .output_end
+            .checked_sub(offset)
+            .and_then(|behind| usize::try_from(behind).ok())
+            .unwrap_or(0);
+        let at = self.output.len().saturating_sub(behind);
+        (at..=self.output.len())
+            .find(|&at| self.output.is_char_boundary(at))
+            .unwrap_or(self.output.len())
+    }
+
+    fn append(&mut self, offset: i64, text: &str) {
+        let skip = self
+            .released_at
+            .and_then(|released| released.checked_sub(offset))
+            .and_then(|skip| usize::try_from(skip).ok())
+            .unwrap_or(0)
+            .min(text.len());
+        let skip = (skip..=text.len())
+            .find(|&at| text.is_char_boundary(at))
+            .unwrap_or(text.len());
+        self.output.push_str(text.get(skip..).unwrap_or_default());
+        let end = i64::try_from(text.len())
+            .ok()
+            .and_then(|length| offset.checked_add(length))
+            .unwrap_or(i64::MAX);
+        self.output_end = self.output_end.max(end);
+    }
 }
 
 fn holder(holder: Option<&ShellHolder>) -> Result<ShellHolder, ModelError> {
@@ -131,7 +177,9 @@ pub struct Session {
     pub turns: BTreeMap<String, Turn>,
     pub messages: Vec<Message>,
     pub tools: BTreeMap<String, Tool>,
+    pub stretches: BTreeMap<String, GroupSummary>,
     pub agents: BTreeMap<String, Agent>,
+    pub running: BTreeMap<String, AgentState>,
     pub files: BTreeMap<String, Vec<FileEdit>>,
     pub shells: BTreeMap<String, Shell>,
     pub decisions: Vec<DecisionMade>,
@@ -146,6 +194,7 @@ pub struct Session {
     pub dropped: i64,
     pub account: Option<AccountStateChanged>,
     pub settings: BTreeMap<String, SettingsChanged>,
+    pub members: Vec<Member>,
 }
 
 fn known(state: &AgentState) -> Result<AgentState, ModelError> {
@@ -164,7 +213,14 @@ fn speaker(origin: &Origin) -> Result<Role, ModelError> {
             job: origin.job.clone().unwrap_or_default(),
             schedule: origin.schedule.clone().unwrap_or_default(),
         }),
-        OriginKind::Person | OriginKind::Agent | OriginKind::Tofu => Ok(Role::User),
+        OriginKind::Agent => Ok(Role::Inbox),
+        OriginKind::Person => Ok(Role::User),
+        OriginKind::Tofu
+        | OriginKind::Hook
+        | OriginKind::Memory
+        | OriginKind::Skill
+        | OriginKind::Library
+        | OriginKind::Plugin => Ok(Role::Harness(origin.sub.clone())),
         OriginKind::Unknown(value) => Err(ModelError::UnknownValue {
             field: "origin kind",
             value: value.clone(),
@@ -172,11 +228,29 @@ fn speaker(origin: &Origin) -> Result<Role, ModelError> {
     }
 }
 
+fn attached(images: &[MessageImage]) -> Result<Vec<(u32, PathBuf)>, ModelError> {
+    images
+        .iter()
+        .map(|image| {
+            let n = u32::try_from(image.n).map_err(|_| ModelError::UnknownValue {
+                field: "image number",
+                value: image.n.to_string(),
+            })?;
+            Ok((n, PathBuf::from(&image.path)))
+        })
+        .collect()
+}
+
 fn stamp<Zone: chrono::TimeZone>(at: &chrono::DateTime<Zone>) -> String
 where
     Zone::Offset: std::fmt::Display,
 {
     at.to_rfc3339_opts(chrono::SecondsFormat::AutoSi, true)
+}
+
+fn earlier(known: &str, said: &str) -> bool {
+    let at = chrono::DateTime::parse_from_rfc3339;
+    matches!((at(known), at(said)), (Ok(known), Ok(said)) if known < said)
 }
 
 fn orphan(event: &'static str, id: &str) -> ModelError {
@@ -241,6 +315,8 @@ impl Session {
                     holder: ShellHolder::Agent,
                     held_since: None,
                     raw: None,
+                    output_end: 0,
+                    released_at: None,
                 });
             match &later.state {
                 ShellNowState::Running => {}
@@ -272,9 +348,49 @@ impl Session {
         Ok(())
     }
 
+    pub(super) fn agents_now(&mut self, now: &[AgentNow]) -> Result<(), ModelError> {
+        self.running.clear();
+        for live in now {
+            let state = known(&live.state)?;
+            self.running.insert(live.instance.clone(), state.clone());
+            let agent = self
+                .agents
+                .entry(live.instance.clone())
+                .or_insert_with(|| Agent {
+                    number: 0,
+                    kind: live.kind.clone(),
+                    model: live.model.clone(),
+                    task: live.task.clone(),
+                    owns: live.owns.clone(),
+                    state: state.clone(),
+                    report: None,
+                    steps: 0,
+                    tokens: 0,
+                    started_at: Some(live.started_at.clone()),
+                    ended_at: None,
+                    thinking: String::new(),
+                    mention: None,
+                    ticket: None,
+                });
+            agent.state = state;
+            agent.ended_at = None;
+            agent.steps = live.steps;
+            agent.tokens = live.tokens;
+        }
+        Ok(())
+    }
+
+    fn held(&self, instance: &str, state: AgentState) -> AgentState {
+        match (state, self.running.get(instance)) {
+            (AgentState::Parked, Some(running)) => running.clone(),
+            (state, _) => state,
+        }
+    }
+
     pub fn reset_transcript(&mut self) {
         self.messages.clear();
         self.tools.clear();
+        self.stretches.clear();
         self.agents.clear();
         self.files.clear();
         self.decisions.clear();
@@ -284,37 +400,48 @@ impl Session {
     pub(super) fn running_now(&mut self, turn: &RunningTurn) {
         self.turns.entry(turn.id.clone()).or_insert_with(|| Turn {
             task: turn.task.clone(),
+            images: Vec::new(),
             origin: Origin {
                 job: None,
                 kind: OriginKind::Tofu,
                 name: None,
                 schedule: None,
-                source: None,
+                sub: OriginSub::Continue,
+                id: None,
+                exit: None,
+                duration_ms: None,
             },
             started_at: turn.started_at.clone(),
             status: None,
+            lead_idle: false,
             worked_for_ms: 0,
             account: None,
             digest: None,
         });
     }
 
-    pub fn queue(&mut self, turn: &str, item: &str, text: &str) {
+    pub fn queue(&mut self, turn: &str, item: &str, text: &str, images: Vec<(u32, PathBuf)>) {
         let queued = Role::Queued(item.to_owned());
         if !self.messages.iter().any(|m| m.role == queued) {
             self.say(turn, &None, queued, text, false);
+            if let Some(message) = self.messages.last_mut() {
+                message.images = images;
+            }
         }
     }
 
     pub fn taken(&mut self, item: &str) {
-        self.settle(item, Role::Taken);
+        self.settle(item, Role::Taken, &mut Vec::new());
     }
 
-    fn settle(&mut self, item: &str, role: Role) -> bool {
+    fn settle(&mut self, item: &str, role: Role, images: &mut Vec<(u32, PathBuf)>) -> bool {
         let queued = Role::Queued(item.to_owned());
         let Some(message) = self.messages.iter_mut().find(|m| m.role == queued) else {
             return false;
         };
+        if message.images.is_empty() {
+            message.images = std::mem::take(images);
+        }
         message.role = role;
         message.complete = true;
         true
@@ -326,7 +453,9 @@ impl Session {
             agent: agent.clone(),
             role,
             text: text.to_owned(),
+            images: Vec::new(),
             complete,
+            at: None,
         });
     }
 
@@ -372,13 +501,22 @@ impl Session {
             }
             N::TurnStarted(e) => {
                 speaker(&e.origin)?;
+                let started_at = self
+                    .turns
+                    .get(&e.turn)
+                    .map(|known| known.started_at.as_str())
+                    .filter(|known| earlier(known, &e.started_at))
+                    .unwrap_or(&e.started_at)
+                    .to_owned();
                 self.turns.insert(
                     e.turn.clone(),
                     Turn {
                         task: e.task.clone(),
+                        images: attached(&e.images)?,
                         origin: e.origin.clone(),
-                        started_at: e.started_at.clone(),
+                        started_at,
                         status: None,
+                        lead_idle: false,
                         worked_for_ms: 0,
                         account: None,
                         digest: None,
@@ -426,18 +564,44 @@ impl Session {
                 turn.worked_for_ms = e.worked_for_ms;
             }
             N::MessageUser(e) => {
-                let role = speaker(&e.origin)?;
-                self.say(&e.turn, &e.agent, role, &e.text, true);
+                self.messages.push(Message {
+                    turn: e.turn.clone(),
+                    agent: e.agent.clone(),
+                    role: speaker(&e.origin)?,
+                    text: e.text.clone(),
+                    images: attached(&e.images)?,
+                    complete: true,
+                    at: e.sent_at.clone(),
+                });
             }
             N::TurnSteered(e) => {
-                if !self.settle(&e.item, Role::Steer) {
+                let mut images = attached(&e.images)?;
+                if !self.settle(&e.item, Role::Steer, &mut images) {
                     self.say(&e.turn, &e.agent, Role::Steer, &e.text, true);
+                    if let Some(message) = self.messages.last_mut() {
+                        message.images = images;
+                    }
+                }
+                if let Some(steer) = self
+                    .messages
+                    .iter_mut()
+                    .rev()
+                    .find(|m| m.role == Role::Steer && m.text == e.text)
+                {
+                    steer.at = Some(e.read_at.clone());
                 }
             }
-            N::TurnSteerQueued(e) if e.agent.is_none() => self.queue(&e.turn, &e.item, &e.text),
+            N::TurnSteerQueued(e) if e.agent.is_none() => {
+                self.queue(&e.turn, &e.item, &e.text, attached(&e.images)?);
+            }
             N::Note(e) => self.say(&e.turn, &e.agent, Role::Note, &e.text, true),
             N::Failure(e) => self.say(&e.turn, &e.agent, Role::Failure, &e.text, true),
-            N::MessageStarted(e) => self.say(&e.turn, &e.agent, Role::Assistant, "", false),
+            N::MessageStarted(e) => {
+                self.say(&e.turn, &e.agent, Role::Assistant, "", false);
+                if let Some(message) = self.messages.last_mut() {
+                    message.at.clone_from(&e.at);
+                }
+            }
             N::MessageDelta(e) => self
                 .open_message(&e.turn, &e.agent, Role::Assistant)
                 .text
@@ -464,11 +628,15 @@ impl Session {
                     e.item.clone(),
                     Tool {
                         name: e.tool.clone(),
+                        title: e.title.clone(),
                         agent: e.agent.clone(),
                         instance: e.instance.clone(),
                         mention: e.r#ref.clone(),
                         args: e.args.clone(),
                         output: None,
+                        summary: None,
+                        card: e.card.clone(),
+                        group: e.group.clone(),
                         failed: false,
                         started_at: Some(e.started_at.clone()),
                         ended_at: None,
@@ -484,7 +652,17 @@ impl Session {
                     .get_mut(&e.item)
                     .ok_or_else(|| orphan("tool.completed", &e.item))?;
                 tool.output = Some(e.output.clone());
+                tool.summary = Some(e.summary.clone());
                 tool.failed = e.failed;
+                if e.card.is_some() {
+                    tool.card.clone_from(&e.card);
+                }
+                if e.group.is_some() {
+                    tool.group.clone_from(&e.group);
+                }
+                if let (Some(group), Some(summary)) = (&tool.group, &e.group_summary) {
+                    self.stretches.insert(group.clone(), summary.clone());
+                }
                 tool.ended_at = tool
                     .started_at
                     .as_deref()
@@ -506,7 +684,7 @@ impl Session {
                         model: e.model.clone(),
                         task: e.task.clone(),
                         owns: e.owns.clone(),
-                        state: known(&e.state)?,
+                        state: self.held(&e.instance, known(&e.state)?),
                         report: None,
                         steps: 0,
                         tokens: 0,
@@ -514,16 +692,22 @@ impl Session {
                         ended_at: None,
                         thinking: String::new(),
                         mention: e.r#ref.clone(),
+                        ticket: e.ticket.clone(),
                     },
                 );
             }
             N::AgentUpdated(e) => {
+                let state = e
+                    .state
+                    .as_ref()
+                    .map(|state| Ok(self.held(&e.instance, known(state)?)))
+                    .transpose()?;
                 let agent = self
                     .agents
                     .get_mut(&e.instance)
                     .ok_or_else(|| orphan("agent.updated", &e.instance))?;
-                if let Some(state) = &e.state {
-                    agent.state = known(state)?;
+                if let Some(state) = state {
+                    agent.state = state;
                 }
                 if let Some(model) = &e.model {
                     agent.model.clone_from(model);
@@ -538,6 +722,7 @@ impl Session {
                 agent.tokens = e.tokens.unwrap_or(agent.tokens);
             }
             N::AgentEnded(e) => {
+                self.running.remove(&e.instance);
                 let agent = self
                     .agents
                     .get_mut(&e.instance)
@@ -582,6 +767,8 @@ impl Session {
                         holder: holder(e.holder.as_ref())?,
                         held_since: e.held_since.clone(),
                         raw: None,
+                        output_end: 0,
+                        released_at: None,
                     },
                 );
             }
@@ -592,6 +779,7 @@ impl Session {
                     .ok_or_else(|| orphan("shell.holder", &e.shell))?;
                 shell.holder = holder(Some(&e.holder))?;
                 shell.held_since = (shell.holder == ShellHolder::Person).then(|| e.since.clone());
+                shell.released_at = (shell.holder != ShellHolder::Person).then_some(e.offset);
             }
             N::ShellRaw(e) => {
                 let shell = self
@@ -607,7 +795,7 @@ impl Session {
                     .shells
                     .get_mut(&e.shell)
                     .ok_or_else(|| orphan("shell.output", &e.shell))?;
-                shell.output.push_str(&e.text);
+                shell.append(e.offset, &e.text);
             }
             N::ShellExited(e) => {
                 let shell = self
@@ -625,6 +813,10 @@ impl Session {
                     .remove(&e.approval)
                     .ok_or_else(|| orphan("approval.resolved", &e.approval))?;
             }
+            N::ApprovalRevoked(e) => self
+                .approvals
+                .retain(|_, (_, asked)| asked.target != e.target || asked.agent != e.agent),
+            N::ModelsChanged(_) => {}
             N::PlanUpdated(e) => self.plan.clone_from(&e.items),
             N::QuotaUpdated(e) => self.quota.clone_from(&e.windows),
             N::ContextUpdated(e) => self.context = Some((e.used, e.budget)),
@@ -638,16 +830,27 @@ impl Session {
             }
             N::Resync(e) => self.dropped = self.dropped.saturating_add(e.dropped),
             N::SessionSettings(e) => self.pick = Some(e.pick.clone()),
+            N::SessionMember(e) => self.members.clone_from(&e.members),
             N::QuestionResolved(e) => {
                 self.questions
                     .remove(&e.question)
                     .ok_or_else(|| orphan("question.resolved", &e.question))?;
             }
+            N::ItemPersisted(e) if e.agent.is_none() => {
+                if let Some(turn) = self.turns.get_mut(&e.turn) {
+                    match e.kind.as_str() {
+                        "turn_start" => turn.lead_idle = false,
+                        "turn_end" => turn.lead_idle = true,
+                        _ => {}
+                    }
+                }
+            }
             N::ItemPersisted(_)
             | N::SessionListed(_)
             | N::Status(_)
             | N::MemoryScoped(_)
-            | N::TurnSteerQueued(_) => {}
+            | N::TurnSteerQueued(_)
+            | N::RequestSent(_) => {}
             N::SessionForked(e) => self.forks.push((**e).clone()),
             N::Unknown { method, .. } => return Err(ModelError::UnknownEvent(method.clone())),
         }

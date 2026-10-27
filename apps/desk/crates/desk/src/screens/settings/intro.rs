@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::{Header, caption, inner_card, shell};
-use desk_ui::components::form::switch;
+use desk_ui::components::form::switch_bare;
 use desk_ui::components::list::separator;
 use desk_ui::components::paint::{halo, ink, ring, tint};
 use desk_ui::components::scroll::ScrollArea;
@@ -20,7 +20,9 @@ use super::fixture::{
     ADD_IMAGE_TELL, EFFORT, Effect, IMAGE_DIR, IMAGES, LATEST_SESSION, MODEL, OPEN_INTRO_TELL,
     PROJECT,
 };
+use super::stored::Stored;
 
+const HIDE_RESUME: &str = "intro.hide_resume";
 const TITLE: f32 = 19.0;
 const DESC: f32 = 13.0;
 const SMALL: f32 = 12.0;
@@ -70,16 +72,21 @@ pub struct Intro {
     effects: [bool; 7],
     motion: bool,
     resume: bool,
-    told: Option<&'static str>,
+    stored: Result<Stored, String>,
+    told: Option<SharedString>,
 }
 
 impl Intro {
     pub fn new() -> Self {
+        let stored = Stored::load();
         Intro {
             image: 0,
             effects: Effect::ALL.map(Effect::on_at_start),
             motion: true,
-            resume: true,
+            resume: !stored
+                .as_ref()
+                .is_ok_and(|stored| stored.switch(HIDE_RESUME)),
+            stored,
             told: None,
         }
     }
@@ -97,7 +104,7 @@ impl Intro {
         cx: &mut Context<Self>,
     ) -> impl Fn(&ClickEvent, &mut Window, &mut gpui::App) + 'static {
         cx.listener(move |this, _: &ClickEvent, _, cx| {
-            this.told = Some(message);
+            this.told = Some(message.into());
             cx.notify();
         })
     }
@@ -134,14 +141,14 @@ impl Intro {
                 effect.sub(),
                 self.on(effect),
                 theme,
+                cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    if let Some(on) = this.effects.get_mut(at) {
+                        *on = !*on;
+                        cx.notify();
+                    }
+                }),
             )
             .py(px(7.0))
-            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                if let Some(on) = this.effects.get_mut(at) {
-                    *on = !*on;
-                    cx.notify();
-                }
-            }))
         });
         let effects: Vec<_> = effects.collect();
         inner_card(theme)
@@ -188,12 +195,12 @@ impl Intro {
                     "effects drift; off when the system asks for less motion",
                     self.motion,
                     theme,
+                    cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.motion = !this.motion;
+                        cx.notify();
+                    }),
                 )
-                .py_1()
-                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                    this.motion = !this.motion;
-                    cx.notify();
-                })),
+                .py_1(),
             )
             .child(
                 switch_row(
@@ -202,12 +209,27 @@ impl Intro {
                     "under the composer, with the project's sessions",
                     self.resume,
                     theme,
+                    cx.listener(|this, _: &ClickEvent, _, cx| {
+                        let resume = !this.resume;
+                        let saved = this
+                            .stored
+                            .as_mut()
+                            .map_err(|error| error.clone())
+                            .and_then(|stored| stored.set_switch(HIDE_RESUME, !resume));
+                        match saved {
+                            Ok(()) => {
+                                eprintln!("desk: settings intro Resume button {resume}");
+                                this.resume = resume;
+                            }
+                            Err(error) => {
+                                this.told =
+                                    Some(format!("The Resume button was not saved: {error}").into())
+                            }
+                        }
+                        cx.notify();
+                    }),
                 )
-                .py_1()
-                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                    this.resume = !this.resume;
-                    cx.notify();
-                })),
+                .py_1(),
             )
     }
 
@@ -328,6 +350,7 @@ fn switch_row(
     sub: &'static str,
     on: bool,
     theme: &Theme,
+    on_flip: impl Fn(&ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> gpui::Stateful<Div> {
     div()
         .id(id)
@@ -335,7 +358,6 @@ fn switch_row(
         .items_center()
         .gap_2p5()
         .px_1()
-        .cursor_pointer()
         .child(
             div()
                 .flex_1()
@@ -351,7 +373,7 @@ fn switch_row(
                         .child(sub),
                 ),
         )
-        .child(switch("switch", "", on, theme))
+        .child(switch_bare("switch", name, on, theme).on_click(on_flip))
 }
 
 fn titled(title: &'static str, note: SharedString, theme: &Theme) -> Div {
@@ -531,7 +553,7 @@ impl Render for Intro {
         root(
             &theme,
             body,
-            self.told.map(Into::into),
+            self.told.clone(),
             cx.listener(|this, _: &ClickEvent, _, cx| {
                 this.told = None;
                 cx.notify();

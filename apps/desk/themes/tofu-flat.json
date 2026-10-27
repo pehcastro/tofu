@@ -14,7 +14,18 @@
       "inner": { "fill": "#00000000", "fill_end": "#00000000", "border": "none" }
     },
     "toast": { "fill": "#24232a", "border": "none" },
-    "tabs": { "fill": "#ffffff0f" }
+    "tabs": { "fill": "#ffffff0f" },
+    "intro": {
+      "composer_fill": "#18171eff",
+      "composer_border": "#ffffff29",
+      "placeholder": "#ffffff61",
+      "icon": "#ffffff73",
+      "model_text": "#ffffffd9",
+      "send_fill": "#ffffffeb",
+      "send_icon": "#111111ff",
+      "link": "#ffffffb8",
+      "link_hover": "#ffffffb8"
+    }
   },
   "light": {
     "surface": { "window": "#f4f3f6ff" },
@@ -23,6 +34,17 @@
       "inner": { "fill": "#00000000", "fill_end": "#00000000", "border": "none" }
     },
     "toast": { "fill": "#ffffff", "border": "none" },
-    "tabs": { "fill": "#17161c0f" }
+    "tabs": { "fill": "#17161c0f" },
+    "intro": {
+      "composer_fill": "#18171eff",
+      "composer_border": "#ffffff29",
+      "placeholder": "#ffffff61",
+      "icon": "#ffffff73",
+      "model_text": "#ffffffd9",
+      "send_fill": "#ffffffeb",
+      "send_icon": "#111111ff",
+      "link": "#ffffffb8",
+      "link_hover": "#ffffffb8"
+    }
   }
 }

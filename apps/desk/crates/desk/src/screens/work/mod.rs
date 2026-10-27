@@ -2,8 +2,9 @@ pub mod split;
 
 use std::cell::RefCell;
 use std::ops::Range;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use desk_core::model::Store;
@@ -27,6 +28,7 @@ use gpui::{
     prelude::*, px, relative,
 };
 
+use crate::desk::viewer::Viewer;
 use crate::desk::{SCREEN_MARKS, ScreenGroup, ScreenMark, screen_mark};
 use crate::modules::chat::cassette::{Replay, Step};
 use crate::modules::chat::{self, Chat, ChatMirror, Find};
@@ -101,6 +103,7 @@ struct Mounted {
     terminals: Terminals,
     mirrors: Mirrors,
     plugins: Mounts,
+    viewer: Rc<RefCell<Option<Viewer>>>,
     project: PathBuf,
 }
 
@@ -248,6 +251,7 @@ fn build(
         terminals: Terminals::default(),
         mirrors: Mirrors::default(),
         plugins: Mounts::default(),
+        viewer: Rc::default(),
         project,
         store,
         chat,
@@ -299,10 +303,15 @@ fn build(
                         .flatten();
                     let terminal = terminal.as_ref().map(|terminal| terminal.read(cx));
                     let mirrored = *module == Module::Chat && titles.mirrors.at(tile).is_some();
+                    let viewed = match module {
+                        Module::Viewer => titles.viewer.borrow().as_ref().map(Viewer::name),
+                        _ => None,
+                    };
                     Tab {
                         label: terminal
                             .and_then(|terminal| terminal.label(cx))
                             .or_else(|| mirrored.then(|| MIRROR_NAME.into()))
+                            .or(viewed)
                             .unwrap_or_else(|| name(module)),
                         icon: glyph(module),
                         count: count(&titles, module, cx),
@@ -321,6 +330,7 @@ fn build(
                         .terminals
                         .at(tile)
                         .map(|terminal| terminal.read(cx).badge(cx)),
+                    Module::Viewer => badges.viewer.borrow().as_ref().map(Viewer::controls),
                     _ => None,
                 }),
                 spawnable: tile_modules(),
@@ -406,6 +416,7 @@ fn glyph(module: &Module) -> Option<Glyph> {
         Module::Shells | Module::Terminal => Some(Glyph::Terminal),
         Module::Plugin(id) => plugins::find(id).map(|plugin| plugin.glyph),
         Module::SourceControl => Some(Glyph::Branch),
+        Module::Viewer => Some(Glyph::Image),
         Module::Editor | Module::Browser => None,
     }
 }
@@ -452,7 +463,11 @@ fn side_of(key: &str) -> Option<Side> {
 
 fn count(mounted: &Mounted, module: &Module, cx: &App) -> Option<u32> {
     let count = match module {
-        Module::SubAgents => mounted.subagents.read(cx).live(),
+        Module::SubAgents => mounted
+            .store
+            .read(cx)
+            .open_session()
+            .map_or(0, |session| session.agents.len()),
         Module::FileEdits => mounted.file_edits.read(cx).count(),
         Module::Shells => mounted.shells.read(cx).count(),
         Module::Chat
@@ -460,6 +475,7 @@ fn count(mounted: &Mounted, module: &Module, cx: &App) -> Option<u32> {
         | Module::Terminal
         | Module::Browser
         | Module::SourceControl
+        | Module::Viewer
         | Module::Plugin(_) => return None,
     };
     u32::try_from(count).ok()
@@ -557,6 +573,7 @@ fn find_groups(
             | Module::Terminal
             | Module::Browser
             | Module::SourceControl
+            | Module::Viewer
             | Module::Plugin(_) => Vec::new(),
         };
         let (hits, anchors): (Vec<SharedString>, Vec<Anchor>) = rows
@@ -617,6 +634,19 @@ fn body(
             )
             .into_any_element(),
         },
+        Module::Viewer => match mounted.viewer.borrow().as_ref() {
+            Some(viewer) => viewer.body(),
+            None => empty_state(
+                "work-viewer-empty",
+                "No file is open",
+                Some("open an image from the chat or the editor to show it here".into()),
+                &[],
+                &[],
+                theme,
+                |_, _, _| {},
+            )
+            .into_any_element(),
+        },
         Module::Editor | Module::Browser | Module::SourceControl => empty_state(
             SharedString::from(format!("work-empty-{}", module.name())),
             module.name().to_owned(),
@@ -657,6 +687,7 @@ impl Expandable {
             "Shells",
             "Terminal",
             "Source control",
+            "Viewer",
         ]
         .into_iter()
         .chain(plugins::all().map(|plugin| plugin.name.as_str()))
@@ -749,6 +780,10 @@ fn expand(
                 module.name()
             );
         }
+        Module::Viewer => match mounted.viewer.borrow().as_ref() {
+            Some(viewer) => tiled(viewer.media(), None, cx),
+            None => return eprintln!("desk: work: no file is open, so the viewer does not expand"),
+        },
     };
     let shown = name(module);
     match EXPANDABLE.find(&shown) {
@@ -856,6 +891,48 @@ impl Work {
 
     pub fn chat(&self) -> &Entity<Chat> {
         &self.mounted.chat
+    }
+
+    pub fn show_media(&mut self, path: Arc<Path>, cx: &mut Context<Self>) -> Result<(), String> {
+        let shown = self
+            .mounted
+            .viewer
+            .borrow()
+            .as_ref()
+            .is_some_and(|viewer| viewer.shows(&path, cx));
+        if !shown {
+            let viewer = Viewer::new(path, cx);
+            self.mounted.viewer.replace(Some(viewer));
+        }
+        self.board.apply(true, |held, area| {
+            let open = held.tiles(area).into_iter().find_map(|(stack, _)| {
+                let at = stack.modules.iter().position(|m| *m == Module::Viewer)?;
+                Some((stack.id, at))
+            });
+            if let Some((tile, at)) = open {
+                return held.activate(tile, at);
+            }
+            let beside = held.focus().zip(held.focused_rect(area));
+            let Some((focus, rect)) = beside else {
+                return held.open(Module::Viewer, area);
+            };
+            let side = match rect.w >= rect.h {
+                true => Side::Right,
+                false => Side::Bottom,
+            };
+            held.open_at(Module::Viewer, Target::Tile(focus, Zone::Side(side)), area)
+                .or_else(|_| held.open(Module::Viewer, area))
+        });
+        cx.notify();
+        self.board.refusal().map_or(Ok(()), |refusal| {
+            Err(format!("the viewer tile did not open: {refusal}"))
+        })
+    }
+
+    fn keep_viewer(&self) {
+        if self.placed(&Module::Viewer).is_empty() {
+            self.mounted.viewer.take();
+        }
     }
 
     fn placed(&self, module: &Module) -> Vec<(usize, TileId)> {
@@ -1077,6 +1154,7 @@ impl Work {
                 | Module::Terminal
                 | Module::Browser
                 | Module::SourceControl
+                | Module::Viewer
                 | Module::Plugin(_),
                 _,
             ) => true,
@@ -1148,8 +1226,7 @@ impl Work {
             Err(error) => Err(error),
         };
         if let Err(error) = stepped {
-            eprintln!("desk: the cassette has a bad line: {error}");
-            cx.quit();
+            eprintln!("desk: the cassette has a bad line, skipped: {error}");
         }
     }
 
@@ -1495,6 +1572,7 @@ impl Render for Work {
         self.keep_terminals(cx);
         self.keep_mirrors(window, cx);
         self.keep_plugins();
+        self.keep_viewer();
         let above = window
             .focused(cx)
             .is_none_or(|held| held != self.focus && self.focus.within_focused(window, cx));

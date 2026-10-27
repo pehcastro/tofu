@@ -6,10 +6,11 @@ use std::time::{Duration, Instant};
 use desk_motion::reduced_motion;
 use desk_motion::tokens::{EASE_OUT, HOVER_MS, TOGGLE_MS};
 use gpui::{
-    AnchoredPositionMode, App, Background, Bounds, Canvas, ClickEvent, ContentMask, Context,
-    Corners, Deferred, Div, Entity, Font, FontWeight, MouseMoveEvent, PathBuilder, Pixels, Rgba,
-    SharedString, Stateful, StyleRefinement, TextRun, Window, anchored, canvas, deferred, div,
-    fill, linear_color_stop, linear_gradient, pattern_slash, point, prelude::*, px, rgb, size,
+    AnchoredPositionMode, AnyElement, App, Background, Bounds, Canvas, ClickEvent, ContentMask,
+    Context, Corners, Deferred, Div, Entity, EventEmitter, Font, FontWeight, MouseMoveEvent,
+    PathBuilder, Pixels, Rgba, SharedString, Stateful, StyleRefinement, TextRun, Window, anchored,
+    canvas, deferred, div, fill, linear_color_stop, linear_gradient, pattern_slash, point,
+    prelude::*, px, rgb, size,
 };
 
 use crate::components::card::dots;
@@ -87,6 +88,7 @@ const GRID_COLUMNS: usize = 25;
 const GRID_CELL: f32 = 12.0;
 const GRID_GAP: f32 = 3.0;
 const DIMMED: f32 = 0.35;
+const TOKENS_PER_DOT: usize = 1000;
 const FORK_CELL: f32 = 0.5;
 
 const METER_CELLS: usize = 20;
@@ -207,6 +209,18 @@ const HATCH_BASE: f32 = 0.3;
 const HATCH: (f32, f32) = (1.5, 3.5);
 const GRADIENT_STOPS: (f32, f32) = (0.2, 0.9);
 const HOVER_DIM: f32 = 0.7;
+const SPLIT_BAR: f32 = 14.0;
+const SPLIT_GAP: f32 = 1.0;
+const SPLIT_TRACK: f32 = 0.04;
+const TICK_ROW: f32 = 20.0;
+const TICK_GAP: f32 = 4.0;
+const TICK_PAD: f32 = 6.0;
+const TICK_RADIUS: f32 = 5.0;
+const TICK_FILL: f32 = 0.08;
+const SEGMENT_HEIGHT: f32 = 7.0;
+const SEGMENT_GAP: f32 = 2.0;
+const SEGMENT_RADIUS: f32 = 2.0;
+const SEGMENT_TRACK: f32 = 0.08;
 
 const ROUND_SIDE: f32 = 180.0;
 const DONUT_RADIUS: f32 = 76.0;
@@ -287,6 +301,13 @@ fn rise(color: Rgba, shown: f32) -> Rgba {
 
 fn faded(color: Rgba, alpha: f32) -> Rgba {
     tint(color, color.alpha * alpha)
+}
+
+fn spotlight(on: Option<(usize, f32)>, index: usize) -> f32 {
+    match on {
+        Some((at, shade)) if at != index => 1.0 - HOVER_DIM * shade,
+        Some(_) | None => 1.0,
+    }
 }
 
 fn stack(cells: usize, cell: f32, gap: f32) -> f32 {
@@ -697,6 +718,28 @@ impl Hover {
         true
     }
 
+    fn point(&mut self, at: Option<usize>) {
+        match at {
+            Some(at) => {
+                self.follow(
+                    [0.0; 2],
+                    Some(Aim {
+                        at,
+                        anchor: (0.0, 0.0),
+                        said: Said::default(),
+                    }),
+                );
+            }
+            None => {
+                self.leave();
+            }
+        }
+    }
+
+    fn on(&self) -> Option<(usize, f32)> {
+        self.at.map(|at| (at, self.shade))
+    }
+
     fn step(&mut self, window: &Window) -> bool {
         let now = Instant::now();
         self.shade = self.fade.map_or(0.0, |fade| fade.value(now));
@@ -766,12 +809,7 @@ impl Tip {
     }
 
     fn dim(&self, index: usize) -> f32 {
-        let hover = self.hover.borrow();
-        if hover.at.is_none_or(|at| at == index) {
-            1.0
-        } else {
-            1.0 - HOVER_DIM * hover.shade
-        }
+        spotlight(self.hover.borrow().on(), index)
     }
 }
 
@@ -952,6 +990,51 @@ pub fn legend(items: impl IntoIterator<Item = (SharedString, Rgba)>, theme: &The
                 )
                 .child(name)
         }))
+}
+
+pub fn segment_bar(parts: &[Slice], total: f32, theme: &Theme) -> Div {
+    let total = parts
+        .iter()
+        .map(|part| part.value.max(0.0))
+        .sum::<f32>()
+        .max(total)
+        .max(f32::EPSILON);
+    let mut end = 0.0;
+    let mut spans: Vec<(f32, f32, Rgba)> = parts
+        .iter()
+        .map(|part| {
+            let from = end;
+            end += part.value.max(0.0) / total;
+            (from, end, part.color)
+        })
+        .collect();
+    spans.push((end, 1.0, ink(theme, SEGMENT_TRACK)));
+    spans.retain(|&(from, to, _)| to > from);
+    div().w_full().h(px(SEGMENT_HEIGHT)).child(
+        canvas(
+            |_, _, _| (),
+            move |bounds: Bounds<Pixels>, (), window, _| {
+                let width = f32::from(bounds.size.width);
+                let last = spans.len().saturating_sub(1);
+                for (index, &(from, to, color)) in spans.iter().enumerate() {
+                    let gap = if index == last { 0.0 } else { SEGMENT_GAP };
+                    let span = width * (to - from) - gap;
+                    if span <= 0.0 {
+                        continue;
+                    }
+                    let origin = bounds.origin + point(px(width * from), px(0.0));
+                    window.paint_quad(
+                        fill(
+                            Bounds::new(origin, size(px(span), bounds.size.height)),
+                            color,
+                        )
+                        .corner_radii(px(SEGMENT_RADIUS)),
+                    );
+                }
+            },
+        )
+        .size_full(),
+    )
 }
 
 #[derive(Clone)]
@@ -1167,14 +1250,21 @@ enum Slot {
     Free,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct PartHovered(pub Option<usize>);
+
 pub struct DotGrid {
     parts: Vec<GridPart>,
     capacity: usize,
     fork_at: usize,
-    selected: Option<usize>,
+    per_dot: usize,
+    picked: Hover,
+    reported: Option<usize>,
     tip: Tip,
     born: Option<Instant>,
 }
+
+impl EventEmitter<PartHovered> for DotGrid {}
 
 impl DotGrid {
     pub fn new(
@@ -1183,13 +1273,47 @@ impl DotGrid {
         fork_at: usize,
         selected: Option<usize>,
     ) -> Self {
+        let mut picked = Hover::default();
+        picked.point(selected);
         DotGrid {
             parts,
             capacity,
             fork_at,
-            selected,
+            per_dot: TOKENS_PER_DOT,
+            picked,
+            reported: None,
             tip: Tip::new(PIN_CELL),
             born: None,
+        }
+    }
+
+    pub fn per_dot(mut self, tokens: usize) -> Self {
+        self.per_dot = tokens.max(1);
+        self
+    }
+
+    pub fn refill(&mut self, parts: Vec<GridPart>, capacity: usize, fork_at: usize) {
+        self.parts = parts;
+        self.capacity = capacity;
+        self.fork_at = fork_at;
+    }
+
+    pub fn highlight(&mut self, part: Option<usize>) {
+        self.picked.point(part);
+    }
+
+    fn tokens(&self, dots: usize) -> String {
+        let tokens = dots.saturating_mul(self.per_dot);
+        match tokens % TOKENS_PER_DOT {
+            0 => format!("{}k", tokens / TOKENS_PER_DOT),
+            _ => format!("{:.1}k", tokens as f32 / TOKENS_PER_DOT as f32),
+        }
+    }
+
+    fn report(&mut self, part: Option<usize>, cx: &mut Context<Self>) {
+        if part != self.reported {
+            self.reported = part;
+            cx.emit(PartHovered(part));
         }
     }
 
@@ -1217,12 +1341,12 @@ impl DotGrid {
             Slot::Part(part) => self
                 .parts
                 .get(part)
-                .map(|slice| Said::new(format!("{}k", slice.tokens), slice.name.clone()))
+                .map(|slice| Said::new(self.tokens(slice.tokens), slice.name.clone()))
                 .unwrap_or_default(),
-            Slot::Fork => Said::new(format!("{}k", self.fork_at), "fork line"),
+            Slot::Fork => Said::new(self.tokens(self.fork_at), "fork line"),
             Slot::Free => {
                 let used: usize = self.parts.iter().map(|slice| slice.tokens).sum();
-                Said::new(format!("{}k", self.capacity.saturating_sub(used)), "free")
+                Said::new(self.tokens(self.capacity.saturating_sub(used)), "free")
             }
         }
     }
@@ -1269,13 +1393,16 @@ impl Render for DotGrid {
         let theme = ActiveTheme::theme(cx);
         let entry = Entry::read(&mut self.born, window, cx);
         self.tip.tick(window);
+        self.picked.step(window);
         let cells = (0..self.capacity)
             .map(|index| {
                 let column = index % GRID_COLUMNS;
                 let color = match self.slot(index) {
                     Slot::Part(part) => self.parts.get(part).map_or(ink(&theme, EMPTY), |slice| {
-                        let dim = self.selected.is_some_and(|picked| picked != part);
-                        let alpha = if dim { DIMMED } else { 1.0 };
+                        let alpha = match self.picked.on() {
+                            Some((picked, shade)) if picked != part => 1.0 - (1.0 - DIMMED) * shade,
+                            Some(_) | None => 1.0,
+                        };
                         rise(
                             faded(slice.color, alpha),
                             entry.cell(share(column, GRID_COLUMNS)),
@@ -1301,9 +1428,33 @@ impl Render for DotGrid {
                 .child(Self::lattice().paint(cells).size_full()),
             cx,
         )
+        .on_mouse_move(cx.listener(|grid, event: &MouseMoveEvent, _, cx| {
+            let area = grid.tip.area.get();
+            let at = event.position - area.origin;
+            let part = area
+                .contains(&event.position)
+                .then(|| {
+                    grid.aim(
+                        (f32::from(at.x), f32::from(at.y)),
+                        (f32::from(area.size.width), f32::from(area.size.height)),
+                    )
+                })
+                .flatten()
+                .and_then(|aim| match grid.slot(aim.at) {
+                    Slot::Part(part) => Some(part),
+                    Slot::Fork | Slot::Free => None,
+                });
+            grid.report(part, cx);
+        }))
+        .on_hover(cx.listener(|grid, over: &bool, _, cx| {
+            if !*over {
+                grid.report(None, cx);
+            }
+        }))
         .on_click(cx.listener(|grid, _: &ClickEvent, _, cx| {
             if let Some(Slot::Part(part)) = grid.tip.at().map(|index| grid.slot(index)) {
-                grid.selected = (grid.selected != Some(part)).then_some(part);
+                let picked = (grid.picked.at != Some(part)).then_some(part);
+                grid.picked.point(picked);
                 cx.notify();
             }
         }))
@@ -2330,6 +2481,13 @@ pub enum BarLook {
     Duotone,
     Hatched,
     Gradient,
+    Split,
+}
+
+#[derive(Clone)]
+pub struct BarTick {
+    pub name: SharedString,
+    pub icon: Option<Rc<dyn Fn() -> AnyElement>>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -2354,6 +2512,9 @@ pub struct Bars {
     look: BarLook,
     layout: BarLayout,
     hues: Vec<Rgba>,
+    ticks: Vec<BarTick>,
+    lit: Hover,
+    focus: Hover,
     tip: Tip,
     born: Option<Instant>,
 }
@@ -2373,6 +2534,9 @@ impl Bars {
             look,
             layout,
             hues: Vec::new(),
+            ticks: Vec::new(),
+            lit: Hover::default(),
+            focus: Hover::default(),
             tip: Tip::new(PIN_CELL),
             born: None,
         }
@@ -2381,6 +2545,57 @@ impl Bars {
     pub fn hued(mut self, hues: Vec<Rgba>) -> Self {
         self.hues = hues;
         self
+    }
+
+    pub fn ticked(mut self, ticks: Vec<BarTick>) -> Self {
+        self.ticks = ticks;
+        self
+    }
+
+    pub fn light(&mut self, slot: Option<usize>) {
+        self.lit.point(slot);
+    }
+
+    pub fn focus(&mut self, series: Option<usize>) {
+        self.focus.point(series);
+    }
+
+    fn hovered(&self) -> Option<(usize, f32)> {
+        match self.tip.at() {
+            Some(at) => Some((at, self.tip.shade())),
+            None => self.lit.on(),
+        }
+    }
+
+    fn tick_row(&self, theme: &Theme) -> Div {
+        let hovered = self.hovered();
+        div()
+            .h(px(TICK_ROW))
+            .flex()
+            .text_size(px(AXIS_TEXT))
+            .children(self.ticks.iter().enumerate().map(|(slot, tick)| {
+                let label = div()
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .gap(px(TICK_GAP))
+                    .h_full()
+                    .px(px(TICK_PAD))
+                    .rounded(px(TICK_RADIUS))
+                    .children(tick.icon.as_ref().map(|icon| icon()));
+                let shade = hovered
+                    .filter(|&(at, _)| at == slot)
+                    .map(|(_, shade)| shade);
+                let label = match (shade, &tick.icon) {
+                    (Some(shade), _) => label
+                        .bg(ink(theme, TICK_FILL * shade))
+                        .text_color(ink(theme, T1))
+                        .child(tick.name.clone()),
+                    (None, Some(_)) => label,
+                    (None, None) => label.text_color(ink(theme, T3)).child(tick.name.clone()),
+                };
+                div().flex_1().flex().justify_center().child(label)
+            }))
     }
 
     fn count(&self) -> usize {
@@ -2395,7 +2610,11 @@ impl Bars {
         BAR_ROW + BAR_ROW_GAP
     }
 
-    fn segments(&self, grown: impl Fn(usize) -> f32, dim: impl Fn(usize) -> f32) -> Vec<Segment> {
+    fn segments(
+        &self,
+        grown: impl Fn(usize) -> f32,
+        dim: impl Fn(usize, usize) -> f32,
+    ) -> Vec<Segment> {
         let levels = levels(&self.series, true);
         let peak = peak(&levels);
         let last = self.series.len().saturating_sub(1);
@@ -2409,7 +2628,7 @@ impl Bars {
                     to: top / peak * grow,
                     color: faded(
                         self.hues.get(slot).copied().unwrap_or(line.color),
-                        dim(slot),
+                        dim(slot, index),
                     ),
                     foot: index == 0,
                     cap: index == last,
@@ -2446,7 +2665,13 @@ impl Bars {
                     let (x, y, w, h) = match layout {
                         BarLayout::Columns => {
                             let pitch = width / count.max(1) as f32;
-                            let thick = pitch * BAR_FILL;
+                            let thick = match look {
+                                BarLook::Split => (pitch * BAR_FILL).min(SPLIT_BAR),
+                                BarLook::Plain
+                                | BarLook::Duotone
+                                | BarLook::Hatched
+                                | BarLook::Gradient => pitch * BAR_FILL,
+                            };
                             let x = segment.slot as f32 * pitch + (pitch - thick) / 2.0;
                             let top = height * (1.0 - segment.to);
                             (x, top, thick, height * (segment.to - segment.from))
@@ -2458,6 +2683,13 @@ impl Bars {
                             BAR_ROW,
                         ),
                     };
+                    let (y, w, h) = match (look, layout) {
+                        (BarLook::Split, BarLayout::Columns) if !segment.cap => {
+                            (y + SPLIT_GAP, w, h - SPLIT_GAP)
+                        }
+                        (BarLook::Split, BarLayout::Rows) if !segment.cap => (y, w - SPLIT_GAP, h),
+                        _ => (y, w, h),
+                    };
                     if w <= 0.0 || h <= 0.0 {
                         continue;
                     }
@@ -2466,7 +2698,7 @@ impl Bars {
                     let corners = Self::corners(layout, segment.foot, segment.cap);
                     let color = segment.color;
                     match look {
-                        BarLook::Plain => {
+                        BarLook::Plain | BarLook::Split => {
                             window.paint_quad(fill(rect, color).corner_radii(corners))
                         }
                         BarLook::Duotone => {
@@ -2537,7 +2769,8 @@ impl Bars {
 impl Chart for Bars {
     fn extent(&self) -> (Option<f32>, f32) {
         match self.layout {
-            BarLayout::Columns => (None, BAR_PLOT + CHART_GAP + AXIS_LINE),
+            BarLayout::Columns if self.ticks.is_empty() => (None, BAR_PLOT + CHART_GAP + AXIS_LINE),
+            BarLayout::Columns => (None, BAR_PLOT + CHART_GAP + TICK_ROW),
             BarLayout::Rows => (
                 None,
                 (self.count() as f32 * Self::row_pitch() - BAR_ROW_GAP).max(0.0),
@@ -2596,11 +2829,28 @@ impl Render for Bars {
         let theme = ActiveTheme::theme(cx);
         let entry = Entry::read(&mut self.born, window, cx);
         self.tip.tick(window);
+        self.lit.step(window);
+        self.focus.step(window);
         let count = self.count();
-        let segments = self.segments(
-            |slot| entry.cell(share(slot, count)),
-            |slot| self.tip.dim(slot),
-        );
+        let on = self.hovered();
+        let focus = self.focus.on();
+        let track = on
+            .filter(|_| self.look == BarLook::Split)
+            .map(|(slot, shade)| Segment {
+                slot,
+                from: 0.0,
+                to: 1.0,
+                color: ink(&theme, SPLIT_TRACK * shade),
+                foot: true,
+                cap: true,
+            });
+        let segments = track
+            .into_iter()
+            .chain(self.segments(
+                |slot| entry.cell(share(slot, count)),
+                |slot, series| spotlight(on, slot) * spotlight(focus, series),
+            ))
+            .collect();
         let bars = Self::paint(self.look, self.layout, count, segments);
         let frame = div()
             .id("bars")
@@ -2614,11 +2864,16 @@ impl Render for Bars {
                     self.labels.first().cloned().unwrap_or_default(),
                     self.labels.last().cloned().unwrap_or_default(),
                 );
+                let foot = if self.ticks.is_empty() {
+                    axis_row(&axis, &theme)
+                } else {
+                    self.tick_row(&theme)
+                };
                 frame
                     .flex_col()
                     .gap(px(CHART_GAP))
                     .child(bars.w_full().h(px(BAR_PLOT)))
-                    .child(axis_row(&axis, &theme))
+                    .child(foot)
             }
             BarLayout::Rows => frame
                 .child(
@@ -2635,7 +2890,7 @@ impl Render for Bars {
                             div()
                                 .h(px(BAR_ROW))
                                 .truncate()
-                                .text_color(ink(&theme, T2 * self.tip.dim(slot)))
+                                .text_color(ink(&theme, T2 * spotlight(on, slot)))
                                 .child(label.clone())
                         })),
                 )

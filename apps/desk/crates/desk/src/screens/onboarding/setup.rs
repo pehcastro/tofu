@@ -14,6 +14,8 @@ use super::{Onboarding, PROJECT_STEP, Sign, Slot};
 use crate::project;
 use crate::screens::intro::effects::glass;
 use desk_ui::components::form::TextInput;
+use desk_ui::live::ActiveTheme;
+use desk_ui::theme::NumberToken;
 
 const CLAUDE: &[u8] = include_bytes!("../../../../../assets/intro/claude.svg");
 const FOLDER: &[u8] = include_bytes!("../../../../../assets/intro/folder.svg");
@@ -758,7 +760,13 @@ impl Onboarding {
                     .px(px(3.0))
                     .pb(px(3.0))
                     .shadow(shadow(45.0, 30.0, 0.5))
-                    .child(glass(12.0, SHELL_SCRIM, 0.76, 0.88))
+                    .child(glass(
+                        12.0,
+                        ActiveTheme::theme(cx).number(NumberToken::ShapeBlur),
+                        SHELL_SCRIM,
+                        0.76,
+                        0.88,
+                    ))
                     .child(ringed(12.0, 0.1).absolute().inset_0())
                     .text_size(px(13.0))
                     .text_color(INK)

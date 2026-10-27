@@ -138,7 +138,18 @@
     "mention": { "text": "#d6cbf5" },
     "chat": { "you": "#ffffff14", "calls": "#00000033" },
     "account": { "from": "#6b7a8fff", "to": "#3a4250ff" },
-    "tabs": { "border": "none", "fill": "#ffffff0d", "hover": "#ffffff06" }
+    "tabs": { "border": "none", "fill": "#ffffff0d", "hover": "#ffffff06" },
+    "intro": {
+      "composer_fill": "#18171eff",
+      "composer_border": "#ffffff29",
+      "placeholder": "#ffffff61",
+      "icon": "#ffffff73",
+      "model_text": "#ffffffd9",
+      "send_fill": "#ffffffeb",
+      "send_icon": "#111111ff",
+      "link": "#ffffffb8",
+      "link_hover": "#ffffffb8"
+    }
   },
   "light": {
     "surface": { "window": "#f4f3f6f2" },
@@ -270,6 +281,17 @@
     "mention": { "text": "#5a3fb0" },
     "chat": { "you": "#17161c0f", "calls": "#17161c0a" },
     "account": { "from": "#a9b4c4ff", "to": "#7d8799ff" },
-    "tabs": { "border": "none", "fill": "#ffffffcc", "hover": "#17161c08" }
+    "tabs": { "border": "none", "fill": "#ffffffcc", "hover": "#17161c08" },
+    "intro": {
+      "composer_fill": "#18171eff",
+      "composer_border": "#ffffff29",
+      "placeholder": "#ffffff61",
+      "icon": "#ffffff73",
+      "model_text": "#ffffffd9",
+      "send_fill": "#ffffffeb",
+      "send_icon": "#111111ff",
+      "link": "#ffffffb8",
+      "link_hover": "#ffffffb8"
+    }
   }
 }

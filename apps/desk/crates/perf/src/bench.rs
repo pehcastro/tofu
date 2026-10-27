@@ -7,7 +7,7 @@ use crate::frames::{FrameSummary, ms};
 use crate::limits::{BENCH_WARMUP_FRAMES, MEMORY_INTERVAL};
 use crate::memory;
 
-const MIB: f64 = 1024.0 * 1024.0;
+pub(crate) const MIB: f64 = 1024.0 * 1024.0;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct BenchResult {

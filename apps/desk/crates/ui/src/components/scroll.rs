@@ -17,6 +17,8 @@ const THUMB_HOT: f32 = 6.0;
 const THUMB_INSET: f32 = 2.0;
 const THUMB_MIN: f32 = 24.0;
 const TAIL_SLACK: f32 = 1.0;
+const RESTING_OPACITY: f32 = 0.35;
+pub const RESTING_GUTTER: f32 = THUMB_WIDTH + 4.0;
 
 #[derive(Clone, Copy)]
 struct Fade {
@@ -327,11 +329,16 @@ fn viewport(id: ElementId, track: Track, window: &mut Window, cx: &mut App) -> E
     })
 }
 
-fn bar(state: Entity<Viewport>, window: &mut Window, cx: &App) -> impl IntoElement + use<> {
+fn bar(
+    state: Entity<Viewport>,
+    floor: f32,
+    window: &mut Window,
+    cx: &App,
+) -> impl IntoElement + use<> {
     let now = Instant::now();
     let viewport = state.read(cx);
     let track = viewport.track.clone();
-    let opacity = viewport.bar.at(now);
+    let opacity = viewport.bar.at(now).max(floor);
     let hot = viewport.thumb_hovered || viewport.grab.is_some();
     if viewport.bar.moving(now) {
         window.request_animation_frame();
@@ -372,6 +379,7 @@ fn bar(state: Entity<Viewport>, window: &mut Window, cx: &App) -> impl IntoEleme
 pub struct Scrollbar {
     id: ElementId,
     track: Track,
+    resting: bool,
 }
 
 pub fn scrollbar(id: impl Into<ElementId>, handle: &ScrollHandle) -> Scrollbar {
@@ -381,6 +389,7 @@ pub fn scrollbar(id: impl Into<ElementId>, handle: &ScrollHandle) -> Scrollbar {
             source: Source::Handle(handle.clone()),
             axis: Axis::Vertical,
         },
+        resting: false,
     }
 }
 
@@ -391,12 +400,18 @@ pub fn list_scrollbar(id: impl Into<ElementId>, list: &ListState) -> Scrollbar {
             source: Source::List(list.clone()),
             axis: Axis::Vertical,
         },
+        resting: false,
     }
 }
 
 impl Scrollbar {
     pub fn axis(mut self, axis: Axis) -> Self {
         self.track.axis = axis;
+        self
+    }
+
+    pub fn resting(mut self, resting: bool) -> Self {
+        self.resting = resting;
         self
     }
 }
@@ -425,7 +440,12 @@ impl RenderOnce for Scrollbar {
                     wheel_state.update(cx, |viewport, cx| viewport.wake(cx))
                 }
             })
-            .child(bar(state, window, cx))
+            .child(bar(
+                state,
+                if self.resting { RESTING_OPACITY } else { 0.0 },
+                window,
+                cx,
+            ))
     }
 }
 
@@ -451,7 +471,7 @@ impl RenderOnce for ScrollArea {
         }
         let wheel_state = state.clone();
         let hover_state = state.clone();
-        let overlay = bar(state, window, cx);
+        let overlay = bar(state, 0.0, window, cx);
         div()
             .id(self.id)
             .relative()
