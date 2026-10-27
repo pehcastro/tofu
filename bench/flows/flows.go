@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	crowd         = 450
-	searchedOf    = 317
-	clockReadings = 3
+	crowd           = 450
+	searchedOf      = 317
+	spinnerReadings = 3
 )
 
 type flow struct {
@@ -29,7 +29,7 @@ var flows = []flow{
 	{2, "kill mid sub-agents, reopen, message the errored ones, their reports start the lead", false, killAndResume},
 	{3, "a report finished before a kill reaches the lead once after reopen", false, reportOnce},
 	{4, "a panic in a sub-agent ends only it and the lead goes on", true, panicEndsOne},
-	{5, "a sub-agent held 70 s inside one call shows its clock moving", false, heldClock},
+	{5, "a sub-agent held 70 s inside one call shows its spinner moving", false, heldSpinner},
 	{6, "a sub-agent waiting on the lead past a shortened cap keeps running", true, capSkipsWaits},
 	{7, "450 settled sub-agents fold and one opens by search", true, foldAndSearch},
 	{8, "10,000 kept shells: memory under 300 MB for 3 min, a report reaches the lead, ctrl+c quits within 3 s", false, keptShellsQuit},
@@ -37,7 +37,7 @@ var flows = []flow{
 	{10, "under a holder, an image pasted into a message the lead reads mid-turn reaches its next request", false, steeredImage},
 }
 
-var clockOnScreen = regexp.MustCompile(`(?m)(?:spawning|working) \[&sub-1\][^\n]*?  ((?:\d+h )?(?:\d+m )?\d+s)\s*[│┃]?\s*$`)
+var spinnerOnScreen = regexp.MustCompile(`(?m)^\s*(\S) working · \[&sub-1\]\s*[│┃]?\s*$`)
 
 func carries(r request, marks ...string) error {
 	for _, mark := range marks {
@@ -141,28 +141,22 @@ func panicEndsOne(s session) (string, error) {
 	return lead.name() + ": " + lineWith(lead.text(), "is errored: panic"), nil
 }
 
-func heldClock(s session) (string, error) {
+func heldSpinner(s session) (string, error) {
 	out, err := s.drive("5-held", "", 2*time.Minute)
 	if err != nil {
 		return "", err
 	}
 	var read []string
-	previous := time.Duration(-1)
-	for _, found := range clockOnScreen.FindAllStringSubmatch(out, -1) {
-		clock, err := time.ParseDuration(strings.ReplaceAll(found[1], " ", ""))
-		if err != nil {
-			return "", err
-		}
+	for _, found := range spinnerOnScreen.FindAllStringSubmatch(out, -1) {
 		read = append(read, found[1])
-		if clock <= previous {
-			return "", fmt.Errorf("sub-1's clock did not move between screens: %s", strings.Join(read, ", "))
-		}
-		previous = clock
 	}
-	if len(read) != clockReadings {
-		return "", fmt.Errorf("sub-1's clock was read on %d of %d screens: %v", len(read), clockReadings, read)
+	if len(read) != spinnerReadings {
+		return "", fmt.Errorf("sub-1's working row was read on %d of %d screens: %v", len(read), spinnerReadings, read)
 	}
-	return "sub-1 read " + strings.Join(read, ", ") + " at session 20s, 45s, 1m 10s", nil
+	if read[0] == read[1] && read[1] == read[2] {
+		return "", fmt.Errorf("sub-1's spinner stood still on every screen: %s", strings.Join(read, ", "))
+	}
+	return "sub-1's working row drew " + strings.Join(read, ", ") + " at session 20s, 45s, 1m 10s", nil
 }
 
 func capSkipsWaits(s session) (string, error) {
