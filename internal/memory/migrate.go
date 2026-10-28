@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/sys"
 )
 
@@ -19,7 +20,23 @@ const (
 	copiedShelves = "copied-shelves"
 )
 
-func (m *Memory) migrate(oldGlobal, oldProject string) error {
+func (m *Memory) migrate(oldGlobal, oldProject string) (err error) {
+	if err := os.MkdirAll(oldGlobal, 0o755); err != nil {
+		return err
+	}
+	lock := filepath.Join(oldGlobal, "migrate.lock")
+	file, held, err := sys.TryLock(lock)
+	for deadline := time.Now().Add(konst.MemtreeLockWaitMillis * time.Millisecond); err == nil && held && time.Now().Before(deadline); {
+		time.Sleep(konst.MemtreeLockRetryMillis * time.Millisecond)
+		file, held, err = sys.TryLock(lock)
+	}
+	if err != nil {
+		return err
+	}
+	if held {
+		return fmt.Errorf("%s is held by another tofu past %d ms, and copying the 0.5.8 shelves takes it", lock, konst.MemtreeLockWaitMillis)
+	}
+	defer func() { err = errors.Join(err, sys.Unlock(file)) }()
 	var copying []Entry
 	markers := map[string][]string{}
 	for _, dir := range []string{oldGlobal, oldProject} {
