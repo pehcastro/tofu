@@ -44,7 +44,7 @@ func runScratch(args []string, out, errOut io.Writer) int {
 	default:
 		return o.usage(fmt.Errorf("there is no subcommand %q", args[0]))
 	}
-	sweep, dryRun := scratchSweep("."), false
+	sweep, dryRun := scratchSweep(".", busyIn(session.OpenIn("."))), false
 	for i := 1; i < len(args); i++ {
 		switch args[i] {
 		case "--cache":
@@ -90,7 +90,7 @@ func scratchLines(report sys.ScratchReport) []string {
 		}
 		lines = append(lines, fmt.Sprintf("  %-40s %9s  touched %s  %s", name, sizeOf(folder.Bytes), folder.Touched.Format(time.DateTime), folder.Path))
 	}
-	sweep := scratchSweep(".")
+	sweep := scratchSweep(".", busyIn(session.OpenIn(".")))
 	next := report.Removable(sweep)
 	lines = append(lines, fmt.Sprintf("cleanup removes sessions untouched for %d days and the oldest past %d GB; next: %d folders", sweep.CleanupDays, sweep.MaxGB, len(next)))
 	if slices.ContainsFunc(report.Folders, func(folder sys.ScratchFolder) bool { return folder.Kind == sys.ScratchKindLeftover }) {
@@ -109,7 +109,7 @@ func sizeOf(bytes int64) string {
 	return fmt.Sprintf("%d GB", bytes)
 }
 
-func scratchSweep(dir string) sys.ScratchSweep {
+func scratchSweep(dir string, live func(string) bool) sys.ScratchSweep {
 	store, _ := openSettings(dir)
 	setting := func(key string, fallback int) int {
 		if store == nil || !slices.ContainsFunc(store.Table(), func(spec settingspkg.Spec) bool { return spec.Key == key }) {
@@ -117,30 +117,32 @@ func scratchSweep(dir string) sys.ScratchSweep {
 		}
 		return store.Int(key)
 	}
-	sessions, err := session.OpenIn(dir)
 	return sys.ScratchSweep{
 		CleanupDays: setting(scratchCleanupSetting, konst.ScratchCleanupDays),
 		MaxGB:       setting(scratchMaxGBSetting, konst.ScratchMaxGB),
 		Now:         time.Now(),
-		Live:        func(id string) bool { return err != nil || sessions.Busy(id) != nil },
+		Live:        live,
 	}
 }
 
+func busyIn(sessions *session.Store, openErr error) func(string) bool {
+	return func(id string) bool { return openErr != nil || sessions.Busy(id) != nil }
+}
+
 func sweepScratch(dir string, say func(string), stop <-chan struct{}) {
+	sessions, openErr := session.OpenIn(dir)
+	live := func(id string) bool {
+		if openErr != nil || sessions.Busy(id) != nil {
+			return true
+		}
+		_, locked := os.Stat(filepath.Join(sessions.Dir(id), sys.SessionLockFile))
+		return !errors.Is(locked, fs.ErrNotExist)
+	}
 	ticker := time.NewTicker(konst.ScratchSweepHours * time.Hour)
 	defer ticker.Stop()
 	for {
 		report, err := sys.ReadScratch(dir)
-		sweep := scratchSweep(dir)
-		busy := sweep.Live
-		sessions, openErr := session.OpenIn(dir)
-		sweep.Live = func(id string) bool {
-			if openErr != nil || busy(id) {
-				return true
-			}
-			_, locked := os.Stat(filepath.Join(sessions.Dir(id), sys.SessionLockFile))
-			return !errors.Is(locked, fs.ErrNotExist)
-		}
+		sweep := scratchSweep(dir, live)
 		if removable := report.Removable(sweep); err == nil && len(removable) > 0 {
 			if err = removeScratch(dir, removable); err == nil {
 				say(fmt.Sprintf("the scratch sweep removed %s, past %d GB or untouched for %d days", plural(len(removable), "folder"), sweep.MaxGB, sweep.CleanupDays))
@@ -172,7 +174,7 @@ func leadScratch(ctx context.Context, config turn.Config, errOut io.Writer) (con
 	}
 	place, _ := sys.ScratchOf(leading)
 	report, err := sys.ReadScratch(config.Project)
-	sweep := scratchSweep(config.Project)
+	sweep := scratchSweep(config.Project, busyIn(session.OpenIn(config.Project)))
 	sweep.Keep = place.Session
 	if removable := report.Removable(sweep); err == nil && len(removable) > 0 {
 		if err := removeScratch(config.Project, removable); err != nil {
