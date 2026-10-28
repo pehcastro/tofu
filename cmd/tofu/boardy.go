@@ -16,6 +16,7 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/boardy"
+	"tofu/internal/host"
 	"tofu/internal/rule"
 )
 
@@ -99,7 +100,9 @@ func boardyVerb(args []string, out, errOut io.Writer) int {
 	actor, person, lead := boardyIdentity(flags["as"])
 	call := boardyCall{o: o, dir: dir, managed: boardy.Managed{Local: boardy.Local{Store: store}, Person: person, Lead: lead}, actor: actor, store: store, words: flow.Words(), flags: flags, args: rest}
 	sizes := store.EventSizes()
+	written := host.BoardyWriting(dir, actor)
 	code := call.run(args[0])
+	written()
 	for _, nudge := range store.NudgesSince(sizes) {
 		_, _ = fmt.Fprintln(errOut, "nudge "+nudge)
 	}

@@ -12,6 +12,12 @@ import (
 type Changed struct {
 	Board string   `json:"board"`
 	Paths []string `json:"paths"`
+	By    string   `json:"by,omitempty"`
+}
+
+type Writing struct {
+	By   string `json:"by"`
+	Done bool   `json:"done,omitempty"`
 }
 
 type fileStamp struct {
@@ -74,16 +80,27 @@ func (w *Watcher) Scan() []Changed {
 	return changes
 }
 
-func (w *Watcher) Watch(quit <-chan struct{}, every time.Duration, send func(Changed)) {
+func (w *Watcher) Watch(quit <-chan struct{}, every time.Duration, told <-chan Writing, send func(Changed)) {
 	tick := time.NewTicker(every)
 	defer tick.Stop()
+	var by string
+	scan := func() {
+		for _, change := range w.Scan() {
+			change.By = by
+			send(change)
+		}
+	}
 	for {
 		select {
 		case <-quit:
 			return
 		case <-tick.C:
-			for _, change := range w.Scan() {
-				send(change)
+			scan()
+		case writing := <-told:
+			by = writing.By
+			if writing.Done {
+				scan()
+				by = ""
 			}
 		}
 	}

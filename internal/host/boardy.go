@@ -2,18 +2,25 @@ package host
 
 import (
 	"encoding/json"
+	"io"
+	"net"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"tofu/internal/boardy"
 	"tofu/internal/konst"
+	"tofu/internal/safe"
 	"tofu/internal/settings"
 	"tofu/internal/sys"
 )
 
 const (
-	boardyPrefix = "boardy."
-	boardyPerson = "person"
+	boardyPrefix      = "boardy."
+	boardyPerson      = "person"
+	hubAskBoardyHear  = "boardy.hear"
+	hubAskBoardyWrite = "boardy.write"
+	boardyPoll        = konst.ServeShellPollMillis * time.Millisecond
 )
 
 func boardyRequests() []method {
@@ -105,7 +112,117 @@ func (s *server) watchBoardy(quit <-chan struct{}) {
 	if err != nil {
 		return
 	}
-	boardy.NewWatcher(store.Dir).Watch(quit, konst.ServeShellPollMillis*time.Millisecond, func(change boardy.Changed) {
+	told := make(chan boardy.Writing)
+	safe.Go(s.report, "serve boardy told", func() { s.hearBoardy(quit, told) })
+	boardy.NewWatcher(store.Dir).Watch(quit, boardyPoll, told, func(change boardy.Changed) {
 		s.box.push(notify(boardyPrefix+"changed", change))
 	})
+}
+
+func (s *server) hearBoardy(quit <-chan struct{}, told chan<- boardy.Writing) {
+	place, err := placeOf(s.Dir)
+	if err != nil {
+		return
+	}
+	tick := time.NewTicker(boardyPoll)
+	defer tick.Stop()
+	for {
+		if conn, err := dialHub(place.socket); err == nil {
+			heard := make(chan struct{})
+			safe.Go(s.report, "serve boardy hang up", func() {
+				select {
+				case <-quit:
+				case <-heard:
+				}
+				_ = conn.Close()
+			})
+			if json.NewEncoder(conn).Encode(hubAsk{Ask: hubAskBoardyHear}) == nil {
+				for lines := json.NewDecoder(conn); ; {
+					var writing boardy.Writing
+					if lines.Decode(&writing) != nil {
+						break
+					}
+					select {
+					case told <- writing:
+					case <-quit:
+					}
+				}
+			}
+			close(heard)
+			select {
+			case told <- boardy.Writing{Done: true}:
+			case <-quit:
+			}
+		}
+		select {
+		case <-quit:
+			return
+		case <-tick.C:
+		}
+	}
+}
+
+func BoardyWriting(project, by string) (done func()) {
+	nothing := func() {}
+	place, err := placeOf(project)
+	if err != nil {
+		return nothing
+	}
+	conn, err := dialHub(place.socket)
+	if err != nil {
+		return nothing
+	}
+	_ = conn.SetDeadline(time.Now().Add(hubAnswerWait))
+	out := json.NewEncoder(conn)
+	var status HubStatus
+	if out.Encode(hubAsk{Ask: hubAskBoardyWrite}) != nil || out.Encode(boardy.Writing{By: by}) != nil || json.NewDecoder(conn).Decode(&status) != nil {
+		_ = conn.Close()
+		return nothing
+	}
+	return func() { _ = conn.Close() }
+}
+
+type boardyHearers struct {
+	mu    sync.Mutex
+	conns map[net.Conn]struct{}
+}
+
+func (b *boardyHearers) serve(conn net.Conn, lines *json.Decoder, asked hubAsk, answer func(net.Conn) error) {
+	_ = conn.SetDeadline(time.Time{})
+	if asked.Ask == hubAskBoardyHear {
+		b.mu.Lock()
+		if b.conns == nil {
+			b.conns = map[net.Conn]struct{}{}
+		}
+		b.conns[conn] = struct{}{}
+		b.mu.Unlock()
+		_, _ = io.Copy(io.Discard, conn)
+		b.mu.Lock()
+		delete(b.conns, conn)
+		b.mu.Unlock()
+		return
+	}
+	var writing boardy.Writing
+	if lines.Decode(&writing) != nil {
+		return
+	}
+	b.tell(writing)
+	if answer(conn) == nil {
+		_, _ = io.Copy(io.Discard, conn)
+	}
+	writing.Done = true
+	b.tell(writing)
+}
+
+func (b *boardyHearers) tell(writing boardy.Writing) {
+	line, err := json.Marshal(writing)
+	if err != nil {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for conn := range b.conns {
+		_ = conn.SetWriteDeadline(time.Now().Add(hubAnswerWait))
+		_, _ = conn.Write(append(line, '\n'))
+	}
 }

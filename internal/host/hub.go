@@ -94,6 +94,8 @@ type hub struct {
 	projectTurn sync.Mutex
 	mu          sync.Mutex
 	sessions    []*hosted
+
+	boardyHearers boardyHearers
 }
 
 type hosted struct {
@@ -448,6 +450,8 @@ func (h *hub) serve(conn net.Conn) {
 		_ = json.NewEncoder(conn).Encode(h.roster(asked.Session))
 	case hubAskMembers:
 		_ = json.NewEncoder(conn).Encode(h.membersNow())
+	case hubAskBoardyHear, hubAskBoardyWrite:
+		h.boardyHearers.serve(conn, lines, asked, h.answer)
 	case hubAskJoin:
 		h.moved(1)
 		defer h.moved(-1)
