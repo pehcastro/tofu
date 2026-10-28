@@ -111,7 +111,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 	var out []outgoing
 	s.turn = cmp.Or(event.Turn, s.turn)
 	if s.message != "" && event.Kind != EventStreamReset && endsTheLeadReply(event) {
-		out = append(out, notify("message.completed", &Text{Identity: s.identity("", s.message), Text: s.written, At: now}))
+		out = append(out, kept("message.completed", &Text{Identity: s.identity("", s.message), Text: s.written, At: now}))
 		s.awaitLog(s.message, session.RoleAssistant, s.written)
 		s.message, s.written = "", ""
 	}
@@ -140,13 +140,13 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 			id.Item = s.mint("message")
 			s.awaitLog(id.Item, session.RoleAssistant, event.Text)
 		}
-		return append(out, notify("message.started", &Marker{Identity: id, At: now}), notify("message.completed", &Text{Identity: id, Text: event.Text, At: now}))
+		return append(out, notify("message.started", &Marker{Identity: id, At: now}), kept("message.completed", &Text{Identity: id, Text: event.Text, At: now}))
 	case EventTask:
 		if id.Item == "" {
 			id.Item = s.mint("task")
 			s.awaitLog(id.Item, session.RoleUser, event.Text)
 		}
-		return append(out, notify("message.user", &UserMessage{Identity: id, Text: event.Text, Origin: event.Origin, Images: event.Images, SentAt: now}))
+		return append(out, kept("message.user", &UserMessage{Identity: id, Text: event.Text, Origin: event.Origin, Images: event.Images, SentAt: now}))
 	case EventStreamReset:
 		if event.Agent != "" || s.message == "" {
 			return out
@@ -161,7 +161,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 			id.Item = s.mint("steered")
 		}
 		s.awaitLog(id.Item, session.RoleUser, event.Text)
-		return append(out, notify("turn.steered", &Steered{Identity: id, Text: event.Text, Origin: event.originOr(llm.SourceSteer), Step: event.Step, ReadAt: now, Images: event.Images}))
+		return append(out, kept("turn.steered", &Steered{Identity: id, Text: event.Text, Origin: event.originOr(llm.SourceSteer), Step: event.Step, ReadAt: now, Images: event.Images}))
 	case EventSteerQueued:
 		return append(out, notify("turn.steerQueued", &SteerQueued{Identity: id, Text: event.Text, Origin: event.originOr(llm.SourceSteer), Images: event.Images}))
 	case EventToolCall:
@@ -241,7 +241,9 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		if event.Logged.Call != "" {
 			id.Item = session.EventIDFor(cmp.Or(event.Agent, s.turn), event.Logged.Call)
 		}
-		return append(out, notify("item.persisted", &Persisted{Identity: id, LogSeq: event.Logged.Seq, LogID: event.ID, Kind: string(event.Logged.Kind)}))
+		persisted := notify("item.persisted", &Persisted{Identity: id, LogSeq: event.Logged.Seq, LogID: event.ID, Kind: string(event.Logged.Kind)})
+		persisted.kept = event.Logged.Kind == session.EventTurnStart || event.Logged.Kind == session.EventTurnEnd
+		return append(out, persisted)
 	case EventMemoryScoped:
 		id.Item = event.ID
 		return append(out, kept("memory.scoped", &MemoryScopedEvent{Identity: id, MemoryScoped: *event.Scoped}))
