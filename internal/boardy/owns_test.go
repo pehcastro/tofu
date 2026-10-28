@@ -208,6 +208,73 @@ func TestSubTicketsLiveUnderTheirParentsOwns(t *testing.T) {
 	}
 }
 
+func TestMoveToDoingOwnsWhatItNames(t *testing.T) {
+	m := managedBoard(t, "DEMO")
+	m.Store.Root = t.TempDir()
+	for name, body := range map[string]string{
+		".gitignore":                 "target/\n",
+		"go.mod":                     "module demo\n",
+		"lib/models/load.go":         "package models\n\nfunc Layers() int { return 1 }\n",
+		"ui/pick.go":                 "package ui\n\nimport library \"demo/lib/models\"\n\nvar picked = library.Layers()\n",
+		"web/web.go":                 "package web\n\nfunc Layers() int { return sys.Layers() }\n",
+		"cmd/main.go":                "package main\n\nimport (\n\t\"demo/lib/models\"\n\t\"demo/sys\"\n)\n\nvar layers, other = sys.Layers(), models.Other\n",
+		"core/src/model/session.rs":  "pub enum PersonKind {\n    YesNo,\n}\n",
+		"core/src/model/mod.rs":      "pub mod session;\n",
+		"desk/chat.rs":               "// PersonKind::YesNo\nfn ask(kind: PersonKind) {}\n",
+		"desk/feed.rs":               "fn f(k: PersonKind) -> u8 {\n    match k {\n        PersonKind::YesNo => 1,\n    }\n}\n",
+		"desk/symbols.rs":            "enum PersonKind {\n    Name,\n}\nfn s() { PersonKind::Name; }\n",
+		"vendor/gpui/src/person.rs":  "fn g() { PersonKind::YesNo; }\n",
+		"desk/target/debug/build.rs": "fn h() { PersonKind::YesNo; }\n",
+	} {
+		full := filepath.Join(m.Store.Root, name)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitIn(t, m.Store.Root, "init", "-q")
+	ticket := func(scope string, owns ...string) Ticket {
+		made := ticketWith(scope, owns...)
+		made.Scope, made.Status = scope, Review
+		created, err := m.Local.Create("DEMO", made, "test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return created
+	}
+
+	rust := ticket("add a variant to PersonKind", "core/src/model/session.rs", filepath.Join(m.Store.Root, "core/src/model/fresh.rs"))
+	_, err := m.Move(rust.ID, Doing, "", manager)
+	refused(t, err, "desk/feed.rs:3: PersonKind::YesNo")
+	refused(t, err, "core/src/model/mod.rs:1")
+	for _, quiet := range []string{"desk/chat.rs", "desk/symbols.rs", "vendor/", "target/"} {
+		if strings.Contains(err.Error(), quiet) {
+			t.Errorf("the refusal lists %s:\n%v", quiet, err)
+		}
+	}
+	moved, err := m.Move(rust.ID, Doing, notOwnedOnPurpose, manager)
+	if err != nil || !strings.Contains(moved.Reason, "desk/feed.rs:3") || !strings.Contains(moved.Reason, notOwnedOnPurpose) {
+		t.Errorf("a move %s: reason %q, %v", notOwnedOnPurpose, moved.Reason, err)
+	}
+
+	goTicket := ticket("rename models.Layers", "lib/models/**")
+	_, err = m.Move(goTicket.ID, Doing, "", manager)
+	refused(t, err, "ui/pick.go:5")
+	for _, quiet := range []string{"web/web.go", "cmd/main.go"} {
+		if strings.Contains(err.Error(), quiet) {
+			t.Errorf("a Layers of another package is listed in %s:\n%v", quiet, err)
+		}
+	}
+	if _, err := m.Store.Edit(goTicket.ID, func(t *Ticket) error { t.Owns = append(t.Owns, "ui/pick.go"); return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Move(goTicket.ID, Doing, "", manager); err != nil {
+		t.Errorf("the ticket owning its caller: %v", err)
+	}
+}
+
 func TestThreadKeepsATicketsEventsInOrderAndNoChildsEvents(t *testing.T) {
 	m := managedBoard(t, "DEMO")
 	parent := ticketIn(t, m, Todo, "x/**")

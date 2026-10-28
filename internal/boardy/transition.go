@@ -110,6 +110,12 @@ func (m Managed) move(board Board, ticket Ticket, to Status, reason, actor strin
 	if err := m.validMove(board, ticket, to); err != nil {
 		return ticket, err
 	}
+	if to == Doing {
+		var err error
+		if reason, err = m.ownedCallers(ticket, reason); err != nil {
+			return ticket, err
+		}
+	}
 	s := m.subjectOf(moveEvent(to), board.Key, ticket, to, actor, depth)
 	s.leave = leave
 	if err := m.gate(&s); err != nil {
