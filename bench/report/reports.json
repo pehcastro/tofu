@@ -5805,6 +5805,94 @@
   ],
   "reports": [
     {
+      "package": "enforce",
+      "date": "2026-10-28",
+      "source": "bench/enforce/report-2026-10-28.md",
+      "figure": "2 of 8 (25%)",
+      "built_from": "prose",
+      "sample": "planted desk mistakes mocked from DESK tickets in bench/enforce/corpus/planted.txt and clean 40 line cuts from git HEAD, each through internal/rule CheckWrite then Weigh, once enforced and once in shadow; no model call, no network",
+      "skips": "one window skipped as debt already in the tree, apps/desk/crates/ui/src/component.rs:10-49 for desk_refuse_static_api; one run, deterministic",
+      "commit": "038fa276",
+      "version": "0.5.19",
+      "previous_run": "none, the first dated report of bench/enforce",
+      "conclusion": [
+        {
+          "text": "Hand read from bench/report/handread.json: Enforced, the seven desk_refuse rules refused no clean write from HEAD, and four of them refused every planted desk mistake. Three fall short of 90 percent planted: desk_refuse_allow_dead 6 of 8, desk_refuse_fixture 19 of 32, and desk_refuse_ui_block 2 of 8 (25%). In shadow mode no write is refused and the same planted writes are recorded.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
+    {
+      "package": "browser",
+      "date": "2026-10-24",
+      "source": "bench/browser/report-2026-10-24.md",
+      "figure": "207 ms",
+      "built_from": "rerun",
+      "sample": "8 recorded pages, each asked once in one live pass on 2026-10-24 over typesafe on jev-1.14.0, rebuilt from answers-2026-10-24.json with no network call; no call discarded as a warm up",
+      "skips": "the model arm, the turn's own model calling browser_act, and the 13 task live A/B, which need Chrome and a subscription turn; one call per page, so no rate",
+      "commit": "bdf53990",
+      "version": "0.5.17-fix1",
+      "previous_run": "bench/browser/report-2026-09-28.md",
+      "conclusion": [
+        {
+          "text": "Hand read from bench/report/handread.json: Jev picked the right next browser action on 7 of 8 recorded pages, 88%, with a median of 207 ms and 1340 input tokens a decision, against jev-ultrafast's 178 ms and 5300 tokens, at $0.000056 a decision. It missed the login wall page, typing where it should have said BLOCKED. The model arm and the live turn against turn A/B were not run.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
+    {
+      "package": "rules",
+      "date": "2026-10-24",
+      "source": "bench/rules/report-2026-10-24.md",
+      "figure": "22 of 41 (54%)",
+      "built_from": "rerun",
+      "sample": "41 final lead replies recorded in this project's sessions, text mocked, hand labelled on em_dash, quote, report_short and stay_in_scope, one live pass over typesafe on jev-1.14.0, rerun offline from bench/rules/batched/runs/2026-10-24.json",
+      "skips": "one labeller; quote applies to 5 of 41 replies only; the rules nobody labelled are counted for flags and not scored; no call discarded as a warm up",
+      "commit": "81a71bb8",
+      "version": "0.5.17-fix1",
+      "previous_run": "bench/rules/report-2026-09-23.md",
+      "conclusion": [
+        {
+          "text": "Hand read from bench/report/handread.json: Asking Jev every applicable prose rule in one request a reply agrees with the hand label less often than no check at all on every labelled rule: em_dash 22 of 41 (54%) against 41 of 41 for the shipped checker, report_short 14 of 41 against 30, stay_in_scope 36 of 41 against 38, quote 3 of 5 for both. A batched request asks 25 questions at a median of 6239 input tokens and 234 ms, 0.010760 USD over 41 requests.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
+    {
+      "package": "stopcheck",
+      "date": "2026-10-24",
+      "source": "bench/stopcheck/report-2026-10-24.md",
+      "figure": "71 agreements against 68",
+      "built_from": "prose",
+      "sample": "81 hand labelled steps, one labeller, 96 fresh calls over typesafe on jev-1.14.0, the 78 steps of the 2026-09-21 run kept in their own table",
+      "skips": "3 session files skipped for carrying no step and no wall clock, 1 step with no hand label not counted; no call discarded as a warm up",
+      "commit": "eeace70b",
+      "version": "0.5.17-fix1",
+      "previous_run": "bench/stopcheck/report-2026-09-21.md",
+      "conclusion": [
+        {
+          "text": "the cheap arm won, 71 agreements against 68, so a typed decision costing money and latency read the turn worse than plain string work did out of 81 labelled steps, which on a corpus this size is one labeller's judgement on a handful of steps rather than a result.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
+    {
       "package": "drain",
       "date": "2026-10-22",
       "source": "bench/drain/report-2026-10-22.md",
@@ -7450,8 +7538,8 @@
     }
   ],
   "counts": {
-    "reports": 68,
-    "packages_with_a_dated_report": 43,
+    "reports": 72,
+    "packages_with_a_dated_report": 44,
     "packages_with_no_dated_report": 21,
     "withdrawn_whole_or_in_part": 20,
     "stale": 1,

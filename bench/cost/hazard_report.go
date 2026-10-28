@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"tofu/bench/report"
 	"tofu/bench/stat"
 	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
@@ -65,11 +66,12 @@ func renderHazards(scores []hazardScore, first hazardRow, answersPath string) st
 		regex.Correct, regex.FalseBlocks, regex.Caught)
 	fmt.Fprintf(b, "- conditions: %s, machine %s, credential kind %s, wire %s, build %s, %d held-out cases of bench/corpus/gate/split.json, one call at a time, arm order alternated per case, no call discarded as warm-up\n",
 		first.Date, first.Machine, first.CredentialKind, first.Wire, buildsOf(shipped, hazards), regex.Cases)
-	fmt.Fprintf(b, "- dollars: %s\n", chargeLine(shipped, hazards))
+	calls := chargesOf(shipped, hazards)
+	fmt.Fprintf(b, "- dollars: %s\n", chargeLine(calls))
 	for _, score := range scores {
 		fmt.Fprintf(b, "- %s: %s\n", score.Arm, score.Rule)
 	}
-	fmt.Fprintf(b, "- rerender from the recorded answers: `%s`\n- spend again: `%s`\n\n", rerenderCommand, liveCommand)
+	fmt.Fprintf(b, "- rerender from the recorded answers: `%s`\n- spend again: `%s`\n\n%s\n\n", rerenderCommand, liveCommand, unitLine(calls))
 
 	source := fmt.Sprintf("source: bench/cost/%s; %s", answersPath, beforeSource)
 	var wins, losses []string
@@ -137,13 +139,27 @@ func buildsOf(scores ...hazardScore) string {
 	return strings.Join(slices.Sorted(maps.Keys(builds)), ", ")
 }
 
-func chargeLine(scores ...hazardScore) string {
+func chargesOf(scores ...hazardScore) map[ledger.ChargeSource]int {
 	calls := map[ledger.ChargeSource]int{}
 	for _, score := range scores {
 		for source, n := range score.Charges {
 			calls[source] += n
 		}
 	}
+	return calls
+}
+
+func unitLine(calls map[ledger.ChargeSource]int) string {
+	var units []ledger.Unit
+	for source, unit := range map[ledger.ChargeSource]ledger.Unit{ledger.ChargeProvider: ledger.UnitMoney, ledger.ChargeList: ledger.UnitListPrice, ledger.ChargeNone: ledger.UnitUnpriced} {
+		if calls[source] > 0 {
+			units = append(units, unit)
+		}
+	}
+	return report.CostUnitLine(units)
+}
+
+func chargeLine(calls map[ledger.ChargeSource]int) string {
 	return fmt.Sprintf("%d calls priced from usage.cost in the response, %d at list price because the response carried no cost, $%.3f per million input tokens with output free (typesafe.DollarsPerInputToken, docs.typesafe.ai/models.md), %d unpriced",
 		calls[ledger.ChargeProvider], calls[ledger.ChargeList], typesafe.DollarsPerInputToken*1e6, calls[ledger.ChargeNone])
 }

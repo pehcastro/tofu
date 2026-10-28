@@ -205,8 +205,8 @@ func TestABenchWithSeveralDatedRunsKeepsThemNewestFirst(t *testing.T) {
 			runs = append(runs, report.Date+" "+report.Figure+" ("+string(report.State)+")")
 		}
 	}
-	if len(runs) != 3 {
-		t.Fatalf("stopcheck has 3 dated runs and the index carries %d", len(runs))
+	if len(runs) != 4 {
+		t.Fatalf("stopcheck has 4 dated runs, the fourth bench/stopcheck/report-2026-10-24.md, and the index carries %d", len(runs))
 	}
 	for i := 1; i < len(runs); i++ {
 		if runs[i-1] < runs[i] {

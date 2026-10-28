@@ -2,6 +2,8 @@
 
 Machine: DESKTOP-AHUN9RO. Date: 2026-10-24. Credential kind: key. Wire for arms a, b and c: typesafe direct, with the header `TypeSafe-Danger-Zone-Images: true` on b and c only. Box model: `jev-1.14.0`.
 
+Cost unit: list price. A money figure is dollars that left the account behind the credential named above, read from the response of the call it names and never from a rate card.
+
 Rebuilt from `answers-2026-09-28.json` (before), `answers-2026-10-24.json` (arm a), `answers-images-2026-10-24.json` (arms b and c) with no network call. Every page was asked once per arm. No call was discarded as a warm up. The live pass needs the network and `TOFU_LIVE=1`, and is skipped without it.
 
 Screenshots: pages/shots.json, recorded 2026-10-24 on DESKTOP-AHUN9RO by go run ./bench/browser/shots, tofu's own headless Chrome through browser.Endpoint and the direct CDP path, a fresh home per run. Viewport 1280x800 at device scale 1; frame: the last Page.screencastFrame after the snapshot, JPEG, rects in CSS pixels from getBoundingClientRect over the snapshot's own element ids. Browser: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36.

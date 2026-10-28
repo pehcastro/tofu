@@ -14,9 +14,11 @@ import (
 	"strings"
 	"time"
 
+	"tofu/bench/report"
 	"tofu/internal/browser"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/typesafe"
+	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
 )
 
@@ -249,6 +251,7 @@ func WriteImages(w io.Writer, shots Shots, before, text, pictured []Reading, bef
 	conditions := images.Conditions
 	fmt.Fprintf(&b, "# bench browser, images: %s\n\n", conditions.Date)
 	fmt.Fprintf(&b, "Machine: %s. Date: %s. Credential kind: %s. Wire for arms a, b and c: typesafe direct, with the header `%s: true` on b and c only. Box model: `%s`.\n\n", conditions.Machine, conditions.Date, conditions.Credential, ImagesHeader, images.BoxModel)
+	b.WriteString(report.CostUnitLine([]ledger.Unit{ledger.UnitListPrice}) + "\n\n")
 	fmt.Fprintf(&b, "Rebuilt from %s with no network call. Every page was asked once per arm. No call was discarded as a warm up. The live pass needs the network and `TOFU_LIVE=1`, and is skipped without it.\n\n", strings.Join(files, ", "))
 	fmt.Fprintf(&b, "Screenshots: %s, recorded %s on %s by %s. Viewport %s; frame: %s. Browser: %s.\n\n", images.Shots, shots.Date, shots.Machine, shots.Recorder, shots.Viewport, shots.Frame, shots.Browser)
 	b.WriteString("Arm b is arm a's request with one field added to the state, `screenshot`, holding the image reference once; the instructions are unchanged and never name the image. Dollars are input tokens at $0.042 per million, output free.\n\n")
