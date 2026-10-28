@@ -24,6 +24,20 @@ type UsageReport struct {
 	Providers  []CredentialReport `json:"providers"`
 	SpendLimit string             `json:"spend_limit"`
 	Missing    []DoctorBlocker    `json:"missing,omitempty"`
+	Spends     []WindowSpend      `json:"window_spend,omitempty"`
+	Unreadable int                `json:"unreadable_lines,omitempty"`
+}
+
+type WindowSpend struct {
+	Account    string     `json:"account"`
+	Window     string     `json:"window"`
+	Since      time.Time  `json:"since"`
+	Requests   int        `json:"requests"`
+	Weighted   float64    `json:"weighted_tokens"`
+	PerDay     float64    `json:"weighted_per_day"`
+	UsedPerDay *float64   `json:"used_fraction_per_day,omitempty"`
+	RunsOutAt  *time.Time `json:"runs_out_at,omitempty"`
+	Row        int64      `json:"-"`
 }
 
 type UsageAnswer struct {

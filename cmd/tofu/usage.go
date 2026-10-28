@@ -34,26 +34,6 @@ const (
 	windowScopeMark       = ":"
 )
 
-type usageReport = host.UsageReport
-
-type usageAnswer struct {
-	usageReport
-	Spent   []windowSpend `json:"window_spend,omitempty"`
-	Skipped int           `json:"unreadable_lines,omitempty"`
-}
-
-type windowSpend struct {
-	Account    string     `json:"account"`
-	Window     string     `json:"window"`
-	Since      time.Time  `json:"since"`
-	Requests   int        `json:"requests"`
-	Weighted   float64    `json:"weighted_tokens"`
-	PerDay     float64    `json:"weighted_per_day"`
-	UsedPerDay *float64   `json:"used_fraction_per_day"`
-	RunsOutAt  *time.Time `json:"runs_out_at"`
-	row        int64
-}
-
 const (
 	usageServing   = host.UsageServing
 	usageAttention = host.UsageAttention
@@ -82,12 +62,12 @@ func usageFail(errOut io.Writer, err error) int {
 	return printFailure(errOut, exitVerdict, "tofu usage: "+err.Error(), "")
 }
 
-func readUsage(now time.Time) (usageAnswer, error) {
+func readUsage(now time.Time) (host.UsageReport, error) {
 	results, err := pollCredentials(context.Background(), time.Now, nil)
 	if err != nil {
-		return usageAnswer{}, err
+		return host.UsageReport{}, err
 	}
-	answer := usageAnswer{usageReport: usageReport{State: usageServing, Providers: credentialReports(results, now), SpendLimit: quota.SpendLimitLine()}}
+	answer := host.UsageReport{State: usageServing, Providers: credentialReports(results, now), SpendLimit: quota.SpendLimitLine()}
 	if len(results) == 0 {
 		answer.State, answer.Missing = usageNone, doctorBlockers()
 		return answer, nil
@@ -103,12 +83,12 @@ func readUsage(now time.Time) (usageAnswer, error) {
 			}
 		}
 	}
-	answer.Spent, answer.Skipped, err = windowSpends(results, now)
+	answer.Spends, answer.Unreadable, err = windowSpends(results, now)
 	return answer, err
 }
 
-func windowSpends(results []pollResult, now time.Time) ([]windowSpend, int, error) {
-	var spends []windowSpend
+func windowSpends(results []pollResult, now time.Time) ([]host.WindowSpend, int, error) {
+	var spends []host.WindowSpend
 	earliest := now
 	for _, result := range results {
 		for _, window := range result.report.Windows {
@@ -116,7 +96,7 @@ func windowSpends(results []pollResult, now time.Time) ([]windowSpend, int, erro
 			if window.Duration == 0 || window.ResetsAt.IsZero() || !window.Used.Reported || !since.Before(now) {
 				continue
 			}
-			if spends = append(spends, windowSpend{Account: quotaAccount(result.row), Window: window.ID, Since: since, row: result.row}); since.Before(earliest) {
+			if spends = append(spends, host.WindowSpend{Account: quotaAccount(result.row), Window: window.ID, Since: since, Row: result.row}); since.Before(earliest) {
 				earliest = since
 			}
 		}
@@ -133,7 +113,7 @@ func windowSpends(results []pollResult, now time.Time) ([]windowSpend, int, erro
 		return nil, 0, err
 	}
 	for _, burn := range quota.Burns(recorded) {
-		at := slices.IndexFunc(spends, func(spend windowSpend) bool { return spend.row == burn.Account && spend.Window == burn.Window })
+		at := slices.IndexFunc(spends, func(spend host.WindowSpend) bool { return spend.Row == burn.Account && spend.Window == burn.Window })
 		if at >= 0 && burn.PerHour != nil {
 			perDay := *burn.PerHour * usageDay.Hours()
 			spends[at].UsedPerDay, spends[at].RunsOutAt = &perDay, burn.FullAt
@@ -143,7 +123,7 @@ func windowSpends(results []pollResult, now time.Time) ([]windowSpend, int, erro
 	return spends, tornReadings + tornEvents, err
 }
 
-func tofuSpend(spends []windowSpend, earliest, now time.Time) (int, error) {
+func tofuSpend(spends []host.WindowSpend, earliest, now time.Time) (int, error) {
 	registry, err := modelRegistry()
 	if err != nil {
 		return 0, err
@@ -249,11 +229,11 @@ func requestEvents(path string, since time.Time) ([]accountEvent, int) {
 	return kept, torn
 }
 
-func spentIn(events []accountEvent, spend windowSpend, now time.Time) []session.Event {
+func spentIn(events []accountEvent, spend host.WindowSpend, now time.Time) []session.Event {
 	_, scope, scoped := strings.Cut(spend.Window, windowScopeMark)
 	var kept []session.Event
 	for _, event := range events {
-		if event.Kind == session.EventTurnStart || event.account == spend.row && !event.At.Before(spend.Since) && !event.At.After(now) &&
+		if event.Kind == session.EventTurnStart || event.account == spend.Row && !event.At.Before(spend.Since) && !event.At.After(now) &&
 			(!scoped || strings.Contains(strings.ToLower(event.model), strings.ToLower(scope))) {
 			kept = append(kept, event.Event)
 		}
@@ -261,8 +241,8 @@ func spentIn(events []accountEvent, spend windowSpend, now time.Time) []session.
 	return kept
 }
 
-func windowPace(page cli.Page, spends []windowSpend, account, window string) (cli.Fact, bool) {
-	at := slices.IndexFunc(spends, func(spend windowSpend) bool { return spend.Account == account && spend.Window == window })
+func windowPace(page cli.Page, spends []host.WindowSpend, account, window string) (cli.Fact, bool) {
+	at := slices.IndexFunc(spends, func(spend host.WindowSpend) bool { return spend.Account == account && spend.Window == window })
 	if at < 0 {
 		return cli.Fact{}, false
 	}
@@ -281,7 +261,7 @@ func windowPace(page cli.Page, spends []windowSpend, account, window string) (cl
 	return cli.Fact{Text: page.Label(text + "; tofu " + weighted(spend.Weighted) + " weighted, " + weighted(spend.PerDay) + "/day")}, true
 }
 
-func usagePage(page cli.Page, report usageAnswer, now time.Time) []string {
+func usagePage(page cli.Page, report host.UsageReport, now time.Time) []string {
 	verdict := cli.Verdict{Mark: cli.Done, Text: string(report.State)}
 	switch report.State {
 	case usageServing:
@@ -312,7 +292,7 @@ func usagePage(page cli.Page, report usageAnswer, now time.Time) []string {
 				}
 			}
 			facts = append(facts, cli.Fact{Label: window.ID, Text: text})
-			if pace, known := windowPace(page, report.Spent, provider.Account, window.ID); known {
+			if pace, known := windowPace(page, report.Spends, provider.Account, window.ID); known {
 				facts = append(facts, pace)
 			}
 		}
