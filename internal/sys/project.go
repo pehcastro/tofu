@@ -475,15 +475,15 @@ func HoldProjectOpen(dir string) (release func()) {
 			_ = os.Remove(path)
 		}
 	}
-	lock, held, err := tryLock(filepath.Join(open, strconv.Itoa(os.Getpid())+".lock"))
+	lock, held, err := TryLock(filepath.Join(open, strconv.Itoa(os.Getpid())+".lock"))
 	if err != nil || held {
 		return release
 	}
-	return func() { _ = unlock(lock) }
+	return func() { _ = Unlock(lock) }
 }
 
 func heldLock(path string) bool {
-	file, held, err := tryLock(path)
+	file, held, err := TryLock(path)
 	if err == nil && !held {
 		_ = file.Close()
 	}
@@ -520,7 +520,7 @@ func (p Project) editRegistry(edit func(*projectRegistry) (*ProjectEntry, error)
 	lockPath := filepath.Join(p.home, projectLockName)
 	var lock *os.File
 	for deadline := time.Now().Add(registryLockWait); lock == nil; {
-		file, held, err := tryLock(lockPath)
+		file, held, err := TryLock(lockPath)
 		switch {
 		case err != nil:
 			return err
@@ -532,7 +532,7 @@ func (p Project) editRegistry(edit func(*projectRegistry) (*ProjectEntry, error)
 			time.Sleep(registryRetry)
 		}
 	}
-	defer func() { _ = unlock(lock) }()
+	defer func() { _ = Unlock(lock) }()
 	registry, err := readProjectRegistry(p.home)
 	if err != nil {
 		return err

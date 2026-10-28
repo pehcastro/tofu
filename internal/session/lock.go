@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"tofu/internal/sys"
 )
 
 const (
@@ -62,7 +64,7 @@ func (s *Store) Hold(id string) (func() error, error) {
 	if file == nil {
 		return nil, err
 	}
-	return func() error { return unlock(file) }, nil
+	return func() error { return sys.Unlock(file) }, nil
 }
 
 func (s *Store) HoldTurn() (func() error, error) {
@@ -76,12 +78,12 @@ func (s *Store) HoldTurn() (func() error, error) {
 	case err != nil:
 		return nil, err
 	}
-	return func() error { return unlock(file) }, nil
+	return func() error { return sys.Unlock(file) }, nil
 }
 
 func takeLock(path string) (*os.File, *lockHolder, error) {
 	for deadline := time.Now().Add(lockStaleGrace); ; time.Sleep(lockRetry) {
-		file, held, err := tryLock(path)
+		file, held, err := sys.TryLock(path)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -92,7 +94,7 @@ func takeLock(path string) (*os.File, *lockHolder, error) {
 				_, err = file.Write(body)
 			}
 			if err != nil {
-				return nil, nil, errors.Join(err, unlock(file))
+				return nil, nil, errors.Join(err, sys.Unlock(file))
 			}
 			return file, nil, nil
 		}
@@ -108,7 +110,7 @@ func (s *Store) Busy(id string) error {
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
-	file, held, err := tryLock(path)
+	file, held, err := sys.TryLock(path)
 	switch {
 	case err != nil:
 		return err

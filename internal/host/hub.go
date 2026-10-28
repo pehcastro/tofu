@@ -286,7 +286,7 @@ func MembersOf(project string) map[string][]Member {
 
 func takeHubLock(place hubPlace) (*os.File, error) {
 	for deadline := time.Now().Add(konst.HostReadyMillis * time.Millisecond); ; time.Sleep(hubRetry) {
-		if file, held, err := lockHub(place.lock); err != nil || !held {
+		if file, held, err := sys.TryLock(place.lock); err != nil || !held {
 			return file, err
 		}
 		if _, err := askStatus(place); err == nil {
@@ -318,7 +318,7 @@ func RunHub(project string, report safe.Report, say func(string), open HubSessio
 	if err != nil {
 		return err
 	}
-	defer func() { _ = lock.Close() }()
+	defer func() { _ = sys.Unlock(lock) }()
 	_ = os.Remove(place.socket)
 	var listener *net.UnixListener
 	if err := throughSocketDir(place.socket, func(reachable string) (err error) {

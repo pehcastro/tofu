@@ -13,27 +13,22 @@ func finalPath(path string) (string, error) {
 	return filepath.EvalSymlinks(path)
 }
 
-func tryLock(path string) (*os.File, bool, error) {
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o644)
+func openLocked(path string) (*os.File, bool, error) {
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
 		return nil, false, err
 	}
-	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		_ = file.Close()
-		if errors.Is(err, syscall.EWOULDBLOCK) {
-			return nil, true, nil
-		}
-		return nil, false, err
+	err = syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+	if err == nil {
+		return file, false, nil
 	}
-	opened, err := file.Stat()
-	named, namedErr := os.Stat(path)
-	if err != nil || namedErr != nil || !os.SameFile(opened, named) {
-		_ = file.Close()
+	_ = file.Close()
+	if errors.Is(err, syscall.EWOULDBLOCK) {
 		return nil, true, nil
 	}
-	return file, false, nil
+	return nil, false, err
 }
 
-func unlock(file *os.File) error {
+func Unlock(file *os.File) error {
 	return errors.Join(os.Remove(file.Name()), file.Close())
 }

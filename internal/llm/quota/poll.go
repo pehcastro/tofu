@@ -94,7 +94,7 @@ func (p *Poller) Poll(ctx context.Context, account Account) (Report, error) {
 		return p.lastGood(account, shelf.read()), transport.Fail("quota.Poll", transport.KindTimeout, err,
 			"another tofu process is asking the %s usage endpoint for this account", account.Provider)
 	}
-	defer func() { _ = lock.Close() }()
+	defer func() { _ = sys.Unlock(lock) }()
 	held := shelf.read()
 	if report, answered, err := p.answer(account, held); answered {
 		return report, err

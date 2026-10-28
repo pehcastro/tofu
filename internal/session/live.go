@@ -63,7 +63,7 @@ func (s *Store) Reopen(header Header, closed *Log) (log *Log, err error) {
 	}
 	defer func() {
 		if err != nil && lock != nil {
-			err = errors.Join(err, unlock(lock))
+			err = errors.Join(err, sys.Unlock(lock))
 		}
 	}()
 	log = &Log{store: s, lock: lock, last: map[string]string{}, prompts: map[string][sha256.Size]byte{}, redact: s.redactor(), side: map[string]*os.File{}}
@@ -255,7 +255,7 @@ func (l *Log) Close() error {
 	if l.lock == nil {
 		return closed
 	}
-	return errors.Join(closed, unlock(l.lock))
+	return errors.Join(closed, sys.Unlock(l.lock))
 }
 
 func (l *Log) leaveResumable() {

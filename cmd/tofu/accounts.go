@@ -32,7 +32,10 @@ import (
 	"tofu/internal/turn"
 )
 
-const claudeBaseURLVariable = "TOFU_CLAUDE_BASE_URL"
+const (
+	claudeBaseURLVariable = "TOFU_CLAUDE_BASE_URL"
+	keeperLockSuffix      = ".keeper.lock"
+)
 
 type accounts struct {
 	dir      string
@@ -342,11 +345,41 @@ func keepAccountsAlive(held heldStore, note, told func(string)) (stop func()) {
 	report := crashTold(".", told)
 	safe.Go(report, "credential keeper", func() {
 		defer close(done)
+		lock := claimKeeper(ctx, held.path+keeperLockSuffix, note)
+		if lock == nil {
+			return
+		}
+		defer func() { _ = sys.Unlock(lock) }()
 		safe.Loop(report, "credential keeper", ctx.Done(), func() { cred.NewKeeper(held.store, note).Run(ctx) })
 	})
 	return func() {
 		cancel()
 		<-done
+	}
+}
+
+func claimKeeper(ctx context.Context, path string, note func(string)) *os.File {
+	told := false
+	for {
+		lock, held, err := sys.TryLock(path)
+		switch {
+		case err != nil:
+			note("signed-in accounts are not kept alive: the keeper lock " + path + " does not open: " + err.Error())
+			return nil
+		case !held:
+			_, _ = lock.WriteString(strconv.Itoa(os.Getpid()))
+			note("process " + strconv.Itoa(os.Getpid()) + " keeps the signed-in accounts alive for this machine")
+			return lock
+		case !told:
+			holder, _ := os.ReadFile(path)
+			note("the credential keeper is held by process " + string(holder) + ", so this host takes it over when that one closes")
+			told = true
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(konst.CredSweepSeconds * time.Second):
+		}
 	}
 }
 

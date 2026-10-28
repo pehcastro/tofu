@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/sys"
 	"tofu/internal/transport"
 )
 
@@ -69,7 +70,8 @@ func (s shelf) try() (*os.File, error) {
 	if err := os.MkdirAll(filepath.Dir(s.lock), 0o755); err != nil {
 		return nil, err
 	}
-	return tryLock(s.lock)
+	file, _, err := sys.TryLock(s.lock)
+	return file, err
 }
 
 func (s shelf) take(ctx context.Context) (*os.File, error) {

@@ -402,17 +402,13 @@ func takeSlot(ctx context.Context, dir string) (func(), error) {
 	}
 	for {
 		for slot := range konst.HookProcessesAtOnce {
-			file, err := os.OpenFile(filepath.Join(dir, strconv.Itoa(slot)), os.O_CREATE|os.O_RDWR, 0o644)
+			file, held, err := sys.TryLock(filepath.Join(dir, strconv.Itoa(slot)))
 			if err != nil {
 				return nil, err
 			}
-			if lockFile(file) == nil {
-				return func() {
-					unlockFile(file)
-					_ = file.Close()
-				}, nil
+			if !held {
+				return func() { _ = sys.Unlock(file) }, nil
 			}
-			_ = file.Close()
 		}
 		select {
 		case <-ctx.Done():
