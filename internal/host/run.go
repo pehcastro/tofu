@@ -107,6 +107,11 @@ func leadUserMessage(logged session.Event) (session.MessageBody, bool) {
 	return said, logged.Agent == "" && logged.Kind == session.EventMessage && json.Unmarshal(logged.Body, &said) == nil && said.Role == session.RoleUser
 }
 
+type takenTask struct {
+	at   time.Time
+	text string
+}
+
 func enteredUnshown(said session.MessageBody, origin llm.Origin) (Event, bool) {
 	switch origin.Source {
 	case llm.SourceTyped, llm.SourceSteer, llm.SourceEnvironment, llm.SourceSpawnLine:
@@ -268,21 +273,28 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	}
 	var opened atomic.Bool
 	opened.Store(resumed)
+	heldByFork := map[takenTask]bool{}
 	config.Appended = func(logged session.Event) {
+		forking.Lock()
+		defer forking.Unlock()
 		if said, user := leadUserMessage(logged); user {
 			origin := turn.OriginOf(said)
 			if endsTheRow(origin.Source) {
 				watch.endLeadRow()
 			}
-			if entered, unshown := enteredUnshown(said, origin); unshown && (entered.Origin.Sub != live.Origin.Source || opened.Swap(true)) {
+			entered, unshown := enteredUnshown(said, origin)
+			if unshown && said.TakenAt != nil {
+				taken := takenTask{at: *said.TakenAt, text: entered.Text}
+				unshown = !heldByFork[taken]
+				heldByFork[taken] = true
+			}
+			if unshown && (entered.Origin.Sub != live.Origin.Source || opened.Swap(true)) {
 				emit(entered)
 			}
 		}
 		if logged.Kind != session.EventSent {
 			emit(Event{Kind: EventPersisted, ID: logged.ID, Agent: logged.Agent, Logged: &logged})
 		}
-		forking.Lock()
-		defer forking.Unlock()
 		if awaitingSession != nil && logged.Kind == session.EventTurnStart && logged.Turn == awaitingSession.ForkedInto && announcedFromHeader(*awaitingSession) {
 			awaitingSession = nil
 		}
