@@ -58,13 +58,12 @@ type Live struct {
 }
 
 type Carry struct {
-	Session   string
-	Name      string
-	Messages  []llm.Message
-	Tasks     []string
-	Store     *session.Store
-	Keys      *sys.KeyRedactor
-	WholeLine bool
+	Session  string
+	Name     string
+	Messages []llm.Message
+	Tasks    []string
+	Store    *session.Store
+	Keys     *sys.KeyRedactor
 }
 
 type Config struct {

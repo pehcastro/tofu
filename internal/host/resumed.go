@@ -136,7 +136,7 @@ func resumedChat(carry Carry, dir string) []Event {
 func (l *resumedLead) read(store *session.Store, carry Carry) ([]llm.Message, []int) {
 	lineage, _ := store.Lineage(carry.Session)
 	drawn := len(lineage) - 1
-	for carry.WholeLine && drawn > 0 && lineage[drawn-1].Header.ForkedInto == lineage[drawn].Header.ID {
+	for drawn > 0 && lineage[drawn-1].Header.ForkedInto == lineage[drawn].Header.ID {
 		drawn--
 	}
 	for i, generation := range lineage {
