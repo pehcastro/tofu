@@ -118,8 +118,8 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 	id := s.identity(event.Agent, event.ID)
 	switch event.Kind {
 	case EventTurnStarted:
-		s.turn, s.task, s.began, s.status = event.ID, event.Text, now, StatusFailed
-		return append(out, kept("turn.started", &TurnStarted{Identity: s.identity("", s.turn), Task: event.Text, Origin: event.Origin, StartedAt: now, Images: event.Images}))
+		s.turn, s.task, s.began, s.status = event.ID, event.Text, cmp.Or(event.At, now), StatusFailed
+		return append(out, kept("turn.started", &TurnStarted{Identity: s.identity("", s.turn), Task: event.Text, Origin: event.Origin, StartedAt: s.began, Images: event.Images}))
 	case EventTurnEnded:
 		s.unlogged = nil
 		return append(out, kept("turn.completed", &TurnCompleted{Identity: s.identity("", s.turn), Status: s.status, StartedAt: s.began, WorkedForMs: now.Sub(s.began).Milliseconds()}))

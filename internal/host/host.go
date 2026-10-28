@@ -328,7 +328,7 @@ func (h *Host) begin(pick Pick, task string, origin llm.Origin) {
 		defer close(turnOver)
 		out := h.emitter()
 		live.Emit = out.emit
-		out.emit(Event{Kind: EventTurnStarted, ID: live.Turn, Text: task, Origin: wireOrigin(origin), Images: images})
+		out.emit(Event{Kind: EventTurnStarted, ID: live.Turn, Text: task, Origin: wireOrigin(origin), Images: images, At: h.now()})
 		crashed := ""
 		_ = safe.Call(func(p safe.Panic) {
 			crashed = p.Saved(h.stateDir())
