@@ -505,7 +505,7 @@ func (h *hub) take(id string, member Member, spawned bool) (*hosted, error) {
 	}
 	for {
 		h.mu.Lock()
-		at := slices.IndexFunc(h.sessions, func(s *hosted) bool { return s.id == id || s.host != nil && s.host.ID() == id })
+		at := slices.IndexFunc(h.sessions, func(s *hosted) bool { return s.id == id || s.host != nil && s.host.writes(id) })
 		if at < 0 {
 			s := &hosted{id: id, ready: make(chan struct{}), ended: make(chan struct{})}
 			s.add(member, spawned)
@@ -544,7 +544,7 @@ func (h *hub) opened(s *hosted) error {
 		if end != nil {
 			end()
 		}
-		s.failed = fmt.Errorf("the tofu host, process %d, did not open session %s: %s", h.status.PID, s.id, strings.Join(troubles, "; "))
+		s.failed = fmt.Errorf("the tofu host, process %d, did not open session %s: %s", h.status.PID, s.id, cmp.Or(strings.Join(troubles, "; "), "this process already holds its writer's lock outside any session the host serves, and a session takes one writer"))
 		h.forget(s)
 		return s.failed
 	}

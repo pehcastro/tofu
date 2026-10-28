@@ -638,6 +638,11 @@ func (h *Host) hold(id string) error {
 	return nil
 }
 
+func (h *Host) writes(id string) bool {
+	now := h.seen().Session
+	return h.ID() == id || now != nil && now.ID == id
+}
+
 func (h *Host) holds(id string) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
