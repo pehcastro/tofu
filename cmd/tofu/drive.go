@@ -140,6 +140,9 @@ report, plus what came after it, and tofu's own estimate:
 
 An unfinished reply streams its text and keeps writing until the turn is stopped,
 which is how a driven run reaches an answer interrupted in the middle of itself.
+holdAfterStop keeps it open that long after the stop, as a wire that ignores a
+cancel does, so a driven run reaches a stop that does not end:
+  {"agent":"c1","text":"still going","unfinished":true,"holdAfterStop":"20s"}
 
 A refused reply is the error a wire returns for that HTTP status and body, so a
 driven run reaches a context overflow or any other refusal without a network:
@@ -191,12 +194,13 @@ const (
 )
 
 type cassetteReply struct {
-	Text       string   `json:"text"`
-	Deltas     []string `json:"deltas"`
-	Thinking   string   `json:"thinking"`
-	Agent      string   `json:"agent"`
-	Unfinished bool     `json:"unfinished"`
-	Refused    *struct {
+	Text          string   `json:"text"`
+	Deltas        []string `json:"deltas"`
+	Thinking      string   `json:"thinking"`
+	Agent         string   `json:"agent"`
+	Unfinished    bool     `json:"unfinished"`
+	HoldAfterStop string   `json:"holdAfterStop"`
+	Refused       *struct {
 		Status  int               `json:"status"`
 		Detail  string            `json:"detail"`
 		Wire    string            `json:"wire"`
@@ -215,11 +219,12 @@ type cassetteReply struct {
 }
 
 type recordedReply struct {
-	decision   llm.Decision
-	deltas     []string
-	thinking   string
-	unfinished bool
-	refused    error
+	decision      llm.Decision
+	deltas        []string
+	thinking      string
+	unfinished    bool
+	holdAfterStop time.Duration
+	refused       error
 }
 
 type cassette struct {
@@ -327,6 +332,14 @@ func readCassette(path string) (*cassette, error) {
 			})
 		}
 		recorded := recordedReply{decision: decision, deltas: reply.Deltas, thinking: reply.Thinking, unfinished: reply.Unfinished}
+		if reply.HoldAfterStop != "" {
+			if !reply.Unfinished {
+				return nil, fmt.Errorf("%s line %d: holdAfterStop holds an unfinished reply open after its stop, and this reply finishes", path, number+1)
+			}
+			if recorded.holdAfterStop, err = time.ParseDuration(reply.HoldAfterStop); err != nil {
+				return nil, fmt.Errorf("%s line %d: holdAfterStop: %w", path, number+1, err)
+			}
+		}
 		if refused := reply.Refused; refused != nil {
 			header := http.Header{}
 			for name, value := range refused.Headers {
@@ -515,6 +528,7 @@ func (c *cassette) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 		return reply.decision, nil
 	}
 	<-ctx.Done()
+	time.Sleep(reply.holdAfterStop)
 	return llm.Decision{}, ctx.Err()
 }
 

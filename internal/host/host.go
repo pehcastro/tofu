@@ -304,7 +304,13 @@ func (h *Host) Send(pick Pick, task string) bool {
 	}
 	if f := h.following.Load(); f != nil {
 		images := h.takePending(task)
-		return h.keepUndelivered(f.send(pick, task, images), images).OK
+		started := h.keepUndelivered(f.send(pick, task, images), images).OK
+		if started {
+			h.mu.Lock()
+			h.cancelled = false
+			h.mu.Unlock()
+		}
+		return started
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -404,6 +410,9 @@ func (asked StopAsked) followed() StopAsked {
 
 func (h *Host) Stop(asked StopAsked) {
 	if f := h.following.Load(); f != nil {
+		h.mu.Lock()
+		h.cancelled = true
+		h.mu.Unlock()
 		f.ask(followAsk{Op: followStop, Stop: asked.followed()})
 		return
 	}
