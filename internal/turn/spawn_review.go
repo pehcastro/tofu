@@ -198,6 +198,12 @@ func (t *SpawnTool) doneReview(ctx context.Context, held *heldSubAgent, claims [
 		return why, notBelieved + fmt.Sprintf("you changed a %s file, and your gate is %s, each run after your last edit and passing: %s",
 			held.definition.Language, strings.Join(held.definition.Gate, " and "), why)
 	}
+	exempt := gateExemptions(t.Project, held.definition, claims)
+	for _, check := range held.definition.Gate {
+		if reason, skipped := exempt[check]; skipped {
+			last.Warnings = append(last.Warnings, reason)
+		}
+	}
 	if t.Review == nil {
 		return "", ""
 	}

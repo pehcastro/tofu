@@ -2,6 +2,7 @@ package turn
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -127,5 +128,81 @@ func TestATypecheckErrorOnlyInAnotherAgentsFileDoesNotSendThisOneBack(t *testing
 	}
 	if missed := gateMissed(project, nil, tsGate, nil, typecheckRound(head+"src/theirs.ts(1,1): error TS1: x")); len(missed) != 1 {
 		t.Errorf("an agent that owns nothing passed on another file's error: %q", missed)
+	}
+}
+
+type cargoRun struct {
+	command, printed string
+	exit             int
+}
+
+func cargoRound(edit string, runs ...cargoRun) []Row {
+	row := Row{Steps: []StepRow{{ToolCalls: []ToolCallRow{{Tool: "edit", Args: json.RawMessage(`{"path":"` + edit + `"}`)}}}}}
+	for i, run := range runs {
+		call := fmt.Sprint("cargo-", i)
+		row.Steps[0].ToolCalls = append(row.Steps[0].ToolCalls, ToolCallRow{Call: call, Tool: "bash", Command: run.command, ExitCode: &run.exit})
+		row.Conversation = append(row.Conversation, llm.Message{Role: llm.RoleTool, ToolCallID: call, Content: run.printed})
+	}
+	return []Row{row}
+}
+
+func TestACargoGateReadsWhatClippyAndTestPrinted(t *testing.T) {
+	const (
+		clean     = "    Checking shop v0.1.0\n    Finished `dev` profile in 0.4s"
+		ranNone   = "     Running unittests src/lib.rs (target/debug/deps/shop-1)\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out\n\n   Doc-tests shop\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed"
+		ranSome   = "running 0 tests\n\ntest result: ok. 0 passed\n\n     Running tests/cart.rs\n\nrunning 10 tests\n\ntest result: ok. 10 passed"
+		ranOne    = "running 1 test\ntest tests::adds ... ok\n\ntest result: ok. 1 passed"
+		theirs    = "error[E0308]: mismatched types\n --> crates/other/src/lib.rs:4:5\n  |\nerror: could not compile `other` (lib) due to 1 previous error"
+		mineBroke = "error[E0308]: mismatched types\n --> src/lib.rs:4:5\n  |\nerror: could not compile `shop` (lib) due to 1 previous error"
+		unplaced  = "error: failed to parse manifest at `Cargo.toml`"
+		deadMine  = "warning: function `orphan` is never used\n --> src\\lib.rs:7:4\n  |\n7 | fn orphan() {}\n  |    ^^^^^^\n  = note: `#[warn(dead_code)]` on by default\nwarning: `shop` (lib) generated 1 warning\n" + clean
+		deadTheir = "warning: unused import: `std::fmt`\n --> crates/other/src/lib.rs:1:5\n" + clean
+	)
+	project := tsProjectHolding(t, map[string]string{
+		"Cargo.toml":                    "[workspace]\nmembers = [\"crates/*\"]\n",
+		"crates/bare/Cargo.toml":        "[package]\nname = \"bare\"\n",
+		"crates/bare/src/lib.rs":        "pub fn a() {}\n",
+		"crates/bare/target/debug/x.rs": "#[test]\nfn built() {}\n",
+		"crates/unit/Cargo.toml":        "[package]\nname = \"unit\"\n",
+		"crates/unit/src/lib.rs":        "#[cfg(test)]\nmod tests {\n    #[test]\n    fn adds() {}\n}\n",
+		"crates/integ/Cargo.toml":       "[package]\nname = \"integ\"\n",
+		"crates/integ/src/lib.rs":       "pub fn a() {}\n",
+		"crates/integ/tests/cart.rs":    "",
+		"crates/shop/Cargo.toml":        "[package]\nname = \"shop\"\n",
+		"crates/shop/src/lib.rs":        "#[tokio::test]\nasync fn adds() {}\n",
+		"crates/other/Cargo.toml":       "[package]\nname = \"other\"\n",
+		"crates/other/src/lib.rs":       "",
+	})
+	owns := []string{"crates/bare/**", "crates/unit/**", "crates/integ/**", "crates/shop/**"}
+	clippy, tested := cargoRun{"cargo clippy", clean, 0}, cargoRun{"cargo test", ranOne, 0}
+	for _, c := range []struct {
+		name, edit string
+		runs       []cargoRun
+		want       string
+	}{
+		{"a crate with no test needs no cargo test", "crates/bare/src/lib.rs", []cargoRun{clippy}, ""},
+		{"a #[test] in src needs cargo test", "crates/unit/src/lib.rs", []cargoRun{clippy}, "cargo test did not run"},
+		{"a tests dir needs cargo test", "crates/integ/src/lib.rs", []cargoRun{clippy}, "cargo test did not run"},
+		{"a tokio test needs cargo test", "crates/shop/src/lib.rs", []cargoRun{clippy}, "cargo test did not run"},
+		{"0 tests in every target is not a pass", "crates/unit/src/lib.rs", []cargoRun{clippy, {"cargo test -p unit nothing", ranNone, 0}}, "cargo test ran 0 tests"},
+		{"0 tests in one target and 10 in another passes", "crates/unit/src/lib.rs", []cargoRun{clippy, {"cargo test", ranSome, 0}}, ""},
+		{"1 test passes", "crates/unit/src/lib.rs", []cargoRun{clippy, tested}, ""},
+		{"0 tests in a crate with none is not a miss", "crates/bare/src/lib.rs", []cargoRun{clippy, {"cargo test", ranNone, 0}}, ""},
+		{"clippy failing only in another crate is excused", "crates/shop/src/lib.rs", []cargoRun{{"cargo clippy", theirs, 101}, tested}, ""},
+		{"clippy failing in an owned file is a miss", "crates/shop/src/lib.rs", []cargoRun{{"cd crates/shop && cargo clippy", mineBroke, 101}, tested}, "cargo clippy exited 101"},
+		{"clippy failing with no file is a miss", "crates/shop/src/lib.rs", []cargoRun{{"cargo clippy", unplaced, 101}, tested}, "cargo clippy exited 101"},
+		{"dead code in an owned file names the item and its line", "crates/shop/src/lib.rs", []cargoRun{{"cd crates/shop && cargo clippy", deadMine, 0}, tested}, "cargo clippy warned function `orphan` is never used at src\\lib.rs:7"},
+		{"an unused import in another crate is not this agent's", "crates/shop/src/lib.rs", []cargoRun{{"cargo clippy", deadTheir, 0}, tested}, ""},
+	} {
+		missed := strings.Join(gateMissed(project, nil, rustDev, owns, cargoRound(c.edit, c.runs...)), "; ")
+		if !strings.HasPrefix(missed, c.want) || (c.want == "") != (missed == "") {
+			t.Errorf("%s: the gate said %q, want %q", c.name, missed, c.want)
+		}
+	}
+	if missed := gateMissed(project, nil, rustDev, nil, cargoRound("crates/shop/src/lib.rs", cargoRun{"cargo clippy", theirs, 101}, tested)); len(missed) != 1 {
+		t.Errorf("an agent that owns nothing passed on another crate's error: %q", missed)
+	}
+	if exempt := gateExemptions(project, rustDev, cargoRound("crates/bare/src/lib.rs")); !strings.Contains(exempt["cargo test"], "no #[test] and no tests") {
+		t.Errorf("a crate with no tests is not said to be exempt: %q", exempt)
 	}
 }

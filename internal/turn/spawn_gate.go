@@ -3,6 +3,7 @@ package turn
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,39 +15,120 @@ import (
 	"tofu/internal/subagent"
 )
 
-func gateMissed(project string, recipes map[string]string, definition subagent.Definition, owns []string, rounds []Row) []string {
-	if definition.Language == "" {
-		return nil
-	}
+func editedSince(project string, definition subagent.Definition, rounds []Row) ([]ToolCallRow, string) {
 	var sinceEdit []ToolCallRow
 	lastEdit := ""
 	for _, round := range rounds {
 		for _, step := range round.Steps {
 			for _, call := range step.ToolCalls {
 				sinceEdit = append(sinceEdit, call)
-				if path := writtenPath(call); path != "" && rule.LanguageOf(path) == definition.Language {
+				if path := writtenPath(call); path != "" && definition.Language != "" && rule.LanguageOf(path) == definition.Language {
 					sinceEdit, lastEdit = nil, path
 				}
 			}
 		}
 	}
+	if lastEdit != "" && !filepath.IsAbs(lastEdit) {
+		lastEdit = filepath.Join(project, lastEdit)
+	}
+	return sinceEdit, lastEdit
+}
+
+func gateExemptions(project string, definition subagent.Definition, rounds []Row) map[string]string {
+	_, lastEdit := editedSince(project, definition, rounds)
+	exempt := map[string]string{}
+	if project == "" || lastEdit == "" {
+		return exempt
+	}
+	if slices.Contains(definition.Gate, "test") {
+		if _, refused := vitestPackage(filepath.Dir(lastEdit)); strings.HasPrefix(refused.FailureText, testNoTests) {
+			exempt["test"] = refused.FailureText
+		}
+	}
+	if manifest, found := findUp(filepath.Dir(lastEdit), "Cargo.toml"); found && slices.Contains(definition.Gate, "cargo test") && !crateHoldsTests(filepath.Dir(manifest)) {
+		named, _ := filepath.Rel(project, manifest)
+		exempt["cargo test"] = "cargo test is not needed: the crate of " + filepath.ToSlash(named) + " has no #[test] and no tests directory, so there is nothing to run"
+	}
+	return exempt
+}
+
+func crateHoldsTests(crate string) bool {
+	if info, err := os.Stat(filepath.Join(crate, "tests")); err == nil && info.IsDir() {
+		return true
+	}
+	found := false
+	_ = filepath.WalkDir(crate, func(path string, entry fs.DirEntry, err error) error {
+		switch {
+		case err != nil:
+			return nil
+		case entry.IsDir() && path != crate && (entry.Name() == "target" || strings.HasPrefix(entry.Name(), ".")):
+			return filepath.SkipDir
+		case entry.IsDir() || filepath.Ext(path) != ".rs":
+			return nil
+		}
+		body, _ := os.ReadFile(path)
+		if found = rustTestAttribute.Match(body); found {
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return found
+}
+
+func ranNoTests(printed string) bool {
+	counts := cargoRunning.FindAllStringSubmatch(printed, -1)
+	return len(counts) > 0 && !slices.ContainsFunc(counts, func(count []string) bool { return count[1] != "0" })
+}
+
+func cargoFindings(project, lastEdit string, owns []string, printed string) (dead []string, foreign bool) {
+	type diagnostic struct{ said, path, line string }
+	var found []diagnostic
+	for _, line := range strings.Split(strings.ReplaceAll(printed, "\r", ""), "\n") {
+		if header := cargoHeader.FindStringSubmatch(line); header != nil && !cargoSummary.MatchString(line) {
+			found = append(found, diagnostic{said: header[3]})
+		} else if at := cargoLocation.FindStringSubmatch(line); at != nil && len(found) > 0 && found[len(found)-1].path == "" {
+			found[len(found)-1].path, found[len(found)-1].line = at[1], at[2]
+		}
+	}
+	foreign = len(found) > 0
+	for _, each := range found {
+		mine := cargoOwned(project, lastEdit, owns, each.path)
+		foreign = foreign && !mine
+		if mine && each.path != "" && cargoDeadCode.MatchString(each.said) {
+			dead = append(dead, each.said+" at "+each.path+":"+each.line)
+		}
+	}
+	return dead, foreign
+}
+
+func cargoOwned(project, lastEdit string, owns []string, printedPath string) bool {
+	if len(owns) == 0 || printedPath == "" {
+		return true
+	}
+	path, found := filepath.FromSlash(strings.ReplaceAll(printedPath, `\`, "/")), true
+	if !filepath.IsAbs(path) {
+		path, found = findUp(filepath.Dir(lastEdit), path)
+	}
+	relative, err := filepath.Rel(project, path)
+	if !found || err != nil {
+		return true
+	}
+	mine, _ := subagent.Matches(filepath.ToSlash(relative), owns)
+	return mine
+}
+
+func gateMissed(project string, recipes map[string]string, definition subagent.Definition, owns []string, rounds []Row) []string {
+	sinceEdit, lastEdit := editedSince(project, definition, rounds)
 	if lastEdit == "" {
 		return nil
 	}
-	if !filepath.IsAbs(lastEdit) {
-		lastEdit = filepath.Join(project, lastEdit)
-	}
-	noTests := false
-	if project != "" && slices.Contains(definition.Gate, "test") {
-		_, refused := vitestPackage(filepath.Dir(lastEdit))
-		noTests = strings.HasPrefix(refused.FailureText, testNoTests)
-	}
+	exempt := gateExemptions(project, definition, rounds)
 	var missed []string
 	for _, check := range definition.Gate {
-		said := check + " did not run"
-		if check == "test" && noTests {
-			said = ""
+		if _, skipped := exempt[check]; skipped {
+			continue
 		}
+		said := check + " did not run"
 		for _, call := range sinceEdit {
 			if !gateRan(check, call, recipes) || call.Error == typecheckUnanswered {
 				continue
@@ -54,12 +136,20 @@ func gateMissed(project string, recipes map[string]string, definition subagent.D
 			printed := printedBy(rounds, call.Call)
 			chained := strings.ContainsAny(call.Command, ";|&\n")
 			verdict := goCheckPrinted(check, printed, call.ExitCode)
+			cargo := strings.HasPrefix(check, "cargo ")
+			dead, foreign := cargoFindings(project, lastEdit, owns, printed)
 			switch {
 			case checkerMissing(printed):
 				said = check + " could not run: its checker is not installed"
+			case cargo && len(dead) > 0:
+				said = check + " warned " + strings.Join(dead, "; ") + ": new code nothing calls is unfinished wiring"
+			case check == "cargo test" && ranNoTests(printed):
+				said = "cargo test ran 0 tests: every target it built printed running 0 tests, so it proved nothing"
 			case chained && verdict == printedFailed:
 				said = check + " failed"
 			case chained && verdict == printedPassed:
+				said = ""
+			case cargo && foreign:
 				said = ""
 			case call.ExitCode != nil && *call.ExitCode != 0:
 				said = fmt.Sprintf("%s exited %d", check, *call.ExitCode)
@@ -90,6 +180,13 @@ var (
 	goDiagnostic = regexp.MustCompile(`(?m)^\S+\.go:\d+:\d+: `)
 	goTestFailed = regexp.MustCompile(`(?m)^(FAIL\b|--- FAIL|panic: |\s*\[FAIL\]|Go test: .*\bfailed\b)`)
 	goTestPassed = regexp.MustCompile(`(?m)^(ok\s+\S|\?\s+\S+\s+\[no test files\]|Go test: \d+ passed in )`)
+
+	rustTestAttribute = regexp.MustCompile(`#\[(\w+::)*test\b`)
+	cargoRunning      = regexp.MustCompile(`(?m)^running (\d+) tests?\r?$`)
+	cargoHeader       = regexp.MustCompile(`^(warning|error)(\[\w+\])?: (.+)$`)
+	cargoSummary      = regexp.MustCompile("^(warning|error): (`[^`]+` \\(.+\\) generated|could not compile|build failed|aborting due to|\\d+ warnings? emitted)")
+	cargoLocation     = regexp.MustCompile(`^\s*--> (.+):(\d+):\d+$`)
+	cargoDeadCode     = regexp.MustCompile(`\b(is|are) never (used|read|constructed)\b|^unused\b`)
 )
 
 func goCheckPrinted(check, printed string, exit *int) printedVerdict {
