@@ -307,6 +307,18 @@ func (a *App) mintID() string {
 	return strconv.FormatInt(a.options.Now().UnixNano(), 16) + strconv.Itoa(a.minted)
 }
 
+func (a *App) turnEventID() string {
+	if a.keptAnswer != "" {
+		return a.keptAnswer
+	}
+	for index := len(a.happened) - 1; index >= a.happenedAtTurn; index-- {
+		if a.happened[index].Actor == orchestrator && a.happened[index].Kind != feed.KindThinking {
+			return a.happened[index].ID
+		}
+	}
+	return ""
+}
+
 func (a *App) interrupt() tea.Cmd {
 	if a.stopOverdue() && a.options.Host.Cancelled() {
 		a.options.Host.ClosingBy(a.askedBy("ctrl+c while a stop hung").By)
@@ -447,7 +459,11 @@ func (a *App) leadTurnBegins() {
 }
 
 func (a *App) leadTurnEnds(words string) {
-	a.view.Close(words, a.view.LastRequest())
+	labelled := a.turnEventID()
+	if a.view.Stopping && a.keptAnswer == "" {
+		labelled = ""
+	}
+	a.view.Close(words, labelled)
 	a.view.Stop()
 	a.leading, a.running = false, 0
 	a.view.WaitOn(a.status.Agents)

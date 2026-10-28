@@ -26,7 +26,6 @@ import (
 	"tofu/internal/judge/jev"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
-	isession "tofu/internal/session"
 	isettings "tofu/internal/settings"
 	roster "tofu/internal/subagent"
 )
@@ -85,16 +84,11 @@ func sessionApp(t *testing.T, width, height int) *App {
 		{Kind: EventToolCall, ID: "c2", Tool: "bash", Text: "go test ./internal/judge/..."},
 		{Kind: EventDecision, Decision: asked()},
 		{Kind: EventToolResult, ID: "c2", Text: "ok tofu/internal/judge 0.42s"},
-		leadRequest("3b1963a2-b303-48a6-b179-66e1feccc0fa"),
 		{Kind: EventDone, Text: "cooked for"},
 	} {
 		app.Update(event)
 	}
 	return app
-}
-
-func leadRequest(id string) Event {
-	return Event{Kind: EventPersisted, ID: id, Logged: &isession.Event{Kind: isession.EventRequest, ID: id}}
 }
 
 func allowed() *session.Decision {
@@ -397,6 +391,15 @@ func TestTheRawGateErrorIsWholeInTheSubAgentsFeed(t *testing.T) {
 	content := ansi.Strip(app.View().Content)
 	if !strings.Contains(content, "missing_credential") || !strings.Contains(content, gateOffHead) {
 		t.Errorf("the sub-agents feed does not show the raw gate error\n%s", content)
+	}
+}
+
+func TestTheAnswerDoesNotPointAtTheGateNoteForItsWork(t *testing.T) {
+	app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: anthropicAlone})
+	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	app.Update(Event{Kind: EventGateOff, Text: noKeyAtAll()})
+	if id := app.turnEventID(); id != "" {
+		t.Errorf("the answer points at the gate note %q as the work of the turn", id)
 	}
 }
 
@@ -1676,15 +1679,11 @@ func TestASoftStopBeforeTheHardStopKeepsTheSameAnswer(t *testing.T) {
 	}
 }
 
-func TestCookedForNamesTheLastLeadRequestWhenAToolCallCameAfterIt(t *testing.T) {
-	const first, last = "c92233ed-942d-490e-8b5c-0d0c889d294e", "3b1963a2-b303-48a6-b179-66e1feccc0fa"
+func TestCookedForNamesTheAnswerWhenAToolCallCameAfterIt(t *testing.T) {
 	app, stopped := turningApp(t)
-	app.Update(leadRequest(first))
 	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "bash", Text: "go test ./..."})
 	app.Update(Event{Kind: EventTextDelta, Text: halfWritten})
 	interrupt(app, 1)
-	app.Update(leadRequest(last))
-	app.Update(Event{Kind: EventPersisted, ID: "sub-req", Agent: "c1", Logged: &isession.Event{Kind: isession.EventRequest, ID: "sub-req-0d0c88aaaaaa"}})
 	app.Update(Event{Kind: EventToolCall, ID: "c2", Tool: "read", Text: "internal/turn/loop.go"})
 	app.Update(Event{Kind: EventToolResult, ID: "c1", Text: "ok"})
 	app.Update(Event{Kind: EventToolResult, ID: "c2", Text: "84 lines"})
@@ -1692,14 +1691,9 @@ func TestCookedForNamesTheLastLeadRequestWhenAToolCallCameAfterIt(t *testing.T) 
 	app.Update(Event{Kind: EventDone, Text: "cooked for"})
 	app.Update(Closed{})
 
-	chat := ansi.Strip(app.View().Content)
-	if want := "[request#" + short(last) + "]"; !strings.Contains(chat, want) {
+	want := "[request#" + interruptedAnswer(t, app).ID + "]"
+	if chat := ansi.Strip(app.View().Content); !strings.Contains(chat, want) {
 		t.Errorf("no line reads %q\n%s", want, chat)
-	}
-	for _, stale := range []string{short(first), "aaaaaa", interruptedAnswer(t, app).ID} {
-		if strings.Contains(chat, "[request#"+stale+"]") {
-			t.Errorf("the closing line names %q, which is not the lead's last request\n%s", stale, chat)
-		}
 	}
 }
 

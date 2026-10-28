@@ -226,7 +226,11 @@ func (m *Model) requestLine() string {
 		if m.Stopping || m.LettingToolsFinish {
 			word, style = stoppingWord, look.Style(look.Amber)
 		}
-		return line + look.Accent(progress.Spin(m.frame)) + " " + style.Render(word) + look.Muted(requestSeparator+widget.Until(m.phaseSince()))
+		line += look.Accent(progress.Spin(m.frame)) + " " + style.Render(word) + look.Muted(requestSeparator+widget.Until(m.phaseSince()))
+		if m.requestID == "" {
+			return line
+		}
+		line, id = line+look.Muted(metaGap), m.requestID
 	case m.leadIdle():
 		line += look.Accent(progress.Spin(m.frame)) + " " + look.Style(look.Violet).Render(m.leadIdleWords()) + look.Muted(requestSeparator+widget.Until(max(m.now().Sub(m.leadIdleSince), 0))+metaGap)
 	case m.cooked != "":
@@ -243,10 +247,6 @@ func (m *Model) requestLine() string {
 
 func (m *Model) Requested(id string) {
 	m.requestID = id
-}
-
-func (m *Model) LastRequest() string {
-	return m.requestID
 }
 
 func (m *Model) Spawn(id string) {
