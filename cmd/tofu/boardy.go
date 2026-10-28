@@ -42,7 +42,7 @@ func boardyUsageOf(subcommand string) string {
 	case "boards":
 		return "tofu boardy boards [--json]"
 	case "set":
-		return "tofu boardy set <ticket> [--title text] [--owns a,b] [--epic E] [--sprint S] [--as name] [--json]"
+		return "tofu boardy set <ticket> [--title text] [--owns a,b] [--epic E] [--sprint S] [--acceptance line]... [--reason text] [--as name] [--json]"
 	case "tick":
 		return "tofu boardy tick [--board KEY] [--json]"
 	case "fire":
@@ -562,6 +562,7 @@ func (c boardyCall) plan() int {
 	id := c.args[0]
 	title, retitle := c.flags["title"]
 	owns, reown := c.flags["owns"]
+	acceptance, reaccept := c.flags["acceptance"]
 	var ticket boardy.Ticket
 	var err error
 	if retitle {
@@ -570,7 +571,10 @@ func (c boardyCall) plan() int {
 	if err == nil && reown {
 		ticket, err = c.managed.Reown(id, splitList(owns), c.actor)
 	}
-	if err == nil && (c.flags["epic"] != "" || c.flags["sprint"] != "" || !retitle && !reown) {
+	if err == nil && reaccept {
+		ticket, err = c.managed.Reaccept(id, acceptance, c.flags["reason"], c.actor)
+	}
+	if err == nil && (c.flags["epic"] != "" || c.flags["sprint"] != "" || !retitle && !reown && !reaccept) {
 		ticket, err = c.managed.Plan(id, c.flags["epic"], c.flags["sprint"], c.actor)
 	}
 	return c.receipt(ticket, err, cli.Changed, ticket.ID+" "+ticket.Title+": owns "+dash(strings.Join(ticket.Owns, ", "))+", "+c.words.Epic+" "+dash(ticket.Epic)+", "+c.words.Sprint+" "+dash(ticket.Sprint))

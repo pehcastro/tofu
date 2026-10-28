@@ -309,3 +309,21 @@ func (s Store) Edit(id string, edit func(*Ticket) error) (Ticket, error) {
 	})
 	return ticket, err
 }
+
+func (m Managed) Reaccept(id, lines, reason, actor string) (Ticket, error) {
+	reason = strings.Join(strings.Fields(reason), " ")
+	switch {
+	case strings.TrimSpace(lines) == "":
+		return Ticket{}, errors.New("name at least one acceptance line")
+	case reason == "":
+		return Ticket{}, errors.New("say why the acceptance changes with --reason")
+	}
+	revision := bulleted([]string{lines})[0]
+	return m.revise(id, fmt.Sprintf("set acceptance to %d lines, because %s", strings.Count(revision, "\n")+1, reason), actor, func(t *Ticket) error {
+		if strings.TrimSpace(strings.Join(t.Acceptance, "")) == "" {
+			t.Acceptance = nil
+		}
+		t.Acceptance = append(t.Acceptance, revision)
+		return nil
+	})
+}
