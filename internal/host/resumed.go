@@ -63,14 +63,15 @@ func resumedChat(carry Carry, dir string) []Event {
 		chat = append(chat, redacted(event, mask))
 	}, turnID: carry.Session, seen: &shownResults{ids: map[string]bool{}}, spawner: &turn.SpawnTool{}}
 	labelled := Event{Kind: EventSession, Text: carry.Name, ID: carry.Session, Root: carry.Session}
+	messages := carry.Messages
 	store, err := carry.reading(dir)
 	if err == nil {
-		lead.read(store, carry.Session)
+		messages = lead.read(store, carry)
 		labelled = labelledAs(store, labelled)
 		store.ForgetRead()
 	}
 	lead.watch.emit(labelled)
-	for _, message := range carry.Messages {
+	for _, message := range messages {
 		if message.Origin.Source == llm.SourceSpawnLine {
 			continue
 		}
@@ -130,16 +131,56 @@ func resumedChat(carry Carry, dir string) []Event {
 	return chat
 }
 
-func (l *resumedLead) read(store *session.Store, id string) {
-	lineage, _ := store.Lineage(id)
-	for _, generation := range lineage {
-		for _, event := range generation.Events {
+func (l *resumedLead) read(store *session.Store, carry Carry) []llm.Message {
+	lineage, _ := store.Lineage(carry.Session)
+	drawn := len(lineage) - 1
+	for carry.WholeLine && drawn > 0 && lineage[drawn-1].Header.ForkedInto == lineage[drawn].Header.ID {
+		drawn--
+	}
+	for i, generation := range lineage {
+		if i >= drawn && generation.Unread {
+			lineage[i].Events, _ = store.Events(generation.Header.ID)
+		}
+		for _, event := range lineage[i].Events {
 			l.note(event)
 		}
 		for _, run := range generation.Header.Agents {
 			l.runs[run.Agent] = run
 		}
 	}
+	line, child := carry.Messages, carry.Messages
+	for i := len(lineage) - 2; i >= drawn; i-- {
+		said, _, _ := store.Said(lineage[i].Header.ID, lineage[i].Events)
+		parent, _ := turn.ConversationFrom(said)
+		line, child = slices.Concat(parent, unheld(parent, child), line[len(child):]), parent
+	}
+	return line
+}
+
+func unheld(parent, child []llm.Message) []llm.Message {
+	held := map[string]bool{}
+	for _, message := range parent {
+		held[heldKey(message)] = true
+	}
+	carry := slices.IndexFunc(child, func(message llm.Message) bool { return message.Origin.Source == llm.SourceForkCarry })
+	fresh := carry + 1
+	for fresh < len(child) && held[heldKey(child[fresh])] {
+		fresh++
+	}
+	if carry < 0 {
+		return child[fresh:]
+	}
+	return append([]llm.Message{child[carry]}, child[fresh:]...)
+}
+
+func heldKey(message llm.Message) string {
+	switch {
+	case message.Role == llm.RoleTool:
+		return "tool " + message.ToolCallID
+	case len(message.ToolCalls) > 0:
+		return "call " + message.ToolCalls[0].ID
+	}
+	return message.Role.String() + " " + message.Content
 }
 
 func (l *resumedLead) note(event session.Event) {

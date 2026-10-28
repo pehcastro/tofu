@@ -301,6 +301,12 @@ func (s *server) open(p SessionOpenParams) (any, error) {
 	return s.openOn(focus, p)
 }
 
+func (s *server) wholeLine(handle string) (Carry, error) {
+	carry, err := s.Carry(handle)
+	carry.WholeLine = true
+	return carry, err
+}
+
 func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 	if p.Session == "" {
 		id, err := l.host.OpenFresh()
@@ -315,7 +321,7 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 		s.mu.Unlock()
 		return SessionOpenResult{Session: id, Fresh: true}, nil
 	}
-	carry, err := s.Carry(p.Session)
+	carry, err := s.wholeLine(p.Session)
 	if err != nil {
 		return nil, err
 	}
@@ -360,7 +366,7 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 }
 
 func (s *server) refocus(l *lane, p SessionOpenParams) (any, error) {
-	carry, err := s.Carry(p.Session)
+	carry, err := s.wholeLine(p.Session)
 	if err != nil {
 		return nil, err
 	}
@@ -393,7 +399,7 @@ func (s *server) rebuild(l *lane) {
 		known, dead = slices.Clone(was.lines), was.dead
 	}
 	s.mu.Unlock()
-	carry, err := s.Carry(session)
+	carry, err := s.wholeLine(session)
 	if err != nil {
 		return
 	}

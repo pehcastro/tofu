@@ -373,7 +373,7 @@ func (s *server) history(p SessionHistoryParams) (any, error) {
 	if kept != nil {
 		return *kept, nil
 	}
-	carry, err := s.Carry(p.Session)
+	carry, err := s.wholeLine(p.Session)
 	if err != nil {
 		return nil, err
 	}
