@@ -70,7 +70,7 @@ func record(pagesDir, fastbrowse, hotel, home string) (err error) {
 	mux.Handle("/", http.FileServer(http.Dir(fastbrowse)))
 	server := &http.Server{Handler: mux, ReadHeaderTimeout: readTimeout}
 	go func() { _ = server.Serve(listener) }()
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 	origin := "http://" + listener.Addr().String()
 
 	if _, err := browser.NewProfile(home, profile); err != nil {

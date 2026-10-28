@@ -92,7 +92,7 @@ func postImages(ctx context.Context, key string, body []byte) (jev.Raw, error) {
 	if err != nil {
 		return jev.Raw{}, err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	raw, err := io.ReadAll(response.Body)
 	elapsed := time.Since(started)
 	if err == nil && response.StatusCode != http.StatusOK {

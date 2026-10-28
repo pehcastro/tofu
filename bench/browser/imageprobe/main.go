@@ -94,7 +94,7 @@ func post(ctx context.Context, at endpoint, key string, shot []byte) (answer, er
 	if err != nil {
 		return answer{}, err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	raw, err := io.ReadAll(response.Body)
 	if err != nil {
 		return answer{}, err
