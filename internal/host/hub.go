@@ -35,6 +35,7 @@ const (
 	hubHostsDir      = "hosts"
 	hubShortKey      = 8
 	hubTempDirPrefix = "tofu-"
+	hubTempVariable  = "TOFU_HOST_TEMP"
 	hubAskStatus     = "status"
 	hubAskJoin       = "join"
 	hubAskRoster     = "roster"
@@ -101,6 +102,7 @@ type hosted struct {
 	end     func()
 	failed  error
 	members []Member
+	spawned []Member
 	ending  bool
 	ready   chan struct{}
 	ended   chan struct{}
@@ -143,9 +145,13 @@ func socketWithinLimit(socket string) (string, error) {
 	return socket, nil
 }
 
+func hubTemp() string {
+	return cmp.Or(os.Getenv(hubTempVariable), os.TempDir())
+}
+
 func tempSocketOf(home, name string) (string, error) {
 	sum := sha256.Sum256([]byte(home))
-	return socketWithinLimit(filepath.Join(os.TempDir(), hubTempDirPrefix+hex.EncodeToString(sum[:])[:hubShortKey], name+".sock"))
+	return socketWithinLimit(filepath.Join(hubTemp(), hubTempDirPrefix+hex.EncodeToString(sum[:])[:hubShortKey], name+".sock"))
 }
 
 func dialHub(socket string) (net.Conn, error) {
@@ -303,6 +309,9 @@ func RunHub(project string, report safe.Report, say func(string), open HubSessio
 	if err := os.Chdir(place.project); err != nil {
 		return err
 	}
+	if err := os.Setenv(hubTempVariable, hubTemp()); err != nil {
+		return err
+	}
 	lock, err := takeHubLock(place)
 	if err != nil {
 		return err
@@ -425,7 +434,11 @@ func (h *hub) serve(conn net.Conn) {
 	case hubAskStatus:
 		_ = h.answer(conn)
 	case hubAskStop:
-		if err := startedHere(conn); err != nil {
+		peer, under, err := peerUnderHost(conn, "stop")
+		if err == nil && under {
+			err = fmt.Errorf("stop is refused: process %d runs in a shell of this host, process %d, so stopping the host would end the process that asked. Run tofu host stop from a terminal the host did not start, or close every tofu window on this project and the host exits %s after the last one leaves", peer, os.Getpid(), konst.HostLingerMillis*time.Millisecond)
+		}
+		if err != nil {
 			_ = json.NewEncoder(conn).Encode(hubJoined{HubStatus: h.status, Refused: err.Error()})
 			return
 		}
@@ -442,19 +455,19 @@ func (h *hub) serve(conn net.Conn) {
 	}
 }
 
-func startedHere(conn net.Conn) error {
+func peerUnderHost(conn net.Conn, action string) (int, bool, error) {
 	peer, err := peerProcess(conn)
 	if err != nil {
-		return fmt.Errorf("the tofu host, process %d, could not tell which process dialled it, so it refused: %w", os.Getpid(), err)
+		return 0, false, fmt.Errorf("the tofu host, process %d, refused to %s because it could not tell which process asked: %w", os.Getpid(), action, err)
 	}
 	seen := map[int]bool{}
 	for pid, err := parentOf(peer); pid > 1 && !seen[pid] && err == nil; pid, err = parentOf(pid) {
 		if pid == os.Getpid() {
-			return fmt.Errorf("process %d was started by the tofu host, process %d, so it may not join the host or stop it", peer, pid)
+			return peer, true, nil
 		}
 		seen[pid] = true
 	}
-	return nil
+	return peer, false, nil
 }
 
 func (h *hub) join(conn net.Conn, lines *json.Decoder, asked hubAsk) {
@@ -462,10 +475,10 @@ func (h *hub) join(conn net.Conn, lines *json.Decoder, asked hubAsk) {
 	joined := hubJoined{HubStatus: h.status}
 	member := asked.Member
 	member.Joined = time.Now()
-	err := startedHere(conn)
+	_, spawned, err := peerUnderHost(conn, "let a process join")
 	var s *hosted
 	if err == nil {
-		s, err = h.take(asked.Session, member)
+		s, err = h.take(asked.Session, member, spawned)
 	}
 	if err != nil {
 		joined.Refused = err.Error()
@@ -486,7 +499,7 @@ func (h *hub) told(s *hosted) {
 	s.host.membersAre(slices.Clone(s.members))
 }
 
-func (h *hub) take(id string, member Member) (*hosted, error) {
+func (h *hub) take(id string, member Member, spawned bool) (*hosted, error) {
 	if id == "" {
 		return nil, errNoSession
 	}
@@ -494,14 +507,15 @@ func (h *hub) take(id string, member Member) (*hosted, error) {
 		h.mu.Lock()
 		at := slices.IndexFunc(h.sessions, func(s *hosted) bool { return s.id == id || s.host != nil && s.host.ID() == id })
 		if at < 0 {
-			s := &hosted{id: id, members: []Member{member}, ready: make(chan struct{}), ended: make(chan struct{})}
+			s := &hosted{id: id, ready: make(chan struct{}), ended: make(chan struct{})}
+			s.add(member, spawned)
 			h.sessions = append(h.sessions, s)
 			h.mu.Unlock()
 			return s, h.opened(s)
 		}
 		s := h.sessions[at]
 		if !s.ending {
-			s.members = append(s.members, member)
+			s.add(member, spawned)
 		}
 		h.mu.Unlock()
 		if s.ending {
@@ -510,6 +524,13 @@ func (h *hub) take(id string, member Member) (*hosted, error) {
 		}
 		<-s.ready
 		return s, s.failed
+	}
+}
+
+func (s *hosted) add(member Member, spawned bool) {
+	s.members = append(s.members, member)
+	if spawned {
+		s.spawned = append(s.spawned, member)
 	}
 }
 
@@ -558,14 +579,23 @@ func (h *hub) leave(s *hosted, member Member) {
 	if at := slices.Index(s.members, member); at >= 0 {
 		s.members = slices.Delete(s.members, at, at+1)
 	}
-	last := len(s.members) == 0 && !s.ending
+	at := slices.Index(s.spawned, member)
+	wasSpawned := at >= 0
+	if wasSpawned {
+		s.spawned = slices.Delete(s.spawned, at, at+1)
+	}
+	onlySpawned := len(s.members) > 0 && len(s.members) == len(s.spawned) && !wasSpawned
+	last := (len(s.members) == 0 || onlySpawned) && !s.ending
 	s.ending = s.ending || last
 	h.mu.Unlock()
-	if !last {
+	switch {
+	case !last:
 		h.told(s)
-		return
+	case onlySpawned:
+		h.end(s, "the last member the host did not start, "+member.named(), "it left and every member still here runs in one of the session's shells, so the session's turn stops and its shells end, taking those members with them")
+	default:
+		h.end(s, "the last member, "+member.named(), "it left, so the session's turn stops and its shells end")
 	}
-	h.end(s, "the last member, "+member.named(), "it left, so the session's turn stops and its shells end")
 }
 
 func (h *hub) end(s *hosted, by, why string) {
