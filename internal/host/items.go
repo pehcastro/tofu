@@ -195,9 +195,12 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		return append(out, merged("usage.updated", event.Agent, &UsageUpdated{Identity: id, Model: event.Model, TokensIn: event.TokensIn, TokensOut: event.TokensOut, CacheRead: event.CacheRead,
 			CacheWrite5m: event.CacheWrite5m, CacheWrite1h: event.CacheWrite1h, CostUSD: event.CostUSD, Decisions: event.Decisions}))
 	case EventContext:
-		id.Item = session.EventIDFor(s.turn, "context")
-		s.context = &ContextUse{Used: event.Context.Used, Budget: event.Context.Budget}
-		return append(out, merged("context.updated", "", &ContextUpdated{Identity: id, ContextUse: *s.context}))
+		id.Item = session.EventIDFor(s.turn, "context "+event.Agent)
+		used := ContextUse{Used: event.Context.Used, Budget: event.Context.Budget}
+		if event.Agent == "" {
+			s.context = &used
+		}
+		return append(out, merged("context.updated", event.Agent, &ContextUpdated{Identity: id, ContextUse: used}))
 	case EventPlan:
 		id.Item = session.EventIDFor(s.turn, "plan")
 		steps := make([]PlanStep, 0, len(event.Plan))

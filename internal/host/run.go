@@ -291,7 +291,11 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 		emit(Event{Kind: EventRequestSent, ID: sent.ID, Agent: sent.Agent, Logged: &sent})
 	}
 	if prepared.Spawner != nil {
-		prepared.Spawner.AnnounceSent(config.Sent)
+		prepared.Spawner.Announce(config.Sent, func(agent string, step turn.StepRow) {
+			if step.Occupancy != nil {
+				emit(Event{Kind: EventContext, Agent: agent, Context: Context{Used: step.Occupancy.Total(), Budget: ceiling}})
+			}
+		})
 	}
 	config.Step = func(step turn.StepRow) {
 		steps.Store(int64(step.Index))

@@ -187,6 +187,7 @@ type SpawnTool struct {
 	plans          map[string]agentPlan
 	built          *builtOncePerTurn
 	writes         *subagent.Writes
+	stepped        CalledAsASubAgentStepIsRecorded
 }
 
 type builtOncePerTurn struct {
@@ -275,7 +276,11 @@ func NewSpawnTool(orchestratorID string, base Config, roster *subagent.Roster) *
 	return &SpawnTool{Inbox: NewInbox(), orchestratorID: orchestratorID, base: base, roster: roster, tree: &spawnTree{}, built: &builtOncePerTurn{}, writes: &subagent.Writes{}}
 }
 
-func (t *SpawnTool) AnnounceSent(sent CalledAsEachRequestIsSent) { t.base.Sent = sent }
+type CalledAsASubAgentStepIsRecorded func(agent string, step StepRow)
+
+func (t *SpawnTool) Announce(sent CalledAsEachRequestIsSent, stepped CalledAsASubAgentStepIsRecorded) {
+	t.base.Sent, t.stepped = sent, stepped
+}
 
 func (t *SpawnTool) Name() string { return "spawn" }
 
@@ -696,7 +701,7 @@ func (t *SpawnTool) offeredTools(held *heldSubAgent, site spawnSite, limits SubA
 	}
 	if offered(t.Name()) {
 		owned = append(owned, &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: func() SubAgentLimits { return limits }, ChecksWork: t.ChecksWork, Project: t.Project, Inbox: held.inbox, Remembered: t.Remembered,
-			orchestratorID: held.agent.ID, depth: t.depth + 1, writesNothing: len(held.boundary.Owns()) == 0, base: t.base, roster: t.roster, tree: t.tree, built: t.built, writes: t.writes})
+			orchestratorID: held.agent.ID, depth: t.depth + 1, writesNothing: len(held.boundary.Owns()) == 0, base: t.base, roster: t.roster, tree: t.tree, built: t.built, writes: t.writes, stepped: t.stepped})
 	}
 	ask := askTool{orchestrator: t, asking: held.agent, conversation: site.conversation}
 	return append(owned, watchedTool{tool: ask, held: held, definition: ask.Definition()}), plan
@@ -740,10 +745,13 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 		sofar, _ := t.roster.SubAgent(held.agent.ID)
 		t.roster.Stepped(held.agent.ID, sofar.Steps+1, now, called...)
 		check.stepped(step, now)
+		t.tree.mu.Lock()
+		defer t.tree.mu.Unlock()
 		if t.base.Step != nil {
-			t.tree.mu.Lock()
 			t.base.Step(step)
-			t.tree.mu.Unlock()
+		}
+		if t.stepped != nil {
+			t.stepped(held.agent.ID, step)
 		}
 	}
 	return subAgent
