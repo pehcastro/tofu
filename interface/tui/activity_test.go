@@ -290,3 +290,19 @@ func TestTheClockDoesNotAdvanceWhileTheTurnWaitsOnThePerson(t *testing.T) {
 		t.Errorf("after the wait the turn reads %q, want 10s", after)
 	}
 }
+
+func TestAReplayedSpawnKeepsTheTimeItWasAskedAndALiveOneTakesTheClock(t *testing.T) {
+	at := fixedStart()
+	app := liveApp(t, &at)
+	asked := at.Add(-time.Hour)
+	app.Update(Event{Kind: EventToolCall, ID: "5b01", Tool: "spawn", Text: "MOCKTASK-1", Promote: true, At: asked})
+	app.Update(Event{Kind: EventToolResult, ID: "5b01", Text: "sub-1 is running in the background", At: asked.Add(time.Second)})
+	app.Update(Event{Kind: EventToolCall, ID: "5b02", Tool: "spawn", Text: "MOCKTASK-2", Promote: true})
+	replayed, live := app.happened[app.happenedAt(app.shortOf("5b01"))], app.happened[app.happenedAt(app.shortOf("5b02"))]
+	if !replayed.At.Equal(asked) || replayed.Elapsed != time.Second {
+		t.Errorf("a spawn replayed from an hour ago is stamped %v and took %v, want %v and 1s", replayed.At, replayed.Elapsed, asked)
+	}
+	if !live.At.Equal(at) {
+		t.Errorf("a live spawn with no time of its own is stamped %v, want the clock %v", live.At, at)
+	}
+}

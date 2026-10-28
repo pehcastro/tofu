@@ -518,7 +518,7 @@ func (a *App) absorb(event Event) {
 	if event.Agent != "" && (event.Kind == EventText || event.Kind == EventTextDelta) {
 		return
 	}
-	at := a.options.Now()
+	at := cmp.Or(event.At, a.options.Now())
 	switch event.Kind {
 	case EventTurnStarted:
 		if !a.busy {
