@@ -19,6 +19,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
 	"tofu/internal/konst"
@@ -150,13 +151,23 @@ func (c Config) gateAsks(ctx context.Context) bool {
 	return c.GatePromptAsks == nil || c.GatePromptAsks()
 }
 
-func (c Config) gatePerson(ctx context.Context) Person {
-	if c.Person != nil || c.gateAsks(ctx) {
-		return c.Person
+type gateAsked struct {
+	person Person
+	cwd    string
+	cases  string
+}
+
+func (c Config) gatePerson(ctx context.Context) gateAsked {
+	asked := gateAsked{person: c.Person, cwd: c.Project}
+	if c.Places.State != "" {
+		asked.cases = gate.CasesFile(c.Places.State)
 	}
-	return Person(func(context.Context, GateRequest, GateDecision) (PersonAnswer, error) {
-		return PersonDenied, errors.New("no person was available to answer")
-	}).RunsWhatJevAsks()
+	if c.Person == nil && !c.gateAsks(ctx) {
+		asked.person = Person(func(context.Context, GateRequest, GateDecision) (PersonAnswer, error) {
+			return PersonDenied, errors.New("no person was available to answer")
+		}).RunsWhatJevAsks()
+	}
+	return asked
 }
 
 const (
@@ -170,8 +181,18 @@ const (
 	refusedTail = ". nothing ran and nothing changed. find another way to do the task, or say why this call is needed and stop."
 )
 
-func gateRefusal(ctx context.Context, person Person, request GateRequest, decision GateDecision, gateErr string) string {
-	why := refusedWhy(ctx, person, request, decision, gateErr)
+func gateRefusal(ctx context.Context, asked gateAsked, request GateRequest, decision GateDecision, gateErr string) string {
+	why := refusedWhy(ctx, asked.person, request, decision, gateErr)
+	if asked.cases != "" && (gateErr != "" || decision.Verdict == ledger.VerdictAsk || decision.Verdict == ledger.VerdictDeny) {
+		outcome, by := "refused: "+why, answerer(ctx)
+		if decision.Reason != nil {
+			by = decision.Reason.AllowedBy
+		}
+		if why == "" {
+			outcome = "the gate's verdict was " + string(decision.Verdict) + " and the call ran, allowed by " + by
+		}
+		_ = gate.BlockCase{ID: request.TurnID + "/" + request.Call, Tool: request.Tool, Input: request.Args, Cwd: asked.cwd, Task: request.Task, Outcome: outcome, At: time.Now()}.AppendTo(asked.cases)
+	}
 	if why == "" {
 		return ""
 	}

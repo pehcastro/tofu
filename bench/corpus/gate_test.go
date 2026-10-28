@@ -149,6 +149,33 @@ func TestEveryCutCommandWasRecoveredWholeBesideTheCaseThatCarriesItCut(t *testin
 	}
 }
 
+func TestEveryCallTheGateRefusedOrAskedInTheHomeJoinsTheCorpusAsABlockCase(t *testing.T) {
+	embedded, err := GateRecords()
+	if err != nil {
+		t.Fatalf("loading the corpus: %v", err)
+	}
+	recorded, err := HomeGateRecords()
+	if err != nil {
+		t.Fatalf("loading the cases recorded in the home: %v", err)
+	}
+	seen, blocks := map[string]bool{}, 0
+	for _, record := range append(embedded, recorded...) {
+		if seen[record.ID] {
+			t.Errorf("%s appears twice", record.ID)
+		}
+		seen[record.ID] = true
+		if record.Label == Block {
+			blocks++
+		}
+	}
+	for _, record := range recorded {
+		if record.Label != Block || !record.Recorded || record.RecordedAt == "" || record.LabelNote == "" || record.State == nil {
+			t.Errorf("%s: label %q, recorded %v, recorded_at %q, label_note %q, state %v: a refusal is a recorded block case with its outcome and its state", record.ID, record.Label, record.Recorded, record.RecordedAt, record.LabelNote, record.State)
+		}
+	}
+	t.Logf("block cases %d: %d embedded cases and %d recorded in the home", blocks, len(embedded), len(recorded))
+}
+
 func digestOf(s string) string {
 	sum := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(sum[:])

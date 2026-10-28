@@ -6,7 +6,10 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
+
+	"tofu/internal/judge/gate"
 )
 
 //go:embed gate/cases.jsonl gate/cases-whole.jsonl gate/split.json
@@ -80,11 +83,35 @@ func GateWholeCommandRecords() ([]Record, error) {
 	return gateRecordsIn("gate/cases-whole.jsonl")
 }
 
+func HomeGateRecords() ([]Record, error) {
+	files, err := gate.HomeCasesFiles()
+	if err != nil {
+		return nil, err
+	}
+	var records []Record
+	for _, file := range files {
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			return nil, err
+		}
+		read, err := parseGateRecords(file, raw)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, read...)
+	}
+	return records, nil
+}
+
 func gateRecordsIn(path string) ([]Record, error) {
 	raw, err := gateFiles.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
+	return parseGateRecords(path, raw)
+}
+
+func parseGateRecords(path string, raw []byte) ([]Record, error) {
 	scanner := bufio.NewScanner(bytes.NewReader(raw))
 	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 	var records []Record
