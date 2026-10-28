@@ -41,9 +41,10 @@ type resumedLead struct {
 }
 
 type recordedMessage struct {
-	logged session.Event
-	body   session.MessageBody
-	taken  bool
+	logged     session.Event
+	body       session.MessageBody
+	generation int
+	taken      bool
 }
 
 func resumedChat(carry Carry, dir string) []Event {
@@ -63,19 +64,19 @@ func resumedChat(carry Carry, dir string) []Event {
 		chat = append(chat, redacted(event, mask))
 	}, turnID: carry.Session, seen: &shownResults{ids: map[string]bool{}}, spawner: &turn.SpawnTool{}}
 	labelled := Event{Kind: EventSession, Text: carry.Name, ID: carry.Session, Root: carry.Session}
-	messages := carry.Messages
+	messages, generations := carry.Messages, make([]int, len(carry.Messages))
 	store, err := carry.reading(dir)
 	if err == nil {
-		messages = lead.read(store, carry)
+		messages, generations = lead.read(store, carry)
 		labelled = labelledAs(store, labelled)
 		store.ForgetRead()
 	}
 	lead.watch.emit(labelled)
-	for _, message := range messages {
+	for i, message := range messages {
 		if message.Origin.Source == llm.SourceSpawnLine {
 			continue
 		}
-		said, persisted := lead.recorded(message), ""
+		said, persisted := lead.recorded(message, generations[i]), ""
 		if said != nil {
 			lead.at, persisted = said.At, said.ID
 		}
@@ -132,7 +133,7 @@ func resumedChat(carry Carry, dir string) []Event {
 	return chat
 }
 
-func (l *resumedLead) read(store *session.Store, carry Carry) []llm.Message {
+func (l *resumedLead) read(store *session.Store, carry Carry) ([]llm.Message, []int) {
 	lineage, _ := store.Lineage(carry.Session)
 	drawn := len(lineage) - 1
 	for carry.WholeLine && drawn > 0 && lineage[drawn-1].Header.ForkedInto == lineage[drawn].Header.ID {
@@ -143,19 +144,23 @@ func (l *resumedLead) read(store *session.Store, carry Carry) []llm.Message {
 			lineage[i].Events, _ = store.Events(generation.Header.ID)
 		}
 		for _, event := range lineage[i].Events {
-			l.note(event)
+			l.note(event, i)
 		}
 		for _, run := range generation.Header.Agents {
 			l.runs[run.Agent] = run
 		}
 	}
 	line, child := carry.Messages, carry.Messages
+	generations := slices.Repeat([]int{len(lineage) - 1}, len(line))
 	for i := len(lineage) - 2; i >= drawn; i-- {
 		said, _, _ := store.Said(lineage[i].Header.ID, lineage[i].Events)
 		parent, _ := turn.ConversationFrom(said)
-		line, child = slices.Concat(parent, unheld(parent, child), line[len(child):]), parent
+		fresh := unheld(parent, child)
+		line = slices.Concat(parent, fresh, line[len(child):])
+		generations = slices.Concat(slices.Repeat([]int{i}, len(parent)), slices.Repeat([]int{i + 1}, len(fresh)), generations[len(child):])
+		child = parent
 	}
-	return line
+	return line, generations
 }
 
 func unheld(parent, child []llm.Message) []llm.Message {
@@ -184,7 +189,7 @@ func heldKey(message llm.Message) string {
 	return message.Role.String() + " " + message.Content
 }
 
-func (l *resumedLead) note(event session.Event) {
+func (l *resumedLead) note(event session.Event, generation int) {
 	if event.Kind == session.EventReport {
 		var report session.ReportBody
 		_ = json.Unmarshal(event.Body, &report)
@@ -214,7 +219,7 @@ func (l *resumedLead) note(event session.Event) {
 		if message.Role == session.RoleUser {
 			l.images[event.ID], l.loose = l.loose, nil
 		}
-		l.said = append(l.said, recordedMessage{logged: event, body: message})
+		l.said = append(l.said, recordedMessage{logged: event, body: message, generation: generation})
 		return
 	}
 	if event.Call == "" {
@@ -307,12 +312,12 @@ func (l *resumedLead) reportsIn(task string) (string, bool) {
 	return strings.TrimSpace(task), drew
 }
 
-func (l *resumedLead) recorded(message llm.Message) *session.Event {
+func (l *resumedLead) recorded(message llm.Message, generation int) *session.Event {
 	if message.Role != llm.RoleUser && message.Role != llm.RoleAssistant {
 		return nil
 	}
 	at := slices.IndexFunc(l.said, func(said recordedMessage) bool {
-		return !said.taken && said.body.Role == message.Role.String() && said.body.Content == message.Content
+		return !said.taken && said.generation == generation && said.body.Role == message.Role.String() && said.body.Content == message.Content
 	})
 	if at < 0 {
 		return nil
