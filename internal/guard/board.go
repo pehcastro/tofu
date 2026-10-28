@@ -2,6 +2,7 @@ package guard
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -40,16 +41,32 @@ type ticketSource interface {
 }
 
 func ticketsAt(env Env) ticketSource {
-	if env.Boardy {
-		store, err := boardy.OpenStore(env.Root)
-		if err == nil {
-			if boards, err := store.Boards(); err == nil && len(boards) > 0 {
-				return boardTickets{store: store, boards: boards}
-			}
-		}
+	folders := folderTickets{dir: filepath.Join(env.Root, ".local", "boji", "tickets")}
+	if !env.Boardy {
+		return folders
 	}
-	return folderTickets{dir: filepath.Join(env.Root, ".local", "boji", "tickets")}
+	store, err := boardy.OpenStore(env.Root)
+	if err != nil {
+		return unreadBoards{fmt.Errorf("boardy could not be opened: %w", err)}
+	}
+	boards, err := store.Boards()
+	boards = slices.DeleteFunc(boards, func(board boardy.Board) bool { return board.Key == "" })
+	switch {
+	case len(boards) > 0:
+		return boardTickets{store: store, boards: boards}
+	case err != nil:
+		return unreadBoards{fmt.Errorf("boardy could not read its boards: %w", err)}
+	}
+	return folders
 }
+
+type unreadBoards struct{ err error }
+
+func (u unreadBoards) list(...place) ([]ticket, error) { return nil, u.err }
+
+func (u unreadBoards) find(string) (ticket, bool, error) { return ticket{}, false, u.err }
+
+func (unreadBoards) where(string) string { return "boardy" }
 
 type folderTickets struct{ dir string }
 

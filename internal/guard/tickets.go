@@ -28,7 +28,7 @@ func requireTicket(env Env, ev event) (Answer, error) {
 		return Answer{}, err
 	}
 	first := "1. Write .local/boji/tickets/doing/TOFU-NNN.md with front matter carrying id, title, epic, size, owns, spec and owner, then Problem, Scope, Acceptance, Notes."
-	if _, onBoards := source.(boardTickets); onBoards {
+	if env.Boardy {
 		first = "1. Create it on its board: tofu boardy new --board TOFU --owns a,b --acceptance text --as orchestrator <title>, then tofu boardy assign it to the agent type and tofu boardy move it to doing. Tickets live in boardy now; a file under .local/boji/tickets alone is not a ticket."
 	}
 	readers := "This project defines no read-only agent, one whose tools hold no edit, so every agent here needs a ticket."
@@ -61,7 +61,7 @@ func spawnRefusal(known []string, source ticketSource, kind, named, prompt strin
 	cited, found, err := source.find(id)
 	switch {
 	case err != nil:
-		return "", err
+		return id + " is cited but it could not be looked up: " + err.Error(), nil
 	case !found:
 		return id + " is cited but it is not on " + source.where(id) + ".", nil
 	case cited.Place == placeClosed:
