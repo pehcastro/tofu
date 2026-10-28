@@ -41,7 +41,7 @@ func (h *Host) SubAgentEvents(names []string, visit func(Event) bool) error {
 	for _, from := range append(lineage, header) {
 		err := store.EachEvent(from.ID, func(agent string) bool { return wanted[agent] }, func(event session.Event) bool {
 			bare := event
-			bare.Body, logged = nil, &bare
+			bare.Body, logged, watch.turnID = nil, &bare, event.Turn
 			switch event.Kind {
 			case session.EventMessage:
 				var said session.MessageBody

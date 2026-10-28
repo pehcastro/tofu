@@ -108,7 +108,7 @@ func resumedChat(carry Carry, dir string) []Event {
 			for _, call := range message.ToolCalls {
 				recorded := lead.calls[call.ID]
 				if recorded != nil && recorded.call.Call != "" {
-					lead.at = recorded.call.At
+					lead.replaying(recorded.call)
 				}
 				lead.watch.called(call, "")
 				if recorded != nil && recorded.spawn.Name != "" && !lead.drawn(recorded.spawn.Name) {
@@ -118,7 +118,8 @@ func resumedChat(carry Carry, dir string) []Event {
 		case llm.RoleTool:
 			if recorded := lead.calls[message.ToolCallID]; recorded != nil && recorded.result.Call != "" {
 				ran := resultOf(recorded.result)
-				message.ToolExitCode, message.ToolHits, lead.at = ran.ToolExitCode, ran.ToolHits, recorded.result.At
+				message.ToolExitCode, message.ToolHits = ran.ToolExitCode, ran.ToolHits
+				lead.replaying(recorded.result)
 			}
 			lead.watch.result(message, "")
 		case llm.RoleSystem, llm.RoleUnknown:
@@ -338,15 +339,19 @@ func (l *resumedLead) linked(agent string) bool {
 	}
 	for _, recorded := range l.calls {
 		if recorded.spawn.Name == agent && recorded.call.Call != "" {
-			l.at = recorded.call.At
+			l.replaying(recorded.call)
 			l.watch.called(callOf(recorded.call), "")
-			l.at = recorded.result.At
+			l.replaying(recorded.result)
 			l.watch.result(resultOf(recorded.result), "")
 			l.spawned(recorded.spawn)
 			return true
 		}
 	}
 	return false
+}
+
+func (l *resumedLead) replaying(logged session.Event) {
+	l.at, l.watch.turnID = logged.At, cmp.Or(logged.Turn, l.watch.turnID)
 }
 
 func (l *resumedLead) show(spawned ...SubAgentRow) {
