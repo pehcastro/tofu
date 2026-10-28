@@ -25,8 +25,6 @@ const (
 	exitUsage        = 2
 	profileFlag      = "--profile"
 	profiledVariable = "TOFU_PROFILED"
-
-	nearestSlackDivisor = 3
 )
 
 const usage = `tofu is a coding agent harness.
@@ -227,17 +225,20 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 
 func nearestCommand(args []string) (string, bool) {
 	_, verbLines, _ := strings.Cut(usage, "\nVerbs:\n")
-	var verbs []string
+	var listed []string
 	for _, line := range strings.Split(verbLines, "\n") {
 		if name, indented := strings.CutPrefix(line, "  "); indented && name != "" && name[0] != ' ' {
-			verbs = append(verbs, strings.Fields(name)[0])
+			listed = append(listed, strings.Fields(name)[0])
 		}
 	}
-	if !slices.Contains(verbs, args[0]) {
-		near, found := nearestWord(args[0], verbs)
+	if !slices.Contains(listed, args[0]) {
+		near, found := nearestWord(args[0], listed)
 		return "tofu " + near, found
 	}
-	known := usageWords(verbUsage(args))
+	known := usageWords(verbNamed(args[0]).usage)
+	if args[0] == "boardy" && len(args) > 1 {
+		known = append(known, usageWords(boardyUsageOf(args[1]))...)
+	}
 	if len(known) == 0 {
 		return "", false
 	}
@@ -261,7 +262,7 @@ func nearestCommand(args []string) (string, bool) {
 }
 
 func nearestWord(word string, candidates []string) (string, bool) {
-	best, distance := "", len(word)/nearestSlackDivisor+1
+	best, distance := "", len(word)/konst.NearestWordBytesPerEdit+1
 	for _, candidate := range candidates {
 		if d := editDistance(word, candidate); d < distance {
 			best, distance = candidate, d
@@ -280,75 +281,117 @@ func usageWords(line string) []string {
 	return strings.FieldsFunc(plain.String(), func(r rune) bool { return !unicode.IsLower(r) && !unicode.IsDigit(r) && r != '-' })
 }
 
-func verbUsage(args []string) string {
-	switch args[0] {
-	case "models":
-		return modelsUsage
+type verbRun = func(args []string, in io.Reader, out, errOut io.Writer) int
+
+type verb struct {
+	run   verbRun
+	usage string
+}
+
+func withoutIn(run func(args []string, out, errOut io.Writer) int) verbRun {
+	return func(args []string, _ io.Reader, out, errOut io.Writer) int { return run(args, out, errOut) }
+}
+
+func withClock(run func(args []string, out, errOut io.Writer, now func() time.Time) int) verbRun {
+	return func(args []string, _ io.Reader, out, errOut io.Writer) int { return run(args, out, errOut, time.Now) }
+}
+
+func verbNamed(name string) verb {
+	switch name {
+	case "--continue":
+		return verb{run: continueVerb}
 	case "session":
-		return strings.Join([]string{sessionSubcommands, sessionBranchUsage, sessionDrainUsage, sessionFindUsage, sessionTraceUsage}, " ")
-	case "boardy":
-		if len(args) > 1 {
-			return boardyUsage + " " + boardyUsageOf(args[1])
-		}
-		return boardyUsage
-	case "agents":
-		return strings.Join([]string{agentsUsage, agentsAddUsage, agentsSetUsage, agentsRemoveUsage}, " ")
-	case "rules":
-		return strings.Join([]string{rulesSubcommands, rulesListUsage, rulesOverridesUsage, rulesCheckUsage, rulesAddUsage, rulesOffUsage, rulesIDUsage}, " ")
-	case "settings":
-		return settingsUsage
-	case "memory":
-		return memoryUsage + " " + memoryTreeUsage
-	case "scratch":
-		return scratchUsage
-	case "changelog":
-		return changelogUsage
-	case "docs":
-		return docsUsage
-	case "doctor":
-		return doctorUsage
-	case "update":
-		return updateUsage
-	case "migrate":
-		return migrateUsage
-	case "reload":
-		return reloadUsage
-	case "library":
-		return libraryUsage
-	case "lint":
-		return lintUsage
-	case "undo":
-		return undoUsage
-	case "why":
-		return whyUsage
-	case "label":
-		return labelUsage
-	case "check":
-		return checkUsage
-	case "judge":
-		return judgeUsage
-	case "replay":
-		return replayUsage
-	case "learn":
-		return learnUsage
-	case "frame":
-		return frameUsage
-	case "drive":
-		return driveUsage
-	case "serve":
-		return serveUsage
+		return verb{sessionVerb, strings.Join([]string{sessionSubcommands, sessionBranchUsage, sessionDrainUsage, sessionFindUsage, sessionTraceUsage}, " ")}
+	case "shells":
+		return verb{run: withoutIn(shellsVerb)}
+	case "hooks":
+		return verb{run: withoutIn(hooksVerb)}
 	case "guard":
-		return guardUsage
+		return verb{guardVerb, guardUsage}
+	case "undo":
+		return verb{withoutIn(undoVerb), undoUsage}
+	case "version":
+		return verb{run: withoutIn(version)}
+	case "update":
+		return verb{withoutIn(updateVerb), updateUsage}
+	case "changelog":
+		return verb{func(args []string, _ io.Reader, out, errOut io.Writer) int {
+			return changelogVerb(args, changelog.Markdown, out, errOut)
+		}, changelogUsage}
+	case "docs":
+		return verb{withoutIn(docsVerb), docsUsage}
+	case "doctor":
+		return verb{withoutIn(doctor), doctorUsage}
 	case "login":
-		return loginUsage + " " + asideUsage
+		return verb{loginVerb, loginUsage + " " + asideUsage}
 	case "logout":
-		return logoutUsage
+		return verb{withoutIn(logoutVerb), logoutUsage}
 	case "usage":
-		return usageFlags
+		return verb{withoutIn(usageVerb), usageFlags}
+	case "models":
+		return verb{withoutIn(modelsVerb), modelsUsage}
+	case "agents":
+		return verb{withoutIn(agentsVerb), strings.Join([]string{agentsUsage, agentsAddUsage, agentsSetUsage, agentsRemoveUsage}, " ")}
+	case "why":
+		return verb{withClock(whyVerb), whyUsage}
+	case "frame":
+		return verb{withoutIn(frameVerb), frameUsage}
+	case "drive":
+		return verb{driveVerb, driveUsage}
+	case "serve":
+		return verb{serveVerb, serveUsage}
 	case host.HubVerb:
-		return projectHostUsage
+		return verb{withoutIn(projectHostVerb), projectHostUsage}
+	case "run":
+		return verb{run: withoutIn(runVerb)}
+	case "judge":
+		return verb{judgeVerb, judgeUsage}
+	case "check":
+		return verb{withoutIn(checkVerb), checkUsage}
+	case "context":
+		return verb{run: withoutIn(contextVerb)}
+	case "sift":
+		return verb{run: siftVerb}
+	case "label":
+		return verb{withClock(labelVerb), labelUsage}
+	case "replay":
+		return verb{withClock(replayVerb), replayUsage}
+	case "library":
+		return verb{withoutIn(libraryVerb), libraryUsage}
+	case "catalog":
+		return verb{run: func(args []string, _ io.Reader, out, errOut io.Writer) int {
+			_, _ = fmt.Fprintln(errOut, "tofu catalog is now tofu library")
+			return libraryVerb(args, out, errOut)
+		}}
+	case "lint":
+		return verb{withoutIn(lintVerb), lintUsage}
+	case "rules":
+		return verb{withoutIn(rulesVerb), strings.Join([]string{rulesSubcommands, rulesListUsage, rulesOverridesUsage, rulesCheckUsage, rulesAddUsage, rulesOffUsage, rulesIDUsage}, " ")}
+	case "boardy":
+		return verb{withoutIn(boardyVerb), boardyUsage}
+	case "scratch":
+		return verb{withoutIn(runScratch), scratchUsage}
+	case "memory":
+		return verb{withoutIn(memoryVerb), memoryUsage + " " + memoryTreeUsage}
+	case "learn":
+		return verb{withoutIn(learnVerb), learnUsage}
+	case "settings":
+		return verb{withoutIn(settingsVerb), settingsUsage}
+	case "reload":
+		return verb{withoutIn(reloadVerb), reloadUsage}
+	case "migrate":
+		return verb{withoutIn(migrateVerb), migrateUsage}
+	case "browser":
+		return verb{run: withoutIn(browserVerb)}
+	case "preview":
+		return verb{run: withoutIn(previewVerb)}
+	case "help", "-h", "--help":
+		return verb{run: func(_ []string, _ io.Reader, out, _ io.Writer) int {
+			_, _ = fmt.Fprintf(out, usage, konst.TemporaryProjectIdleHours)
+			return exitOK
+		}}
 	}
-	return ""
+	return verb{}
 }
 
 func dispatch(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
@@ -358,96 +401,10 @@ func dispatch(args []string, in io.Reader, out io.Writer, errOut io.Writer) int 
 	if strings.HasPrefix(args[0], "chrome-extension://") {
 		return hostVerb(args[0], in, out, errOut)
 	}
-	switch args[0] {
-	case "--continue":
-		return continueVerb(args[1:], in, out, errOut)
-	case "session":
-		return sessionVerb(args[1:], in, out, errOut)
-	case "shells":
-		return shellsVerb(args[1:], out, errOut)
-	case "hooks":
-		return hooksVerb(args[1:], out, errOut)
-	case "guard":
-		return guardVerb(args[1:], in, out, errOut)
-	case "undo":
-		return undoVerb(args[1:], out, errOut)
-	case "version":
-		return version(args[1:], out, errOut)
-	case "update":
-		return updateVerb(args[1:], out, errOut)
-	case "changelog":
-		return changelogVerb(args[1:], changelog.Markdown, out, errOut)
-	case "docs":
-		return docsVerb(args[1:], out, errOut)
-	case "doctor":
-		return doctor(args[1:], out, errOut)
-	case "login":
-		return loginVerb(args[1:], in, out, errOut)
-	case "logout":
-		return logoutVerb(args[1:], out, errOut)
-	case "usage":
-		return usageVerb(args[1:], out, errOut)
-	case "models":
-		return modelsVerb(args[1:], out, errOut)
-	case "agents":
-		return agentsVerb(args[1:], out, errOut)
-	case "why":
-		return whyVerb(args[1:], out, errOut, time.Now)
-	case "frame":
-		return frameVerb(args[1:], out, errOut)
-	case "drive":
-		return driveVerb(args[1:], in, out, errOut)
-	case "serve":
-		return serveVerb(args[1:], in, out, errOut)
-	case host.HubVerb:
-		return projectHostVerb(args[1:], out, errOut)
-	case "run":
-		return runVerb(args[1:], out, errOut)
-	case "judge":
-		return judgeVerb(args[1:], in, out, errOut)
-	case "check":
-		return checkVerb(args[1:], out, errOut)
-	case "context":
-		return contextVerb(args[1:], out, errOut)
-	case "sift":
-		return siftVerb(args[1:], in, out, errOut)
-	case "label":
-		return labelVerb(args[1:], out, errOut, time.Now)
-	case "replay":
-		return replayVerb(args[1:], out, errOut, time.Now)
-	case "library":
-		return libraryVerb(args[1:], out, errOut)
-	case "catalog":
-		_, _ = fmt.Fprintln(errOut, "tofu catalog is now tofu library")
-		return libraryVerb(args[1:], out, errOut)
-	case "lint":
-		return lintVerb(args[1:], out, errOut)
-	case "rules":
-		return rulesVerb(args[1:], out, errOut)
-	case "boardy":
-		return boardyVerb(args[1:], out, errOut)
-	case "scratch":
-		return runScratch(args[1:], out, errOut)
-	case "memory":
-		return memoryVerb(args[1:], out, errOut)
-	case "learn":
-		return learnVerb(args[1:], out, errOut)
-	case "settings":
-		return settingsVerb(args[1:], out, errOut)
-	case "reload":
-		return reloadVerb(args[1:], out, errOut)
-	case "migrate":
-		return migrateVerb(args[1:], out, errOut)
-	case "browser":
-		return browserVerb(args[1:], out, errOut)
-	case "preview":
-		return previewVerb(args[1:], out, errOut)
-	case "help", "-h", "--help":
-		_, _ = fmt.Fprintf(out, usage, konst.TemporaryProjectIdleHours)
-		return exitOK
-	default:
-		page := cli.Detect(errOut, os.Environ())
-		_ = page.Print(errOut, page.ErrorLine("tofu: unknown verb "+strconv.Quote(args[0]), "tofu help"))
-		return exitUsage
+	if named := verbNamed(args[0]); named.run != nil {
+		return named.run(args[1:], in, out, errOut)
 	}
+	page := cli.Detect(errOut, os.Environ())
+	_ = page.Print(errOut, page.ErrorLine("tofu: unknown verb "+strconv.Quote(args[0]), "tofu help"))
+	return exitUsage
 }

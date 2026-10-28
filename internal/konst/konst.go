@@ -317,6 +317,8 @@ const (
 
 const TemporaryProjectIdleHours = 2
 
+const NearestWordBytesPerEdit = 3
+
 const (
 	CatalogStaleHours = 24
 	CatalogRetryHours = 1
