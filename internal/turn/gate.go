@@ -649,7 +649,7 @@ func shellChangesTheHarness(project, command string) bool {
 			return true
 		case tofu && slices.Contains(args, "settings") && slices.Contains(args, "set") && (len(steps) > 1 || !setsInAThrowawayHome(project, command, args)):
 			return true
-		case !slices.Contains(readOnlyPrograms(), program) && slices.ContainsFunc(args, handed):
+		case !slices.Contains(readOnlyPrograms(), program) && (program != "find" || subagent.FindActs(args)) && slices.ContainsFunc(args, handed):
 			return true
 		}
 		written = append(written, step.Changes...)

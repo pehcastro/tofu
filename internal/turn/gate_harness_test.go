@@ -65,6 +65,9 @@ func TestPersonOnlyBashHarnessCases(t *testing.T) {
 		{"unknown program after a non-literal cd with no harness name", `cd $DIR && go test ./...`, false},
 		{"read a harness file after a cd", `cd .tofu && cat settings.json`, false},
 		{"unknown program after a cd away from the harness", `cd apps/desk && cargo build 2>/dev/null`, false},
+		{"find over the home harness folder that only reads", `find ~/.tofu -maxdepth 4 -type f -newermt "2026-10-26 21:35" \( -name "*.log" -o -name "*.jsonl" \) 2>/dev/null | grep -v scratchpad | head -15`, false},
+		{"find deleting the home harness folder", `find ~/.tofu -delete`, true},
+		{"find running rm over the home harness folder", `find ~/.tofu -exec rm {} +`, true},
 	}
 	for _, c := range cases {
 		args, _ := json.Marshal(map[string]string{"command": c.command})

@@ -589,6 +589,14 @@ func given(args []shellWord, flags ...string) bool {
 	return slices.ContainsFunc(args, func(arg shellWord) bool { return slices.Contains(flags, arg.text) })
 }
 
+func findActions() []string {
+	return []string{"-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls"}
+}
+
+func FindActs(args []string) bool {
+	return slices.ContainsFunc(args, func(arg string) bool { return slices.Contains(findActions(), arg) })
+}
+
 func (g Grammar) readOnly(tool string, args []shellWord) (bool, error) {
 	switch tool {
 	case "ls", "cat", "head", "tail", "wc", "grep", "egrep", "fgrep", "diff", "cmp", "stat", "du", "df", "pwd",
@@ -602,7 +610,7 @@ func (g Grammar) readOnly(tool string, args []shellWord) (bool, error) {
 	case "cp":
 		return false, g.refuses(tool, args, "-s", "-l", "--link", "--symbolic-link")
 	case "find":
-		return false, g.refuses(tool, args, "-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls")
+		return false, g.refuses(tool, args, findActions()...)
 	case "rg":
 		return false, g.refuses(tool, args, "--pre")
 	case "sort":
