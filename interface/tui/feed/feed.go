@@ -79,6 +79,7 @@ type Agent struct {
 	Since      time.Duration
 	Owns       []string
 	Report     string
+	Moves      []roster.Transition
 }
 
 const (

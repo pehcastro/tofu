@@ -13,6 +13,7 @@ import (
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/markdown"
 	roster "tofu/internal/subagent"
+	"tofu/internal/widget"
 )
 
 const (
@@ -34,6 +35,9 @@ const (
 	unnamedAgent     = "(unnamed sub-agent)"
 	ownsTitle        = "owns"
 	reportTitle      = "report"
+	reviewTitle      = "review"
+	moveSeparator    = " · "
+	reasonSeparator  = ": "
 	overlapWord      = "  overlaps "
 	requesting       = "Requesting "
 	toWorkOn         = " to work on "
@@ -107,10 +111,50 @@ func (m Model) aboutCards() (about []Event, lead int) {
 	if len(agent.Owns) > 0 {
 		about = append(about, m.aboutFilter(ownsTitle, "", m.ownership(agent.Owns)))
 	}
+	lead = len(about)
 	if agent.Report != "" {
-		return append(about, m.aboutFilter(reportTitle, agent.Report, nil)), len(about)
+		about = append(about, m.aboutFilter(reportTitle, agent.Report, nil))
 	}
-	return about, len(about)
+	if moves := movesLine(agent.Moves, textWidth(m.feedWidth())); moves != "" {
+		about = append(about, m.aboutFilter(reviewTitle, "", []string{moves}))
+	}
+	return about, lead
+}
+
+func movesLine(moves []roster.Transition, width int) string {
+	var shown []roster.Transition
+	fixed, reopened := -widget.Cells(moveSeparator), 0
+	for index, move := range moves {
+		if move.Move == roster.Spawned || move.Move == roster.Reviewed && index < len(moves)-1 {
+			continue
+		}
+		shown = append(shown, move)
+		fixed += widget.Cells(string(move.Move) + moveSeparator)
+		if move.Move == roster.SentBack {
+			fixed += widget.Cells(reasonSeparator)
+			reopened++
+		}
+	}
+	parts := make([]string, len(shown))
+	for index, move := range shown {
+		parts[index] = look.Style(moveColour(move.Move)).Render(string(move.Move))
+		if move.Move == roster.SentBack {
+			parts[index] += look.Muted(reasonSeparator + widget.Fit(move.Reason, (width-fixed)/max(1, reopened)))
+		}
+	}
+	return widget.Fit(strings.Join(parts, look.Faint(moveSeparator)), width)
+}
+
+func moveColour(move roster.Move) look.Color {
+	switch move {
+	case roster.Reviewed:
+		return look.Blue
+	case roster.SentBack:
+		return look.Amber
+	case roster.Accepted:
+		return look.Mint
+	}
+	panic("feed: unknown sub-agent move " + string(move))
 }
 
 func (m Model) filteredAgent() (Agent, bool) {
