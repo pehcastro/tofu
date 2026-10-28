@@ -553,7 +553,7 @@ func (h *Host) keepUndelivered(reply followReply, images []pendingImage) followR
 	switch {
 	case !reply.delivered():
 		h.pending = append(h.pending, images...)
-	case reply.OK:
+	case reply.Turn != "":
 		h.turn = reply.Turn
 	}
 	return reply
