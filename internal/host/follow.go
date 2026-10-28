@@ -105,6 +105,7 @@ type followLine struct {
 	Reply    *followReply  `json:",omitempty"`
 	Settings *heldSettings `json:",omitempty"`
 	Raw      *ShellRaw     `json:",omitempty"`
+	Cron     bool          `json:",omitempty"`
 }
 
 type heldSettings struct {
@@ -591,6 +592,9 @@ func (h *Host) heed(f *following) {
 		}
 		if now := line.Snapshot; now != nil {
 			h.rejoin(f, *now, line.Seq)
+		}
+		if line.Cron {
+			_ = h.loadCron(h.ID())
 		}
 		if line.Reply != nil && line.Reply.Refused != "" {
 			h.note("the tofu host, process " + strconv.Itoa(f.hub.PID) + ", could not read what this tofu sent, so it did not run: " + line.Reply.Refused)

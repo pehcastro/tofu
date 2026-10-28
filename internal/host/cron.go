@@ -89,7 +89,16 @@ func (h *Host) armCron() {
 	})
 }
 
+func (h *Host) cronMoved() {
+	h.bus.mu.Lock()
+	h.fanOut(followLine{Cron: true})
+	h.bus.mu.Unlock()
+}
+
 func (h *Host) fire(fires []cron.Fire) {
+	if len(fires) > 0 {
+		h.cronMoved()
+	}
 	for _, fired := range fires {
 		if fired.Prompt == "" {
 			h.note(fired.Line)
@@ -153,6 +162,9 @@ func (h *Host) finish(fired []string, answer string) {
 		if note := h.cron.Finished(id, answer); note != "" {
 			h.note(note)
 		}
+	}
+	if len(fired) > 0 {
+		h.cronMoved()
 	}
 }
 
