@@ -151,9 +151,12 @@ func chargesOf(scores ...hazardScore) map[ledger.ChargeSource]int {
 
 func unitLine(calls map[ledger.ChargeSource]int) string {
 	var units []ledger.Unit
-	for source, unit := range map[ledger.ChargeSource]ledger.Unit{ledger.ChargeProvider: ledger.UnitMoney, ledger.ChargeList: ledger.UnitListPrice, ledger.ChargeNone: ledger.UnitUnpriced} {
-		if calls[source] > 0 {
-			units = append(units, unit)
+	for _, charged := range []struct {
+		source ledger.ChargeSource
+		unit   ledger.Unit
+	}{{ledger.ChargeProvider, ledger.UnitMoney}, {ledger.ChargeList, ledger.UnitListPrice}, {ledger.ChargeNone, ledger.UnitUnpriced}} {
+		if calls[charged.source] > 0 {
+			units = append(units, charged.unit)
 		}
 	}
 	return report.CostUnitLine(units)
