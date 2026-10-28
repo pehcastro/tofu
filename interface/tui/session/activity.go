@@ -241,6 +241,14 @@ func (m *Model) requestLine() string {
 	return line + tag
 }
 
+func (m *Model) Requested(id string) {
+	m.requestID = id
+}
+
+func (m *Model) LastRequest() string {
+	return m.requestID
+}
+
 func (m *Model) Spawn(id string) {
 	m.Spawning = append(m.Spawning, id)
 }

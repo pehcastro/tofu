@@ -156,7 +156,7 @@ type Model struct {
 	began              time.Time
 	entered            time.Time
 	turns              int
-	turnID             string
+	requestID          string
 	cooked             string
 	cookedID           string
 	minted             int
@@ -527,7 +527,7 @@ func (m *Model) Start() {
 		m.started = true
 	}
 	at := m.now()
-	m.entered, m.turns, m.turnID = at, m.turns+1, m.mint()
+	m.entered, m.turns, m.requestID = at, m.turns+1, ""
 	m.Busy, m.Stopping, m.LettingToolsFinish, m.began = true, false, false, at
 	m.leadIdleSince, m.waitingOn = time.Time{}, 0
 	m.waited, m.phase, m.shown = 0, requesting, at
@@ -546,10 +546,7 @@ func (m *Model) Close(words, id string) {
 	if !m.Stopping {
 		m.cooked += requestSeparator + "waited " + widget.Until(m.waited)
 	}
-	m.cookedID = m.turnID
-	if id != "" {
-		m.cookedID = id
-	}
+	m.cookedID = id
 	m.seal()
 }
 

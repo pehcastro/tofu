@@ -35,13 +35,16 @@ func reachesTheFeed(t *testing.T, app *App, id string) {
 	}
 }
 
-func TestAnAskingTurnClosesWithADurationAndAnIDThatReachesTheFeed(t *testing.T) {
+func TestAnAskingTurnClosesWithADurationAndItsLastRequest(t *testing.T) {
 	app, _ := awaitingApp(t)
 	app.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
 	app.Update(Event{Kind: EventToolResult, ID: "c1", Text: "everything up to date"})
+	app.Update(leadRequest("3b1963a2-b303-48a6-b179-66e1feccc0fa"))
 	app.Update(Event{Kind: EventDone, Text: "cooked for"})
 	app.Update(Closed{})
-	reachesTheFeed(t, app, closingID(t, app))
+	if id := closingID(t, app); id != short("3b1963a2-b303-48a6-b179-66e1feccc0fa") {
+		t.Errorf("the turn closes on #%s, not on its last request", id)
+	}
 }
 
 func TestAnInterruptedTurnKeepsThePartialInTheFeedAndSaysSoInOneLine(t *testing.T) {

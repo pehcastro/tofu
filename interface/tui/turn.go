@@ -279,11 +279,19 @@ func (a *App) answer(answer Answer) {
 }
 
 func (a *App) recorded(event Event) {
-	var said isession.MessageBody
-	if event.Agent != "" || event.Logged == nil || event.Logged.Kind != isession.EventMessage || json.Unmarshal(event.Logged.Body, &said) != nil {
+	logged := event.Logged
+	if event.Agent != "" || logged == nil {
 		return
 	}
-	a.view.Recorded(said.Role, said.Content, event.Logged.ID, event.Logged.At)
+	if logged.Kind == isession.EventRequest {
+		a.view.Requested(logged.ID)
+		return
+	}
+	var said isession.MessageBody
+	if logged.Kind != isession.EventMessage || json.Unmarshal(logged.Body, &said) != nil {
+		return
+	}
+	a.view.Recorded(said.Role, said.Content, logged.ID, logged.At)
 }
 
 func (a *App) cronFired(prompt string) {
@@ -297,18 +305,6 @@ func (a *App) cronFired(prompt string) {
 func (a *App) mintID() string {
 	a.minted++
 	return strconv.FormatInt(a.options.Now().UnixNano(), 16) + strconv.Itoa(a.minted)
-}
-
-func (a *App) turnEventID() string {
-	if a.keptAnswer != "" {
-		return a.keptAnswer
-	}
-	for index := len(a.happened) - 1; index >= a.happenedAtTurn; index-- {
-		if a.happened[index].Actor == orchestrator && a.happened[index].Kind != feed.KindThinking {
-			return a.happened[index].ID
-		}
-	}
-	return ""
 }
 
 func (a *App) interrupt() tea.Cmd {
@@ -451,11 +447,7 @@ func (a *App) leadTurnBegins() {
 }
 
 func (a *App) leadTurnEnds(words string) {
-	labelled := a.turnEventID()
-	if a.view.Stopping && a.keptAnswer == "" {
-		labelled = ""
-	}
-	a.view.Close(words, labelled)
+	a.view.Close(words, a.view.LastRequest())
 	a.view.Stop()
 	a.leading, a.running = false, 0
 	a.view.WaitOn(a.status.Agents)

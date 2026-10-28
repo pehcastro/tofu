@@ -58,7 +58,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			exchange := sent[event.ID]
 			delete(sent, event.ID)
 			row.Kind, row.ID = kindRequest, cmp.Or(exchange.Request, event.ID)
-			row.Text = traced(cmp.Or(step.Model, exchange.Model), "in "+strconv.Itoa(step.PromptTokens)+" out "+strconv.Itoa(step.CompletionTokens)+" read "+strconv.Itoa(step.CacheReadTokens)+
+			row.Text = traced(turn.ShortID(row.ID), cmp.Or(step.Model, exchange.Model), "in "+strconv.Itoa(step.PromptTokens)+" out "+strconv.Itoa(step.CompletionTokens)+" read "+strconv.Itoa(step.CacheReadTokens)+
 				" wrote "+strconv.Itoa(step.CacheWriteTokens), took(exchange.DurationMS), spent(step.CostUSD), string(step.Phase), exchange.Why, oneLine(exchange.Error))
 			row.Outcome = traceProblem(false, exchange.Error)
 		case session.EventMemoryRequest:
@@ -199,7 +199,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 	for _, exchange := range exchanges {
 		if _, unrecorded := sent[exchange.Request]; unrecorded && exchange.Error != "" {
 			rows = append(rows, traceRow{At: exchange.At, Kind: kindRequest, Agent: exchange.Agent, Turn: exchange.Turn, ID: exchange.Request,
-				Outcome: traceProblem(false, exchange.Error), Text: traced(exchange.Model, took(exchange.DurationMS), oneLine(exchange.Error))})
+				Outcome: traceProblem(false, exchange.Error), Text: traced(turn.ShortID(exchange.Request), exchange.Model, took(exchange.DurationMS), oneLine(exchange.Error))})
 		}
 	}
 	for _, cut := range cacheTrace(events, exchanges).Breaks {
