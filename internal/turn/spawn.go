@@ -275,6 +275,8 @@ func NewSpawnTool(orchestratorID string, base Config, roster *subagent.Roster) *
 	return &SpawnTool{Inbox: NewInbox(), orchestratorID: orchestratorID, base: base, roster: roster, tree: &spawnTree{}, built: &builtOncePerTurn{}, writes: &subagent.Writes{}}
 }
 
+func (t *SpawnTool) AnnounceSent(sent CalledAsEachRequestIsSent) { t.base.Sent = sent }
+
 func (t *SpawnTool) Name() string { return "spawn" }
 
 func (t *SpawnTool) SubAgentRows() []Row {
@@ -450,7 +452,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if err := sideHeldOwns(t.Name(), t.base.Sessions, t.base.Session, args.Owns); err != nil {
 		return Result{}, err
 	}
-	system, environment, err := t.SubAgents.prompt(t.base, definition, args.Task, args.Owns)
+	system, parts, environment, err := t.SubAgents.prompt(t.base, definition, args.Task, args.Owns)
 	if err != nil {
 		return Result{}, fmt.Errorf("spawn: the sub-agent's prompt did not compose: %w", err)
 	}
@@ -517,7 +519,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		return Result{}, fmt.Errorf("spawn: %s's scratch folder was not made: %w", subAgentID, err)
 	}
 	timing.took("scratch")
-	held := &heldSubAgent{agent: agent, definition: definition, effort: opened.Effort, askedEffort: effort, system: system,
+	held := &heldSubAgent{agent: agent, definition: definition, effort: opened.Effort, askedEffort: effort, system: system, parts: parts,
 		environment: environment + scratchWords(scratch) + t.briefFiles(context.WithValue(ctx, subAgentKey{}, subAgentID), args, site.conversation),
 		boundary:    subagent.NewBoundary(subAgentID, scratch.Dir(), args.Owns), scratch: scratch, inbox: NewInbox(),
 		trace: spawnTrace{definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, ticket: args.Ticket, depth: t.depth + 1}}
@@ -710,7 +712,7 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 	subAgent.Caps.MaxSteps, subAgent.Caps.MaxForks = cmp.Or(subAgent.Caps.MaxSteps, konst.SubAgentMaxSteps), konst.SubAgentMaxForks
 	subAgent.Caps.WallClock = cmp.Or(limits.WallClock, konst.SubAgentWallClockSeconds*time.Second)
 	held.kept.Lock()
-	subAgent.System, subAgent.Environment, subAgent.History, subAgent.Prefix = held.system, held.environment, held.history, &held.prefix
+	subAgent.System, subAgent.Parts, subAgent.Environment, subAgent.History, subAgent.Prefix = held.system, held.parts, held.environment, held.history, &held.prefix
 	held.kept.Unlock()
 	subAgent.Memory = ""
 	if t.Remembered != nil {

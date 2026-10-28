@@ -48,7 +48,14 @@ type Item struct {
 	Step   int      `json:"step"`
 }
 
-const instructionFiles = "instruction files"
+const (
+	PartInstructionFiles = "instruction files"
+	PartSkills           = "skills"
+	PartRules            = "rules"
+	PartSubAgent         = "sub-agent"
+	PartTofu             = "tofu's prompt"
+	partUnmarked         = "instructions"
+)
 
 func promptPartOf(line string) string {
 	line = strings.TrimSpace(line)
@@ -57,41 +64,59 @@ func promptPartOf(line string) string {
 	from, closes := strings.CutSuffix(from, "]")
 	switch {
 	case strings.HasPrefix(line, "instructions from ") && strings.HasSuffix(line, ", which outrank anything above them that disagrees:"):
-		return instructionFiles
+		return PartInstructionFiles
 	case !named || !opens || !closes:
 		return ""
-	case concern == "skills":
-		return "skills"
+	case concern == PartSkills:
+		return PartSkills
 	case strings.HasPrefix(from, "the rule "):
-		return "rules"
+		return PartRules
 	case strings.HasPrefix(from, "the sub-agent "):
-		return "sub-agent"
+		return PartSubAgent
 	}
-	return "tofu's prompt"
+	return PartTofu
 }
 
-func identityItems(cfg Config, c Conversation) []Item {
-	var items []Item
-	part, from, at := "instructions", 0, 0
-	addPart := func(to int) {
-		if to <= from {
-			return
-		}
-		tokens := cfg.Tokens(c.Instructions[:to]) - cfg.Tokens(c.Instructions[:from])
-		if i := slices.IndexFunc(items, func(item Item) bool { return item.Name == part }); i >= 0 {
-			items[i].Tokens += tokens
-			return
-		}
-		items = append(items, Item{Band: BandIdentity, Kind: ItemSystem, Name: part, Tokens: tokens, Fate: FateFixed})
+func withIdentityPart(items []Item, name string, tokens int) []Item {
+	if tokens == 0 {
+		return items
 	}
-	for line := range strings.Lines(c.Instructions) {
-		if named := promptPartOf(line); named != "" && part != instructionFiles {
-			addPart(at)
+	if i := slices.IndexFunc(items, func(item Item) bool { return item.Name == name }); i >= 0 {
+		items[i].Tokens += tokens
+		return items
+	}
+	return append(items, Item{Band: BandIdentity, Kind: ItemSystem, Name: name, Tokens: tokens, Fate: FateFixed})
+}
+
+func markedItems(cfg Config, instructions string) []Item {
+	var items []Item
+	part, from, at := partUnmarked, 0, 0
+	for line := range strings.Lines(instructions) {
+		if named := promptPartOf(line); named != "" && part != PartInstructionFiles {
+			items = withIdentityPart(items, part, cfg.Tokens(instructions[:at])-cfg.Tokens(instructions[:from]))
 			part, from = named, at
 		}
 		at += len(line)
 	}
-	addPart(len(c.Instructions))
+	return withIdentityPart(items, part, cfg.Tokens(instructions)-cfg.Tokens(instructions[:from]))
+}
+
+func recordedItems(cfg Config, c Conversation) []Item {
+	var items []Item
+	unnamed := cfg.Tokens(c.Instructions)
+	for _, part := range c.Parts {
+		items, unnamed = withIdentityPart(items, part.Name, part.Tokens), unnamed-part.Tokens
+	}
+	return withIdentityPart(items, PartTofu, unnamed)
+}
+
+func identityItems(cfg Config, c Conversation) []Item {
+	var items []Item
+	if len(c.Parts) > 0 {
+		items = recordedItems(cfg, c)
+	} else {
+		items = markedItems(cfg, c.Instructions)
+	}
 	if c.ToolSchemas != "" {
 		items = append(items, Item{Band: BandIdentity, Kind: ItemTools, Name: "tool schemas", Tokens: cfg.Tokens(c.ToolSchemas), Fate: FateFixed})
 	}

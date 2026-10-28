@@ -367,16 +367,26 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	var recording sync.Mutex
 	compacting := config.Inbox.compactionScope()
 	compactionAsk := func(into *record, index int, charge func(float64)) RecordedAsk {
+		var compactions *record
+		if into != nil {
+			compactions = &record{log: into.log, scope: into.scope, turn: into.turn, agent: into.agent, spawnedBy: into.spawnedBy, said: map[string]string{}, announce: into.announce, lastSent: &messagesKept{}}
+		}
 		return func(ctx context.Context, why, wire string, model Model, request llm.Request) (llm.Decision, error) {
 			if err := compacting.Err(); err != nil {
 				return llm.Decision{}, err
 			}
 			id, started := session.NewEventID(), time.Now()
+			recording.Lock()
+			compactions.sent(id, why, request, artifacts.preview.OnWire(wire))
+			recording.Unlock()
 			tapped, tap := llm.Tapped(ctx)
 			decision, timing, err := askCountingAttempts(tapped, model, request)
 			recording.Lock()
 			defer recording.Unlock()
-			into.exchange(id, why, wire, request, started, tap.Attempts(), decision, err)
+			compactions.exchange(id, why, wire, request, started, tap.Attempts(), decision, err)
+			if compactions != nil {
+				into.failed, compactions.failed = append(into.failed, compactions.failed...), nil
+			}
 			charge(decision.Usage.Cost)
 			if err == nil {
 				spent := stepFrom(id, index, timing, decision)

@@ -22,6 +22,7 @@ type heldSubAgent struct {
 	effort      llm.Effort
 	askedEffort llm.Effort
 	system      string
+	parts       []PromptPart
 	environment string
 	prefix      Prefix
 	boundary    *subagent.Boundary

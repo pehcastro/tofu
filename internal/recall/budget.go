@@ -55,8 +55,14 @@ func (e Entry) tokens(cfg Config) int {
 	return cfg.MessageTokens(e.Text) + cfg.Tokens(e.Calls) + e.Images*konst.ImageTokens
 }
 
+type PromptPart struct {
+	Name   string
+	Tokens int
+}
+
 type Conversation struct {
 	Instructions string
+	Parts        []PromptPart
 	ToolSchemas  string
 	Facts        []string
 	Entries      []Entry

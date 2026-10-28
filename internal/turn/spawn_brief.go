@@ -16,15 +16,16 @@ import (
 	"tofu/internal/sys"
 )
 
-func (s SubAgents) prompt(inherited Config, definition subagent.Definition, task string, owns []string) (string, string, error) {
+func (s SubAgents) prompt(inherited Config, definition subagent.Definition, task string, owns []string) (string, []PromptPart, string, error) {
 	system, environment := inherited.System, inherited.Environment
+	var parts []PromptPart
 	switch {
 	case s.Prompt.Environment != "":
 		spec := s.Prompt
 		spec.Task, spec.Paths, spec.Agent, spec.Role = task, owns, definition, rule.RoleSubAgent
 		owned, err := rule.Frameworks(s.Root, owns)
 		if err != nil {
-			return "", "", err
+			return "", nil, "", err
 		}
 		spec.Frameworks = append(slices.Clone(spec.Frameworks), owned...)
 		slices.Sort(spec.Frameworks)
@@ -32,13 +33,13 @@ func (s SubAgents) prompt(inherited Config, definition subagent.Definition, task
 		spec.Agent = definition.Reaching(spec.Frameworks)
 		composed, err := Compose(spec)
 		if err != nil {
-			return "", "", err
+			return "", nil, "", err
 		}
-		system, environment = composed.Head(), composed.WithTaskRules(spec.Environment)
+		system, parts, environment = composed.Head(), composed.Parts, composed.WithTaskRules(spec.Environment)
 	case definition.Name != "":
 		system += "\n\n" + agentPart(definition).Text
 	}
-	return system, Redated(strings.TrimSpace(environment+"\n\n"+holdingWords(owns)), inherited.Now), nil
+	return system, parts, Redated(strings.TrimSpace(environment+"\n\n"+holdingWords(owns)), inherited.Now), nil
 }
 
 func holdingWords(owns []string) string {

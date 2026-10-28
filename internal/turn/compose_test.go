@@ -249,7 +249,7 @@ func TestASubAgentOwningAMonorepoAppGetsThatAppsFrameworkRules(t *testing.T) {
 		{[]string{"apps/docs/**"}, []string{"vue"}, false, true},
 	} {
 		agents := SubAgents{Root: root, Prompt: ComposeSpec{Environment: "e", ToolGuidance: "g", Rules: rules, Frameworks: c.lead}}
-		system, _, err := agents.prompt(Config{}, subagent.Definition{}, "write the page", c.owns)
+		system, _, _, err := agents.prompt(Config{}, subagent.Definition{}, "write the page", c.owns)
 		if err != nil {
 			t.Fatal(err)
 		}

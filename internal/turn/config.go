@@ -268,7 +268,7 @@ func (c Config) promptParts(preview recall.Config) []keptPart {
 	}
 	byTask := composed.render(func(part PromptPart) bool { return part.ByTask })
 	parts := []keptPart{
-		{PromptPart: session.PromptPart{Kind: string(rule.ConcernEnvironment), PerTurn: true}, text: strings.TrimSpace(strings.TrimSuffix(c.Environment, byTask))},
+		{PromptPart: session.PromptPart{Kind: string(rule.ConcernEnvironment), PerTurn: true}, text: strings.TrimSpace(strings.Replace(c.Environment, byTask, "", 1))},
 		{PromptPart: session.PromptPart{Kind: partInstructions}, text: c.Instructions},
 	}
 	for _, part := range c.Parts {

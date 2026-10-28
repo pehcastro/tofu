@@ -14,6 +14,7 @@ import (
 	"tofu/internal/boardy"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/recall"
 	"tofu/internal/rule"
 	"tofu/internal/session"
 	"tofu/internal/shell"
@@ -174,11 +175,14 @@ func (t *SpawnTool) traceAnswer(ctx context.Context, asking string, request llm.
 	if at < 0 {
 		return
 	}
-	answering := &record{log: site.log, scope: site.turn, turn: site.turn, agent: runs[at].ParentAgent, said: map[string]string{}}
+	answering := &record{log: site.log, scope: site.turn, turn: site.turn, agent: runs[at].ParentAgent, said: map[string]string{}, announce: t.base.Sent, lastSent: &messagesKept{}}
 	id, why := session.NewEventID(), "answers "+asking+"'s ask"
 	if failed == nil {
 		why += fmt.Sprintf(": ended as %s, stop reason %q", decision.Outcome, decision.Stop)
 	}
+	preview, err := recall.LoadConfig()
+	answering.note(err)
+	answering.sent(id, why, request, preview.OnWire(t.base.Wire))
 	answering.exchange(id, why, t.base.Wire, request, started, attempts, decision, failed)
 	if failed == nil {
 		answering.step(session.EventRequest, stepFrom(id, 0, requestTiming{attempt: len(attempts), durationMS: time.Since(started).Milliseconds()}, decision))

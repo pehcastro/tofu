@@ -275,7 +275,7 @@ func (t *SpawnTool) recompose(held *heldSubAgent) error {
 		return err
 	}
 	owns := held.boundary.Owns()
-	system, environment, err := t.SubAgents.prompt(t.base, definition, held.agent.Brief, owns)
+	system, parts, environment, err := t.SubAgents.prompt(t.base, definition, held.agent.Brief, owns)
 	if err != nil {
 		return err
 	}
@@ -283,7 +283,7 @@ func (t *SpawnTool) recompose(held *heldSubAgent) error {
 	if err != nil {
 		return fmt.Errorf("%s's scratch folder was not made: %w", held.agent.ID, err)
 	}
-	held.definition, held.system, held.environment, held.restored = definition, system, environment+scratchWords(scratch), false
+	held.definition, held.system, held.parts, held.environment, held.restored = definition, system, parts, environment+scratchWords(scratch), false
 	held.boundary, held.scratch = subagent.NewBoundary(held.agent.ID, scratch.Dir(), owns), scratch
 	return nil
 }
