@@ -903,7 +903,7 @@ func drawnPlanState(state tools.PlanState) PlanState {
 }
 
 func gateDecision(tool string, gated turn.GateDecision) Decision {
-	decision := Decision{Tool: tool, Verdict: verdictOf(gated.Verdict)}
+	decision := Decision{Tool: tool, Verdict: verdictOf(gated.Verdict), Provider: gated.Provider, Model: gated.Model, DurationMS: gated.DurationMS}
 	for _, answer := range gated.Answers {
 		decision.Answers = append(decision.Answers, gateAnswer(answer))
 	}

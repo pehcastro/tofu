@@ -52,6 +52,9 @@ type GateDecision struct {
 	Verdict    ledger.Verdict
 	Answers    []ledger.Answer
 	Reason     *ledger.Reason
+	Provider   string
+	Model      string
+	DurationMS int64
 	PersonOnly bool
 	HookAsk    string
 	Failure    string

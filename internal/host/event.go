@@ -183,6 +183,9 @@ type Decision struct {
 	Answers       []GateAnswer
 	Reason        Reason
 	Failure       string
+	Provider      string
+	Model         string
+	DurationMS    int64
 	Enforced      bool
 	OverridesRule string
 	Remembers     string

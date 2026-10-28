@@ -564,6 +564,9 @@ type DecisionMade struct {
 	Tool          string    `json:"tool"`
 	OverridesRule string    `json:"overridesRule,omitempty"`
 	Call          string    `json:"call,omitempty"`
+	Provider      string    `json:"provider,omitempty"`
+	Model         string    `json:"model,omitempty"`
+	DurationMS    int64     `json:"durationMs,omitempty"`
 	At            time.Time `json:"at"`
 }
 

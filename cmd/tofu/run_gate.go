@@ -146,7 +146,8 @@ func gateKeyFrom(keys jev.Keyring) (string, error) {
 
 func (g *toolGate) Decide(ctx context.Context, request turn.GateRequest) (turn.GateDecision, error) {
 	row, err := g.ask(ctx, request)
-	decision := turn.GateDecision{ID: row.ID, Verdict: row.Verdict, Answers: row.Answers, Reason: row.Reason}
+	decision := turn.GateDecision{ID: row.ID, Verdict: row.Verdict, Answers: row.Answers, Reason: row.Reason,
+		Provider: row.Provider, Model: row.Build, DurationMS: row.LatencyMS}
 	var unavailable jevUnavailable
 	switch {
 	case errors.As(err, &unavailable):
