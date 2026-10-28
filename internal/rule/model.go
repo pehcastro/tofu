@@ -1,6 +1,7 @@
 package rule
 
 import (
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -154,6 +155,9 @@ type Rule struct {
 	Domain       string
 	Checker      string
 	Command      string
+	Pattern      *regexp.Regexp
+	Paths        []string
+	ExceptPaths  []string
 	Measurement  string
 	Source       string
 	Evidence     string
@@ -169,7 +173,8 @@ type Rule struct {
 }
 
 type Finding struct {
-	RuleID string
-	Target string
-	Detail string
+	RuleID  string
+	Target  string
+	Detail  string
+	Matched string
 }

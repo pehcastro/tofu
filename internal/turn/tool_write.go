@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/rule"
 	"tofu/internal/sys"
 	"tofu/internal/transform"
 )
@@ -23,6 +25,7 @@ type WriteTool struct {
 	root     Root
 	ledger   *ReadLedger
 	checkers *Typecheckers
+	rules    []rule.Rule
 }
 
 func NewWriteTool(root string) (*WriteTool, error) {
@@ -40,6 +43,11 @@ func (t *WriteTool) Reading(ledger *ReadLedger) *WriteTool {
 
 func (t *WriteTool) Checking(checkers *Typecheckers) *WriteTool {
 	t.checkers = checkers
+	return t
+}
+
+func (t *WriteTool) Ruling(rules []rule.Rule) *WriteTool {
+	t.rules = rules
 	return t
 }
 
@@ -88,6 +96,11 @@ func (t *WriteTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if readErr != nil && !errors.Is(readErr, fs.ErrNotExist) {
 		return Result{}, fmt.Errorf("write: reading %s before replacing it: %w", args.Path, readErr)
 	}
+	fires := rule.CheckWrite(t.rules, filepath.Clean(args.Path), string(held), args.Content)
+	ruled, err := rule.Weigh(fires)
+	if err != nil {
+		return Result{}, fmt.Errorf("write: %w", err)
+	}
 	if readErr != nil {
 		err = sys.WriteFile(resolved, []byte(args.Content), writePerm)
 	} else {
@@ -116,7 +129,7 @@ func (t *WriteTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		After:   args.Content,
 		Diff:    transform.Unified(args.Path, before, args.Content),
 	}
-	return Result{Content: t.checkers.Typechecked(ctx, resolved, preview.Result()), Command: args.Path}, nil
+	return Result{Content: t.checkers.Typechecked(ctx, resolved, strings.Join(append([]string{preview.Result()}, ruled...), "\n")), Command: args.Path, Rules: fires}, nil
 }
 
 func (t *WriteTool) appendTo(ctx context.Context, resolved string, args writeArgs) (Result, error) {
@@ -136,6 +149,11 @@ func (t *WriteTool) appendTo(ctx context.Context, resolved string, args writeArg
 	}
 	added := strings.ReplaceAll(args.Content, "\r\n", "\n")
 	after := endings.Restore(lead + added)
+	fires := rule.CheckWrite(t.rules, filepath.Clean(args.Path), string(held), after)
+	ruled, err := rule.Weigh(fires)
+	if err != nil {
+		return Result{}, fmt.Errorf("write: %w", err)
+	}
 	change := ChangeOf(string(held), after)
 	if !t.ledger.Saw(ctx, args.Path, held) {
 		return Result{}, fmt.Errorf("write: %s has not been read in this session or has changed since, so appending to it is refused: %s",
@@ -154,7 +172,7 @@ func (t *WriteTool) appendTo(ctx context.Context, resolved string, args writeArg
 	for i, line := range lines {
 		shown += fmt.Sprintf("\n%d\t%s", first+i, line)
 	}
-	return Result{Content: t.checkers.Typechecked(ctx, resolved, shown), Command: args.Path}, nil
+	return Result{Content: t.checkers.Typechecked(ctx, resolved, strings.Join(append([]string{shown}, ruled...), "\n")), Command: args.Path, Rules: fires}, nil
 }
 
 const (

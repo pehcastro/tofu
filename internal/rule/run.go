@@ -8,6 +8,7 @@ import (
 type Fire struct {
 	RuleID   string
 	Mode     Mode
+	Text     string
 	Target   string
 	Findings []Finding
 	Blocked  bool
@@ -29,6 +30,7 @@ func Run(r Rule, checkers map[string]Checker, a Artifact, target string, now tim
 	return Fire{
 		RuleID:   r.ID,
 		Mode:     r.Mode,
+		Text:     r.Text,
 		Target:   target,
 		Findings: findings,
 		Blocked:  r.Mode == ModeEnforced && len(findings) > 0,

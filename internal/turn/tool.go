@@ -14,6 +14,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/rule"
 	"tofu/internal/sys"
 )
 
@@ -37,6 +38,7 @@ type Result struct {
 	SubAgent    string
 	Repeat      bool
 	Origin      llm.Origin
+	Rules       []rule.Fire
 }
 
 func runeSafeHead(s string, n int) string {

@@ -1286,8 +1286,12 @@ func assembleRunTools(dir, set string, ledger *turn.ReadLedger, warm *warmProces
 	if err := cmp.Or(readErr, writeErr); err != nil {
 		return nil, nil, err
 	}
+	rules, _, rulesErr := loadRules("", dir)
+	if rulesErr != nil {
+		return nil, nil, rulesErr
+	}
 	read := readTool.Reading(ledger)
-	write := writeTool.Reading(ledger).Checking(checkers)
+	write := writeTool.Reading(ledger).Checking(checkers).Ruling(rules)
 	checked, checkErr := tools.Checked(dir, []turn.Tool{bashTool})
 	if checkErr != nil {
 		return nil, nil, checkErr
@@ -1326,7 +1330,7 @@ func assembleRunTools(dir, set string, ledger *turn.ReadLedger, warm *warmProces
 		return nil, nil, err
 	}
 	plan := tools.NewPlan()
-	full := append([]turn.Tool{read, write, shell, plan, tools.Shells{}, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger).Checking(checkers), typecheckTool, testTool, githubTool}, verbTools...)
+	full := append([]turn.Tool{read, write, shell, plan, tools.Shells{}, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger).Checking(checkers).Ruling(rules), typecheckTool, testTool, githubTool}, verbTools...)
 	return tools.NewMemo().Wrap(append(append(full, webTools...), browserTools...)), plan, nil
 }
 

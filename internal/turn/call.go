@@ -6,12 +6,15 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
 
 	"tofu/internal/hook"
 	"tofu/internal/llm"
+	"tofu/internal/rule"
+	"tofu/internal/session"
 	"tofu/internal/sys"
 )
 
@@ -153,6 +156,10 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 	}
 	if err != nil {
 		row, answer := rejectedCall(call, started, g.redact.Redact(err.Error()), g.id, g.parent, g.author)
+		var refused rule.Refusal
+		if errors.As(err, &refused) {
+			row.Rules = ruleFindings(refused.Fires)
+		}
 		return row, answer, false
 	}
 	result.Content, result.FailureText = g.redact.Redact(result.Content), g.redact.Redact(result.FailureText)
@@ -190,6 +197,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		Error:          result.FailureText,
 		SubAgentID:     result.SubAgent,
 		Hooks:          hookRunOf(hook.PostToolUse, post),
+		Rules:          ruleFindings(result.Rules),
 	}
 	if storeErr != nil {
 		row.ResultHandleError = storeErr.Error()
@@ -224,6 +232,16 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		Images:          result.Images,
 		Origin:          result.Origin,
 	}, result.Repeat
+}
+
+func ruleFindings(fires []rule.Fire) []session.RuleFinding {
+	var found []session.RuleFinding
+	for _, f := range fires {
+		for _, one := range f.Lines() {
+			found = append(found, session.RuleFinding{Rule: f.RuleID, Mode: string(f.Mode), At: one.Target})
+		}
+	}
+	return found
 }
 
 func rejectedCall(call llm.ToolCall, started time.Time, reason, id, parent, author string) (ToolCallRow, llm.Message) {

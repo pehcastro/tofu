@@ -14,6 +14,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/rule"
 	"tofu/internal/search"
 	"tofu/internal/transform"
 	"tofu/internal/turn"
@@ -23,6 +24,12 @@ type Edit struct {
 	root     turn.Root
 	ledger   *turn.ReadLedger
 	checkers *turn.Typecheckers
+	rules    []rule.Rule
+}
+
+func (e Edit) Ruling(rules []rule.Rule) Edit {
+	e.rules = rules
+	return e
 }
 
 func NewEdit(dir string) (Edit, error) {
@@ -75,6 +82,7 @@ type plannedEdit struct {
 	preview  transform.Preview
 	change   turn.LineChange
 	notes    []string
+	fires    []rule.Fire
 }
 
 func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
@@ -118,12 +126,14 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 		}
 	}
 	shown, targets := make([]string, len(plans)), make([]string, len(plans))
+	var fires []rule.Fire
 	for i, plan := range plans {
 		e.ledger.Rewrote(ctx, plan.preview.Path, []byte(plan.preview.After), plan.change)
 		shown[i] = e.checkers.Typechecked(ctx, plan.resolved, strings.Join(append([]string{plan.preview.Diff}, plan.notes...), "\n"))
 		targets[i] = plan.preview.Path
+		fires = append(fires, plan.fires...)
 	}
-	return turn.Result{Content: strings.Join(append(shown, skipped...), "\n"), Command: strings.Join(targets, " ")}, nil
+	return turn.Result{Content: strings.Join(append(shown, skipped...), "\n"), Command: strings.Join(targets, " "), Rules: fires}, nil
 }
 
 func refusedChange(change turn.EditChange, onFile int) error {
@@ -225,6 +235,12 @@ func (e Edit) plan(ctx context.Context, changes []turn.EditChange, several bool)
 	if !filepath.IsLocal(target) {
 		return plannedEdit{}, fmt.Errorf("edit: path %q leaves the root it was given", target)
 	}
+	fires := rule.CheckWrite(e.rules, target, before, after)
+	recorded, err := rule.Weigh(fires)
+	if err != nil {
+		return plannedEdit{}, fmt.Errorf("edit: %w", err)
+	}
+	notes = append(notes, recorded...)
 	preview := transform.Preview{Path: target, Existed: true, Before: before, After: after, Diff: transform.Unified(target, before, after)}
-	return plannedEdit{resolved: resolved, preview: preview, change: change, notes: notes}, nil
+	return plannedEdit{resolved: resolved, preview: preview, change: change, notes: notes, fires: fires}, nil
 }

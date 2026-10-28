@@ -6,9 +6,12 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+
+	"tofu/internal/subagent"
 )
 
 func LoadFS(shipped fs.FS, root string) ([]Rule, error) {
@@ -127,6 +130,9 @@ func parseRule(data []byte, path string) (Rule, error) {
 	r.Trigger, err = newTrigger(declares, path, r.ID)
 	if err != nil {
 		return Rule{}, err
+	}
+	if (r.Checker == CheckerPattern) != (r.Pattern != nil) || (r.Paths != nil || r.ExceptPaths != nil) && r.Pattern == nil {
+		return Rule{}, fmt.Errorf("%s: rule %q: pattern, paths and except_paths go with checker %s, and that checker needs a pattern", path, r.ID, CheckerPattern)
 	}
 	if r.Concern.neverConditional() && !r.Trigger.AlwaysOn() {
 		return Rule{}, fmt.Errorf("%s: rule %q is concern %s and declares a trigger, and %s are never conditional", path, r.ID, r.Concern, concernNames(neverConditionalConcerns()))
@@ -262,6 +268,26 @@ func (r *Rule) setField(key, value, path string, line int) error {
 		r.Text = value
 	case "command":
 		r.Command = value
+	case "pattern":
+		pattern, err := regexp.Compile(value)
+		if err != nil {
+			return fmt.Errorf("%s:%d: the pattern %q is not a regular expression: %v", path, line, value, err)
+		}
+		r.Pattern = pattern
+	case "paths", "except_paths":
+		var globs []string
+		for one := range strings.SplitSeq(value, ",") {
+			glob := strings.TrimSpace(one)
+			if _, err := subagent.Matches("a/path/the/globs/are/tested/against", []string{glob}); err != nil {
+				return fmt.Errorf("%s:%d: %s names %q, which is not a path glob: %v", path, line, key, glob, err)
+			}
+			globs = append(globs, glob)
+		}
+		if key == "paths" {
+			r.Paths = globs
+		} else {
+			r.ExceptPaths = globs
+		}
 	case "notes":
 		r.Notes = value
 	case "reason", "by", "at":

@@ -90,7 +90,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 				answered.State = "refused"
 			}
 			reason, gate := callReason(result.ResultBody), gateWords(result, nil, event.Call)
-			answered.Text = traced(call.Tool+" → "+answered.State, sized(result.ResultBytes), took(result.DurationMS), oneLine(reason), gate, oneLine(string(call.Args)))
+			answered.Text = traced(call.Tool+" → "+answered.State, ruleWords(result.Rules), sized(result.ResultBytes), took(result.DurationMS), oneLine(reason), gate, oneLine(string(call.Args)))
 			if result.Error != "" || result.Refused || result.ToolOutcome == session.ToolOutcomeFailed || result.ToolOutcome == session.ToolOutcomeAborted {
 				answered.Outcome = traceProblem(result.ToolOutcome == session.ToolOutcomeAborted, cmp.Or(reason, answered.State))
 			}
@@ -237,6 +237,14 @@ func becauseOf(rows []traceRow, causes []stopCause, at int) string {
 		return said
 	}
 	return "no row before it says why"
+}
+
+func ruleWords(found []session.RuleFinding) string {
+	words := make([]string, len(found))
+	for i, one := range found {
+		words[i] = "rule " + one.Rule + " " + one.Mode + " at " + one.At
+	}
+	return strings.Join(words, ", ")
 }
 
 func traced(parts ...string) string {

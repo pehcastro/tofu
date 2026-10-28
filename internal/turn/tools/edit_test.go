@@ -9,9 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"tofu/internal/judge/state"
+	"tofu/internal/rule"
 	"tofu/internal/turn"
 )
 
@@ -330,5 +332,49 @@ func TestEveryCheckOnAnEditCallReadsFileTwo(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(filepath.Join(dir, "a.go")); string(got) != files["a.go"] {
 		t.Fatalf("file one was written by a call the budget refused:\n%s", got)
+	}
+}
+
+func TestAnEnforcedPatternRefusesTheWholeEditCallAndAShadowOneWritesAndSaysSo(t *testing.T) {
+	const head = "id: raw_colour\ndomain: dev\nkind: structural\nconcern: code_rules\nchecker: pattern\nscope: \"apps/desk/**\"\npattern: \"\\brgba?\\(\"\ntext: a colour comes from the theme\nmode: "
+	files := map[string]string{"apps/desk/a.rs": "fn a() {}\n", "apps/desk/b.rs": "fn b() {}\n", "internal/c.go": "package c\n"}
+	call := editCall(change("apps/desk/a.rs", "fn a() {}", "fn a() {}\nfn x() {}"), change("apps/desk/b.rs", "fn b() {}", "fn b() {}\nlet c = rgb(0x1e1e1e);"))
+	for _, mode := range []string{"enforced", "shadow"} {
+		dir := t.TempDir()
+		for name, body := range files {
+			if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		rules, err := rule.LoadFS(fstest.MapFS{"rules/raw_colour@1.yaml": {Data: []byte(head + mode + "\n")}}, "project")
+		if err != nil {
+			t.Fatal(err)
+		}
+		editor, err := NewEdit(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		editor = editor.Ruling(rules)
+		if _, err := editor.Run(context.Background(), editCall(change("internal/c.go", "package c", "package c\n\nvar c = rgb(1)"))); err != nil {
+			t.Fatalf("%s: a write outside the scope was refused: %v", mode, err)
+		}
+		result, err := editor.Run(context.Background(), call)
+		a, _ := os.ReadFile(filepath.Join(dir, "apps/desk/a.rs"))
+		b, _ := os.ReadFile(filepath.Join(dir, "apps/desk/b.rs"))
+		if mode == "enforced" {
+			if err == nil || !strings.Contains(err.Error(), "raw_colour") || !strings.Contains(err.Error(), "apps/desk/b.rs:2") || !strings.Contains(err.Error(), "a colour comes from the theme") {
+				t.Fatalf("the enforced refusal does not name the rule, the line and the text: %v", err)
+			}
+			if string(a) != files["apps/desk/a.rs"] || string(b) != files["apps/desk/b.rs"] {
+				t.Fatalf("a refused call wrote a file:\n%s\n%s", a, b)
+			}
+			continue
+		}
+		if err != nil || !strings.Contains(string(b), "rgb(0x1e1e1e)") || !strings.Contains(result.Content, "raw_colour (shadow)") {
+			t.Fatalf("the shadow rule did not write and say so: %v\n%s\n%s", err, b, result.Content)
+		}
 	}
 }

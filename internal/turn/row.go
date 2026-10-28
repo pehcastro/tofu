@@ -69,9 +69,10 @@ type ToolCallRow struct {
 	DurationMS     int64  `json:"duration_ms"`
 	Error          string `json:"error,omitempty"`
 
-	GateReason *ledger.Reason `json:"gate_reason,omitempty"`
-	Refused    bool           `json:"refused,omitempty"`
-	Hooks      []HookRun      `json:"hooks,omitempty"`
+	Rules      []session.RuleFinding `json:"rules,omitempty"`
+	GateReason *ledger.Reason        `json:"gate_reason,omitempty"`
+	Refused    bool                  `json:"refused,omitempty"`
+	Hooks      []HookRun             `json:"hooks,omitempty"`
 }
 
 type HookRun struct {

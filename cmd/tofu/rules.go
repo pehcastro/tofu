@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -457,7 +458,15 @@ func rulesCheckVerb(args []string, out, errOut io.Writer) int {
 		if err != nil {
 			return o.fail(err)
 		}
-		fires = append(fires, found...)
+		listed, err := patternFiles(rules, root)
+		if err != nil {
+			return o.fail(err)
+		}
+		patterned, err := rule.CheckFiles(rules, root, listed, time.Now())
+		if err != nil {
+			return o.fail(err)
+		}
+		fires = append(append(fires, found...), patterned...)
 	}
 
 	logDir, err := sys.LogDir()
@@ -475,6 +484,17 @@ func rulesCheckVerb(args []string, out, errOut io.Writer) int {
 		}
 	}
 	return o.done(report.Blocked == 0, report, report.lines)
+}
+
+func patternFiles(rules []rule.Rule, root string) ([]string, error) {
+	if !slices.ContainsFunc(rules, func(r rule.Rule) bool { return r.Pattern != nil }) {
+		return nil, nil
+	}
+	listed, err := exec.Command("git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", root).Output()
+	if err != nil {
+		return nil, fmt.Errorf("a pattern rule reads the files git lists under %s, and git ls-files failed: %w", root, err)
+	}
+	return strings.FieldsFunc(string(listed), func(r rune) bool { return r == 0 }), nil
 }
 
 func (report ruleCheckReport) lines(page cli.Page) []string {
