@@ -13,6 +13,7 @@ import (
 type substitution struct {
 	real     string
 	scrubbed string
+	isPath   bool
 }
 
 type Identities []substitution
@@ -22,19 +23,19 @@ type machine struct {
 }
 
 var credentialSubstitutions = []substitution{
-	{"sk-or-v1-", "redacted-openrouter-key-"},
-	{"sk-ant-api", "redacted-anthropic-api-key"},
-	{"sk-ant-oat", "redacted-anthropic-oauth-token"},
-	{"sk-proj-", "redacted-openai-key-"},
-	{"ghp_", "redacted-github-token-"},
-	{"gho_", "redacted-github-oauth-token-"},
-	{"github_pat_", "redacted-github-pat-"},
-	{"AKIA", "redacted-aws-key-"},
-	{"xoxb-", "redacted-slack-bot-token-"},
-	{"xoxp-", "redacted-slack-user-token-"},
-	{"eyJhbGciOi", "redacted-jwt-algorithm-"},
-	{"eyJ0eXAiOi", "redacted-jwt-type-"},
-	{"-----BEGIN ", "redacted-pem-block "},
+	{real: "sk-or-v1-", scrubbed: "redacted-openrouter-key-"},
+	{real: "sk-ant-api", scrubbed: "redacted-anthropic-api-key"},
+	{real: "sk-ant-oat", scrubbed: "redacted-anthropic-oauth-token"},
+	{real: "sk-proj-", scrubbed: "redacted-openai-key-"},
+	{real: "ghp_", scrubbed: "redacted-github-token-"},
+	{real: "gho_", scrubbed: "redacted-github-oauth-token-"},
+	{real: "github_pat_", scrubbed: "redacted-github-pat-"},
+	{real: "AKIA", scrubbed: "redacted-aws-key-"},
+	{real: "xoxb-", scrubbed: "redacted-slack-bot-token-"},
+	{real: "xoxp-", scrubbed: "redacted-slack-user-token-"},
+	{real: "eyJhbGciOi", scrubbed: "redacted-jwt-algorithm-"},
+	{real: "eyJ0eXAiOi", scrubbed: "redacted-jwt-type-"},
+	{real: "-----BEGIN ", scrubbed: "redacted-pem-block "},
 }
 
 var pathForms = []func(string) string{
@@ -72,23 +73,23 @@ func Machine() Identities {
 
 func identitiesOf(m machine) Identities {
 	var table Identities
-	add := func(real, scrubbed string) {
-		if real != "" && !slices.ContainsFunc(table, func(entry substitution) bool { return entry.real == real }) {
-			table = append(table, substitution{real, scrubbed})
+	add := func(entry substitution) {
+		if entry.real != "" && !slices.ContainsFunc(table, func(seen substitution) bool { return seen.real == entry.real }) {
+			table = append(table, entry)
 		}
 	}
 	projects := projectsRoot(m.home, m.workdir)
-	for _, dir := range []substitution{{m.home, path.Dir(m.home) + "/owner"}, {projects, path.Dir(projects) + "/projects"}} {
+	for _, dir := range []substitution{{real: m.home, scrubbed: path.Dir(m.home) + "/owner"}, {real: projects, scrubbed: path.Dir(projects) + "/projects"}} {
 		if dir.real == "" {
 			continue
 		}
 		for _, form := range pathForms {
-			add(form(dir.real), form(dir.scrubbed))
+			add(substitution{form(dir.real), form(dir.scrubbed), true})
 		}
 	}
-	add(m.email, "owner@example.com")
-	add(m.gitName, "owner-handle")
-	add(m.user, "owner")
+	add(substitution{real: m.email, scrubbed: "owner@example.com"})
+	add(substitution{real: m.gitName, scrubbed: "owner-handle"})
+	add(substitution{real: m.user, scrubbed: "owner"})
 	slices.SortStableFunc(table, func(a, b substitution) int { return len(b.real) - len(a.real) })
 	return table
 }
@@ -118,12 +119,33 @@ func hasVolume(slashed string) bool {
 	return len(slashed) >= 2 && slashed[1] == ':'
 }
 
-func (identities Identities) Scrub(text string) string {
-	for _, entry := range identities {
-		text = strings.ReplaceAll(text, entry.real, entry.scrubbed)
+func (entry substitution) replaceIn(text string) string {
+	if !entry.isPath {
+		return strings.ReplaceAll(text, entry.real, entry.scrubbed)
 	}
-	for _, entry := range credentialSubstitutions {
-		text = strings.ReplaceAll(text, entry.real, entry.scrubbed)
+	var out strings.Builder
+	for {
+		before, after, found := strings.Cut(text, entry.real)
+		out.WriteString(before)
+		if !found {
+			return out.String()
+		}
+		if after != "" && continuesName(after[0]) {
+			out.WriteString(entry.real)
+		} else {
+			out.WriteString(entry.scrubbed)
+		}
+		text = after
+	}
+}
+
+func continuesName(next byte) bool {
+	return next == '_' || '0' <= next && next <= '9' || 'a' <= next && next <= 'z' || 'A' <= next && next <= 'Z'
+}
+
+func (identities Identities) Scrub(text string) string {
+	for _, entry := range slices.Concat(identities, credentialSubstitutions) {
+		text = entry.replaceIn(text)
 	}
 	return text
 }
@@ -131,7 +153,7 @@ func (identities Identities) Scrub(text string) string {
 func (identities Identities) LeaksIn(text string) []string {
 	var found []string
 	for _, entry := range identities {
-		if strings.Contains(text, entry.real) {
+		if entry.replaceIn(text) != text {
 			found = append(found, entry.real)
 		}
 	}
