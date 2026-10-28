@@ -886,6 +886,9 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		}
 		_ = os.Setenv(cassetteVariable, held)
 	}
+	if plan.host {
+		_ = os.Setenv(doneReviewVariable, plan.arms.doneArm)
+	}
 	clock, err := driveClock(deck)
 	if err != nil {
 		return driveFail(errOut, err)
