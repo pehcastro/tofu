@@ -1,7 +1,8 @@
 ---
 id: gpui-frames-and-cost
 domain: dev
-document: how gpui-ce schedules a frame, what an idle window costs, which views re-render, and what each primitive costs per frame
+framework: gpui-ce
+document: how gpui-ce schedules a frame, what an idle window costs, which views re-render, what hover, clicks, tooltips, focus and a caret dirty, and what each primitive costs per frame
 ---
 
 # Frames and what they cost in gpui-ce
@@ -26,6 +27,19 @@ gpui-ce is immediate mode: a dirty view re-runs `render`, layout, prepaint and p
 - Put anything that animates in its own `Entity` and render it with `.cached(style)` (`view.rs`). A cached view replays its last prepaint and paint when its bounds, content mask and text style are unchanged and it is not dirty, so the frame request re-renders the moving part only.
 - Never animate inside the view that holds a long list or a whole screen; the frame request will re-render all of it every frame.
 - Many spinners: one small view that draws them all from one phase beats one animation element each, which is one notify each.
+
+## What dirties more than it looks
+
+Line numbers are at the vendored revision 175ef66.
+
+- A notify dirties the view and every ancestor view (`window.rs:2178-2189`). A cached view that misses re-renders its whole subtree with caching off, so every cached view inside it renders too (`view.rs:447-457`). A small moving or blinking view stays cheap only when no cached view above it holds much else.
+- `.hover(style)` and `.group_hover(..)` notify the view rendering the element on every enter and leave (`elements/div.rs:3247-3271`, `3274-3292`). A hover style on each row of a long list re-renders that whole view on every crossing: give hover to the smallest view that owns it, or one shared highlight.
+- `on_click` calls `window.refresh()` on the mouse down inside it and again on the mouse up (`elements/div.rs:3383-3392`, `3495-3512`), and so does the pressed style (`elements/div.rs:3640-3672`). A refresh skips every cached view (`view.rs:435`), so each click re-renders the whole window twice. Where that cost shows, press on `on_mouse_down` and notify the small view that owns the press.
+- Showing or hiding a tooltip refreshes the window (`elements/div.rs:4153-4178`), and so does moving focus (`window.rs:2285-2297`).
+- A `deferred` popover belongs to the view it is declared in and hangs from its dispatch node (`window.rs:4276-4281`), so a caret blinking inside a popover declared in a cached card dirties the card and everything above it.
+- A focused text field blinks forever: its caret task notifies every 500 ms (`examples/view_example/example_editor.rs:91-105`, under `crates/gpui`). A preview draws no caret and holds no focus.
+- `cx.refresh_windows()` queues a refresh of every window (`app.rs:1128-1130`). Never call it from an overlay, a hover or anything per frame.
+- A list without a small fixed bound is a `uniform_list`, which renders only the visible rows (`elements/uniform_list.rs:473-490`), or a `list`. Derived data (parsed text, layouts, strings, colours) is computed when its input changes and stored; `render` only reads. Batch incoming chunks and notify once.
 
 ## Cost per primitive
 

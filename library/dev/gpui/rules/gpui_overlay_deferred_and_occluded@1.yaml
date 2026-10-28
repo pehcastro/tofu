@@ -1,0 +1,8 @@
+id: gpui_overlay_deferred_and_occluded
+domain: dev
+kind: human
+concern: code_rules
+framework: gpui-ce
+touches: (?i)overlay|popover|popup|menu|dropdown|tooltip|modal|dialog|picker|toast|deferred|anchored|occlude|hit|click|title ?bar|caption|drag|on top|absolute|z-?index
+text: in gpui-ce an overlay is `deferred(..)`, placed by `anchored()` from its measured size, which flips to the other side and snaps inside the window; never from a guessed size or mockup coordinates. a deferred draw keeps the text style and the view of where it is declared, so set its own text style on its root and never declare it inside a cached card. hitboxes are tested last inserted first. `occlude()` blocks hover, clicks and tooltips for everything behind, so occlude only the overlay's own panel and controls, and prefer `block_mouse_except_scroll()`; a `window_control_area` under an occluding hitbox stops dragging and the caption buttons. put `on_mouse_down_out` on the panel, not on its anchor, and remember `on_click` needs the mouse down and up in the same hitbox. an `absolute()` child gets an explicit `top` and `left`. `svg().with_transformation` moves the paint and not the hitbox, so compute a hit area with the paint's transform. snap an edge once in device pixels. the gpui-overlays-and-hit-testing reference has each fact with its source line.
+notes: the popover closed on mouse down by its anchor, a title bar killed by an occluding layer and overlays inheriting a small bold font were each one line once the gpui fact was known. it guards against overlays under their content, dead clicks and window controls that stop working.

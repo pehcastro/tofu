@@ -284,6 +284,47 @@ func TestReferences(t *testing.T) {
 	}
 }
 
+func TestAFrameworkReferenceReachesOnlyATaskOfThatFramework(t *testing.T) {
+	rustDev := definitionNamed(t, Definitions(scanOf(t, "", "tofu")), "rust-dev")
+	held := len(rustDev.References)
+	for _, c := range []struct {
+		frameworks []string
+		pages      int
+		gpui       bool
+	}{{nil, 4, false}, {[]string{"react"}, 4, false}, {[]string{"gpui-ce"}, 12, true}, {[]string{"gpui-ce", "react"}, 12, true}} {
+		reaching := rustDev.Reaching(c.frameworks)
+		total, named := 0, slices.Clone(reaching.Cut)
+		for _, reference := range reaching.References {
+			total += len(reference.Text)
+			named = append(named, reference.Name)
+		}
+		gpui := slices.ContainsFunc(named, func(name string) bool { return strings.HasPrefix(name, "gpui-") })
+		slices.Sort(named)
+		switch {
+		case len(named) != c.pages || len(slices.Compact(named)) != c.pages:
+			t.Errorf("frameworks %v: rust-dev names %d pages once each, got kept %d and cut %q", c.frameworks, c.pages, len(reaching.References), reaching.Cut)
+		case gpui != c.gpui:
+			t.Errorf("frameworks %v: a gpui page is kept or cut = %v, want %v: %q", c.frameworks, gpui, c.gpui, named)
+		case total > konst.SubAgentReferenceBytes:
+			t.Errorf("frameworks %v: %d bytes kept, past the %d a sub-agent is given", c.frameworks, total, konst.SubAgentReferenceBytes)
+		case !kept(reaching, "rust-verify") || c.gpui && !kept(reaching, "gpui-verify"):
+			t.Errorf("frameworks %v: the verify pages the done gate checks against are kept, got %+v cut %q", c.frameworks, reaching.References, reaching.Cut)
+		case slices.ContainsFunc(rustDev.References, func(reference Reference) bool {
+			return slices.Contains(reaching.Cut, reference.Name) && total+len(reference.Text) <= konst.SubAgentReferenceBytes
+		}):
+			t.Errorf("frameworks %v: a cut page fits in the %d bytes left: cut %q", c.frameworks, konst.SubAgentReferenceBytes-total, reaching.Cut)
+		}
+		t.Logf("frameworks %v: kept %d bytes of %d pages, cut %q", c.frameworks, total, len(reaching.References), reaching.Cut)
+	}
+	if len(rustDev.References) != held {
+		t.Fatalf("Reaching changed the definition it was called on: %d references, held %d", len(rustDev.References), held)
+	}
+}
+
+func kept(definition Definition, name string) bool {
+	return slices.ContainsFunc(definition.References, func(reference Reference) bool { return reference.Name == name })
+}
+
 func BenchmarkDefinitionsTwenty(b *testing.B) {
 	project := b.TempDir()
 	folder := filepath.Join(project, ".claude", "agents")

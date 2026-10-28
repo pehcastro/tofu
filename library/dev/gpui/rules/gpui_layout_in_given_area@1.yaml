@@ -1,0 +1,8 @@
+id: gpui_layout_in_given_area
+domain: dev
+kind: human
+concern: code_rules
+framework: gpui-ce
+touches: (?i)layout|flex|width|height|truncat|wrap|overflow|scroll|list|row|column|grid|sidebar|panel|card|strip|header|toolbar|tab|resize|narrow|min_w|gap|padding|margin|align|bleed|clip|screen|view
+text: lay out with flex inside the area the parent gives, never at mockup coordinates; a fixed number is only a min or a max. a gpui-ce flex item starts at `min_size: auto`, so it will not shrink below its text: every text that can grow gets `truncate()` or `line_clamp(n)`, and every flex item between it and its row gets `min_w_0()`. taffy shrinks by basis, so a control that must stay whole (a close button among many tabs) gets `flex_none()` or `flex_shrink_0()`. a `.cached(style)` view needs a definite size in `style`. `uniform_list` gives every row the height of one measured item and lays each row out at the list's width, so rows take `w_full()` and rows of different heights use `list`. `overflow_y_scroll` needs an `id`, and gpui draws no scrollbar, so use the project's own. controls sit in flow inside their strip, never absolute over it; a screen is one frame, never a card inside a card. check every new view at the narrowest and the widest window. the gpui-layout reference has each fact with its source line.
+notes: 87 desk tickets were layout defects, each a flex fact (min_w_0, shrink by basis, an unsized cached view, uniform_list row width) that no gpui page named. it guards against text bleeding out of its box, controls vanishing at narrow widths and absolute overlays drawn at mockup pixels.

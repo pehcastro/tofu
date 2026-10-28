@@ -379,6 +379,44 @@ func TestTheLeadHasTheSpawnResultBeforeTheSubAgentsFirstRequestIsAnswered(t *tes
 	led.wait(t)
 }
 
+func TestRustDevCarriesTheGpuiReferencesOnlyWhereItsOwnsReachGpuiCe(t *testing.T) {
+	found := subagent.Definitions(subagent.Scan{Library: library.Files(), Tools: []string{"read", "write", "edit", "glob", "search", "symbols", "bash"}})
+	for _, c := range []struct {
+		manifest, owns string
+		gpui           bool
+	}{
+		{"[workspace.dependencies]\ngpui = { package = \"gpui-ce\", path = \"vendor/gpui-ce\" }\n", "apps/desk/crates/ui/src/tabs.rs", true},
+		{"[dependencies]\nserde = \"1\"\n", "apps/desk/crates/ui/src/tabs.rs", false},
+		{"[workspace.dependencies]\ngpui = { package = \"gpui-ce\", path = \"vendor/gpui-ce\" }\n", "tools/cli/src/main.rs", false},
+	} {
+		root := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(root, "apps", "desk"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "apps", "desk", "Cargo.toml"), []byte(c.manifest), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		model := &stubModel{decisions: []llm.Decision{claimDecision("did the piece")}}
+		base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(namedTool("read")), ResultBytesCap: 4096,
+			ArtifactDir: t.TempDir(), NewID: func() string { return "turn-orchestrator" }}
+		spawn := NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
+		spawn.SubAgents = SubAgents{Root: root, Defined: found.Definitions, Prompt: ComposeSpec{Environment: "e", ToolGuidance: "g"}}
+		if _, err := spawn.Run(context.Background(), json.RawMessage(`{"agent":"rust-dev","task":"fix the tab strip","owns":["`+c.owns+`"]}`)); err != nil {
+			t.Fatal(err)
+		}
+		reported(t, spawn)
+		system := model.requests[0].Messages[0].Content
+		_, cut, _ := strings.Cut(system, "these references were cut")
+		cut, _, _ = strings.Cut(cut, "\n")
+		listed := strings.Contains(system, "\n- gpui-layout: ") && strings.Contains(system, "\n- gpui-input-and-focus: ")
+		named := strings.Contains(cut, "gpui-motion")
+		t.Logf("%s owning %s: gpui listed %v, cut%s", strings.TrimSpace(c.manifest), c.owns, listed, cut)
+		if listed != c.gpui || named != c.gpui || !c.gpui && strings.Contains(system, "\n- gpui-") {
+			t.Errorf("%s owning %s: gpui pages listed %v and cut pages named %v, want %v", strings.TrimSpace(c.manifest), c.owns, listed, named, c.gpui)
+		}
+	}
+}
+
 func TestASpawnWithNoOwnsStartsAndItsWriteEditAndNestedSpawnAreRefused(t *testing.T) {
 	names := []string{"read", "write", "edit", "typecheck", "test", "glob", "search", "symbols", "bash", "spawn"}
 	found := subagent.Definitions(subagent.Scan{Library: library.Files(), Tools: names})

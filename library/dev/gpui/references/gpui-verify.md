@@ -1,6 +1,7 @@
 ---
 id: gpui-verify
 domain: dev
+framework: gpui-ce
 document: judging gpui-ce motion and frame cost: the build to judge on, the window state, reading present intervals, and what a measurement must carry
 ---
 

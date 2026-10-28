@@ -1,0 +1,8 @@
+id: gpui_state_one_owner
+domain: dev
+kind: human
+concern: code_rules
+framework: gpui-ce
+touches: (?i)state|entity|model|observe|subscribe|notify|stale|count|sync|refresh|reload|async|spawn|task|request|reply|load|fetch|query|session|quit|drop|lifecycle|thread|watcher|parse|process
+text: in gpui-ce name the owner of every value before coding it: one `Entity` holds it, every view reads it through that entity and is told by `cx.observe` or `cx.subscribe`, whose `Subscription` lives in a field because dropping it unsubscribes. never keep a second copy; a count, colour or key derives from the collection the view lists. build an entity once and update it with setters; key element state with `use_keyed_state` by the row's identity, never `use_state` in a loop or an index. an update of an entity that is already being updated panics, so push it through `cx.defer` or `window.defer`. hold every `Task` in a field and replace it, since dropping it cancels; check each async reply against the id it was asked for and drop it when stale. file, process, network and parse work never runs in `render`, mount or an event handler: run it with `cx.background_spawn`, apply the result on the foreground and draw a loading state at once. anything spawned dies in `Drop` and in `cx.on_app_quit`. the gpui-state-and-entities reference has each fact with its source line.
+notes: 52 desk tickets were stale or split state and 24 a blocked UI thread: a count from a different collection than the list, a reply for the session being left, a watcher started on every call. it guards against two copies drifting, re-entrant panics, leaked tasks and frozen first frames.

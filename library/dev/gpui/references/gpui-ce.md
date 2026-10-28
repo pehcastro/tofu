@@ -1,6 +1,7 @@
 ---
 id: gpui-ce
 domain: dev
+framework: gpui-ce
 document: what gpui-ce is, how it differs from Zed's gpui, where its source is the authority, its crates and its renderer on each OS
 ---
 

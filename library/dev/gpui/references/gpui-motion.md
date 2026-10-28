@@ -1,6 +1,7 @@
 ---
 id: gpui-motion
 domain: dev
+framework: gpui-ce
 document: motion in gpui-ce: which primitive carries velocity, springs and their numbers, eased transitions, presence, a gliding highlight, spinners and reduced motion
 ---
 

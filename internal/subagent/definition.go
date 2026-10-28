@@ -62,9 +62,10 @@ type Definition struct {
 }
 
 type Reference struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
-	Text string `json:"-"`
+	Name      string `json:"name"`
+	Path      string `json:"path"`
+	Framework string `json:"framework,omitempty"`
+	Text      string `json:"-"`
 }
 
 type Broken struct {
@@ -359,6 +360,30 @@ func (s Scan) resolve(definition *Definition, assigned assignment) {
 	}
 }
 
+func (d Definition) Reaching(frameworks []string) Definition {
+	reached := slices.DeleteFunc(slices.Clone(d.References), func(reference Reference) bool {
+		return reference.Framework != "" && !slices.Contains(frameworks, reference.Framework)
+	})
+	kept, cut := budgeted(reached)
+	d.References, d.Cut = kept, append(cut, d.Cut...)
+	return d
+}
+
+func budgeted(references []Reference) ([]Reference, []string) {
+	var kept []Reference
+	var cut []string
+	used := 0
+	for _, reference := range references {
+		if used+len(reference.Text) > konst.SubAgentReferenceBytes {
+			cut = append(cut, reference.Name)
+			continue
+		}
+		used += len(reference.Text)
+		kept = append(kept, reference)
+	}
+	return kept, cut
+}
+
 func (s Scan) place(definition *Definition, tofuWrote bool) {
 	named := definition.References
 	definition.References = nil
@@ -372,7 +397,7 @@ func (s Scan) place(definition *Definition, tofuWrote bool) {
 		slices.Sort(definition.Ignored)
 		return
 	}
-	used := 0
+	var read []Reference
 	for _, reference := range named {
 		found, _ := fs.Glob(s.Library, "*/references/"+reference.Name+".md")
 		deep, _ := fs.Glob(s.Library, "*/*/references/"+reference.Name+".md")
@@ -382,20 +407,22 @@ func (s Scan) place(definition *Definition, tofuWrote bool) {
 			continue
 		}
 		data, err := fs.ReadFile(s.Library, found[0])
-		var text string
+		var header, text string
 		if err == nil {
-			_, text, err = frontMatter(data)
+			header, text, err = frontMatter(data)
 		}
-		switch {
-		case err != nil:
+		var fields map[string][]string
+		if err == nil {
+			fields, err = fieldsOf(header)
+		}
+		if err != nil {
 			definition.Refused = append(definition.Refused, fmt.Sprintf("the reference %q does not read: %v", reference.Name, err))
-		case len(definition.Cut) > 0 || used+len(text) > konst.SubAgentReferenceBytes:
-			definition.Cut = append(definition.Cut, reference.Name)
-		default:
-			used += len(text)
-			definition.References = append(definition.References, Reference{Name: reference.Name, Path: libraryOrigin + "/" + found[0], Text: text})
+			continue
 		}
+		read = append(read, Reference{Name: reference.Name, Path: libraryOrigin + "/" + found[0], Text: text, Framework: strings.Join(fields["framework"], " ")})
 	}
+	_, definition.Cut = budgeted(slices.DeleteFunc(slices.Clone(read), func(reference Reference) bool { return reference.Framework != "" }))
+	definition.References = slices.DeleteFunc(read, func(reference Reference) bool { return slices.Contains(definition.Cut, reference.Name) })
 }
 
 func claudeTool(name string) string {
