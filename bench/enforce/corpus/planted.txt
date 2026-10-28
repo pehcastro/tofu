@@ -1,0 +1,563 @@
+=== desk_refuse_fixture DESK-19 apps/desk/crates/desk/src/modules/data_studio/mod.rs
+why: the data studio grid drew rows from a fixture module
+mark: mod fixture;
+---
+mod fixture;
+mod grid;
+
+pub fn rows() -> Vec<grid::Row> {
+    fixture::ROWS.iter().map(grid::Row::from).collect()
+}
+=== desk_refuse_fixture DESK-34 apps/desk/crates/desk/src/screens/onboarding/states.rs
+why: the onboarding state boards came from the module's own fixture
+mark: use super::fixture;
+---
+use super::fixture;
+
+pub fn state(board: Board) -> State {
+    match board {
+        Board::Start => fixture::start(),
+        Board::Models => fixture::models(),
+        Board::Home => fixture::home(),
+    }
+}
+=== desk_refuse_fixture DESK-68 apps/desk/crates/book/src/book/tabs.rs
+why: the close x only raised a toast that the page is not built, and closed nothing
+mark: this.toast("Only the Agents tab is built on this page", cx);
+---
+pub fn strip(cx: &mut Context<Book>) -> impl IntoElement {
+    TabStrip::new("agents-tabs", tabs()).on_close(cx.listener(|this, _index: &usize, _, cx| {
+        this.toast("Only the Agents tab is built on this page", cx);
+    }))
+}
+=== desk_refuse_fixture DESK-69 apps/desk/crates/book/src/book/buttons.rs
+why: a chevron down on a split button opened no menu
+mark: .on_click(|_, _, _| {})
+---
+pub fn split(label: SharedString) -> impl IntoElement {
+    h_flex()
+        .child(Button::new("run", label))
+        .child(IconButton::new("run-more", Icon::ChevronDown).on_click(|_, _, _| {}))
+}
+=== desk_refuse_fixture DESK-132 apps/desk/crates/desk/src/modules/subagents/mod.rs
+why: the Sub-agents module read its rows and feed from fixtures
+mark: let agents = fixture::AGENTS;
+---
+mod chrome;
+mod fixture;
+
+pub fn rows(cx: &mut App) -> Vec<AnyElement> {
+    let agents = fixture::AGENTS;
+    agents.iter().map(|agent| chrome::row(agent, cx)).collect()
+}
+=== desk_refuse_fixture DESK-136 apps/desk/crates/desk/src/modules/file_edits/mod.rs
+why: the File edits module read its files from fixture.rs
+mark: mod fixture;
+---
+mod chrome;
+mod fixture;
+mod paint;
+
+pub fn files() -> &'static [fixture::EditedFile] {
+    fixture::FILES
+}
+=== desk_refuse_fixture DESK-137 apps/desk/crates/desk/src/modules/shells/mod.rs
+why: the Shells module read its shells from fixture.rs
+mark: mod fixture;
+---
+mod chrome;
+mod fixture;
+mod paint;
+
+pub fn shells() -> Vec<Shell> {
+    fixture::SHELLS.iter().cloned().collect()
+}
+=== desk_refuse_fixture DESK-145 apps/desk/crates/desk/src/screens/theme/mod.rs
+why: the Theme screen listed themes from a fixture
+mark: mod fixture;
+---
+mod fixture;
+
+pub fn themes() -> Vec<ThemeCard> {
+    fixture::THEMES.iter().map(ThemeCard::from).collect()
+}
+=== desk_refuse_fixture DESK-165 apps/desk/crates/desk/src/modules/editor/boards.rs
+why: the editor drew static lines in boards.rs instead of a file
+mark: pub const LINES: &[Line] = &[
+---
+pub const LINES: &[Line] = &[
+    Line::code(1, "package main"),
+    Line::code(2, ""),
+    Line::code(3, "func main() {"),
+    Line::code(4, "    run()"),
+    Line::code(5, "}"),
+];
+=== desk_refuse_fixture DESK-168 apps/desk/crates/desk/src/modules/git/changes.rs
+why: the Changes pane drew fixture::CHANGES
+mark: fixture::CHANGES.iter()
+---
+pub fn rows(cx: &mut App) -> Vec<AnyElement> {
+    fixture::CHANGES.iter().map(|change| change_row(change, cx)).collect()
+}
+=== desk_refuse_fixture DESK-169 apps/desk/crates/desk/src/modules/editor/parts.rs
+why: the agent bar, blame and person row were fixture decorations
+mark: fixture::AGENT_NOTES
+---
+pub fn agent_bar(cx: &mut App) -> impl IntoElement {
+    v_flex().children(fixture::AGENT_NOTES.iter().map(|note| note_row(note, cx)))
+}
+=== desk_refuse_fixture DESK-177 apps/desk/crates/desk/src/title_bar.rs
+why: the bell and account buttons raised a not drawn yet toast instead of a popover
+mark: Self::tell(window, cx, "notices are not drawn yet")
+---
+fn bell(cx: &mut Context<TitleBar>) -> impl IntoElement {
+    IconButton::new("bell", Icon::Bell).on_click(cx.listener(|_, _, window, cx| {
+        Self::tell(window, cx, "notices are not drawn yet");
+    }))
+}
+=== desk_refuse_fixture DESK-196 apps/desk/crates/desk/src/screens/classifier/mod.rs
+why: the Classifier drew fixture points and sixty synthetic sandbox risks
+mark: fixture::risks()
+---
+mod fixture;
+
+pub fn risks() -> Vec<Risk> {
+    fixture::risks()
+}
+=== desk_refuse_fixture DESK-197 apps/desk/crates/desk/src/screens/library/mod.rs
+why: Library drew rules, skills and agents from fixture data
+mark: mod fixture;
+---
+mod fixture;
+
+pub fn agents() -> Vec<AgentRow> {
+    fixture::AGENTS.to_vec()
+}
+=== desk_refuse_fixture DESK-198 apps/desk/crates/desk/src/screens/context/mod.rs
+why: Context drew six fixture categories with fixture items
+mark: fixture::CATEGORIES
+---
+mod fixture;
+
+pub fn categories() -> &'static [Category] {
+    fixture::CATEGORIES
+}
+=== desk_refuse_fixture DESK-242 apps/desk/crates/desk/src/modules/editor/mod.rs
+why: the editor kept a fixture source beside the disk source
+mark: Fixture,
+---
+pub enum Source {
+    Fixture,
+    Disk(PathBuf),
+}
+
+pub fn open(source: Source, cx: &mut App) -> Entity<Editor> {
+    match source {
+        Source::Fixture => fixture_editor(cx),
+        Source::Disk(path) => disk_editor(path, cx),
+    }
+}
+=== desk_refuse_fixture DESK-254 apps/desk/crates/desk/src/screens/settings/rows.rs
+why: every tofu settings row came from fixture.rs and switches flipped an in-memory map
+mark: fixture::TOFU_ROWS
+---
+pub fn tofu_rows() -> Vec<Row> {
+    fixture::TOFU_ROWS.iter().map(Row::from).collect()
+}
+=== desk_refuse_fixture DESK-318 apps/desk/crates/desk/src/control/dispatch.rs
+why: every verb but four answered that it is not built in this desk yet
+mark: _ => Reply::refuse(format!("{verb} is not built in this desk yet")),
+---
+pub fn answer(verb: &str, args: Args, cx: &mut App) -> Reply {
+    match verb {
+        "tile.open" => tile_open(args, cx),
+        _ => Reply::refuse(format!("{verb} is not built in this desk yet")),
+    }
+}
+=== desk_refuse_fixture DESK-325 apps/desk/crates/desk/src/screens/onboarding/setup.rs
+why: sign in faked success without asking tofu
+mark: self.account = Some(Account::signed_in("person@example.com", "Plan"));
+---
+fn sign_in(&mut self, cx: &mut Context<Self>) {
+    self.account = Some(Account::signed_in("person@example.com", "Plan"));
+    self.step = Step::Project;
+    cx.notify();
+}
+=== desk_refuse_fixture DESK-325 apps/desk/crates/desk/src/screens/onboarding/mod.rs
+why: the classifier choices and found chips were invented in fixture.rs
+mark: fixture::CLASSIFIERS
+---
+mod fixture;
+mod setup;
+
+pub fn classifier_choices() -> Vec<Choice> {
+    fixture::CLASSIFIERS.to_vec()
+}
+=== desk_refuse_fixture DESK-328 apps/desk/crates/desk/src/screens/intro/mod.rs
+why: intro/fixture.rs drove the whole home
+mark: mod fixture;
+---
+mod fixture;
+mod paint;
+
+pub fn home() -> Home {
+    Home { account: fixture::ACCOUNT, sessions: fixture::SESSIONS.to_vec() }
+}
+=== desk_refuse_fixture DESK-341 apps/desk/crates/desk/src/modules/notepad/mod.rs
+why: Rendered was a stub string, not a renderer
+mark: const RENDERED_LATER: &str = "rendered view comes with markdown in notepad";
+---
+const RENDERED_LATER: &str = "rendered view comes with markdown in notepad";
+
+fn rendered(&self) -> impl IntoElement {
+    div().child(RENDERED_LATER)
+}
+=== desk_refuse_fixture DESK-372 apps/desk/crates/desk/src/screens/work/mod.rs
+why: Source control in the work screen was an empty state saying it is not mounted yet
+mark: Module::SourceControl => empty_state("Source control", "not mounted in the work screen yet"),
+---
+fn body(module: Module, cx: &mut App) -> AnyElement {
+    match module {
+        Module::Chat => chat_tile(cx),
+        Module::SourceControl => empty_state("Source control", "not mounted in the work screen yet"),
+    }
+}
+=== desk_refuse_fixture DESK-372 apps/desk/crates/desk/src/modules/git/watch.rs
+why: the disk change toast said not drawn yet
+mark: Self::tell(window, cx, "outside change: not drawn yet");
+---
+fn on_disk_change(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    Self::tell(window, cx, "outside change: not drawn yet");
+}
+=== desk_refuse_fixture DESK-413 apps/desk/crates/desk/src/modules/git/mod.rs
+why: Changes kept a Fixture variant beside the real repository
+mark: Fixture,
+---
+pub enum Changes {
+    Fixture,
+    Repo(Repo),
+}
+=== desk_refuse_fixture DESK-431 apps/desk/crates/desk/src/modules/notepad/mod.rs
+why: hide line numbers laid a surface rect over the gutter and the gutter stayed
+mark: window.paint_quad(fill(Bounds::new(origin, size(px(NUMBER_COLUMN), height)), surface));
+---
+fn paint_gutter(&self, origin: Point<Pixels>, height: Pixels, surface: Hsla, window: &mut Window) {
+    if !self.numbers {
+        window.paint_quad(fill(Bounds::new(origin, size(px(NUMBER_COLUMN), height)), surface));
+    }
+}
+=== desk_refuse_fixture DESK-452 apps/desk/crates/desk/src/modules/editor/actions.rs
+why: go to line, quick open and find in files only logged no surface yet
+mark: log::info!("desk: editor action {name} no surface yet");
+---
+fn unbuilt(name: &str) {
+    log::info!("desk: editor action {name} no surface yet");
+}
+=== desk_refuse_fixture DESK-582 apps/desk/crates/desk/src/screens/settings/rows.rs
+why: page toggles flipped an in-memory map and were never saved
+mark: self.switches.insert(key, on);
+---
+fn toggle(&mut self, key: SharedString, on: bool, cx: &mut Context<Self>) {
+    self.switches.insert(key, on);
+    cx.notify();
+}
+=== desk_refuse_fixture DESK-591 apps/desk/crates/desk/src/screens/intro/composer.rs
+why: current checkout, the branch and the model pick were mockups from intro/fixture.rs
+mark: Chip::new(fixture::BRANCH)
+---
+pub fn chips() -> impl IntoElement {
+    h_flex()
+        .child(Chip::new(fixture::CHECKOUT))
+        .child(Chip::new(fixture::BRANCH))
+        .child(Chip::new(fixture::MODEL))
+}
+=== desk_refuse_fixture DESK-592 apps/desk/crates/desk/src/desk.rs
+why: the sidebar foot read Docs and only logged that Docs has no source
+mark: log::info!("desk: Docs has no source yet");
+---
+fn open_docs(&mut self) {
+    log::info!("desk: Docs has no source yet");
+}
+=== desk_refuse_fixture DESK-598 apps/desk/crates/desk/src/screens/intro_setup/preview.rs
+why: the intro setup preview showed invented prompt, model and session text
+mark: .child(Composer::sample("Do anything in sample-app", "Model 5 High"))
+---
+pub fn preview() -> impl IntoElement {
+    v_flex()
+        .child(Composer::sample("Do anything in sample-app", "Model 5 High"))
+        .child(Resume::sample("Resume · calm-otter-fern"))
+}
+=== desk_refuse_fixture DESK-599 apps/desk/crates/desk/src/screens/intro_setup/mod.rs
+why: thumbnails loaded from a dev-only mockups path and plus only raised a tell
+mark: const BACKGROUNDS: &str = "../../../../.local/desk-app/mockups/canvas/bg";
+---
+const BACKGROUNDS: &str = "../../../../.local/desk-app/mockups/canvas/bg";
+const ADD_IMAGE_TELL: &str = "adding an image comes later";
+
+pub fn thumbnails() -> Vec<PathBuf> {
+    std::fs::read_dir(BACKGROUNDS).into_iter().flatten().flatten().map(|entry| entry.path()).collect()
+}
+=== desk_refuse_allow_dead DESK-239 apps/desk/crates/desk/src/modules/chat/mod.rs
+why: asked_id carried expect(dead_code) until screens/context called it
+mark: #[expect(dead_code)]
+---
+impl Chat {
+    #[expect(dead_code)]
+    pub fn asked_id(&self) -> Option<&SessionId> {
+        self.open_id.as_ref().or(self.pending.as_ref())
+    }
+}
+=== desk_refuse_allow_dead DESK-364 apps/desk/crates/desk/src/plugins/mod.rs
+why: Kind carried expect(dead_code)
+mark: #[expect(dead_code)]
+---
+#[expect(dead_code)]
+pub enum Kind {
+    Native(SharedString),
+    Wasm(PathBuf),
+}
+=== desk_refuse_allow_dead DESK-364 apps/desk/crates/desk/src/plugins/plugin.rs
+why: built_in carried expect(dead_code)
+mark: #[expect(dead_code)]
+---
+impl Plugin {
+    #[expect(dead_code)]
+    pub fn built_in(&self) -> bool {
+        matches!(self.kind, Kind::Native(_))
+    }
+}
+=== desk_refuse_allow_dead DESK-367 apps/desk/crates/desk/src/control/capture.rs
+why: region was silenced with a feature gated allow(dead_code)
+mark: #[cfg_attr(not(feature = "plugin-draw"), allow(dead_code))]
+---
+#[cfg_attr(not(feature = "plugin-draw"), allow(dead_code))]
+pub fn region(bounds: Bounds<Pixels>, scale: f32) -> Rect {
+    Rect::from_bounds(bounds, scale)
+}
+=== desk_refuse_allow_dead DESK-505 apps/desk/crates/ui/src/components/logos.rs
+why: logos.rs compiled under an expect(dead_code) and no logo reached the asset registry
+mark: #![expect(dead_code)]
+---
+#![expect(dead_code)]
+
+pub enum Brand {
+    Claude,
+    Codex,
+}
+
+impl Brand {
+    pub fn entries() -> Vec<(SharedString, &'static [u8])> {
+        Vec::new()
+    }
+}
+=== desk_refuse_allow_dead DESK-635 apps/desk/crates/desk/src/screens/intro_setup/colours.rs
+why: colour_row carried expect(dead_code) until a caller existed
+mark: #[expect(dead_code)]
+---
+#[expect(dead_code)]
+pub fn colour_row(label: SharedString, token: ColorToken, cx: &mut App) -> impl IntoElement {
+    h_flex().child(label).child(swatch(token, cx))
+}
+=== desk_refuse_allow_dead DESK-653 apps/desk/crates/desk/src/modules/chat/mod.rs
+why: drop_tofu carried expect(dead_code) until its route existed
+mark: #[expect(dead_code)]
+---
+impl Chat {
+    #[expect(dead_code)]
+    pub fn drop_tofu(&mut self, cx: &mut Context<Self>) {
+        self.bridge.crash();
+        cx.notify();
+    }
+}
+=== desk_refuse_allow_dead DESK-656 apps/desk/crates/desk/src/screens/theme/pick.rs
+why: Listing was silenced with a multi-line feature gated expect(dead_code)
+mark: dead_code,
+---
+#[cfg_attr(
+    not(feature = "screen-theme"),
+    expect(
+        dead_code,
+        reason = "only the theme screen changes the theme list"
+    )
+)]
+pub struct Listing;
+=== desk_refuse_leak DESK-127 apps/desk/crates/desk/src/modules/chat/mod.rs
+why: each approval was built with Box::leak into a static slice
+mark: let questions: &'static [Question] = Box::leak(questions.into_boxed_slice());
+---
+fn approval(request: &ApprovalRequest) -> Asking {
+    let questions: Vec<Question> = request.questions.iter().map(question).collect();
+    let questions: &'static [Question] = Box::leak(questions.into_boxed_slice());
+    Asking::new(questions)
+}
+=== desk_refuse_static_api DESK-126 apps/desk/crates/ui/src/components/ask.rs
+why: Asking::new took only a static slice of questions
+mark: pub fn new(questions: &'static [Question]) -> Self {
+---
+impl Asking {
+    pub fn new(questions: &'static [Question]) -> Self {
+        Self { questions, at: 0 }
+    }
+}
+=== desk_refuse_static_api DESK-126 apps/desk/crates/ui/src/components/ask.rs
+why: Ask, Question and Choice fields were static str
+mark: pub title: &'static str,
+---
+pub struct Question {
+    pub title: &'static str,
+    pub detail: Option<&'static str>,
+    pub choices: &'static [Choice],
+}
+
+pub struct Choice {
+    pub label: &'static str,
+}
+=== desk_refuse_static_api DESK-124 apps/desk/crates/ui/src/components/chat.rs
+why: the ui chat rows took static str, so live data could not use them
+mark: pub fn tool_row(name: &'static str, detail: &'static str) -> impl IntoElement {
+---
+pub fn tool_row(name: &'static str, detail: &'static str) -> impl IntoElement {
+    h_flex().child(name).child(detail)
+}
+=== desk_refuse_static_api DESK-135 apps/desk/crates/ui/src/components/shells.rs
+why: shells.rs and term.rs took static data
+mark: pub title: &'static str,
+---
+pub struct Shell {
+    pub title: &'static str,
+    pub lines: &'static [&'static str],
+}
+=== desk_refuse_static_api DESK-182 apps/desk/crates/ui/src/components/overlay.rs
+why: menu() took items with static str labels and no caption
+mark: pub label: &'static str,
+---
+pub struct MenuItem {
+    pub label: &'static str,
+    pub key: Option<&'static str>,
+}
+
+pub fn menu(items: &[MenuItem]) -> impl IntoElement {
+    v_flex().children(items.iter().map(|item| item.label))
+}
+=== desk_refuse_raw_colour DESK-141 apps/desk/crates/terminal/src/palette.rs
+why: the terminal palette hard-coded its background and its own sixteen ANSI colours
+mark: pub const BACKGROUND: Rgba = rgb(0x161719);
+---
+pub const BACKGROUND: Rgba = rgb(0x161719);
+
+pub fn ansi() -> [Rgba; 4] {
+    [rgb(0x000000), rgb(0xcd3131), rgb(0x0dbc79), rgb(0xe5e510)]
+}
+=== desk_refuse_raw_colour DESK-107 apps/desk/crates/ui/src/components/ask.rs
+why: the ask bar used its own kbd fills instead of theme tokens
+mark: const PRIMARY_KBD_FILL: Hsla = hsla(0.69, 0.1, 0.2, 1.0);
+---
+const PRIMARY_KBD_FILL: Hsla = hsla(0.69, 0.1, 0.2, 1.0);
+const PRIMARY_KBD_TEXT: Hsla = hsla(0.0, 0.0, 0.95, 1.0);
+=== desk_refuse_raw_colour DESK-115 apps/desk/crates/tiling/src/preview.rs
+why: the drop preview was a blue fill, not the theme's muted surface
+mark: .bg(hsla(0.58, 0.8, 0.6, 0.25))
+---
+pub fn drop_preview(bounds: Bounds<Pixels>) -> impl IntoElement {
+    div().absolute().size(bounds.size).bg(hsla(0.58, 0.8, 0.6, 0.25))
+}
+=== desk_refuse_ui_block DESK-248 apps/desk/crates/terminal/src/pty.rs
+why: pty output was sent with block_on
+mark: futures::executor::block_on(output.send(bytes)).ok();
+---
+fn pump(mut reader: Box<dyn Read + Send>, mut output: Sender<Vec<u8>>) {
+    let mut buffer = [0u8; 4096];
+    while let Ok(read) = reader.read(&mut buffer) {
+        let bytes = buffer[..read].to_vec();
+        futures::executor::block_on(output.send(bytes)).ok();
+    }
+}
+=== desk_refuse_ui_block DESK-248 apps/desk/crates/terminal/src/pty.rs
+why: keystroke input went through std mpsc
+mark: let (keys, typed) = std::sync::mpsc::channel::<Vec<u8>>();
+---
+pub fn input() -> (Sender<Vec<u8>>, Receiver<Vec<u8>>) {
+    let (keys, typed) = std::sync::mpsc::channel::<Vec<u8>>();
+    (keys, typed)
+}
+=== desk_refuse_ui_block DESK-248 apps/desk/crates/ui/src/live.rs
+why: the theme stop signal was a std mpsc with recv_timeout
+mark: use std::sync::mpsc;
+---
+use std::sync::mpsc;
+use std::time::Duration;
+
+pub fn watch(stop: mpsc::Receiver<()>) {
+    while stop.recv_timeout(Duration::from_millis(250)).is_err() {
+        reload();
+    }
+}
+=== desk_refuse_ui_block DESK-404 apps/desk/crates/desk/src/modules/git/mod.rs
+why: reload read and hashed every unstaged file inside the Workspace mount before the first frame
+mark: if let Ok(bytes) = std::fs::read(root.join(path)) {
+---
+fn fingerprint(root: &Path, unstaged: &[PathBuf]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    for path in unstaged {
+        if let Ok(bytes) = std::fs::read(root.join(path)) {
+            bytes.hash(&mut hasher);
+        }
+    }
+    hasher.finish()
+}
+=== desk_refuse_ui_block DESK-404 apps/desk/crates/desk/src/modules/git/mod.rs
+why: mount opened the repository and ran git status on the gpui thread
+mark: let repo = Repo::open(&root).ok();
+---
+pub fn mount(root: PathBuf, cx: &mut Context<Workspace>) -> Self {
+    let repo = Repo::open(&root).ok();
+    let changes = repo.as_ref().map(|repo| repo.status()).unwrap_or_default();
+    Self { repo, changes }
+}
+=== desk_refuse_ui_block DESK-242 apps/desk/crates/desk/src/modules/editor/mod.rs
+why: the disk source listed the directory with fs::read_dir on the gpui thread
+mark: let entries = fs::read_dir(&root)
+---
+fn list(root: &Path) -> Vec<PathBuf> {
+    let entries = fs::read_dir(&root).map(|dir| dir.flatten().map(|entry| entry.path()).collect());
+    entries.unwrap_or_default()
+}
+=== desk_refuse_ui_block DESK-343 apps/desk/crates/desk/src/control/draw.rs
+why: draw.snapshot grabbed the window inside cx.update and blocked the main thread
+mark: let png = desk_perf::grab(window)?;
+---
+pub fn snapshot(window: &mut Window, out: &Path) -> Result<()> {
+    let png = desk_perf::grab(window)?;
+    png.save(out)
+}
+=== desk_refuse_ui_block DESK-451 apps/desk/crates/desk/src/modules/editor/typing.rs
+why: every keystroke re-synced the syntax of a 2000 line note on the ui thread
+mark: self.syntax.sync(&self.buffer);
+---
+fn on_input(&mut self, text: &str, cx: &mut Context<Self>) {
+    self.buffer.insert(self.caret, text);
+    self.syntax.sync(&self.buffer);
+    cx.notify();
+}
+=== desk_refuse_schema_edit DESK-434 apps/desk/crates/core/schema/tofu.host.json
+why: boardy.Row and boardy.RowsAnswer were added to the schema by hand
+mark: "boardy.Row": {
+base: head
+---
+  "boardy.Row": {
+    "type": "object",
+    "properties": { "id": { "type": "string" }, "title": { "type": "string" } }
+  },
+  "boardy.RowsAnswer": {
+    "type": "object",
+    "properties": { "rows": { "type": "array", "items": { "$ref": "#/definitions/boardy.Row" } } }
+  },
+=== desk_refuse_schema_edit DESK-373 apps/desk/crates/core/schema/tofu.host.json
+why: a hand edit stood in for the regenerated schema
+mark: "SessionHolder": {
+base: head
+---
+  "SessionHolder": {
+    "type": "object",
+    "properties": { "member": { "type": "string" } }
+  },

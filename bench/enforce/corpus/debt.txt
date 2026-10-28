@@ -1,0 +1,3 @@
+desk_refuse_static_api apps/desk/crates/ui/src/component.rs:16 control takes label: &'static str in a pub fn, the mistake itself
+desk_refuse_static_api apps/desk/crates/ui/src/component.rs:32 icon_button takes label: &'static str in a pub fn, the mistake itself
+desk_refuse_static_api apps/desk/crates/ui/src/component.rs:48 status_item takes label: &'static str in a pub fn, the mistake itself
