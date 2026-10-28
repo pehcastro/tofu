@@ -459,6 +459,9 @@ func agentDelta(id Identity, was, now SubAgentRow) *AgentUpdated {
 	if was.Report != now.Report {
 		delta.Report = &now.Report
 	}
+	if !slices.Equal(was.Moves, now.Moves) {
+		delta.Moves = &now.Moves
+	}
 	if delta == unchanged {
 		return nil
 	}

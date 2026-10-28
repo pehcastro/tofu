@@ -217,3 +217,32 @@ func TestACompleteCallListIsDrawnWholeWithNoHiddenLine(t *testing.T) {
 		t.Fatalf("two recorded calls drew %+v, want both whole and in order", calls)
 	}
 }
+
+func TestEveryTransitionInsideOneSecondReachesTheMember(t *testing.T) {
+	start := time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC)
+	held := rosterHolding(t, roster.SubAgent{ID: "turn-1-c1", Mission: "write the note", Owns: []string{"note.txt"}, Started: start})
+	var sent [][]roster.Transition
+	watch := &watcher{held: held, now: func() time.Time { return start }, emit: func(event Event) { sent = append(sent, event.SubAgents[0].Moves) }}
+
+	watch.redrawWhenChanged()
+	held.Moved("turn-1-c1", roster.Reviewed, "")
+	watch.redrawWhenChanged()
+	held.Reached("turn-1-c1", roster.InReview, "the note is written")
+	watch.redrawWhenChanged()
+	held.Moved("turn-1-c1", roster.Accepted, "the note exists")
+	watch.redrawWhenChanged()
+	watch.redrawWhenChanged()
+
+	want := []int{1, 2, 2, 3}
+	if len(sent) != len(want) {
+		t.Fatalf("four changes inside one second sent %d lines carrying %v, want %d: a move that changes nothing else is dropped", len(sent), sent, len(want))
+	}
+	for index, moves := range sent {
+		if len(moves) != want[index] {
+			t.Errorf("line %d carries %d moves %v, want %d", index, len(moves), moves, want[index])
+		}
+	}
+	if last := sent[len(sent)-1]; last[len(last)-1].Move != roster.Accepted || last[len(last)-1].Reason != "the note exists" {
+		t.Errorf("the last line ends on %+v, want the acceptance with its reason", last[len(last)-1])
+	}
+}

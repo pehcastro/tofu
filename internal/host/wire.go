@@ -400,19 +400,20 @@ type AgentStarted struct {
 
 type AgentUpdated struct {
 	Identity
-	Instance string      `json:"instance"`
-	State    *AgentState `json:"state,omitempty"`
-	Task     *string     `json:"task,omitempty"`
-	Model    *string     `json:"model,omitempty"`
-	Steps    *int        `json:"steps,omitempty"`
-	Tokens   *int        `json:"tokens,omitempty"`
-	Report   *string     `json:"report,omitempty"`
+	Instance string               `json:"instance"`
+	State    *AgentState          `json:"state,omitempty"`
+	Task     *string              `json:"task,omitempty"`
+	Model    *string              `json:"model,omitempty"`
+	Steps    *int                 `json:"steps,omitempty"`
+	Tokens   *int                 `json:"tokens,omitempty"`
+	Report   *string              `json:"report,omitempty"`
+	Moves    *[]roster.Transition `json:"moves,omitempty"`
 }
 
 func (a *AgentUpdated) absorb(older any) {
 	was := older.(*AgentUpdated)
 	a.State, a.Task, a.Model = cmp.Or(a.State, was.State), cmp.Or(a.Task, was.Task), cmp.Or(a.Model, was.Model)
-	a.Steps, a.Tokens, a.Report = cmp.Or(a.Steps, was.Steps), cmp.Or(a.Tokens, was.Tokens), cmp.Or(a.Report, was.Report)
+	a.Steps, a.Tokens, a.Report, a.Moves = cmp.Or(a.Steps, was.Steps), cmp.Or(a.Tokens, was.Tokens), cmp.Or(a.Report, was.Report), cmp.Or(a.Moves, was.Moves)
 }
 
 type AgentEnded struct {

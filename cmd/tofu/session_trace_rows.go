@@ -181,7 +181,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			case timed:
 				row.Kind = kindSpawn
 				row.Agent, _, _ = strings.Cut(spawnOf, " ")
-			case event.Agent != "":
+			case event.Agent != "" && (notice.From == nil || llm.Source(notice.From.Sub) == llm.SourceGate):
 				row.Kind = kindGate
 			}
 		case session.EventAttachment:

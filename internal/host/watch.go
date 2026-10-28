@@ -516,7 +516,7 @@ func sameToTheSecond(now, drawn SubAgentRow) bool {
 		now.Report == drawn.Report && now.Turn == drawn.Turn && now.Parent == drawn.Parent &&
 		now.Steps == drawn.Steps && now.Total == drawn.Total && now.Tokens == drawn.Tokens &&
 		now.Started.Equal(drawn.Started) && now.Ended.Equal(drawn.Ended) &&
-		slices.Equal(now.Owns, drawn.Owns) && slices.Equal(now.Calls, drawn.Calls)
+		slices.Equal(now.Owns, drawn.Owns) && slices.Equal(now.Calls, drawn.Calls) && slices.Equal(now.Moves, drawn.Moves)
 }
 
 func (a *watcher) subAgents() []SubAgentRow {

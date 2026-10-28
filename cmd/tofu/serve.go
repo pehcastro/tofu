@@ -24,7 +24,7 @@ import (
 	"tofu/internal/turn"
 )
 
-const serveUsage = `usage: tofu serve --stdio [--dir PATH] [--cassette PATH]
+const serveUsage = `usage: tofu serve --stdio [--dir PATH] [--cassette PATH] [--done-review off|cheap|screen|typed]
        tofu serve --schema
 
 serves one project to a frontend over standard input and output: JSON-RPC 2.0,
@@ -40,20 +40,29 @@ TOFU_DRIVE_CASSETTE names it when --cassette does not. A cassette run reads
 no quota, unless TOFU_CLAUDE_USAGE_URL or TOFU_CODEX_USAGE_URL names a
 stand-in usage endpoint, which it then polls for quota.updated and
 account.state.
+
+--done-review off|cheap|screen|typed picks how a sub-agent's hand-back is
+reviewed before the lead reads it, as tofu drive does, off when not named.
+TOFU_SERVE_DONE_REVIEW names it when --done-review does not, and carries it to
+the tofu host the session runs in.
 `
 
-const percentOfOne = 100
+const (
+	percentOfOne       = 100
+	doneReviewVariable = "TOFU_SERVE_DONE_REVIEW"
+)
 
 type servePlan struct {
 	stdio    bool
 	schema   bool
 	dir      string
 	cassette string
+	doneArm  string
 }
 
 func serveArgs(args []string) (servePlan, error) {
-	plan := servePlan{cassette: os.Getenv(cassetteVariable)}
-	valued := map[string]*string{"--dir": &plan.dir, "--cassette": &plan.cassette}
+	plan := servePlan{cassette: os.Getenv(cassetteVariable), doneArm: os.Getenv(doneReviewVariable)}
+	valued := map[string]*string{"--dir": &plan.dir, "--cassette": &plan.cassette, "--done-review": &plan.doneArm}
 	for index := 0; index < len(args); index++ {
 		target, takesValue := valued[args[index]]
 		switch {
@@ -73,7 +82,7 @@ func serveArgs(args []string) (servePlan, error) {
 	if plan.stdio == plan.schema {
 		return plan, errors.New("name exactly one of --stdio and --schema")
 	}
-	return plan, nil
+	return plan, armIsKnown("--done-review", plan.doneArm, doneArms())
 }
 
 func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
@@ -94,6 +103,7 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		_, _ = fmt.Fprintln(out, string(schema))
 		return exitOK
 	}
+	_ = os.Setenv(doneReviewVariable, plan.doneArm)
 	if plan.dir != "" {
 		if err := os.Chdir(plan.dir); err != nil {
 			return serveFail(errOut, err)
