@@ -43,7 +43,15 @@ Sub-agents · 13 defined                                               ✗ 1 bro
     changes the least it can, and is done only when cargo check, clippy, the
     covering tests and fmt pass the way the project runs them.
     tools      read, glob, search, symbols, edit, write, bash
+    reference  gpui-verify  3.8 KB
     reference  rust-verify  3.8 KB
+    reference  gpui-layout  3.6 KB
+    reference  gpui-input-and-focus  3.6 KB
+    reference  gpui-overlays-and-hit-testing  3.7 KB
+    reference  gpui-state-and-entities  3.3 KB
+    reference  gpui-ce  4.4 KB
+    reference  gpui-frames-and-cost  7.1 KB
+    reference  gpui-motion  6.7 KB
     reference  rust-errors-and-ownership  3.7 KB
     reference  rust-async  3.0 KB
     reference  rust-unsafe  4.0 KB
