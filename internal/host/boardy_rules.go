@@ -63,7 +63,10 @@ func (s *server) tickBoardy(quit <-chan struct{}) {
 		if api, err := s.boardyAPI(); held != nil && err == nil {
 			boards, _ := api.Board.Store.Boards()
 			for _, board := range boards {
-				_, err := api.Board.Tick(board.Key)
+				ran, err := api.Board.Tick(board.Key)
+				if len(ran) == 0 && err == nil {
+					continue
+				}
 				text := ""
 				if err != nil {
 					text = err.Error()

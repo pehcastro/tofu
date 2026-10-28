@@ -324,7 +324,8 @@ func (h Hook) valid() error {
 
 func (h Hook) Due(last, now time.Time) bool {
 	if h.Every > 0 {
-		return now.Sub(last) >= h.Every
+		halfTick := konst.CronMinIntervalSeconds * time.Second / 2
+		return now.Sub(last) >= h.Every-halfTick
 	}
 	clock, _ := time.Parse(dailyLayout, h.Daily)
 	today := time.Date(now.Year(), now.Month(), now.Day(), clock.Hour(), clock.Minute(), 0, 0, now.Location())
