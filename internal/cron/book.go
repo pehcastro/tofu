@@ -58,6 +58,7 @@ type Job struct {
 	Versions   []Version `json:"versions"`
 	Next       time.Time `json:"next,omitzero"`
 	Fires      int       `json:"fires"`
+	LastFired  time.Time `json:"last_fired,omitzero"`
 	LastResult string    `json:"last_result,omitempty"`
 	Unchanged  int       `json:"unchanged,omitempty"`
 	Ended      string    `json:"ended,omitempty"`
@@ -435,6 +436,7 @@ func fire(one pending, now time.Time) Fire {
 		return Fire{ID: job.ID, Line: job.endedLine()}
 	}
 	job.Fires++
+	job.LastFired = now
 	head := job.Noun() + " " + job.ID
 	prompt := head + " fired (" + spec.Schedule + ", v" + strconv.Itoa(job.Version()) + konst.CronPromptMark + spec.Prompt
 	line := head + " fired · " + spec.Schedule + " · " + firstLine(spec.Prompt)

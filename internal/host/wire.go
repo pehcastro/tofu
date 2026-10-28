@@ -654,12 +654,17 @@ type CronState struct {
 }
 
 type CronJob struct {
-	ID       string     `json:"id"`
-	Schedule string     `json:"schedule"`
-	Prompt   string     `json:"prompt"`
-	Paused   bool       `json:"paused"`
-	Next     *time.Time `json:"next,omitempty"`
-	Ended    string     `json:"ended,omitempty"`
+	ID         string     `json:"id"`
+	Schedule   string     `json:"schedule"`
+	Prompt     string     `json:"prompt"`
+	Paused     bool       `json:"paused"`
+	Next       *time.Time `json:"next,omitempty"`
+	Ended      string     `json:"ended,omitempty"`
+	LastResult string     `json:"lastResult,omitempty"`
+	LastFired  time.Time  `json:"lastFired,omitzero"`
+	Fires      int        `json:"fires,omitempty"`
+	Expires    time.Time  `json:"expires,omitzero"`
+	Until      string     `json:"until,omitempty"`
 }
 
 type CronUpdated struct {

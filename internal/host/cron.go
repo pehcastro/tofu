@@ -55,7 +55,7 @@ func (h *Host) cronState() CronState {
 	state := CronState{Jobs: []CronJob{}}
 	for _, job := range h.cron.Jobs() {
 		spec := job.Spec()
-		one := CronJob{ID: job.ID, Schedule: spec.Schedule, Prompt: spec.Prompt, Paused: spec.Paused, Ended: job.Ended}
+		one := CronJob{ID: job.ID, Schedule: spec.Schedule, Prompt: spec.Prompt, Paused: spec.Paused, Ended: job.Ended, LastResult: job.LastResult, LastFired: job.LastFired, Fires: job.Fires, Expires: spec.Expires, Until: spec.Until}
 		if !job.Next.IsZero() {
 			one.Next = &job.Next
 		}

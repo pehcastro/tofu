@@ -50,4 +50,8 @@ func TestAFiredJobStartsATurnWhenIdleAndWaitsInTheLeadsInboxWhenBusy(t *testing.
 	if job, _ := h.cron.Job("c2"); job.LastResult != "" {
 		t.Errorf("c2's prompt was never read and the turn's answer was booked to it: %q", job.LastResult)
 	}
+	sent := h.cronState().Jobs[0]
+	if sent.Fires != 1 || !sent.LastFired.Equal(at.Add(3*time.Minute)) || sent.LastResult != "the build passes" || !sent.Expires.After(at) {
+		t.Errorf("query.cron sends c1 as %+v, want one fire at 09:03, its answer and its expiry", sent)
+	}
 }
