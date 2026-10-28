@@ -391,6 +391,11 @@ func (s *server) refocus(l *lane, p SessionOpenParams) (any, error) {
 func (s *server) rebuild(l *lane) {
 	l.rebuilding.Lock()
 	defer l.rebuilding.Unlock()
+	select {
+	case <-l.stop:
+		return
+	default:
+	}
 	s.mu.Lock()
 	session, was := l.items.session, l.replay
 	var known []storedLine
@@ -527,6 +532,8 @@ func (s *server) pumpOn(l *lane) {
 }
 
 func (l *lane) halt() {
+	l.rebuilding.Lock()
 	close(l.stop)
+	l.rebuilding.Unlock()
 	<-l.pumped
 }
