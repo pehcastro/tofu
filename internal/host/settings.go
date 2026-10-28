@@ -11,8 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"tofu/internal/konst"
+	"tofu/internal/boardy"
 	"tofu/internal/llm/models"
+	"tofu/internal/safe"
 	"tofu/internal/settings"
 	roster "tofu/internal/subagent"
 	"tofu/internal/sys"
@@ -23,6 +24,7 @@ type SettingsChanged struct {
 	Identity
 	SettingsSet
 	Reason string `json:"reason,omitempty"`
+	By     string `json:"by,omitempty"`
 }
 
 type settingsFiles map[SettingScope]map[string]string
@@ -31,6 +33,7 @@ type settingsSeen struct {
 	mu      sync.Mutex
 	files   settingsFiles
 	session heldSettings
+	by      string
 }
 
 type ModelsChange string
@@ -177,14 +180,27 @@ func (s *server) settingsMoved() {
 	for _, row := range report.Settings {
 		if scope, held := changed[row.Key]; held {
 			set := SettingsSet{Key: row.Key, Value: row.Value, Scope: scope, Source: row.Source}
-			s.box.push(merged("settings.changed", row.Key, &SettingsChanged{Identity: focus.identity("", ""), SettingsSet: set, Reason: row.Reason}))
+			s.box.push(merged("settings.changed", row.Key, &SettingsChanged{Identity: focus.identity("", ""), SettingsSet: set, Reason: row.Reason, By: s.seen.by}))
 		}
 	}
 }
 
+func (s *server) settingsWriting(writing boardy.Writing) {
+	s.seen.mu.Lock()
+	s.seen.by = writing.By
+	s.seen.mu.Unlock()
+	if writing.Done {
+		s.settingsMoved()
+		s.seen.mu.Lock()
+		s.seen.by = ""
+		s.seen.mu.Unlock()
+	}
+}
+
 func (s *server) watchSettings(quit <-chan struct{}) {
+	safe.Go(s.report, "serve settings told", func() { s.hear(quit, TopicSettings, s.settingsWriting) })
 	files, assigned := ConfigSeen(s.Dir), readAgentModels(s.Dir)
-	every := time.NewTicker(konst.ServeShellPollMillis * time.Millisecond)
+	every := time.NewTicker(servePoll)
 	defer every.Stop()
 	for {
 		select {

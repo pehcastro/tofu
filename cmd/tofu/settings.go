@@ -100,7 +100,7 @@ func settingsVerb(args []string, out, errOut io.Writer) int {
 		return settingsGetVerb(o, args[1:], store, dir)
 	case "set":
 		o.verb, o.usageLine = "settings set", settingsSetUsage
-		return settingsSetVerb(o, args[1:], store)
+		return settingsSetVerb(o, args[1:], store, dir)
 	}
 	return o.usage(fmt.Errorf("unknown subcommand %q", args[0]))
 }
@@ -217,7 +217,7 @@ func settingsGetVerb(o verbOutput, args []string, store *settingspkg.Store, dir 
 		func(cli.Page) []string { return []string{fmt.Sprint(setting.Value)} })
 }
 
-func settingsSetVerb(o verbOutput, args []string, store *settingspkg.Store) int {
+func settingsSetVerb(o verbOutput, args []string, store *settingspkg.Store, dir string) int {
 	scope := settingspkg.Global
 	rest := args
 	if len(args) >= 2 && args[0] == "--scope" {
@@ -241,7 +241,11 @@ func settingsSetVerb(o verbOutput, args []string, store *settingspkg.Store) int 
 	if before == "" || strings.ContainsAny(before, " \t") {
 		before = strconv.Quote(before)
 	}
-	if err := writeSetting(store, scope, spec, rest[1]); err != nil {
+	actor, _, _ := boardyIdentity("")
+	written := host.Writing(dir, host.TopicSettings, actor)
+	err := writeSetting(store, scope, spec, rest[1])
+	written()
+	if err != nil {
 		return o.usage(err)
 	}
 	return o.receipt(writeReceipt{

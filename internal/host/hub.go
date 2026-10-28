@@ -22,6 +22,7 @@ import (
 	"syscall"
 	"time"
 
+	"tofu/internal/boardy"
 	"tofu/internal/konst"
 	"tofu/internal/safe"
 	"tofu/internal/sys"
@@ -41,12 +42,15 @@ const (
 	hubAskRoster     = "roster"
 	hubAskMembers    = "members"
 	hubAskStop       = "stop"
+	hubAskHear       = "hear"
+	hubAskWrite      = "write"
 	hubAnswerWait    = konst.HostAnswerMillis * time.Millisecond
 	hubRetry         = konst.HostRetryMillis * time.Millisecond
 	hubBeat          = 2000 * time.Millisecond
 	hubBeatMissed    = 10000 * time.Millisecond
 	hubLogCap        = 1 << 20
 	hubLogKept       = ".1"
+	servePoll        = konst.ServeShellPollMillis * time.Millisecond
 )
 
 var (
@@ -70,10 +74,18 @@ type hubPlace struct {
 	project, socket, lock, log, registry string
 }
 
+type WriteTopic string
+
+const (
+	TopicBoardy   WriteTopic = "boardy"
+	TopicSettings WriteTopic = "settings"
+)
+
 type hubAsk struct {
-	Ask     string `json:"ask"`
-	Session string `json:"session,omitempty"`
-	Member  Member `json:"member,omitzero"`
+	Ask     string     `json:"ask"`
+	Session string     `json:"session,omitempty"`
+	Member  Member     `json:"member,omitzero"`
+	Topic   WriteTopic `json:"topic,omitempty"`
 }
 
 type hubJoined struct {
@@ -95,7 +107,7 @@ type hub struct {
 	mu          sync.Mutex
 	sessions    []*hosted
 
-	boardyHearers boardyHearers
+	hearers hearers
 }
 
 type hosted struct {
@@ -424,6 +436,110 @@ func (h *hub) answer(conn net.Conn) error {
 	return json.NewEncoder(conn).Encode(status)
 }
 
+func Writing(project string, topic WriteTopic, by string) (done func()) {
+	nothing := func() {}
+	place, err := placeOf(project)
+	if err != nil {
+		return nothing
+	}
+	conn, err := dialHub(place.socket)
+	if err != nil {
+		return nothing
+	}
+	_ = conn.SetDeadline(time.Now().Add(hubAnswerWait))
+	out := json.NewEncoder(conn)
+	var status HubStatus
+	if out.Encode(hubAsk{Ask: hubAskWrite, Topic: topic}) != nil || out.Encode(boardy.Writing{By: by}) != nil || json.NewDecoder(conn).Decode(&status) != nil {
+		_ = conn.Close()
+		return nothing
+	}
+	return func() { _ = conn.Close() }
+}
+
+func (s *server) hear(quit <-chan struct{}, topic WriteTopic, heard func(boardy.Writing)) {
+	place, err := placeOf(s.Dir)
+	if err != nil {
+		return
+	}
+	tick := time.NewTicker(servePoll)
+	defer tick.Stop()
+	for {
+		if conn, err := dialHub(place.socket); err == nil {
+			hungUp := make(chan struct{})
+			safe.Go(s.report, "serve "+string(topic)+" hang up", func() {
+				select {
+				case <-quit:
+				case <-hungUp:
+				}
+				_ = conn.Close()
+			})
+			if json.NewEncoder(conn).Encode(hubAsk{Ask: hubAskHear, Topic: topic}) == nil {
+				for lines := json.NewDecoder(conn); ; {
+					var writing boardy.Writing
+					if lines.Decode(&writing) != nil {
+						break
+					}
+					heard(writing)
+				}
+			}
+			close(hungUp)
+			heard(boardy.Writing{Done: true})
+		}
+		select {
+		case <-quit:
+			return
+		case <-tick.C:
+		}
+	}
+}
+
+type hearers struct {
+	mu    sync.Mutex
+	conns map[net.Conn]WriteTopic
+}
+
+func (h *hearers) serve(conn net.Conn, lines *json.Decoder, asked hubAsk, answer func(net.Conn) error) {
+	_ = conn.SetDeadline(time.Time{})
+	if asked.Ask == hubAskHear {
+		h.mu.Lock()
+		if h.conns == nil {
+			h.conns = map[net.Conn]WriteTopic{}
+		}
+		h.conns[conn] = asked.Topic
+		h.mu.Unlock()
+		_, _ = io.Copy(io.Discard, conn)
+		h.mu.Lock()
+		delete(h.conns, conn)
+		h.mu.Unlock()
+		return
+	}
+	var writing boardy.Writing
+	if lines.Decode(&writing) != nil {
+		return
+	}
+	h.tell(asked.Topic, writing)
+	if answer(conn) == nil {
+		_, _ = io.Copy(io.Discard, conn)
+	}
+	writing.Done = true
+	h.tell(asked.Topic, writing)
+}
+
+func (h *hearers) tell(topic WriteTopic, writing boardy.Writing) {
+	line, err := json.Marshal(writing)
+	if err != nil {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for conn, heard := range h.conns {
+		if heard == topic {
+			_ = conn.SetWriteDeadline(time.Now().Add(hubAnswerWait))
+			_, _ = conn.Write(append(line, '\n'))
+		}
+	}
+}
+
 func (h *hub) serve(conn net.Conn) {
 	defer func() { _ = conn.Close() }()
 	_ = conn.SetDeadline(time.Now().Add(hubAnswerWait))
@@ -450,8 +566,8 @@ func (h *hub) serve(conn net.Conn) {
 		_ = json.NewEncoder(conn).Encode(h.roster(asked.Session))
 	case hubAskMembers:
 		_ = json.NewEncoder(conn).Encode(h.membersNow())
-	case hubAskBoardyHear, hubAskBoardyWrite:
-		h.boardyHearers.serve(conn, lines, asked, h.answer)
+	case hubAskHear, hubAskWrite:
+		h.hearers.serve(conn, lines, asked, h.answer)
 	case hubAskJoin:
 		h.moved(1)
 		defer h.moved(-1)
