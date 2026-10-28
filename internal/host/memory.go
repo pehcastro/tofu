@@ -9,7 +9,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/memory"
 	"tofu/internal/memtree"
 	"tofu/internal/session"
@@ -61,6 +63,62 @@ const (
 func keptMemory(emit func(Event)) func(tools.MemoryKept) {
 	return func(kept tools.MemoryKept) {
 		emit(Event{Kind: EventMemoryScoped, ID: session.NewEventID(), Scoped: &MemoryScoped{Statement: kept.Statement, Offered: kept.Offered, Picked: string(kept.Kept), By: ScopedByAuto}})
+	}
+}
+
+type MemoryChanged struct {
+	Scope memory.Scope `json:"scope"`
+	File  string       `json:"file"`
+}
+
+type memoryStamp struct {
+	scope    memory.Scope
+	size     int64
+	modified time.Time
+}
+
+func memoryStamps(shelves []memory.Shelf) map[string]memoryStamp {
+	stamps := map[string]memoryStamp{}
+	for _, shelf := range shelves {
+		for _, file := range shelf.EntryFiles() {
+			if info, err := os.Stat(file); err == nil {
+				stamps[file] = memoryStamp{scope: shelf.Scope, size: info.Size(), modified: info.ModTime()}
+			}
+		}
+	}
+	return stamps
+}
+
+func (s *server) watchMemory(quit <-chan struct{}) {
+	placed, err := memory.Placed(s.Dir)
+	if err != nil {
+		return
+	}
+	shelves := placed.Shelves()
+	seen := memoryStamps(shelves)
+	every := time.NewTicker(konst.ServeShellPollMillis * time.Millisecond)
+	defer every.Stop()
+	changed := func(file string, stamp memoryStamp) {
+		s.box.push(merged("memory.changed", file, &MemoryChanged{Scope: stamp.scope, File: file}))
+	}
+	for {
+		select {
+		case <-quit:
+			return
+		case <-every.C:
+		}
+		now := memoryStamps(shelves)
+		for file, stamp := range now {
+			if seen[file] != stamp {
+				changed(file, stamp)
+			}
+		}
+		for file, stamp := range seen {
+			if _, still := now[file]; !still {
+				changed(file, stamp)
+			}
+		}
+		seen = now
 	}
 }
 

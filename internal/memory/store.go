@@ -246,3 +246,8 @@ func (m Memory) storeView(dir string, budget int) (string, error) {
 	}
 	return store.View(), errors.Join(err, store.Close())
 }
+
+func (s Shelf) EntryFiles() []string {
+	authored, _ := filepath.Glob(filepath.Join(s.Dir, "*", entriesFile))
+	return append([]string{filepath.Join(s.Dir, entriesFile)}, authored...)
+}

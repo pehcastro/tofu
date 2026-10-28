@@ -140,6 +140,27 @@ type Memory struct {
 }
 
 func Open(project string) (Memory, error) {
+	m, err := Placed(project)
+	if err != nil {
+		return m, err
+	}
+	weights, err := loadWeights()
+	if err != nil {
+		return Memory{}, err
+	}
+	if err := m.migrate(filepath.Join(m.home, dirName), m.Project.Dir); err != nil {
+		return m, err
+	}
+	for _, shelf := range m.all() {
+		shelf.Weight = weights[shelf.Scope]
+		if err := m.read(shelf); err != nil {
+			return m, err
+		}
+	}
+	return m, nil
+}
+
+func Placed(project string) (Memory, error) {
 	full, err := filepath.Abs(project)
 	if err != nil {
 		return Memory{}, err
@@ -149,10 +170,6 @@ func Open(project string) (Memory, error) {
 		return Memory{}, err
 	}
 	state, err := sys.ProjectStateDirAt(full)
-	if err != nil {
-		return Memory{}, err
-	}
-	weights, err := loadWeights()
 	if err != nil {
 		return Memory{}, err
 	}
@@ -166,15 +183,6 @@ func Open(project string) (Memory, error) {
 	m.Project = Shelf{Scope: Project, Dir: filepath.Join(state, dirName)}
 	m.UserLocal = Shelf{Scope: UserLocal, Dir: filepath.Join(repo, dirName, "user")}
 	m.ProjectLocal = Shelf{Scope: ProjectLocal, Dir: filepath.Join(repo, dirName, "project")}
-	if err := m.migrate(filepath.Join(home, dirName), m.Project.Dir); err != nil {
-		return m, err
-	}
-	for _, shelf := range m.all() {
-		shelf.Weight = weights[shelf.Scope]
-		if err := m.read(shelf); err != nil {
-			return m, err
-		}
-	}
 	return m, nil
 }
 

@@ -1288,6 +1288,7 @@ func notifications() []method {
 		{name: "approval.revoked", params: ApprovalRevoked{}},
 		{name: "question.resolved", params: QuestionResolved{}},
 		{name: "memory.scoped", params: MemoryScopedEvent{}},
+		{name: "memory.changed", params: MemoryChanged{}},
 		{name: "item.persisted", params: Persisted{}},
 		{name: "request.sent", params: RequestSent{}},
 		{name: statusMethod, params: StatusReport{}},

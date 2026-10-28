@@ -79,13 +79,14 @@ type server struct {
 	requota  chan struct{}
 	accounts map[string]AccountCondition
 	seen     settingsSeen
+	labels   map[string]string
 	lanes    atomic.Pointer[[]*lane]
 	replays  string
 }
 
 func Serve(cfg ServeConfig) error {
 	s := &server{ServeConfig: cfg, box: newOutbox(), shells: map[string]*watchedShell{}, items: newItems(cfg.Host.ID()),
-		status: statusFeed{board: status.Board{Now: time.Now}, acked: map[string]bool{}}, requota: make(chan struct{}, 1), accounts: map[string]AccountCondition{}}
+		status: statusFeed{board: status.Board{Now: time.Now}, acked: map[string]bool{}}, requota: make(chan struct{}, 1), accounts: map[string]AccountCondition{}, labels: map[string]string{}}
 	s.seen.files = readSettingsFiles(cfg.Dir)
 	if state, err := sys.ProjectStateDirAt(cfg.Dir); err == nil {
 		s.replays = filepath.Join(state, replayDir)
@@ -107,6 +108,8 @@ func Serve(cfg ServeConfig) error {
 	watch("serve boardy", s.watchBoardy)
 	watch("serve boardy hooks", s.tickBoardy)
 	watch("serve settings", s.watchSettings)
+	watch("serve memory", s.watchMemory)
+	watch("serve sessions", s.watchSessions)
 	safe.Fatal(s.report, "serve read", func(died error) { read <- died }, func() { read <- s.read() })
 	var err error
 	select {
@@ -427,7 +430,7 @@ func (s *server) rename(p SessionRenameParams) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.box.push(sessionUpdated(Identity{Session: header.ID, Item: header.ID}, labelledAs(store, Event{Kind: EventSession, ID: header.ID, Root: header.ID})))
+	s.relabelled(labelledAs(store, Event{Kind: EventSession, ID: header.ID, Root: header.ID}))
 	focused := s.focus()
 	safe.Go(s.report, "serve list", func() { s.listed(focused) })
 	return Ack{OK: true}, nil

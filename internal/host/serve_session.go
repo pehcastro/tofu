@@ -8,7 +8,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/session"
 	"tofu/internal/shell"
@@ -114,6 +116,63 @@ func (s *server) listed(l *lane) {
 	id := l.items.identity("", row.ID)
 	s.mu.Unlock()
 	s.box.push(merged("session.listed", row.ID, &SessionListed{Identity: id, SessionRow: row}))
+}
+
+func sessionStamps(store *session.Store) map[string]time.Time {
+	stamps := map[string]time.Time{}
+	entries, _ := os.ReadDir(store.Dir(""))
+	for _, entry := range entries {
+		if info, err := entry.Info(); err == nil && entry.IsDir() {
+			stamps[entry.Name()] = info.ModTime()
+		}
+	}
+	return stamps
+}
+
+func (s *server) watchSessions(quit <-chan struct{}) {
+	store, err := session.OpenIn(s.Host.dir)
+	if err != nil {
+		return
+	}
+	seen := sessionStamps(store)
+	every := time.NewTicker(konst.ServeShellPollMillis * time.Millisecond)
+	defer every.Stop()
+	for {
+		select {
+		case <-quit:
+			return
+		case <-every.C:
+		}
+		now, read := sessionStamps(store), store.ReadOnce()
+		newest := map[string]Event{}
+		for id, stamp := range now {
+			if seen[id].Equal(stamp) {
+				continue
+			}
+			event := labelledAs(read, Event{Kind: EventSession, ID: id, Root: id})
+			if was, kept := newest[event.Root]; event.Identity != nil && (!kept || was.Identity.Generation < event.Identity.Generation) {
+				newest[event.Root] = event
+			}
+		}
+		seen = now
+		for _, event := range newest {
+			s.relabelled(event)
+		}
+	}
+}
+
+func (s *server) relabelled(event Event) {
+	if event.Identity == nil {
+		return
+	}
+	label := event.Identity.Name + session.FamilyMark + event.Identity.Tag
+	s.mu.Lock()
+	moved := s.labels[event.Root] != label
+	s.labels[event.Root] = label
+	s.mu.Unlock()
+	if moved {
+		s.box.push(sessionUpdated(Identity{Session: event.ID, Item: event.ID}, event))
+	}
 }
 
 func (s *server) state() SessionState {
