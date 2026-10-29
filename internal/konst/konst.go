@@ -338,6 +338,8 @@ const (
 	BrowserSocketPathMaxBytes       = 107
 	BrowserSocketPathMaxBytesDarwin = 104
 	BrowserIdleAfterMillis          = 1500
+	BrowserWakeMillis               = 3000
+	BrowserSleepMinutesDefault      = 10
 
 	BrowserPageTextRunes      = 6000
 	BrowserElementCeiling     = 250

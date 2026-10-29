@@ -497,6 +497,79 @@ func TestAScreencastInTheStubAcksOnlyItsTabAndListensOnlyWhileRecording(t *testi
 	}
 }
 
+const sleepingChrome = `
+const fs = require('node:fs');
+const vm = require('node:vm');
+const anything = () => new Proxy(async () => undefined, {get: (_, key) => key === 'then' ? undefined : anything()});
+const lenient = known => new Proxy(known, {get: (target, key) => key in target ? target[key] : anything()});
+const listeners = {};
+const on = name => ({addListener: listener => { listeners[name] = listener; }});
+const posted = [];
+const ungrouped = [];
+let fromHost = null;
+const chrome = lenient({
+  runtime: lenient({connectNative: () => ({postMessage: message => posted.push(message), onMessage: {addListener: listener => { fromHost = listener; }}, onDisconnect: on('disconnect')}), getURL: name => name}),
+  tabs: lenient({onCreated: on('created'), onRemoved: on('removed'), onUpdated: on('updated'), onActivated: on('activated'),
+    query: async () => [{id: 9, windowId: 1, url: 'https://a.test/', title: 'A', active: true, groupId: -1}],
+    get: async id => ({id, windowId: 1, groupId: id === 9 ? -1 : 100}),
+    ungroup: async ids => { ungrouped.push(...ids); }}),
+  debugger: lenient({getTargets: async () => [], onDetach: on('detached'), onEvent: on('event')}),
+  storage: {session: {get: async () => ({groups: {1: 100}}), set: async () => {}}},
+});
+const context = vm.createContext({chrome, console, setTimeout, clearTimeout, URL, structuredClone, performance, navigator: {userAgent: 'node'},
+  fetch: async () => ({text: async () => JSON.stringify({version_name: '0.5.21 b1'})})});
+vm.runInContext(fs.readFileSync('background.js', 'utf8'), context);
+const settle = () => new Promise(resolve => setTimeout(resolve, 50));
+const mark = label => posted.push({mark: label});
+(async () => {
+  await settle();
+  mark('connected');
+  listeners.created({id: 30, windowId: 1, url: 'https://b.test/', title: 'B'});
+  mark('sleep');
+  fromHost({t: 'sleep'});
+  listeners.created({id: 31, windowId: 1, url: 'https://c.test/', title: 'C'});
+  listeners.updated(31, {url: 'https://c.test/2'}, {id: 31, windowId: 1, url: 'https://c.test/2', title: 'C'});
+  listeners.removed(30);
+  await settle();
+  mark('wake');
+  fromHost({t: 'wake'});
+  await settle();
+  listeners.removed(31);
+  mark('wake');
+  fromHost({t: 'wake'});
+  await settle();
+  listeners.removed(9);
+  await settle();
+  console.log(JSON.stringify({posted: posted.map(message => message.mark ?? message.t + ' ' + (message.tab?.id ?? message.tabId ?? message.tabs?.map(tab => tab.id).join(','))), ungrouped}));
+})();
+`
+
+func TestAsleepTheExtensionKeepsItsTabWorkPostsNoTabEventAndEachWakeSendsOneFreshHello(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("no node on the PATH to run background.js")
+	}
+	out, err := exec.Command(node, "-e", sleepingChrome).Output()
+	if err != nil {
+		t.Fatalf("background.js under a sleeping relay: %v\n%s", err, out)
+	}
+	var run struct {
+		Posted    []string
+		Ungrouped []int
+	}
+	if err := json.Unmarshal(out, &run); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	t.Logf("posted %q, ungrouped %v", run.Posted, run.Ungrouped)
+	want := []string{"hello 9", "connected", "tabUpdated 30", "sleep", "wake", "hello 9", "tabRemoved 31", "wake", "hello 9", "tabRemoved 9"}
+	if !slices.Equal(run.Posted, want) {
+		t.Errorf("the extension posted %q; want %q: tab events until the sleep, none while asleep, one hello per wake and each event once after it", run.Posted, want)
+	}
+	if !slices.Equal(run.Ungrouped, []int{30, 31}) {
+		t.Errorf("the person's new tabs ungrouped from tofu's group: %v; want 30 and 31, so the grouping work goes on while asleep", run.Ungrouped)
+	}
+}
+
 func TestNoShippedFileCarriesACommentOrAnEmDash(t *testing.T) {
 	for _, name := range []string{"background.js", "snapshot.js", "manifest.json"} {
 		text := shipped(t, name)

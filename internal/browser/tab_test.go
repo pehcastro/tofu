@@ -39,7 +39,7 @@ type fakeExtension struct {
 	answer func(extensionCall) string
 }
 
-func (f *fakeExtension) serve(fromHost io.Reader, toHost io.Writer) {
+func (f *fakeExtension) serve(fromHost io.Reader, toHost io.Writer, hello []byte) {
 	for {
 		raw, err := browser.ReadMessage(fromHost)
 		if err != nil {
@@ -47,6 +47,9 @@ func (f *fakeExtension) serve(fromHost io.Reader, toHost io.Writer) {
 		}
 		var call extensionCall
 		if json.Unmarshal(raw, &call) != nil || call.T != "call" {
+			if call.T == "wake" && browser.WriteMessage(toHost, hello) != nil {
+				return
+			}
 			continue
 		}
 		f.mu.Lock()
@@ -98,12 +101,12 @@ func sharedTab(t *testing.T, answer func(extensionCall) string) (browser.SharedT
 			t.Error("the host did not stop")
 		}
 	})
-	hello := `{"t":"hello","version":2,"tabs":[{"id":7,"url":"http://127.0.0.1:8000/fixture.html","title":"Forma"}]}`
-	if err := browser.WriteMessage(toHostW, []byte(hello)); err != nil {
+	hello := []byte(`{"t":"hello","version":2,"tabs":[{"id":7,"url":"http://127.0.0.1:8000/fixture.html","title":"Forma"}]}`)
+	if err := browser.WriteMessage(toHostW, hello); err != nil {
 		t.Fatalf("the host did not read hello: %v, %v", err, <-hostDone)
 	}
 	ext := &fakeExtension{answer: answer}
-	go ext.serve(fromHostR, toHostW)
+	go ext.serve(fromHostR, toHostW, hello)
 
 	client, err := browser.Dial(home)
 	if err != nil {
@@ -664,6 +667,9 @@ func drivenPage(t *testing.T, name string) (*browser.Driver, *fakePage) {
 				} `json:"args"`
 			}
 			if json.Unmarshal(raw, &call) != nil || call.T != "call" {
+				if call.T == "wake" {
+					_ = browser.WriteMessage(toHostW, hello)
+				}
 				continue
 			}
 			if point := call.Args.Point; point != nil {

@@ -14,13 +14,16 @@ import (
 )
 
 const (
-	NotConnected = "the tofu extension is not connected"
-	InstallHint  = "tofu browser install, then load it in Chrome"
+	NotConnected     = "the tofu extension is not connected"
+	InstallHint      = "tofu browser install, then load it in Chrome"
+	RelayBeforeSleep = "the relay runs an older tofu that cannot say whether it is asleep"
+	RefreshHint      = "tofu browser install, then reload the tofu card in chrome://extensions"
 )
 
 var (
-	ErrNotConnected    = errors.New(NotConnected + ": run " + InstallHint)
-	ErrRelayRestarting = errors.New("the tofu relay runs another build and restarts on this one")
+	ErrNotConnected     = errors.New(NotConnected + ": run " + InstallHint)
+	ErrRelayRestarting  = errors.New("the tofu relay runs another build and restarts on this one")
+	ErrRelayBeforeSleep = errors.New(RelayBeforeSleep + ": run " + RefreshHint)
 )
 
 type droppedAfterTimeout struct{ deadline error }

@@ -137,7 +137,13 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 		return o.show(struct {
 			Build string `json:"build"`
 		}{build}, []string{build})
-	case "", "tabs":
+	case "":
+		var state *browser.Relay
+		if err := o.withBrowser(home, func(client *browser.Client) (err error) { state, err = client.Relay(); return err }); err != nil {
+			return o.fail(err)
+		}
+		return o.show(state, relayPage(page, *state))
+	case "tabs":
 		var tabs []browser.Tab
 		var builds *browser.Builds
 		err := o.withBrowser(home, func(client *browser.Client) (err error) {
@@ -463,8 +469,11 @@ func (o browserOutput) show(data any, lines []string) int {
 
 func (o browserOutput) fail(err error) int {
 	what, hint := err.Error(), ""
-	if errors.Is(err, browser.ErrNotConnected) && !errors.Is(err, os.ErrDeadlineExceeded) {
+	switch {
+	case errors.Is(err, browser.ErrNotConnected) && !errors.Is(err, os.ErrDeadlineExceeded):
 		what, hint = browser.NotConnected, browser.InstallHint
+	case errors.Is(err, browser.ErrRelayBeforeSleep):
+		what, hint = browser.RelayBeforeSleep, browser.RefreshHint
 	}
 	if o.asJSON {
 		_ = writeJSON(o.out, cli.Envelope{Verb: o.verb, At: time.Now(), Problems: []cli.Problem{{What: err.Error(), Hint: hint}}})
@@ -513,6 +522,18 @@ func tabsPage(page cli.Page, tabs []browser.Tab, builds *browser.Builds) []strin
 		return append(lines, cli.Indent(page.Label("chrome:// pages, DevTools, extensions and the web store are never listed"))...)
 	}
 	return append(lines, cli.Indent(page.Rows(rows)...)...)
+}
+
+func relayPage(page cli.Page, state browser.Relay) []string {
+	verdict, hint := cli.Verdict{Mark: cli.Idle, Text: "asleep"}, "the first call that needs Chrome wakes it: tofu browser tabs is one"
+	if state.Awake {
+		verdict, hint = cli.Verdict{Mark: cli.Active, Text: "awake"}, "tofu settings set browserSleepMinutes <minutes> changes when it sleeps"
+	}
+	facts := []cli.Fact{{Label: "build", Text: state.Builds.Tofu}, {Label: "extension", Text: cmp.Or(state.Builds.Extension, "unknown")},
+		{Label: "memory", Text: widget.Size(int(state.HeldBytes)) + " held from the system"}, {Label: "sessions", Text: strconv.Itoa(state.OtherSessions) + " other tofu connected"},
+		{Label: "sleeps", Text: strings.TrimSuffix(state.SleepAfter.String(), "0s") + " after the last tofu leaves"}}
+	lines := append(append(page.Title("Chrome relay", nil, verdict), ""), cli.Indent(page.Facts(facts)...)...)
+	return append(append(lines, ""), cli.Indent(page.Hint(cmp.Or(state.Builds.Problem, hint)))...)
 }
 
 func recipesPage(page cli.Page, dir string, recipes []recipe.Recipe) []string {

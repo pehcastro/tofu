@@ -77,7 +77,7 @@ func (f *fakeExtension) answer(op string, args json.RawMessage) (any, browser.Ti
 	return struct{}{}, timing
 }
 
-func (f *fakeExtension) serve(fromHost io.Reader, toHost io.Writer) {
+func (f *fakeExtension) serve(fromHost io.Reader, toHost io.Writer, hello []byte) {
 	for {
 		raw, err := browser.ReadMessage(fromHost)
 		if err != nil {
@@ -90,6 +90,9 @@ func (f *fakeExtension) serve(fromHost io.Reader, toHost io.Writer) {
 			Args json.RawMessage `json:"args"`
 		}
 		if json.Unmarshal(raw, &call) != nil || call.T != "call" {
+			if call.T == "wake" && browser.WriteMessage(toHost, hello) != nil {
+				return
+			}
 			continue
 		}
 		value, timing := f.answer(call.Op, call.Args)
@@ -191,10 +194,11 @@ func sharedTab(t *testing.T, ext *fakeExtension) browser.SharedTab {
 		_ = fromHostR.Close()
 		<-hostDone
 	})
-	if err := browser.WriteMessage(toHostW, []byte(`{"t":"hello","version":2,"tabs":[{"id":7,"url":"http://127.0.0.1/","title":"Stays"}]}`)); err != nil {
+	hello := []byte(`{"t":"hello","version":2,"tabs":[{"id":7,"url":"http://127.0.0.1/","title":"Stays"}]}`)
+	if err := browser.WriteMessage(toHostW, hello); err != nil {
 		t.Fatal(err)
 	}
-	go ext.serve(fromHostR, toHostW)
+	go ext.serve(fromHostR, toHostW, hello)
 	client, err := browser.Dial(home)
 	if err != nil {
 		t.Fatal(err)

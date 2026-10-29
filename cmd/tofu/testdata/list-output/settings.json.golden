@@ -788,6 +788,17 @@ exit 0
         "label": "Browser headless",
         "description": "A Chrome tofu starts on a browser profile runs with no window. false shows it",
         "kind": "bool"
+      },
+      {
+        "key": "browserSleepMinutes",
+        "category": "Browser",
+        "value": 10,
+        "source": "default",
+        "label": "Browser sleep",
+        "description": "Minutes the Chrome relay stays awake once no tofu is connected. Asleep it keeps the port and stops tab events",
+        "kind": "int",
+        "min": 1,
+        "unit": "minutes the Chrome relay stays awake with no tofu connected"
       }
     ]
   },

@@ -11,6 +11,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"runtime/debug"
 	"slices"
 	"sync"
 	"time"
@@ -59,6 +61,8 @@ type relay struct {
 	closed    bool
 	shown     status
 	idle      *time.Timer
+	ready     chan struct{}
+	sleeper   *time.Timer
 
 	home         string
 	extensionDir string
@@ -67,8 +71,8 @@ type relay struct {
 	draining     bool
 	manifestTofu string
 	installed    func(exe string) (string, error)
+	sleepAfter   func() time.Duration
 	cursor       bool
-	replaced     error
 	report       safe.Report
 }
 
@@ -78,7 +82,18 @@ func Host(origin string, stdin io.Reader, stdout io.Writer, home string) error {
 		return err
 	}
 	reapLeftovers(home)
-	return host(origin, stdin, stdout, home, tofu, installedBuild)
+	return host(origin, stdin, stdout, home, tofu, installedBuild, func() time.Duration { return sleepAfter(home) })
+}
+
+func sleepAfter(home string) time.Duration {
+	minutes := 0
+	if store, err := settings.Open(filepath.Join(sys.StateDir(home), settings.FileName), ""); err == nil {
+		minutes = store.Int(settings.BrowserSleepMinutes)
+	}
+	if minutes < 1 {
+		minutes = konst.BrowserSleepMinutesDefault
+	}
+	return time.Duration(minutes) * time.Minute
 }
 
 func installedBuild(exe string) (string, error) {
@@ -107,7 +122,7 @@ func cursorOn(home string) bool {
 	return store.Bool(settings.BrowserCursor)
 }
 
-func host(origin string, stdin io.Reader, stdout io.Writer, home, tofu string, installed func(exe string) (string, error)) error {
+func host(origin string, stdin io.Reader, stdout io.Writer, home, tofu string, installed func(exe string) (string, error), sleepAfter func() time.Duration) error {
 	extensionDir, manifestPath := installPaths(home)
 	var installedHost hostManifest
 	raw, err := os.ReadFile(manifestPath)
@@ -137,7 +152,7 @@ func host(origin string, stdin io.Reader, stdout io.Writer, home, tofu string, i
 		return err
 	}
 	r := &relay{extension: stdout, tabs: map[int]Tab{}, claims: map[int]*session{}, pending: map[int64]route{}, sessions: map[*session]bool{}, shown: statusIdle, home: home, extensionDir: extensionDir, builds: Builds{Tofu: tofu}, restart: make(chan struct{}, 1),
-		manifestTofu: installedHost.Path, installed: installed, cursor: cursorOn(home), report: func(p safe.Panic) { p.Saved(sys.StateDir(home)) }}
+		manifestTofu: installedHost.Path, installed: installed, sleepAfter: sleepAfter, cursor: cursorOn(home), report: func(p safe.Panic) { p.Saved(sys.StateDir(home)) }}
 	r.idle = time.AfterFunc(idleAfter, func() {
 		_ = safe.Call(r.report, "browser idle", func() error {
 			r.mu.Lock()
@@ -158,12 +173,7 @@ func host(origin string, stdin io.Reader, stdout io.Writer, home, tofu string, i
 		}
 	})
 
-	stopWatching := make(chan struct{})
-	defer close(stopWatching)
-	safe.Go(r.report, "browser install watch", func() {
-		safe.Loop(r.report, "browser install watch", stopWatching, func() { r.watchInstall(stopWatching) })
-	})
-
+	debug.FreeOSMemory()
 	read := make(chan error, 1)
 	safe.Go(r.report, "browser extension reader", func() {
 		read <- safe.Call(r.report, "browser extension reader", func() error { return r.readExtension(stdin) })
@@ -171,7 +181,7 @@ func host(origin string, stdin io.Reader, stdout io.Writer, home, tofu string, i
 	select {
 	case err = <-read:
 	case <-r.restart:
-		err = r.replaced
+		err = nil
 	}
 	_ = listener.Close()
 	r.mu.Lock()
@@ -190,43 +200,55 @@ func (r *relay) installedTofu() string {
 	return r.manifestTofu
 }
 
-func (r *relay) watchInstall(stop <-chan struct{}) {
-	seen, _ := os.Stat(r.installedTofu())
-	tick := time.NewTicker(idleAfter)
-	defer tick.Stop()
-	for {
-		select {
-		case <-stop:
-			return
-		case <-tick.C:
-		}
-		exe := r.installedTofu()
-		now, err := os.Stat(exe)
-		if err != nil || seen != nil && os.SameFile(seen, now) && now.ModTime().Equal(seen.ModTime()) {
-			continue
-		}
-		seen = now
-		current, err := r.installed(exe)
-		if err != nil || current == r.builds.Tofu {
-			continue
-		}
-		r.mu.Lock()
-		err = r.drainFor(current, fmt.Errorf("this relay runs build %s and %s is now build %s: the relay stops so Chrome starts the refreshed copy, which updates the extension", r.builds.Tofu, exe, current))
-		r.mu.Unlock()
-		if err == nil {
-			return
-		}
-	}
-}
-
-func (r *relay) drainFor(current string, replaced error) error {
+func (r *relay) drainFor(current string) error {
 	if _, err := Refresh(r.home); err != nil {
 		return fmt.Errorf("the installed tofu is build %s and the copy Chrome starts could not take it, so this relay on %s keeps running: %v: run tofu browser install", current, r.builds.Tofu, err)
 	}
-	r.replaced = replaced
 	r.draining = true
 	r.settle()
 	return nil
+}
+
+func (r *relay) awaitTabs() error {
+	r.mu.Lock()
+	if r.ready == nil {
+		r.ready = make(chan struct{})
+		_ = r.tell(toExtension{T: messageWake})
+	}
+	ready := r.ready
+	r.mu.Unlock()
+	select {
+	case <-ready:
+		return nil
+	case <-time.After(konst.BrowserWakeMillis * time.Millisecond):
+		return fmt.Errorf("the extension did not send its tabs within %d ms of the wake: reload the tofu card in chrome://extensions", konst.BrowserWakeMillis)
+	}
+}
+
+func (r *relay) sleepSoon() {
+	switch {
+	case r.ready == nil:
+	case r.sleeper == nil:
+		r.sleeper = time.AfterFunc(r.sleepAfter(), r.sleep)
+	default:
+		r.sleeper.Reset(r.sleepAfter())
+	}
+}
+
+func (r *relay) sleep() {
+	_ = safe.Call(r.report, "browser sleep", func() error {
+		r.mu.Lock()
+		stays := r.closed || r.ready == nil || len(r.sessions) > 0
+		if !stays {
+			r.ready, r.tabs = nil, map[int]Tab{}
+			_ = r.tell(toExtension{T: messageSleep})
+		}
+		r.mu.Unlock()
+		if !stays {
+			debug.FreeOSMemory()
+		}
+		return nil
+	})
 }
 
 func (r *relay) readExtension(stdin io.Reader) error {
@@ -253,6 +275,11 @@ func (r *relay) receive(message extensionMessage) (*session, result) {
 	defer r.mu.Unlock()
 	switch message.T {
 	case messageHello:
+		r.adopt(message.Build)
+		if r.ready == nil {
+			_ = r.tell(toExtension{T: messageSleep})
+			break
+		}
 		r.tabs = map[int]Tab{}
 		for _, tab := range message.Tabs {
 			r.tabs[tab.ID] = tab
@@ -261,12 +288,18 @@ func (r *relay) receive(message extensionMessage) (*session, result) {
 			_, open := r.tabs[tab]
 			return !open
 		})
-		r.adopt(message.Build)
+		select {
+		case <-r.ready:
+		default:
+			close(r.ready)
+		}
 	case messageTabRemoved:
 		delete(r.tabs, message.TabID)
 		delete(r.claims, message.TabID)
 	case messageTabUpdated:
-		r.tabs[message.Tab.ID] = message.Tab
+		if r.ready != nil {
+			r.tabs[message.Tab.ID] = message.Tab
+		}
 	case messageFrames:
 		if to, asked := r.pending[message.ID]; asked {
 			to.frames = append(to.frames, message.Frames...)
@@ -376,19 +409,27 @@ func (r *relay) serve(conn net.Conn) {
 	maps.DeleteFunc(r.claims, func(_ int, owner *session) bool { return owner == s })
 	maps.DeleteFunc(r.pending, func(_ int64, to route) bool { return to.session == s })
 	r.settle()
+	if len(r.sessions) == 0 {
+		r.sleepSoon()
+	}
 	_ = conn.Close()
 }
 
 func (r *relay) handle(s *session, req request) {
+	if !slices.Contains([]string{opHello, opBuilds, opRelay}, req.Op) {
+		if err := r.awaitTabs(); err != nil {
+			s.send(result{ID: req.ID, Error: err.Error()})
+			return
+		}
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if req.Op == opTabs {
+	switch req.Op {
+	case opTabs:
 		tabs := slices.SortedFunc(maps.Values(r.tabs), func(a, b Tab) int { return a.ID - b.ID })
 		listed, _ := json.Marshal(slices.DeleteFunc(tabs, func(tab Tab) bool { return !reachable(tab.URL) }))
 		s.send(result{ID: req.ID, OK: true, Value: listed})
-		return
-	}
-	if req.Op == opHello {
+	case opHello:
 		var hello struct {
 			Build string `json:"build"`
 		}
@@ -401,20 +442,23 @@ func (r *relay) handle(s *session, req request) {
 			s.send(result{ID: req.ID, Error: fmt.Sprintf("this tofu is older than the relay: restart it (the relay runs build %s, the installed tofu, and this tofu runs %s)", r.builds.Tofu, hello.Build)})
 			return
 		}
-		if err := r.drainFor(current, nil); err != nil {
+		if err := r.drainFor(current); err != nil {
 			s.send(result{ID: req.ID, Error: err.Error()})
 			return
 		}
 		s.send(result{ID: req.ID, Error: fmt.Sprintf("%s: this relay runs build %s, the installed tofu is %s, and the tofu that dialled it runs %s", relayRestarting, r.builds.Tofu, current, hello.Build)})
-		return
-	}
-	if req.Op == opBuilds {
+	case opBuilds:
 		builds, _ := json.Marshal(r.builds)
 		s.send(result{ID: req.ID, OK: true, Value: builds})
-		return
-	}
-	if err := r.forward(s, req); err != nil {
-		s.send(result{ID: req.ID, Error: err.Error()})
+	case opRelay:
+		var memory runtime.MemStats
+		runtime.ReadMemStats(&memory)
+		state, _ := json.Marshal(Relay{Awake: r.ready != nil, Builds: r.builds, HeldBytes: memory.Sys - memory.HeapReleased, OtherSessions: len(r.sessions) - 1, SleepAfter: r.sleepAfter()})
+		s.send(result{ID: req.ID, OK: true, Value: state})
+	default:
+		if err := r.forward(s, req); err != nil {
+			s.send(result{ID: req.ID, Error: err.Error()})
+		}
 	}
 }
 

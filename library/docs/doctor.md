@@ -104,15 +104,14 @@ Other verbs that each check one thing:
 - `tofu usage` prints each credential's quota windows and when they
   reset. `--history` prints the readings already taken.
 - `tofu version` prints the version, and `tofu changelog` what changed.
-- `tofu frame --list` names the app's recorded screens, and
-  `tofu frame <name> --width 120 --height 40` prints one, to see how the
-  app draws in your terminal.
+- `tofu frame --list` names the app's recorded screens, and `tofu frame
+  <name> --width 120 --height 40` prints one as it draws in your terminal.
 - `tofu drive` runs a script of what a person would do in the app, with no
   terminal and no model call, and prints the screens it asks for.
-- `tofu lint comments <path>` lists every comment in the Go source under
-  a path.
+- `tofu lint comments <path>` lists every comment in Go source under a path.
 - `tofu sift` marks which paragraphs of standard input are worth reading.
-- `tofu browser` lists the Chrome tabs tofu can reach.
+- `tofu browser` says whether the Chrome relay is asleep or awake, and
+  `tofu browser tabs` lists the Chrome tabs tofu can reach.
   `tofu browser install` sets up the extension and its native host.
 
 ## Undo it

@@ -103,15 +103,15 @@ func TestBrowserTabsOpenAndCloseMatchTheirTextAndJSON(t *testing.T) {
 		args []string
 		want string
 	}{
-		{[]string{}, "" +
+		{[]string{"tabs"}, "" +
 			"Chrome tabs · 3 reachable · 1 opened by tofu                         ✓ connected\n" +
 			"\n" +
 			"  ○ 12   example.com         Example Domain\n" +
 			"  ● 812  lisbon.example.org  Stays in Lisbon\n" +
 			"  ○ 9    about:blank\n"},
-		{[]string{"--json"}, `{
+		{[]string{"tabs", "--json"}, `{
   "tofu": "VERSION",
-  "verb": "browser",
+  "verb": "browser tabs",
   "ok": true,
   "at": "AT",
   "data": {
@@ -178,11 +178,28 @@ func TestBrowserWithNoTabSaysWhatIsNeverListed(t *testing.T) {
 		"Chrome tabs · 0 reachable                                            ✓ connected\n" +
 		"\n" +
 		"  chrome:// pages, DevTools, extensions and the web store are never listed\n"
-	if code, out, errOut := runBrowser(t); code != exitOK || out != want || errOut != "" {
-		t.Fatalf("tofu browser with no tab exited %d, printed\n%s\nand %q", code, out, errOut)
+	if code, out, errOut := runBrowser(t, "tabs"); code != exitOK || out != want || errOut != "" {
+		t.Fatalf("tofu browser tabs with no tab exited %d, printed\n%s\nand %q", code, out, errOut)
 	}
-	if _, out, _ := runBrowser(t, "--json"); !strings.Contains(out, `"tabs": []`) {
-		t.Fatalf("tofu browser --json with no tab printed\n%s", out)
+	if _, out, _ := runBrowser(t, "tabs", "--json"); !strings.Contains(out, `"tabs": []`) {
+		t.Fatalf("tofu browser tabs --json with no tab printed\n%s", out)
+	}
+}
+
+func TestBrowserOnARelayThatAnswersNoStateSaysItIsOlderAndExitsOne(t *testing.T) {
+	fakeRelay(t, browserHome(t), nil)
+	want := "✗ the relay runs an older tofu that cannot say whether it is asleep\n" +
+		"  → tofu browser install, then reload the tofu card in chrome://extensions\n"
+	if code, out, errOut := runBrowser(t); code != exitVerdict || out != "" || errOut != want {
+		t.Errorf("tofu browser on a relay that answers no state exited %d, printed %q and on stderr\n%s\nwant\n%s", code, out, errOut, want)
+	}
+	code, out, _ := runBrowser(t, "--json")
+	var envelope struct {
+		OK       bool          `json:"ok"`
+		Problems []cli.Problem `json:"problems"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil || code != exitVerdict || envelope.OK || len(envelope.Problems) != 1 || !strings.Contains(envelope.Problems[0].What, "older tofu that cannot say whether it is asleep") {
+		t.Errorf("tofu browser --json on a relay that answers no state exited %d and printed\n%s", code, out)
 	}
 }
 
@@ -217,9 +234,9 @@ func TestBrowserNoColourWritesNoEscape(t *testing.T) {
 	for _, noColour := range []string{"", "1"} {
 		t.Setenv("FORCE_COLOR", "1")
 		t.Setenv("NO_COLOR", noColour)
-		_, out, _ := runBrowser(t)
+		_, out, _ := runBrowser(t, "tabs")
 		if strings.Contains(out, "\x1b") == (noColour != "") {
-			t.Errorf("with NO_COLOR=%q and FORCE_COLOR=1 tofu browser printed %q", noColour, out)
+			t.Errorf("with NO_COLOR=%q and FORCE_COLOR=1 tofu browser tabs printed %q", noColour, out)
 		}
 	}
 	t.Setenv("NO_COLOR", "1")

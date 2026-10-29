@@ -1,0 +1,44 @@
+{
+  "label": "relay0520-linux",
+  "build": "0.5.20 (37ea528b)",
+  "command": [
+    "tofu0520",
+    "chrome-extension://jednanpboiikklhkkkimnmdmjmgjgphh/"
+  ],
+  "home": "fresh",
+  "nominal_mhz": 0,
+  "settle_s": 30,
+  "window_s": 300,
+  "readings": [
+    {
+      "working_set_mb": 8.9453125,
+      "private_working_set_mb": 8.9375,
+      "peak_working_set_mb": 23.08984375,
+      "cpu_percent_of_one_core": 0.019880046733629513,
+      "context_switches_per_s": 3.591661776542399,
+      "mcycles_per_s": 0,
+      "threads": 9
+    },
+    {
+      "working_set_mb": 8.66015625,
+      "private_working_set_mb": 8.65234375,
+      "peak_working_set_mb": 21.83984375,
+      "cpu_percent_of_one_core": 0.01988368760551894,
+      "context_switches_per_s": 3.237727131765334,
+      "mcycles_per_s": 0,
+      "threads": 10
+    },
+    {
+      "working_set_mb": 4.84765625,
+      "private_working_set_mb": 4.83984375,
+      "peak_working_set_mb": 21.71484375,
+      "cpu_percent_of_one_core": 0.013250718636337415,
+      "context_switches_per_s": 3.219924628629992,
+      "mcycles_per_s": 0,
+      "threads": 5
+    }
+  ],
+  "method": "the command starts with its standard input and output as pipes, as Chrome starts a native host, and is sent one native message hello; after the settle time its VmRSS and its private pages from /proc/\u003cpid\u003e/smaps_rollup are read every 100 ms for the window and the median kept, its user and system ticks from /proc/\u003cpid\u003e/stat over the window divided by the wall time, and every thread's voluntary and involuntary context switches from /proc/\u003cpid\u003e/task/*/status at each end of the window, then its standard input is closed",
+  "machine": "linux/amd64, 16 logical CPUs",
+  "date": "2026-10-29 03:02"
+}

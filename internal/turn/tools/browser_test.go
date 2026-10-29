@@ -58,7 +58,7 @@ type fakeChrome struct {
 
 const blankPage = `{"url":"about:blank","title":"","text":"","fingerprint":"blank","scroll":{"up":false,"down":false},"elements":[]}`
 
-func (f *fakeChrome) serve(fromHost io.Reader, toHost io.Writer) {
+func (f *fakeChrome) serve(fromHost io.Reader, toHost io.Writer, hello []byte) {
 	for {
 		raw, err := browser.ReadMessage(fromHost)
 		if err != nil {
@@ -72,6 +72,9 @@ func (f *fakeChrome) serve(fromHost io.Reader, toHost io.Writer) {
 			Args  json.RawMessage `json:"args"`
 		}
 		if json.Unmarshal(raw, &call) != nil || call.T != "call" {
+			if call.T == "wake" && browser.WriteMessage(toHost, hello) != nil {
+				return
+			}
 			continue
 		}
 		f.mu.Lock()
@@ -156,13 +159,13 @@ func hostWithTwoTabs(t *testing.T, chrome *fakeChrome) string {
 			t.Error("the host did not stop")
 		}
 	})
-	hello := `{"t":"hello","version":2,"tabs":[` +
+	hello := []byte(`{"t":"hello","version":2,"tabs":[` +
 		`{"id":7,"url":"http://127.0.0.1:8000/form.html","title":"Forma"},` +
-		`{"id":8,"url":"chrome://settings/","title":"Settings"}]}`
-	if err := browser.WriteMessage(toHostW, []byte(hello)); err != nil {
+		`{"id":8,"url":"chrome://settings/","title":"Settings"}]}`)
+	if err := browser.WriteMessage(toHostW, hello); err != nil {
 		t.Fatalf("the host did not read hello: %v", err)
 	}
-	go chrome.serve(fromHostR, toHostW)
+	go chrome.serve(fromHostR, toHostW, hello)
 	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(time.Millisecond) {
 		client, err := browser.Dial(home)
 		if err == nil {
@@ -491,7 +494,7 @@ func (p *cdpPage) answer(method string, params map[string]any) any {
 	return value(nil)
 }
 
-func (p *cdpPage) serve(fromHost io.Reader, toHost io.Writer) {
+func (p *cdpPage) serve(fromHost io.Reader, toHost io.Writer, hello []byte) {
 	for {
 		raw, err := browser.ReadMessage(fromHost)
 		if err != nil {
@@ -513,6 +516,9 @@ func (p *cdpPage) serve(fromHost io.Reader, toHost io.Writer) {
 			} `json:"args"`
 		}
 		if json.Unmarshal(raw, &call) != nil || call.T != "call" {
+			if call.T == "wake" && browser.WriteMessage(toHost, hello) != nil {
+				return
+			}
 			continue
 		}
 		if call.Op == "open" || call.Op == "navigate" {
@@ -596,10 +602,11 @@ func browserOn(t *testing.T, page *cdpPage, driver string) func(name, args strin
 		_ = toHostW.Close()
 		_ = fromHostR.Close()
 	})
-	if err := browser.WriteMessage(toHostW, []byte(`{"t":"hello","version":2,"tabs":[{"id":7,"url":"https://stays.test/","title":"Stays"}]}`)); err != nil {
+	hello := []byte(`{"t":"hello","version":2,"tabs":[{"id":7,"url":"https://stays.test/","title":"Stays"}]}`)
+	if err := browser.WriteMessage(toHostW, hello); err != nil {
 		t.Fatal(err)
 	}
-	go page.serve(fromHostR, toHostW)
+	go page.serve(fromHostR, toHostW, hello)
 	offered, err := tools.NewBrowser(drive(home, driver))
 	if err != nil {
 		t.Fatal(err)
@@ -776,10 +783,11 @@ func TestTheBrowserSubAgentObservesActsObservesAndReportsItsTab(t *testing.T) {
 		_ = toHostW.Close()
 		_ = fromHostR.Close()
 	})
-	if err := browser.WriteMessage(toHostW, []byte(`{"t":"hello","version":2,"tabs":[{"id":7,"url":"https://stays.test/","title":"Stays","opened":true}]}`)); err != nil {
+	hello := []byte(`{"t":"hello","version":2,"tabs":[{"id":7,"url":"https://stays.test/","title":"Stays","opened":true}]}`)
+	if err := browser.WriteMessage(toHostW, hello); err != nil {
 		t.Fatal(err)
 	}
-	go page.serve(fromHostR, toHostW)
+	go page.serve(fromHostR, toHostW, hello)
 
 	offered, err := tools.NewBrowser(drive(home, settings.DriverSubagent))
 	if err != nil {

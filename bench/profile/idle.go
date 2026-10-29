@@ -14,13 +14,14 @@ import (
 )
 
 type idleReading struct {
-	WorkingSetMB        float64 `json:"working_set_mb"`
-	PrivateWorkingSetMB float64 `json:"private_working_set_mb"`
-	PeakWorkingSetMB    float64 `json:"peak_working_set_mb"`
-	CPUPercent          float64 `json:"cpu_percent_of_one_core"`
-	SwitchesPerS        float64 `json:"context_switches_per_s"`
-	MCyclesPerS         float64 `json:"mcycles_per_s"`
-	Threads             int     `json:"threads"`
+	WorkingSetMB        float64  `json:"working_set_mb"`
+	PrivateWorkingSetMB float64  `json:"private_working_set_mb"`
+	PeakWorkingSetMB    float64  `json:"peak_working_set_mb"`
+	CPUPercent          float64  `json:"cpu_percent_of_one_core"`
+	SwitchesPerS        float64  `json:"context_switches_per_s"`
+	MCyclesPerS         float64  `json:"mcycles_per_s"`
+	Threads             int      `json:"threads"`
+	Heard               []string `json:"heard,omitempty"`
 }
 
 type idleRun struct {
@@ -168,7 +169,7 @@ func idles(labels []string) error {
 	if len(labels) == 0 {
 		return errors.New("idles needs the labels of idle runs to set side by side")
 	}
-	fmt.Print("| run | home | starts | CPU % of one core by cycles | by process times | context switches per s | working set MB |\n|---|---|---|---|---|---|---|\n")
+	fmt.Print("| run | home | starts | CPU % of one core by cycles | by process times | context switches per s | working set MB | private working set MB |\n|---|---|---|---|---|---|---|---|\n")
 	for _, label := range labels {
 		body, err := os.ReadFile(filepath.Join(here(), "runs", "idle-"+label+".json"))
 		if err != nil {
@@ -178,9 +179,9 @@ func idles(labels []string) error {
 		if err := json.Unmarshal(body, &r); err != nil {
 			return err
 		}
-		fmt.Printf("| %s | %s | %d | %s | %s | %s | %s |\n", label, r.Home, len(r.Readings), middle(r.column(r.cyclesPercent)),
+		fmt.Printf("| %s | %s | %d | %s | %s | %s | %s | %s |\n", label, r.Home, len(r.Readings), middle(r.column(r.cyclesPercent)),
 			middle(r.column(func(x idleReading) float64 { return x.CPUPercent })), middle(r.column(func(x idleReading) float64 { return x.SwitchesPerS })),
-			middle(r.column(func(x idleReading) float64 { return x.WorkingSetMB })))
+			middle(r.column(func(x idleReading) float64 { return x.WorkingSetMB })), middle(r.column(func(x idleReading) float64 { return x.PrivateWorkingSetMB })))
 	}
 	return nil
 }

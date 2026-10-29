@@ -4,30 +4,77 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"net"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/settings"
+	"tofu/internal/sys"
 )
 
 const testOrigin = "chrome-extension://abcdefghijklmnopabcdefghijklmnop/"
+
+type fakeTabs struct {
+	mu    sync.Mutex
+	tabs  map[int]Tab
+	build string
+	deaf  bool
+}
 
 type fakeExtension struct {
 	t      *testing.T
 	toHost *io.PipeWriter
 	heard  <-chan toExtension
+	rhythm <-chan toExtension
+	chrome *fakeTabs
 }
 
 func (f fakeExtension) send(message string) {
 	f.t.Helper()
+	f.chrome.mu.Lock()
+	defer f.chrome.mu.Unlock()
+	var seen extensionMessage
+	_ = json.Unmarshal([]byte(message), &seen)
+	switch seen.T {
+	case messageHello:
+		f.chrome.tabs, f.chrome.build = map[int]Tab{}, seen.Build
+		for _, tab := range seen.Tabs {
+			f.chrome.tabs[tab.ID] = tab
+		}
+	case messageTabUpdated:
+		f.chrome.tabs[seen.Tab.ID] = seen.Tab
+	case messageTabRemoved:
+		delete(f.chrome.tabs, seen.TabID)
+	}
 	if err := WriteMessage(f.toHost, []byte(message)); err != nil {
 		f.t.Fatalf("the host did not read %s: %v", message, err)
+	}
+}
+
+func (f fakeExtension) wake() {
+	f.chrome.mu.Lock()
+	defer f.chrome.mu.Unlock()
+	if f.chrome.deaf {
+		return
+	}
+	hello, _ := json.Marshal(extensionMessage{T: messageHello, Version: ProtocolVersion, Build: f.chrome.build, Tabs: slices.SortedFunc(maps.Values(f.chrome.tabs), func(a, b Tab) int { return a.ID - b.ID })})
+	_ = WriteMessage(f.toHost, hello)
+}
+
+func (f fakeExtension) beat(within time.Duration) messageType {
+	select {
+	case message := <-f.rhythm:
+		return message.T
+	case <-time.After(within):
+		return ""
 	}
 }
 
@@ -104,21 +151,22 @@ func startHost(t *testing.T, home string) (fakeExtension, <-chan error) {
 
 func startHostOn(t *testing.T, home, build string) (fakeExtension, <-chan error) {
 	t.Helper()
-	return startHostWith(t, home, build, func(string) (string, error) { return Build() })
+	return startHostWith(t, home, build, func(string) (string, error) { return Build() }, time.Hour)
 }
 
-func startHostWith(t *testing.T, home, build string, installed func(exe string) (string, error)) (fakeExtension, <-chan error) {
+func startHostWith(t *testing.T, home, build string, installed func(exe string) (string, error), sleepAfter time.Duration) (fakeExtension, <-chan error) {
 	t.Helper()
 	stdinR, stdinW := io.Pipe()
 	stdoutR, stdoutW := io.Pipe()
 	done := make(chan error, 1)
 	go func() {
-		err := host(testOrigin, stdinR, stdoutW, home, build, installed)
+		err := host(testOrigin, stdinR, stdoutW, home, build, installed, func() time.Duration { return sleepAfter })
 		_ = stdinR.CloseWithError(errors.New("the host returned"))
 		_ = stdoutW.Close()
 		done <- err
 	}()
-	heard := make(chan toExtension, 64)
+	heard, rhythm := make(chan toExtension, 64), make(chan toExtension, 64)
+	ext := fakeExtension{t, stdinW, heard, rhythm, &fakeTabs{tabs: map[int]Tab{}}}
 	go func() {
 		defer close(heard)
 		for {
@@ -131,14 +179,22 @@ func startHostWith(t *testing.T, home, build string, installed func(exe string) 
 				t.Errorf("the host wrote %s to the extension: %v", raw, err)
 				return
 			}
-			heard <- message
+			switch message.T {
+			case messageWake:
+				go ext.wake()
+				rhythm <- message
+			case messageSleep:
+				rhythm <- message
+			default:
+				heard <- message
+			}
 		}
 	}()
 	t.Cleanup(func() {
 		_ = stdinW.Close()
 		_ = stdoutR.Close()
 	})
-	return fakeExtension{t, stdinW, heard}, done
+	return ext, done
 }
 
 func dial(t *testing.T, home string) *Client {
@@ -681,54 +737,128 @@ func reinstall(t *testing.T, home, build string) {
 	}
 }
 
-func TestARelayStopsForANewerInstalledTofuOnceItsCallIsAnswered(t *testing.T) {
+func relayOf(t *testing.T, client *Client) Relay {
+	t.Helper()
+	state, err := client.Relay()
+	if err != nil || state == nil {
+		t.Fatalf("the relay answered its state with %v, %v", state, err)
+	}
+	return *state
+}
+
+func TestARelayStartsAsleepAndOnlyACallThatNeedsChromeWakesIt(t *testing.T) {
 	home := shortHome(t)
 	installFor(t, home, testOrigin)
-	reinstall(t, home, "0ld")
-	ext, done := startHostWith(t, home, "0ld", buildInExe)
-	helloFrom(ext, "0ld")
-	read := callAsync(withoutHello(t, home), 7, "snapshot", nil)
-	pending := ext.call()
-
-	reinstall(t, home, "n3w")
-	select {
-	case err := <-done:
-		t.Fatalf("the relay stopped with %v while call %d was still out", err, pending.ID)
-	case <-time.After(3 * idleAfter):
+	ext, _ := startHost(t, home)
+	helloFrom(ext, "")
+	if beat := ext.beat(time.Second); beat != messageSleep {
+		t.Fatalf("a relay with no session heard the connect hello and said %q; want sleep", beat)
 	}
-	ext.answer(pending.ID, `"ok":true,"value":"the page"`)
-	if a := <-read; a.err != nil || string(a.value) != `"the page"` {
-		t.Fatalf("the call out when the new tofu was installed came back as %s, %v", a.value, a.err)
+	if err := WriteMessage(ext.toHost, []byte(`{"t":"tabUpdated","tab":{"id":8,"url":"https://gone.test/","title":"Gone"}}`)); err != nil {
+		t.Fatal(err)
 	}
-	select {
-	case err := <-done:
-		if err == nil || !strings.Contains(err.Error(), "n3w") || !strings.Contains(err.Error(), "0ld") {
-			t.Fatalf("the relay stopped with %v; want a line naming build 0ld and the installed n3w", err)
-		}
-	case <-time.After(3 * idleAfter):
-		t.Fatal("a relay on build 0ld kept running under an installed tofu on n3w")
+	ext.send(`{"t":"tabUpdated","tab":{"id":9,"url":"https://b.test/","title":"B"}}`)
+	client := dial(t, home)
+	if state := relayOf(t, client); state.Awake {
+		t.Fatalf("the relay says %+v after a dial, a hello and a state read; want asleep", state)
+	}
+	if beat := ext.beat(200 * time.Millisecond); beat != "" {
+		t.Fatalf("a dial, its hello and a state read made the relay say %q; want nothing", beat)
+	}
+	tabs, err := client.Tabs()
+	want := []Tab{{7, "https://a.test/", "A", false}, {9, "https://b.test/", "B", false}}
+	if beat := ext.beat(time.Second); beat != messageWake || err != nil || !slices.Equal(tabs, want) {
+		t.Fatalf("the first tabs call said %q and listed %v, %v; want wake, then %v from the extension's fresh hello and not tab 8, which it posted while asleep", beat, tabs, err, want)
+	}
+	tofu, _ := Build()
+	if state := relayOf(t, client); !state.Awake || state.Builds.Tofu != tofu || state.HeldBytes == 0 || state.OtherSessions != 0 {
+		t.Fatalf("the woken relay says %+v; want awake on build %s with the memory it holds and no other session", state, tofu)
 	}
 }
 
-func TestARelayKeepsRunningWhenTheInstalledTofuIsItsBuildOrCannotSay(t *testing.T) {
-	for name, build := range map[string]string{"the same build": "0ld", "no build": ""} {
-		t.Run(name, func(t *testing.T) {
-			home := shortHome(t)
-			installFor(t, home, testOrigin)
-			reinstall(t, home, "0ld")
-			ext, done := startHostWith(t, home, "0ld", buildInExe)
-			helloFrom(ext, "0ld")
-			client := withoutHello(t, home)
-			reinstall(t, home, build)
-			select {
-			case err := <-done:
-				t.Fatalf("the relay stopped with %v when the installed tofu said %q", err, build)
-			case <-time.After(3 * idleAfter):
-			}
-			if tabs, err := client.Tabs(); err != nil || len(tabs) != 1 {
-				t.Fatalf("after the reinstall the relay serves %v, %v", tabs, err)
-			}
-		})
+func TestARelaySleepsOnlyOnceTheLastSessionHasGone(t *testing.T) {
+	const after = 150 * time.Millisecond
+	home := shortHome(t)
+	installFor(t, home, testOrigin)
+	build, _ := Build()
+	ext, _ := startHostWith(t, home, build, func(string) (string, error) { return build, nil }, after)
+	helloFrom(ext, "")
+	if beat := ext.beat(time.Second); beat != messageSleep {
+		t.Fatalf("the connect hello made the relay say %q; want sleep", beat)
+	}
+	first := dial(t, home)
+	clicked := callAsync(first, 7, "click", nil)
+	if beat := ext.beat(time.Second); beat != messageWake {
+		t.Fatalf("a click made the relay say %q; want wake", beat)
+	}
+	call := ext.call()
+	if beat := ext.beat(4 * after); beat != "" {
+		t.Fatalf("with a click out for %v, over the %v sleep time, the relay said %q", 4*after, after, beat)
+	}
+	ext.answer(call.ID, `"ok":true`)
+	if a := <-clicked; a.err != nil {
+		t.Fatalf("the click out past the sleep time came back with %v", a.err)
+	}
+	if beat := ext.beat(4 * after); beat != "" {
+		t.Fatalf("with a session connected and idle past the sleep time the relay said %q", beat)
+	}
+	_ = first.Close()
+	second := dial(t, home)
+	if beat := ext.beat(4 * after); beat != "" {
+		t.Fatalf("a session that dialled while the first closed was put to sleep: %q", beat)
+	}
+	_ = second.Close()
+	if beat := ext.beat(4 * after); beat != messageSleep {
+		t.Fatalf("with the last session gone for %v the relay said %q; want sleep", 4*after, beat)
+	}
+	if beat := ext.beat(4 * after); beat != "" {
+		t.Fatalf("a relay already asleep said %q", beat)
+	}
+
+	ext.send(`{"t":"tabRemoved","tabId":7}`)
+	ext.send(`{"t":"tabUpdated","tab":{"id":9,"url":"https://c.test/","title":"C"}}`)
+	third := dial(t, home)
+	if state := relayOf(t, third); state.Awake {
+		t.Fatalf("after the sleep the relay says %+v; want asleep", state)
+	}
+	tabs, err := third.Tabs()
+	if beat := ext.beat(time.Second); beat != messageWake || err != nil || !slices.Equal(tabs, []Tab{{9, "https://c.test/", "C", false}}) {
+		t.Fatalf("the second wake said %q and listed %v, %v; want wake and tab 9 alone, as Chrome has them now", beat, tabs, err)
+	}
+}
+
+func TestAnExtensionThatNeverAnswersTheWakeFailsTheCallWithinTheLimit(t *testing.T) {
+	home := shortHome(t)
+	installFor(t, home, testOrigin)
+	ext, _ := startHost(t, home)
+	helloFrom(ext, "")
+	ext.chrome.mu.Lock()
+	ext.chrome.deaf = true
+	ext.chrome.mu.Unlock()
+	started := time.Now()
+	_, err := dial(t, home).Tabs()
+	took, limit := time.Since(started), konst.BrowserWakeMillis*time.Millisecond
+	if err == nil || !strings.Contains(err.Error(), "did not send its tabs") || took < limit || took > limit+time.Second {
+		t.Fatalf("a tabs call to an extension that never answers the wake returned %v after %v; want it named within %v", err, took, limit)
+	}
+}
+
+func TestTheSleepTimeIsReadFromTheSettingsEachTimeAndDefaultsToTen(t *testing.T) {
+	home := shortHome(t)
+	file := filepath.Join(sys.StateDir(home), settings.FileName)
+	if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, step := range []struct {
+		settings string
+		want     time.Duration
+	}{{"", 10 * time.Minute}, {`{"browserSleepMinutes": 1}`, time.Minute}, {`{"browserSleepMinutes": 0}`, 10 * time.Minute}, {`not json`, 10 * time.Minute}, {`{"browserSleepMinutes": 3}`, 3 * time.Minute}} {
+		if err := os.WriteFile(file, []byte(step.settings), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if got := sleepAfter(home); got != step.want {
+			t.Errorf("with the settings %q the relay sleeps after %v; want %v", step.settings, got, step.want)
+		}
 	}
 }
 
@@ -755,7 +885,7 @@ func TestANewerClientOnACopyInstallRefreshesTheCopyBeforeTheRelayRestarts(t *tes
 	home := shortHome(t)
 	installCopyFor(t, home, filepath.Join(home, "tofu.exe"))
 	reinstall(t, home, "n3w")
-	ext, done := startHostWith(t, home, "0ld", buildInExe)
+	ext, done := startHostWith(t, home, "0ld", buildInExe, time.Hour)
 	helloFrom(ext, "0ld")
 
 	if client, err := Dial(home); !errors.Is(err, ErrRelayRestarting) {
@@ -781,7 +911,7 @@ func TestARelayReadsWhichTofuIsInstalledWhenItIsAskedNotWhenItStarted(t *testing
 	home := shortHome(t)
 	installCopyFor(t, home, filepath.Join(home, "tofu.exe"))
 	reinstall(t, home, "0ld")
-	ext, done := startHostWith(t, home, "0ld", buildInExe)
+	ext, done := startHostWith(t, home, "0ld", buildInExe, time.Hour)
 	helloFrom(ext, "0ld")
 
 	other := filepath.Join(home, "other.exe")
@@ -805,7 +935,7 @@ func TestARelayReadsWhichTofuIsInstalledWhenItIsAskedNotWhenItStarted(t *testing
 func TestARelayThatCannotRefreshItsCopyKeepsServingAndNamesTheInstall(t *testing.T) {
 	home := shortHome(t)
 	installCopyFor(t, home, filepath.Join(home, "gone", "tofu.exe"))
-	ext, done := startHostWith(t, home, "0ld", func(string) (string, error) { return "n3w", nil })
+	ext, done := startHostWith(t, home, "0ld", func(string) (string, error) { return "n3w", nil }, time.Hour)
 	helloFrom(ext, "0ld")
 
 	client, err := Dial(home)

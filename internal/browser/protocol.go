@@ -37,6 +37,8 @@ const (
 	messageResult     messageType = "result"
 	messageReload     messageType = "reload"
 	messageFrames     messageType = "frames"
+	messageWake       messageType = "wake"
+	messageSleep      messageType = "sleep"
 )
 
 type Builds struct {
@@ -53,6 +55,26 @@ func (c *Client) Builds() (*Builds, error) {
 	}
 	var builds *Builds
 	return builds, json.Unmarshal(raw, &builds)
+}
+
+type Relay struct {
+	Awake         bool          `json:"awake"`
+	Builds        Builds        `json:"builds"`
+	HeldBytes     uint64        `json:"held_bytes"`
+	OtherSessions int           `json:"other_sessions"`
+	SleepAfter    time.Duration `json:"sleep_after_ns"`
+}
+
+func (c *Client) Relay() (*Relay, error) {
+	raw, err := c.Call(0, opRelay, nil)
+	var state *Relay
+	if err == nil {
+		err = json.Unmarshal(raw, &state)
+	}
+	if err == nil && state == nil || err != nil && strings.Contains(err.Error(), `unknown browser op "`+opRelay+`"`) {
+		return nil, ErrRelayBeforeSleep
+	}
+	return state, err
 }
 
 type status string
@@ -131,6 +153,7 @@ func reachable(address string) bool {
 const (
 	opTabs       = "tabs"
 	opBuilds     = "builds"
+	opRelay      = "relay"
 	opOpen       = "open"
 	opClose      = "close"
 	opBack       = "back"

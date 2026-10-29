@@ -98,6 +98,7 @@ const (
 	BrowserCursor               = "browserCursor"
 	BrowserProfile              = "browserProfile"
 	BrowserHeadless             = "browserHeadless"
+	BrowserSleepMinutes         = "browserSleepMinutes"
 	ContinueOnSubscription      = "continueOnSubscription"
 	SubscriptionOrder           = "subscriptionOrder"
 	ContinueOnAPIModel          = "continueOnAPIModel"
@@ -357,6 +358,8 @@ func Default() []Spec {
 		{Key: BrowserCursor, Label: "Browser cursor", Description: "A cursor labelled tofu glides to each click in tofu's tab. It is drawn only and changes nothing", Category: "Browser", Kind: Bool, Default: 1},
 		{Key: BrowserProfile, Label: "Browser profile", Description: "The browser profile tofu drives, from tofu browser profile new. Empty drives your Chrome through the extension", Category: "Browser", Kind: Text},
 		{Key: BrowserHeadless, Label: "Browser headless", Description: "A Chrome tofu starts on a browser profile runs with no window. false shows it", Category: "Browser", Kind: Bool, Default: 1},
+		{Key: BrowserSleepMinutes, Label: "Browser sleep", Description: "Minutes the Chrome relay stays awake once no tofu is connected. Asleep it keeps the port and stops tab events", Category: "Browser", Kind: Int, Default: konst.BrowserSleepMinutesDefault,
+			Least: 1, Most: math.MaxInt32, Unit: "minutes the Chrome relay stays awake with no tofu connected"},
 	}
 	for i := range specs {
 		specs[i].Group = specs[i].Category

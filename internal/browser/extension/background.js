@@ -41,6 +41,7 @@ const screencasts = new Map();
 const cursorless = new Set();
 const activeByWindow = new Map();
 let port = null;
+let streaming = true;
 let hostError = '';
 let reconnectDelay = RECONNECT_MIN_MS;
 let snapshotSource = null;
@@ -51,6 +52,7 @@ let lastAct = {tabId: 0, windowId: 0, at: 0};
 
 const tabInfo = tab => ({id: tab.id, url: tab.url ?? tab.pendingUrl ?? '', title: tab.title ?? '', opened: opened.has(tab.id)});
 const post = message => port?.postMessage(message);
+const postTab = message => streaming && post(message);
 const send = (tabId, method, params) => chrome.debugger.sendCommand({tabId}, method, params);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const ourGroups = async () => groups ??= (await chrome.storage.session.get({groups: {}})).groups;
@@ -70,11 +72,17 @@ function serially(work) {
 async function connect() {
   if (port) return;
   port = chrome.runtime.connectNative(HOST);
+  streaming = true;
   port.onMessage.addListener(message => {
     reconnectDelay = RECONNECT_MIN_MS;
     if (message.t === 'call') void answer(message);
     if (message.t === 'status') void show(message.state);
     if (message.t === 'reload') chrome.runtime.reload();
+    if (message.t === 'sleep') streaming = false;
+    if (message.t === 'wake') {
+      streaming = true;
+      void hello();
+    }
   });
   port.onDisconnect.addListener(() => {
     hostError = chrome.runtime.lastError?.message ?? 'the tofu host exited';
@@ -92,6 +100,10 @@ async function connect() {
     reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_MS);
   });
   void show('idle');
+  await hello();
+}
+
+async function hello() {
   const tabs = await chrome.tabs.query({});
   for (const tab of tabs) if (tab.active) activeByWindow.set(tab.windowId, [tab.id]);
   post({t: 'hello', version: PROTOCOL_VERSION, build: await BUILD, tabs: tabs.map(tabInfo)});
@@ -446,7 +458,7 @@ chrome.tabs.onCreated.addListener(tab => {
     const before = current === tab.id ? previous : current;
     serially(() => leaveWithPersonsTab(tab.id, tab.windowId, before));
   }
-  post({t: 'tabUpdated', tab: tabInfo(tab)});
+  postTab({t: 'tabUpdated', tab: tabInfo(tab)});
 });
 chrome.tabs.onActivated.addListener(({tabId, windowId}) => {
   const [current] = activeByWindow.get(windowId) ?? [];
@@ -455,7 +467,7 @@ chrome.tabs.onActivated.addListener(({tabId, windowId}) => {
 chrome.tabs.onRemoved.addListener(tabId => {
   for (const set of [attached, opened, grouped, optedOut, children, cursorless]) set.delete(tabId);
   dropScreencast(tabId);
-  post({t: 'tabRemoved', tabId});
+  postTab({t: 'tabRemoved', tabId});
 });
 chrome.debugger.onDetach.addListener(({tabId}) => {
   attached.delete(tabId);
@@ -466,7 +478,7 @@ chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
     grouped.delete(tabId);
     optedOut.add(tabId);
   }
-  if (change.url !== undefined || change.title !== undefined) post({t: 'tabUpdated', tab: tabInfo(tab)});
+  if (change.url !== undefined || change.title !== undefined) postTab({t: 'tabUpdated', tab: tabInfo(tab)});
 });
 
 chrome.debugger.getTargets()

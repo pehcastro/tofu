@@ -2,7 +2,7 @@
 title: Browser debug
 description: Recording an animation frame by frame, the site recipes tofu learns, and driving a tab yourself from the command line.
 order: 3
-updated: 2026-10-04
+updated: 2026-10-29
 ---
 
 Three things for when a page doesn't behave:
@@ -36,7 +36,7 @@ failure can be replayed by hand.
   records takes into `~/.tofu/motion/<take id>`, `inspect` reads one, and
   `compare` sets a `before` and an `after` label side by side.
 - **Recipes.** Edit or delete the file to change or forget one.
-- **Steps.** Every step command needs `--tab`, from `tofu browser`.
+- **Steps.** Every step command needs `--tab`, from `tofu browser tabs`.
 
 ## Commands
 

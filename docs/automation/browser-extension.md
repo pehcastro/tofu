@@ -109,9 +109,64 @@ on Windows, deleted on the next refresh, and by a rename over it on Linux
 and macOS. An install from before the copy names `tofu.exe` itself;
 `tofu doctor` calls it stale and `tofu browser install` moves it to the copy.
 
+## Asleep and awake
+
+The relay sleeps while no tofu uses it, so a Chrome left open all day costs
+next to nothing. It starts asleep. Asleep it keeps the extension's port open,
+which keeps Chrome's service worker alive, holds no tabs, and hears no tab
+events, because the extension stops sending them while still keeping its own
+bookkeeping. The relay then waits on its standard input and its socket and
+does nothing else.
+
+- **What wakes it:** the first call that needs Chrome, such as
+  `tofu browser tabs`, a read or an action. The relay tells the extension
+  `wake`, the extension answers with its open tabs, and from then on sends
+  each change. `tofu browser` and the build check answer without waking it.
+- **When it sleeps:** once the last tofu has left and no call is out, after
+  `browserSleepMinutes`, 10 by default. The relay reads the setting each time
+  a tofu leaves, so `tofu settings set browserSleepMinutes 1` takes effect on
+  the next sleep with no restart. A call still out, or a tofu still
+  connected, keeps it awake however long it takes.
+- **What sleeping does:** the relay tells the extension `sleep`, drops its
+  tab list and gives its free memory back to the system.
+
+Over 5 idle minutes, started the way Chrome starts it, three fresh starts
+each, the median:
+
+| Idle for 5 minutes | Windows | Linux |
+| --- | --- | --- |
+| Context switches a second, the relay asleep | 0.4 | 0.6 |
+| Context switches a second, the relay before it slept, 0.5.20 | 3.1 | 3.2 |
+| Context switches a second, a Go program that only reads its input | 0.03 | 0.03 |
+| CPU, % of one core, the relay asleep | 0.0 | 0.0 |
+| Private memory, the relay asleep | 6.3 MB | 7.8 MB |
+
+The context switches left asleep are the Go runtime's forced collection,
+every 2 minutes: with collection off, `GOGC=off`, the asleep relay reads
+0.03 a second on Windows and 0.06 on Linux, next to 0.03 for a Go program
+that only reads its standard input.
+
 ## Commands
 
-`tofu browser` lists the tabs tofu reaches and the builds on each side:
+`tofu browser` prints the relay without waking it:
+
+```text
+Chrome relay                                                            ○ asleep
+
+  build      995fa8a7a901
+  extension  995fa8a7a901
+  memory     7.7 MB held from the system
+  sessions   0 other tofu connected
+  sleeps     10m after the last tofu leaves
+
+  → the first call that needs Chrome wakes it: tofu browser tabs is one
+```
+
+Awake, the verdict reads `● awake`, and `--json` carries the same in `data`:
+`awake`, `builds`, `held_bytes`, `other_sessions` and `sleep_after_ns`.
+
+`tofu browser tabs` wakes it and lists the tabs tofu reaches and the builds
+on each side:
 
 ```text
 Chrome tabs                                          ✓ updated from 6bd3adb862e4

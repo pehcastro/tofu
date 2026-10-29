@@ -27,7 +27,7 @@ What it is
   - Projects: projectManagement (boardy, the ticket board), boardFlow (the words
     boardy uses), scratchCleanupDays and scratchMaxGB (the scratchpad)
   - Browser: browser, browserDriver, browserSteps, browserModel, browserEffort,
-    browserCursor, browserProfile, browserHeadless
+    browserCursor, browserProfile, browserHeadless, browserSleepMinutes
 
   `gatePrompt` is `auto` by default, which is auto mode: Jev decides at every
   gate and the work does not stop for you. Only a call it denies is refused, and
@@ -151,6 +151,9 @@ The detail
     profile login` stays signed in.
   - `browserHeadless`: read when that Chrome starts, and never by your own
     Chrome.
+  - `browserSleepMinutes`: read each time the last tofu leaves the relay, so a
+    change needs no restart. Asleep, the relay holds no tab list and the
+    extension posts no tab events; the first call that needs Chrome wakes it.
 
 Where it lives
 
@@ -462,4 +465,8 @@ Browser
       true or false
       A Chrome tofu starts on a browser profile runs with no window. false shows
       it
+    browserSleepMinutes          10
+      at least 1 minutes the Chrome relay stays awake with no tofu connected
+      Minutes the Chrome relay stays awake once no tofu is connected. Asleep it
+      keeps the port and stops tab events
 --- stderr

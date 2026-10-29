@@ -85,6 +85,29 @@ func idleOnce(cmd *exec.Cmd, settle, window time.Duration, screen io.Writer) (id
 	defer func() { _ = windows.CloseHandle(process) }()
 	defer func() { _ = windows.CloseHandle(job) }()
 	time.Sleep(settle)
+	reading, err := sampleIdle(process, window)
+	_ = windows.TerminateJobObject(job, 1)
+	_, _ = windows.WaitForSingleObject(process, windows.INFINITE)
+	windows.ClosePseudoConsole(console)
+	<-drained
+	if err != nil {
+		return idleReading{}, fmt.Errorf("%s: %w", cmd.Path, err)
+	}
+	return reading, nil
+}
+
+const relayMethod = "the command starts with its standard input and output as pipes, as Chrome starts a native host, and is sent one native message hello; after the settle time its own working set and private working set are read every 100 ms for the window and the median kept, its CPU time over the window divided by the wall time, its threads' context switches and its cycle count read from one NtQuerySystemInformation snapshot at each end of the window, then its standard input is closed"
+
+func readRelay(pid int, window time.Duration) (idleReading, error) {
+	process, err := windows.OpenProcess(windows.PROCESS_QUERY_INFORMATION|windows.PROCESS_VM_READ|windows.SYNCHRONIZE, false, uint32(pid))
+	if err != nil {
+		return idleReading{}, err
+	}
+	defer func() { _ = windows.CloseHandle(process) }()
+	return sampleIdle(process, window)
+}
+
+func sampleIdle(process windows.Handle, window time.Duration) (idleReading, error) {
 	var working, private []float64
 	var peak float64
 	pid, _ := windows.GetProcessId(process)
@@ -97,8 +120,7 @@ func idleOnce(cmd *exec.Cmd, settle, window time.Duration, screen io.Writer) (id
 		if exited, _ := windows.WaitForSingleObject(process, 0); exited == windows.WAIT_OBJECT_0 {
 			var code uint32
 			_ = windows.GetExitCodeProcess(process, &code)
-			windows.ClosePseudoConsole(console)
-			return idleReading{}, fmt.Errorf("%s exited with %d before it was read", cmd.Path, code)
+			return idleReading{}, fmt.Errorf("process %d exited with %d before it was read", pid, code)
 		}
 		counters := memoryCounters{size: uint32(unsafe.Sizeof(memoryCounters{}))}
 		if ok, _, callErr := processMemory.Call(uintptr(process), uintptr(unsafe.Pointer(&counters)), uintptr(counters.size)); ok == 0 {
@@ -114,14 +136,9 @@ func idleOnce(cmd *exec.Cmd, settle, window time.Duration, screen io.Writer) (id
 		return idleReading{}, err
 	}
 	seconds := time.Since(windowStarted).Seconds()
-	idleCPU := 100 * (processCPU(process) - cpuBefore) / seconds
-	_ = windows.TerminateJobObject(job, 1)
-	_, _ = windows.WaitForSingleObject(process, windows.INFINITE)
-	windows.ClosePseudoConsole(console)
-	<-drained
 	slices.Sort(working)
 	slices.Sort(private)
-	return idleReading{WorkingSetMB: working[len(working)/2], PrivateWorkingSetMB: private[len(private)/2], PeakWorkingSetMB: peak, CPUPercent: idleCPU,
+	return idleReading{WorkingSetMB: working[len(working)/2], PrivateWorkingSetMB: private[len(private)/2], PeakWorkingSetMB: peak, CPUPercent: 100 * (processCPU(process) - cpuBefore) / seconds,
 		SwitchesPerS: float64(after.switches-before.switches) / seconds, MCyclesPerS: float64(after.cycles-before.cycles) / seconds / 1e6, Threads: after.threads}, nil
 }
 

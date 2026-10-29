@@ -329,9 +329,9 @@ func report([]string) error {
 }
 
 func main() {
-	verbs := map[string]func([]string) error{"stage": stage, "sample": sample, "report": report, "size": sizes, "idle": idle, "idles": idles}
+	verbs := map[string]func([]string) error{"stage": stage, "sample": sample, "report": report, "size": sizes, "idle": idle, "idles": idles, "relay": relay}
 	if len(os.Args) < 2 || verbs[os.Args[1]] == nil {
-		fmt.Fprintln(os.Stderr, "usage: profile stage|sample|report|size|idle|idles")
+		fmt.Fprintln(os.Stderr, "usage: profile stage|sample|report|size|idle|idles|relay")
 		os.Exit(2)
 	}
 	if err := verbs[os.Args[1]](os.Args[2:]); err != nil {

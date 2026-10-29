@@ -1,0 +1,45 @@
+{
+  "label": "relay0520-windows",
+  "build": "0.5.20 (37ea528b)",
+  "command": [
+    "tofu",
+    "chrome-extension://jednanpboiikklhkkkimnmdmjmgjgphh/",
+    "--parent-window=0"
+  ],
+  "home": "fresh",
+  "nominal_mhz": 3187,
+  "settle_s": 30,
+  "window_s": 300,
+  "readings": [
+    {
+      "working_set_mb": 15.984375,
+      "private_working_set_mb": 5.30859375,
+      "peak_working_set_mb": 16.08203125,
+      "cpu_percent_of_one_core": 0,
+      "context_switches_per_s": 2.9748463824150737,
+      "mcycles_per_s": 0.528541838936638,
+      "threads": 8
+    },
+    {
+      "working_set_mb": 17.61328125,
+      "private_working_set_mb": 6.5703125,
+      "peak_working_set_mb": 18.3046875,
+      "cpu_percent_of_one_core": 0.02073289338421068,
+      "context_switches_per_s": 3.224379579112445,
+      "mcycles_per_s": 0.5918378406964219,
+      "threads": 15
+    },
+    {
+      "working_set_mb": 16.02734375,
+      "private_working_set_mb": 5.26953125,
+      "peak_working_set_mb": 16.1171875,
+      "cpu_percent_of_one_core": 0,
+      "context_switches_per_s": 3.1018730894535214,
+      "mcycles_per_s": 0.5777243505848833,
+      "threads": 7
+    }
+  ],
+  "method": "the command starts with its standard input and output as pipes, as Chrome starts a native host, and is sent one native message hello; after the settle time its own working set and private working set are read every 100 ms for the window and the median kept, its CPU time over the window divided by the wall time, its threads' context switches and its cycle count read from one NtQuerySystemInformation snapshot at each end of the window, then its standard input is closed",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "date": "2026-10-29 01:54"
+}
