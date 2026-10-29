@@ -49,6 +49,7 @@ func (h *Host) SubAgentEvents(names []string, visit func(Event) bool) error {
 					watch.emit(Event{Kind: EventThinking, ID: session.EventIDFor(event.Agent, "thinking "+event.ID), Agent: event.Agent, Text: said.Thinking})
 				}
 			case session.EventToolCall:
+				delete(watch.cards.open, event.Agent)
 				watch.called(callOf(event), event.Agent)
 			case session.EventToolResult:
 				watch.result(resultOf(event), event.Agent)

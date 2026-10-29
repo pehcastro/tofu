@@ -290,8 +290,10 @@ type App struct {
 	happenedAtTurn int
 	trimmedTo      int
 	gapReadEmpty   feed.Gap
+	gapReading     bool
 	unheld         feed.Unheld
 	unheldCounted  bool
+	unheldReading  bool
 	keptAnswer     string
 	updateSaid     updateMsg
 	updateChecked  bool
@@ -607,12 +609,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	a.ageWorking()
 	a.trimFeed()
-	a.countWhatIsNotHeld()
+	counting := a.countWhatIsNotHeld()
 	a.flushFeed()
-	a.fillGap()
-	a.flushFeed()
+	filling := a.fillGap()
 	a.syncFeed()
-	return a, caught(tea.Batch(cmd, a.startPulse(), a.reportStatus(), a.foldLater()))
+	return a, caught(tea.Batch(cmd, counting, filling, a.startPulse(), a.reportStatus(), a.foldLater()))
 }
 
 func (a *App) update(msg tea.Msg) tea.Cmd {
@@ -662,6 +663,12 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 	case Event:
 		a.absorb(msg)
 		return a.listen()
+	case gapReadMsg:
+		a.gapRead(msg)
+		return nil
+	case unheldReadMsg:
+		a.unheldRead(msg)
+		return nil
 	case paste.Outcome:
 		a.view.Attached(msg)
 		return nil
