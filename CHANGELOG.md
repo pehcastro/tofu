@@ -39,6 +39,7 @@ Every window on a session sees the same live session: who changed what, every su
 - A replayed message, spawn and spawn time keep their own generation, id and time.
 - `tofu drive` with the done review arm reaches the host it joins.
 - The working row names the request it can resolve.
+- A lead tool call on a follow-up message draws one card in the activity feed, and its hash is the call's id.
 - One unreadable board no longer hides the others from the guard.
 
 ## 0.5.19 - 2026-10-27
