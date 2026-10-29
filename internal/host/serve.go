@@ -87,8 +87,6 @@ type server struct {
 
 type historyWalk struct {
 	mu        sync.Mutex
-	store     *session.Store
-	parent    string
 	id        string
 	lines     []outgoing
 	kept      Carry
@@ -142,23 +140,14 @@ func (w *historyWalk) linesOf(carry Carry, dir string) []outgoing {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	read := newItems(carry.Session)
-	if w.store == nil || w.parent != carry.Session {
-		w.store = carry.Store
-	}
-	if w.store == nil {
-		return read.all(resumedChat(carry, dir).Chat)
-	}
-	walking := *w.store
-	carry.Store = &walking
 	lines := read.all(resumedChat(carry, dir).Chat)
-	header, _ := w.store.Header(carry.Session)
-	w.store.Unread(carry.Session)
-	w.id, w.lines, w.parent = "", nil, header.Parent
+	if carry.Store == nil {
+		return lines
+	}
+	header, _ := carry.Store.Header(carry.Session)
+	w.id, w.lines = "", nil
 	if header.ForkedInto != "" {
 		w.id, w.lines = carry.Session, lines
-	}
-	if w.parent == "" {
-		w.store = nil
 	}
 	return lines
 }
