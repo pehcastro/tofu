@@ -434,7 +434,10 @@ func logLineage(head string, lineage []Generation) {
 	_ = appendLines(path, []byte(lines.String()))
 }
 
-func (s *Store) Unread(id string) { delete(s.parsed, id) }
+func (s *Store) Unread(id string) {
+	delete(s.parsed, id)
+	delete(s.headers, id)
+}
 
 func (s *Store) Spawns(id string) ([]Event, error) {
 	raw, err := s.readFile(s.EventsPath(id))

@@ -110,7 +110,9 @@ func (e *Earlier) open(store *session.Store, lead *resumedLead) []llm.Message {
 	}
 	for i, generation := range e.lineage {
 		for _, event := range generation.Events {
-			lead.note(event, i)
+			if i == head || event.Kind != session.EventMessage || len(lead.loose) > 0 {
+				lead.note(event, i)
+			}
 		}
 		for _, run := range generation.Header.Agents {
 			e.runs[run.Agent] = run

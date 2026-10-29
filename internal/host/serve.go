@@ -82,6 +82,45 @@ type server struct {
 	labels   map[string]string
 	lanes    atomic.Pointer[[]*lane]
 	replays  string
+	walk     historyWalk
+}
+
+type historyWalk struct {
+	mu     sync.Mutex
+	store  *session.Store
+	parent string
+	id     string
+	lines  []outgoing
+}
+
+func (w *historyWalk) linesOf(carry Carry, dir string) []outgoing {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.id == carry.Session {
+		return w.lines
+	}
+	read := newItems(carry.Session)
+	if w.store == nil || w.parent != carry.Session {
+		fresh, err := session.OpenIn(dir)
+		if err != nil {
+			w.store = nil
+			return read.all(resumedChat(carry, dir).Chat)
+		}
+		w.store = fresh.ReadOnce()
+	}
+	walking := *w.store
+	carry.Store = &walking
+	lines := read.all(resumedChat(carry, dir).Chat)
+	header, _ := w.store.Header(carry.Session)
+	w.store.Unread(carry.Session)
+	w.id, w.lines, w.parent = "", nil, header.Parent
+	if header.ForkedInto != "" {
+		w.id, w.lines = carry.Session, lines
+	}
+	if w.parent == "" {
+		w.store = nil
+	}
+	return lines
 }
 
 func Serve(cfg ServeConfig) error {
@@ -380,8 +419,7 @@ func (s *server) history(p SessionHistoryParams) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	read := newItems(carry.Session)
-	lines := read.all(resumedChat(carry, s.Host.dir).Chat)
+	lines := s.walk.linesOf(carry, s.Host.dir)
 	first, end := window(len(lines))
 	page := []HistoryLine{}
 	for _, out := range lines[first:end] {
