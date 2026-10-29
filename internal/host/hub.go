@@ -37,6 +37,7 @@ const (
 	hubShortKey      = 8
 	hubTempDirPrefix = "tofu-"
 	hubTempVariable  = "TOFU_HOST_TEMP"
+	hubReadyVariable = "TOFU_HOST_READY_ON_STDIN"
 	hubAskStatus     = "status"
 	hubAskJoin       = "join"
 	hubAskRoster     = "roster"
@@ -241,17 +242,34 @@ func EnsureHub(project string) (HubStatus, error) {
 		return HubStatus{}, err
 	}
 	defer func() { _ = log.Close() }()
-	if err := startDetached(func() *exec.Cmd {
-		cmd := exec.Command(exe, HubVerb, HubRunVerb, "--dir", place.project)
-		cmd.Dir, cmd.Stdout, cmd.Stderr = place.project, log, log
-		return cmd
-	}); err != nil {
+	told, tells, err := os.Pipe()
+	if err != nil {
 		return HubStatus{}, err
 	}
+	defer func() { _ = told.Close() }()
+	err = startDetached(func() *exec.Cmd {
+		cmd := exec.Command(exe, HubVerb, HubRunVerb, "--dir", place.project)
+		cmd.Dir, cmd.Stdin, cmd.Stdout, cmd.Stderr, cmd.Env = place.project, tells, log, log, append(os.Environ(), hubReadyVariable+"=1")
+		return cmd
+	})
+	_ = tells.Close()
+	if err != nil {
+		return HubStatus{}, err
+	}
+	listening := make(chan struct{})
+	go func() {
+		_, _ = told.Read(make([]byte, 1))
+		close(listening)
+	}()
 	ready := konst.HostReadyMillis * time.Millisecond
-	for deadline := time.Now().Add(ready); time.Now().Before(deadline); time.Sleep(hubRetry) {
+	for deadline := time.Now().Add(ready); time.Now().Before(deadline); {
 		if status, err := askStatus(place); err == nil {
 			return status, nil
+		}
+		select {
+		case <-listening:
+			listening = nil
+		case <-time.After(hubRetry):
 		}
 	}
 	return HubStatus{}, fmt.Errorf("the tofu host did not answer on %s within %s, its log is %s", place.socket, ready, place.log)
@@ -366,6 +384,11 @@ func RunHub(project string, report safe.Report, say func(string), open HubSessio
 			safe.Go(report, "host member", func() { h.serve(conn) })
 		}
 	})
+	if os.Getenv(hubReadyVariable) != "" {
+		_ = os.Unsetenv(hubReadyVariable)
+		_, _ = os.Stdin.Write([]byte{'\n'})
+		_ = os.Stdin.Close()
+	}
 	say("process " + strconv.Itoa(h.status.PID) + " serves " + place.project + " on " + place.socket)
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -580,7 +603,7 @@ func peerUnderHost(conn net.Conn, action string) (int, bool, error) {
 	if err != nil {
 		return 0, false, fmt.Errorf("the tofu host, process %d, refused to %s because it could not tell which process asked: %w", os.Getpid(), action, err)
 	}
-	seen := map[int]bool{}
+	seen, parentOf := map[int]bool{}, parentLookup()
 	for pid, err := parentOf(peer); pid > 1 && !seen[pid] && err == nil; pid, err = parentOf(pid) {
 		if pid == os.Getpid() {
 			return peer, true, nil

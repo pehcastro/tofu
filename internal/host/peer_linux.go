@@ -25,14 +25,16 @@ func peerProcess(conn net.Conn) (int, error) {
 	return int(cred.Pid), nil
 }
 
-func parentOf(pid int) (int, error) {
-	stat, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
-	if err != nil {
-		return 0, err
+func parentLookup() func(pid int) (int, error) {
+	return func(pid int) (int, error) {
+		stat, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+		if err != nil {
+			return 0, err
+		}
+		afterName := bytes.Fields(stat[bytes.LastIndexByte(stat, ')')+1:])
+		if len(afterName) < 2 {
+			return 0, os.ErrNotExist
+		}
+		return strconv.Atoi(string(afterName[1]))
 	}
-	afterName := bytes.Fields(stat[bytes.LastIndexByte(stat, ')')+1:])
-	if len(afterName) < 2 {
-		return 0, os.ErrNotExist
-	}
-	return strconv.Atoi(string(afterName[1]))
 }

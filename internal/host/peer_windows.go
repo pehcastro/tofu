@@ -30,17 +30,20 @@ func peerProcess(conn net.Conn) (int, error) {
 	return int(pid), err
 }
 
-func parentOf(pid int) (int, error) {
+func parentLookup() func(pid int) (int, error) {
+	parents := map[int]int{}
 	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
-	if err != nil {
-		return 0, err
-	}
-	defer func() { _ = windows.CloseHandle(snapshot) }()
-	entry := windows.ProcessEntry32{Size: uint32(unsafe.Sizeof(windows.ProcessEntry32{}))}
-	for err = windows.Process32First(snapshot, &entry); err == nil; err = windows.Process32Next(snapshot, &entry) {
-		if int(entry.ProcessID) == pid {
-			return int(entry.ParentProcessID), nil
+	if err == nil {
+		defer func() { _ = windows.CloseHandle(snapshot) }()
+		entry := windows.ProcessEntry32{Size: uint32(unsafe.Sizeof(windows.ProcessEntry32{}))}
+		for err = windows.Process32First(snapshot, &entry); err == nil; err = windows.Process32Next(snapshot, &entry) {
+			parents[int(entry.ProcessID)] = int(entry.ParentProcessID)
 		}
 	}
-	return 0, err
+	return func(pid int) (int, error) {
+		if parent, found := parents[pid]; found {
+			return parent, nil
+		}
+		return 0, err
+	}
 }

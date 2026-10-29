@@ -19,10 +19,12 @@ func peerProcess(conn net.Conn) (int, error) {
 	return pid, cmp.Or(err, pidErr)
 }
 
-func parentOf(pid int) (int, error) {
-	proc, err := unix.SysctlKinfoProc("kern.proc.pid", pid)
-	if err != nil {
-		return 0, err
+func parentLookup() func(pid int) (int, error) {
+	return func(pid int) (int, error) {
+		proc, err := unix.SysctlKinfoProc("kern.proc.pid", pid)
+		if err != nil {
+			return 0, err
+		}
+		return int(proc.Eproc.Ppid), nil
 	}
-	return int(proc.Eproc.Ppid), nil
 }
