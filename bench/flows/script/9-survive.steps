@@ -13,5 +13,9 @@ wait stopping the turn
 key esc
 wait CRONLEAD
 key alt+2
+wait ACTIVE  2
+key left
+key down
+key down
 wait SUBWORKING
 screen
