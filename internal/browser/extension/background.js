@@ -199,7 +199,7 @@ async function attach(tabId) {
 async function groupTab(tabId) {
   const tab = await chrome.tabs.get(tabId);
   const mine = (await ourGroups())[tab.windowId];
-  if (tab.pinned || optedOut.has(tabId) || (tab.groupId !== NO_GROUP && tab.groupId !== mine)) return;
+  if (tab.pinned || optedOut.has(tabId) || (tab.groupId !== NO_GROUP && tab.groupId !== mine && !opened.has(tabId))) return;
   const live = mine !== undefined && await chrome.tabGroups.get(mine).then(() => true, () => false);
   const groupId = await chrome.tabs.group(live ? {tabIds: [tabId], groupId: mine} : {tabIds: [tabId], createProperties: {windowId: tab.windowId}});
   groups[tab.windowId] = groupId;
@@ -210,7 +210,7 @@ async function groupTab(tabId) {
 
 async function leaveWithPersonsTab(tabId, windowId, before) {
   const mine = (await ourGroups())[windowId];
-  if (before === undefined || mine === undefined) return;
+  if (before === undefined || mine === undefined || opened.has(tabId)) return;
   const [tab, from] = await Promise.all([chrome.tabs.get(tabId), chrome.tabs.get(before)]);
   if (tab.groupId === mine && from.groupId !== mine) await chrome.tabs.ungroup([tabId]);
 }

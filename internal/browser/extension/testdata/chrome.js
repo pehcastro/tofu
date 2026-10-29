@@ -7,6 +7,8 @@ let commitAfter = 100;
 let completeAfter = 100;
 let popupOpener = 20;
 let release = 'opens';
+let createdLate = false;
+let besideActive = false;
 let nextTab = 21;
 const heard = [];
 const posted = [];
@@ -123,10 +125,14 @@ const chrome = {
   tabs: {
     get: async id => ({...tabs.get(id)}),
     create: async ({url}) => {
-      tabs.set(20, {id: 20, windowId: 1, url: '', pendingUrl: url, status: 'loading', pinned: false, groupId: -1});
-      listeners.created({...tabs.get(20)});
-      loadLater(20, url);
-      return {...tabs.get(20)};
+      const id = tabs.has(20) ? nextTab++ : 20;
+      const active = [...tabs.values()].find(tab => tab.active);
+      tabs.set(id, {id, windowId: 1, url: '', pendingUrl: url, status: 'loading', pinned: false, groupId: besideActive ? active.groupId : -1});
+      const created = () => listeners.created({...tabs.get(id)});
+      if (createdLate) setTimeout(created);
+      else created();
+      loadLater(id, url);
+      return {...tabs.get(id)};
     },
     update: async (id, {url}) => {
       note('navigate', id, url);
@@ -173,15 +179,44 @@ const chrome = {
 };
 
 const fetch = async name => ({text: async () => fs.readFileSync(path.join(dir, name), 'utf8')});
-vm.runInContext(fs.readFileSync(path.join(dir, 'background.js'), 'utf8'),
+const load = () => vm.runInContext(fs.readFileSync(path.join(dir, 'background.js'), 'utf8'),
   vm.createContext({chrome, fetch, navigator: {userAgent: 'node'}, setTimeout, performance, URL, console}));
+load();
 
 const quiet = () => new Promise(resolve => setTimeout(resolve, 300));
 const call = (id, tabId, op, args = {}) => {
   calledAt[id] = performance.now();
   listeners.message({t: 'call', id, tabId, op, args});
 };
-const scenarios = {groups: async () => {
+const joins = late => async () => {
+  [createdLate, besideActive] = [late, true];
+  const joined = {};
+  const open = async (name, id) => {
+    call(id, 0, 'open', {url: `https://stays.test/${name}`});
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const tabId = posted.find(message => message.t === 'result' && message.id === id).value;
+    joined[name] = groups.get(tabs.get(tabId).groupId)?.title ?? 'no group';
+  };
+  activate(6);
+  await open('fresh', 1);
+  activate(5);
+  await open('besideAnotherGroup', 2);
+  activate(6);
+  listeners.message({t: 'sleep'});
+  await quiet();
+  listeners.message({t: 'wake'});
+  await quiet();
+  await open('woken', 3);
+  for (const key of Object.keys(storage)) delete storage[key];
+  load();
+  await quiet();
+  activate(6);
+  await open('reloaded', 4);
+  activate(5);
+  await open('reloadedBesideAnotherGroup', 5);
+  return {joined};
+};
+const scenarios = {joinsEarly: joins(false), joinsLate: joins(true), groups: async () => {
   listeners.message({t: 'status', state: 'acting'});
   call(1, 9, 'click', {element: 1, guard: 'g'});
   call(2, 9, 'snapshot');

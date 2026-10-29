@@ -130,13 +130,14 @@ func TestBackgroundAttachesGroupsAndNavigatesInOnePlaceEach(t *testing.T) {
 }
 
 type stubRun struct {
-	Heard     [][]any          `json:"heard"`
-	Posted    []map[string]any `json:"posted"`
-	Grouped   map[string]any   `json:"grouped"`
-	Restored  map[string]any   `json:"restored"`
-	Listening []int            `json:"listening"`
-	Answered  map[string]int   `json:"answered"`
-	GroupOf   map[string]int   `json:"groupOf"`
+	Heard     [][]any           `json:"heard"`
+	Posted    []map[string]any  `json:"posted"`
+	Grouped   map[string]any    `json:"grouped"`
+	Restored  map[string]any    `json:"restored"`
+	Listening []int             `json:"listening"`
+	Answered  map[string]int    `json:"answered"`
+	GroupOf   map[string]int    `json:"groupOf"`
+	Joined    map[string]string `json:"joined"`
 }
 
 func inStubbedChrome(t *testing.T, scenario string) stubRun {
@@ -294,6 +295,18 @@ func TestAPlusTabJoinsTofusGroupOnlyFromATabInsideItAndTofusTabsStillJoin(t *tes
 	}
 	if run.GroupOf["20"] != 100 || run.GroupOf["23"] != 100 {
 		t.Errorf("tofu's tab 20 is in group %d and tab 23 it opened in %d, with the person on tab 6 outside; want both in 100", run.GroupOf["20"], run.GroupOf["23"])
+	}
+}
+
+func TestEveryTabTofuOpensJoinsTofusGroupWhicheverWayChromeOrdersTheCreatedEvent(t *testing.T) {
+	for _, scenario := range []string{"joinsEarly", "joinsLate"} {
+		run := inStubbedChrome(t, scenario)
+		t.Logf("%s: %v", scenario, run.Joined)
+		for _, when := range []string{"fresh", "besideAnotherGroup", "woken", "reloaded", "reloadedBesideAnotherGroup"} {
+			if got := run.Joined[when]; !strings.HasPrefix(got, "tofu ") {
+				t.Errorf("%s: the tab tofu opened %s is in %q; want tofu's group", scenario, when, got)
+			}
+		}
 	}
 }
 
