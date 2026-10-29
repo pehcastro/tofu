@@ -142,7 +142,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch, he
 	shortcuts, _ := keymap.ShortcutsPath()
 	opening := live.Opening(launch.resumed.hosted())
 	if note := resumeNote(launch.resumed); note != "" {
-		opening = append(opening, tui.Event{Kind: tui.EventNote, Text: note})
+		opening.Chat = append(opening.Chat, tui.Event{Kind: tui.EventNote, Text: note})
 	}
 	if memoryOn(dir) {
 		shelves, err := memory.Open(dir)
@@ -150,7 +150,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch, he
 			shelves.Copied = append(shelves.Copied, "your memory is unreadable: "+err.Error())
 		}
 		for _, line := range shelves.Copied {
-			opening = append(opening, tui.Event{Kind: tui.EventNote, Text: line})
+			opening.Chat = append(opening.Chat, tui.Event{Kind: tui.EventNote, Text: line})
 		}
 	}
 	return tui.Options{
@@ -174,7 +174,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch, he
 		Paste:        paste.Board{Read: wiring.clipboard, Dir: live.AttachmentDir, Recorded: live.Attached},
 		Paths:        appPaths(dir),
 		Sessions:     func() ([]tui.SessionRow, error) { return appSessions(live.ID()) },
-		Resume:       func(handle string) (string, []tui.Event) { return appResume(live, handle) },
+		Resume:       func(handle string) (string, host.Opened) { return appResume(live, handle) },
 		NewSession:   func() string { return freshSession(live) },
 		Compact:      func() string { return compactSession(live) },
 		Undo:         func(count string) string { return undoTurns(live.ID(), count) },
@@ -676,20 +676,20 @@ func freshSession(live *host.Host) string {
 	return freshSessionNote
 }
 
-func appResume(live *host.Host, handle string) (string, []tui.Event) {
+func appResume(live *host.Host, handle string) (string, host.Opened) {
 	store, err := sessionstore.Open()
 	if err != nil {
-		return "the session store does not open, so nothing is carried: " + err.Error(), nil
+		return "the session store does not open, so nothing is carried: " + err.Error(), host.Opened{}
 	}
 	carry, err := resumeOf(store, handle)
 	if err != nil {
-		return err.Error(), nil
+		return err.Error(), host.Opened{}
 	}
-	chat, err := live.Resume(carry.hosted())
+	opened, err := live.Resume(carry.hosted())
 	if err != nil {
-		return err.Error(), nil
+		return err.Error(), host.Opened{}
 	}
-	return "continuing " + carry.Session + ", " + strconv.Itoa(carry.Carried) + " messages from " + plural(carry.Steps, "step"), chat
+	return "continuing " + carry.Session + ", " + strconv.Itoa(carry.Carried) + " messages from " + plural(carry.Steps, "step"), opened
 }
 
 func appSessions(inUse string) ([]tui.SessionRow, error) {

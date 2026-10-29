@@ -2944,7 +2944,7 @@ func TestEverySessionEventOfAContinuationForkCarriesTheRootOfItsLine(t *testing.
 			t.Fatal(err)
 		}
 	}
-	if resumed := newAppSession(dir, nil, nil, time.Now, sessionResume{}).Opening(sessionResume{Session: fork}.hosted()); len(resumed) == 0 || resumed[0].Root != root {
+	if resumed := newAppSession(dir, nil, nil, time.Now, sessionResume{}).Opening(sessionResume{Session: fork}.hosted()).Chat; len(resumed) == 0 || resumed[0].Root != root {
 		t.Fatalf("the resumed chat names the line %+v, want the root %s", resumed, root)
 	}
 	driver := driveApp(t)

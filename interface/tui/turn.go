@@ -278,20 +278,48 @@ func (a *App) answer(answer Answer) {
 	}
 }
 
-func (a *App) recorded(event Event) {
+func recordedIn(view *session.Model, event Event) {
 	logged := event.Logged
 	if event.Agent != "" || logged == nil {
 		return
 	}
 	if logged.Kind == isession.EventRequest {
-		a.view.Requested(logged.ID)
+		view.Requested(logged.ID)
 		return
 	}
 	var said isession.MessageBody
 	if logged.Kind != isession.EventMessage || json.Unmarshal(logged.Body, &said) != nil {
 		return
 	}
-	a.view.Recorded(said.Role, said.Content, logged.ID, logged.At)
+	view.Recorded(said.Role, said.Content, logged.ID, logged.At)
+}
+
+func drawChat(view *session.Model, event Event, status string) {
+	switch event.Kind {
+	case EventTask:
+		switch {
+		case event.Origin.Kind == host.OriginPerson:
+			view.Append(session.Entry{Kind: session.User, Body: event.Text})
+		case event.Origin.Sub == llm.SourceReplyCut:
+			view.Append(session.Entry{Kind: session.Note, Body: event.Text})
+		}
+	case EventText:
+		view.Append(session.Entry{Kind: session.Assistant, Body: event.Text, ID: event.ID})
+	case EventToolCall:
+		if event.Promote {
+			view.Spawn(event.ID)
+			return
+		}
+		view.Append(session.Entry{Kind: session.Tool, ID: event.ID, Head: event.Tool, Body: event.Text, Detail: event.Detail, Card: event.Card, Group: event.Group, Started: event.At})
+	case EventToolResult:
+		view.Finish(event.ID, session.Result{Status: status, Output: event.Detail, Bytes: event.Bytes, Failed: event.Failed, At: event.At, Card: event.Card})
+	case EventNote:
+		view.Append(session.Entry{Kind: session.Note, Body: event.Text})
+	case EventFailure:
+		view.Append(session.Entry{Kind: session.Failure, ID: event.ID, Body: event.Text})
+	case EventPersisted:
+		recordedIn(view, event)
+	}
 }
 
 func (a *App) cronFired(prompt string) {
@@ -550,13 +578,11 @@ func (a *App) absorb(event Event) {
 			a.firesDrawn = slices.Delete(a.firesDrawn, drawnWhenFired, drawnWhenFired+1)
 		case event.Origin.Kind == host.OriginCron:
 			a.cronFired(event.Text)
-		case event.Origin.Kind == host.OriginPerson:
-			a.view.Append(session.Entry{Kind: session.User, Body: event.Text})
-		case event.Origin.Sub == llm.SourceReplyCut:
-			a.view.Append(session.Entry{Kind: session.Note, Body: event.Text})
+		default:
+			drawChat(&a.view, event, "")
 		}
 	case EventText:
-		a.view.Append(session.Entry{Kind: session.Assistant, Body: event.Text, ID: event.ID})
+		drawChat(&a.view, event, "")
 	case EventTextDelta:
 		a.view.Stream(event.Text)
 	case EventStreamReset:
@@ -580,7 +606,7 @@ func (a *App) absorb(event Event) {
 			a.cronFired(event.Detail)
 			a.firesDrawn = append(a.firesDrawn, event.Detail)
 		} else {
-			a.view.Append(session.Entry{Kind: session.Note, Body: event.Text})
+			drawChat(&a.view, event, "")
 		}
 		a.countCrons()
 	case EventDone:
@@ -589,9 +615,9 @@ func (a *App) absorb(event Event) {
 			a.showSubAgents(event.SubAgents)
 		}
 	case EventFailure:
-		id := cmp.Or(event.ID, a.mintID())
-		a.record(feed.Event{ID: a.shortOf(id), FullID: id, Actor: orchestrator, Kind: feed.KindFailure, State: feed.StateFailed, Title: strings.TrimSpace(failureHead + " " + event.Tool), Body: event.Text, At: at})
-		a.view.Append(session.Entry{Kind: session.Failure, ID: id, Body: event.Text})
+		event.ID = cmp.Or(event.ID, a.mintID())
+		a.record(feed.Event{ID: a.shortOf(event.ID), FullID: event.ID, Actor: orchestrator, Kind: feed.KindFailure, State: feed.StateFailed, Title: strings.TrimSpace(failureHead + " " + event.Tool), Body: event.Text, At: at})
+		drawChat(&a.view, event, "")
 	case EventDecision:
 		if event.Decision == nil {
 			break
@@ -635,7 +661,7 @@ func (a *App) absorb(event Event) {
 		a.view.Resume(event.ID)
 		a.showLeadMemoryAsk()
 	case EventPersisted:
-		a.recorded(event)
+		drawChat(&a.view, event, "")
 	case host.EventSteerQueued:
 		a.queueSteeredElsewhere(event.Text)
 		a.steered[event.Text] = event.ID
@@ -723,11 +749,7 @@ func (a *App) called(event Event, at time.Time) {
 		return
 	}
 	a.running++
-	if event.Promote {
-		a.view.Spawn(event.ID)
-		return
-	}
-	a.view.Append(session.Entry{Kind: session.Tool, ID: event.ID, Head: event.Tool, Body: event.Text, Detail: event.Detail, Card: event.Card, Group: event.Group, Started: event.At})
+	drawChat(&a.view, event, "")
 }
 
 func (a *App) answered(event Event, at time.Time) {
@@ -753,7 +775,7 @@ func (a *App) answered(event Event, at time.Time) {
 		return
 	}
 	if done.Kind != feed.KindSpawn {
-		a.view.Finish(event.ID, session.Result{Status: status, Output: event.Detail, Bytes: event.Bytes, Failed: event.Failed, At: event.At, Card: event.Card})
+		drawChat(&a.view, event, status)
 	}
 	a.rememberedByTheLead(event.Detail)
 	a.running = max(a.running-1, 0)

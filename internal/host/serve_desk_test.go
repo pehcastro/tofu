@@ -140,7 +140,7 @@ func TestDeskAnEndedSubAgentSaysWhenItEndedTheSameLiveAndOnReplay(t *testing.T) 
 		{Role: llm.RoleUser, Content: report},
 	}}
 	replay := newItems(id)
-	replayed := agentEnded(t, replay.all(resumedChat(carry, project)))
+	replayed := agentEnded(t, replay.all(resumedChat(carry, project).Chat))
 
 	held := &roster.Roster{}
 	if err := held.Hold(roster.SubAgent{ID: "research-1", Agent: "research", State: roster.Working, Started: spawned.Add(-time.Millisecond)}); err != nil {

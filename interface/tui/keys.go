@@ -144,7 +144,7 @@ func (a *App) composerKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 			return cmd, true
 		}
 	}
-	if _, scrolled := a.view.Scroll(key); scrolled {
+	if a.view.Scroll(key) {
 		return nil, true
 	}
 	_, jumps := tabDigit(key)

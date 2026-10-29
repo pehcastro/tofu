@@ -107,7 +107,7 @@ func TestAReopenedSessionSaysWhoSentEachMessage(t *testing.T) {
 	carry := Carry{Session: id, Messages: messages}
 
 	var got, want []Origin
-	for _, event := range resumedChat(carry, project) {
+	for _, event := range resumedChat(carry, project).Chat {
 		if event.Kind == EventTask {
 			got = append(got, event.Origin)
 		}

@@ -1,6 +1,7 @@
 package session
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -77,15 +78,13 @@ func joined(words ...string) string {
 
 func (m *Model) groupOf(start int) group {
 	_, end := m.blockAt(start)
-	g := group{calls: m.entries[start:end], running: -1, open: m.opened[m.entries[start].ID], live: m.Busy}
+	live := m.Busy && !slices.ContainsFunc(m.entries[end:], Entry.message)
+	g := group{calls: m.entries[start:end], running: -1, open: m.opened[m.entries[start].ID], live: live}
 	for at, call := range g.calls {
 		if call.running() {
 			g.running = at
 		}
 		g.headed = g.headed || !call.standsAlone()
-	}
-	for _, later := range m.entries[end:] {
-		g.live = g.live && !later.message()
 	}
 	for before := start - 1; before >= 0 && !m.entries[before].message(); before-- {
 		g.agents += len(m.entries[before].SubAgents)

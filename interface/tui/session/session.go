@@ -146,6 +146,8 @@ type Model struct {
 	prose              Prose
 	unshown            map[string]bool
 	entries            []Entry
+	earlier            int
+	lo                 int
 	composer           textarea.Model
 	bar                []string
 	barKey             composerKey
@@ -235,7 +237,8 @@ func (m *Model) wrapped(entry *Entry) bool {
 
 func (m *Model) Fill() bool {
 	left := konst.RewrapFillEntries
-	for index := len(m.entries) - 1; index >= 0; index-- {
+	lo, hi := m.window()
+	for index := hi - 1; index >= lo; index-- {
 		if entry := &m.entries[index]; !m.wrapped(entry) {
 			if left == 0 {
 				return true
@@ -348,15 +351,46 @@ func (m *Model) Append(entry Entry) {
 		entry.undrawn, entry.rendered = true, widget.Wrap(entry.Body, m.textWidth())
 	}
 	m.entries = append(m.entries, entry)
-	if len(m.entries) <= entryWindow {
-		return
+	m.frameAround(m.top.entry)
+}
+
+func (m *Model) window() (int, int) {
+	lo := min(m.lo, len(m.entries))
+	return lo, min(lo+entryWindow, len(m.entries))
+}
+
+func (m *Model) frameAround(entry int) {
+	last := max(len(m.entries)-entryWindow, 0)
+	switch lo, hi := m.window(); {
+	case m.following:
+		m.lo = last
+	case entry < lo || entry >= hi:
+		m.lo = min(max(entry-entryWindow/2, 0), last)
 	}
-	dropped := len(m.entries) - entryWindow
-	m.entries = m.entries[dropped:]
-	m.top.entry -= dropped
-	if m.top.entry < 0 {
-		m.top = anchor{}
+	if m.lo < len(m.entries) {
+		m.lo, _ = m.blockAt(m.lo)
 	}
+}
+
+func (m *Model) Older() *Model {
+	return &Model{now: m.now, prose: m.prose, width: m.width, height: m.height, following: true, unshown: map[string]bool{}, opened: map[string]bool{}, FeedID: m.FeedID, ChatShowsTools: m.ChatShowsTools}
+}
+
+func (m *Model) MarkEarlier() { m.earlier = len(m.entries) }
+
+func (m *Model) Prepend(older *Model) {
+	for index := range older.entries {
+		older.entries[index].turn = -1
+	}
+	m.entries = slices.Insert(m.entries, m.earlier, older.entries...)
+	if !m.following && m.top.entry >= m.earlier {
+		m.top.entry += len(older.entries)
+	}
+	if m.lo >= m.earlier {
+		m.lo += len(older.entries)
+	}
+	m.revision++
+	m.frameAround(m.top.entry)
 }
 
 func (m *Model) Finish(id string, result Result) {
@@ -519,7 +553,10 @@ func (m *Model) Reset() {
 	m.closed, m.picked = false, 0
 }
 
-func (m *Model) Follow() { m.following = true }
+func (m *Model) Follow() {
+	m.following = true
+	m.frameAround(m.top.entry)
+}
 
 func (m *Model) Start() {
 	if !m.started {
@@ -537,6 +574,7 @@ func (m *Model) Start() {
 func (m *Model) dropGreeting() {
 	if len(m.entries) > 0 && m.entries[0].Kind == Note {
 		m.entries = m.entries[1:]
+		m.earlier = max(m.earlier-1, 0)
 		m.revision++
 	}
 }

@@ -6,18 +6,20 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"tofu/internal/host"
 )
 
 func TestSlashResumeWithAHandleResumesItAndNeverReachesTheModel(t *testing.T) {
 	entered := make(chan string, 1)
 	app := commandApp(t, entered)
 	var asked []string
-	app.options.Resume = func(handle string) (string, []Event) {
+	app.options.Resume = func(handle string) (string, host.Opened) {
 		asked = append(asked, handle)
 		if handle != "parser" {
-			return "no session " + handle + " here", nil
+			return "no session " + handle + " here", host.Opened{}
 		}
-		return "continuing s-bravo", []Event{{Kind: EventSession, ID: "s-bravo", Text: "parser"}, {Kind: EventText, Text: "bravo answered"}}
+		return "continuing s-bravo", host.Opened{Chat: []Event{{Kind: EventSession, ID: "s-bravo", Text: "parser"}, {Kind: EventText, Text: "bravo answered"}}}
 	}
 
 	typeText(app, "/resume   parser  ")
@@ -53,13 +55,13 @@ func TestSlashResumePicksASessionByItsFirstLineAndTheChatShowsItsTurn(t *testing
 			{ID: "s-alpha", Task: "plan the alpha migration", Facts: "3m ago · 1 turn"},
 		}, nil
 	}
-	app.options.Resume = func(id string) (string, []Event) {
+	app.options.Resume = func(id string) (string, host.Opened) {
 		resumed = append(resumed, id)
-		return "continuing " + id, []Event{
+		return "continuing " + id, host.Opened{Chat: []Event{
 			{Kind: EventSession, ID: id, Text: "parser"},
 			{Kind: EventTask, Text: "sketch the bravo parser"},
 			{Kind: EventText, Text: "bravo answered"},
-		}
+		}}
 	}
 
 	typeText(app, "/resume")

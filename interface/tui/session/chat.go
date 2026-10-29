@@ -79,7 +79,8 @@ func (m *Model) scrollMetrics(rows int) (int, int, anchor) {
 	if scrollable && !m.following {
 		from = m.top
 	}
-	return m.offset(anchor{entry: len(m.entries)}), m.offset(from), from
+	_, hi := m.window()
+	return m.offset(anchor{entry: hi}), m.offset(from), from
 }
 
 func (m *Model) blockLines(start int) []string {
@@ -138,15 +139,12 @@ func (m *Model) lead(start int) int {
 }
 
 func (m *Model) latestUser(index int) bool {
-	if m.entries[index].Kind != User {
-		return false
-	}
-	for later := index + 1; later < len(m.entries); later++ {
+	for later := len(m.entries) - 1; later >= index; later-- {
 		if m.entries[later].Kind == User {
-			return false
+			return later == index
 		}
 	}
-	return true
+	return false
 }
 
 func expandMark(id string) string {

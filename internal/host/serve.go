@@ -381,7 +381,7 @@ func (s *server) history(p SessionHistoryParams) (any, error) {
 		return nil, err
 	}
 	read := newItems(carry.Session)
-	lines := read.all(resumedChat(carry, s.Host.dir))
+	lines := read.all(resumedChat(carry, s.Host.dir).Chat)
 	first, end := window(len(lines))
 	page := []HistoryLine{}
 	for _, out := range lines[first:end] {

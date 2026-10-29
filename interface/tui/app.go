@@ -161,7 +161,7 @@ type Options struct {
 	Copy          func(text string) error
 	Paths         func() []string
 	Sessions      func() ([]SessionRow, error)
-	Resume        func(id string) (string, []Event)
+	Resume        func(id string) (string, host.Opened)
 	NewSession    func() string
 	Compact       func() string
 	Undo          func(count string) string
@@ -171,7 +171,7 @@ type Options struct {
 	KillShell     func(name string) error
 	RunCommand    func(ctx context.Context, command string) (output string, stopped bool)
 	Fresh         bool
-	Resumed       []Event
+	Resumed       host.Opened
 	Pose          string
 	Keymap        string
 	PromptHistory string
@@ -266,6 +266,7 @@ type App struct {
 	pressedAt      time.Time
 	steered        map[string]string
 	steeredUnread  []string
+	earlier        *host.Earlier
 	sentNow        bool
 	stopCommand    context.CancelFunc
 	subAgents      []subagent.Row
@@ -394,10 +395,10 @@ func New(options Options) *App {
 	app.settings.SetBranch(options.Branch)
 	app.intro = newIntro(options.Fresh, app.text(isettings.Animations) != animationsOff, options.Pose)
 	app.resize(app.width, app.height)
-	for _, event := range options.Resumed {
+	for _, event := range options.Resumed.Chat {
 		app.absorb(event)
 	}
-	app.options.Resumed = nil
+	app.earlier, app.options.Resumed = options.Resumed.Earlier, host.Opened{}
 	app.view.Stop()
 	app.readWires()
 	app.configSeen = host.ConfigSeen(options.Root)
@@ -501,7 +502,7 @@ func Run(options Options) error {
 }
 
 func (a *App) Init() tea.Cmd {
-	return caught(tea.Batch(a.view.Focus(), a.intro.start(), a.pollQuota(), a.readPaths(), a.watchSetup(), a.pollShells(), a.startPulse(), a.reloadStaleModels(), a.listen(), a.watchUpdates(0)))
+	return caught(tea.Batch(a.view.Focus(), a.intro.start(), a.pollQuota(), a.readPaths(), a.watchSetup(), a.pollShells(), a.startPulse(), a.reloadStaleModels(), a.listen(), a.watchUpdates(0), a.loadEarlier()))
 }
 
 func (a *App) watchUpdates(after time.Duration) tea.Cmd {
@@ -727,6 +728,8 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 			a.notify(string(msg))
 		}
 		return nil
+	case earlierMsg:
+		return a.drawEarlier(msg)
 	case updateMsg:
 		if msg != a.updateSaid {
 			a.updateAt = a.pulse

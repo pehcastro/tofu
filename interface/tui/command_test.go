@@ -16,6 +16,7 @@ import (
 	"tofu/interface/tui/palette"
 	"tofu/internal/command"
 	"tofu/internal/golden"
+	"tofu/internal/host"
 )
 
 func commandApp(t *testing.T, entered chan<- string) *App {
@@ -28,7 +29,7 @@ func commandApp(t *testing.T, entered chan<- string) *App {
 		Copy:       func(string) error { return nil },
 		Paths:      repoPaths,
 		Sessions:   func() ([]SessionRow, error) { return nil, nil },
-		Resume:     func(id string) (string, []Event) { return "continuing " + id, nil },
+		Resume:     func(id string) (string, host.Opened) { return "continuing " + id, host.Opened{} },
 		NewSession: func() string { return "the next task starts a new session" },
 		Compact:    func() string { return "compacted 2 old tool result(s)" },
 		Undo:       func(count string) string { return "undid " + count },

@@ -28,10 +28,13 @@ type recordedReport struct {
 
 type resumedLead struct {
 	watch   *watcher
+	carry   Carry
+	store   *session.Store
+	chat    []Event
 	calls   map[string]*recordedCall
 	reports []recordedReport
 	rows    []SubAgentRow
-	said    []recordedMessage
+	said    map[saidKey][]session.Event
 	loose   []session.Attachment
 	images  map[string][]session.Attachment
 	runs    map[string]session.AgentRun
@@ -40,127 +43,178 @@ type resumedLead struct {
 	at      time.Time
 }
 
-type recordedMessage struct {
-	logged     session.Event
-	body       session.MessageBody
-	generation int
-	taken      bool
+type saidKey struct {
+	generation    int
+	role, content string
 }
 
-func resumedChat(carry Carry, dir string) []Event {
+type Opened struct {
+	Chat    []Event
+	Earlier *Earlier
+}
+
+type Earlier struct {
+	carry   Carry
+	mask    func(string) string
+	store   *session.Store
+	lineage []session.Generation
+	runs    map[string]session.AgentRun
+	bottom  int
+	next    int
+	child   []llm.Message
+}
+
+func resumedChat(carry Carry, dir string) Opened {
+	earlier := &Earlier{carry: carry, runs: map[string]session.AgentRun{}, next: -1}
 	if carry.Session == "" {
-		return nil
+		return Opened{Earlier: earlier}
 	}
-	var chat []Event
 	keys := carry.Keys
 	if keys == nil {
 		loaded := sys.LoadKeyRedactor()
 		keys = &loaded
 	}
-	mask := keys.Redact
-	lead := &resumedLead{calls: map[string]*recordedCall{}, worked: map[string][]session.Event{}, runs: map[string]session.AgentRun{}, images: map[string][]session.Attachment{}}
+	earlier.mask = keys.Redact
+	labelled := Event{Kind: EventSession, Text: carry.Name, ID: carry.Session, Root: carry.Session}
+	store, err := carry.reading(dir)
+	if err != nil {
+		lead := earlier.lead(nil)
+		lead.watch.emit(labelled)
+		lead.replay(carry.Messages, 0)
+		return Opened{Chat: lead.chat, Earlier: earlier}
+	}
+	lead := earlier.lead(store)
+	messages := earlier.open(store, lead)
+	lead.watch.emit(labelledAs(store, labelled))
+	store.ForgetRead()
+	lead.replay(messages, len(earlier.lineage)-1)
+	lead.settleTheRunning(func() []SubAgentRow { return heldRoster(store, carry.Session) })
+	return Opened{Chat: lead.chat, Earlier: earlier}
+}
+
+func (e *Earlier) lead(store *session.Store) *resumedLead {
+	lead := &resumedLead{carry: e.carry, store: store, calls: map[string]*recordedCall{}, said: map[saidKey][]session.Event{}, worked: map[string][]session.Event{}, runs: e.runs, images: map[string][]session.Attachment{}}
 	lead.watch = &watcher{emit: func(event Event) {
 		event.Turn, event.At = lead.turn, lead.at
-		chat = append(chat, redacted(event, mask))
-	}, turnID: carry.Session, seen: &shownResults{ids: map[string]bool{}}, spawner: &turn.SpawnTool{}}
-	labelled := Event{Kind: EventSession, Text: carry.Name, ID: carry.Session, Root: carry.Session}
-	messages, generations := carry.Messages, make([]int, len(carry.Messages))
-	store, err := carry.reading(dir)
-	if err == nil {
-		messages, generations = lead.read(store, carry)
-		labelled = labelledAs(store, labelled)
-		store.ForgetRead()
+		lead.chat = append(lead.chat, redacted(event, e.mask))
+	}, turnID: e.carry.Session, seen: &shownResults{ids: map[string]bool{}}, spawner: &turn.SpawnTool{}}
+	return lead
+}
+
+func (e *Earlier) open(store *session.Store, lead *resumedLead) []llm.Message {
+	e.lineage, _ = store.Lineage(e.carry.Session)
+	head := len(e.lineage) - 1
+	e.bottom = head
+	for e.bottom > 0 && e.lineage[e.bottom-1].Header.ForkedInto == e.lineage[e.bottom].Header.ID {
+		e.bottom--
 	}
-	lead.watch.emit(labelled)
-	for i, message := range messages {
+	for i, generation := range e.lineage {
+		for _, event := range generation.Events {
+			lead.note(event, i)
+		}
+		for _, run := range generation.Header.Agents {
+			e.runs[run.Agent] = run
+		}
+	}
+	uncached := *store
+	uncached.ForgetRead()
+	e.store, e.next, e.child = &uncached, head-1, e.carry.Messages
+	return e.unheldIn(head)
+}
+
+func (e *Earlier) Next() ([]Event, bool) {
+	at := e.next
+	if at < e.bottom {
+		return nil, false
+	}
+	lead := e.lead(e.store)
+	for _, event := range e.events(at) {
+		lead.note(event, at)
+	}
+	lead.replay(e.unheldIn(at), at)
+	lead.settleTheRunning(func() []SubAgentRow { return nil })
+	e.lineage[at].Events, e.next = nil, at-1
+	return lead.chat, e.next >= e.bottom
+}
+
+func (e *Earlier) unheldIn(at int) []llm.Message {
+	if at <= e.bottom {
+		return e.child
+	}
+	said, _, _ := e.store.Said(e.lineage[at-1].Header.ID, e.events(at-1))
+	parent, _ := turn.ConversationFrom(said)
+	fresh := unheld(parent, e.child)
+	e.child = parent
+	return fresh
+}
+
+func (e *Earlier) events(at int) []session.Event {
+	generation := &e.lineage[at]
+	if generation.Unread {
+		generation.Events, _ = e.store.Events(generation.Header.ID)
+		generation.Unread = false
+	}
+	return generation.Events
+}
+
+func (l *resumedLead) replay(messages []llm.Message, generation int) {
+	for _, message := range messages {
 		if message.Origin.Source == llm.SourceSpawnLine {
 			continue
 		}
-		said, persisted := lead.recorded(message, generations[i]), ""
+		said, persisted := l.recorded(message, generation), ""
 		if said != nil {
-			lead.at, persisted = said.At, said.ID
+			l.at, persisted = said.At, said.ID
 		}
 		if said != nil && message.Role == llm.RoleUser && (message.Origin.Source == llm.SourceTask || message.Origin.Source == llm.SourceCronFire) {
-			lead.turn, lead.watch.turnID = said.Turn, cmp.Or(said.Turn, carry.Session)
+			l.turn, l.watch.turnID = said.Turn, cmp.Or(said.Turn, l.carry.Session)
 		}
 		switch message.Role {
 		case llm.RoleUser:
 			if endsTheRow(message.Origin.Source) {
-				lead.watch.endLeadRow()
+				l.watch.endLeadRow()
 			}
-			task, origin := carry.taskIn(message.Content), lead.originOf(message)
-			left, drew := lead.reportsIn(task)
+			task, origin := l.carry.taskIn(message.Content), l.originOf(message)
+			left, drew := l.reportsIn(task)
 			switch {
 			case origin.Sub == llm.SourceEnvironment:
 			case !drew || origin.Sub == llm.SourceReport || origin.Sub == llm.SourceReportFor:
 				var images []MessageImage
-				if said != nil && store != nil {
-					images = shownAttached(task, lead.images[said.ID], store)
+				if said != nil && l.store != nil {
+					images = shownAttached(task, l.images[said.ID], l.store)
 				}
-				lead.watch.emit(Event{Kind: EventTask, ID: persisted, Text: task, Origin: origin, Images: images})
+				l.watch.emit(Event{Kind: EventTask, ID: persisted, Text: task, Origin: origin, Images: images})
 			case left != "" && origin.Kind == OriginPerson:
-				lead.watch.emit(Event{Kind: EventTask, ID: persisted, Text: left, Origin: origin})
+				l.watch.emit(Event{Kind: EventTask, ID: persisted, Text: left, Origin: origin})
 			}
 		case llm.RoleAssistant:
 			if text := strings.TrimSpace(message.Content); text != "" {
-				lead.watch.endLeadRow()
-				lead.watch.emit(Event{Kind: EventText, ID: persisted, Text: text})
+				l.watch.endLeadRow()
+				l.watch.emit(Event{Kind: EventText, ID: persisted, Text: text})
 			}
 			for _, call := range message.ToolCalls {
-				recorded := lead.calls[call.ID]
+				recorded := l.calls[call.ID]
 				if recorded != nil && recorded.call.Call != "" {
-					lead.replaying(recorded.call)
+					l.replaying(recorded.call)
 				}
-				lead.watch.called(call, "")
-				if recorded != nil && recorded.spawn.Name != "" && !lead.drawn(recorded.spawn.Name) {
-					lead.spawned(recorded.spawn)
+				l.watch.called(call, "")
+				if recorded != nil && recorded.spawn.Name != "" && !l.drawn(recorded.spawn.Name) {
+					l.spawned(recorded.spawn)
 				}
 			}
 		case llm.RoleTool:
-			if recorded := lead.calls[message.ToolCallID]; recorded != nil && recorded.result.Call != "" {
+			if recorded := l.calls[message.ToolCallID]; recorded != nil && recorded.result.Call != "" {
 				ran := resultOf(recorded.result)
 				message.ToolExitCode, message.ToolHits = ran.ToolExitCode, ran.ToolHits
-				lead.replaying(recorded.result)
+				l.replaying(recorded.result)
 			}
-			lead.watch.result(message, "")
+			l.watch.result(message, "")
 		case llm.RoleSystem, llm.RoleUnknown:
 		}
 		if said != nil {
-			lead.watch.emit(Event{Kind: EventPersisted, ID: said.ID, Logged: said})
+			l.watch.emit(Event{Kind: EventPersisted, ID: said.ID, Logged: said})
 		}
 	}
-	lead.settleTheRunning(store, carry.Session)
-	return chat
-}
-
-func (l *resumedLead) read(store *session.Store, carry Carry) ([]llm.Message, []int) {
-	lineage, _ := store.Lineage(carry.Session)
-	drawn := len(lineage) - 1
-	for drawn > 0 && lineage[drawn-1].Header.ForkedInto == lineage[drawn].Header.ID {
-		drawn--
-	}
-	for i, generation := range lineage {
-		if i >= drawn && generation.Unread {
-			lineage[i].Events, _ = store.Events(generation.Header.ID)
-		}
-		for _, event := range lineage[i].Events {
-			l.note(event, i)
-		}
-		for _, run := range generation.Header.Agents {
-			l.runs[run.Agent] = run
-		}
-	}
-	line, child := carry.Messages, carry.Messages
-	generations := slices.Repeat([]int{len(lineage) - 1}, len(line))
-	for i := len(lineage) - 2; i >= drawn; i-- {
-		said, _, _ := store.Said(lineage[i].Header.ID, lineage[i].Events)
-		parent, _ := turn.ConversationFrom(said)
-		fresh := unheld(parent, child)
-		line = slices.Concat(parent, fresh, line[len(child):])
-		generations = slices.Concat(slices.Repeat([]int{i}, len(parent)), slices.Repeat([]int{i + 1}, len(fresh)), generations[len(child):])
-		child = parent
-	}
-	return line, generations
 }
 
 func unheld(parent, child []llm.Message) []llm.Message {
@@ -219,7 +273,8 @@ func (l *resumedLead) note(event session.Event, generation int) {
 		if message.Role == session.RoleUser {
 			l.images[event.ID], l.loose = l.loose, nil
 		}
-		l.said = append(l.said, recordedMessage{logged: event, body: message, generation: generation})
+		key := saidKey{generation: generation, role: message.Role, content: message.Content}
+		l.said[key] = append(l.said[key], event)
 		return
 	}
 	if event.Call == "" {
@@ -316,19 +371,21 @@ func (l *resumedLead) recorded(message llm.Message, generation int) *session.Eve
 	if message.Role != llm.RoleUser && message.Role != llm.RoleAssistant {
 		return nil
 	}
-	at := slices.IndexFunc(l.said, func(said recordedMessage) bool {
-		return !said.taken && said.generation == generation && said.body.Role == message.Role.String() && said.body.Content == message.Content
-	})
-	if at < 0 {
+	key := saidKey{generation: generation, role: message.Role.String(), content: message.Content}
+	queued := l.said[key]
+	if len(queued) == 0 {
 		return nil
 	}
-	l.said[at].taken = true
-	return &l.said[at].logged
+	l.said[key] = queued[1:]
+	return &queued[0]
 }
 
 func (l *resumedLead) originOf(message llm.Message) Origin {
 	origin := message.Origin
-	if at := slices.IndexFunc(l.reports, func(report recordedReport) bool { return strings.Contains(message.Content, report.text) }); origin.Kind() == OriginAgent && origin.Name == "" && at >= 0 {
+	if origin.Kind() != OriginAgent || origin.Name != "" {
+		return wireOrigin(origin)
+	}
+	if at := slices.IndexFunc(l.reports, func(report recordedReport) bool { return strings.Contains(message.Content, report.text) }); at >= 0 {
 		origin.Name = l.reports[at].agent
 	}
 	return wireOrigin(origin)
@@ -364,11 +421,11 @@ func (l *resumedLead) show(spawned ...SubAgentRow) {
 	l.watch.emit(Event{Kind: EventSubAgent, SubAgents: l.rows})
 }
 
-func (l *resumedLead) settleTheRunning(store *session.Store, id string) {
+func (l *resumedLead) settleTheRunning(held func() []SubAgentRow) {
 	if !slices.ContainsFunc(l.rows, func(row SubAgentRow) bool { return row.State == roster.Working }) {
 		return
 	}
-	live := heldRoster(store, id)
+	live := held()
 	for _, held := range live {
 		if held.State == roster.Working && !l.drawn(held.Name) {
 			l.rows = append(l.rows, held)

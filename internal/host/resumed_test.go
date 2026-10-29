@@ -89,7 +89,7 @@ func TestAResumedChatDrawsEachSubAgentReportAsAReportAndNeverAsSomethingThePerso
 		{Role: llm.RoleUser, Content: noted, Origin: llm.LegacyOrigin("sub-agent report")},
 	}}
 
-	chat := resumedChat(carry, project)
+	chat := resumedChat(carry, project).Chat
 
 	var tasks, drawn []string
 	var last []SubAgentRow

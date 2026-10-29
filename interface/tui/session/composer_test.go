@@ -109,10 +109,10 @@ func TestUpAndDownNeverMoveTheTranscript(t *testing.T) {
 		model.Append(Entry{Kind: Note, Body: "line " + strconv.Itoa(step)})
 	}
 	before := model.View()
-	if _, moved := model.Scroll("up"); moved {
+	if model.Scroll("up") {
 		t.Fatalf("up scrolled the transcript instead of belonging to the composer")
 	}
-	if _, moved := model.Scroll("down"); moved {
+	if model.Scroll("down") {
 		t.Fatalf("down scrolled the transcript instead of belonging to the composer")
 	}
 	if after := model.View(); after != before {

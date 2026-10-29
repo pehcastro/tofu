@@ -96,8 +96,8 @@ func (m *Model) move(at anchor, lines int) anchor {
 }
 
 type rowKey struct {
-	revision, width, turns, entries int
-	showsTools                      bool
+	revision, width, turns, entries, lo int
+	showsTools                          bool
 }
 
 type rowTable struct {
@@ -106,33 +106,35 @@ type rowTable struct {
 }
 
 func (m *Model) rowKey() rowKey {
-	return rowKey{m.revision, m.width, m.turns, len(m.entries), m.ChatShowsTools}
+	return rowKey{m.revision, m.width, m.turns, len(m.entries), m.lo, m.ChatShowsTools}
 }
 
 func (m *Model) offset(at anchor) int {
+	lo, hi := m.window()
 	if m.rows.before == nil || m.rows.key != m.rowKey() {
-		before := make([]int, len(m.entries)+1)
-		for index := 0; index < len(m.entries); {
+		before := make([]int, hi-lo+1)
+		for index := lo; index < hi; {
 			start, end := m.blockAt(index)
+			start, end = max(start, lo), min(end, hi)
 			rows := m.lead(start) + 1 + len(m.entries[start].displayLines())
 			if m.wrapped(&m.entries[start]) {
 				rows = len(m.blockLines(start))
 			}
 			for inside := start + 1; inside <= end; inside++ {
-				before[inside] = before[start] + rows
+				before[inside-lo] = before[start-lo] + rows
 			}
 			index = end
 		}
 		m.rows = rowTable{key: m.rowKey(), before: before}
 	}
-	return m.rows.before[min(at.entry, len(m.entries))] + at.line
+	return m.rows.before[min(max(at.entry, lo), hi)-lo] + at.line
 }
 
-func (m *Model) Scroll(key string) (int, bool) {
+func (m *Model) Scroll(key string) bool {
 	rows := m.transcriptRows()
 	tail, scrollable := m.tailAnchor(rows)
 	if !scrollable {
-		return 0, false
+		return false
 	}
 	from := m.top
 	if m.following {
@@ -154,10 +156,10 @@ func (m *Model) Scroll(key string) (int, bool) {
 	case key == "end" && !editing:
 		to = tail
 	default:
-		return 0, false
+		return false
 	}
 	m.landAt(to, tail)
-	return m.offset(from) - m.offset(m.top), true
+	return true
 }
 
 func (m *Model) landAt(to, tail anchor) {
@@ -166,6 +168,7 @@ func (m *Model) landAt(to, tail anchor) {
 	if m.following {
 		m.top = tail
 	}
+	m.frameAround(m.top.entry)
 }
 
 func (m *Model) SetScroll(behindNewest int) {

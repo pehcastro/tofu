@@ -69,6 +69,9 @@ func (s *appSession) end() []string {
 
 func (s *appSession) startFresh() string { return freshSession(s.Host) }
 
-func (s *appSession) resume(handle string) (string, []tui.Event) { return appResume(s.Host, handle) }
+func (s *appSession) resume(handle string) (string, []tui.Event) {
+	note, opened := appResume(s.Host, handle)
+	return note, opened.Chat
+}
 
 func (s *appSession) compact() string { return compactSession(s.Host) }

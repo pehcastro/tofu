@@ -323,7 +323,7 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 	was := l.items.session
 	l.items.session = carry.Session
 	s.mu.Unlock()
-	chat, err := l.host.Resume(carry)
+	opened, err := l.host.Resume(carry)
 	if err != nil {
 		s.mu.Lock()
 		l.items.session = was
@@ -342,7 +342,7 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 		}
 	}
 	read := newItems(carry.Session)
-	lines := read.all(chat)
+	lines := read.all(opened.Chat)
 	replay := s.replayOf(lines)
 	if live := l.host.seen(); live.Turn != nil {
 		read.translate(*live.Turn, time.Now())
@@ -366,7 +366,7 @@ func (s *server) refocus(l *lane, p SessionOpenParams) (any, error) {
 	}
 	l.asks(p.Asking)
 	read := newItems(carry.Session)
-	lines := read.all(resumedChat(carry, s.Host.dir))
+	lines := read.all(resumedChat(carry, s.Host.dir).Chat)
 	replay := s.replayOf(lines)
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -410,7 +410,7 @@ func (s *server) rebuild(l *lane) {
 	}
 	read, count, live, failed := newItems(carry.Session), 0, int64(0), false
 	var changed []changedLine
-	for _, event := range l.host.Opening(carry) {
+	for _, event := range l.host.Opening(carry).Chat {
 		for _, out := range read.translate(event, event.At) {
 			line, err := frozen(out)
 			switch {

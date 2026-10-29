@@ -816,13 +816,13 @@ func (h *Host) Fresh() error {
 	return h.cron.Load("")
 }
 
-func (h *Host) Resume(carry Carry) ([]Event, error) {
+func (h *Host) Resume(carry Carry) (Opened, error) {
 	h.mu.Lock()
 	h.dropCheckIn()
 	running := h.running
 	h.mu.Unlock()
 	if running {
-		return nil, errTurnRunning
+		return Opened{}, errTurnRunning
 	}
 	h.forget()
 	h.mu.Lock()
@@ -833,7 +833,7 @@ func (h *Host) Resume(carry Carry) ([]Event, error) {
 		h.mu.Lock()
 		h.pick = was
 		h.mu.Unlock()
-		return nil, err
+		return Opened{}, err
 	}
 	h.mu.Lock()
 	h.id, h.pending, h.started = carry.Session, nil, SourceResumed
@@ -842,18 +842,18 @@ func (h *Host) Resume(carry Carry) ([]Event, error) {
 	if f := h.following.Load(); f != nil {
 		f.caughtUp()
 	}
-	chat := h.Opening(carry)
+	opened := h.Opening(carry)
 	if restoreErr != nil {
-		chat = append(chat, Event{Kind: EventNote, Text: restoreErr.Error()})
+		opened.Chat = append(opened.Chat, Event{Kind: EventNote, Text: restoreErr.Error()})
 	}
 	if err := h.loadCron(carry.Session); err != nil {
-		chat = append(chat, Event{Kind: EventNote, Text: err.Error()})
+		opened.Chat = append(opened.Chat, Event{Kind: EventNote, Text: err.Error()})
 	}
 	h.armCron()
-	return chat, nil
+	return opened, nil
 }
 
-func (h *Host) Opening(carry Carry) []Event { return resumedChat(carry, h.dir) }
+func (h *Host) Opening(carry Carry) Opened { return resumedChat(carry, h.dir) }
 
 func (h *Host) Compacted(into string, messages []llm.Message) error {
 	h.mu.Lock()
