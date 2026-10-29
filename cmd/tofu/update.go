@@ -14,7 +14,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -27,6 +26,7 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/interface/tui/frame"
+	"tofu/internal/browser"
 	"tofu/internal/host"
 	"tofu/internal/konst"
 	settingspkg "tofu/internal/settings"
@@ -42,9 +42,7 @@ const (
 	updateRepository     = "pehcastro/tofu"
 	updateLatestPath     = "/repos/" + updateRepository + "/releases/latest"
 	updateChecksums      = "checksums.txt"
-	updateAsideSuffix    = ".old"
 	updateCacheFile      = "update.json"
-	updateExecutableMode = 0o755
 	updateAttemptTimeout = 5 * time.Minute
 	exitUpdateAvailable  = 10
 )
@@ -119,11 +117,24 @@ func updateFrom(current string, release bool, args []string, out, errOut io.Writ
 	if err != nil {
 		return o.fail(err)
 	}
-	if report.Aside, err = replaceBinary(target, binary); err != nil {
+	if report.Aside, err = browser.ReplaceExecutable(target, binary); err != nil {
 		return o.fail(err)
 	}
 	report.Installed = target
-	return o.done(true, report, lines)
+	home, err := os.UserHomeDir()
+	refreshed := false
+	if err == nil {
+		refreshed, err = browser.RefreshIfCopyOf(home, target)
+	}
+	return o.done(true, report, func(page cli.Page) []string {
+		switch {
+		case err != nil:
+			return append(lines(page), page.Glyph(cli.Warn)+" the copy Chrome starts was not refreshed: "+err.Error(), page.Hint("tofu browser install refreshes it"))
+		case refreshed:
+			return append(lines(page), page.Receipt(cli.Changed, "the copy Chrome starts is on this build", page.Path(browser.CopyPath(home))))
+		}
+		return lines(page)
+	})
 }
 
 func updateClient() (*transport.Client, error) {
@@ -252,7 +263,7 @@ func (w *updateWatch) install(ctx context.Context, release latestRelease, versio
 	if err != nil {
 		return err
 	}
-	if _, err := replaceBinary(w.target, binary); err != nil {
+	if _, err := browser.ReplaceExecutable(w.target, binary); err != nil {
 		return err
 	}
 	installed, err := os.Stat(w.target)
@@ -377,36 +388,4 @@ func unpack(archive []byte, archiveSuffix, executable string) ([]byte, error) {
 			return io.ReadAll(entries)
 		}
 	}
-}
-
-func replaceBinary(target string, binary []byte) (string, error) {
-	staged, err := os.CreateTemp(filepath.Dir(target), filepath.Base(target)+".new-*")
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = os.Remove(staged.Name()) }()
-	_, err = staged.Write(binary)
-	if err = errors.Join(err, staged.Close(), os.Chmod(staged.Name(), updateExecutableMode)); err != nil {
-		return "", err
-	}
-	if goruntime.GOOS != "windows" {
-		return "", os.Rename(staged.Name(), target)
-	}
-	setAside, _ := filepath.Glob(target + updateAsideSuffix + "*")
-	for _, old := range setAside {
-		_ = os.Remove(old)
-	}
-	aside := target + updateAsideSuffix + "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
-	if err := os.Rename(target, aside); errors.Is(err, fs.ErrNotExist) {
-		aside = ""
-	} else if err != nil {
-		return "", err
-	}
-	if err := os.Rename(staged.Name(), target); err != nil {
-		if aside != "" {
-			_ = os.Rename(aside, target)
-		}
-		return "", err
-	}
-	return aside, nil
 }

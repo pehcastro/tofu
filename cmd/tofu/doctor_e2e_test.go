@@ -102,7 +102,7 @@ thresholds:
 `
 )
 
-var browserRow = regexp.MustCompile(`^  (⚠ .+? +no native host, so tofu cannot reach its tabs +→ tofu browser install|⚠ .+? +the native host names a tofu that is gone +→ tofu browser install|✓ .+? +native host installed)$`)
+var browserRow = regexp.MustCompile(`^  (⚠ .+? +no native host, so tofu cannot reach its tabs +→ tofu browser install|⚠ .+? +the native host is stale: it runs tofu itself or a copy that is gone +→ tofu browser install|✓ .+? +native host installed)$`)
 
 var envelopeMoment = regexp.MustCompile(`(?m)^  "at": "\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ"`)
 

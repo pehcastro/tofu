@@ -122,6 +122,19 @@ func Install(home, exe, hostsKey string) (id string, browserManifestsWritten []s
 	}
 	id = ExtensionID(der)
 
+	source, err := os.Stat(exe)
+	if err != nil {
+		return "", nil, err
+	}
+	if browserCopy, err := os.Stat(CopyPath(home)); err == nil && os.SameFile(source, browserCopy) {
+		return "", nil, fmt.Errorf("%s is the copy Chrome starts: run tofu browser install from tofu itself", exe)
+	}
+	if err := sys.WriteFile(sourceRecord(home), []byte(exe), 0o644); err != nil {
+		return "", nil, err
+	}
+	if _, err := Refresh(home); err != nil {
+		return "", nil, err
+	}
 	extensionDir, manifestPath := installPaths(home)
 	if err := writeExtension(extensionDir); err != nil {
 		return "", nil, err
@@ -129,7 +142,7 @@ func Install(home, exe, hostsKey string) (id string, browserManifestsWritten []s
 	manifest, err := json.MarshalIndent(hostManifest{
 		Name:           HostName,
 		Description:    "tofu reads and drives the Chrome tabs you share with it",
-		Path:           exe,
+		Path:           CopyPath(home),
 		Type:           "stdio",
 		AllowedOrigins: []string{"chrome-extension://" + id + "/"},
 	}, "", "  ")
@@ -192,18 +205,26 @@ func writeExtension(extensionDir string) error {
 	return nil
 }
 
-func Uninstall(home, hostsKey string) (browserManifestsRemoved []string, err error) {
+func Uninstall(home, hostsKey string) (browserManifestsRemoved []string, heldByChrome string, err error) {
 	extensionDir, manifestPath := installPaths(home)
 	if err := unregister(hostsKey + `\` + HostName); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	browsers := browserManifests(home)
-	for _, path := range append([]string{manifestPath}, browsers...) {
-		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, err
+	for _, path := range append([]string{manifestPath, sourceRecord(home)}, browsers...) {
+		if err := ignoreMissing(os.Remove(path)); err != nil {
+			return nil, "", err
 		}
 	}
-	return browsers, os.RemoveAll(extensionDir)
+	browserCopy := CopyPath(home)
+	sweepAsides(browserCopy)
+	if ignoreMissing(os.Remove(browserCopy)) != nil {
+		heldByChrome = asideOf(browserCopy)
+		if err := os.Rename(browserCopy, heldByChrome); err != nil {
+			return nil, "", err
+		}
+	}
+	return browsers, heldByChrome, os.RemoveAll(extensionDir)
 }
 
 type HostState string
@@ -231,7 +252,7 @@ func Hosts(home, hostsKey string) []NativeHost {
 		switch _, gone := os.Stat(manifest.Path); {
 		case err != nil || manifest.Name != HostName:
 			hosts[i].State = HostMissing
-		case gone != nil:
+		case gone != nil || manifest.Path != CopyPath(home):
 			hosts[i].State = HostStale
 		default:
 			hosts[i].State = HostInstalled

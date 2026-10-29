@@ -69,8 +69,9 @@ Chrome, Chromium, and Brave or Edge when their profile folder is there.
 - `✓ <browser>  native host installed`: the browser can reach tofu.
 - `⚠ <browser>  no native host, ...`: the browser cannot start tofu, so its
   tabs stay out of reach. The `→` names `tofu browser install`.
-- `⚠ <browser>  the native host names a tofu that is gone`: tofu moved or
-  was deleted since the install. Run `tofu browser install` again.
+- `⚠ <browser>  the native host is stale: it runs tofu itself or a copy that is gone`:
+  the install is from before Chrome ran `tofu-browser`, the copy of tofu, or
+  the copy was deleted. Run `tofu browser install` again.
 
 Under `rules`, what tofu decides with:
 

@@ -60,6 +60,9 @@ func scratchHostsKey(t *testing.T) string {
 func TestInstallWritesTheHostManifestAndKeyAndUninstallRemovesBoth(t *testing.T) {
 	home, hosts := t.TempDir(), scratchHostsKey(t)
 	exe := filepath.Join(home, "bin", "tofu.exe")
+	if err := errors.Join(os.MkdirAll(filepath.Dir(exe), 0o755), os.WriteFile(exe, []byte("tofu itself"), 0o755)); err != nil {
+		t.Fatal(err)
+	}
 	for range 2 {
 		if id, browsers, err := Install(home, exe, hosts); err != nil || id != shippedExtensionID || browsers != nil {
 			t.Fatalf("Install returned %q, %q, %v; want %q and no browser folder, since the registry key is the registration", id, browsers, err, shippedExtensionID)
@@ -81,8 +84,12 @@ func TestInstallWritesTheHostManifestAndKeyAndUninstallRemovesBoth(t *testing.T)
 		t.Fatal(err)
 	}
 	origins := []string{"chrome-extension://" + shippedExtensionID + "/"}
-	if manifest.Name != "com.ephem.tofu" || manifest.Path != exe || manifest.Type != "stdio" || !slices.Equal(manifest.AllowedOrigins, origins) {
-		t.Fatalf("host manifest is %s", raw)
+	browserCopy := filepath.Join(home, ".tofu", "bin", "tofu-browser.exe")
+	if manifest.Name != "com.ephem.tofu" || manifest.Path != browserCopy || manifest.Type != "stdio" || !slices.Equal(manifest.AllowedOrigins, origins) {
+		t.Fatalf("host manifest is %s; want it to name the copy %s", raw, browserCopy)
+	}
+	if copied, err := os.ReadFile(browserCopy); err != nil || string(copied) != "tofu itself" {
+		t.Fatalf("the copy Chrome starts holds %q, %v; want the bytes of %s", copied, err, exe)
 	}
 
 	key, err := registry.OpenKey(registry.CURRENT_USER, hosts+`\com.ephem.tofu`, registry.QUERY_VALUE)
@@ -110,18 +117,18 @@ func TestInstallWritesTheHostManifestAndKeyAndUninstallRemovesBoth(t *testing.T)
 		t.Fatalf("the unpacked extension manifest is %s; want the shipped one with version %s and version_name %s", copied, want["version"], want["version_name"])
 	}
 
-	if _, err := Uninstall(home, hosts); err != nil {
-		t.Fatal(err)
+	if _, held, err := Uninstall(home, hosts); err != nil || held != "" {
+		t.Fatalf("Uninstall said %q is held, %v; nothing runs the copy", held, err)
 	}
 	if _, err := registry.OpenKey(registry.CURRENT_USER, hosts+`\com.ephem.tofu`, registry.QUERY_VALUE); !errors.Is(err, registry.ErrNotExist) {
 		t.Fatalf("the key survived Uninstall: %v", err)
 	}
-	for _, path := range []string{manifestPath, filepath.Join(home, ".tofu", "browser", "extension")} {
+	for _, path := range []string{manifestPath, filepath.Join(home, ".tofu", "browser", "extension"), browserCopy, sourceRecord(home)} {
 		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("%s survived Uninstall: %v", path, err)
 		}
 	}
-	if _, err := Uninstall(home, hosts); err != nil {
+	if _, _, err := Uninstall(home, hosts); err != nil {
 		t.Fatalf("a second Uninstall failed: %v", err)
 	}
 }

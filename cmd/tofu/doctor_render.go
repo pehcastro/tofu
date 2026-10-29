@@ -105,7 +105,7 @@ func hostRows(hosts []browser.NativeHost) []cli.Row {
 		case browser.HostInstalled:
 			rows[i] = cli.Row{Mark: cli.Done, Cells: []string{host.Browser, "native host installed"}}
 		case browser.HostStale:
-			rows[i] = cli.Row{Mark: cli.Warn, Cells: []string{host.Browser, "the native host names a tofu that is gone"}, Hint: "tofu browser install"}
+			rows[i] = cli.Row{Mark: cli.Warn, Cells: []string{host.Browser, "the native host is stale: it runs tofu itself or a copy that is gone"}, Hint: "tofu browser install"}
 		case browser.HostMissing:
 			rows[i] = cli.Row{Mark: cli.Warn, Cells: []string{host.Browser, "no native host, so tofu cannot reach its tabs"}, Hint: "tofu browser install"}
 		default:

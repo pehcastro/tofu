@@ -1,15 +1,15 @@
 package browser
 
 import (
+	"encoding/json"
 	"os"
-	"path/filepath"
 	"slices"
 	"testing"
 )
 
 func TestHostsSaysForEachBrowserWhetherItsNativeHostReachesALiveTofu(t *testing.T) {
 	home, hostsKey := t.TempDir(), scratchHostsKey(t)
-	t.Cleanup(func() { _, _ = Uninstall(home, hostsKey) })
+	t.Cleanup(func() { _, _, _ = Uninstall(home, hostsKey) })
 	live, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -27,10 +27,23 @@ func TestHostsSaysForEachBrowserWhetherItsNativeHostReachesALiveTofu(t *testing.
 		t.Fatal(err)
 	}
 	every("installed for a tofu that exists", HostInstalled)
-	if _, _, err := Install(home, filepath.Join(home, "gone", "tofu"), hostsKey); err != nil {
+	if err := os.Remove(CopyPath(home)); err != nil {
 		t.Fatal(err)
 	}
-	every("installed for a tofu that is gone", HostStale)
+	every("the copy Chrome starts is gone", HostStale)
+	if _, _, err := Install(home, live, hostsKey); err != nil {
+		t.Fatal(err)
+	}
+	pointedAtTofu, err := json.Marshal(hostManifest{Name: HostName, Type: "stdio", Path: live})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, host := range Hosts(home, hostsKey) {
+		if err := os.WriteFile(host.Manifest, pointedAtTofu, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	every("an install from before the copy, naming tofu itself", HostStale)
 	for _, host := range Hosts(home, hostsKey) {
 		if err := os.WriteFile(host.Manifest, []byte("not a manifest"), 0o644); err != nil {
 			t.Fatal(err)

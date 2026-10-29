@@ -732,6 +732,99 @@ func TestARelayKeepsRunningWhenTheInstalledTofuIsItsBuildOrCannotSay(t *testing.
 	}
 }
 
+func installCopyFor(t *testing.T, home, source string) {
+	t.Helper()
+	installFor(t, home, testOrigin)
+	_, manifestPath := installPaths(home)
+	raw, err := json.Marshal(hostManifest{Name: HostName, Type: "stdio", Path: CopyPath(home), AllowedOrigins: []string{testOrigin}})
+	if err == nil {
+		err = errors.Join(os.WriteFile(manifestPath, raw, 0o644), os.MkdirAll(filepath.Dir(CopyPath(home)), 0o755))
+	}
+	if err == nil {
+		err = errors.Join(os.WriteFile(CopyPath(home), []byte("0ld"), 0o755), os.WriteFile(sourceRecord(home), []byte(source), 0o644))
+	}
+	if err == nil {
+		err = os.Chtimes(CopyPath(home), time.Now().Add(-time.Hour), time.Now().Add(-time.Hour))
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestANewerClientOnACopyInstallRefreshesTheCopyBeforeTheRelayRestarts(t *testing.T) {
+	home := shortHome(t)
+	installCopyFor(t, home, filepath.Join(home, "tofu.exe"))
+	reinstall(t, home, "n3w")
+	ext, done := startHostWith(t, home, "0ld", buildInExe)
+	helloFrom(ext, "0ld")
+
+	if client, err := Dial(home); !errors.Is(err, ErrRelayRestarting) {
+		if client != nil {
+			_ = client.Close()
+		}
+		t.Fatalf("a newer client dialled a relay running a stale copy and got %v; want ErrRelayRestarting", err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("the stale relay exited with %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the stale relay kept serving after a newer client dialled it")
+	}
+	if copied, err := os.ReadFile(CopyPath(home)); err != nil || string(copied) != "n3w" {
+		t.Fatalf("the copy Chrome starts next holds %q, %v; want the installed tofu n3w, or Chrome restarts the stale build", copied, err)
+	}
+}
+
+func TestARelayReadsWhichTofuIsInstalledWhenItIsAskedNotWhenItStarted(t *testing.T) {
+	home := shortHome(t)
+	installCopyFor(t, home, filepath.Join(home, "tofu.exe"))
+	reinstall(t, home, "0ld")
+	ext, done := startHostWith(t, home, "0ld", buildInExe)
+	helloFrom(ext, "0ld")
+
+	other := filepath.Join(home, "other.exe")
+	if err := errors.Join(os.WriteFile(other, []byte("n3w"), 0o755), os.WriteFile(sourceRecord(home), []byte(other), 0o644)); err != nil {
+		t.Fatal(err)
+	}
+	if client, err := Dial(home); !errors.Is(err, ErrRelayRestarting) {
+		if client != nil {
+			_ = client.Close()
+		}
+		t.Fatalf("after an install from another tofu, a newer client got %v; want ErrRelayRestarting", err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("the stale relay exited with %v", err)
+	}
+	if copied, err := os.ReadFile(CopyPath(home)); err != nil || string(copied) != "n3w" {
+		t.Fatalf("the copy holds %q, %v; want the tofu installed last, n3w", copied, err)
+	}
+}
+
+func TestARelayThatCannotRefreshItsCopyKeepsServingAndNamesTheInstall(t *testing.T) {
+	home := shortHome(t)
+	installCopyFor(t, home, filepath.Join(home, "gone", "tofu.exe"))
+	ext, done := startHostWith(t, home, "0ld", func(string) (string, error) { return "n3w", nil })
+	helloFrom(ext, "0ld")
+
+	client, err := Dial(home)
+	if client != nil {
+		_ = client.Close()
+	}
+	if err == nil || errors.Is(err, ErrRelayRestarting) || !strings.Contains(err.Error(), "tofu browser install") {
+		t.Fatalf("a newer client dialled a relay whose copy cannot be refreshed and got %v; want a refusal naming tofu browser install and no restart", err)
+	}
+	select {
+	case err := <-done:
+		t.Fatalf("the relay drained into the same stale copy and exited with %v", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+	if tabs, err := withoutHello(t, home).Tabs(); err != nil || len(tabs) != 1 {
+		t.Fatalf("after the failed refresh the relay serves %v, %v", tabs, err)
+	}
+}
+
 func staleInstall(t *testing.T, home string) string {
 	t.Helper()
 	extensionDir, _ := installPaths(home)

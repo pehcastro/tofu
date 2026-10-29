@@ -34,6 +34,8 @@ type extension struct {
 	Folder    string   `json:"folder"`
 	ID        string   `json:"id,omitempty"`
 	Host      string   `json:"host,omitempty"`
+	CopyOf    string   `json:"copy_of,omitempty"`
+	Held      string   `json:"held,omitempty"`
 	Manifests []string `json:"manifests,omitempty"`
 	Next      []string `json:"next,omitempty"`
 	Hint      string   `json:"hint"`
@@ -190,12 +192,16 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 		installed.Manifests = manifests
 		return o.show(installed, extensionPage(page, installed))
 	case "uninstall":
-		manifests, err := browser.Uninstall(home, *hostsKey)
+		manifests, held, err := browser.Uninstall(home, *hostsKey)
 		if err != nil {
 			return o.fail(err)
 		}
 		removed := removedExtension(home)
 		removed.Manifests = manifests
+		if held != "" {
+			removed.Held = held
+			removed.Hint = "Chrome still runs the copy, now at " + held + ": the next install deletes it, or delete it once Chrome is closed"
+		}
 		return o.show(removed, extensionPage(page, removed))
 	}
 	_, _ = fmt.Fprintf(errOut, "tofu browser: unknown argument %q: use install, uninstall, tabs, build, recipes, open, read, close, observe, click, fill, select, press, scroll, back, batch, bench, motion, profile, or nothing\n", verb)
@@ -535,13 +541,14 @@ func installedExtension(home, exe, id string) extension {
 		Installed: true,
 		Folder:    browser.ExtensionDir(home),
 		ID:        id,
-		Host:      exe,
+		Host:      browser.CopyPath(home),
+		CopyOf:    exe,
 		Next: []string{
 			"open chrome://extensions and turn on Developer mode",
 			"Load unpacked, pick the folder above, check the id matches",
 			"pin the tofu icon so its badge shows",
 		},
-		Hint: "after a tofu update: tofu browser install, then reload the tofu card",
+		Hint: "tofu update keeps the copy and the extension current: nothing to run",
 	}
 }
 
@@ -555,7 +562,7 @@ func extensionPage(page cli.Page, data extension) []string {
 		verdict = cli.Verdict{Mark: cli.Done, Text: "installed"}
 	}
 	lines := append(page.Title("Chrome extension", nil, verdict), "")
-	facts := []cli.Fact{{Label: "folder", Text: page.Path(data.Folder)}, {Label: "id", Text: data.ID}, {Label: "host", Text: page.Path(data.Host)}}
+	facts := []cli.Fact{{Label: "folder", Text: page.Path(data.Folder)}, {Label: "id", Text: data.ID}, {Label: "host", Text: page.Path(data.Host)}, {Label: "copy of", Text: page.Path(data.CopyOf)}}
 	for _, manifest := range data.Manifests {
 		facts = append(facts, cli.Fact{Label: "manifest", Text: page.Path(manifest)})
 	}

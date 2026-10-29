@@ -56,8 +56,20 @@ The tofu icon, a cat, carries a badge: `on` when connected and idle, `read` whil
 
 A tab tofu acts in or opens joins an orange group titled `tofu`, which reads `tofu •` while tofu acts. Pinned tabs, tabs in your own groups and tabs you drag out are left alone. A tab tofu opened closes when the run ends, or when the sub-agent that opened it finishes, and in the app when you quit. When tofu disconnects the group dissolves and Chrome's debugging bar goes away.
 
+## How it runs
+
+Chrome starts the relay, not tofu. While the extension is connected, which is as long as Chrome is open, Chrome keeps running the native host it started, so it shows in the process list with no tofu session open. That host is `tofu-browser`, a byte copy of the tofu that ran `tofu browser install`, and it runs only the relay: it reads the extension on standard input and serves `~/.tofu/browser/relay.sock`.
+
+It is a copy because Chrome holds the program it started, and on Windows a running program can be renamed but never overwritten or deleted. With Chrome running `tofu.exe` itself, an install that writes over `tofu.exe` fails while Chrome is open; with the copy, `tofu.exe` stays free. Linux and macOS use the same layout.
+
+- Windows: `%USERPROFILE%\.tofu\bin\tofu-browser.exe`
+- macOS and Linux: `~/.tofu/bin/tofu-browser`, mode `0755`
+
+Every `com.ephem.tofu.json` names the copy, and `~/.tofu/browser/tofu-source` records the tofu it was copied from. `tofu browser install` writes it, `tofu update` rewrites it after replacing tofu, and a newer tofu that reaches a relay on an older build makes the relay copy the recorded tofu over itself, answer its calls and exit, so Chrome starts the new copy when the extension reconnects. That first call prints `updating: the relay restarts on this build`. A running copy on Windows is renamed aside to `tofu-browser.exe.old-<n>` and deleted on the next refresh. An install from before the copy names `tofu.exe`; `tofu doctor` calls it stale and `tofu browser install` moves it.
+
 ## Where it lives
 
+- `~/.tofu/bin/tofu-browser`, `tofu-browser.exe` on Windows: the copy of tofu Chrome starts
 - `~/.tofu/browser/extension`: the unpacked extension Chrome loads
 - `~/.tofu/browser/relay.sock`: where a session reaches the extension
 - `~/.tofu/motion/<take id>`: a motion take, its frames, trace and sheets
@@ -70,12 +82,14 @@ Install it once with `tofu browser install`. It writes the extension, registers 
     Chrome extension                        ✓ installed
       folder    ~/.tofu/browser/extension
       id        jednanpboiikklhkkkimnmdmjmgjgphh
+      host      ~/.tofu/bin/tofu-browser
+      copy of   /usr/bin/tofu
       manifest  ~/.config/chromium/NativeMessagingHosts/com.ephem.tofu.json
     next, once in Chrome
       1  open chrome://extensions and turn on Developer mode
       2  Load unpacked, pick the folder above, check the id matches
       3  pin the tofu icon so its badge shows
-      → after a tofu update: tofu browser install, then reload the tofu card
+      → tofu update keeps the copy and the extension current: nothing to run
 
 The settings:
 
@@ -117,4 +131,4 @@ Without `--tab` the first step opens a tab of tofu's own and the tab closes when
 
 ## Undo it
 
-`tofu settings set browser off` takes the tools away from the model. `tofu browser uninstall` removes the host, each `com.ephem.tofu.json` it wrote, and the folder, prints `○ removed`, and ends `→ remove the tofu card in chrome://extensions`.
+`tofu settings set browser off` takes the tools away from the model. `tofu browser uninstall` removes the host, each `com.ephem.tofu.json` it wrote, the copy and the folder, prints `○ removed`, and ends `→ remove the tofu card in chrome://extensions`.

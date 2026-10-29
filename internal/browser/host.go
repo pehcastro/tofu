@@ -60,11 +60,13 @@ type relay struct {
 	shown     status
 	idle      *time.Timer
 
+	home         string
 	extensionDir string
 	builds       Builds
 	restart      chan struct{}
 	draining     bool
-	installed    func() (string, error)
+	manifestTofu string
+	installed    func(exe string) (string, error)
 	cursor       bool
 	replaced     error
 	report       safe.Report
@@ -134,8 +136,8 @@ func host(origin string, stdin io.Reader, stdout io.Writer, home, tofu string, i
 	if err != nil {
 		return err
 	}
-	r := &relay{extension: stdout, tabs: map[int]Tab{}, claims: map[int]*session{}, pending: map[int64]route{}, sessions: map[*session]bool{}, shown: statusIdle, extensionDir: extensionDir, builds: Builds{Tofu: tofu}, restart: make(chan struct{}, 1),
-		installed: func() (string, error) { return installed(installedHost.Path) }, cursor: cursorOn(home), report: func(p safe.Panic) { p.Saved(sys.StateDir(home)) }}
+	r := &relay{extension: stdout, tabs: map[int]Tab{}, claims: map[int]*session{}, pending: map[int64]route{}, sessions: map[*session]bool{}, shown: statusIdle, home: home, extensionDir: extensionDir, builds: Builds{Tofu: tofu}, restart: make(chan struct{}, 1),
+		manifestTofu: installedHost.Path, installed: installed, cursor: cursorOn(home), report: func(p safe.Panic) { p.Saved(sys.StateDir(home)) }}
 	r.idle = time.AfterFunc(idleAfter, func() {
 		_ = safe.Call(r.report, "browser idle", func() error {
 			r.mu.Lock()
@@ -159,7 +161,7 @@ func host(origin string, stdin io.Reader, stdout io.Writer, home, tofu string, i
 	stopWatching := make(chan struct{})
 	defer close(stopWatching)
 	safe.Go(r.report, "browser install watch", func() {
-		safe.Loop(r.report, "browser install watch", stopWatching, func() { r.watchInstall(installedHost.Path, stopWatching) })
+		safe.Loop(r.report, "browser install watch", stopWatching, func() { r.watchInstall(stopWatching) })
 	})
 
 	read := make(chan error, 1)
@@ -181,8 +183,15 @@ func host(origin string, stdin io.Reader, stdout io.Writer, home, tofu string, i
 	return err
 }
 
-func (r *relay) watchInstall(exe string, stop <-chan struct{}) {
-	seen, _ := os.Stat(exe)
+func (r *relay) installedTofu() string {
+	if source, err := os.ReadFile(sourceRecord(r.home)); err == nil {
+		return string(source)
+	}
+	return r.manifestTofu
+}
+
+func (r *relay) watchInstall(stop <-chan struct{}) {
+	seen, _ := os.Stat(r.installedTofu())
 	tick := time.NewTicker(idleAfter)
 	defer tick.Stop()
 	for {
@@ -191,22 +200,33 @@ func (r *relay) watchInstall(exe string, stop <-chan struct{}) {
 			return
 		case <-tick.C:
 		}
+		exe := r.installedTofu()
 		now, err := os.Stat(exe)
 		if err != nil || seen != nil && os.SameFile(seen, now) && now.ModTime().Equal(seen.ModTime()) {
 			continue
 		}
 		seen = now
-		current, err := r.installed()
+		current, err := r.installed(exe)
 		if err != nil || current == r.builds.Tofu {
 			continue
 		}
 		r.mu.Lock()
-		r.replaced = fmt.Errorf("this relay runs build %s and %s is now build %s: the relay stops so Chrome starts the installed tofu, which updates the extension", r.builds.Tofu, exe, current)
-		r.draining = true
-		r.settle()
+		err = r.drainFor(current, fmt.Errorf("this relay runs build %s and %s is now build %s: the relay stops so Chrome starts the refreshed copy, which updates the extension", r.builds.Tofu, exe, current))
 		r.mu.Unlock()
-		return
+		if err == nil {
+			return
+		}
 	}
+}
+
+func (r *relay) drainFor(current string, replaced error) error {
+	if _, err := Refresh(r.home); err != nil {
+		return fmt.Errorf("the installed tofu is build %s and the copy Chrome starts could not take it, so this relay on %s keeps running: %v: run tofu browser install", current, r.builds.Tofu, err)
+	}
+	r.replaced = replaced
+	r.draining = true
+	r.settle()
+	return nil
 }
 
 func (r *relay) readExtension(stdin io.Reader) error {
@@ -376,14 +396,16 @@ func (r *relay) handle(s *session, req request) {
 			s.send(result{ID: req.ID, OK: true})
 			return
 		}
-		current, err := r.installed()
+		current, err := r.installed(r.installedTofu())
 		if err != nil || current == r.builds.Tofu {
 			s.send(result{ID: req.ID, Error: fmt.Sprintf("this tofu is older than the relay: restart it (the relay runs build %s, the installed tofu, and this tofu runs %s)", r.builds.Tofu, hello.Build)})
 			return
 		}
+		if err := r.drainFor(current, nil); err != nil {
+			s.send(result{ID: req.ID, Error: err.Error()})
+			return
+		}
 		s.send(result{ID: req.ID, Error: fmt.Sprintf("%s: this relay runs build %s, the installed tofu is %s, and the tofu that dialled it runs %s", relayRestarting, r.builds.Tofu, current, hello.Build)})
-		r.draining = true
-		r.settle()
 		return
 	}
 	if req.Op == opBuilds {

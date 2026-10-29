@@ -233,6 +233,7 @@ func TestBrowserInstallUninstallAndBenchPagesMatchTheirTextAndJSON(t *testing.T)
 	page := cli.Page{Profile: colorprofile.NoTTY, Width: konst.ProseWidthChars, Home: "/home/ada"}
 	installed := installedExtension(page.Home, "/home/ada/.local/bin/tofu.exe", "jednanpboiikklhkkkimnmdmjmgjgphh")
 	removed := removedExtension(page.Home)
+	copyName := filepath.Base(browser.CopyPath(page.Home))
 	report := benchReport{Chooser: "jev", RowsFile: "/home/ada/.tofu/bench/browser-steps-20260929-120000.jsonl", Summary: steps.Summary{
 		Steps: 12, DidNotRun: 1, Failed: 2, Untimed: 3,
 		Phases: []steps.Phase{{Name: "wall ms", P50: 412.5, P90: 1338.25}, {Name: "jev input tokens", P50: 1800, P90: 2310}},
@@ -249,14 +250,15 @@ func TestBrowserInstallUninstallAndBenchPagesMatchTheirTextAndJSON(t *testing.T)
 			"\n" +
 			"  folder    ~/.tofu/browser/extension\n" +
 			"  id        jednanpboiikklhkkkimnmdmjmgjgphh\n" +
-			"  host      ~/.local/bin/tofu.exe\n" +
+			"  host      ~/.tofu/bin/" + copyName + "\n" +
+			"  copy of   ~/.local/bin/tofu.exe\n" +
 			"\n" +
 			"next, once in Chrome\n" +
 			"  1  open chrome://extensions and turn on Developer mode\n" +
 			"  2  Load unpacked, pick the folder above, check the id matches\n" +
 			"  3  pin the tofu icon so its badge shows\n" +
 			"\n" +
-			"  → after a tofu update: tofu browser install, then reload the tofu card\n", `{
+			"  → tofu update keeps the copy and the extension current: nothing to run\n", `{
   "tofu": "VERSION",
   "verb": "browser install",
   "ok": true,
@@ -265,13 +267,14 @@ func TestBrowserInstallUninstallAndBenchPagesMatchTheirTextAndJSON(t *testing.T)
     "installed": true,
     "folder": "/home/ada/.tofu/browser/extension",
     "id": "jednanpboiikklhkkkimnmdmjmgjgphh",
-    "host": "/home/ada/.local/bin/tofu.exe",
+    "host": "/home/ada/.tofu/bin/` + copyName + `",
+    "copy_of": "/home/ada/.local/bin/tofu.exe",
     "next": [
       "open chrome://extensions and turn on Developer mode",
       "Load unpacked, pick the folder above, check the id matches",
       "pin the tofu icon so its badge shows"
     ],
-    "hint": "after a tofu update: tofu browser install, then reload the tofu card"
+    "hint": "tofu update keeps the copy and the extension current: nothing to run"
   },
   "problems": []
 }

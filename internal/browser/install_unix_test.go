@@ -36,6 +36,9 @@ func TestInstallWritesTheHostManifestForEachBrowserAndUninstallRemovesOnlyIt(t *
 	}
 
 	exe, id := filepath.Join(home, "bin", "tofu"), ""
+	if err := errors.Join(os.MkdirAll(filepath.Dir(exe), 0o755), os.WriteFile(exe, []byte("tofu itself"), 0o644)); err != nil {
+		t.Fatal(err)
+	}
 	for range 2 {
 		var wrote []string
 		if id, wrote, err = Install(home, exe, ChromeHostsKey); err != nil || !slices.Equal(wrote, want) {
@@ -48,8 +51,12 @@ func TestInstallWritesTheHostManifestForEachBrowserAndUninstallRemovesOnlyIt(t *
 	if err == nil {
 		err = json.Unmarshal(shipped, &manifest)
 	}
-	if err != nil || manifest.Path != exe || !slices.Equal(manifest.AllowedOrigins, []string{"chrome-extension://" + id + "/"}) {
-		t.Fatalf("the host manifest is %s, %v; want path %s and the origin of %q", shipped, err, exe, id)
+	browserCopy := filepath.Join(home, ".tofu", "bin", "tofu-browser")
+	if err != nil || manifest.Path != browserCopy || !slices.Equal(manifest.AllowedOrigins, []string{"chrome-extension://" + id + "/"}) {
+		t.Fatalf("the host manifest is %s, %v; want path %s and the origin of %q", shipped, err, browserCopy, id)
+	}
+	if info, err := os.Stat(browserCopy); err != nil || info.Mode().Perm() != 0o755 {
+		t.Fatalf("the copy Chrome starts is %v, %v; want mode 0755 whatever the mode of %s", info, err, exe)
 	}
 	for _, path := range want {
 		if copied, err := os.ReadFile(path); err != nil || string(copied) != string(shipped) {
@@ -61,11 +68,11 @@ func TestInstallWritesTheHostManifestForEachBrowserAndUninstallRemovesOnlyIt(t *
 	}
 
 	for range 2 {
-		if removed, err := Uninstall(home, ChromeHostsKey); err != nil || !slices.Equal(removed, want) {
+		if removed, _, err := Uninstall(home, ChromeHostsKey); err != nil || !slices.Equal(removed, want) {
 			t.Fatalf("Uninstall returned %q, %v; want %q", removed, err, want)
 		}
 	}
-	for _, path := range append(want, manifestPath) {
+	for _, path := range append(want, manifestPath, browserCopy, sourceRecord(home)) {
 		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("%s survived Uninstall: %v", path, err)
 		}

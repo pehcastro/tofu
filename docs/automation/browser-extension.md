@@ -2,12 +2,13 @@
 title: Browser extension
 description: A Chrome extension and a native host that let tofu read and drive your own browser, with your logins.
 order: 1
-updated: 2026-10-05
+updated: 2026-10-29
 ---
 
 A small Chrome extension, shipped inside the tofu binary, and a relay. When
-Chrome starts the extension, it starts tofu as a native messaging host,
-`com.ephem.tofu`, which listens on `~/.tofu/browser/relay.sock`. A tofu
+Chrome starts the extension, it starts `tofu-browser`, a copy of tofu, as a
+native messaging host, `com.ephem.tofu`, which listens on
+`~/.tofu/browser/relay.sock`. A tofu
 session reaches your browser through that socket, and the browser tools are
 its only users. Nothing goes through a server.
 
@@ -70,6 +71,44 @@ browser off, press **ctrl+k**, type `browser`, and set **Browser** to `off`.
 
 ![Search with browser typed: the Browser, driver, steps, model, effort and cursor settings](./media/tui-search.png)
 
+## How it runs
+
+Chrome starts the relay, not tofu. Chrome runs a native messaging host for as
+long as the extension is connected, which is as long as Chrome is open, so
+the program it starts shows in your process list even when no tofu session
+is open. That program is `tofu-browser`, a byte copy of the tofu that ran
+`tofu browser install`. It runs only the relay: it reads the extension's
+messages on standard input and serves `relay.sock`.
+
+It is a copy because Chrome holds the program it started. On Windows a
+running program can be renamed but never overwritten or deleted, so with
+Chrome running `tofu.exe` itself, any install that writes over `tofu.exe`
+fails while Chrome is open. With the copy, Chrome holds `tofu-browser.exe`
+and `tofu.exe` stays free to replace. Linux and macOS work the same way, so
+every system has one layout.
+
+| System | The copy Chrome starts |
+| --- | --- |
+| Windows | `%USERPROFILE%\.tofu\bin\tofu-browser.exe` |
+| macOS | `~/.tofu/bin/tofu-browser`, mode `0755` |
+| Linux | `~/.tofu/bin/tofu-browser`, mode `0755` |
+
+Every `com.ephem.tofu.json` names the copy, and
+`~/.tofu/browser/tofu-source` records which tofu it was copied from. It
+stays current three ways:
+
+- `tofu browser install` writes it again.
+- `tofu update` rewrites it after replacing tofu, and prints a line saying so.
+- A newer tofu that reaches a relay on an older build makes the relay copy
+  the recorded tofu over itself, answer the calls it has out, and exit. The
+  extension reconnects and Chrome starts the new copy. The first call says
+  `updating: the relay restarts on this build` and then goes through.
+
+A running copy is replaced by renaming it aside to `tofu-browser.exe.old-<n>`
+on Windows, deleted on the next refresh, and by a rename over it on Linux
+and macOS. An install from before the copy names `tofu.exe` itself;
+`tofu doctor` calls it stale and `tofu browser install` moves it to the copy.
+
 ## Commands
 
 `tofu browser` lists the tabs tofu reaches and the builds on each side:
@@ -82,4 +121,5 @@ Chrome tabs                                          ✓ updated from 6bd3adb862
 The verdict is `connected` when nothing changed. A row per tab follows, `●`
 on tofu's and `○` on yours, and `--json` prints them in `data.tabs`.
 `tofu browser uninstall` removes the host, every `com.ephem.tofu.json` it
-wrote, and the folder.
+wrote, the copy, and the folder. When Chrome still runs the copy on Windows
+it is renamed aside and the output names it.
