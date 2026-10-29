@@ -2,14 +2,17 @@
 title: The ledger
 description: Every classifier verdict is an appended row you can explain, correct, and replay against new thresholds without a model call.
 order: 7
-updated: 2026-10-04
+updated: 2026-10-28
 ---
 
 The ledger is the record of every classifier decision, one folder per
 project at `~/.tofu/projects/<project>/log/`. Each row holds the decision
 point, the state that was judged, each answer, the verdict, the threshold
-that decided it, the mode (shadow or enforced), the classifier build, the
-latency and the cost. Rows go to one file per day, and only ever get
+that decided it, the mode (shadow or enforced), the classifier's provider,
+the build its answer reported, the latency and the cost. The `decision`
+event `tofu serve` sends for a gate verdict carries the same three as
+`provider`, `model` and `durationMs`, so the app names who judged a call and
+how long it took. Rows go to one file per day, and only ever get
 appended.
 
 `tofu run` has nobody to answer an ask, so under its default

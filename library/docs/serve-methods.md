@@ -36,7 +36,7 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
 - `session.set`: takes `asking`, `wire`, `model` and `effort`, held for later turns and cron fires; `session.settings` tells every client
 - `session.rename`: takes `session` and `name`, and names the whole family
 - `session.compact`: answers `results`, `tokensBefore`, `tokensAfter`, `into`, and errs on a session opened beside the first. `session.history`: takes `session`, `limit` and `before`; answers `lines`, each
-  `{method, params}` as `session.open` sends it, from `first` of `total`
+  `{method, params}` as `session.open` sends it, from `first` of `total`, across every earlier generation of the family back to the first message
 - `session.info` and `session.trace` answer what `tofu session info` and `trace` print, `session.info` with `carried_from` `{session, handle, messages}` when it began with messages carried over. `session.find` takes
   `session` and any of `tool`, `command`, `file`, `text`, `agent`, `since`, `until`, and `failed` true for failed and refused calls only; answers `handle`, `query`, `hits`
 - `session.turns` takes `session`, one generation; answers `snapshots`, how many turns undo holds, `next`, the older generation to ask for next, and `turns`, each

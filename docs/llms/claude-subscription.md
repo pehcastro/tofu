@@ -2,7 +2,7 @@
 title: Claude subscription
 description: The claude-sub source, how tofu signs in to your Claude plan, and how its prompt is cached.
 order: 2
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 `claude-sub` is the source for Claude models on your Claude plan. tofu signs
@@ -36,6 +36,9 @@ neighbour.
   tofu keeps the last 20 attempts for each account, with the time, the
   status and the answer, and never the token. `tofu login --status --json`
   lists them under `attempts`, and `tofu logout` clears them.
+- Run several windows at once: one tofu process on the machine keeps the
+  signed-in accounts fresh for every tofu running, and the others wait to
+  take over when it closes, so two windows never refresh one token twice.
 - Sign one out: `tofu logout llm claude-sub`. With two accounts signed in,
   tofu names both and asks for the number: `tofu logout llm claude-sub <n>`.
 - Pick a Claude model: **Ctrl+L**, provider `claude-sub`. `/status` shows

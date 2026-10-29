@@ -2,7 +2,7 @@
 title: Boardy managers and hooks
 description: Who may change a ticket on a boardy board, how other sessions ask through triage, and board hooks that check, nudge or act before and after any board event.
 order: 19
-updated: 2026-10-24
+updated: 2026-10-28
 ---
 
 A boardy board has managers. A manager creates, assigns, accepts and closes
@@ -87,7 +87,9 @@ own `to`. A command check runs during a test.
 
 A schedule hook runs over every ticket when it is due. `tofu boardy tick`
 runs the due ones once, and `tofu serve`, so the desk app too, ticks every
-minute while it is open. `boards/<KEY>/hooks-ticked.json` keeps the last
+minute while it is open. One host per project ticks, however many windows
+are open, so an `every` hook runs once in each slot, and a hook that fails
+is told once, not on every tick. `boards/<KEY>/hooks-ticked.json` keeps the last
 run of each. `tofu boardy fire agent.spawn|agent.report|lead.attach
 [ticket]` fires the three events no board command makes, and
 `tofu boardy set <ticket> --epic E --sprint S` plans a ticket.

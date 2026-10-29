@@ -2,7 +2,7 @@
 title: Serving tofu to another program
 description: tofu serve --stdio runs one project for the desk app or a script of your own, over JSON-RPC on standard input and output, with every board, approval, question and status record the app has.
 order: 2
-updated: 2026-10-24
+updated: 2026-10-28
 ---
 
 `tofu serve --stdio` runs one project for another program: the desk app, an editor, or a script of
@@ -49,7 +49,9 @@ client sets the host's asking and model for every client: the terminal's footer
 shows a pick another client made and keeps it, and offers its own default only
 to a host with none. `/loop` and `/cron` made in any client run in the host,
 and the trace row says which process fired them. When the lead forks,
-`session.forked` names the new session in `to`, and every client moves to it.
+`session.forked` names the new session in `to`, and every client moves to it. A resumed session
+replays its chat across every earlier generation, and `session.history` pages back to the first
+message.
 
 **It answers fast and idles light.** `session.list` answers about 4x and `session.trace` about 2x
 faster than before, and the `boardy.*` calls 1.7 to 2x faster on a board of 1,500 tickets, with the
@@ -83,7 +85,9 @@ started it.
 
 - `status`, one per program status record: the lead, each sub-agent, each kept shell and each cron
   job, each under its `session`. See [Program status](/docs/features/status).
-- `boardy.changed`, `{board, paths}`, within two seconds of a write to a board's files, by tofu or by hand.
+- `boardy.changed`, `{board, paths, by}`, within two seconds of a write to a board's files, by tofu or by
+  hand. A `tofu boardy` write that runs while the host is up says who made it in `by`: `person`, the
+  `--as` name, or the sub-agent's session.
 - `scratch.changed`, the `scratch.list` answer again, after a `scratch.clean` that removed folders.
 - `shell.started` only for a shell tofu keeps, never a one-shot command, and `shell.exited` for
   every one of them. `shell.ready` carries a dev server's port once tofu reads
@@ -94,6 +98,10 @@ started it.
   `offset`, only while a person holds it. A client that sees a gap in the offsets calls
   `shell.takeover` again for a fresh replay. `shell.started` and `session.state` say `terminal`,
   `holder` and `heldSince`.
+- `agent.updated` when a sub-agent's state, task, steps, report or review moves change. `moves` lists
+  each move with its round and reason, `spawned`, `reviewed`, `reopened` or `accepted`, and the
+  terminal's sub-agent card draws them on a `review` line. A sub-agent's steps send their own
+  `context.updated`, with `agent` set, so its context never stands in for the lead's.
 - `agent.ended` when a sub-agent ends, with its `state` and the text `report`. On a ticket the
   verdict and each acceptance line ride on the ticket's `reported` entry, read with
   `boardy.get`. A resumed session replays it. `tofu serve --schema` has the full type.
@@ -117,12 +125,21 @@ started it.
 - `account.state` when an account becomes rate limited or spent, and when it serves again.
 - `settings.changed` when a setting changes, through `settings.set`, through `tofu settings set` in
   another window, or by hand in the file, with the new value, the file that changed and where the
-  value now comes from.
+  value now comes from. A `tofu settings set` that runs while the host is up also says who made it
+  in `by`, as `boardy.changed` does.
 - `models.changed` when a role is rebound, a sub-agent's model is set or removed, or a model file changes,
   through `tofu models bind`, `tofu agents set`, the app's Settings or by hand: what changed, its name, the
   model it runs now, the scope and the file. The next turn and the next spawn run the new model in every
   window, and a cron that fires with no window open runs it too.
 - `memory.scoped` when a remember card is answered: the rule, the scope offered and picked, and by whom.
+- `memory.changed`, `{scope, file}`, within a second of a memory entry being added, changed or
+  removed, by tofu, another window or by hand.
+- `session.updated` when a session is renamed, by `session.rename` or by `tofu session rename` in
+  another window, so every member shows the new name.
+- `cron.updated` when a cron job fires and again when its result is in. Each job carries
+  `lastFired`, `fires`, `lastResult`, `expires` and `until` beside its schedule and next fire.
+- `decision` for every gate verdict, naming the classifier that gave it: `provider`, `model`, the
+  build its answer reported, and `durationMs`. The ledger row holds the same three.
 - `approval.resolved` and `question.resolved`, naming the answer and who sent it; an `allow_always`
   or `reject_always` says `standing`. A standing answer is kept beside its session and read back
   after a restart or `tofu --continue`, never in another session.

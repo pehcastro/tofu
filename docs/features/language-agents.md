@@ -2,7 +2,7 @@
 title: Language agents and the gate
 description: tofu brings a sub-agent per language, and a gate that sends it back until its project's own checks ran after its last edit and passed.
 order: 3
-updated: 2026-10-05
+updated: 2026-10-28
 ---
 
 A language agent is a built-in sub-agent for one language: `go-dev`,
@@ -23,6 +23,14 @@ When a language agent reports done, tofu walks its recorded calls. For each
 gate check it looks for a run after the last edit in that language. A check
 that didn't run, or exited non-zero, sends the agent back with what is
 missing, up to 3 times; after that its claim stands with a warning.
+
+A crate with nothing to test is not held to `cargo test`. When the crate
+`rust-dev` last edited has no `#[test]` and no `tests` folder, the gate
+skips that check and says why, naming the crate's `Cargo.toml`:
+
+```text
+cargo test is not needed: the crate of crates/parse/Cargo.toml has no #[test] and no tests directory, so there is nothing to run
+```
 
 A check counts however it was run: through `bash`, through the `typecheck`
 or `test` tool, through `rtk`, or through the project's own `typecheck` or

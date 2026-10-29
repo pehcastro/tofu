@@ -2,7 +2,7 @@
 title: Sessions
 description: Every session is recorded as it runs, outside your project, and one command reopens it where you left off.
 order: 6
-updated: 2026-10-24
+updated: 2026-10-28
 ---
 
 A session is one conversation with tofu: every message, tool call and
@@ -55,7 +55,9 @@ with 84 sub-agents. Each message keeps its own time, each sub-agent report
 draws as a report, and a conversation over the context target forks
 before its first request instead of resending the whole history. A resumed
 session and a resumed sub-agent keep their pictures, their model and the
-sub-agent's thinking, and a fork keeps the model you chose.
+sub-agent's thinking, and a fork keeps the model you chose. A resumed
+session draws its chat across every earlier generation, so scrolling up
+reaches the first message, in the app and over `tofu serve`.
 
 **A long session stays light.** The chat holds a window of the newest rows
 and reads older ones from the session as you scroll, so a session of

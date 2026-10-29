@@ -11,7 +11,7 @@ A sub-agent is a helper the model can hand one piece of a task to, like a
 planner or a reviewer. Each one has a name, a description the model reads
 to decide when to use it, the model it runs on, and the tools it may use.
 tofu ships a few, and you can add your own. `rust-dev` also builds gpui-ce
-interfaces, with the `gpui_` rules when a Cargo.toml depends on gpui-ce.
+interfaces, with the `gpui_` rules when a Cargo.toml depends on gpui-ce. A language sub-agent, `go-dev`, `py-dev`, `rust-dev` or `ts-dev`, is sent back until its gate checks ran after its last edit and passed; a crate with no `#[test]` and no `tests` folder is exempt from `cargo test`, and the gate says so, naming the crate's `Cargo.toml`.
 
 When the model hands one a piece of work, it names the paths that
 sub-agent may change. A sub-agent given no paths still starts: it reads,

@@ -97,7 +97,7 @@ command and the ledger row:
 explains the last verdict: each answer, the threshold it crossed, and
 the mode it ran under. `tofu why --last 5` shows five, `--point tool_gate`
 keeps to one decision point, and `tofu why <id>` explains one row.
-`tofu doctor` says where the key came from, and whether the gate is ready.
+`tofu doctor` says where the key came from, and whether the gate is ready. Every verdict's ledger row, and the `decision` event `tofu serve` sends, names the classifier's `provider`, the build its answer reported and the time it took. A call the gate refused or asked about is appended as a block case to `~/.tofu/projects/<project>/gate/cases.jsonl`: the tool, its input, the folder, your task and the outcome, the reason it was refused or who allowed it, labelled `block` in the shape of the gate's corpus.
 
     tofu replay --point tool_gate --set risk_ask_at=1.5 --since 7d
 

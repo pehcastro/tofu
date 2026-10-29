@@ -2,7 +2,7 @@
 title: Boardy
 description: Your own Jira or Linear, kept as markdown files on your disk, with numbered tickets and sub-tickets, statuses, a thread of what happened on each, and a lint that catches two tickets claiming one file.
 order: 18
-updated: 2026-10-24
+updated: 2026-10-28
 ---
 
 Boardy is a ticket board that lives in files. Each project can hold several
@@ -28,6 +28,14 @@ A ticket holds its owns only while it is doing; review, todo and done
 tickets keep theirs as a record. An owns entry may be an absolute path in
 another repository, such as `F:/work/other-repo/**`.
 
+**A move to doing checks the callers.** When a ticket's title, scope or
+acceptance names an exported Go or Rust item declared in a file it owns,
+`tofu boardy move <id> doing` reads the project's other Go and Rust files
+for a use of it. A use outside the owns refuses the move and names each
+file and line, with the command that adds them to the owns. To move it
+anyway, give a reason starting `not-owned-on-purpose`, and the files go on
+the ticket's record.
+
 **Your words.** Set `boardFlow` to `jira` (ticket, board, epic, sprint,
 points) or `linear` (issue, team, project, cycle, estimate). The files are
 the same either way.
@@ -50,6 +58,14 @@ tofu boardy move DEMO-1 doing
 tofu boardy move DEMO-1 review
 tofu boardy log DEMO-1 parsed every key, the test passes
 tofu boardy show DEMO-1
+```
+
+Add an acceptance line to a ticket that has none, or one more to a ticket
+that does. `--reason` is required, and the change and its reason go on the
+ticket's Log:
+
+```
+tofu boardy set DEMO-2 --acceptance "the list shows every row" --reason "the bug had no acceptance"
 ```
 
 See the board and check it:

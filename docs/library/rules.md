@@ -2,7 +2,7 @@
 title: How a rule fires
 description: A rule is one instruction with triggers, and it reaches a prompt only when the task matches them.
 order: 2
-updated: 2026-10-24
+updated: 2026-10-28
 ---
 
 A rule is one YAML file, `<id>@1.yaml`, holding one instruction the model
@@ -66,6 +66,36 @@ sub-agent's prompt by about 8,000 bytes.
 A `human` rule is text only. A `structural` or `decision` rule names a
 checker that `tofu rules check` runs over files: in `shadow` mode a finding
 warns, in `enforced` it blocks, and `off` drops the rule.
+
+## A rule that refuses the write that breaks it
+
+A structural rule with `checker: pattern` is a regular expression tofu runs
+on every `write` and `edit` in a turn, before the file changes. An
+`enforced` one refuses the whole call when the write adds a match, naming
+the rule, the file and the line, so nothing is written and the agent fixes
+it in the same turn. A `shadow` one writes, and the tool result records the
+finding. A match the file already held before the write is not the
+write's, so it never refuses.
+
+```yaml
+id: raw_colour
+domain: dev
+kind: structural
+concern: code_rules
+checker: pattern
+mode: enforced
+scope: "src/ui/**"
+except_paths: "src/ui/theme/**"
+pattern: "\b(rgba?|hsla)\("
+text: a colour comes from the theme
+```
+
+`scope` and `paths` say which files it reads, and `except_paths` which it
+skips; both take comma-separated globs. `tofu rules check src` runs the
+same pattern over every file git lists under `src`, and the session trace
+records each finding on the call it fired on. A pattern that doesn't
+compile, or one under a checker other than `pattern`, is refused when the
+rule loads.
 
 ## Why rules fire only where they apply
 

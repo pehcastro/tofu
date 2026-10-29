@@ -13,7 +13,7 @@ A conversation keeps one name for its whole life, such as `tidy-moss-vole#12cp3.
 
 Every message in the chat shows the id it was recorded under, such as `[message#9c2d40]`. Type that
 reference in a message and the lead quotes it, across forks and `--continue`. A fork carries every
-message you typed, word for word, and keeps the model you chose. A resumed session or sub-agent keeps its pictures and its model, and a long chat holds a window of its newest rows and reads the rest as you scroll.
+message you typed, word for word, and keeps the model you chose. A resumed session or sub-agent keeps its pictures and its model. A resumed session draws its chat across every earlier generation, so scrolling up reaches the first message, in the app and over `tofu serve`, and a long chat holds a window of its newest rows and reads the rest as you scroll.
 
 Every session runs in the project's `tofu host`, one process per project. The terminal, the desk and `tofu serve` each join it as a member, so closing one window leaves the others working, and a prompt, Esc, a steer or an approval from any member runs in the host. The first window starts it, and it exits 5 s after its last member leaves; the last member leaving stops the session's turn and ends its shells. A member silent for 10 s is let go. A newer tofu joining an older host says so and runs on the older build until the last member leaves.
 

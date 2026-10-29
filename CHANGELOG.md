@@ -10,6 +10,37 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.20 - 2026-10-28
+
+Every window on a session sees the same live session: who changed what, every sub-agent's own steps and review, and the whole chat back to its first generation.
+
+### Added
+
+- Over `tofu serve`: a sub-agent's review moves (`spawned`, `reviewed`, `accepted`, `reopened`) reach every member on `agent.updated` as `moves`, and its card in the app shows them; a sub-agent's steps carry its own context item; `memory.changed` tells every member when a memory is added, changed or removed; a session renamed with `tofu session rename` reaches every member on `session.updated`; a cron job carries its last fire, fire count and expiry, and a member hears each fire and its result.
+- `tofu settings set` and a `tofu boardy` change run while a host is up carry `by` to every member: `person`, the `--as` name, or the sub-agent's session.
+- A classifier decision names its provider, model build and time taken: the `decision` event carries `provider`, `model` and `durationMs`, and the ledger row holds the same.
+- `tofu boardy set --acceptance ... --reason` adds an Acceptance section with the reason logged, and `tofu boardy move <id> doing` refuses a ticket whose `owns` misses a caller of what it changes, naming the file.
+- A structural rule in `.tofu/rules` refuses a write or an edit that breaks it, in the turn that makes it.
+- A call the gate refuses or asks about is recorded as a block case in the project's `gate/cases.jsonl`.
+- A cargo crate with no tests is exempt from the test gate, and the gate says why.
+
+### Changed
+
+- A resumed session draws its chat across every earlier generation, so scrolling up reaches the first message, in the app and over `tofu serve`.
+- One file lock serves every holder on the machine, and one process keeps the accounts fresh for every tofu running, so two windows no longer refresh one token twice.
+- The board's `every` hooks run once per slot in one host per project, and a failing hook is told once.
+
+### Fixed
+
+- A steer sent through a followed host keeps the turn id it was sent for.
+- A continuation fork no longer sends the turn's task again.
+- A member that stops a turn marks it cancelled for every member, and a member joining mid-turn gets the turn's real start and joins a session the lead forked into.
+- Two processes that open memory at once run its migration once.
+- A replayed message, spawn and spawn time keep their own generation, id and time.
+- `tofu drive` with the done review arm reaches the host it joins.
+- The working row names the request it can resolve.
+- One unreadable board no longer hides the others from the guard.
+
 ## 0.5.19 - 2026-10-27
 
 A clean chat again: one live row for the lead's work, one row per sub-agent status, and replies that are never cut in two.

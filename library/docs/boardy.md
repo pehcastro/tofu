@@ -51,10 +51,9 @@ there, not as a file outside the project.
     tofu boardy move DEMO-1 blocked --reason "waits on DEMO-2"
     tofu boardy log DEMO-1 parsed every key, the test passes
     tofu settings set boardFlow linear
+    tofu boardy set DEMO-2 --acceptance "the list shows every row" --reason "the bug had no acceptance"
 
-With more than one board, `new` and `list` take `--board KEY`. Every
-subcommand takes `--json`. Sub-tickets, `new --parent DEMO-1`, are in
-`tofu docs boardy-views`.
+`set --acceptance` adds an `## Acceptance` section to a ticket with none, or a line to the one it has; `--reason` is required and is logged with the change. With more than one board, `new` and `list` take `--board KEY`. Every subcommand takes `--json`. Sub-tickets, `new --parent DEMO-1`, are in `tofu docs boardy-views`.
 
 ## Agents on the board
 
@@ -107,7 +106,7 @@ Every other ticket keeps its owns as a record, so two review tickets may
 own the same paths. `holds = ["doing", "review"]` in `board.toml` makes
 more statuses hold. An owns entry may be an absolute path outside the
 project, such as `F:/work/other-repo/**` or `/home/me/other-repo/**`; it
-is checked the same way, case-folded on Windows and macOS.
+is checked the same way, case-folded on Windows and macOS. A move to doing reads the callers: when the ticket's title, scope or acceptance names an exported Go or Rust item declared in a file it owns, a use of that item in a file outside the owns refuses the move, naming each file and line and the `tofu boardy set --owns` that adds them. A reason starting `not-owned-on-purpose` moves it anyway and records the files.
 
 A ticket waiting on the person's call is `needs-decision`; `tofu boardy
 ask` and `tofu boardy catchup` are in `tofu docs boardy-rules`.

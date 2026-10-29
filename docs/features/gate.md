@@ -2,7 +2,7 @@
 title: The gate
 description: Jev judges every tool call before it runs, and a call that waits for you waits a few minutes at most, then is decided so the turn and its cron jobs go on.
 order: 21
-updated: 2026-10-16
+updated: 2026-10-28
 ---
 
 Before a tool call runs, such as a shell command or a file write, Jev, a
@@ -46,6 +46,14 @@ its prompt reaches the turn at the next step:
 ```
 
 A turn a cron job started asks nobody, and refuses every call that would ask.
+
+## Every refusal becomes a case
+
+**A call the gate refused or asked about is kept as a block case.** tofu
+appends it to `~/.tofu/projects/<project>/gate/cases.jsonl`, one JSON line
+with the tool, its input, the folder, your task and what happened: the
+reason it was refused, or who allowed it when it ran. Each line is labelled
+`block`, in the same shape as the gate's own corpus.
 
 ## How to
 

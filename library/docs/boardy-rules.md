@@ -68,7 +68,7 @@ value removes one. A manager adds, edits and removes.
 
 `hand DEMO-3 OPS` creates the next OPS ticket with DEMO-3's Log and drops
 DEMO-3 as `handed to OPS-1`. `tick` runs the due schedule hooks once;
-`tofu serve`, and so the desk app, ticks every minute while it is open.
+`tofu serve`, and so the desk app, ticks every minute while it is open. One host per project ticks however many windows are open, so an `every` hook runs once per slot, and a failing hook is told once.
 `fire` fires the events no board command makes. `triage show T1` prints
 who asked, when, the spec and owns, then the requested ticket's sections.
 

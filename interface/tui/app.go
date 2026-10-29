@@ -767,8 +767,9 @@ func (a *App) beat() {
 	a.pulsing = false
 	a.pulse++
 	if a.text(isettings.Animations) != animationsOff {
-		a.feed.SetFrame(a.pulse)
-		a.view.SetFrame(a.pulse)
+		frame := int(time.Duration(a.options.Now().UnixNano()) / pulseInterval)
+		a.feed.SetFrame(frame)
+		a.view.SetFrame(frame)
 	}
 	if a.status.Note != "" && a.pulse-a.noticeAt > noticePulses {
 		a.status.Note = ""
