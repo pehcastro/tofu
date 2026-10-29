@@ -143,8 +143,8 @@ func (e *Earlier) unheldIn(at int) []llm.Message {
 	if at <= e.bottom {
 		return e.child
 	}
-	said, _, _ := e.store.Said(e.lineage[at-1].Header.ID, e.events(at-1))
-	parent, _ := turn.ConversationFrom(said)
+	said, _, _ := e.store.ReadSaid(e.lineage[at-1].Header.ID, e.events(at-1))
+	parent, _ := turn.ConversationOf(said)
 	fresh := unheld(parent, e.child)
 	e.child = parent
 	return fresh

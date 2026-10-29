@@ -159,7 +159,8 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		}
 	}
 	live, release := spawn()
-	err = host.Serve(host.ServeConfig{Host: live, Release: release, Spawn: spawn, Dir: dir, In: in, Out: out, Shells: launch.registry, Carry: serveCarry, Verb: serveVerbs(errOut), Quota: polled, Accounts: accounts,
+	recent := &sessionstore.Recent{}
+	err = host.Serve(host.ServeConfig{Host: live, Release: release, Spawn: spawn, Dir: dir, In: in, Out: out, Shells: launch.registry, Carry: serveCarry(recent), Verb: serveVerbs(errOut, recent), Quota: polled, Accounts: accounts,
 		Sessions: serveSessions, Branch: serveBranch, Access: serveAccess, Wires: wires, Sources: wireSources(), Ledger: serveLedger, Compact: compactCarried,
 		Run: func(ctx context.Context, command string) (string, bool) {
 			return shellCommand(ctx, dir, launch.registry, command)
@@ -177,13 +178,16 @@ func serveFail(errOut io.Writer, err error) int {
 	return exitVerdict
 }
 
-func serveCarry(handle string) (host.Carry, error) {
-	store, err := sessionstore.Open()
-	if err != nil {
-		return host.Carry{}, err
+func serveCarry(recent *sessionstore.Recent) func(string) (host.Carry, error) {
+	return func(handle string) (host.Carry, error) {
+		store, err := sessionstore.Open()
+		if err != nil {
+			return host.Carry{}, err
+		}
+		store.Recalls(recent)
+		carry, err := resumeOf(store, handle)
+		return carry.hosted(), err
 	}
-	carry, err := resumeOf(store, handle)
-	return carry.hosted(), err
 }
 
 func serveSessions(open string, wanted host.SessionListParams) (host.SessionList, error) {
@@ -371,10 +375,15 @@ func signedInWires() []string {
 	return names
 }
 
-func serveVerbs(errOut io.Writer) func([]string) (host.VerbResult, error) {
+func serveVerbs(errOut io.Writer, recent *sessionstore.Recent) func([]string) (host.VerbResult, error) {
 	return func(args []string) (host.VerbResult, error) {
 		var out bytes.Buffer
-		run(append(slices.Clone(args), jsonFlag), strings.NewReader(""), &out, errOut)
+		asked := append(slices.Clone(args), jsonFlag)
+		if asked[0] == "session" {
+			sessionVerbRecalling(recent, asked[1:], strings.NewReader(""), &out, errOut)
+		} else {
+			run(asked, strings.NewReader(""), &out, errOut)
+		}
 		var result host.VerbResult
 		if err := json.Unmarshal(out.Bytes(), &result); err != nil {
 			return result, fmt.Errorf("tofu %s printed no report: %w", strings.Join(args, " "), err)

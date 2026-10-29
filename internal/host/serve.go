@@ -104,7 +104,9 @@ func (w *historyWalk) built(id string) ([]outgoing, bool) {
 func (w *historyWalk) keep(carry Carry, files string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	carry.Store = nil
+	if carry.Store != nil {
+		carry.Store = carry.Store.ReadOnce()
+	}
 	w.kept, w.keptFiles = carry, files
 }
 

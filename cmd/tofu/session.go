@@ -100,6 +100,10 @@ func sessionOperands(subcommand string) (string, int, bool) {
 }
 
 func sessionVerb(args []string, in io.Reader, out, errOut io.Writer) int {
+	return sessionVerbRecalling(nil, args, in, out, errOut)
+}
+
+func sessionVerbRecalling(recent *session.Recent, args []string, in io.Reader, out, errOut io.Writer) int {
 	all := len(args) > 0 && args[0] == "list" && slices.Contains(args, "--all")
 	args = slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return all && arg == "--all" })
 	handles, _, err := verbArgs(args[min(1, len(args)):])
@@ -165,6 +169,7 @@ func sessionVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return o.fail(err)
 	}
+	store.Recalls(recent)
 	lifetime := sessionLifetime(".", o.errOut)
 	switch args[0] {
 	case "list":
@@ -288,11 +293,11 @@ func resumeOf(store *session.Store, id string) (sessionResume, error) {
 	if err != nil {
 		return sessionResume{}, err
 	}
-	said, steps, err := store.Said(row.ID, recorded)
+	said, steps, err := store.ReadSaid(row.ID, recorded)
 	if err != nil {
 		return sessionResume{}, err
 	}
-	messages, err := turn.ConversationFrom(said)
+	messages, err := turn.ConversationOf(said)
 	if err != nil {
 		return sessionResume{}, err
 	}
@@ -439,7 +444,11 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, error) {
 	if err != nil {
 		return sessionRow{}, err
 	}
-	messages, err := turn.ConversationFrom(events)
+	reading, err := session.ReadEvents(events)
+	if err != nil {
+		return sessionRow{}, err
+	}
+	messages, err := turn.ConversationOf(reading)
 	if err != nil {
 		return sessionRow{}, err
 	}
@@ -456,7 +465,7 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, error) {
 		if into, err := store.Header(row.ForkedInto); err == nil {
 			row.ForkIntoKind = into.ForkKind
 		}
-		steps, err := contextSteps(events)
+		steps, err := stepRowsOf(reading)
 		if err != nil {
 			return sessionRow{}, err
 		}

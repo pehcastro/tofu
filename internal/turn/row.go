@@ -346,6 +346,10 @@ func ConversationFrom(events []session.Event) ([]llm.Message, error) {
 	if err != nil {
 		return nil, err
 	}
+	return ConversationOf(reading)
+}
+
+func ConversationOf(reading session.Reading) ([]llm.Message, error) {
 	messages := make([]llm.Message, 0, len(reading.Messages))
 	for _, recorded := range reading.Messages {
 		message, err := messageOf(recorded.MessageBody)

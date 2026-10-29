@@ -46,6 +46,89 @@ type Store struct {
 	parsed   map[string][]Event
 	headers  map[string]Header
 	redactor func() sys.KeyRedactor
+	recent   *Recent
+}
+
+type Recent struct {
+	mu     sync.Mutex
+	newest recalled
+	older  recalled
+}
+
+type recalled struct {
+	id       string
+	events   fileStamp
+	parsed   []Event
+	blobs    fileStamp
+	settings Settings
+	said     *Reading
+	steps    int
+}
+
+type fileStamp struct {
+	size  int64
+	mod   int64
+	found bool
+}
+
+func stampOf(path string) fileStamp {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fileStamp{}
+	}
+	return fileStamp{size: info.Size(), mod: info.ModTime().UnixNano(), found: true}
+}
+
+func (s *Store) Recalls(recent *Recent) { s.recent = recent }
+
+func (r *Recent) slot(id string) *recalled {
+	switch id {
+	case r.newest.id:
+		return &r.newest
+	case r.older.id:
+		return &r.older
+	}
+	return nil
+}
+
+func (r *Recent) recall(id string, at fileStamp) ([]Event, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if kept := r.slot(id); kept != nil && at.found && kept.events == at {
+		return kept.parsed, true
+	}
+	return nil, false
+}
+
+func (r *Recent) keep(id string, at fileStamp, events []Event) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.newest.id != id {
+		r.older = r.newest
+	}
+	r.newest = recalled{id: id, events: at, parsed: events}
+}
+
+func (r *Recent) saidOf(id string, events []Event, blobs fileStamp, settings Settings) (Reading, int, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	kept := r.slot(id)
+	if kept == nil || kept.said == nil || kept.blobs != blobs || kept.settings != settings || !sameEvents(kept.parsed, events) {
+		return Reading{}, 0, false
+	}
+	return *kept.said, kept.steps, true
+}
+
+func (r *Recent) keepSaid(id string, events []Event, blobs fileStamp, settings Settings, said Reading, steps int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if kept := r.slot(id); kept != nil && sameEvents(kept.parsed, events) {
+		kept.blobs, kept.settings, kept.said, kept.steps = blobs, settings, &said, steps
+	}
+}
+
+func sameEvents(a, b []Event) bool {
+	return len(a) > 0 && len(a) == len(b) && &a[0] == &b[0]
 }
 
 func (s *Store) ReadOnce() *Store {
@@ -538,11 +621,23 @@ func (s *Store) events(id string) ([]Event, error) {
 	if s.legacy(id) {
 		return s.legacyEvents(id)
 	}
-	raw, err := s.readFile(filepath.Join(s.Dir(id), eventsName))
+	path := filepath.Join(s.Dir(id), eventsName)
+	var at fileStamp
+	if s.recent != nil {
+		at = stampOf(path)
+		if events, found := s.recent.recall(id, at); found {
+			return events, nil
+		}
+	}
+	raw, err := s.readFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("session: %s has no events: %w", id, err)
 	}
-	return parseEvents(raw, id)
+	events, err := parseEvents(raw, id)
+	if err == nil && at.found {
+		s.recent.keep(id, at, events)
+	}
+	return events, err
 }
 
 func (s *Store) Body(handle string) ([]Event, error) {
@@ -556,6 +651,22 @@ func (s *Store) Body(handle string) ([]Event, error) {
 
 func (s *Store) Part(events []Event, part string) ([]Event, error) {
 	return s.settings.shown(partOf(events, part), withSteps, s.crashed)
+}
+
+func (s *Store) ReadSaid(id string, events []Event) (Reading, int, error) {
+	var blobs fileStamp
+	if s.recent != nil {
+		blobs = stampOf(filepath.Join(s.Dir(id), blobsName))
+		if reading, steps, found := s.recent.saidOf(id, events, blobs, s.settings); found {
+			return reading, steps, nil
+		}
+	}
+	said, steps, err := s.Said(id, events)
+	reading, unread := ReadEvents(said)
+	if err = cmp.Or(err, unread); err == nil && s.recent != nil {
+		s.recent.keepSaid(id, events, blobs, s.settings, reading, steps)
+	}
+	return reading, steps, err
 }
 
 func (s *Store) Said(id string, events []Event) (said []Event, steps int, err error) {

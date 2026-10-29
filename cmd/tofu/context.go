@@ -162,6 +162,10 @@ func contextSteps(events []session.Event) ([]turn.StepRow, error) {
 	if err != nil {
 		return nil, err
 	}
+	return stepRowsOf(reading)
+}
+
+func stepRowsOf(reading session.Reading) ([]turn.StepRow, error) {
 	steps := make([]turn.StepRow, len(reading.Steps))
 	for i, step := range reading.Steps {
 		if err := json.Unmarshal(step.Raw, &steps[i]); err != nil {
