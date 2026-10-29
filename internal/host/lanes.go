@@ -315,9 +315,12 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 		s.mu.Unlock()
 		return SessionOpenResult{Session: id, Fresh: true}, nil
 	}
-	carry, err := s.Carry(p.Session)
-	if err != nil {
-		return nil, err
+	carry, kept := s.walk.take(p.Session, sessionFiles(s.Host.dir, p.Session))
+	if !kept {
+		var err error
+		if carry, err = s.Carry(p.Session); err != nil {
+			return nil, err
+		}
 	}
 	s.mu.Lock()
 	was := l.items.session

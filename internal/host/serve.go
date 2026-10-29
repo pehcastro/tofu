@@ -86,27 +86,65 @@ type server struct {
 }
 
 type historyWalk struct {
-	mu     sync.Mutex
-	store  *session.Store
-	parent string
-	id     string
-	lines  []outgoing
+	mu        sync.Mutex
+	store     *session.Store
+	parent    string
+	id        string
+	lines     []outgoing
+	kept      Carry
+	keptFiles string
+}
+
+func (w *historyWalk) built(id string) ([]outgoing, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.lines, id != "" && w.id == id
+}
+
+func (w *historyWalk) keep(carry Carry, files string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	carry.Store = nil
+	w.kept, w.keptFiles = carry, files
+}
+
+func (w *historyWalk) take(id, files string) (Carry, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	kept, same := w.kept, files != "" && w.kept.Session == id && w.keptFiles == files
+	w.kept, w.keptFiles = Carry{}, ""
+	return kept, same
+}
+
+func sessionFiles(dir, id string) string {
+	store, err := session.OpenIn(dir)
+	if err != nil || id == "" {
+		return ""
+	}
+	entries, err := os.ReadDir(store.Dir(id))
+	if err != nil {
+		return ""
+	}
+	var files strings.Builder
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil || entry.IsDir() {
+			return ""
+		}
+		files.WriteString(entry.Name() + " " + strconv.FormatInt(info.Size(), 10) + " " + strconv.FormatInt(info.ModTime().UnixNano(), 10) + "\n")
+	}
+	return files.String()
 }
 
 func (w *historyWalk) linesOf(carry Carry, dir string) []outgoing {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.id == carry.Session {
-		return w.lines
-	}
 	read := newItems(carry.Session)
 	if w.store == nil || w.parent != carry.Session {
-		fresh, err := session.OpenIn(dir)
-		if err != nil {
-			w.store = nil
-			return read.all(resumedChat(carry, dir).Chat)
-		}
-		w.store = fresh.ReadOnce()
+		w.store = carry.Store
+	}
+	if w.store == nil {
+		return read.all(resumedChat(carry, dir).Chat)
 	}
 	walking := *w.store
 	carry.Store = &walking
@@ -415,11 +453,19 @@ func (s *server) history(p SessionHistoryParams) (any, error) {
 	if kept != nil {
 		return *kept, nil
 	}
-	carry, err := s.Carry(p.Session)
-	if err != nil {
-		return nil, err
+	id := p.Session
+	lines, built := s.walk.built(id)
+	if !built {
+		files := sessionFiles(s.Host.dir, p.Session)
+		carry, err := s.Carry(p.Session)
+		if err != nil {
+			return nil, err
+		}
+		if carry.Session == p.Session {
+			s.walk.keep(carry, files)
+		}
+		id, lines = carry.Session, s.walk.linesOf(carry, s.Host.dir)
 	}
-	lines := s.walk.linesOf(carry, s.Host.dir)
 	first, end := window(len(lines))
 	page := []HistoryLine{}
 	for _, out := range lines[first:end] {
@@ -427,7 +473,7 @@ func (s *server) history(p SessionHistoryParams) (any, error) {
 			page = append(page, HistoryLine{Method: line.method, Params: json.RawMessage(line.params)})
 		}
 	}
-	return SessionHistory{Session: carry.Session, First: first, Total: len(lines), Lines: page}, nil
+	return SessionHistory{Session: id, First: first, Total: len(lines), Lines: page}, nil
 }
 
 func (s *server) compact(p SessionParams) (any, error) {
