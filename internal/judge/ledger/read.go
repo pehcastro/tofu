@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,8 @@ import (
 )
 
 const lineCeiling = 1 << 20
+
+const newestChunkBytes = 1 << 16
 
 type Filter struct {
 	Point   string
@@ -162,14 +165,9 @@ func (r *Reader) eachInDay(day string, filter Filter, report *Report, fn func(Ro
 			continue
 		}
 		report.Scanned++
-		var row Row
-		if err := json.Unmarshal(line, &row); err != nil {
+		row, err := parseRow(line)
+		if err != nil {
 			report.Corrupt = append(report.Corrupt, Corrupt{File: path, Line: number, Err: err})
-			continue
-		}
-		if row.Schema < 1 || row.Schema > SchemaVersion {
-			report.Corrupt = append(report.Corrupt, Corrupt{File: path, Line: number,
-				Err: fmt.Errorf("ledger: row schema %d, this build reads up to %d", row.Schema, SchemaVersion)})
 			continue
 		}
 		if outcome, ok := outcomes[row.ID]; ok {
@@ -188,6 +186,74 @@ func (r *Reader) eachInDay(day string, filter Filter, report *Report, fn func(Ro
 		report.Corrupt = append(report.Corrupt, Corrupt{File: path, Line: number + 1, Err: err})
 	}
 	return nil
+}
+
+func parseRow(line []byte) (Row, error) {
+	var row Row
+	if err := json.Unmarshal(line, &row); err != nil {
+		return Row{}, err
+	}
+	if row.Schema < 1 || row.Schema > SchemaVersion {
+		return Row{}, fmt.Errorf("ledger: row schema %d, this build reads up to %d", row.Schema, SchemaVersion)
+	}
+	return row, nil
+}
+
+func (r *Reader) Newest(filter Filter) (Row, bool, error) {
+	days, err := r.days()
+	if err != nil {
+		return Row{}, false, err
+	}
+	for _, day := range slices.Backward(days) {
+		if !filter.coversDay(day) {
+			continue
+		}
+		row, found, err := r.lastInDay(day, filter)
+		if err != nil {
+			return Row{}, false, err
+		}
+		if !found {
+			continue
+		}
+		outcomes, err := r.outcomes(day)
+		if outcome, ok := outcomes[row.ID]; ok {
+			row.Outcome = &outcome
+		}
+		return row, true, err
+	}
+	return Row{}, false, nil
+}
+
+func (r *Reader) lastInDay(day string, filter Filter) (Row, bool, error) {
+	file, err := os.Open(filepath.Join(r.dir, day+logSuffix))
+	if err != nil {
+		return Row{}, false, err
+	}
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if err != nil {
+		return Row{}, false, err
+	}
+	unread, rest := info.Size(), []byte{}
+	for {
+		cut := bytes.LastIndexByte(rest, '\n')
+		if cut < 0 && unread > 0 {
+			from := max(unread-newestChunkBytes, 0)
+			chunk := make([]byte, unread-from)
+			if _, err := file.ReadAt(chunk, from); err != nil {
+				return Row{}, false, err
+			}
+			rest, unread = append(chunk, rest...), from
+			continue
+		}
+		if row, err := parseRow(rest[cut+1:]); err == nil && filter.match(row) {
+			return row, true, nil
+		}
+		if cut < 0 {
+			return Row{}, false, nil
+		}
+		rest = rest[:cut]
+	}
 }
 
 func (r *Reader) outcomes(day string) (map[string]Outcome, error) {

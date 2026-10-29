@@ -63,6 +63,7 @@ const (
 	roundMark        = "-r"
 	artifactsDirName = "artifacts"
 	sessionsDirName  = "sessions"
+	sweptStampName   = "swept"
 )
 
 const (
@@ -98,14 +99,18 @@ func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 	home, _ := os.UserHomeDir()
 	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: tools.NewBrowserTabs(home), release: new(func()), endSession: new(func() []string), stopRestoring: func() {}}
 	safe.Go(sys.Crashes(dir), "state sweep", func() {
-		aged := time.Now().AddDate(0, 0, -stateFileKeptDays)
-		if state, err := sys.ProjectStateDirAt(dir); err == nil {
+		state, err := sys.ProjectStateDirAt(dir)
+		if err != nil {
+			return
+		}
+		sys.OncePerDay(filepath.Join(state, sweptStampName), time.Now(), func() {
+			aged := time.Now().AddDate(0, 0, -stateFileKeptDays)
 			_ = sys.RemoveUnreferencedArtifacts(filepath.Join(state, artifactsDirName), filepath.Join(state, sessionsDirName), aged)
 			_ = sys.RemoveAged(state, safe.CrashPrefix, safe.CrashSuffix, aged)
-		}
-		if stateHome, err := sys.HomeConfigDir(); err == nil {
-			_ = sys.RemoveAged(stateHome, safe.CrashPrefix, safe.CrashSuffix, aged)
-		}
+			if stateHome, err := sys.HomeConfigDir(); err == nil {
+				_ = sys.RemoveAged(stateHome, safe.CrashPrefix, safe.CrashSuffix, aged)
+			}
+		})
 	})
 	if registryErr != nil {
 		return launch

@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
@@ -176,20 +175,11 @@ func lookupLock(path string) gate.LockLookup {
 }
 
 func currentBuild(ledgerDir, point string) (gate.Current, error) {
-	var current gate.Current
-	var lastAt time.Time
-	_, err := ledger.NewReader(ledgerDir).Each(ledger.Filter{Point: point}, func(row ledger.Row) error {
-		if current.Known && row.At.Before(lastAt) {
-			return nil
-		}
-		current = gate.Current{Build: row.Build, QuestionsVersion: row.Version, Known: true}
-		lastAt = row.At
-		return nil
-	})
-	if err != nil {
+	row, found, err := ledger.NewReader(ledgerDir).Newest(ledger.Filter{Point: point})
+	if err != nil || !found {
 		return gate.Current{}, err
 	}
-	return current, nil
+	return gate.Current{Build: row.Build, QuestionsVersion: row.Version, Known: true}, nil
 }
 
 func ledgerState() string {

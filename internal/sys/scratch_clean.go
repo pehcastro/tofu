@@ -165,6 +165,14 @@ func RemoveAged(dir, prefix, suffix string, before time.Time) error {
 	return removeEach(dir, agedFiles(dir, prefix, suffix, before))
 }
 
+func OncePerDay(stamp string, now time.Time, work func()) {
+	if info, err := os.Stat(stamp); err == nil && info.ModTime().Format(time.DateOnly) == now.Format(time.DateOnly) {
+		return
+	}
+	work()
+	_ = WriteFile(stamp, nil, 0o644)
+}
+
 func RemoveUnreferencedArtifacts(artifacts, sessions string, before time.Time) error {
 	candidates := map[string]bool{}
 	for _, name := range agedFiles(artifacts, "", artifactSuffix, before) {
