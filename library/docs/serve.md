@@ -13,7 +13,7 @@ a line, in the protocol `tofu.host/1`. Standard error carries logs and nothing e
 daemon: the program that starts tofu owns it. Idle, it uses about 0.35% of a core. `session.list` answers about 4x and `session.trace` about 2x faster than in 0.5.14, and the `boardy.*` calls 1.7 to 2x faster on a board of 1,500 tickets, with the same output.
 
 Every event names its `session`, `turn`, `item`, `seq`, `agent` for a sub-agent's, and `ref`, the token ctrl+r
-types for its item. Events carry data: a turn ends with `status` `finished`, `stopped` or `failed`, a tool
+types for its item. `turn` is the turn that began the lead's run: a follow-up message the lead reads in that run keeps it, and each call still carries its own recorded id in `item`. Events carry data: a turn ends with `status` `finished`, `stopped` or `failed`, a tool
 reports exit code, bytes, lines and duration as numbers, and a file edit carries its hunks with three lines of
 context. `tofu docs serve-methods` lists every request; this page is what serve sends without being asked.
 

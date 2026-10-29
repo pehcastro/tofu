@@ -181,7 +181,9 @@ tofu serve --stdio --cassette hi.cassette
 ```
 
 tofu answers each request, then streams `turn.started`, `message.delta` and the rest, and ends with
-`turn.completed` carrying `status: finished`. A cassette run reads no quota. To try `quota.updated`
+`turn.completed` carrying `status: finished`. An event's `turn` is the turn that began the lead's
+run: a follow-up message the lead reads in that run keeps it, and each call still carries its own
+recorded id in `item`. A cassette run reads no quota. To try `quota.updated`
 and `account.state` with no vendor, point `TOFU_CLAUDE_USAGE_URL` or `TOFU_CODEX_USAGE_URL` at a
 usage endpoint of your own, and tofu polls that one instead.
 
