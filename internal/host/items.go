@@ -243,7 +243,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 			s.bind(*event.Logged)
 		}
 		if event.Logged.Call != "" {
-			id.Item = session.EventIDFor(cmp.Or(event.Agent, s.turn), event.Logged.Call)
+			id.Item = session.EventIDFor(cmp.Or(event.Agent, event.Logged.Turn, s.turn), event.Logged.Call)
 		}
 		persisted := notify("item.persisted", &Persisted{Identity: id, LogSeq: event.Logged.Seq, LogID: event.ID, Kind: string(event.Logged.Kind)})
 		persisted.kept = event.Logged.Kind == session.EventTurnStart || event.Logged.Kind == session.EventTurnEnd

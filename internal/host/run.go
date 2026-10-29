@@ -277,6 +277,9 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	config.Appended = func(logged session.Event) {
 		forking.Lock()
 		defer forking.Unlock()
+		if logged.Kind == session.EventTurnStart && logged.Agent == "" {
+			watch.turnRecorded(logged.Turn)
+		}
 		if said, user := leadUserMessage(logged); user {
 			origin := turn.OriginOf(said)
 			if endsTheRow(origin.Source) {

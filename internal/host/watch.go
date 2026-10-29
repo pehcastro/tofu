@@ -67,6 +67,7 @@ type watcher struct {
 	costUSD   float64
 	marks     sync.Mutex
 	shows     sync.Mutex
+	turnAt    sync.Mutex
 	spent     *tokenTally
 	asked     map[string][]Call
 	watched   map[string]watchedAgent
@@ -210,7 +211,7 @@ func (a *watcher) askThrough(ctx context.Context, inner turn.Model, request llm.
 			a.result(message, asker)
 		}
 	}
-	thinking := a.eventID(asker, "thinking "+a.turnID+" "+strconv.FormatInt(a.thoughts.Add(1), 10))
+	thinking := a.eventID(asker, "thinking "+a.recordedTurn()+" "+strconv.FormatInt(a.thoughts.Add(1), 10))
 	request.OnThinking = func(text string) {
 		a.emit(Event{Kind: EventThinking, ID: thinking, Agent: asker, Text: text})
 	}
@@ -300,8 +301,20 @@ func sinceLastReply(messages []llm.Message) int {
 	return 0
 }
 
+func (a *watcher) recordedTurn() string {
+	a.turnAt.Lock()
+	defer a.turnAt.Unlock()
+	return a.turnID
+}
+
+func (a *watcher) turnRecorded(turnID string) {
+	a.turnAt.Lock()
+	a.turnID = turnID
+	a.turnAt.Unlock()
+}
+
 func (a *watcher) eventID(asker, call string) string {
-	return session.EventIDFor(cmp.Or(asker, a.turnID), call)
+	return session.EventIDFor(cmp.Or(asker, a.recordedTurn()), call)
 }
 
 func (a *watcher) called(call llm.ToolCall, asker string) {
