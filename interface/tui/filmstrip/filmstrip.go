@@ -464,7 +464,7 @@ func Names() []string {
 }
 
 func stubbedHost(home string) (restore func()) {
-	stub := map[string]string{"TERM_PROGRAM": "zed", "ZED_TERM": "", "VSCODE_PID": "", "WT_SESSION": "", "TERMINAL_EMULATOR": ""}
+	stub := map[string]string{"TERM_PROGRAM": "zed", "ZED_TERM": "", "VSCODE_PID": "", "WT_SESSION": "", "TERMINAL_EMULATOR": "", "TERM": "xterm-256color", "NO_COLOR": "", "TOFU_ASCII": ""}
 	for _, variable := range []string{"APPDATA", "LOCALAPPDATA", "USERPROFILE", "HOME", "XDG_CONFIG_HOME"} {
 		stub[variable] = home
 	}
