@@ -2,17 +2,26 @@ package boardy
 
 import (
 	"cmp"
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"tofu/internal/classifier"
+	"tofu/internal/judge/jev"
+	"tofu/internal/judge/ledger"
+	"tofu/internal/judge/question"
 	"tofu/internal/rule"
 	"tofu/internal/subagent"
+	"tofu/internal/sys"
+	"tofu/library/questions"
 )
 
 func (m Managed) Create(key string, ticket Ticket, actor string) (Ticket, error) {
@@ -79,6 +88,9 @@ func (m Managed) created(key string, ticket Ticket, actor, replaces string, dept
 	if err == nil {
 		err = m.gate(&s)
 	}
+	if err == nil {
+		err = m.drafted(key, s.ticket, actor)
+	}
 	if err = errors.Join(err, os.Remove(preview.Name())); err != nil {
 		return Ticket{}, err
 	}
@@ -109,6 +121,16 @@ func (m Managed) MoveLeaving(id string, to Status, reason, actor string, leave [
 func (m Managed) move(board Board, ticket Ticket, to Status, reason, actor string, depth int, leave []int) (Ticket, error) {
 	if err := m.validMove(board, ticket, to); err != nil {
 		return ticket, err
+	}
+	if ticket.Status == Triage && to != Dropped {
+		if err := m.drafted(board.Key, ticket, actor); err != nil {
+			return ticket, err
+		}
+	}
+	if to == Done {
+		if err := m.closable(ticket, reason, actor); err != nil {
+			return ticket, err
+		}
 	}
 	if to == Doing {
 		var err error
@@ -341,6 +363,10 @@ func (m Managed) validMove(board Board, ticket Ticket, to Status) error {
 		if gate := m.doneGate(ticket.Owns); gate.Refusal() != "" {
 			return RefusedError{Ticket: ticket.ID, Why: gate.Refusal(), Done: &gate}
 		}
+		leftForNobody := []int{}
+		if unproved := m.unevidenced(ticket, leftForNobody); unproved != "" {
+			return RefusedError{Ticket: ticket.ID, Why: unproved + ", and a ticket reaches done only when every line in force has evidence, a line left for the lead included: tofu boardy log " + ticket.ID + " --evidence --line <n>"}
+		}
 	}
 	if to == Review || to == Done {
 		children, _ := filepath.Glob(filepath.Join(board.Dir, TicketsDirName, ticket.ID, "*.md"))
@@ -425,6 +451,189 @@ func (m Managed) ownsFree(key string, ticket Front, owns []string, status Status
 		}
 	}
 	return nil
+}
+
+const (
+	feasibilityRef     = "ticket_feasibility@1"
+	feasibilityDecides = "platform"
+	doneReasonRef      = "done_reason@1"
+	doneReasonDecides  = "open"
+	doneReasonPart     = "part"
+	reasonPartPrefix   = "part_"
+)
+
+var reasonBreak = sys.LazyRegexp(`[,;!?\n]|\.(?:\s|$)`)
+
+func (m Managed) drafted(key string, ticket Ticket, actor string) error {
+	if missing := ticket.undrafted(); len(missing) > 0 {
+		names, says := make([]string, len(missing)), make([]string, len(missing))
+		for i, drafted := range missing {
+			names[i], says[i] = drafted.Heading, drafted.Heading+": "+drafted.Says
+		}
+		return RefusedError{Why: fmt.Sprintf("%q has no %s, and a ticket is made with each of them. %s", ticket.Title, strings.Join(names, ", "), strings.Join(says, "; "))}
+	}
+	if strings.TrimSpace(ticket.Feasibility) != "" {
+		return nil
+	}
+	ruled := m.judged(feasibilityRef, feasibilityDecides, struct {
+		Ticket jevTicket `json:"ticket"`
+	}{jevTicketOf(ticket)}, nil)
+	switch {
+	case ruled.unread != "":
+		return m.heldForPerson(subject{event: rule.HookTicketCreate, key: key, ticket: ticket, actor: actor}, feasibilityRef, ruled.unread)
+	case ruled.answers[feasibilityDecides].Noul >= ruled.threshold:
+		return RefusedError{Why: fmt.Sprintf("Jev judged that %q asks for a platform or visual effect (%s, %s at %.2f against %.2f), and such a ticket is made with a %s section: %s", ticket.Title, feasibilityRef, feasibilityDecides, ruled.answers[feasibilityDecides].Noul, ruled.threshold, FeasibilityHeading, feasibilitySays)}
+	}
+	return nil
+}
+
+func (m Managed) closable(ticket Ticket, reason, actor string) error {
+	parts := reasonParts(reason)
+	if len(parts) == 0 {
+		return nil
+	}
+	options := make([]jev.Option, len(parts))
+	for i, part := range parts {
+		options[i] = jev.Option{Name: reasonPartPrefix + strconv.Itoa(i+1), Criteria: part}
+	}
+	ruled := m.judged(doneReasonRef, doneReasonDecides, struct {
+		Ticket jevTicket `json:"ticket"`
+		Reason string    `json:"reason"`
+		Parts  []string  `json:"parts"`
+	}{jevTicketOf(ticket), reason, parts}, options)
+	if ruled.unread != "" {
+		return m.heldForPerson(subject{event: rule.HookTicketMove, key: ticket.Board(), ticket: ticket, to: Done, actor: actor}, doneReasonRef, ruled.unread)
+	}
+	if quoted, open := openPart(ruled.answers, reason, parts, ruled.threshold); open {
+		return RefusedError{Ticket: ticket.ID, Why: fmt.Sprintf("its reason says %q is still open (Jev, %s, %s at %.2f against %.2f), and a ticket reaches done only when nothing it asked for is open: make the open part its own ticket and keep %s open, or close it with a reason that names nothing open", quoted, doneReasonRef, doneReasonDecides, ruled.answers[doneReasonDecides].Noul, ruled.threshold, ticket.ID)}
+	}
+	return nil
+}
+
+func openPart(answers map[string]jev.Answer, reason string, parts []string, threshold float64) (string, bool) {
+	if answers[doneReasonDecides].Noul < threshold {
+		return "", false
+	}
+	if at, err := strconv.Atoi(strings.TrimPrefix(answers[doneReasonPart].Choice, reasonPartPrefix)); err == nil && at >= 1 && at <= len(parts) {
+		return parts[at-1], true
+	}
+	return reason, true
+}
+
+func reasonParts(reason string) []string {
+	var parts []string
+	for _, part := range reasonBreak().Split(reason, -1) {
+		if part = strings.TrimSpace(part); part != "" {
+			parts = append(parts, part)
+		}
+	}
+	return parts
+}
+
+func (m Managed) Redraft(id, field, body, actor string) (Ticket, error) {
+	at, err := draftedSection(field, body)
+	if err != nil {
+		return Ticket{}, err
+	}
+	return m.revise(id, "set "+new(Ticket).Drafted()[at].Heading, actor, func(t *Ticket) error {
+		*t.Drafted()[at].Body = strings.TrimSpace(body)
+		return nil
+	})
+}
+
+func draftedSection(field, body string) (int, error) {
+	sections := new(Ticket).Drafted()
+	at := slices.IndexFunc(sections, func(d Drafted) bool { return d.Field == field })
+	switch {
+	case at < 0:
+		return at, fmt.Errorf("%q is not a section a ticket is drafted with", field)
+	case strings.TrimSpace(body) == "":
+		return at, fmt.Errorf("say what %s holds", sections[at].Heading)
+	}
+	return at, nil
+}
+
+func (m Managed) heldForPerson(s subject, ref, unread string) error {
+	subjectName := cmp.Or(s.ticket.ID, strconv.Quote(s.ticket.Title))
+	if m.actorKind(s.actor) != rule.ActorPerson {
+		return WaitingError{Ticket: subjectName, Rule: ref, Detail: "Jev could not answer, so the person decides: " + unread}
+	}
+	return m.Store.Record(s.key, Event{Ticket: s.ticket.ID, Kind: RuleFired, Actor: s.actor, To: s.to, Text: hookText(ref, string(rule.ThenNudge), s.event, subjectName+" went ahead unjudged: "+unread)})
+}
+
+type ruling struct {
+	answers   map[string]jev.Answer
+	threshold float64
+	unread    string
+}
+
+func (m Managed) judged(ref, decides string, state any, options []jev.Option) ruling {
+	name, _, _ := strings.Cut(ref, "@")
+	body, err := json.Marshal(state)
+	row := ledger.Row{Point: name, Questions: name, StateHash: ledger.HashOf(body), StateBuilder: name + "_state@1", State: body,
+		Verdict: ledger.VerdictAsk, Reason: &ledger.Reason{Question: decides, Mode: ledger.ModeEnforced}}
+	var ruled ruling
+	var set question.Set
+	var asked []jev.Question
+	var decision jev.Decision
+	if err == nil {
+		set, asked, ruled.threshold, err = m.library(ref, decides, options)
+	}
+	if err == nil {
+		row.Version, row.Reason.Threshold, row.Reason.Comparison = set.QuestionsVersion, ruled.threshold, ">= "+strconv.FormatFloat(ruled.threshold, 'f', -1, 64)
+		var client *jev.Client
+		if client, err = classifier.Open(m.Store.Root, jev.ReadKeyring(), 1); err == nil {
+			decision, err = client.Ask(context.Background(), jev.Request{State: json.RawMessage(body), Questions: asked})
+		}
+	}
+	if err != nil {
+		cause := err.Error()
+		row.Reason.ModeReason, ruled.unread = &cause, cause
+		if jev.IsUnbound(err) {
+			ruled.unread = "no classifier is bound, so Jev did not answer: tofu models bind classifier <source/model>"
+		}
+	} else {
+		decision.Record(&row, asked, set.QuestionsVersion)
+		ruled.answers, row.Reason.Value, row.Verdict = decision.Answers, decision.Answers[decides].Noul, ledger.VerdictAllow
+		if row.Reason.Value >= ruled.threshold {
+			row.Verdict = ledger.VerdictDeny
+		}
+	}
+	places, err := sys.ResolvePlaces(m.Store.Root)
+	if err == nil {
+		_, err = ledger.NewWriter(places.Log).Append(row)
+	}
+	if err != nil {
+		ruled.unread = "the decision did not reach the ledger: " + err.Error()
+	}
+	return ruled
+}
+
+func (m Managed) library(ref, decides string, options []jev.Option) (question.Set, []jev.Question, float64, error) {
+	layers, err := question.Layers(questions.Files(), m.Store.Root)
+	if err != nil {
+		return question.Set{}, nil, 0, err
+	}
+	set, fields, err := question.Resolve(ref, layers)
+	if err != nil {
+		return set, nil, 0, err
+	}
+	at := slices.IndexFunc(fields, func(f question.Field) bool { return f.Path == "thresholds."+decides+"_at" })
+	var threshold float64
+	if at >= 0 {
+		threshold, err = strconv.ParseFloat(fields[at].Value, 64)
+	}
+	if at < 0 || err != nil || threshold <= 0 || threshold > 1 {
+		return set, nil, 0, fmt.Errorf("%s declares no thresholds.%s_at above 0 and at or below 1", ref, decides)
+	}
+	asked := make([]jev.Question, len(set.Questions))
+	for i, q := range set.Questions {
+		asked[i] = q.ToJev()
+		if asked[i].Kind == jev.QuestionChoice {
+			asked[i].Options = append(asked[i].Options, options...)
+		}
+	}
+	return set, asked, threshold, nil
 }
 
 func (s Store) logLine(actor, text string) string {

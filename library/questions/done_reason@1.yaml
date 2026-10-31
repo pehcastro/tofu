@@ -1,0 +1,49 @@
+name: done_reason
+domain: general
+questions_version: 1
+mode: enforced
+notes: >-
+  asked by internal/boardy when a ticket moves to done with a reason that is
+  not blank. state.ticket is the ticket, state.reason the reason as written,
+  and state.parts the reason cut at commas, semicolons, sentence ends and line
+  breaks. boardy adds one option to part for each entry of parts, named part_1
+  on, after none. the move is refused when open is at or above open_at, and
+  the refusal quotes the part Jev chose, or the whole reason when it chose
+  none. an error or a timeout holds the move for the person, whose own move
+  passes. open_at is the middle of the noul range, an uncalibrated prior.
+
+thresholds:
+  open_at: 0.5
+
+state:
+  - ticket
+  - reason
+  - parts
+
+questions:
+  open:
+    type: noul
+    instructions: >-
+      A ticket on a project board is being closed as done, and `reason` is
+      what the person closing it wrote. Decide whether `reason` says that some
+      of the work the ticket covers is not finished: kept for later, moved to
+      a follow-up, skipped, not verified, partly working, or done except for
+      something.
+    criteria:
+      true: >-
+        reason names work the ticket covers that is still open: an exception,
+        a remaining part, a follow-up, a later fix, a line not verified, or
+        something that does not work yet.
+      false: >-
+        reason says the work is finished, or says nothing about what remains.
+
+  part:
+    type: choice
+    instructions: >-
+      `parts` is `reason` cut into pieces, and each option past none is one of
+      them, in order. Choose the piece that names work still open.
+    escape: none
+    options:
+      - name: none
+        criteria: >-
+          No piece names work that is still open.

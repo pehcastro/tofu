@@ -213,7 +213,7 @@ func (m Managed) check(h rule.Hook, s subject) (string, bool, error) {
 		answer, said := m.askJev(h.Action.Arg, s)
 		return strings.TrimSpace(h.Text + "\n" + said), answer == "", nil
 	case rule.DoContract:
-		missing := m.unevidenced(s)
+		missing := m.unevidenced(s.ticket, s.leave)
 		return cmp.Or(h.Text, "a ticket moves on with evidence for each acceptance line") + ": " + missing, missing != "", nil
 	case rule.DoCommand:
 		output, failed, err := rule.RunCommand(h.Action.Arg, s.path, []string{"TOFU_BOARD_EVENT=" + string(s.event), "TOFU_TICKET=" + s.path,
@@ -226,14 +226,18 @@ func (m Managed) check(h rule.Hook, s subject) (string, bool, error) {
 	panic("boardy: unknown check " + string(h.Action.Do))
 }
 
-func (m Managed) unevidenced(s subject) string {
-	lines, err := m.Store.Acceptance(s.ticket, s.leave)
+func (m Managed) unevidenced(ticket Ticket, leave []int) string {
+	lines, err := m.Store.Acceptance(ticket, leave)
 	switch {
 	case err != nil:
 		return "its evidence could not be read: " + err.Error()
 	case len(lines) == 0:
-		return s.ticket.ID + " has no acceptance lines to evidence"
+		return ticket.ID + " has no acceptance lines to evidence"
 	}
+	return UnmetLines(lines)
+}
+
+func UnmetLines(lines []AcceptanceLine) string {
 	var unmet []string
 	for i, line := range lines {
 		if line.State == LineUnmet {
@@ -243,7 +247,7 @@ func (m Managed) unevidenced(s subject) string {
 	if len(unmet) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("%d of %d acceptance lines are unmet, with no evidence entry naming them and not left for the lead: %s", len(unmet), len(lines), strings.Join(unmet, "; "))
+	return fmt.Sprintf("%d of %d acceptance lines in force have no evidence entry naming them: %s", len(unmet), len(lines), strings.Join(unmet, "; "))
 }
 
 type trial struct {
@@ -433,8 +437,9 @@ func (m Managed) effect(h rule.Hook, s subject) error {
 		if s.ticket.ID != "" {
 			follow.Relates = []string{s.ticket.ID}
 		}
-		made, err = m.created(s.key, follow, actor, "", depth)
-		arg += " is " + made.ID
+		if made, err = m.created(s.key, follow, actor, "", depth); err == nil {
+			arg += " is " + made.ID
+		}
 	case rule.DoMove, rule.DoAssign, rule.DoLog:
 		var ticket Ticket
 		var board Board
@@ -454,7 +459,7 @@ func (m Managed) effect(h rule.Hook, s subject) error {
 	case rule.DoNotify:
 	}
 	if err != nil {
-		return m.note(h, s, "did not run: "+err.Error())
+		return m.Store.Record(s.key, Event{Ticket: s.ticket.ID, Kind: RuleFired, Actor: actor, To: s.to, Text: hookText(h.ID, string(rule.ThenNudge), s.event, string(h.Action.Do)+" "+arg+" did not run: "+err.Error())})
 	}
 	return m.note(h, s, arg)
 }

@@ -2,7 +2,7 @@
 title: Boardy
 description: Your own Jira or Linear, kept as markdown files on your disk, with numbered tickets and sub-tickets, statuses, a thread of what happened on each, and a lint that catches two tickets claiming one file.
 order: 18
-updated: 2026-10-28
+updated: 2026-10-31
 ---
 
 Boardy is a ticket board that lives in files. Each project can hold several
@@ -46,10 +46,54 @@ Make a board and three tickets:
 
 ```
 tofu boardy init --key DEMO
-tofu boardy new --priority P1 --owns "internal/a/**" --acceptance "tofu reads every key" parse the config
-tofu boardy new --type bug the list drops a row
-tofu boardy new --owns docs/x.md write the page
+tofu boardy new --priority P1 --owns "internal/a/**" --before "tofu ignores the config" --driven "tofu config show" --still-works "tofu run reads its flags" --error-case "an empty config prints the defaults" --acceptance "tofu reads every key" parse the config
+tofu boardy new --type bug --before "the list shows 9 of 10 rows" --driven "tofu boardy list" --still-works "list --json" --error-case "an empty board says so" the list drops a row
+tofu boardy new --owns docs/x.md --before "no page" --driven "open docs/x.md" --still-works "the index links it" --error-case "a missing image is named" write the page
 ```
+
+A ticket is made with four sections a person drives: **Before**, how it
+works now; **Driven path**, the steps that show the change; **Still works**,
+a line for each neighbour the change touches (repeat `--still-works`); and
+**Empty or error case**, what an empty or failing input does. `new` without
+one of them is refused, naming each one missing:
+
+```
+refused: "a plain ticket" has no Before, Driven path, Still works, Empty or error case, and a ticket is made with each of them.
+```
+
+A ticket asking for a visual or platform effect, such as a blur or a
+transparency, also needs **Feasibility** (`--feasibility`): what the platform
+gives, what it does not, and the source. Jev decides whether the ask is one,
+with the library question `ticket_feasibility@1`, and each answer is a row in
+the project's decision ledger:
+
+```
+refused: Jev judged that "blur behind the desk sidebar" asks for a platform or visual effect (ticket_feasibility@1, platform at 0.97 against 0.50), and such a ticket is made with a Feasibility section
+```
+
+When Jev cannot answer, an agent's create waits for the person, and the
+person's own create goes through with one line saying it was not judged.
+With no classifier bound that line names the fix:
+
+```
+nudge ticket_feasibility@1: "list sorts by priority" went ahead unjudged: no classifier is bound, so Jev did not answer: tofu models bind classifier <source/model>
+```
+
+Every way a ticket is made runs the same check: `new`, `ticket_create`,
+`ticket_request`, a triage accept, a hand to another board, a hook's
+`create` effect, a move out of triage and the `boardy.create` call of
+`tofu serve`. A hook whose follow up lacks the sections prints one line on the
+command that fired it, and the same line goes on the ticket's thread:
+
+```
+nudge follow: create follow up DRV-2 did not run: refused: "follow up DRV-2" has no Before, Driven path, ...
+```
+
+`tofu boardy set <id> --before text --driven text --still-works line
+--error-case text --feasibility text` fills the sections of a ticket made
+before they existed, the Log records each one, and the receipt names the
+sections it set. Given a triage request, `set T1 --board DRV ...` fills the
+request the same way, so it can be accepted rather than dropped.
 
 Work one through review:
 
@@ -59,6 +103,27 @@ tofu boardy move DEMO-1 review
 tofu boardy log DEMO-1 parsed every key, the test passes
 tofu boardy show DEMO-1
 ```
+
+A ticket reaches done only when nothing it asked for is open. A move to
+done is refused while any acceptance line in force has no evidence entry
+naming it, a line left for the lead included, and the refusal names the line:
+
+```
+DEMO-3 refused: 1 of 2 acceptance lines in force have no evidence entry naming them: line 2, the dark theme shows the priority colour
+```
+
+The reason is read too. Jev asks `done_reason@1` whether it names a part
+still open, and a reason such as `all done except the dark theme, follow up
+later` is refused, quoting the part:
+
+```
+DEMO-3 refused: its reason says "all done except the dark theme" is still open (Jev, done_reason@1, open at 0.99 against 0.50)
+```
+
+Make the open part its own ticket and keep the first open, or close it with
+a reason that names nothing open. A move with no reason asks nothing, and
+when Jev cannot answer, an agent's move waits for the person and the
+person's own move goes through with the same `nudge done_reason@1` line.
 
 Add an acceptance line to a ticket that has none, or one more to a ticket
 that does. `--reason` is required, and the change and its reason go on the
@@ -174,6 +239,16 @@ depends: []
 
 ## Scope
 
+## Before
+
+## Driven path
+
+## Still works
+
+## Empty or error case
+
+## Feasibility
+
 ## Acceptance
 
 ## Log
@@ -228,7 +303,7 @@ tofu boardy manager add <lead session id>
 | `ticket_ask` | every agent | writes a question for a manager into its own ticket's Log |
 | `ticket_request` | every agent | writes a request into a board's triage |
 | `ticket_move` | every agent | an agent moves its own ticket from doing to review; a manager moves any ticket |
-| `ticket_create` | managers | creates a numbered ticket, or a sub-ticket with `parent` |
+| `ticket_create` | managers | creates a numbered ticket, or a sub-ticket with `parent`; asks for `before`, `driven`, `still_works`, `error_case` and, for a visual or platform effect, `feasibility` |
 | `ticket_assign` | managers | assigns a ticket |
 | `ticket_list` | managers | lists a board's tickets by status, oldest first with the time since each last changed, up to ten and how many more |
 
@@ -241,11 +316,11 @@ the lead gives it.
 | Command | Does |
 |---|---|
 | `tofu boardy init --key KEY [--name text]` | makes a board |
-| `tofu boardy new [--board KEY \| --parent ID] [--type t] [--priority P0..P4] [--status s] [--points n] [--size S\|M\|L] [--spec path] [--owns a,b] [--scope text] [--acceptance text] [--as name] <title>` | makes a ticket with the next number |
+| `tofu boardy new [--board KEY \| --parent ID] [--type t] [--priority P0..P4] [--status s] [--points n] [--size S\|M\|L] [--spec path] [--owns a,b] [--problem text] [--scope text] --before text --driven text --still-works line... --error-case text [--feasibility text] [--acceptance text] [--as name] <title>` | makes a ticket with the next number |
 | `tofu boardy list [--board KEY] [--status s] [--all] [--fields id,status,assignee,owns]` | lists live tickets, or only the named front matter fields |
 | `tofu boardy held <path>` | names the ticket holding a path on any board, and the glob, or says it is not held |
 | `tofu boardy show <ticket> [--thread]` | prints one ticket; `--thread` adds its Activity in order |
-| `tofu boardy move <ticket> <status> [--reason text]` | changes its status |
+| `tofu boardy move <ticket> <status> [--reason text]` | changes its status; done needs evidence on every line and a reason naming nothing open |
 | `tofu boardy log <ticket> <text> [--evidence [--line n]]` | appends a dated line to its Log; `--evidence` marks it as proof, and `--line` names the acceptance line it proves |
 | `tofu boardy ask <ticket> --tldr t --eli5 e --options "a \| b" --recommend n --why w` | puts a question on a ticket |
 | `tofu boardy catchup [--board KEY] [--answers]` | lists open questions and writes `catchup.md`; `--answers` applies what the person wrote |

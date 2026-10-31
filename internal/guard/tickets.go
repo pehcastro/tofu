@@ -29,7 +29,7 @@ func requireTicket(env Env, ev event) (Answer, error) {
 	}
 	first := "1. Write .local/boji/tickets/doing/TOFU-NNN.md with front matter carrying id, title, epic, size, owns, spec and owner, then Problem, Scope, Acceptance, Notes."
 	if env.Boardy {
-		first = "1. Create it on its board: tofu boardy new --board TOFU --owns a,b --acceptance text --as orchestrator <title>, then tofu boardy assign it to the agent type and tofu boardy move it to doing. Tickets live in boardy now; a file under .local/boji/tickets alone is not a ticket."
+		first = "1. Create it on its board: tofu boardy new --board TOFU --owns a,b --before text --driven text --still-works line --error-case text [--feasibility text] --acceptance text --as orchestrator <title>, where --feasibility is needed when the ask is a platform or visual effect, then tofu boardy assign it to the agent type and tofu boardy move it to doing. Tickets live in boardy now; a file under .local/boji/tickets alone is not a ticket."
 	}
 	readers := "This project defines no read-only agent, one whose tools hold no edit, so every agent here needs a ticket."
 	if len(agents.readers) > 0 {

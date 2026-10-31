@@ -99,7 +99,9 @@ func build(tofu, root, deck string, steps int) (string, error) {
 		return "", err
 	}
 	for ticket := 1; ticket <= boardTickets; ticket++ {
-		if err := verb(tofu, project, env, "boardy", "new", "--board", boardKey, "--epic", boardEpic, fmt.Sprintf("bench ticket %d", ticket)); err != nil {
+		if err := verb(tofu, project, env, "boardy", "new", "--board", boardKey, "--epic", boardEpic,
+			"--before", "the board is empty", "--driven", "tofu boardy list", "--still-works", "tofu serve answers", "--error-case", "an unknown id is refused",
+			"--feasibility", "none: no platform or visual effect", fmt.Sprintf("bench ticket %d", ticket)); err != nil {
 			return "", err
 		}
 	}

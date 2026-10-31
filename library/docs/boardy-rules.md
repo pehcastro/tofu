@@ -85,6 +85,17 @@ four options and the pick with why. `tofu boardy ask` asks it,
 stays on the ticket under Questions with an `Answer:` line, and catchup,
 audit and the board's rows count only the open ones.
 
+Some checks are built in and need no hook file. A create needs Before,
+Driven path, Still works and Empty or error case, and Feasibility when Jev's
+`ticket_feasibility@1` judges the ask a visual or platform effect. A move to
+done needs an evidence entry naming every acceptance line in force, a line
+left for the lead included, and a reason that Jev's `done_reason@1` judges
+names nothing still open. A ticket owning `internal/turn`, `internal/host`,
+`internal/subagent`, `internal/session`, `interface/tui`, `cmd/tofu` or
+`apps/desk` reaches done only on a HEAD tree with a passing flows stamp.
+Each Jev answer is a decision ledger row; when Jev cannot answer, an agent's
+create or move waits for the person.
+
 ## Check it
 
     tofu boardy rule list [--board KEY]

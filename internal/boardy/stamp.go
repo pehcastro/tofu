@@ -138,7 +138,7 @@ func DoneRefusal(repo string, owns []string) string {
 func flowsArea(globs []string) string {
 	for _, glob := range globs {
 		literal, _, _ := strings.Cut(strings.ToLower(strings.ReplaceAll(glob, `\`, "/")), "*")
-		for _, area := range []string{"internal/turn", "internal/host", "internal/subagent", "interface/tui", "cmd/tofu"} {
+		for _, area := range []string{"internal/turn", "internal/host", "internal/subagent", "internal/session", "interface/tui", "cmd/tofu", "apps/desk"} {
 			if strings.HasPrefix(literal, area+"/") || strings.HasPrefix(area+"/", literal) {
 				return area
 			}

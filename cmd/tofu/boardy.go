@@ -27,7 +27,7 @@ func boardyUsageOf(subcommand string) string {
 	case "init":
 		return "tofu boardy init --key KEY [--name text] [--json]"
 	case "new":
-		return "tofu boardy new [--board KEY | --parent ID] [--type story|task|bug|subtask] [--priority P0..P4] [--status s] [--points n] [--size S|M|L] [--spec path] [--owns a,b] [--epic E] [--sprint S] [--scope text] [--acceptance line]... [--as name] <title> [--json]"
+		return "tofu boardy new [--board KEY | --parent ID] [--type story|task|bug|subtask] [--priority P0..P4] [--status s] [--points n] [--size S|M|L] [--spec path] [--owns a,b] [--epic E] [--sprint S] [--problem text] [--scope text] --before text --driven text --still-works line... --error-case text [--feasibility text] [--acceptance line]... [--as name] <title> [--json]"
 	case "list":
 		return "tofu boardy list [--board KEY] [--status s] [--all] [--fields id,status,assignee,owns] [--json]"
 	case "held":
@@ -43,7 +43,7 @@ func boardyUsageOf(subcommand string) string {
 	case "boards":
 		return "tofu boardy boards [--json]"
 	case "set":
-		return "tofu boardy set <ticket> [--title text] [--owns a,b] [--epic E] [--sprint S] [--acceptance line]... [--reason text] [--as name] [--json]"
+		return "tofu boardy set <ticket | request [--board KEY]> [--title text] [--owns a,b] [--epic E] [--sprint S] [--acceptance line]... [--reason text] [--before text] [--driven text] [--still-works line]... [--error-case text] [--feasibility text] [--as name] [--json]"
 	case "tick":
 		return "tofu boardy tick [--board KEY] [--json]"
 	case "fire":
@@ -169,7 +169,7 @@ func boardyFlags(args []string) (map[string]string, []string, error) {
 			flags[name] = "true"
 		case i+1 == len(args):
 			return nil, nil, fmt.Errorf("--%s needs a value", name)
-		case name == "acceptance" && flags[name] != "":
+		case (name == "acceptance" || name == "still-works") && flags[name] != "":
 			flags[name], i = flags[name]+"\n"+args[i+1], i+1
 		default:
 			flags[name], i = args[i+1], i+1
@@ -224,9 +224,12 @@ func (c boardyCall) create() int {
 	if err != nil {
 		return c.o.fail(err)
 	}
-	ticket := boardy.Ticket{Front: boardy.Front{Title: title, Owns: splitList(c.flags["owns"]), Spec: c.flags["spec"], Parent: c.flags["parent"], Epic: c.flags["epic"], Sprint: c.flags["sprint"]}, Scope: c.flags["scope"]}
+	ticket := boardy.Ticket{Front: boardy.Front{Title: title, Owns: splitList(c.flags["owns"]), Spec: c.flags["spec"], Parent: c.flags["parent"], Epic: c.flags["epic"], Sprint: c.flags["sprint"]}, Problem: c.flags["problem"], Scope: c.flags["scope"]}
 	if acceptance := c.flags["acceptance"]; acceptance != "" {
 		ticket.Acceptance = []string{acceptance}
+	}
+	for _, drafted := range ticket.Drafted() {
+		*drafted.Body = c.flags[strings.ReplaceAll(drafted.Field, "_", "-")]
 	}
 	var parseErrs []error
 	if raw := c.flags["type"]; raw != "" {
@@ -463,6 +466,11 @@ func boardySection(page cli.Page, name, body string) []string {
 
 func ticketSections(page cli.Page, ticket boardy.Ticket) []string {
 	lines := append(boardySection(page, "Problem", ticket.Problem), boardySection(page, "Scope", ticket.Scope)...)
+	for _, drafted := range ticket.Drafted() {
+		if *drafted.Body != "" {
+			lines = append(lines, boardySection(page, drafted.Heading, *drafted.Body)...)
+		}
+	}
 	for i, revision := range ticket.Acceptance {
 		lines = append(lines, boardySection(page, boardy.RevisionHeading(i), revision)...)
 	}
@@ -563,6 +571,9 @@ func (c boardyCall) plan() int {
 		return c.o.usage(errors.New("name one " + c.words.Ticket))
 	}
 	id := c.args[0]
+	if _, notTicket := boardy.SplitID(id); notTicket != nil {
+		return c.fillRequest(id, notTicket)
+	}
 	title, retitle := c.flags["title"]
 	owns, reown := c.flags["owns"]
 	acceptance, reaccept := c.flags["acceptance"]
@@ -577,10 +588,45 @@ func (c boardyCall) plan() int {
 	if err == nil && reaccept {
 		ticket, err = c.managed.Reaccept(id, acceptance, c.flags["reason"], c.actor)
 	}
-	if err == nil && (c.flags["epic"] != "" || c.flags["sprint"] != "" || !retitle && !reown && !reaccept) {
+	redrafted := c.redraft(func(field, body string) error {
+		if err == nil {
+			ticket, err = c.managed.Redraft(id, field, body, c.actor)
+		}
+		return err
+	})
+	if err == nil && (c.flags["epic"] != "" || c.flags["sprint"] != "" || !retitle && !reown && !reaccept && redrafted == nil) {
 		ticket, err = c.managed.Plan(id, c.flags["epic"], c.flags["sprint"], c.actor)
 	}
-	return c.receipt(ticket, err, cli.Changed, ticket.ID+" "+ticket.Title+": owns "+dash(strings.Join(ticket.Owns, ", "))+", "+c.words.Epic+" "+dash(ticket.Epic)+", "+c.words.Sprint+" "+dash(ticket.Sprint))
+	summary := ticket.ID + " " + ticket.Title + ": owns " + dash(strings.Join(ticket.Owns, ", ")) + ", " + c.words.Epic + " " + dash(ticket.Epic) + ", " + c.words.Sprint + " " + dash(ticket.Sprint)
+	if redrafted != nil {
+		summary += ", set " + strings.Join(redrafted, ", ")
+	}
+	return c.receipt(ticket, err, cli.Changed, summary)
+}
+
+func (c boardyCall) fillRequest(id string, notTicket error) int {
+	key, err := c.board()
+	var request boardy.Ticket
+	redrafted := c.redraft(func(field, body string) error {
+		if err == nil {
+			request, err = c.managed.RedraftRequest(key, id, field, body, c.actor)
+		}
+		return err
+	})
+	if err == nil && redrafted == nil {
+		err = notTicket
+	}
+	return c.receipt(request, err, cli.Changed, "request "+id+" "+request.Title+": set "+strings.Join(redrafted, ", "))
+}
+
+func (c boardyCall) redraft(set func(field, body string) error) []string {
+	var redrafted []string
+	for _, drafted := range new(boardy.Ticket).Drafted() {
+		if body, given := c.flags[strings.ReplaceAll(drafted.Field, "_", "-")]; given && set(drafted.Field, body) == nil {
+			redrafted = append(redrafted, drafted.Heading)
+		}
+	}
+	return redrafted
 }
 
 func (c boardyCall) tick() int {

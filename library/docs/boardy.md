@@ -13,9 +13,13 @@ its own tickets from 1: `DEMO-1`, `DEMO-2`, `OPS-1`. On a board of 1,500 tickets
 
 A ticket has front matter (type, status, assignee, priority P0 to P4,
 points, owns, depends, blocks, relates, duplicates, epic, sprint, labels,
-component, spec, size S, M or L) and four sections: Problem, Scope, Acceptance and Log. A ticket
+component, spec, size S, M or L) and its sections: Problem, Scope, Before, Driven path, Still works, Empty or error case, Feasibility, Acceptance and Log. A ticket
 that goes back from review to doing gets a numbered acceptance revision,
 `Acceptance 2`, so every round keeps its own list.
+
+A ticket is made with Before (how it works now), Driven path (the steps a person performs to see the change), Still works (a line for each neighbour it touches) and Empty or error case (what an empty or failing input does); `new` without one is refused, naming each one missing. When Jev's `ticket_feasibility@1` judges the ask a visual or platform effect, such as a blur, Feasibility is required too: what the platform gives, what it does not, and the source.
+
+A move to done is refused while an acceptance line in force has no evidence entry naming it, a line left for the lead included, and the refusal names the line. Jev's `done_reason@1` reads the reason, and one that names a part still open, such as `all done except the dark theme`, is refused, quoting that part. A move with no reason asks nothing. Each Jev answer is a decision ledger row. When Jev cannot answer, an agent's create or move waits for the person, and the person's own goes through with one `nudge` line; with no classifier bound it names `tofu models bind classifier <source/model>`. Every way a ticket is made runs this check: `new`, `ticket_create`, `ticket_request`, a triage accept, a move out of triage, a hand, a hook's `create` effect and `boardy.create` in `tofu serve`; a hook follow up it refuses prints a `nudge` line on the command that fired it. `tofu boardy set <id> --before --driven --still-works --error-case --feasibility` fills the sections of an older ticket or, with `--board KEY`, of a triage request such as `T1`, and its receipt names the sections set. `new --problem` sets the Problem.
 
 Status is a field: triage, backlog, todo, doing, review, done, dropped,
 needs-decision with a question, or
@@ -46,7 +50,7 @@ there, not as a file outside the project.
 ## Change it
 
     tofu boardy init --key DEMO
-    tofu boardy new --priority P1 --owns "internal/a/**" --acceptance "tofu reads every key" parse the config
+    tofu boardy new --priority P1 --owns "internal/a/**" --before "tofu ignores the config" --driven "tofu config show" --still-works "tofu run reads its flags" --error-case "an empty config prints the defaults" --acceptance "tofu reads every key" parse the config
     tofu boardy move DEMO-1 doing
     tofu boardy move DEMO-1 blocked --reason "waits on DEMO-2"
     tofu boardy log DEMO-1 parsed every key, the test passes
@@ -68,7 +72,7 @@ rides on the sub-agent's row, so `--continue` keeps it. The contract reads
 the ticket by that id and its last acceptance revision, never the first
 ticket-shaped word in the brief. The spawn and the report, with the files
 the sub-agent wrote, land on the ticket's thread, and so does a
-`ticket_ask`. `ticket_create` takes `parent` to make a sub-ticket.
+`ticket_ask`. `ticket_create` takes `parent` to make a sub-ticket, and asks for `before`, `driven`, `still_works`, `error_case` and, for a visual or platform effect, `feasibility`.
 Evidence names the line it proves with `line`, a move to review names lines left for the lead with `leave`, and `evidence_at_review` refuses review while a line is unmet. The report is one entry: the engineer's last words in two sentences at most, a `verdict` (done, done with concerns, blocked or needs you), and each line as met, unmet or not mine to prove.
 
 With no managers the lead manages the board as the lead, never as you, with

@@ -30,12 +30,15 @@ func ticketBoard(t *testing.T) boardy.Managed {
 		{Front: boardy.Front{Title: "no owns"}, Acceptance: []string{"- it parses"}},
 		{Front: boardy.Front{Title: "parse the config", Owns: []string{"internal/a/**"}, Status: boardy.Todo}, Acceptance: []string{"- the old line", "- UTF-8 input parses\n- the test passes"}},
 	} {
+		ticket.Before, ticket.Driven, ticket.StillWorks, ticket.ErrorCase, ticket.Feasibility = "b", "d", "w", "e", "f"
 		if _, err := board.Create("DEMO", ticket, "lead"); err != nil {
 			t.Fatal(err)
 		}
 	}
 	return board
 }
+
+const drafted = `"before":"b","driven":"d","still_works":"w","error_case":"e","feasibility":"f",`
 
 func subAgentTool(t *testing.T, board boardy.Managed, name string) turn.Tool {
 	t.Helper()
@@ -107,7 +110,7 @@ func TestTicketToolsKeepASubAgentToItsOwnTicket(t *testing.T) {
 	if err != nil || !strings.Contains(read, "status: review") || !strings.Contains(read, "- "+time.Now().Format(time.DateOnly)+" go-dev-1: UTF-8 input parses") || !strings.Contains(read, "go-dev-1 (evidence): go test ./internal/a") {
 		t.Errorf("ticket_read gave %v:\n%s", err, read)
 	}
-	if _, err := runTicket(subAgentTool(t, board, "ticket_request"), `{"board":"DEMO","title":"a follow-up","acceptance":"- it is filed"}`); err != nil {
+	if _, err := runTicket(subAgentTool(t, board, "ticket_request"), `{"board":"DEMO",`+drafted+`"title":"a follow-up","acceptance":"- it is filed"}`); err != nil {
 		t.Fatal(err)
 	}
 	if requests, _ := board.Store.Requests("DEMO"); len(requests) != 1 {
@@ -135,11 +138,17 @@ func TestTicketToolsSplitATicketAndThreadTheAsk(t *testing.T) {
 		t.Fatal(err)
 	}
 	create := lead[slices.IndexFunc(lead, func(tool turn.Tool) bool { return tool.Name() == "ticket_create" })]
-	said, err := runTicket(create, `{"board":"DEMO","parent":"DEMO-2","title":"the parser half","acceptance":"- it parses","owns":["internal/a/parse.go"]}`)
+	said, err := runTicket(create, `{"board":"DEMO",`+drafted+`"parent":"DEMO-2","title":"the parser half","acceptance":"- it parses","owns":["internal/a/parse.go"]}`)
 	if err != nil || !strings.Contains(said, "DEMO-2-1") {
 		t.Fatalf("ticket_create under DEMO-2 said %q, %v", said, err)
 	}
-	if _, err := runTicket(create, `{"board":"DEMO","parent":"DEMO-2","title":"outside","acceptance":"- no","owns":["internal/b/**"]}`); err == nil || !strings.Contains(err.Error(), "DEMO-2") {
+	if made, _ := board.Store.Get("DEMO-2-1"); made.Before != "b" || made.Driven != "d" || made.StillWorks != "w" || made.ErrorCase != "e" || made.Feasibility != "f" {
+		t.Errorf("ticket_create left the sections %+v", made)
+	}
+	if _, err := runTicket(create, `{"board":"DEMO","parent":"DEMO-2","title":"the other half","acceptance":"- it parses","owns":["internal/a/two.go"]}`); err == nil || !strings.Contains(err.Error(), "Driven path") {
+		t.Errorf("ticket_create with no sections: %v, want a refusal naming Driven path", err)
+	}
+	if _, err := runTicket(create, `{"board":"DEMO",`+drafted+`"parent":"DEMO-2","title":"outside","acceptance":"- no","owns":["internal/b/**"]}`); err == nil || !strings.Contains(err.Error(), "DEMO-2") {
 		t.Errorf("a child owning outside DEMO-2: %v, want a refusal naming it", err)
 	}
 	owns, err := tools.TicketGrant(board, "DEMO-2-1", "lead", "go-dev-2")
@@ -200,7 +209,15 @@ func TestTicketToolsStateAndKeepTheirLimitsInWords(t *testing.T) {
 		}
 	}
 	create := lead[slices.IndexFunc(lead, func(tool turn.Tool) bool { return tool.Name() == "ticket_create" })]
-	if _, err := runTicket(create, `{"board":"DEMO","parent":"DEMO-1","title":"half","acceptance":"- it parses","owns":["internal/a/parse.go"]}`); err == nil || !strings.Contains(err.Error(), "DEMO-1 owns no paths") || !strings.Contains(err.Error(), "without a parent") {
+	schema, _ := create.Definition().Parameters.(map[string]any)
+	required, _ := schema["required"].([]string)
+	properties, _ := schema["properties"].(map[string]any)
+	for _, field := range []string{"before", "driven", "still_works", "error_case", "feasibility"} {
+		if properties[field] == nil || field != "feasibility" && !slices.Contains(required, field) {
+			t.Errorf("ticket_create does not ask for %s: required %q", field, required)
+		}
+	}
+	if _, err := runTicket(create, `{"board":"DEMO",`+drafted+`"parent":"DEMO-1","title":"half","acceptance":"- it parses","owns":["internal/a/parse.go"]}`); err == nil || !strings.Contains(err.Error(), "DEMO-1 owns no paths") || !strings.Contains(err.Error(), "without a parent") {
 		t.Errorf("a sub-ticket of DEMO-1, which owns nothing: %v", err)
 	}
 }

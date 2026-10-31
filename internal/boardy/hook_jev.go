@@ -30,6 +30,14 @@ type jevTicket struct {
 	Acceptance string `json:"acceptance"`
 }
 
+func jevTicketOf(t Ticket) jevTicket {
+	inForce := ""
+	if len(t.Acceptance) > 0 {
+		inForce = t.Acceptance[len(t.Acceptance)-1]
+	}
+	return jevTicket{ID: t.ID, Title: t.Title, Type: t.Type, Problem: t.Problem, Scope: t.Scope, Acceptance: inForce}
+}
+
 type jevEpic struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
@@ -46,11 +54,7 @@ func (m Managed) askJev(ref string, s subject) (string, string) {
 	if err != nil {
 		return "", "the epics could not be read: " + err.Error()
 	}
-	t := s.ticket
-	state := jevState{Ticket: jevTicket{ID: t.ID, Title: t.Title, Type: t.Type, Problem: t.Problem, Scope: t.Scope}, Epics: []jevEpic{}}
-	if len(t.Acceptance) > 0 {
-		state.Ticket.Acceptance = t.Acceptance[len(t.Acceptance)-1]
-	}
+	state := jevState{Ticket: jevTicketOf(s.ticket), Epics: []jevEpic{}}
 	for _, epic := range epics {
 		if !epic.Done {
 			state.Epics = append(state.Epics, jevEpic{ID: epic.ID, Title: epic.Title, Text: epic.Text})

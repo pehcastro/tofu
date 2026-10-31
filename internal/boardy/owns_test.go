@@ -191,6 +191,7 @@ func TestSubTicketsLiveUnderTheirParentsOwns(t *testing.T) {
 		t.Errorf("the parent to review with live children: %v, want a refusal naming %s", err, first.ID)
 	}
 	for _, child := range []string{first.ID, second.ID, overlapping.ID} {
+		proved(t, m, child)
 		if _, err := m.Move(child, Done, "", manager); err != nil {
 			t.Fatal(err)
 		}

@@ -159,15 +159,23 @@ func (t ticketTool) Definition() llm.Tool {
 			"parent": stringParam("a ticket to split, such as DEMO-2: the new one becomes its sub-ticket DEMO-2-1, and its owns must sit inside the parent's"),
 		}
 		required = []string{"board", "title", "acceptance"}
+		var drafted boardy.Ticket
+		for _, section := range drafted.Drafted() {
+			properties[section.Field] = stringParam(section.Heading + ": " + section.Says)
+			if section.Heading != boardy.FeasibilityHeading {
+				required = append(required, section.Field)
+			}
+		}
 		if t.verb == ticketCreate {
 			describe = "creates a ticket on a board you manage, numbered by the board; put it in an epic and a sprint, and make them first with epic and sprint when none fits. a sub-ticket's owns sit inside its parent's owns, which are the ceiling, so a parent that owns nothing takes no sub-ticket and the new one is made without a parent; no owns glob may overlap the owns of a ticket in doing on any board, and the refusal names the glob and the ticket"
 			properties["epic"], properties["sprint"] = stringParam("the epic id it belongs to, from epic list"), stringParam("the sprint id it is planned in, from sprint list")
 		}
+		describe += ". a ticket carries before, driven, still_works and error_case, and one asking for a visual or platform effect, such as a blur or transparency, carries feasibility too; a ticket missing one is refused naming it"
 	case ticketMove:
 		statuses := []boardy.Status{boardy.Review}
 		describe = "moves your own ticket from doing to review once every acceptance line in force has an entry of kind evidence naming it, or is in leave; a board may also want a least amount of evidence, and the refusal says how much"
 		if t.manager {
-			statuses, describe = boardy.Statuses(), "moves a ticket on a board you manage to a status; blocked needs a reason. a ticket reaches doing, review or done only with Acceptance, review only with a Log entry, and a parent reaches review or done only once its sub-tickets are done or dropped. a ticket moving into doing may not own a path a ticket in doing already owns; the refusal names the glob and the ticket"
+			statuses, describe = boardy.Statuses(), "moves a ticket on a board you manage to a status; blocked needs a reason. a ticket reaches doing, review or done only with Acceptance, review only with a Log entry, done only when every acceptance line in force has evidence naming it and the reason names nothing still open, and a parent reaches review or done only once its sub-tickets are done or dropped. a ticket moving into doing may not own a path a ticket in doing already owns; the refusal names the glob and the ticket"
 		}
 		properties["to"], properties["reason"], required = map[string]any{"type": "string", "enum": statuses}, stringParam("why, required for blocked"), append(required, "to")
 		describe += ". a reason is one sentence on one line, and anything longer goes in ticket_log"
@@ -185,6 +193,9 @@ func (t ticketTool) Definition() llm.Tool {
 func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 	var args struct {
 		ID, Text, Question, ELI5, Why, Board, Title, Problem, Scope, Acceptance, To, Reason, Parent, Epic, Sprint, Status string
+		Before, Driven, Feasibility                                                                                       string
+		StillWorks                                                                                                        string `json:"still_works"`
+		ErrorCase                                                                                                         string `json:"error_case"`
 		Kind                                                                                                              logKind
 		Owns, Options                                                                                                     []string
 		Recommend, Line                                                                                                   int
@@ -227,7 +238,8 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 			said = "asked in the Log of " + ticket.ID + "; a manager answers there"
 		case ticketRequest, ticketCreate:
 			command = string(t.verb) + " " + args.Board
-			draft := boardy.Ticket{Front: boardy.Front{Title: args.Title, Owns: args.Owns, Parent: args.Parent, Epic: args.Epic, Sprint: args.Sprint}, Problem: args.Problem, Scope: args.Scope, Acceptance: []string{args.Acceptance}}
+			draft := boardy.Ticket{Front: boardy.Front{Title: args.Title, Owns: args.Owns, Parent: args.Parent, Epic: args.Epic, Sprint: args.Sprint}, Problem: args.Problem, Scope: args.Scope,
+				Before: args.Before, Driven: args.Driven, StillWorks: args.StillWorks, ErrorCase: args.ErrorCase, Feasibility: args.Feasibility, Acceptance: []string{args.Acceptance}}
 			file := t.board.Create
 			if t.verb == ticketRequest {
 				file = t.board.Request

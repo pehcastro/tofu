@@ -1,0 +1,38 @@
+name: ticket_feasibility
+domain: general
+questions_version: 1
+mode: enforced
+notes: >-
+  asked by internal/boardy when a ticket is made without a Feasibility
+  section. state.ticket is the new ticket. the ticket is refused when platform
+  is at or above platform_at, and the refusal asks for the section: what the
+  platform gives, what it does not, and the source. a ticket that carries the
+  section is never asked about. an error or a timeout holds the ticket for the
+  person, whose own ticket is made. platform_at is the middle of the noul
+  range, an uncalibrated prior.
+
+thresholds:
+  platform_at: 0.5
+
+state:
+  - ticket
+
+questions:
+  platform:
+    type: noul
+    instructions: >-
+      `ticket` is a new ticket for a software project. Decide whether what it
+      asks for is a visual or platform effect that exists only if the
+      operating system, the window system, the GPU, the browser or the
+      interface toolkit provides it: a blur or vibrancy behind a window or a
+      panel, transparency, a shadow outside the window, a native menu or tray,
+      a shader, a system notification, an animation the toolkit may not
+      support, or a feature of one platform only.
+    criteria:
+      true: >-
+        The ticket asks for an effect or a behaviour the platform or the
+        toolkit may not offer, so whether it can be built at all has to be
+        checked first.
+      false: >-
+        The ticket asks for logic, data, text, layout or tooling that any
+        platform runs, or for an effect the code already has.

@@ -123,11 +123,40 @@ type Front struct {
 
 type Ticket struct {
 	Front
-	Problem    string     `json:"problem"`
-	Scope      string     `json:"scope"`
-	Acceptance []string   `json:"acceptance"`
-	Questions  []Question `json:"questions,omitempty"`
-	Log        string     `json:"log"`
+	Problem     string     `json:"problem"`
+	Scope       string     `json:"scope"`
+	Before      string     `json:"before,omitempty"`
+	Driven      string     `json:"driven,omitempty"`
+	StillWorks  string     `json:"still_works,omitempty"`
+	ErrorCase   string     `json:"error_case,omitempty"`
+	Feasibility string     `json:"feasibility,omitempty"`
+	Acceptance  []string   `json:"acceptance"`
+	Questions   []Question `json:"questions,omitempty"`
+	Log         string     `json:"log"`
+}
+
+const (
+	FeasibilityHeading = "Feasibility"
+	feasibilitySays    = "what the platform gives, what it does not, and the source"
+)
+
+type Drafted struct {
+	Heading, Field, Says string
+	Body                 *string
+}
+
+func (t *Ticket) Drafted() []Drafted {
+	return []Drafted{
+		{"Before", "before", "how it works now, driven", &t.Before},
+		{"Driven path", "driven", "the steps a person performs to see the change", &t.Driven},
+		{"Still works", "still_works", "a line for each neighbour the change touches", &t.StillWorks},
+		{"Empty or error case", "error_case", "what an empty or failing input does", &t.ErrorCase},
+		{FeasibilityHeading, "feasibility", feasibilitySays, &t.Feasibility},
+	}
+}
+
+func (t Ticket) undrafted() []Drafted {
+	return slices.DeleteFunc(t.Drafted(), func(d Drafted) bool { return d.Heading == FeasibilityHeading || strings.TrimSpace(*d.Body) != "" })
 }
 
 func (t Ticket) Board() string { key, _, _ := strings.Cut(t.ID, "-"); return key }
@@ -201,6 +230,11 @@ func (t Ticket) Markdown() []byte {
 	}
 	section("Problem", t.Problem)
 	section("Scope", t.Scope)
+	for _, drafted := range t.Drafted() {
+		if strings.TrimSpace(*drafted.Body) != "" {
+			section(drafted.Heading, *drafted.Body)
+		}
+	}
 	if len(t.Acceptance) == 0 {
 		section(RevisionHeading(0), "")
 	}
@@ -338,7 +372,9 @@ func (t *Ticket) readSections(body string) error {
 			case RevisionHeading(len(t.Acceptance)):
 				t.Acceptance = append(t.Acceptance, "")
 			default:
-				return fmt.Errorf("the section %q is not Problem, Scope, Acceptance, Acceptance <n> in order, Questions, or Log", heading)
+				if !slices.ContainsFunc(t.Drafted(), func(d Drafted) bool { return d.Heading == heading }) {
+					return fmt.Errorf("the section %q is not Problem, Scope, Before, Driven path, Still works, Empty or error case, Feasibility, Acceptance, Acceptance <n> in order, Questions, or Log", heading)
+				}
 			}
 		case heading == "" && strings.TrimSpace(line) != "":
 			return fmt.Errorf("text before the first section: %q", strings.TrimSpace(line))
@@ -357,6 +393,9 @@ func (t *Ticket) readSections(body string) error {
 		t.Acceptance[i] = strings.TrimSpace(sections[RevisionHeading(i)])
 	}
 	t.Problem, t.Scope, t.Log = strings.TrimSpace(sections["Problem"]), strings.TrimSpace(sections["Scope"]), strings.TrimSpace(sections["Log"])
+	for _, drafted := range t.Drafted() {
+		*drafted.Body = strings.TrimSpace(sections[drafted.Heading])
+	}
 	var err error
 	t.Questions, err = parseQuestions(sections[QuestionsHeading])
 	return err

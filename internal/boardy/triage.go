@@ -60,6 +60,9 @@ func (m Managed) request(key string, ticket Ticket, actor string) (Ticket, error
 	if err := m.gate(&s); err != nil {
 		return Ticket{}, err
 	}
+	if err := m.drafted(key, s.ticket, actor); err != nil {
+		return Ticket{}, err
+	}
 	req := Request{By: *m.Store.authorOf(actor), At: time.Now().UTC().Truncate(time.Second), Ticket: ticket}
 	err := m.Store.locked(key, triageCounterName, func() error {
 		dir := filepath.Join(m.Store.BoardDir(key), TriageDirName)
@@ -125,6 +128,31 @@ func (m Managed) namesTriagedTicket(key, id string) (bool, error) {
 		err = fmt.Errorf("%s is %s, not in the triage of %s", id, ticket.Status, key)
 	}
 	return true, err
+}
+
+func (m Managed) RedraftRequest(key, id, field, body, actor string) (Ticket, error) {
+	at, err := draftedSection(field, body)
+	if err != nil {
+		return Ticket{}, err
+	}
+	heading := new(Ticket).Drafted()[at].Heading
+	if err := m.Manages(key, actor, "set "+heading+" on a triage request"); err != nil {
+		return Ticket{}, err
+	}
+	var req Request
+	err = m.Store.locked(key, "triage-"+id, func() error {
+		if req, err = m.Store.readRequest(key, id); err != nil {
+			return err
+		}
+		*req.Ticket.Drafted()[at].Body = strings.TrimSpace(body)
+		req.Ticket.Log = strings.TrimSpace(req.Ticket.Log + "\n" + m.Store.logLine(actor, "set "+heading))
+		data, err := json.MarshalIndent(req, "", "  ")
+		if err != nil {
+			return err
+		}
+		return writeAtomic(m.Store.requestPath(key, id), append(data, '\n'))
+	})
+	return req.Ticket, err
 }
 
 func (s Store) readRequest(key, id string) (Request, error) {

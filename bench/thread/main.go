@@ -52,7 +52,9 @@ func drive(label, tofu, cassette string, proof []string, work string) (counted, 
 	for _, args := range [][]string{
 		{"boardy", "init", "--key", boardKey, "--name", "demo"},
 		{"boardy", "epic", "new", "CFG", "config", "--board", boardKey},
-		{"boardy", "new", "--board", boardKey, "--epic", "CFG", "--owns", "internal/parse/**", "--acceptance", acceptance, "parse the config"},
+		{"boardy", "new", "--board", boardKey, "--epic", "CFG", "--owns", "internal/parse/**", "--acceptance", acceptance,
+			"--before", "the config is not read", "--driven", "go test ./internal/parse/...", "--still-works", "a missing config keeps the defaults", "--error-case", "a malformed config is refused naming the line",
+			"--feasibility", "none: no platform or visual effect", "parse the config"},
 		{"run", "--dir", project, "--no-gate", "--sift", "free", "work " + ticketID},
 		{"boardy", "show", ticketID, "--thread", "--json"},
 	} {
