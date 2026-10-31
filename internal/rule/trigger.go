@@ -22,6 +22,7 @@ const (
 	VerbExplore Verb = "explore"
 	VerbReview  Verb = "review"
 	VerbWrite   Verb = "write"
+	VerbPlan    Verb = "plan"
 )
 
 func languageExtensions() map[string][]string {
@@ -253,9 +254,9 @@ func newTrigger(d declaredTrigger, file, id string) (Trigger, error) {
 		return Trigger{}, err
 	}
 	switch t.verb {
-	case VerbNone, VerbDebug, VerbExplore, VerbReview, VerbWrite:
+	case VerbNone, VerbDebug, VerbExplore, VerbReview, VerbWrite, VerbPlan:
 	default:
-		return Trigger{}, fmt.Errorf("%s: rule %q declares the task %q, and a task is %s, %s, %s or %s", file, id, d.task, VerbDebug, VerbExplore, VerbReview, VerbWrite)
+		return Trigger{}, fmt.Errorf("%s: rule %q declares the task %q, and a task is %s, %s, %s, %s or %s", file, id, d.task, VerbDebug, VerbExplore, VerbReview, VerbWrite, VerbPlan)
 	}
 	return t, nil
 }
@@ -382,14 +383,37 @@ func (r Rule) forTheWriterOnly() bool {
 	panic("rule: unknown shape " + string(r.Shapes))
 }
 
+func (t Trigger) onlyPaths() bool {
+	return t.event == EventNone && t.condition == nil && t.verb == VerbNone && t.role == RoleAny
+}
+
 func Index(rules []Rule, task Task) []Match {
 	index := make([]Match, len(rules))
 	for i, r := range rules {
 		fires, why := r.Trigger.firesFor(task)
-		if fires && task.Role == RoleOrchestrator && r.forTheWriterOnly() {
-			fires, why = false, "a rule for how code is written reaches the agent that writes it, and the prompt is the orchestrator's"
+		switch {
+		case !fires && task.Verb == VerbPlan && r.Domain == DomainQA && r.Trigger.onlyPaths():
+			fires, why = true, "the task plans work, and a qa rule scoped to paths reaches the plan before the paths exist"
+		case fires && task.Role == RoleOrchestrator && task.Verb != VerbPlan && r.forTheWriterOnly():
+			fires, why = false, "a rule for how code is written reaches the agent that writes it or a lead that plans, and the prompt is the orchestrator's on a task that plans nothing"
 		}
 		index[i] = Match{RuleID: r.ID, Fires: fires, Why: why}
+	}
+	return index
+}
+
+func IndexReaching(rules []Rule, agentDomain string, task Task) []Match {
+	index := Index(rules, task)
+	for i, r := range rules {
+		reaches, why := r.ReachesDomain(agentDomain, task)
+		switch {
+		case r.Mode == ModeOff:
+			index[i] = Match{RuleID: r.ID, Why: "the rule's mode is off"}
+		case !reaches:
+			index[i] = Match{RuleID: r.ID, Why: why}
+		case why != "" && index[i].Fires:
+			index[i].Why = why + ", and " + index[i].Why
+		}
 	}
 	return index
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +11,8 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/rule"
+	"tofu/internal/subagent"
+	"tofu/internal/turn"
 )
 
 type ruleIndexListing struct {
@@ -27,6 +30,7 @@ type ruleIndexReport struct {
 	Task       string             `json:"task"`
 	TaskKind   string             `json:"task_kind"`
 	Role       string             `json:"role,omitempty"`
+	Agent      string             `json:"agent,omitempty"`
 	Paths      []string           `json:"paths"`
 	Frameworks []string           `json:"frameworks,omitempty"`
 	Firing     int                `json:"firing"`
@@ -34,31 +38,37 @@ type ruleIndexReport struct {
 }
 
 func rulesIndexVerb(args []string, out, errOut io.Writer) int {
-	o := verbOutput{verb: "rules index", usageLine: `tofu rules index "<task>" [path...] [--task kind] [--role orchestrator|sub-agent] [--library dir] [--dir project] [--json]`, out: out, errOut: errOut}
+	o := verbOutput{verb: "rules index", usageLine: `tofu rules index "<task>" [path...] [--task kind] [--role orchestrator|sub-agent] [--agent name] [--library dir] [--dir project] [--json]`, out: out, errOut: errOut}
 	kept := make([]string, 0, len(args))
-	verb, role, roleAsked := rule.VerbNone, rule.RoleAny, false
+	verb, role, agentName, verbAsked, roleAsked := rule.VerbNone, rule.RoleAny, "", false, false
 	for i := 0; i < len(args); i++ {
 		flag := args[i]
-		if flag != "--task" && flag != "--role" {
+		if flag != "--task" && flag != "--role" && flag != "--agent" {
 			kept = append(kept, flag)
 			continue
 		}
 		if i++; i >= len(args) {
 			return o.usage(fmt.Errorf("%s needs a value", flag))
 		}
-		if flag == "--task" {
-			verb = rule.Verb(args[i])
-			continue
+		switch flag {
+		case "--task":
+			verb, verbAsked = rule.Verb(args[i]), true
+		case "--role":
+			role, roleAsked = rule.Role(args[i]), true
+		case "--agent":
+			agentName = args[i]
 		}
-		role, roleAsked = rule.Role(args[i]), true
 	}
 	switch verb {
-	case rule.VerbNone, rule.VerbDebug, rule.VerbExplore, rule.VerbReview, rule.VerbWrite:
+	case rule.VerbNone, rule.VerbDebug, rule.VerbExplore, rule.VerbReview, rule.VerbWrite, rule.VerbPlan:
 	default:
-		return o.usage(fmt.Errorf("--task is %s, %s, %s or %s, found %q", rule.VerbDebug, rule.VerbExplore, rule.VerbReview, rule.VerbWrite, verb))
+		return o.usage(fmt.Errorf("--task is %s, %s, %s, %s or %s, found %q", rule.VerbDebug, rule.VerbExplore, rule.VerbReview, rule.VerbWrite, rule.VerbPlan, verb))
 	}
 	if roleAsked && role != rule.RoleOrchestrator && role != rule.RoleSubAgent {
 		return o.usage(fmt.Errorf("--role is %s or %s, found %q", rule.RoleOrchestrator, rule.RoleSubAgent, role))
+	}
+	if agentName != "" && role == rule.RoleOrchestrator {
+		return o.usage(fmt.Errorf("--agent %s composes a sub-agent's prompt, and --role is %s", agentName, role))
 	}
 	opts, err := parseRulesFlags(kept)
 	if err == nil && len(opts.rest) == 0 {
@@ -72,16 +82,33 @@ func rulesIndexVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return o.fail(err)
 	}
+	var agent subagent.Definition
+	if agentName != "" {
+		found, err := agentsIn(opts.dir)
+		if err == nil {
+			agent, err = turn.SubAgents{Defined: found.Definitions}.Named(agentName)
+		}
+		if err != nil {
+			return o.fail(err)
+		}
+		role = rule.RoleSubAgent
+	}
 	rules := stack.rules
-	report := ruleIndexReport{Origin: stack.origin, Task: opts.rest[0], TaskKind: string(verb), Role: string(role), Paths: opts.rest[1:], Rules: make([]ruleIndexListing, 0, len(rules))}
+	task := turn.TaskNamed(opts.rest[0])
+	if verbAsked {
+		task.Verb = verb
+	}
+	for _, named := range opts.rest[1:] {
+		if !slices.Contains(task.Paths, named) {
+			task.Paths = append(task.Paths, named)
+		}
+	}
+	report := ruleIndexReport{Origin: stack.origin, Task: task.Text, TaskKind: string(task.Verb), Role: string(role), Agent: agent.Name, Paths: task.Paths, Rules: make([]ruleIndexListing, 0, len(rules))}
 	if report.Frameworks, err = rule.Frameworks(opts.dir, report.Paths); err != nil {
 		return o.fail(err)
 	}
-	task := rule.Task{Text: report.Task, Paths: report.Paths, Verb: verb, Role: role, Frameworks: report.Frameworks}
-	for i, m := range rule.Index(rules, task) {
-		if reaches, why := rules[i].ReachesDomain(rule.DomainDev, task); !reaches {
-			m.Fires, m.Why = false, why
-		}
+	task.Role, task.Language, task.Frameworks = role, agent.Language, report.Frameworks
+	for i, m := range rule.IndexReaching(rules, cmp.Or(agent.Domain, rule.DomainDev), task) {
 		if m.Fires {
 			report.Firing++
 		}
@@ -126,6 +153,9 @@ func (report ruleIndexReport) lines(page cli.Page) []string {
 	}
 	if report.Role != "" {
 		facts = append(facts, cli.Fact{Label: "role", Text: report.Role})
+	}
+	if report.Agent != "" {
+		facts = append(facts, cli.Fact{Label: "agent", Text: report.Agent})
 	}
 	if len(report.Frameworks) > 0 {
 		facts = append(facts, cli.Fact{Label: "frameworks", Text: strings.Join(report.Frameworks, ", ")})

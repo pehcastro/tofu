@@ -192,18 +192,13 @@ func Compose(spec ComposeSpec) (Composed, error) {
 		composed.Parts = append(composed.Parts, builtin)
 	}
 	agentDomain := cmp.Or(spec.Agent.Domain, rule.DomainDev)
-	reaching := slices.DeleteFunc(slices.Clone(spec.Rules), func(loaded rule.Rule) bool {
-		reaches, _ := loaded.ReachesDomain(agentDomain, composed.Task)
-		return !reaches || loaded.Mode == rule.ModeOff
-	})
-	withoutTask := rule.Index(reaching, rule.Task{Role: composed.Task.Role, Language: composed.Task.Language, Frameworks: composed.Task.Frameworks})
-	for i, match := range rule.Index(reaching, composed.Task) {
+	withoutTask := rule.IndexReaching(spec.Rules, agentDomain, rule.Task{Role: composed.Task.Role, Language: composed.Task.Language, Frameworks: composed.Task.Frameworks})
+	for i, match := range rule.IndexReaching(spec.Rules, agentDomain, composed.Task) {
 		if !match.Fires {
 			composed.HeldBack = append(composed.HeldBack, match)
 			continue
 		}
-		fired := reaching[i]
-		reachesWithoutTask, _ := fired.ReachesDomain(agentDomain, rule.Task{})
+		fired := spec.Rules[i]
 		text := cmp.Or(strings.TrimSpace(fired.Text), strings.TrimSpace(fired.Notes))
 		if text == "" {
 			return Composed{}, fmt.Errorf("rule %s fires, %s, and carries no text the prompt can send: %s",
@@ -215,7 +210,7 @@ func Compose(spec ComposeSpec) (Composed, error) {
 			File:    filepath.ToSlash(fired.File),
 			Text:    text,
 			Why:     match.Why,
-			ByTask:  !withoutTask[i].Fires || !reachesWithoutTask,
+			ByTask:  !withoutTask[i].Fires,
 		})
 	}
 	for _, off := range spec.SwitchedOff {
@@ -298,8 +293,8 @@ func TaskNamed(text string) rule.Task {
 			task.Paths = append(task.Paths, filepath.ToSlash(word))
 			continue
 		}
-		if task.Verb == rule.VerbNone {
-			task.Verb = verbNamed(word)
+		if verb := verbNamed(word); verb == rule.VerbPlan || task.Verb == rule.VerbNone {
+			task.Verb = verb
 		}
 	}
 	return task
@@ -320,6 +315,9 @@ func namedExtension(word string) bool {
 
 func verbNamed(word string) rule.Verb {
 	named := rule.Verb(strings.ToLower(word))
+	if slices.Contains([]rule.Verb{rule.VerbPlan, "ticket", "tickets", "epic", "epics"}, named) {
+		return rule.VerbPlan
+	}
 	if slices.Contains([]rule.Verb{rule.VerbDebug, rule.VerbExplore, rule.VerbReview, rule.VerbWrite}, named) {
 		return named
 	}

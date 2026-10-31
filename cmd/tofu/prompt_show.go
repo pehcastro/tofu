@@ -4,9 +4,11 @@ import (
 	"cmp"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"tofu/internal/llm"
+	"tofu/internal/rule"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/turn"
 )
@@ -33,24 +35,53 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 	system, firstUser := sent.SystemMessage(), sent.FirstUserMessage()
 	uncomposed := len(runSystem(opts))
 
-	fired, widest := 0, 0
+	stack, err := stackRules("", cmp.Or(opts.dir, "."))
+	if err != nil {
+		return runFail(errOut, err)
+	}
+	held := slices.Clone(composed.HeldBack)
+	listed := map[string]bool{}
+	fired, off, widest := 0, 0, 0
 	for _, part := range composed.Parts {
-		if part.RuleID != "" {
+		listed[part.RuleID] = true
+		switch {
+		case part.Off:
+			off++
+		case part.RuleID != "":
 			fired++
 		}
 		widest = max(widest, len(part.Concern))
 	}
-	_, _ = fmt.Fprintf(out, "task: %s\ninstruction files: %s\npaths the task names: %s\nverb the task names: %s\nrules: %d fire, %d held back\n\n",
+	for _, match := range held {
+		listed[match.RuleID] = true
+	}
+	loaded := slices.Concat(stack.rules, stack.shippedOff)
+	for _, one := range loaded {
+		if listed[one.ID] {
+			continue
+		}
+		why := "the run's setting --tools three sends no " + one.ID
+		switch key := ruleSetting(one.ID); {
+		case one.Mode == rule.ModeOff && key != "":
+			why = "the rule's mode is off, and the setting " + key + " does not turn it on here"
+		case one.Mode == rule.ModeOff:
+			why = "the rule's mode is off"
+		case opts.leadAlone:
+			why = "the run's lead alone setting: the task names few files in one folder, so the spawn rules are not sent"
+		}
+		held = append(held, rule.Match{RuleID: one.ID, Why: why})
+	}
+	_, _ = fmt.Fprintf(out, "task: %s\ninstruction files: %s\npaths the task names: %s\nverb the task names: %s\nrules: %d loaded, %d fire, %d held back, %d switched off\n\n",
 		opts.task, instructions,
 		cmp.Or(strings.Join(composed.Task.Paths, ", "), "none, so a scope and a language reach nothing"),
 		cmp.Or(string(composed.Task.Verb), "none, so a rule that names a task holds back"),
-		fired, len(composed.HeldBack))
+		len(loaded), fired, len(held), off)
 
 	for _, part := range composed.Parts {
 		_, _ = fmt.Fprintf(out, "part %-*s %6d bytes  from %s\n", widest, part.Concern, len(part.Text), part.From())
 	}
-	for _, held := range composed.HeldBack {
-		_, _ = fmt.Fprintf(out, "held %s: %s\n", held.RuleID, held.Why)
+	for _, match := range held {
+		_, _ = fmt.Fprintf(out, "held %s: %s\n", match.RuleID, match.Why)
 	}
 
 	_, _ = fmt.Fprintf(out, "\nsystem message, %d bytes\n%s\n", len(system), system)

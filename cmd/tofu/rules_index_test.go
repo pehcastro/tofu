@@ -131,37 +131,60 @@ func TestRulesIndexFiresWhatTheComposerSendsForEveryRole(t *testing.T) {
 		t.Fatal(err)
 	}
 	project := t.TempDir()
+	found, err := agentsIn(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	qa, err := turn.SubAgents{Defined: found.Definitions}.Named("qa")
+	if err != nil {
+		t.Fatal(err)
+	}
+	type indexCase struct {
+		spec turn.ComposeSpec
+		args []string
+	}
+	var cases []indexCase
 	for _, task := range []string{"fix the parser", "add tests for the parser"} {
 		for _, role := range []rule.Role{rule.RoleAny, rule.RoleOrchestrator, rule.RoleSubAgent} {
-			composed, err := turn.Compose(turn.ComposeSpec{Task: task, Paths: []string{"parser.go"}, Environment: "e", ToolGuidance: "g", Rules: rules, Role: role})
-			if err != nil {
-				t.Fatal(err)
-			}
-			var sent, listed []string
-			for _, part := range composed.Parts {
-				if part.RuleID != "" {
-					sent = append(sent, part.RuleID)
-				}
-			}
-			args := []string{"rules", "index", task, "parser.go", "--library", library, "--dir", project, "--task", string(composed.Task.Verb), jsonFlag}
+			args := []string{"parser.go", "--task", string(turn.TaskNamed(task).Verb)}
 			if role != rule.RoleAny {
 				args = append(args, "--role", string(role))
 			}
-			code, out, errOut := runOutput(args)
-			var printed struct{ Data ruleIndexReport }
-			if err := json.Unmarshal([]byte(out), &printed); code != exitOK || err != nil {
-				t.Fatalf("%q %q exited %d (%v):\n%s%s", task, role, code, err, out, errOut)
+			cases = append(cases, indexCase{turn.ComposeSpec{Task: task, Paths: []string{"parser.go"}, Role: role}, args})
+		}
+	}
+	cases = append(cases,
+		indexCase{turn.ComposeSpec{Task: "write a ticket for the theme picker", Role: rule.RoleOrchestrator}, []string{"--role", "orchestrator"}},
+		indexCase{turn.ComposeSpec{Task: "fix the nil check in internal/turn/loop.go", Role: rule.RoleOrchestrator}, []string{"--role", "orchestrator"}},
+		indexCase{turn.ComposeSpec{Task: "write a ticket for the theme picker", Role: rule.RoleSubAgent, Agent: qa}, []string{"--role", "sub-agent", "--agent", "qa"}},
+		indexCase{turn.ComposeSpec{Task: "check the change in internal/turn/loop_test.go", Role: rule.RoleSubAgent, Agent: qa}, []string{"--agent", "qa"}},
+	)
+	for _, c := range cases {
+		c.spec.Environment, c.spec.ToolGuidance, c.spec.Rules = "e", "g", rules
+		composed, err := turn.Compose(c.spec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var sent, listed []string
+		for _, part := range composed.Parts {
+			if part.RuleID != "" {
+				sent = append(sent, part.RuleID)
 			}
-			for _, r := range printed.Data.Rules {
-				if r.Fires {
-					listed = append(listed, r.RuleID)
-				}
+		}
+		code, out, errOut := runOutput(append([]string{"rules", "index", c.spec.Task, "--library", library, "--dir", project, jsonFlag}, c.args...))
+		var printed struct{ Data ruleIndexReport }
+		if err := json.Unmarshal([]byte(out), &printed); code != exitOK || err != nil {
+			t.Fatalf("%q %v exited %d (%v):\n%s%s", c.spec.Task, c.args, code, err, out, errOut)
+		}
+		for _, r := range printed.Data.Rules {
+			if r.Fires {
+				listed = append(listed, r.RuleID)
 			}
-			slices.Sort(sent)
-			slices.Sort(listed)
-			if !slices.Equal(sent, listed) {
-				t.Errorf("%q as %q: the composer sends %v\nand the index fires %v", task, role, sent, listed)
-			}
+		}
+		slices.Sort(sent)
+		slices.Sort(listed)
+		if !slices.Equal(sent, listed) {
+			t.Errorf("%q %v: the composer sends %v\nand the index fires %v", c.spec.Task, c.args, sent, listed)
 		}
 	}
 }

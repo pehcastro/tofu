@@ -45,6 +45,9 @@ func (r Rule) ReachesDomain(agentDomain string, task Task) (bool, string) {
 	if r.Domain != DomainQA && r.Domain != DomainDev || r.Domain == agentDomain || r.ReachesDevFor(task) {
 		return true, ""
 	}
+	if r.Domain == DomainQA && task.Verb == VerbPlan {
+		return true, "the task plans work, so a qa rule reaches a " + agentDomain + " agent"
+	}
 	if r.AlsoReaches == ReachWorkOnTests {
 		return false, fmt.Sprintf("a %s rule reaches a %s agent only when the task works on tests", r.Domain, agentDomain)
 	}

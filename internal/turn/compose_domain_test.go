@@ -89,3 +89,80 @@ func TestATestRuleReachesADevWhoseWorkTouchesTests(t *testing.T) {
 		}
 	}
 }
+
+func TestALeadThatPlansReceivesTheQAAndWriterRulesInTheTaskHalf(t *testing.T) {
+	rules, err := rule.LoadFS(shipped.Files(), "library")
+	if err != nil {
+		t.Fatalf("LoadFS: %v", err)
+	}
+	planning := []string{"e2e_first", "failure_modes_first", "test_boundary_cases", "read_first", "design_first"}
+	for _, c := range []struct {
+		task  string
+		plans bool
+	}{
+		{"write a ticket for the theme picker", true},
+		{"Write the Epic for themes,", true},
+		{"plan the theme system", true},
+		{"write a ticket for internal/turn/loop.go", true},
+		{"fix the nil check in internal/turn/loop.go", false},
+		{"write tickets/README.md", false},
+		{"rename the field in plan.md", false},
+	} {
+		composed, err := Compose(ComposeSpec{Task: c.task, Environment: "<env/>", ToolGuidance: "read reads a whole file", Rules: rules, Role: rule.RoleOrchestrator})
+		if err != nil {
+			t.Fatalf("Compose %q: %v", c.task, err)
+		}
+		if (composed.Task.Verb == rule.VerbPlan) != c.plans {
+			t.Errorf("%q: the verb is %q, want plan %v", c.task, composed.Task.Verb, c.plans)
+		}
+		fired := map[string]PromptPart{}
+		for _, part := range composed.Parts {
+			if part.RuleID != "" {
+				fired[part.RuleID] = part
+			}
+		}
+		for _, id := range planning {
+			part, fires := fired[id]
+			if fires != c.plans || fires && !part.ByTask {
+				t.Errorf("%q: %s fires %v by task %v, want fires %v and by task", c.task, id, fires, part.ByTask, c.plans)
+			}
+			if strings.Contains(composed.Head(), "from the rule "+id+"]") {
+				t.Errorf("%q: %s is in the frozen head", c.task, id)
+			}
+		}
+		if _, fires := fired["sub_agent_boundaries"]; fires {
+			t.Errorf("%q: a sub-agent rule reached the lead", c.task)
+		}
+		if len(fired)+len(composed.HeldBack) != len(rules) {
+			t.Errorf("%q: %d fire and %d are held back, of %d loaded", c.task, len(fired), len(composed.HeldBack), len(rules))
+		}
+		for _, held := range composed.HeldBack {
+			if held.Why == "" {
+				t.Errorf("%q: %s is held back with no reason", c.task, held.RuleID)
+			}
+		}
+	}
+}
+
+func TestEveryRuleTheQAAgentDoesNotFireIsHeldBackWithAReason(t *testing.T) {
+	rules, err := rule.LoadFS(shipped.Files(), "library")
+	if err != nil {
+		t.Fatalf("LoadFS: %v", err)
+	}
+	found := subagent.Definitions(subagent.Scan{Library: shipped.Files()})
+	at := slices.IndexFunc(found.Definitions, func(d subagent.Definition) bool { return d.Name == "qa" })
+	composed, err := Compose(ComposeSpec{Task: "check the change", Environment: "<env/>", ToolGuidance: "g", Rules: rules, Role: rule.RoleSubAgent, Agent: found.Definitions[at]})
+	if err != nil {
+		t.Fatalf("Compose: %v", err)
+	}
+	fired := 0
+	for _, part := range composed.Parts {
+		if part.RuleID != "" {
+			fired++
+		}
+	}
+	domainHeld := slices.ContainsFunc(composed.HeldBack, func(m rule.Match) bool { return strings.Contains(m.Why, "a dev rule") })
+	if fired+len(composed.HeldBack) != len(rules) || !domainHeld {
+		t.Errorf("%d fire and %d are held back of %d loaded, a dev rule held by domain %v", fired, len(composed.HeldBack), len(rules), domainHeld)
+	}
+}
