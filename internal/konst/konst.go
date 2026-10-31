@@ -146,6 +146,7 @@ const (
 const (
 	LongLivedGCPercent        = 200
 	LongLivedMemoryLimitBytes = 512 * 1024 * 1024
+	RecalledNewestGenerations = 2
 )
 
 const (

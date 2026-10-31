@@ -70,7 +70,7 @@ func (s *Store) Reopen(header Header, closed *Log) (log *Log, err error) {
 	kept, err := s.read(header.ID)
 	switch {
 	case err == nil:
-		log.header = kept
+		log.header, log.header.Agents = kept, slices.Clone(kept.Agents)
 		if err := log.resume(closed); err != nil {
 			return nil, err
 		}

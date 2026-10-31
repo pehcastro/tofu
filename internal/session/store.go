@@ -50,9 +50,16 @@ type Store struct {
 }
 
 type Recent struct {
-	mu     sync.Mutex
-	newest recalled
-	older  recalled
+	mu      sync.Mutex
+	kept    []*recalled
+	lineage map[string]bool
+	walked  map[string]bool
+	headers map[string]recalledHeader
+}
+
+type recalledHeader struct {
+	at     fileStamp
+	header Header
 }
 
 type recalled struct {
@@ -82,13 +89,13 @@ func stampOf(path string) fileStamp {
 func (s *Store) Recalls(recent *Recent) { s.recent = recent }
 
 func (r *Recent) slot(id string) *recalled {
-	switch id {
-	case r.newest.id:
-		return &r.newest
-	case r.older.id:
-		return &r.older
+	at := slices.IndexFunc(r.kept, func(kept *recalled) bool { return kept.id == id })
+	if at < 0 {
+		return nil
 	}
-	return nil
+	kept := r.kept[at]
+	r.kept = slices.Insert(slices.Delete(r.kept, at, at+1), 0, kept)
+	return kept
 }
 
 func (r *Recent) recall(id string, at fileStamp) ([]Event, bool) {
@@ -103,10 +110,49 @@ func (r *Recent) recall(id string, at fileStamp) ([]Event, bool) {
 func (r *Recent) keep(id string, at fileStamp, events []Event) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.newest.id != id {
-		r.older = r.newest
+	r.kept = slices.Insert(slices.DeleteFunc(r.kept, func(kept *recalled) bool { return kept.id == id }), 0, &recalled{id: id, events: at, parsed: events})
+	r.prune()
+}
+
+func (r *Recent) holdLineage(id string, ancestors []Header, read []string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	walkedBack := r.walked[id]
+	r.walked, r.lineage = map[string]bool{}, map[string]bool{}
+	for _, ancestor := range ancestors {
+		r.walked[ancestor.ID] = true
 	}
-	r.newest = recalled{id: id, events: at, parsed: events}
+	for _, held := range read {
+		r.lineage[held] = !walkedBack
+	}
+	r.prune()
+}
+
+func (r *Recent) prune() {
+	held := r.kept[:0]
+	for at, kept := range r.kept {
+		if at < konst.RecalledNewestGenerations || r.lineage[kept.id] {
+			held = append(held, kept)
+		}
+	}
+	clear(r.kept[len(held):])
+	r.kept = held
+}
+
+func (r *Recent) header(id string, at fileStamp) (Header, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	kept, found := r.headers[id]
+	return kept.header, found && at.found && kept.at == at
+}
+
+func (r *Recent) keepHeader(id string, at fileStamp, header Header) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.headers == nil {
+		r.headers = map[string]recalledHeader{}
+	}
+	r.headers[id] = recalledHeader{at: at, header: header}
 }
 
 func (r *Recent) saidOf(id string, events []Event, blobs fileStamp, settings Settings) (Reading, int, bool) {
@@ -483,19 +529,30 @@ func (s *Store) lineage(id string, needed func(Header) string) ([]Generation, er
 		return nil, err
 	}
 	var lineage []Generation
+	read := []string{id}
 	for _, header := range slices.Backward(append([]Header{head}, ancestors...)) {
 		generation := Generation{Header: header, Unread: true}
 		if header.ID != id {
 			generation.readFor = needed(header)
 		}
-		if header.ID == id || generation.readFor != "" {
-			events, err := s.Events(header.ID)
-			if err != nil && !errors.Is(err, fs.ErrNotExist) {
-				return nil, err
-			}
-			generation.Events, generation.Unread = events, err != nil
+		if generation.readFor != "" {
+			read = append(read, header.ID)
 		}
 		lineage = append(lineage, generation)
+	}
+	if s.recent != nil {
+		s.recent.holdLineage(id, ancestors, read)
+	}
+	for i := range lineage {
+		generation := &lineage[i]
+		if generation.Header.ID != id && generation.readFor == "" {
+			continue
+		}
+		events, err := s.Events(generation.Header.ID)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return nil, err
+		}
+		generation.Events, generation.Unread = events, err != nil
 	}
 	return lineage, nil
 }
@@ -966,7 +1023,15 @@ func (s *Store) read(id string) (Header, error) {
 	if err := namesOneSession(id); err != nil {
 		return Header{}, err
 	}
-	raw, err := s.readSettled(filepath.Join(s.Dir(id), headerName))
+	path := filepath.Join(s.Dir(id), headerName)
+	var at fileStamp
+	if s.recent != nil {
+		at = stampOf(path)
+		if header, found := s.recent.header(id, at); found {
+			return s.heldHeader(id, header), nil
+		}
+	}
+	raw, err := s.readSettled(path)
 	if err == nil {
 		var header Header
 		if err := json.Unmarshal(raw, &header); err != nil {
@@ -975,13 +1040,20 @@ func (s *Store) read(id string) (Header, error) {
 		if header.CarriedFrom != nil {
 			header.Parent = header.CarriedFrom.Session
 		}
-		if s.headers != nil {
-			s.headers[id] = header
+		if at.found {
+			s.recent.keepHeader(id, at, header)
 		}
-		return header, nil
+		return s.heldHeader(id, header), nil
 	}
 	if !errors.Is(err, fs.ErrNotExist) {
 		return Header{}, err
 	}
 	return s.legacyHeader(id)
+}
+
+func (s *Store) heldHeader(id string, header Header) Header {
+	if s.headers != nil {
+		s.headers[id] = header
+	}
+	return header
 }
