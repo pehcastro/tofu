@@ -161,7 +161,7 @@ func redacted(event Event, mask func(string) string) Event {
 		summary := *event.GroupSummary
 		summary.Head, summary.Open = maskedPieces(summary.Head, mask), slices.Clone(summary.Open)
 		for i := range summary.Open {
-			summary.Open[i].Detail = maskedPieces(summary.Open[i].Detail, mask)
+			summary.Open[i] = summary.Open[i].maskedBy(mask)
 		}
 		event.GroupSummary = &summary
 	}

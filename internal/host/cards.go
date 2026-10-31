@@ -3,6 +3,7 @@ package host
 import (
 	"math"
 	"slices"
+	"sync"
 
 	"tofu/internal/llm"
 	"tofu/internal/toolcard"
@@ -47,6 +48,20 @@ type CardPiece struct {
 type CardLine struct {
 	Family CardFamily  `json:"family"`
 	Detail []CardPiece `json:"detail"`
+	masked *maskedLine
+}
+
+type maskedLine struct {
+	once   sync.Once
+	detail []CardPiece
+}
+
+func (l CardLine) maskedBy(mask func(string) string) CardLine {
+	if l.masked == nil {
+		return CardLine{Family: l.Family, Detail: maskedPieces(l.Detail, mask)}
+	}
+	l.masked.once.Do(func() { l.masked.detail = maskedPieces(l.Detail, mask) })
+	return CardLine{Family: l.Family, Detail: l.masked.detail}
 }
 
 type GroupSummary struct {
@@ -58,12 +73,18 @@ type GroupSummary struct {
 
 type cardRow struct {
 	id    string
-	cards []toolcard.Card
+	cards toolcard.Row
+	wired map[toolcard.Family]wiredLine
+}
+
+type wiredLine struct {
+	from toolcard.Phrase
+	line CardLine
 }
 
 type placedCard struct {
-	row *cardRow
-	at  int
+	row  *cardRow
+	seat toolcard.Seat
 }
 
 type cardRows struct {
@@ -77,11 +98,10 @@ func (r *cardRows) place(asker, id string, card toolcard.Card) (*ToolCard, strin
 	}
 	row := r.open[asker]
 	if row == nil {
-		row = &cardRow{id: id}
+		row = &cardRow{id: id, cards: toolcard.Row{Room: toolcard.Room{Highlights: math.MaxInt, Items: math.MaxInt, HeadColumns: math.MaxInt, DetailColumns: math.MaxInt}}, wired: map[toolcard.Family]wiredLine{}}
 		r.open[asker] = row
 	}
-	r.placed[id] = placedCard{row: row, at: len(row.cards)}
-	row.cards = append(row.cards, card)
+	r.placed[id] = placedCard{row: row, seat: row.cards.Add(card)}
 	return wireCard(card), row.id
 }
 
@@ -96,13 +116,18 @@ func (r *cardRows) settle(id, content string, failed bool, exit *int) (*ToolCard
 		code = *exit
 	}
 	row := placed.row
-	row.cards[placed.at] = row.cards[placed.at].Settled(content, failed, code)
-	summary := toolcard.Group(row.cards, toolcard.Room{Highlights: math.MaxInt, Items: math.MaxInt, HeadColumns: math.MaxInt, DetailColumns: math.MaxInt})
+	settled := row.cards.Settle(placed.seat, content, failed, code)
+	summary := row.cards.Summary()
 	wired := &GroupSummary{Calls: summary.Calls, Failed: summary.Failed, Head: wirePhrase(summary.Head)}
 	for _, line := range summary.Open {
-		wired.Open = append(wired.Open, CardLine{Family: CardFamily(line.Family), Detail: wirePhrase(line.Detail)})
+		held, known := row.wired[line.Family]
+		if !known || !slices.Equal(held.from, line.Detail) {
+			held = wiredLine{from: line.Detail, line: CardLine{Family: CardFamily(line.Family), Detail: wirePhrase(line.Detail), masked: &maskedLine{}}}
+			row.wired[line.Family] = held
+		}
+		wired.Open = append(wired.Open, held.line)
 	}
-	return wireCard(row.cards[placed.at]), row.id, wired
+	return wireCard(settled), row.id, wired
 }
 
 func (a *watcher) endLeadRow() {

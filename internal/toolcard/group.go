@@ -52,30 +52,97 @@ const (
 	itemGap      = ", "
 )
 
+type Row struct {
+	Room   Room
+	held   map[Family][]Card
+	drawn  map[Family]drawn
+	calls  int
+	failed int
+}
+
+type Seat struct {
+	family Family
+	at     int
+}
+
+type drawn struct {
+	line      Phrase
+	highlight Phrase
+}
+
 func Group(cards []Card, room Room) Summary {
-	summary := Summary{Calls: len(cards)}
-	byFamily := map[Family][]Card{}
+	row := Row{Room: room}
 	for _, card := range cards {
-		byFamily[card.Family] = append(byFamily[card.Family], card)
-		if card.Tone == Fail {
-			summary.Failed++
+		row.Add(card)
+	}
+	return row.Summary()
+}
+
+func (r *Row) Add(card Card) Seat {
+	if r.held == nil {
+		r.held, r.drawn = map[Family][]Card{}, map[Family]drawn{}
+	}
+	r.held[card.Family] = append(r.held[card.Family], card)
+	r.calls++
+	r.failed += failures(card)
+	delete(r.drawn, card.Family)
+	return Seat{family: card.Family, at: len(r.held[card.Family]) - 1}
+}
+
+func (r *Row) Settle(seat Seat, content string, failed bool, exit int) Card {
+	card := &r.held[seat.family][seat.at]
+	r.failed -= failures(*card)
+	*card = card.Settled(content, failed, exit)
+	r.failed += failures(*card)
+	delete(r.drawn, seat.family)
+	return *card
+}
+
+func (r *Row) Summary() Summary {
+	summary := Summary{Calls: r.calls, Failed: r.failed, Head: say(Piece{Text: counted(r.calls, "call", "calls"), Ink: Muted})}
+	var highlights []Phrase
+	if r.failed > 0 {
+		highlights = append(highlights, say(text(strconv.Itoa(r.failed)), failure()))
+	}
+	for _, family := range []Family{Git, Edited, Tests, Board, Memory, Agents} {
+		if said := r.drawnOf(family).highlight; said != nil {
+			highlights = append(highlights, said)
 		}
 	}
-	summary.Head = say(Piece{Text: counted(len(cards), "call", "calls"), Ink: Muted})
 	shown := 0
-	for _, highlight := range highlights(cards, summary.Failed) {
+	for _, highlight := range highlights {
 		next := append(append(slices.Clip(summary.Head), Piece{Text: highlightGap, Ink: Plain}), highlight...)
-		if shown < room.Highlights && next.width() <= room.HeadColumns {
+		if shown < r.Room.Highlights && next.width() <= r.Room.HeadColumns {
 			summary.Head, shown = next, shown+1
 		}
 	}
 	for _, family := range Families() {
-		if held := byFamily[family]; len(held) > 0 {
-			items, collapsed := detail(family, held)
-			summary.Open = append(summary.Open, Line{Family: family, Detail: fitted(items, collapsed, room)})
+		if len(r.held[family]) > 0 {
+			summary.Open = append(summary.Open, Line{Family: family, Detail: r.drawnOf(family).line})
 		}
 	}
 	return summary
+}
+
+func (r *Row) drawnOf(family Family) drawn {
+	held := r.held[family]
+	if len(held) == 0 {
+		return drawn{}
+	}
+	if said, known := r.drawn[family]; known {
+		return said
+	}
+	items, collapsed := detail(family, held)
+	said := drawn{line: fitted(items, collapsed, r.Room), highlight: highlight(family, held)}
+	r.drawn[family] = said
+	return said
+}
+
+func failures(card Card) int {
+	if card.Tone == Fail {
+		return 1
+	}
+	return 0
 }
 
 func text(said string) Piece { return Piece{Text: said, Ink: Plain} }
@@ -142,20 +209,16 @@ func counts(added, removed int) []Piece {
 	return said
 }
 
-func highlights(cards []Card, failed int) []Phrase {
-	var said []Phrase
-	if failed > 0 {
-		said = append(said, say(text(strconv.Itoa(failed)), failure()))
-	}
+func highlight(family Family, cards []Card) Phrase {
 	var moved []string
-	var lastTest Card
+	var lastTest *Card
 	pushes, saved, started := false, false, 0
-	for _, card := range cards {
+	for at, card := range cards {
 		ok := card.Tone != Fail
 		switch {
 		case !card.settled:
 		case card.Family == Tests:
-			lastTest = card
+			lastTest = &cards[at]
 		case card.kind == kindCommit:
 			pushes = pushes || card.pushNote == pushedNote
 		case card.kind == kindPush:
@@ -168,32 +231,42 @@ func highlights(cards []Card, failed int) []Phrase {
 			started++
 		}
 	}
-	if committed := committedShas(cards); committed != nil {
-		if pushes {
+	switch family {
+	case Git:
+		committed := committedShas(cards)
+		if committed != nil && pushes {
 			committed = append(committed, text(", pushed"))
 		}
-		said = append(said, committed)
-	}
-	if edits := merged(cards); len(edits) > 0 {
-		said = append(said, say(text(counted(len(edits), "edit", "edits"))))
-	}
-	if lastTest.Family == Tests && lastTest.Tone != Fail {
-		said = append(said, say(text("tests pass")))
-	}
-	switch len(moved) {
-	case 0:
-	case 1:
-		said = append(said, say(text("moved"), Piece{Text: moved[0], Ink: Ref}))
+		return committed
+	case Edited:
+		if edits := merged(cards); len(edits) > 0 {
+			return say(text(counted(len(edits), "edit", "edits")))
+		}
+	case Tests:
+		if lastTest != nil && lastTest.Tone != Fail {
+			return say(text("tests pass"))
+		}
+	case Board:
+		switch len(moved) {
+		case 0:
+		case 1:
+			return say(text("moved"), Piece{Text: moved[0], Ink: Ref})
+		default:
+			return say(text(strconv.Itoa(len(moved)) + " tickets moved"))
+		}
+	case Memory:
+		if saved {
+			return say(text("memory saved"))
+		}
+	case Agents:
+		if started > 0 {
+			return say(text(counted(started, "agent", "agents") + " started"))
+		}
+	case Explored, Asked, Web, Ran:
 	default:
-		said = append(said, say(text(strconv.Itoa(len(moved))+" tickets moved")))
+		panic("toolcard: unknown family " + string(family))
 	}
-	if saved {
-		said = append(said, say(text("memory saved")))
-	}
-	if started > 0 {
-		said = append(said, say(text(counted(started, "agent", "agents")+" started")))
-	}
-	return said
+	return nil
 }
 
 func committedShas(cards []Card) Phrase {
