@@ -428,7 +428,7 @@ Arguments:
                         tofu settings set readBeforeEdit false
   --no-instructions     the arm that %s
   --no-docs             the arm that drops the tofu_docs tool and the prompt sentence pointing at it
-  --done-review <arm>          the arm that reviews a sub-agent's answer
+  --done-review <arm>          the arm that reviews a sub-agent's answer, over the doneReview setting
   --max-steps <n>              cap the steps a turn takes, unset means no cap
   --loop-guard-repeats <n>     how many repeats of one call with one result stops a turn
   --loop-guard-window <n>      how many recent calls the loop guard remembers
@@ -464,7 +464,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 		}
 	}
 	opts = settled(opts, say)
-	if opts.noSubAgents && opts.doneArm != doneArmOff {
+	if opts.noSubAgents && opts.doneArm != settingspkg.DoneReviewOff {
 		return runFail(errOut, fmt.Errorf(
 			"--done-review %s with the %s setting off: that arm has no spawn tool, so no sub-agent is ever reviewed and the flag would say a check is running that is not",
 			opts.doneArm, settingspkg.TurnMaySpawn))
@@ -1615,7 +1615,6 @@ func runFail(errOut io.Writer, err error) int {
 func parseRunArgs(args []string) (runOpts, error) {
 	opts := runOpts{
 		toolSet:          toolSetFull,
-		doneArm:          doneArmOff,
 		loopGuardRepeats: konst.TurnLoopGuardRepeats,
 		loopGuardWindow:  konst.TurnLoopGuardWindow,
 	}
@@ -1725,8 +1724,8 @@ func parseRunArgs(args []string) (runOpts, error) {
 		return runOpts{}, fmt.Errorf("--sift %q is none of %s: with no --sift the method table decides",
 			opts.siftArm, strings.Join(siftArms(), ", "))
 	}
-	if !slices.Contains(doneArms(), opts.doneArm) {
-		return runOpts{}, fmt.Errorf("--done-review %q is none of %s", opts.doneArm, strings.Join(doneArms(), ", "))
+	if opts.doneArm != "" && !slices.Contains(settingspkg.DoneReviews(), opts.doneArm) {
+		return runOpts{}, fmt.Errorf("--done-review %q is none of %s: with no --done-review the %s setting decides", opts.doneArm, strings.Join(settingspkg.DoneReviews(), ", "), settingspkg.DoneReview)
 	}
 	switch opts.toolSet {
 	case toolSetFull, toolSetThree:
@@ -1734,7 +1733,7 @@ func parseRunArgs(args []string) (runOpts, error) {
 		return runOpts{}, fmt.Errorf("--tools %q is neither %s nor %s, the arm that offers read, write and bash alone",
 			opts.toolSet, toolSetFull, toolSetThree)
 	}
-	if without := spawnlessFlag(opts); opts.doneArm != doneArmOff && without != "" {
+	if without := spawnlessFlag(opts); opts.doneArm != "" && opts.doneArm != settingspkg.DoneReviewOff && without != "" {
 		return runOpts{}, fmt.Errorf("--done-review %s with %s: that arm has no spawn tool, so no sub-agent is ever reviewed and the flag would say a check is running that is not",
 			opts.doneArm, without)
 	}

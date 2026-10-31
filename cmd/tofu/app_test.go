@@ -991,7 +991,7 @@ func TestASpawnedSubAgentShowsInTheSubAgentViewWithTheGlobsItHolds(t *testing.T)
 	}
 	ended := subAgentEvents[len(subAgentEvents)-1].SubAgents[0]
 	if ended.State != roster.Finished || ended.Steps != 2 || ended.Report == "" {
-		t.Fatalf("the sub-agent ended as %+v, want it finished, since no done review runs in the app, with the steps and the report the roster carries", ended)
+		t.Fatalf("the sub-agent ended as %+v, want it finished, since the screen review finds no ticket to hold it to, with the steps and the report the roster carries", ended)
 	}
 	screen := feedOf(t, driver, "[&sub-1]")
 	for _, want := range []string{"1 agents", "[&sub-1]", "write note.txt", "owns", "note.txt"} {

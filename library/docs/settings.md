@@ -17,7 +17,7 @@ The settings come in groups:
 - Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images, projectInstructionsCap, contextCeiling, instructionSources, skills, memory, autoMemory, episodes, memoryFromAllUsers, memoryModel, learn
 - Files: diffContext, hyperlinks, groupByAgent
 - Shell: persistentRegistry, logTail, killConfirm, shell
-- Turn: decisionCap, turnMaySpawn, oneWorkingSessionPerProject, planEveryStep, sideChatAccess, subAgentsPerTurn, subAgentDepth, leadCache, subAgentCache, subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb
+- Turn: decisionCap, turnMaySpawn, oneWorkingSessionPerProject, planEveryStep, sideChatAccess, subAgentsPerTurn, subAgentDepth, leadCache, subAgentCache, subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents, doneReview, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb
 - Projects: projectManagement (boardy, the ticket board), boardFlow (the words boardy uses), scratchCleanupDays and scratchMaxGB (the scratchpad)
 - Browser: browser, browserDriver, browserSteps, browserModel, browserEffort, browserCursor, browserProfile, browserHeadless, browserSleepMinutes
 
@@ -58,6 +58,7 @@ Each setting's own line is two sentences at most. The rest is here.
 - `subAgentCheckSeconds`: the check is built from what tofu records: the sub-agent's steps, the files it changed, its gate and its last tool.
 - `subAgentWatchSeconds`: the chat line says what the call is doing, such as waiting for the orchestrator's answer, running bash or building. A sub-agent with no new output, step or request for this long is stalled.
 - `verifySubAgents`: the lead reads what the sub-agent changed, runs the build or the tests again and opens what it made. Off takes the report as the result unless you ask for a check. `tofu rules off verify_sub_agents` turns it off too, whatever this says.
+- `doneReview`: `screen` sends a sub-agent back while an acceptance line on its ticket has no evidence entry naming it, up to the round cap, and the lead's report names each line. `typed` asks Jev after the screen and falls back to `screen`, saying so in the chat, when no classifier is bound. `cheap` sends back a sub-agent that ran no tool without failing; `off` reviews nothing. A sub-agent with no ticket passes the screen. `--done-review` and `TOFU_SERVE_DONE_REVIEW` win over it. The next turn reads the new value.
 - `agentSources`: a comma list, inside the project. The home directory gives only `~/.tofu/agents`, and the library is always read.
 - `projectManagement`: a spawn names a ticket, its owns become the sub-agent's paths and the sub-agent moves it to review.
 - `boardFlow`: jira says ticket, board, epic, sprint and points. linear says issue, team, project, cycle and estimate.

@@ -18,6 +18,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	settingspkg "tofu/internal/settings"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
@@ -70,32 +71,67 @@ func claimedDoneWithNothing() turn.Row {
 	}
 }
 
-func TestTheDoneReviewIsOffUntilTheCommandLineAsksForIt(t *testing.T) {
-	opts, err := parseRunArgs([]string{"--dir", t.TempDir(), "a task"})
+func TestTheDoneReviewIsScreenUnlessTheSettingOrTheCommandLineSaysOtherwise(t *testing.T) {
+	emptyHome(t)
+	dir := t.TempDir()
+	reviewOf := func(args ...string) turn.DoneReview {
+		t.Helper()
+		opts, err := parseRunArgs(append(append([]string{"--dir", dir}, args...), "a task"))
+		if err != nil {
+			t.Fatalf("tofu run %v: %v", args, err)
+		}
+		return newDoneReview(settled(opts, nil).doneArm, func(note string) { t.Errorf("tofu run %v said %q", args, note) })
+	}
+	if review := reviewOf(); review != turn.DoneReview(turn.ContractDoneReview{}) {
+		t.Fatalf("with no setting and no flag the done review is %#v, want the screen", review)
+	}
+	for _, spawnless := range [][]string{{"--no-subagents"}, {"--tools", toolSetThree}} {
+		if review := reviewOf(spawnless...); review != nil {
+			t.Fatalf("tofu run %v spawns nothing and still built the done review %#v", spawnless, review)
+		}
+	}
+	store, err := openSettings(dir)
 	if err != nil {
-		t.Fatalf("parseRunArgs: %v", err)
+		t.Fatal(err)
 	}
-	if opts.doneArm != doneArmOff {
-		t.Fatalf("the done review defaults to %q, want %q", opts.doneArm, doneArmOff)
+	if err := store.SetText(settingspkg.Project, settingspkg.DoneReview, settingspkg.DoneReviewOff); err != nil {
+		t.Fatal(err)
 	}
-	review, err := newDoneReview(opts.doneArm)
-	if err != nil || review != nil {
-		t.Fatalf("the off arm built a reviewer %v (err %v), so a sub-agent would be judged by default", review, err)
+	if review := reviewOf(); review != nil {
+		t.Fatalf("doneReview off still built the done review %#v", review)
 	}
-	if _, err := parseRunArgs([]string{"--dir", t.TempDir(), "--done-review", "maybe", "a task"}); err == nil {
+	if review := reviewOf("--done-review", settingspkg.DoneReviewCheap); review != turn.DoneReview(turn.CheapDoneReview{}) {
+		t.Fatalf("--done-review cheap over doneReview off built %#v, want the flag to win", review)
+	}
+	if _, err := parseRunArgs([]string{"--dir", dir, "--done-review", "maybe", "a task"}); err == nil {
 		t.Fatal("tofu run accepted an unknown done review arm rather than refusing it by name")
 	}
 }
 
+func TestATypedDoneReviewWithNoJevKeyFallsBackToTheScreenAndSaysSo(t *testing.T) {
+	emptyHome(t)
+	t.Setenv(sys.OpenRouterClassifierKeyName, "")
+	t.Chdir(t.TempDir())
+	var said []string
+	review := newDoneReview(settingspkg.DoneReviewTyped, func(note string) { said = append(said, note) })
+	if review != turn.DoneReview(turn.ContractDoneReview{}) {
+		t.Fatalf("typed with no Jev key built %#v, want the screen", review)
+	}
+	if len(said) != 1 || !strings.Contains(said[0], "typed") || !strings.Contains(said[0], "screen") {
+		t.Fatalf("the fallback said %q, want one note naming typed and screen", said)
+	}
+	t.Log(said[0])
+}
+
 func TestADoneReviewIsRefusedOnAnArmThatCanSpawnNoSubAgent(t *testing.T) {
 	for _, without := range [][]string{{"--no-subagents"}, {"--tools", toolSetThree}} {
-		args := []string{"--dir", t.TempDir(), "--done-review", doneArmTyped}
+		args := []string{"--dir", t.TempDir(), "--done-review", settingspkg.DoneReviewTyped}
 		args = append(append(args, without...), "a task")
 		_, err := parseRunArgs(args)
 		if err == nil {
 			t.Fatalf("tofu run %v took a done review arm on a run that spawns nothing, so the flag says a check is running that is not", without)
 		}
-		if !strings.Contains(err.Error(), doneArmTyped) || !strings.Contains(err.Error(), without[0]) {
+		if !strings.Contains(err.Error(), settingspkg.DoneReviewTyped) || !strings.Contains(err.Error(), without[0]) {
 			t.Fatalf("the refusal names neither flag: %v", err)
 		}
 		t.Logf("tofu run %s --done-review typed: %v", strings.Join(without, " "), err)
@@ -103,18 +139,14 @@ func TestADoneReviewIsRefusedOnAnArmThatCanSpawnNoSubAgent(t *testing.T) {
 }
 
 func TestTheCheapDoneReviewArmReopensASubAgentThatRanNoTool(t *testing.T) {
-	opts, err := parseRunArgs([]string{"--dir", t.TempDir(), "--done-review", doneArmCheap, "a task"})
+	opts, err := parseRunArgs([]string{"--dir", t.TempDir(), "--done-review", settingspkg.DoneReviewCheap, "a task"})
 	if err != nil {
 		t.Fatalf("parseRunArgs: %v", err)
 	}
-	if opts.doneArm != doneArmCheap {
+	if opts.doneArm != settingspkg.DoneReviewCheap {
 		t.Fatalf("--done-review cheap parsed as %q", opts.doneArm)
 	}
-	review, err := newDoneReview(opts.doneArm)
-	if err != nil {
-		t.Fatalf("newDoneReview: %v", err)
-	}
-	decision, err := review.Review(context.Background(), claimedDoneWithNothing())
+	decision, err := newDoneReview(opts.doneArm, nil).Review(context.Background(), claimedDoneWithNothing())
 	if err != nil {
 		t.Fatalf("the cheap arm failed: %v", err)
 	}
@@ -128,17 +160,14 @@ func TestTheTypedDoneReviewArmReopensASubAgentAndLogsTheDecision(t *testing.T) {
 	t.Chdir(t.TempDir())
 	stubJev(t, http.StatusOK, stopCheckWorkRemainsReply)
 
-	opts, err := parseRunArgs([]string{"--dir", t.TempDir(), "--done-review", doneArmTyped, "a task"})
+	opts, err := parseRunArgs([]string{"--dir", t.TempDir(), "--done-review", settingspkg.DoneReviewTyped, "a task"})
 	if err != nil {
 		t.Fatalf("parseRunArgs: %v", err)
 	}
-	if opts.doneArm != doneArmTyped {
+	if opts.doneArm != settingspkg.DoneReviewTyped {
 		t.Fatalf("--done-review typed parsed as %q", opts.doneArm)
 	}
-	review, err := newDoneReview(opts.doneArm)
-	if err != nil {
-		t.Fatalf("newDoneReview: %v", err)
-	}
+	review := newDoneReview(opts.doneArm, func(note string) { t.Fatalf("the typed arm fell back with a Jev stub bound: %s", note) })
 
 	decision, err := review.Review(context.Background(), claimedDoneWithNothing())
 	if err != nil {

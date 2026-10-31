@@ -3,6 +3,7 @@ package turn
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -52,20 +53,14 @@ type ContractDoneReview struct{}
 
 func (ContractDoneReview) Review(_ context.Context, subAgent Row) (DoneDecision, error) {
 	lines := acceptanceOf(subAgent)
-	var unmet []string
-	for i, line := range lines {
-		if line.State == boardy.LineUnmet {
-			unmet = append(unmet, fmt.Sprintf("line %d, %s", i+1, line.Line))
-		}
-	}
+	unmet := boardy.UnmetLines(lines)
 	switch {
 	case lines == nil:
 		return DoneDecision{Verdict: DoneAccepted, Reason: "no ticket, so no acceptance lines and nothing to evaluate"}, nil
 	case outcomeStoppedEarly(subAgent.Outcome):
 		return DoneDecision{Verdict: DoneAccepted, Reason: "the sub-agent was stopped before it finished, so its unmet lines are not held against it"}, nil
-	case len(unmet) > 0:
-		return DoneDecision{Verdict: DoneReopen, Reason: fmt.Sprintf("%d of %d acceptance lines have no evidence entry naming them and are not left for the lead: %s",
-			len(unmet), len(lines), strings.Join(unmet, "; "))}, nil
+	case unmet != "":
+		return DoneDecision{Verdict: DoneReopen, Reason: unmet}, nil
 	}
 	return DoneDecision{Verdict: DoneAccepted, Reason: fmt.Sprintf("all %d acceptance lines are met or left for the lead", len(lines))}, nil
 }
@@ -151,14 +146,13 @@ func wholeRun(rounds []Row) Row {
 	return whole
 }
 
-func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldSubAgent, subAgent Config) ([]Row, []string, subagent.State, error) {
+func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldSubAgent, subAgent Config) (claims []Row, sentBack []string, state subagent.State, unbelievedAtCap string, firstErr error) {
 	agent := held.agent
 	spawned := t.writeMoves(subAgent, agent.ID)
 	first, firstErr := Run(subAgentCtx, subAgent)
 	first.Warnings = append(first.Warnings, spawned...)
-	claims, state := []Row{first}, roundState(outerCtx, firstErr)
+	claims, state = []Row{first}, roundState(outerCtx, firstErr)
 	held.remember(first)
-	var sentBack []string
 	recipes := projectRecipes(t.Project)
 	for state == subagent.Finished {
 		last := &claims[len(claims)-1]
@@ -169,6 +163,9 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 		}
 		if _, err := t.roster.Reopen(agent.ID, why); err != nil {
 			last.Warnings = append(last.Warnings, err.Error())
+			if capped := (subagent.RoundCapError{}); errors.As(err, &capped) {
+				unbelievedAtCap = fmt.Sprintf("the round cap of %d was hit and the done review still does not believe it: %s", capped.Cap, why)
+			}
 			break
 		}
 		last.Warnings = append(last.Warnings, t.writeMoves(subAgent, agent.ID)...)
@@ -187,7 +184,7 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 			state = roundState(outerCtx, nil)
 		}
 	}
-	return claims, sentBack, state, firstErr
+	return claims, sentBack, state, unbelievedAtCap, firstErr
 }
 
 func (t *SpawnTool) doneReview(ctx context.Context, held *heldSubAgent, claims []Row, recipes map[string]string) (why, task string) {

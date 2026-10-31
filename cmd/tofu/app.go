@@ -782,6 +782,10 @@ func settled(opts runOpts, say func(string)) runOpts {
 	opts.noSubAgents = opts.noSubAgents || settingInt(dir, settingspkg.TurnMaySpawn, say) == 0
 	opts.readBeforeEdit = settingInt(dir, settingspkg.ReadBeforeEdit, say) != 0
 	opts.planEveryStep = settingInt(dir, settingspkg.PlanEveryStep, say) != 0
+	if opts.doneArm == "" && spawnlessFlag(opts) == "" {
+		opts.doneArm = settingText(dir, settingspkg.DoneReview, say)
+	}
+	opts.doneArm = cmp.Or(opts.doneArm, settingspkg.DoneReviewOff)
 	return opts
 }
 
@@ -797,7 +801,7 @@ func (e *appEngine) OneTurnPerProject() bool {
 
 func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, error) {
 	opts := pickedOpts(e.dir, start, e.arms.maxSteps)
-	opts.gateArm, opts.siftArm, opts.doneArm, opts.noInstructions, opts.noDocs = e.arms.gateArm, e.arms.siftArm, cmp.Or(e.arms.doneArm, doneArmOff), e.arms.noInstructions, e.arms.noDocs
+	opts.gateArm, opts.siftArm, opts.doneArm, opts.noInstructions, opts.noDocs = e.arms.gateArm, e.arms.siftArm, e.arms.doneArm, e.arms.noInstructions, e.arms.noDocs
 	opts.toolSet, opts.contextCeiling, opts.noSubAgents = cmp.Or(e.arms.toolSet, opts.toolSet), e.arms.contextCeiling, e.arms.noSubAgents
 	started, err := e.startTurn(settled(opts, hooks.Say), start, hooks, clockFromNow())
 	if started.scorer != nil {
@@ -915,9 +919,7 @@ func (e *appEngine) startTurn(opts runOpts, start host.Turn, hooks host.Hooks, c
 		return started, err
 	}
 	if spawner != nil {
-		if spawner.Review, err = newDoneReview(opts.doneArm); err != nil {
-			return started, err
-		}
+		spawner.Review = newDoneReview(opts.doneArm, say)
 	}
 	clock.step("lead tools, board and spawn")
 	if config.Session != e.timed {

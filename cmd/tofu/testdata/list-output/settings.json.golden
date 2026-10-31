@@ -587,6 +587,21 @@ exit 0
         "kind": "bool"
       },
       {
+        "key": "doneReview",
+        "category": "Turn",
+        "value": "screen",
+        "source": "default",
+        "label": "Done review",
+        "description": "What reads a sub-agent's hand-back before the lead takes it. screen sends back acceptance lines with no evidence",
+        "kind": "choice",
+        "choices": [
+          "off",
+          "cheap",
+          "screen",
+          "typed"
+        ]
+      },
+      {
         "key": "agentSources",
         "category": "Turn",
         "value": "tofu,agents,claude",

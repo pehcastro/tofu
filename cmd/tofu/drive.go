@@ -27,6 +27,7 @@ import (
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/llm/wire/codex"
 	sessionstore "tofu/internal/session"
+	settingspkg "tofu/internal/settings"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
@@ -73,7 +74,8 @@ mechanism can be driven by hand on a cassette rather than argued about:
   --sift free|judged        which arm cuts a bash result before the model reads
                             it, otherwise the method table decides
   --done-review off|cheap|screen|typed   how a sub-agent's hand-back is
-                            reviewed before the lead reads it, off when not named
+                            reviewed before the lead reads it, the doneReview
+                            setting when not named
   --gate off|shadow|enforce, --no-gate    how a tool call is judged
   --tools full|three        which tools the turn is given
   --no-subagents            run without the spawn tool
@@ -795,7 +797,7 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 	if err := cmp.Or(
 		armIsKnown("--gate", plan.arms.gateArm, gateArms()),
 		armIsKnown("--sift", plan.arms.siftArm, siftArms()),
-		armIsKnown("--done-review", plan.arms.doneArm, doneArms()),
+		armIsKnown("--done-review", plan.arms.doneArm, settingspkg.DoneReviews()),
 		armIsKnown("--tools", plan.arms.toolSet, []string{toolSetFull, toolSetThree}),
 		armIsKnown("--source", plan.source, []string{string(cred.ClaudeSub), string(cred.CodexSub)}),
 	); err != nil {

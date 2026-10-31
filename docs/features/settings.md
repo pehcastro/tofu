@@ -79,6 +79,7 @@ Turn
     subAgentCheckSeconds    1800                             default
     subAgentWatchSeconds    600                              default
     verifySubAgents         true                             default
+    doneReview              screen                           default
     agentSources            tofu,agents,claude               default
 Projects
     projectManagement       off                              default, off until the project has a board: tofu boardy init
@@ -103,6 +104,17 @@ minutes, so a pause rewrites only the conversation:
 `tofu settings set leadCache history-5m`. Anthropic's
 [prompt caching](https://docs.claude.com/en/docs/build-with-claude/prompt-caching)
 prices a five minute write at 1.25 times base input and an hour at 2 times.
+
+`doneReview` decides what reads a sub-agent's hand-back before the lead
+takes it. `screen`, the default, sends the sub-agent back while an
+acceptance line on its ticket has no evidence entry naming it, and the
+lead's report names each line it was sent back for. It makes no Jev call
+and adds about 0.01 ms a spawn. `typed` asks Jev on top of the screen, and
+falls back to `screen` with a line in the chat when no classifier is bound,
+so a missing key never stops a turn. `cheap` sends back a sub-agent that ran
+no tool without failing, and `off` takes every hand-back as it is.
+`--done-review` on `tofu run`, `tofu drive` and `tofu serve`, and
+`TOFU_SERVE_DONE_REVIEW` for serve, win over it.
 
 `continueOnSubscription`, `subscriptionOrder` and `continueOnAPIModel`
 decide where work goes when every account of a subscription is at its limit:

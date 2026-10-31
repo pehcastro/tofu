@@ -88,6 +88,7 @@ const (
 	SubAgentCheckSeconds        = "subAgentCheckSeconds"
 	SubAgentWatchSeconds        = "subAgentWatchSeconds"
 	VerifySubAgents             = "verifySubAgents"
+	DoneReview                  = "doneReview"
 	AgentSources                = "agentSources"
 	Skills                      = "skills"
 	Browser                     = "browser"
@@ -166,6 +167,17 @@ const (
 	FeedsSummary = "summary"
 	FeedsOff     = "off"
 )
+
+const (
+	DoneReviewOff    = "off"
+	DoneReviewCheap  = "cheap"
+	DoneReviewScreen = "screen"
+	DoneReviewTyped  = "typed"
+)
+
+func DoneReviews() []string {
+	return []string{DoneReviewOff, DoneReviewCheap, DoneReviewScreen, DoneReviewTyped}
+}
 
 const (
 	ImagesAuto   = "auto"
@@ -330,6 +342,8 @@ func Default() []Spec {
 		{Key: SubAgentWatchSeconds, Label: "Sub-agent watch", Description: "Seconds before a long sub-agent call is named in the chat, and a sub-agent with no progress shows stalled", Category: "Turn", Kind: Int, Default: konst.SubAgentWatchSecondsDefault,
 			Least: 1, Most: math.MaxInt32, Unit: "seconds before a long call is named, and before a sub-agent with no progress is stalled"},
 		{Key: VerifySubAgents, Label: "Check sub-agents", Description: "The lead checks each sub-agent's work itself before it reports. off takes the report as the result", Category: "Turn", Kind: Bool, Default: 1},
+		{Key: DoneReview, Label: "Done review", Description: "What reads a sub-agent's hand-back before the lead takes it. screen sends back acceptance lines with no evidence", Category: "Turn", Kind: Text, DefaultText: DoneReviewScreen,
+			Choices: DoneReviews()},
 		{Key: AgentSources, Label: "Agent folders", Description: "The project folders sub-agents are read from, in order: tofu, agents and claude", Category: "Turn", Kind: Text, DefaultText: "tofu,agents,claude",
 			ListOf: []string{"tofu", "agents", "claude"}},
 		{Key: subagent.TierGenius.Setting(), Label: "Genius tier", Description: "the model @genius names, and opus in a shared agent file; empty runs the orchestrator's model", Category: "Turn", Kind: Text},

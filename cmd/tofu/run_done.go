@@ -9,30 +9,31 @@ import (
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
+	settingspkg "tofu/internal/settings"
 	"tofu/internal/turn"
 )
 
 const doneReviewPoint = state.StopCheckRuleRef
 
-const (
-	doneArmOff    = "off"
-	doneArmCheap  = "cheap"
-	doneArmScreen = "screen"
-	doneArmTyped  = "typed"
-)
-
-func doneArms() []string { return []string{doneArmOff, doneArmCheap, doneArmScreen, doneArmTyped} }
-
-func newDoneReview(arm string) (turn.DoneReview, error) {
+func newDoneReview(arm string, say func(string)) turn.DoneReview {
 	switch arm {
-	case doneArmOff:
-		return nil, nil
-	case doneArmCheap:
-		return turn.CheapDoneReview{}, nil
-	case doneArmScreen:
-		return turn.ContractDoneReview{}, nil
-	case doneArmTyped:
-		return newTypedDoneReview()
+	case settingspkg.DoneReviewOff:
+		return nil
+	case settingspkg.DoneReviewCheap:
+		return turn.CheapDoneReview{}
+	case settingspkg.DoneReviewScreen:
+		return turn.ContractDoneReview{}
+	case settingspkg.DoneReviewTyped:
+		typed, err := newTypedDoneReview()
+		if err == nil {
+			return typed
+		}
+		reason := err.Error()
+		if jev.IsUnbound(err) {
+			reason = "no Jev classifier is bound"
+		}
+		say("the typed done review fell back to screen because " + reason + "; screen reads the acceptance lines with no Jev call")
+		return turn.ContractDoneReview{}
 	}
 	panic("tofu run: unknown done review arm " + arm)
 }

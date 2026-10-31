@@ -19,6 +19,7 @@ import (
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/quota"
 	sessionstore "tofu/internal/session"
+	settingspkg "tofu/internal/settings"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
@@ -42,9 +43,9 @@ stand-in usage endpoint, which it then polls for quota.updated and
 account.state.
 
 --done-review off|cheap|screen|typed picks how a sub-agent's hand-back is
-reviewed before the lead reads it, as tofu drive does, off when not named.
-TOFU_SERVE_DONE_REVIEW names it when --done-review does not, and carries it to
-the tofu host the session runs in.
+reviewed before the lead reads it, as tofu drive does. TOFU_SERVE_DONE_REVIEW
+names it when --done-review does not, and carries it to the tofu host the
+session runs in. With neither, the doneReview setting decides.
 `
 
 const (
@@ -82,7 +83,7 @@ func serveArgs(args []string) (servePlan, error) {
 	if plan.stdio == plan.schema {
 		return plan, errors.New("name exactly one of --stdio and --schema")
 	}
-	return plan, armIsKnown("--done-review", plan.doneArm, doneArms())
+	return plan, armIsKnown("--done-review", plan.doneArm, settingspkg.DoneReviews())
 }
 
 func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {

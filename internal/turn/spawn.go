@@ -782,7 +782,7 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 	}
 	id := subAgent.NewID()
 	began := trace.begin(id)
-	claims, sentBack, state, runErr := t.runRounds(ctx, subAgentCtx, held, subAgent)
+	claims, sentBack, state, unbelievedAtCap, runErr := t.runRounds(ctx, subAgentCtx, held, subAgent)
 	forked := held.forkedSoFar()
 	asked := subAgent.Boundary.Reported()
 	last := &claims[len(claims)-1]
@@ -801,6 +801,10 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 		}
 		report.Findings = append(report.Findings, subagent.Finding{Bucket: subagent.Noted, Text: "sent back " + times + ": " + strings.Join(sentBack, "; then ")})
 	}
+	if unbelievedAtCap != "" {
+		report.Completion = subagent.Blocked
+		report.Findings = append(report.Findings, subagent.Finding{Bucket: subagent.ActOn, Text: "not done: " + unbelievedAtCap})
+	}
 	t.tree.mu.Lock()
 	t.tree.retain(claims)
 	for _, claim := range append(slices.Clone(forked), claims...) {
@@ -808,7 +812,7 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 	}
 	t.tree.mu.Unlock()
 	if t.SubAgents.Ended != nil {
-		t.SubAgents.Ended(held.definition, agent.Brief, append(forked, claims...), report, runErr == nil && state != subagent.Errored && !stoppedEarly(state, last.Outcome))
+		t.SubAgents.Ended(held.definition, agent.Brief, append(forked, claims...), report, runErr == nil && state != subagent.Errored && !stoppedEarly(state, last.Outcome) && unbelievedAtCap == "")
 	}
 	text := report.Text(t.proseStore())
 	if agent.Ticket != "" && t.base.Board != nil {

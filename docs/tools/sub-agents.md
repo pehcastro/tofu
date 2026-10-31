@@ -2,7 +2,7 @@
 title: Sub-agent tools
 description: spawn, message, subagents and ask, the tools the lead and its sub-agents use to hand out work and talk while it runs.
 order: 7
-updated: 2026-10-24
+updated: 2026-10-31
 ---
 
 Four tools, tofu's own Go code. The lead gets `spawn`; the loop adds
@@ -35,6 +35,15 @@ limits in settings.
 
 `subAgentsPerTurn` (10) and `subAgentDepth` (2) are settings, and `tofu
 agents` lists the sub-agents `agent` can name.
+
+## Before the lead takes a hand-back
+
+When a sub-agent says it is done, the `doneReview` setting reads its work
+before the lead does. By default, `screen` sends it back while an acceptance
+line in its brief has no evidence entry naming that line, and the report the
+lead gets says `sent back` with each line it was sent back for. It makes no
+model or Jev call. `tofu settings set doneReview off` takes the hand-back as
+it is. See [Settings](/docs/features/settings).
 
 ## What a sub-agent's shell runs
 

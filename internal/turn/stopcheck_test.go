@@ -97,6 +97,39 @@ func TestTheStopCheckMethodComesFromTheShippedTableWhenNobodyPassesOne(t *testin
 	}
 }
 
+func TestASubAgentStillUnbelievedAtTheRoundCapReachesTheLeadBlockedNamingTheLine(t *testing.T) {
+	for _, c := range []struct {
+		brief, want, refused string
+	}{
+		{"TOFU-1: write the greeting under mine/.\n\n## Acceptance\n- mine/greeting.txt says hello, pasted\n", "is finished, blocked,", ", done,"},
+		{"write the greeting under mine/", "is finished, done,", "round cap"},
+	} {
+		_, spawn := orchestratorTurn(t, t.TempDir(), []llm.Decision{claimDecision("all done"), claimDecision("done again"), claimDecision("done a third time")})
+		spawn.Review = ContractDoneReview{}
+		spawn.Methods = methodTable(t, string(method.Judged))
+		var endedFinished []bool
+		var endedCompletion subagent.Completion
+		spawn.SubAgents.Ended = func(_ subagent.Definition, _ string, _ []Row, ended SubAgentReport, finished bool) {
+			endedFinished, endedCompletion = append(endedFinished, finished), ended.Completion
+		}
+		if _, err := spawn.Run(context.Background(), spawnCall("call-1", c.brief, "mine/**").ToolCalls[0].Arguments); err != nil {
+			t.Fatalf("spawn returned an error: %v", err)
+		}
+		report := reported(t, spawn)
+		if !strings.Contains(report, c.want) || strings.Contains(report, c.refused) {
+			t.Fatalf("the lead got, for %q:\n%s\nwant %q and no %q", c.brief, report, c.want, c.refused)
+		}
+		capped := strings.HasPrefix(c.brief, "TOFU-1")
+		if len(endedFinished) != 1 || endedFinished[0] == capped || (endedCompletion == subagent.Blocked) != capped {
+			t.Fatalf("for %q the Ended consumer was told finished %v with completion %s, want finished %v", c.brief, endedFinished, endedCompletion, !capped)
+		}
+		if strings.HasPrefix(c.brief, "TOFU-1") && (!strings.Contains(report, "line 1, mine/greeting.txt says hello") || !strings.Contains(report, "round cap of 3")) {
+			t.Fatalf("the blocked report names neither the unmet line nor the cap:\n%s", report)
+		}
+		t.Log(report)
+	}
+}
+
 func methodTable(t *testing.T, named string) method.Table {
 	t.Helper()
 	rows := "kind: method_table\ntable_version: 1\nnotes: a fixture\nmethods:\n"

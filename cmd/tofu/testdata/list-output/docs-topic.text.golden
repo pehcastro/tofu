@@ -22,8 +22,9 @@ What it is
   - Shell: persistentRegistry, logTail, killConfirm, shell
   - Turn: decisionCap, turnMaySpawn, oneWorkingSessionPerProject, planEveryStep,
     sideChatAccess, subAgentsPerTurn, subAgentDepth, leadCache, subAgentCache,
-    subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents, agentSources,
-    modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb
+    subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents, doneReview,
+    agentSources, modelTier.genius, modelTier.smart, modelTier.worker,
+    modelTier.dumb
   - Projects: projectManagement (boardy, the ticket board), boardFlow (the words
     boardy uses), scratchCleanupDays and scratchMaxGB (the scratchpad)
   - Browser: browser, browserDriver, browserSteps, browserModel, browserEffort,
@@ -124,6 +125,14 @@ The detail
     or the tests again and opens what it made. Off takes the report as the
     result unless you ask for a check. `tofu rules off verify_sub_agents` turns
     it off too, whatever this says.
+  - `doneReview`: `screen` sends a sub-agent back while an acceptance line on
+    its ticket has no evidence entry naming it, up to the round cap, and the
+    lead's report names each line. `typed` asks Jev after the screen and falls
+    back to `screen`, saying so in the chat, when no classifier is bound.
+    `cheap` sends back a sub-agent that ran no tool without failing; `off`
+    reviews nothing. A sub-agent with no ticket passes the screen.
+    `--done-review` and `TOFU_SERVE_DONE_REVIEW` win over it. The next turn
+    reads the new value.
   - `agentSources`: a comma list, inside the project. The home directory gives
     only `~/.tofu/agents`, and the library is always read.
   - `projectManagement`: a spawn names a ticket, its owns become the sub-agent's
@@ -391,6 +400,10 @@ Turn
       true or false
       The lead checks each sub-agent's work itself before it reports. off takes
       the report as the result
+    doneReview                   screen
+      one of off, cheap, screen, typed
+      What reads a sub-agent's hand-back before the lead takes it. screen sends
+      back acceptance lines with no evidence
     agentSources                 tofu,agents,claude
       a comma list of tofu, agents, claude
       The project folders sub-agents are read from, in order: tofu, agents and
