@@ -17,6 +17,7 @@ import (
 	"tofu/interface/cli"
 	"tofu/internal/boardy"
 	"tofu/internal/host"
+	"tofu/internal/judge/gate"
 	"tofu/internal/rule"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/sys"
@@ -29,6 +30,7 @@ const (
 	rulesFromTheBinary  = "the binary"
 	rulesFromTheProject = "the project"
 	ruleOn              = "on"
+	pointKind           = "point"
 	rulesSubcommands    = "tofu rules list|check|fired|index|overrides|add|off|restore|remove"
 	rulesListUsage      = "tofu rules list [--library dir] [--dir project] [--json]"
 	rulesOverridesUsage = "tofu rules overrides [--library dir] [--dir project] [--json]"
@@ -329,23 +331,50 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 	for _, off := range stack.shippedOff {
 		listing = append(listing, ruleListing{ID: off.ID, Kind: string(off.Kind), Origin: shippedFrom, Mode: string(rule.ModeOff), Switch: stack.switchOn(off.ID, opts.dir)})
 	}
+	if opts.library == "" {
+		library, points := readLibrary()
+		if library.Unreadable != "" {
+			return o.fail(errors.New(library.Unreadable))
+		}
+		for _, point := range points {
+			listing = append(listing, pointListing(point))
+		}
+	}
 	report := ruleListReport{Origin: stack.origin, Rules: listing}
 	return o.done(true, report, func(page cli.Page) []string { return ruleListLines(page, report, checked) })
 }
 
+func pointListing(point doctorRule) ruleListing {
+	if point.Point == shellSiftPoint {
+		point = shellSiftRule(point)
+	}
+	listed := ruleListing{ID: point.Point, Kind: pointKind, Origin: "shipped", Mode: point.Mode, Switch: point.Fallback}
+	if point.Origin == string(gate.OriginProject) {
+		listed.Origin = "library"
+	}
+	if point.Unusable != "" {
+		listed.Switch = "unusable: " + point.Unusable
+	}
+	return listed
+}
+
 func ruleListLines(page cli.Page, report ruleListReport, checked []string) []string {
 	checkMode := func(r ruleListing) rule.Mode {
-		if r.Mode == string(rule.ModeOff) || slices.Contains(checked, r.ID) {
+		if r.Mode == string(rule.ModeOff) || r.Kind == pointKind || slices.Contains(checked, r.ID) {
 			return rule.Mode(r.Mode)
 		}
 		return ""
 	}
 	var origins []string
 	checks := map[rule.Mode]int{}
-	running := 0
+	running, points := 0, 0
 	for _, r := range report.Rules {
 		if !slices.Contains(origins, r.Origin) {
 			origins = append(origins, r.Origin)
+		}
+		if r.Kind == pointKind {
+			points++
+			continue
 		}
 		checks[checkMode(r)]++
 		if r.Mode != string(rule.ModeOff) {
@@ -363,7 +392,11 @@ func ruleListLines(page cli.Page, report ruleListReport, checked []string) []str
 	if len(counts) > 0 {
 		verdict.Text = strings.Join(counts, " · ")
 	}
-	lines := page.Title("Rules", []string{strconv.Itoa(running) + " run", "from " + page.Path(report.Origin)}, verdict)
+	facts := []string{strconv.Itoa(running) + " run", "from " + page.Path(report.Origin)}
+	if points > 0 {
+		facts = slices.Insert(facts, 1, plural(points, "point"))
+	}
+	lines := page.Title("Rules", facts, verdict)
 	for _, name := range origins {
 		var rows []cli.Row
 		for _, r := range report.Rules {
@@ -374,6 +407,9 @@ func ruleListLines(page cli.Page, report ruleListReport, checked []string) []str
 			row := cli.Row{Mark: listingMark(mode), Cells: []string{r.ID, r.Kind, string(mode)}, Detail: cmp.Or(r.Switch, page.Path(r.File))}
 			if r.Override != nil {
 				row.Detail = overrideWhy(*r.Override)
+			}
+			if r.Kind == pointKind && r.Mode == "" {
+				row.Mark = cli.Fail
 			}
 			rows = append(rows, row)
 		}

@@ -87,6 +87,15 @@ a row per rule that runs, grouped by where it came from, `shipped`,
 your own: `●` enforced, `○` shadow, `✓` a rule with no checker, `-` a
 rule an override switched off. An overridden rule shows its reason.
 
+The list also names every judge point, such as `stop_check@1`, with kind
+`point` and the mode it runs in once its lock is read, the same mode
+`tofu doctor` counts: `○` shadow decides nothing and only records, `●`
+enforced acts on the answer, and `✗` a point that cannot run says why. The
+title counts them, `<n> points`, and `--json` rows carry `kind: point` and
+`mode`. `tofu run --show-prompt` ends its rule lines with one
+`point <id>: <mode>` line per point. With `--library dir` the list shows
+only that folder's rules and no points.
+
     tofu rules overrides
 
 lists every override with its layer, reason and date, and marks a stale

@@ -70,6 +70,14 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 			_, _ = fmt.Fprintf(out, "shadow %s: %s\n", loaded.ID, why)
 		}
 	}
+	library, points := readLibrary()
+	if library.Unreadable != "" {
+		_, _ = fmt.Fprintf(out, "points unreadable: %s\n", library.Unreadable)
+	}
+	for _, point := range points {
+		listed := pointListing(point)
+		_, _ = fmt.Fprintf(out, "point %s: %s\n", listed.ID, strings.TrimSpace(listed.Mode+" "+listed.Switch))
+	}
 
 	_, _ = fmt.Fprintf(out, "\nsystem message, %d bytes\n%s\n", len(system), system)
 	for _, view := range sent.MemoryMessage() {
