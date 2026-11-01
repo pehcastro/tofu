@@ -227,35 +227,55 @@ func TestAStandingAnswerThatCannotBeWrittenSaysSo(t *testing.T) {
 	}
 }
 
-func TestACompactedSessionKeepsTheStandingAnswersOfTheOneItContinues(t *testing.T) {
+func compactedThenReopened(t *testing.T, before func(h *Host)) (reopened *Host, from, into string) {
+	t.Helper()
 	home, project := t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	h, _ := New(Config{Dir: project})
 	defer h.Close()
-	before, err := h.OpenFresh()
+	from, err := h.OpenFresh()
 	if err != nil {
 		t.Fatal(err)
 	}
-	answeredStanding(t, h, settingsAsk("3"), AlwaysHere)
+	before(h)
 	store, err := session.OpenIn(project)
 	if err != nil {
 		t.Fatal(err)
 	}
-	into := session.NewEventID()
-	if err := store.Write(session.Header{ID: before, ForkedInto: into}, nil); err != nil {
+	into = session.NewEventID()
+	if err := store.Write(session.Header{ID: from, ForkedInto: into}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Write(session.Header{ID: into, CarriedFrom: &session.Carried{Session: from}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := h.Compacted(into, nil); err != nil {
 		t.Fatal(err)
 	}
-	if answer := unasked(t, h, settingsAsk("3")); answer != turn.PersonAlwaysHere {
-		t.Errorf("after compaction into %s the allow_always call answered %v, want it run unasked", into, answer)
-	}
 	h.Close()
-	reopened, _ := New(Config{Dir: project, Resumed: Carry{Session: into}})
-	defer reopened.Close()
-	if got := reopened.Standing(); len(got) != 1 {
-		t.Errorf("the compacted session reopened stands on %v, want the answer carried from %s", got, before)
+	reopened, _ = New(Config{Dir: project, Resumed: Carry{Session: into}})
+	t.Cleanup(reopened.Close)
+	return reopened, from, into
+}
+
+func TestACompactedSessionReopenedKeepsTheStandingAnswersOfTheOneItContinues(t *testing.T) {
+	reopened, from, into := compactedThenReopened(t, func(h *Host) { answeredStanding(t, h, settingsAsk("3"), AlwaysHere) })
+	stands := reopened.Standing()
+	if len(stands) != 1 {
+		t.Fatalf("%s compacted from %s and reopened with nothing asked in between stands on %v, want the answer carried", into, from, stands)
+	}
+	if answer := unasked(t, reopened, settingsAsk("3")); answer != turn.PersonAlwaysHere {
+		t.Errorf("after compaction into %s and a reopen the allow_always call answered %v, want it run unasked", into, answer)
+	}
+	if _, revoked := reopened.Revoke(stands[0].Target); !revoked {
+		t.Fatalf("the answer carried into %s could not be revoked", into)
+	}
+	project := reopened.dir
+	reopened.Close()
+	again, _ := New(Config{Dir: project, Resumed: Carry{Session: into}})
+	defer again.Close()
+	if got := again.Standing(); len(got) != 0 {
+		t.Errorf("after a revoke in %s a reopen stands on %v, want the revoke to hold rather than the answer of %s", into, got, from)
 	}
 }

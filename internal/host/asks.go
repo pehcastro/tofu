@@ -1,8 +1,6 @@
 package host
 
 import (
-	"errors"
-	"io/fs"
 	"slices"
 	"sync"
 	"time"
@@ -37,12 +35,11 @@ func (a *asks) follow() {
 	}
 	before := a.held
 	a.held = now
-	read, until, err := now.read()
 	var keepErr error
-	if errors.Is(err, fs.ErrNotExist) && before.forkedInto(now.id) {
+	if now.unwrittenForkOf(before) {
 		keepErr = now.keep(a.standing, a.until)
 	} else {
-		a.standing, a.until = read, until
+		a.standing, a.until, _ = now.read()
 	}
 	a.mu.Unlock()
 	a.report(keepErr)

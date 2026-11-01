@@ -2,6 +2,8 @@ package host
 
 import (
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
@@ -41,12 +43,42 @@ func (in standingIn) forkedInto(id string) bool {
 	return err == nil && header.ForkedInto == id
 }
 
+func (in standingIn) unwrittenForkOf(before standingIn) bool {
+	if in.id == "" {
+		return false
+	}
+	_, err := os.Stat(in.file())
+	return errors.Is(err, fs.ErrNotExist) && before.forkedInto(in.id)
+}
+
+func (in standingIn) carried() ([]byte, error) {
+	body, err := os.ReadFile(in.file())
+	if !errors.Is(err, fs.ErrNotExist) {
+		return body, err
+	}
+	chain, chainErr := in.store.Ancestors(in.id)
+	if chainErr != nil {
+		return nil, err
+	}
+	into := in.id
+	for _, from := range chain {
+		if from.ForkedInto != into {
+			break
+		}
+		if body, err = os.ReadFile(standingIn{store: in.store, id: from.ID}.file()); !errors.Is(err, fs.ErrNotExist) {
+			return body, err
+		}
+		into = from.ID
+	}
+	return nil, err
+}
+
 func (in standingIn) read() (map[string]Answer, map[string]time.Time, error) {
 	standing, until := map[string]Answer{}, map[string]time.Time{}
 	if in.id == "" {
 		return standing, until, nil
 	}
-	body, err := os.ReadFile(in.file())
+	body, err := in.carried()
 	if err != nil {
 		return standing, until, err
 	}
