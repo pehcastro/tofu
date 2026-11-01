@@ -270,7 +270,7 @@ func (m Managed) entered(key string, ticket Ticket) time.Time {
 	return cmp.Or(enteredStatus(events)[ticket.ID], ticket.Created)
 }
 
-func (m Managed) weigh(hooks []rule.Hook, when rule.When, s subject) ([]Fired, []rule.Hook, error) {
+func (m Managed) holding(hooks []rule.Hook, when rule.When, s subject) ([]rule.Hook, subject) {
 	hooks = slices.DeleteFunc(slices.Clone(hooks), func(h rule.Hook) bool { return h.When != when || h.On != s.event })
 	if s.entered.IsZero() {
 		s.entered = time.Now()
@@ -278,14 +278,16 @@ func (m Managed) weigh(hooks []rule.Hook, when rule.When, s subject) ([]Fired, [
 			s.entered = m.entered(s.key, s.ticket)
 		}
 	}
+	return slices.DeleteFunc(hooks, func(h rule.Hook) bool { return !m.holds(h, s) }), s
+}
+
+func (m Managed) weigh(hooks []rule.Hook, when rule.When, s subject) ([]Fired, []rule.Hook, error) {
+	hooks, s = m.holding(hooks, when, s)
 	var fired []Fired
 	var effects []rule.Hook
 	var refusals []string
 	var waits error
 	for _, h := range hooks {
-		if !m.holds(h, s) {
-			continue
-		}
 		if !h.Action.Do.Check() {
 			effects = append(effects, h)
 			continue
@@ -521,8 +523,17 @@ func (m Managed) Foresee(event rule.HookEvent, key, id, actor string) (Foreseen,
 	if err != nil {
 		return Foreseen{}, err
 	}
-	fired, effects, err := m.weigh(hooks, rule.WhenAfter, s)
 	var foreseen Foreseen
+	held, s := m.holding(hooks, rule.WhenAfter, s)
+	var decidable []rule.Hook
+	for _, h := range held {
+		if h.Action.Do == rule.DoCommand || h.Action.Do == rule.DoJev {
+			foreseen.Effects = append(foreseen.Effects, h.ID+" would run "+string(h.Action.Do)+" "+h.Action.Arg+" to decide")
+			continue
+		}
+		decidable = append(decidable, h)
+	}
+	fired, effects, err := m.weigh(decidable, rule.WhenAfter, s)
 	for _, f := range fired {
 		if said, found := s.firedEvent(f).hookSaid(string(rule.ThenNudge)); found {
 			foreseen.Nudges = append(foreseen.Nudges, said)
