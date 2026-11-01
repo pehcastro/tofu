@@ -56,6 +56,21 @@ lead gets says `sent back` with each line it was sent back for. It makes no
 model or Jev call. `tofu settings set doneReview off` takes the hand-back as
 it is. See [Settings](/docs/features/settings).
 
+## Who calls what it changed
+
+A sub-agent's report lists each file it wrote once, and then an impact
+list: each exported Go, Rust or TypeScript item it changed, with the file
+and line of every call site outside that file, as the symbols tool finds
+them by name. In a git project, changed means lines that differ from
+`HEAD`; a new file, or a project without git, counts every exported item in
+the file. A file the scan cannot read is named in the list as unread.
+
+```
+wrote calc/calc.go
+impact, each exported item it changed and the call sites outside its file that the symbols tool matched by name:
+  func Add in calc/calc.go: main.go:9, stats/stats.go:8
+```
+
 ## What a sub-agent's shell runs
 
 A sub-agent reads its own session and board from its shell: `tofu session

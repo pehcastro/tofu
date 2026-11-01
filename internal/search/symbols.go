@@ -37,6 +37,7 @@ type Graph struct {
 	Unparsed    int
 	Unreadable  int
 	FirstFailed string
+	Unread      []string
 	Text        string
 }
 
@@ -65,10 +66,7 @@ func symbolGraph(files []string, wanted func(string) bool, read func(rel string)
 		}
 		body, err := read(rel)
 		if err != nil {
-			if graph.Unreadable == 0 {
-				graph.FirstFailed = failedRead(rel, err)
-			}
-			graph.Unreadable++
+			graph.Unread = append(graph.Unread, failedRead(rel, err))
 			continue
 		}
 		var parsed bool
@@ -85,6 +83,9 @@ func symbolGraph(files []string, wanted func(string) bool, read func(rel string)
 			continue
 		}
 		graph.Parsed++
+	}
+	if graph.Unreadable = len(graph.Unread); graph.Unreadable > 0 {
+		graph.FirstFailed = graph.Unread[0]
 	}
 	slices.SortStableFunc(graph.Definitions, func(left, right Definition) int { return strings.Compare(left.Path, right.Path) })
 	return graph

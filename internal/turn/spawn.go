@@ -804,7 +804,7 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 		last.Warnings = append(last.Warnings, "this sub-agent run was not wholly recorded: "+err.Error())
 	}
 	report := reportOf(agent, forked, []Row{wholeRun(claims)}, state)
-	report.Asked = asked
+	report.Asked, report.Impact = asked, boardy.ImpactOf(t.SubAgents.Root, report.Wrote)
 	if len(asked) > 0 && state == subagent.Finished {
 		report.Completion = subagent.NeedsContext
 	}

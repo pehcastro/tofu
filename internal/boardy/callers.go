@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -56,6 +57,186 @@ type callerScan struct {
 	stopped string
 }
 
+type Impacted struct {
+	Item    string   `json:"item"`
+	Callers []string `json:"callers,omitempty"`
+}
+
+type Impact struct {
+	Items   []Impacted `json:"items,omitempty"`
+	Unread  []string   `json:"unread,omitempty"`
+	Stopped string     `json:"stopped,omitempty"`
+}
+
+func ImpactOf(root string, wrote []string) Impact {
+	if root == "" {
+		return Impact{}
+	}
+	root, _ = filepath.Abs(root)
+	var files []string
+	for _, written := range wrote {
+		if inside, err := filepath.Rel(root, written); filepath.IsAbs(written) && err == nil && !strings.HasPrefix(inside, "..") {
+			written = inside
+		}
+		if rel := filepath.ToSlash(written); isSource(rel) && !slices.Contains(files, rel) {
+			files = append(files, rel)
+		}
+	}
+	if len(files) == 0 {
+		return Impact{}
+	}
+	lines, touched := sourceLines{root: root, read: map[string][]string{}}, changedIn(root, files)
+	declared := search.Index(root, files, func(string) bool { return true })
+	impact := Impact{Unread: declared.Unread}
+	var changed []search.Definition
+	for _, definition := range declared.Definitions {
+		head := lines.head(definition)
+		exported := map[string]bool{".go": ast.IsExported(bareName(definition.Symbol)), ".rs": strings.HasPrefix(head, "pub"), ".ts": strings.HasPrefix(head, "export")}
+		if exported[languageOf(definition.Path)] && touched(definition) {
+			changed = append(changed, definition)
+		}
+	}
+	if len(changed) == 0 {
+		return impact
+	}
+	sources, stopped := callerSources(root)
+	if sources == nil {
+		sources, stopped = walkedSources(root)
+	}
+	graph := search.Index(root, sources, func(name string) bool {
+		return slices.ContainsFunc(changed, func(definition search.Definition) bool { return bareName(definition.Symbol) == name })
+	})
+	impact.Stopped = stopped
+	for _, unread := range graph.Unread {
+		if !slices.Contains(impact.Unread, unread) {
+			impact.Unread = append(impact.Unread, unread)
+		}
+	}
+	for _, definition := range changed {
+		impact.Items = append(impact.Items, impactedBy(graph, definition))
+	}
+	return impact
+}
+
+func impactedBy(graph search.Graph, definition search.Definition) Impacted {
+	name := bareName(definition.Symbol)
+	item := Impacted{Item: string(definition.Kind) + " " + definition.Symbol + " in " + definition.Path}
+	at, more := map[string]int{}, []int{}
+	for _, site := range graph.Callers {
+		if site.Name != name || site.Path == definition.Path || languageOf(site.Path) != languageOf(definition.Path) ||
+			slices.ContainsFunc(graph.Definitions, func(other search.Definition) bool { return other.Path == site.Path && bareName(other.Symbol) == name }) {
+			continue
+		}
+		if seen, found := at[site.Path]; found {
+			more[seen]++
+			continue
+		}
+		at[site.Path] = len(item.Callers)
+		item.Callers, more = append(item.Callers, fmt.Sprintf("%s:%d", site.Path, site.Line)), append(more, 0)
+	}
+	for i, extra := range more {
+		if extra > 0 {
+			item.Callers[i] += fmt.Sprintf(" (+%d more)", extra)
+		}
+	}
+	return item
+}
+
+func languageOf(rel string) string {
+	return strings.TrimSuffix(path.Ext(rel), "x")
+}
+
+func isSource(rel string) bool {
+	return slices.Contains([]string{".go", ".rs", ".ts", ".tsx"}, path.Ext(rel))
+}
+
+func scanStopped(count int, at string) string {
+	return fmt.Sprintf("the scan stopped after %d files, at %s, so the list may be short", count, at)
+}
+
+func walkedSources(root string) ([]string, string) {
+	var sources []string
+	stopped := ""
+	err := filepath.WalkDir(root, func(full string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		name := entry.Name()
+		switch {
+		case entry.IsDir() && full != root && (name == "vendor" || name == "node_modules" || strings.HasPrefix(name, ".")):
+			return fs.SkipDir
+		case entry.IsDir() || !isSource(name):
+			return nil
+		}
+		rel, err := filepath.Rel(root, full)
+		if len(sources) == konst.BoardCallerFilesMost {
+			stopped = scanStopped(len(sources), filepath.ToSlash(rel))
+			return fs.SkipAll
+		}
+		sources = append(sources, filepath.ToSlash(rel))
+		return err
+	})
+	if err != nil {
+		return sources, "the walk for callers stopped, so the list may be short: " + err.Error()
+	}
+	return sources, stopped
+}
+
+func changedIn(root string, files []string) func(search.Definition) bool {
+	tracked, listErr := gitOut(root, "", append([]string{"ls-tree", "-r", "--name-only", "HEAD", "--"}, files...)...)
+	diff, diffErr := gitOut(root, "", append([]string{"diff", "-U0", "--no-color", "--no-ext-diff", "--relative", "HEAD", "--"}, files...)...)
+	if listErr != nil || diffErr != nil {
+		return func(search.Definition) bool { return true }
+	}
+	hunks := map[string][][2]int{}
+	current := ""
+	for line := range strings.Lines(diff) {
+		fields := strings.Fields(line)
+		switch {
+		case strings.HasPrefix(line, "+++ "):
+			current = strings.TrimPrefix(strings.TrimSpace(line[4:]), "b/")
+		case strings.HasPrefix(line, "@@ ") && len(fields) > 2:
+			start, count, counted := strings.Cut(strings.TrimPrefix(fields[2], "+"), ",")
+			first, _ := strconv.Atoi(start)
+			last := first
+			if spanned, _ := strconv.Atoi(count); counted && spanned > 1 {
+				last = first + spanned - 1
+			}
+			hunks[current] = append(hunks[current], [2]int{first, last})
+		}
+	}
+	known := strings.Split(filepath.ToSlash(tracked), "\n")
+	return func(definition search.Definition) bool {
+		return !slices.Contains(known, definition.Path) || slices.ContainsFunc(hunks[definition.Path], func(hunk [2]int) bool {
+			return hunk[0] <= definition.LastLine && definition.FirstLine <= hunk[1]
+		})
+	}
+}
+
+type sourceLines struct {
+	root string
+	read map[string][]string
+}
+
+func (s sourceLines) line(rel string, number int) string {
+	if s.read[rel] == nil {
+		raw, _ := os.ReadFile(filepath.Join(s.root, rel))
+		s.read[rel] = strings.Split(string(raw), "\n")
+	}
+	if number > len(s.read[rel]) {
+		return ""
+	}
+	return strings.TrimSpace(s.read[rel][number-1])
+}
+
+func (s sourceLines) head(definition search.Definition) string {
+	head := definition.FirstLine
+	for head < definition.LastLine && strings.HasPrefix(s.line(definition.Path, head), "#[") {
+		head++
+	}
+	return s.line(definition.Path, head)
+}
+
 func (m Managed) ownedCallers(ticket Ticket, reason string) (string, error) {
 	if m.Store.Root == "" || len(ticket.Owns) == 0 {
 		return reason, nil
@@ -85,7 +266,7 @@ func callerSources(root string) ([]string, string) {
 			continue
 		}
 		if len(sources) == konst.BoardCallerFilesMost {
-			return sources, fmt.Sprintf("the scan stopped after %d files, at %s, so the list may be short", len(sources), rel)
+			return sources, scanStopped(len(sources), rel)
 		}
 		sources = append(sources, rel)
 	}
@@ -164,25 +345,11 @@ func functionCallers(root string, sources []string, owned func(string) bool, tex
 			others = append(others, rel)
 		}
 	}
-	lines := map[string][]string{}
-	lineOf := func(rel string, number int) string {
-		if lines[rel] == nil {
-			raw, _ := os.ReadFile(filepath.Join(root, rel))
-			lines[rel] = strings.Split(string(raw), "\n")
-		}
-		if number > len(lines[rel]) {
-			return ""
-		}
-		return strings.TrimSpace(lines[rel][number-1])
-	}
+	lines := sourceLines{root: root, read: map[string][]string{}}
 	home := map[string]string{}
 	for _, definition := range search.Index(root, mine, func(string) bool { return true }).Definitions {
-		head := definition.FirstLine
-		for head < definition.LastLine && strings.HasPrefix(lineOf(definition.Path, head), "#[") {
-			head++
-		}
 		name := bareName(definition.Symbol)
-		public := definition.Kind == search.KindFunc && path.Ext(definition.Path) == ".rs" && strings.HasPrefix(lineOf(definition.Path, head), "pub")
+		public := definition.Kind == search.KindFunc && path.Ext(definition.Path) == ".rs" && strings.HasPrefix(lines.head(definition), "pub")
 		if home[name] == "" && (public || named(text, "fn "+name) && (definition.Kind == search.KindFunc || definition.Kind == search.KindMethod)) {
 			home[name] = definition.Path
 		}
@@ -218,7 +385,7 @@ func functionCallers(root string, sources []string, owned func(string) bool, tex
 			continue
 		}
 		at[item+"\n"+call.Path] = len(sites)
-		sites = append(sites, callerSite{item: item, file: call.Path, line: call.Line, text: clipped(lineOf(call.Path, call.Line))})
+		sites = append(sites, callerSite{item: item, file: call.Path, line: call.Line, text: clipped(lines.line(call.Path, call.Line))})
 	}
 	return sites
 }

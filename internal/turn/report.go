@@ -86,6 +86,7 @@ type SubAgentReport struct {
 	Findings   []subagent.Finding  `json:"findings"`
 	Learned    []string            `json:"learned"`
 	Wrote      []string            `json:"wrote,omitempty"`
+	Impact     boardy.Impact       `json:"impact,omitzero"`
 	Ran        []SubAgentCommand   `json:"ran,omitempty"`
 	CostUSD    float64             `json:"cost_usd"`
 	Asked      []subagent.Question `json:"asked,omitempty"`
@@ -118,7 +119,7 @@ func reportOf(agent subagent.SubAgent, forked, attempts []Row, state subagent.St
 		for _, step := range segment.Steps {
 			for _, call := range step.ToolCalls {
 				report.Ran = append(report.Ran, commandOf(call, printedBy([]Row{segment}, call.Call)))
-				if path := writtenPath(call); path != "" {
+				if path := writtenPath(call); path != "" && !slices.Contains(report.Wrote, path) {
 					report.Wrote = append(report.Wrote, path)
 				}
 			}
@@ -260,6 +261,18 @@ func (r SubAgentReport) Text(store *recall.Store) string {
 	}
 	if len(r.Wrote) > 0 {
 		fmt.Fprintf(body, "wrote %s\n", strings.Join(r.Wrote, ", "))
+	}
+	if len(r.Impact.Items) > 0 || len(r.Impact.Unread) > 0 {
+		body.WriteString("impact, each exported item it changed and the call sites outside its file that the symbols tool matched by name:\n")
+		for _, item := range r.Impact.Items {
+			fmt.Fprintf(body, "  %s: %s\n", item.Item, cmp.Or(strings.Join(item.Callers, ", "), "no call site found"))
+		}
+		for _, unread := range r.Impact.Unread {
+			fmt.Fprintf(body, "  unread %s\n", unread)
+		}
+		if r.Impact.Stopped != "" {
+			fmt.Fprintf(body, "  %s\n", r.Impact.Stopped)
+		}
 	}
 	var checks []string
 	checkFailed := false

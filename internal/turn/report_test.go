@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode/utf8"
 
+	"tofu/internal/boardy"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
@@ -191,6 +194,85 @@ func TestASubAgentsProseIsMarkedLineByLineAndALongOneIsCutToAHeadATailAndAHandle
 			whole, err := recall.NewStore(dir).Fetch(handle[1])
 			if err != nil || string(whole) != run.prose {
 				t.Fatalf("handle %s holds %d bytes (%v), want the %d byte prose whole", handle[1], len(whole), err, len(run.prose))
+			}
+		})
+	}
+}
+
+func TestAReportListsEachChangedExportedItemWithItsCallersOutsideItsFileAndEachWrittenFileOnce(t *testing.T) {
+	committed := map[string]string{
+		"go.mod":            "module demo\n\ngo 1.24\n",
+		"calc/calc.go":      "package calc\n\nfunc Add(a, b int) int {\n\treturn a + b\n}\n\nfunc half(a int) int {\n\treturn a / 2\n}\n\nfunc Sub(a, b int) int {\n\treturn a - b\n}\n\nfunc twice(a int) int {\n\treturn Add(a, a)\n}\n",
+		"main.go":           "package main\n\nimport \"demo/calc\"\n\nfunc main() {\n\tprintln(calc.Add(1, 2), calc.Sub(3, 1))\n}\n",
+		"report/report.go":  "package report\n\nimport \"demo/calc\"\n\nfunc Line() int {\n\treturn calc.Add(4, 5)\n}\n",
+		"crate/src/lib.rs":  "pub fn total(x: i32) -> i32 {\n    x\n}\n\nfn inner() -> i32 {\n    1\n}\n",
+		"crate/src/main.rs": "fn main() {\n    println!(\"{}\", demo::total(1));\n}\n",
+		"web/add.ts":        "export function Add(a: number) {\n  return a\n}\n",
+	}
+	for _, row := range []struct {
+		name    string
+		changed map[string]string
+		wrote   []string
+		want    []string
+		refuse  []string
+	}{
+		{name: "an exported go func changed and written twice",
+			changed: map[string]string{"calc/calc.go": strings.Replace(committed["calc/calc.go"], "return a + b", "return b + a", 1)},
+			wrote:   []string{"calc/calc.go", "calc/calc.go"},
+			want:    []string{"\nwrote calc/calc.go\n", "\n  func Add in calc/calc.go: main.go:6, report/report.go:6\n"},
+			refuse:  []string{"calc.go, ", "Sub in", "half", "calc/calc.go:16", "web/add.ts"}},
+		{name: "only an unexported go func changed",
+			changed: map[string]string{"calc/calc.go": strings.Replace(committed["calc/calc.go"], "a / 2", "a >> 1", 1)},
+			wrote:   []string{"calc/calc.go"},
+			want:    []string{"\nwrote calc/calc.go\n"},
+			refuse:  []string{"impact"}},
+		{name: "a pub rust fn changed",
+			changed: map[string]string{"crate/src/lib.rs": strings.Replace(committed["crate/src/lib.rs"], "    x\n", "    x + 0\n", 1)},
+			wrote:   []string{"<root>/crate/src/lib.rs"},
+			want:    []string{"\n  func total in crate/src/lib.rs: crate/src/main.rs:2\n"},
+			refuse:  []string{"inner"}},
+		{name: "a new file and one that cannot be read",
+			changed: map[string]string{"calc/more.go": "package calc\n\nfunc More() int {\n\treturn 1\n}\n"},
+			wrote:   []string{"calc/more.go", "calc/gone.go"},
+			want:    []string{"\n  func More in calc/more.go: no call site found\n", "\n  unread calc/gone.go: "}},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			root := t.TempDir()
+			put := func(files map[string]string) {
+				for rel, body := range files {
+					full := filepath.Join(root, filepath.FromSlash(rel))
+					if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			put(committed)
+			for _, args := range [][]string{{"init", "-q"}, {"add", "."}, {"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "x"}} {
+				if out, err := exec.Command("git", append([]string{"-c", "core.autocrlf=false", "-C", root}, args...)...).CombinedOutput(); err != nil {
+					t.Fatalf("git %v: %v %s", args, err, out)
+				}
+			}
+			put(row.changed)
+			var calls []ToolCallRow
+			for i, rel := range row.wrote {
+				args, _ := json.Marshal(map[string]string{"path": strings.Replace(rel, "<root>", filepath.ToSlash(root), 1)})
+				calls = append(calls, ToolCallRow{Call: "w" + strconv.Itoa(i), Tool: "write", Args: args})
+			}
+			report := reportOf(subagent.SubAgent{ID: "sub-1"}, nil, []Row{{Steps: []StepRow{{ToolCalls: calls}}}}, subagent.Finished)
+			report.Impact = boardy.ImpactOf(root, report.Wrote)
+			text := report.Text(nil)
+			for _, want := range row.want {
+				if !strings.Contains(text, want) {
+					t.Errorf("the report lacks %q:\n%s", want, text)
+				}
+			}
+			for _, refused := range row.refuse {
+				if strings.Contains(text, refused) {
+					t.Errorf("the report carries %q:\n%s", refused, text)
+				}
 			}
 		})
 	}
