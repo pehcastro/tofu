@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"tofu/internal/konst"
 )
@@ -25,9 +26,10 @@ type picture struct {
 }
 
 type bus struct {
-	mu  sync.Mutex
-	seq uint64
-	now picture
+	mu    sync.Mutex
+	seq   uint64
+	now   picture
+	heard map[string]Resolution
 }
 
 func (p *picture) apply(event Event) Event {
@@ -143,6 +145,12 @@ func (h *Host) Events() <-chan Event { return h.events }
 func (h *Host) deliver(event Event) {
 	h.bus.mu.Lock()
 	h.bus.seq++
+	if said, held := h.bus.heard[event.ID]; held && event.Kind == EventResumed {
+		if event.Resolution == nil || *event.Resolution == *cancelledByTofu() && said.Decision == Cancelled {
+			event.Resolution = &said
+		}
+		delete(h.bus.heard, event.ID)
+	}
 	told := h.bus.now.apply(event)
 	h.fanOut(followLine{Seq: h.bus.seq, Event: &event})
 	h.bus.mu.Unlock()
@@ -213,8 +221,30 @@ func (h *Host) putBack(asked Event) (resumed Event, settled bool) {
 	return Event{}, false
 }
 
+func (h *Host) Hear(id string, decision ApprovalDecision, by string) {
+	if f := h.following.Load(); f != nil {
+		f.ask(followAsk{Op: followHeard, Asked: id, Text: string(decision), By: by})
+		return
+	}
+	h.bus.mu.Lock()
+	defer h.bus.mu.Unlock()
+	if h.bus.heard == nil {
+		h.bus.heard = map[string]Resolution{}
+	}
+	h.bus.heard[id] = Resolution{Decision: decision, By: by}
+}
+
+func (h *Host) granted(id string, standing bool, until time.Time) {
+	h.bus.mu.Lock()
+	defer h.bus.mu.Unlock()
+	if said, held := h.bus.heard[id]; held {
+		said.Standing, said.Until = standing, until
+		h.bus.heard[id] = said
+	}
+}
+
 func (h *Host) forget() {
 	h.bus.mu.Lock()
 	defer h.bus.mu.Unlock()
-	h.bus.now = picture{Settings: h.bus.now.Settings}
+	h.bus.now, h.bus.heard = picture{Settings: h.bus.now.Settings}, nil
 }

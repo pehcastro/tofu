@@ -42,6 +42,7 @@ const (
 	followStanding  followOp = "standing"
 	followQuestion  followOp = "question"
 	followMemory    followOp = "memory"
+	followHeard     followOp = "heard"
 	followSteer     followOp = "steer"
 	followSendNow   followOp = "sendNow"
 	followUnsteer   followOp = "unsteer"
@@ -374,6 +375,8 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 		reply.OK = h.AnswerQuestion(ask.Asked, ask.Question, ask.By)
 	case followMemory:
 		reply.OK = h.AnswerMemory(ask.Asked, ask.Scope)
+	case followHeard:
+		h.Hear(ask.Asked, ApprovalDecision(ask.Text), ask.By)
 	case followSteer:
 		h.received(ask.Images)
 		reply.Steered = h.steerFor(ask.Text)

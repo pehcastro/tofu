@@ -10,6 +10,7 @@ import (
 
 	"tofu/interface/tui/palette"
 	"tofu/interface/tui/session"
+	"tofu/internal/host"
 	"tofu/internal/memory"
 	isettings "tofu/internal/settings"
 )
@@ -109,8 +110,15 @@ func (d *offerDialog) decide(a *App, choice palette.Choice) tea.Cmd {
 		a.refreshSettingsRows()
 		a.view.Append(session.Entry{Kind: session.Note, Body: note})
 	}
-	if a.options.Host != nil && a.options.Host.AnswerMemory(d.leadAskID, kept) {
-		a.view.Resume(d.leadAskID)
+	if a.options.Host != nil {
+		decision := host.RejectOnce
+		if kept != "" {
+			decision = host.RememberedAs(kept)
+		}
+		a.options.Host.Hear(d.leadAskID, decision, answeredHere)
+		if a.options.Host.AnswerMemory(d.leadAskID, kept) {
+			a.view.Resume(d.leadAskID)
+		}
 	}
 	return a.pop()
 }

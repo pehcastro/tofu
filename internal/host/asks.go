@@ -22,6 +22,7 @@ type asks struct {
 	held     standingIn
 	session  func() standingIn
 	unkept   func(error)
+	granted  func(id string, standing bool, until time.Time)
 }
 
 func (a *asks) follow() {
@@ -103,6 +104,9 @@ func (a *asks) grant(id string, given Answer, until time.Time) (answered, stands
 			a.until[asked.place] = until
 		}
 		keepErr = a.held.keep(a.standing, a.until)
+	}
+	if a.granted != nil {
+		a.granted(id, stands, until)
 	}
 	asked.reply <- given
 	a.mu.Unlock()

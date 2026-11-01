@@ -183,7 +183,7 @@ func New(cfg Config) (*Host, []string) {
 		questions:   &replies[answeredQuestion]{},
 		memoryPicks: &replies[memory.Scope]{},
 	}
-	h.asks.session, h.asks.unkept = h.standingIn, h.standingUnkept
+	h.asks.session, h.asks.unkept, h.asks.granted = h.standingIn, h.standingUnkept, h.granted
 	if h.now == nil {
 		h.now = time.Now
 	}

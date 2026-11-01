@@ -249,7 +249,7 @@ func (a *App) unqueue() {
 	}
 }
 
-const questionAnsweredHere = "tui"
+const answeredHere = "tui"
 
 func (a *App) questionKey(key string) bool {
 	if len(a.questions) == 0 {
@@ -274,13 +274,18 @@ func (a *App) questionKey(key string) bool {
 	}
 	a.questions = a.questions[1:]
 	if a.options.Host != nil {
-		a.options.Host.AnswerQuestion(form.ID, answer, questionAnsweredHere)
+		a.options.Host.AnswerQuestion(form.ID, answer, answeredHere)
 	}
 	return true
 }
 
 func (a *App) answer(answer Answer) {
-	if asked := a.view.AskedID(); a.options.Host != nil && a.options.Host.Answer(asked, answer) {
+	asked := a.view.AskedID()
+	if a.options.Host == nil {
+		return
+	}
+	a.options.Host.Hear(asked, answer.Decision(), answeredHere)
+	if a.options.Host.Answer(asked, answer) {
 		a.view.Resume(asked)
 	}
 }

@@ -672,7 +672,8 @@ func awaitPerson(emit func(Event), book *asks, config *turn.Config) turn.Person 
 			return unanswered.decide(emit, request, places.Log)
 		}
 		emit(asked)
-		defer emit(Event{Kind: EventResumed, ID: asked.ID, Agent: asked.Agent})
+		resumed := Event{Kind: EventResumed, ID: asked.ID, Agent: asked.Agent, Resolution: cancelledByTofu()}
+		defer func() { emit(resumed) }()
 		emit(Event{Kind: EventNote, Text: "if nobody answers by " + time.Now().Add(unanswered.waited).Format(time.TimeOnly) + ", in " + unanswered.waited.String() +
 			", " + settings.GateAskTimeout + " " + unanswered.outcome + " decides the ask about " + place})
 		timer := time.NewTimer(unanswered.waited)
@@ -680,12 +681,15 @@ func awaitPerson(emit func(Event), book *asks, config *turn.Config) turn.Person 
 		started := time.Now()
 		select {
 		case <-timer.C:
+			resumed.Resolution.Decision = unanswered.applied()
 			return unanswered.decide(emit, request, places.Log)
 		case answered := <-reply:
 			if answered == unattendedNow {
 				unanswered.cronFired = true
+				resumed.Resolution.Decision = unanswered.applied()
 				return unanswered.decide(emit, request, places.Log)
 			}
+			resumed.Resolution = nil
 			if request.Code != nil {
 				turn.CodeEntry{Turn: request.TurnID, Code: *request.Code, By: "the person", Answer: codeAnswer(answered), Took: time.Since(started)}.Record(places.Log)
 			}
@@ -749,6 +753,13 @@ func (u unansweredAsk) why() string {
 }
 
 func (u unansweredAsk) Error() string { return u.why() + ", so the call did not run" }
+
+func (u unansweredAsk) applied() ApprovalDecision {
+	if u.outcome == settings.GateAskAllow {
+		return AllowOnce
+	}
+	return RejectOnce
+}
 
 func (u unansweredAsk) decide(emit func(Event), request turn.GateRequest, log string) (turn.PersonAnswer, error) {
 	answer, code, err, said := turn.PersonDenied, turn.CodeDeny, error(u), u.Error()

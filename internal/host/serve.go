@@ -928,6 +928,7 @@ func (s *server) approvalAnswered(l *lane, asked Event, result json.RawMessage) 
 	if !l.host.takeAsk(approval) {
 		return withdrawn("approval " + approval)
 	}
+	l.host.Hear(approval, answer.Decision, s.client)
 	answered, stands, until := true, false, time.Time{}
 	switch {
 	case answer.Decision == AllowFor:
@@ -943,7 +944,7 @@ func (s *server) approvalAnswered(l *lane, asked Event, result json.RawMessage) 
 	if !answered {
 		return s.unanswered(l, asked, "approval "+approval)
 	}
-	s.box.push(kept("approval.resolved", &ApprovalResolved{Identity: l.items.identity(asked.Agent, approval), Approval: approval, Decision: answer.Decision, By: s.client, Standing: stands, Until: until}))
+	s.box.push(s.resolution(l, asked, Event{Resolution: &Resolution{Decision: answer.Decision, By: s.client, Standing: stands, Until: until}}))
 	return nil
 }
 
@@ -963,7 +964,8 @@ func (s *server) resolution(l *lane, asked, resumed Event) outgoing {
 	if asked.Questions != nil {
 		return kept("question.resolved", &QuestionResolved{Identity: id, Question: asked.ID, Outcome: QuestionOutcome(resumed.Text), By: resumed.Detail})
 	}
-	return kept("approval.resolved", &ApprovalResolved{Identity: id, Approval: asked.ID, Decision: Cancelled, By: "tofu"})
+	said := cmp.Or(resumed.Resolution, cancelledByTofu())
+	return kept("approval.resolved", &ApprovalResolved{Identity: id, Approval: asked.ID, Decision: said.Decision, By: said.By, Standing: said.Standing, Until: said.Until})
 }
 
 func (s *server) revoke(p ApprovalRevokeParams) (any, error) {

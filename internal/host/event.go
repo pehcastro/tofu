@@ -91,6 +91,7 @@ type Event struct {
 	Step         int
 	Turn         string
 	Questions    []turn.PersonQuestion
+	Resolution   *Resolution `json:",omitempty"`
 	Wait         time.Duration
 	Accepts      []ApprovalDecision
 	Reason       string
@@ -327,6 +328,15 @@ type Pick struct {
 	Effort llm.Effort
 	Fired  string
 }
+
+type Resolution struct {
+	Decision ApprovalDecision
+	By       string
+	Standing bool
+	Until    time.Time
+}
+
+func cancelledByTofu() *Resolution { return &Resolution{Decision: Cancelled, By: "tofu"} }
 
 type Answer int
 

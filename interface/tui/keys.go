@@ -14,6 +14,7 @@ import (
 	"tofu/interface/tui/feed"
 	"tofu/interface/tui/keyfield"
 	"tofu/interface/tui/shells"
+	"tofu/internal/host"
 	"tofu/internal/keymap"
 	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
@@ -129,6 +130,9 @@ func (a *App) composerKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	}
 	if at, err := strconv.Atoi(key); err == nil && a.view.TakesAnswerDigits() && at >= 1 && at <= len(a.view.AskChoices()) {
 		if choice := a.view.AskChoices()[at-1]; choice.Cancels {
+			if a.options.Host != nil {
+				a.options.Host.Hear(a.view.AskedID(), host.Cancelled, answeredHere)
+			}
 			a.stopEverything()
 		} else {
 			a.answer(choice.Answer)

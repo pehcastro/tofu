@@ -201,12 +201,14 @@ func pickMemory(emit func(Event), book *replies[memory.Scope]) tools.MemoryPick 
 		emit(Event{Kind: EventDecision, ID: id, Decision: &Decision{Tool: turn.RememberToolName, Verdict: Ask, Remembers: offer.Statement, MemoryScope: offer.Scope, MemoryScopes: offer.Scopes}})
 		accepts := []ApprovalDecision{}
 		for _, scope := range offer.Scopes {
-			accepts = append(accepts, rememberedAs(scope))
+			accepts = append(accepts, RememberedAs(scope))
 		}
 		emit(Event{Kind: EventAwaitPerson, ID: id, Tool: turn.RememberToolName, Args: shown, Accepts: append(accepts, RejectOnce, RejectAlways, Cancelled)})
-		defer emit(Event{Kind: EventResumed, ID: id})
+		resumed := Event{Kind: EventResumed, ID: id, Resolution: cancelledByTofu()}
+		defer func() { emit(resumed) }()
 		select {
 		case picked := <-reply:
+			resumed.Resolution = nil
 			emit(Event{Kind: EventMemoryScoped, ID: id, Scoped: &MemoryScoped{Statement: offer.Statement, Offered: offer.Scope, Picked: cmp.Or(string(picked), MemoryNone), Scopes: offer.Scopes, By: ScopedByPerson}})
 			return picked, nil
 		case <-ctx.Done():

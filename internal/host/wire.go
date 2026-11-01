@@ -175,7 +175,7 @@ func keptAs(decision ApprovalDecision) memory.Scope {
 	return ""
 }
 
-func rememberedAs(scope memory.Scope) ApprovalDecision {
+func RememberedAs(scope memory.Scope) ApprovalDecision {
 	switch scope {
 	case memory.Global:
 		return RememberGlobal
@@ -203,6 +203,15 @@ func personAnswerOf(decision ApprovalDecision) Answer {
 		return NeverHere
 	}
 	panic("host: no answer for the decision " + string(decision))
+}
+
+func (answer Answer) Decision() ApprovalDecision {
+	for _, decision := range []ApprovalDecision{AllowOnce, AllowFor, AllowAlways, RejectOnce, RejectAlways} {
+		if personAnswerOf(decision) == answer {
+			return decision
+		}
+	}
+	panic("host: no decision for an answer outside the five a gate ask takes")
 }
 
 type Risk string
