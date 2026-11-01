@@ -303,14 +303,15 @@ func (p *Prefix) lastSent() *messagesKept {
 }
 
 const (
-	thePromptChangedSince = "the system prompt above is kept as this session's first turn sent it, so the provider can reuse its cache. what changed in it since then:"
-	noLongerApplies       = "no longer applies, so disregard it in the system prompt above: "
-	PartAppendedWhy       = "sent in a message after the cached system prompt, because it changed after this session's first turn"
-	aToolIsNew            = "a new tool is offered, and the tool list holds it: "
-	aToolIsGone           = "a tool is no longer offered, so do not call it: "
-	aToolChanged          = "a tool's definition changed, and the tool list holds the current one: "
-	aSkillIsNotLoaded     = "a skill is not loaded, so the skill tool does not offer it: "
-	partRemovedWhy        = "removed after this session's first turn, and a message after the cached system prompt said so"
+	thePromptChangedSince   = "the system prompt above is kept as this session's first turn sent it, so the provider can reuse its cache. what changed in it since then:"
+	noLongerApplies         = "no longer applies, so disregard it in the system prompt above: "
+	PartAppendedWhy         = "sent in a message after the cached system prompt, because it changed after this session's first turn"
+	aToolIsNew              = "a new tool is offered, and the tool list holds it: "
+	aToolIsGone             = "a tool is no longer offered, so do not call it: "
+	aToolChanged            = "a tool's definition changed, and the tool list holds the current one: "
+	aToolDescriptionChanged = "a tool's description changed, and the tool list keeps the first one so the provider can reuse its cache; "
+	aSkillIsNotLoaded       = "a skill is not loaded, so the skill tool does not offer it: "
+	partRemovedWhy          = "removed after this session's first turn, and a message after the cached system prompt said so"
 )
 
 func inTheSystem(part keptPart) bool { return part.Sent() && !part.PerTurn }
@@ -386,6 +387,9 @@ func (p *Prefix) holdTools(now []llm.Tool) []string {
 			changes = append(changes, aToolIsGone+was.Name)
 		case sameDefinition(was, now[at]):
 			kept = append(kept, was)
+		case sameDefinition(llm.Tool{Parameters: was.Parameters}, llm.Tool{Parameters: now[at].Parameters}):
+			kept = append(kept, was)
+			changes = append(changes, aToolDescriptionChanged+was.Name+" now reads: "+now[at].Description)
 		default:
 			kept = append(kept, now[at])
 			changes = append(changes, aToolChanged+was.Name)

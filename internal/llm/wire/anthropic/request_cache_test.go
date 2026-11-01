@@ -455,12 +455,15 @@ func TestTheSessionRecordsHowMuchOfARequestsCacheWriteLivesFiveMinutesAndHowMuch
 	}
 }
 
-type describedTool struct{ description *string }
+type describedTool struct {
+	description *string
+	schema      *map[string]any
+}
 
 func (describedTool) Name() string { return "roster" }
 
 func (d describedTool) Definition() llm.Tool {
-	return llm.Tool{Name: "roster", Description: *d.description}
+	return llm.Tool{Name: "roster", Description: *d.description, Parameters: *d.schema}
 }
 
 func (describedTool) Run(context.Context, json.RawMessage) (turn.Result, error) {
@@ -468,32 +471,67 @@ func (describedTool) Run(context.Context, json.RawMessage) (turn.Result, error) 
 }
 
 func TestASessionsLaterTurnSendsTheSystemPromptAndToolsItsFirstTurnSent(t *testing.T) {
-	config, server := sessionConfig(t, "text", "text")
-	description := "lists the sub-agents ts-dev and go-dev"
-	read, _ := turn.NewReadTool(t.TempDir())
-	config.Tools = turn.NewRegistry(read, describedTool{description: &description})
-	config.Prefix = &turn.Prefix{}
-	composed, err := turn.Compose(sessionSpec(t, firstTurnTask, rule.RoleOrchestrator))
-	if err != nil {
-		t.Fatalf("composing: %v", err)
+	firstSchema := map[string]any{"type": "object", "properties": map[string]any{"team": map[string]any{"type": "string"}}}
+	widerSchema := map[string]any{"type": "object", "properties": map[string]any{"team": map[string]any{"type": "string"}, "language": map[string]any{"type": "string"}}}
+	for _, changed := range []struct {
+		name          string
+		schema        map[string]any
+		toolsHeld     bool
+		messagesCarry string
+	}{
+		{name: "only the description changed", schema: firstSchema, toolsHeld: true, messagesCarry: "rust-dev"},
+		{name: "the input schema changed", schema: widerSchema, toolsHeld: false, messagesCarry: "roster"},
+	} {
+		t.Run(changed.name, func(t *testing.T) {
+			config, server := sessionConfig(t, "text", "text")
+			description, schema := "lists the sub-agents ts-dev and go-dev", firstSchema
+			read, _ := turn.NewReadTool(t.TempDir())
+			config.Tools = turn.NewRegistry(read, describedTool{description: &description, schema: &schema})
+			config.Prefix = &turn.Prefix{}
+			composed, err := turn.Compose(sessionSpec(t, firstTurnTask, rule.RoleOrchestrator))
+			if err != nil {
+				t.Fatalf("composing: %v", err)
+			}
+			config.System, config.Environment = composed.Head(), composed.WithTaskRules(sessionEnvironment)
+			for _, task := range []string{firstTurnTask, secondTurnTask} {
+				config.Task = task
+				row, err := turn.Run(context.Background(), config)
+				if err != nil {
+					t.Fatalf("running %q: %v", task, err)
+				}
+				config.History = turn.Sendable(row.Conversation)
+				config.Memory, description, schema = "the person prefers bun over node", "lists the sub-agents ts-dev, go-dev and rust-dev", changed.schema
+			}
+			if len(server.bodies) != 2 {
+				t.Fatalf("two turns sent %d requests, want 2", len(server.bodies))
+			}
+			sent := func(body []byte, where string) string {
+				var pieces []string
+				for _, piece := range inCacheOrder(t, body) {
+					if strings.Contains(piece.where, where) {
+						pieces = append(pieces, piece.text)
+					}
+				}
+				return strings.Join(pieces, "\n")
+			}
+			if sent(server.bodies[0], "system") != sent(server.bodies[1], "system") {
+				t.Fatal("the second turn rewrote its system prompt, so the cached head breaks")
+			}
+			roster := sent(server.bodies[1], "roster")
+			if held := sent(server.bodies[0], "the tool") == sent(server.bodies[1], "the tool"); held != changed.toolsHeld {
+				t.Fatalf("the second turn's tools are byte-identical to the first: %v, want %v; second turn sent %s", held, changed.toolsHeld, roster)
+			}
+			if !changed.toolsHeld && !strings.Contains(roster, "language") {
+				t.Fatalf("the input schema changed and the second turn still sent the first one: %s", roster)
+			}
+			if !strings.Contains(sent(server.bodies[1], "message"), changed.messagesCarry) {
+				t.Fatalf("no message after the cached head says %q, so the model never learns what changed", changed.messagesCarry)
+			}
+			if changed.toolsHeld {
+				assertCachedPrefixCarriesOver(t, headOf(inCacheOrder(t, server.bodies[0])), headOf(inCacheOrder(t, server.bodies[1])))
+			}
+		})
 	}
-	config.System, config.Environment = composed.Head(), composed.WithTaskRules(sessionEnvironment)
-	for _, task := range []string{firstTurnTask, secondTurnTask} {
-		config.Task = task
-		row, err := turn.Run(context.Background(), config)
-		if err != nil {
-			t.Fatalf("running %q: %v", task, err)
-		}
-		config.History = turn.Sendable(row.Conversation)
-		config.Memory, description = "the person prefers bun over node", "lists the sub-agents ts-dev, go-dev and rust-dev"
-	}
-	if len(server.bodies) != 2 {
-		t.Fatalf("two turns sent %d requests, want 2", len(server.bodies))
-	}
-	if strings.Contains(string(server.bodies[1]), "prefers bun") || strings.Contains(string(server.bodies[1]), "rust-dev") {
-		t.Fatal("the second turn rewrote its system prompt or a tool description, so the cached head breaks")
-	}
-	assertCachedPrefixCarriesOver(t, headOf(inCacheOrder(t, server.bodies[0])), headOf(inCacheOrder(t, server.bodies[1])))
 }
 
 func cacheReadBytes(t *testing.T, earlier, later []byte) int {
