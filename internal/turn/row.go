@@ -386,6 +386,15 @@ func Sendable(messages []llm.Message) []llm.Message {
 	return sendable
 }
 
+func NewestTask(messages []llm.Message) string {
+	for _, message := range slices.Backward(messages) {
+		if task, found := TaskIn(message.Content); found && message.Role == llm.RoleUser && (message.Origin.Source == "" || saidByThePerson(message.Origin)) {
+			return task
+		}
+	}
+	return ""
+}
+
 func (r Row) PromptAccounting() llm.PromptAccounting {
 	return llm.PromptAccountingFor(r.Wire)
 }

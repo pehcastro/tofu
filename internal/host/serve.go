@@ -539,7 +539,7 @@ func (h *Host) Compact() (Compacted, error) {
 	if err != nil {
 		return Compacted{}, err
 	}
-	shrunk, err := turn.CompactCarried(h.dir, places, header.Wire, header.Task, carried)
+	shrunk, err := turn.CompactCarried(h.dir, places, header.Wire, cmp.Or(turn.NewestTask(carried), header.Task), carried)
 	if err != nil {
 		return Compacted{}, err
 	}
