@@ -30,6 +30,13 @@ From your home, only `~/.tofu/skills` is read: not `~/.claude/skills`,
 not `~/.agents/skills`. When two skills share a name, the first one found
 is offered and the other is skipped with a notice.
 
+tofu ships skills of its own, `debug`, `hunt`, `simplify`, `flake-triage`
+and `test-plan`, and lists them beside yours for the lead and for every
+library sub-agent, each of which carries the skill tool. A skill of yours
+with the same name is offered instead of the shipped one. The lead also
+lists the library's general references, such as `contract`, and reads one
+whole with the `reference` tool, as a library sub-agent reads its own.
+
 `SKILL.md` opens with front matter:
 
     ---

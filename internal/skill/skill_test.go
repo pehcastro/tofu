@@ -158,18 +158,18 @@ func TestLoad(t *testing.T) {
 	write(t, filepath.Join(dir, "refs", "format.md"), "the format")
 	write(t, filepath.Join(root, "secret.txt"), "secret")
 	skills := []Skill{{Name: "commit", File: filepath.Join(dir, "SKILL.md"), Dir: dir}}
-	if body, err := Load(skills, "commit", ""); err != nil || strings.TrimSpace(body) != "the body" {
+	if body, err := Load(skills, nil, "commit", ""); err != nil || strings.TrimSpace(body) != "the body" {
 		t.Fatalf("body %q err %v, want the body without front matter", body, err)
 	}
-	if body, err := Load(skills, "commit", "refs/format.md"); err != nil || body != "the format" {
+	if body, err := Load(skills, nil, "commit", "refs/format.md"); err != nil || body != "the format" {
 		t.Fatalf("a file inside the folder: %q %v", body, err)
 	}
 	for _, escape := range []string{"../secret.txt", "refs/../../secret.txt", filepath.Join(root, "secret.txt"), "/secret.txt"} {
-		if body, err := Load(skills, "commit", escape); err == nil {
+		if body, err := Load(skills, nil, "commit", escape); err == nil {
 			t.Fatalf("%s read outside the skill: %q", escape, body)
 		}
 	}
-	if _, err := Load(skills, "nope", ""); err == nil || !strings.Contains(err.Error(), "commit") {
+	if _, err := Load(skills, nil, "nope", ""); err == nil || !strings.Contains(err.Error(), "commit") {
 		t.Fatalf("an unknown name fails without naming what exists: %v", err)
 	}
 }

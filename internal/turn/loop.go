@@ -206,7 +206,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		if config.Sessions != nil {
 			added = append(added, lookupTool{sessions: config.Sessions, current: func() string { return recorded.session() }})
 		}
-		if config.SpawnedFrom != "" && strings.Contains(config.System, referencesOnDemand) {
+		if strings.Contains(config.System, referencesOnDemand) {
 			added = append(added, referenceTool{held: config.References})
 		}
 		return added

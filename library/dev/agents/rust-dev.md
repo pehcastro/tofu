@@ -17,7 +17,7 @@ references:
   - rust-unsafe
 language: rust
 model: inherit
-tools: read, glob, search, symbols, edit, write, bash
+tools: read, glob, search, symbols, edit, write, bash, skill
 gate: cargo clippy, cargo test
 ---
 

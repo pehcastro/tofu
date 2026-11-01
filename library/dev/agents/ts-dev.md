@@ -7,9 +7,10 @@ references:
   - ts-type-design
   - ts-boundaries
   - verify-a-running-service
+  - interface-craft
 language: typescript
 model: inherit
-tools: read, glob, search, symbols, edit, typecheck, test, write, bash
+tools: read, glob, search, symbols, edit, typecheck, test, write, bash, skill
 gate: typecheck, test
 ---
 

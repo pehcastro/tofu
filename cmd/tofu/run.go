@@ -762,7 +762,14 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 		for _, one := range offered.Unoffered {
 			unloaded = append(unloaded, turn.PromptPart{Concern: turn.ConcernSkills, Name: one.Name, File: filepath.ToSlash(one.File), Why: one.Why, State: session.PartDropped})
 		}
-		skills = offered.Skills
+		library, err := skill.Shipped(shipped.Files(), libraryRoot)
+		if err != nil {
+			return composedRun{}, err
+		}
+		skills = slices.Concat(offered.Skills, slices.DeleteFunc(library, func(one skill.Skill) bool {
+			return slices.ContainsFunc(offered.Skills, func(own skill.Skill) bool { return own.Name == one.Name })
+		}))
+		slices.SortFunc(skills, func(a, b skill.Skill) int { return strings.Compare(a.Name, b.Name) })
 	}
 	run.startup.step("skills")
 	frameworks, err := rule.Frameworks(cmp.Or(opts.dir, "."), turn.TaskNamed(opts.task).Paths)
@@ -841,7 +848,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	dir := cmp.Or(opts.dir, ".")
 	run.omitThinkingSummary = thinkingSummaryOff(opts, run.notify)
 	references := map[string]string{}
-	for _, definition := range prompt.subAgents.Defined {
+	for _, definition := range append(prompt.subAgents.Defined, subagent.Definition{References: composed.References}) {
 		for _, reference := range definition.References {
 			references[reference.Name] = reference.Text
 		}
@@ -1041,7 +1048,7 @@ func leadNeverCalls() []string {
 }
 
 func scanSubAgents(dir string, built []turn.Tool) subagent.Found {
-	names := []string{(&turn.SpawnTool{}).Name()}
+	names := []string{(&turn.SpawnTool{}).Name(), turn.SkillToolName}
 	for _, tool := range built {
 		names = append(names, tool.Name())
 	}

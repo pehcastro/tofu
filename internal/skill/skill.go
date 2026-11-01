@@ -231,7 +231,7 @@ func Listing(skills []Skill, windowTokens int) string {
 	return heading + kept.String() + note
 }
 
-func Load(skills []Skill, name, path string) (string, error) {
+func Load(skills []Skill, library fs.FS, name, path string) (string, error) {
 	at := slices.IndexFunc(skills, func(one Skill) bool { return one.Name == name })
 	if at < 0 {
 		var names []string
@@ -241,6 +241,15 @@ func Load(skills []Skill, name, path string) (string, error) {
 		return "", fmt.Errorf("no skill is named %q; the skills are: %s", name, cmp.Or(strings.Join(names, ", "), "none"))
 	}
 	one := skills[at]
+	if one.Origin == OriginLibrary {
+		if path != "" {
+			return "", fmt.Errorf("the library skill %s is one file, so it has no %s to read", name, path)
+		}
+		_, inLibrary, _ := strings.Cut(one.File, "/")
+		data, err := fs.ReadFile(library, inLibrary)
+		_, body := frontMatter(string(data))
+		return body, err
+	}
 	if path == "" {
 		data, err := os.ReadFile(one.File)
 		_, body := frontMatter(string(data))

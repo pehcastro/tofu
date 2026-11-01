@@ -9,7 +9,7 @@ references:
   - go-traps
 language: go
 model: inherit
-tools: read, glob, search, symbols, edit, write, bash
+tools: read, glob, search, symbols, edit, write, bash, skill
 gate: go vet, go test
 ---
 

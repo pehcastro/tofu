@@ -262,8 +262,8 @@ func TestReferences(t *testing.T) {
 			t.Fatalf("%s should carry its body without front matter, got %q", reference.Name, reference.Text)
 		}
 	}
-	if !slices.Equal(names, []string{"ts-strict-config", "ts-type-design", "ts-boundaries", "verify-a-running-service"}) || len(tsDev.Cut) != 0 {
-		t.Fatalf("ts-dev carries its four references whole, got %q cut %q", names, tsDev.Cut)
+	if !slices.Equal(names, []string{"ts-strict-config", "ts-type-design", "ts-boundaries", "verify-a-running-service", "interface-craft"}) || len(tsDev.Cut) != 0 {
+		t.Fatalf("ts-dev carries its five references whole, got %q cut %q", names, tsDev.Cut)
 	}
 	if qa := definitionNamed(t, found, "qa"); len(qa.References) != 5 || len(qa.Cut) != 0 {
 		t.Fatalf("qa carries its five references whole, four from qa and verify-a-running-service from dev, got %+v cut %q", qa.References, qa.Cut)

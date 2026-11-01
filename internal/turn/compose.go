@@ -99,9 +99,17 @@ func agentPart(definition subagent.Definition) PromptPart {
 	var text strings.Builder
 	text.WriteString("you are the " + definition.Name + " sub-agent, and these are your instructions:\n" + definition.Instructions)
 	if len(definition.References) > 0 {
-		text.WriteString("\n\n" + referencesOnDemand)
+		text.WriteString("\n\n" + referenceIndex(definition.References))
 	}
-	for _, reference := range definition.References {
+	if len(definition.Cut) > 0 {
+		fmt.Fprintf(&text, "\n\nthese references were cut to keep them within %d bytes and are not here: %s", konst.SubAgentReferenceBytes, strings.Join(definition.Cut, ", "))
+	}
+	return PromptPart{Concern: rule.ConcernIdentity, Agent: definition.Name, File: filepath.ToSlash(definition.Path), Text: text.String()}
+}
+
+func referenceIndex(references []subagent.Reference) string {
+	text := referencesOnDemand
+	for _, reference := range references {
 		var title string
 		var sections []string
 		for line := range strings.Lines(reference.Text) {
@@ -115,15 +123,26 @@ func agentPart(definition subagent.Definition) PromptPart {
 				sections = append(sections, section)
 			}
 		}
-		text.WriteString("\n- " + reference.Name + ": " + cmp.Or(title, reference.Name))
+		text += "\n- " + reference.Name + ": " + cmp.Or(title, reference.Name)
 		if len(sections) > 0 {
-			text.WriteString(", on " + strings.Join(sections, "; "))
+			text += ", on " + strings.Join(sections, "; ")
 		}
 	}
-	if len(definition.Cut) > 0 {
-		fmt.Fprintf(&text, "\n\nthese references were cut to keep them within %d bytes and are not here: %s", konst.SubAgentReferenceBytes, strings.Join(definition.Cut, ", "))
+	return text
+}
+
+func leadReferences(library fs.FS) ([]subagent.Reference, error) {
+	files, _ := fs.Glob(library, "general/references/*.md")
+	var references []subagent.Reference
+	for _, file := range files {
+		data, err := fs.ReadFile(library, file)
+		if err != nil {
+			return nil, err
+		}
+		_, body, _ := strings.Cut(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n---\n")
+		references = append(references, subagent.Reference{Name: strings.TrimSuffix(path.Base(file), ".md"), Path: "library/" + file, Text: strings.TrimLeft(body, "\n")})
 	}
-	return PromptPart{Concern: rule.ConcernIdentity, Agent: definition.Name, File: filepath.ToSlash(definition.Path), Text: text.String()}
+	return references, nil
 }
 
 func referenceParts(definition subagent.Definition) []PromptPart {
@@ -157,7 +176,7 @@ func autoloadedSkills(definition subagent.Definition, skills []skill.Skill) (str
 	}
 	var text strings.Builder
 	for _, name := range definition.Skills {
-		body, err := skill.Load(skills, name, "")
+		body, err := skill.Load(skills, shipped.Files(), name, "")
 		switch {
 		case err == nil:
 			text.WriteString("\n\nthe skill " + name + ", loaded before your task:\n" + body)
@@ -222,16 +241,17 @@ func unofferedLibrarySkills(library fs.FS, listed []skill.Skill, loaded []Prompt
 			continue
 		}
 		dropped = append(dropped, PromptPart{Concern: ConcernSkills, Name: name, File: "library/" + file, State: session.PartDropped,
-			Why: "a library skill reaches only a library sub-agent that names it, and the skill listing reads .tofu, .agents, .claude and ~/.tofu/skills"})
+			Why: "this run lists no skill: the skills setting is off or the run gives three tools"})
 	}
 	return dropped
 }
 
 type Composed struct {
-	Task     rule.Task
-	Parts    []PromptPart
-	HeldBack []rule.Match
-	Unsent   []PromptPart
+	Task       rule.Task
+	Parts      []PromptPart
+	HeldBack   []rule.Match
+	Unsent     []PromptPart
+	References []subagent.Reference
 }
 
 func (c Composed) Recorded() []PromptPart { return slices.Concat(c.Parts, c.Unsent) }
@@ -275,6 +295,14 @@ func Compose(spec ComposeSpec) (Composed, error) {
 		part.Text += text
 		composed.Parts = append(composed.Parts, part)
 		loaded, composed.Unsent = autoloaded, slices.Concat(autoloaded, referenceParts(spec.Agent))
+	} else {
+		references, err := leadReferences(shipped.Files())
+		if err != nil {
+			return Composed{}, err
+		}
+		composed.References = references
+		composed.Parts = append(composed.Parts, PromptPart{Concern: rule.ConcernIdentity, Text: referenceIndex(references)})
+		composed.Unsent = referenceParts(subagent.Definition{References: references})
 	}
 	if composed.Task.Language = spec.Agent.Language; composed.Task.Language != "" && !rule.KnownLanguage(composed.Task.Language) {
 		return Composed{}, fmt.Errorf("the sub-agent %s declares the language %q, which no rule knows", spec.Agent.Name, composed.Task.Language)

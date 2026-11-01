@@ -3,7 +3,7 @@ name: skeptic
 domain: dev
 description: Challenges a hunter's findings one by one against the code, in a fresh context, and disproves only what it can disprove with a quoted line. Read-only. Spawned by /hunt after the hunters report; a referee rules on both.
 model: inherit
-tools: read, glob, search, symbols, bash
+tools: read, glob, search, symbols, bash, skill
 ---
 
 # Skeptic

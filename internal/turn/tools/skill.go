@@ -8,6 +8,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/skill"
 	"tofu/internal/turn"
+	shipped "tofu/library"
 )
 
 type Skill struct {
@@ -42,7 +43,7 @@ func (s Skill) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) 
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("skill: arguments are not the expected shape: %w", err)
 	}
-	body, err := skill.Load(s.skills, args.Name, args.Path)
+	body, err := skill.Load(s.skills, shipped.Files(), args.Name, args.Path)
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("skill: %w", err)
 	}

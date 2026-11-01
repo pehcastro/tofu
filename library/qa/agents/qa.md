@@ -13,7 +13,7 @@ skills:
   - test-plan
 source: library/qa/references/failure-triage.md
 model: inherit
-tools: read, glob, search, symbols, typecheck, test, bash, write
+tools: read, glob, search, symbols, typecheck, test, bash, write, skill
 ---
 
 # QA

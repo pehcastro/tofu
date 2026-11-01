@@ -3,7 +3,7 @@ name: referee
 domain: dev
 description: Rules on each finding after the hunter and the skeptic have both reported, reading the code itself, and confirms a defect only when it can show it now with a failing test, a reproduction, or an input and the path it takes. Spawned by /hunt last; writes only in its scratch folder.
 model: inherit
-tools: read, glob, search, symbols, bash, write
+tools: read, glob, search, symbols, bash, write, skill
 ---
 
 # Referee

@@ -3,7 +3,7 @@ name: hunter
 domain: dev
 description: Reads the files it is given and reports every defect it can point at, as structured findings with path, line, kind and the input that triggers it. Read-only. Spawned by /hunt, one per shard; a skeptic checks what it finds.
 model: inherit
-tools: read, glob, search, symbols, bash
+tools: read, glob, search, symbols, bash, skill
 ---
 
 # Hunter
