@@ -956,7 +956,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 			return turn.Config{}, nil, err
 		}
 		asking = append(asking, leadTickets...)
-		config.Environment += leadAttached(board, sessionID, run)
+		config.Inbox.FramesFirstRequest(leadAttached(board, sessionID, run))
 	}
 	if opts.agent == "" && episodesOn(dir) {
 		zoom := &tools.Zoom{Project: dir, Compactor: func(ask turn.RecordedAsk) (memtree.Compact, memtree.CompactAll, func()) {

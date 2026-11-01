@@ -60,6 +60,7 @@ type Inbox struct {
 	typed    <-chan string
 	untasked string
 	composes func(task string) (Composed, error)
+	attached string
 
 	judgesOpened bool
 
@@ -1093,6 +1094,12 @@ func (b *Inbox) ComposesEachTask(environment string, compose func(task string) (
 	b.mu.Unlock()
 }
 
+func (b *Inbox) FramesFirstRequest(attached string) {
+	b.mu.Lock()
+	b.attached = attached
+	b.mu.Unlock()
+}
+
 func (b *Inbox) retasked(config Config, task string) Config {
 	b.mu.Lock()
 	untasked, compose := b.untasked, b.composes
@@ -1122,6 +1129,8 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 	ctx = context.WithValue(ctx, leadInboxKey{}, config.Inbox)
 	config.Inbox.mu.Lock()
 	config.Inbox.typed = typed
+	attached := config.Inbox.attached
+	config.Inbox.attached = ""
 	config.Inbox.mu.Unlock()
 	config.Inbox.openJudges(config)
 	if config.TaskOrigin.Source == "" || saidByThePerson(config.TaskOrigin) {
@@ -1133,7 +1142,10 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 		config.Inbox.mu.Unlock()
 		config.Task += boardNotifies(config.Board)
 		config.Environment = Redated(config.Environment, config.Now)
-		row, err := Run(ctx, config)
+		framed := config
+		framed.Environment += attached
+		attached = ""
+		row, err := Run(ctx, framed)
 		ended(row, err)
 		failed = append(failed, err)
 		next, said := config.Inbox.next(ctx, typed)
