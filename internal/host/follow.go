@@ -416,8 +416,6 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 		var err error
 		if reply.Compacted, err = h.Compact(ask.By); err != nil {
 			reply.OK, reply.Failed = false, err.Error()
-		} else if reply.Compacted.Into != "" {
-			h.emitter().emit(h.sessionLabelled(reply.Compacted.Into))
 		}
 	default:
 		reply.OK = false

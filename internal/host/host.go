@@ -872,16 +872,19 @@ func (h *Host) Compacted(into string, messages []llm.Message) error {
 	h.dropCheckIn()
 	h.id, h.carried, h.started = into, messages, SourceCompact
 	h.mu.Unlock()
-	if err := h.enter(into); err != nil || h.joins {
+	if err := h.enter(into); err != nil {
 		return err
 	}
 	store, err := session.OpenIn(h.dir)
 	if err != nil {
 		return err
 	}
-	if err := h.cron.Keep(cronFile(store, into)); err != nil {
-		return fmt.Errorf("cron jobs were not written: %w", err)
+	if !h.joins {
+		if err := h.cron.Keep(cronFile(store, into)); err != nil {
+			return fmt.Errorf("cron jobs were not written: %w", err)
+		}
 	}
+	h.emitter().emit(labelledAs(store, Event{Kind: EventSession, ID: into, Root: into}))
 	return nil
 }
 

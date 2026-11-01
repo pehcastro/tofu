@@ -479,26 +479,10 @@ func (s *server) compact(p SessionParams) (any, error) {
 		return nil, turnRunning(turn)
 	}
 	compacted, err := s.Compact(named.host, s.asker("session.compact"))
-	if err != nil || compacted.Into == "" {
-		return compacted, err
+	if err == nil && compacted.Into != "" {
+		safe.Go(s.report, "serve list", func() { s.listed(named) })
 	}
-	labelled := s.Host.sessionLabelled(compacted.Into)
-	s.mu.Lock()
-	named.items.session = compacted.Into
-	named.replace(nil)
-	s.box.push(sessionUpdated(named.items.identity("", compacted.Into), labelled))
-	s.mu.Unlock()
-	safe.Go(s.report, "serve list", func() { s.listed(named) })
-	s.rebuild(named)
-	return compacted, nil
-}
-
-func (h *Host) sessionLabelled(id string) Event {
-	labelled := Event{Kind: EventSession, ID: id, Root: id}
-	if store, err := session.OpenIn(h.dir); err == nil {
-		labelled = labelledAs(store, labelled)
-	}
-	return labelled
+	return compacted, err
 }
 
 type Compacted struct {

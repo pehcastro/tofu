@@ -68,7 +68,7 @@ func TestServeStopsTheLeadUnsteersRunsCommandsCompactsAndPagesHistory(t *testing
 			{Role: llm.RoleUser, Content: "second task"}, {Role: llm.RoleAssistant, Content: "second answer"},
 		}}, nil
 	}
-	c, live, project := serving(t, play, ServeConfig{Ledger: read, Run: run, Carry: carry, Compact: func(*Host, string) (Compaction, error) { return compacted, nil }})
+	c, live, project := serving(t, play, ServeConfig{Ledger: read, Run: run, Carry: carry, Compact: func(lead *Host, _ string) (Compaction, error) { return compacted, lead.Compacted(compacted.Into, nil) }})
 	h = live
 	store, err := session.OpenIn(project)
 	if err != nil {
@@ -177,15 +177,15 @@ func TestServeStopsTheLeadUnsteersRunsCommandsCompactsAndPagesHistory(t *testing
 	c.until(func(line wireLine) bool { return line.Method == "turn.completed" }, "turn.completed")
 
 	c.ask("16", "session.compact", `{}`)
-	var updated SessionUpdated
-	c.until(func(line wireLine) bool {
-		return line.Method == "session.updated" && json.Unmarshal(line.Params, &updated) == nil && updated.Session == compacted.Into
-	}, "session.updated naming the compacted session")
 	var result Compaction
 	c.answer("16", &result)
 	if result != compacted {
 		t.Errorf("session.compact = %+v, want %+v", result, compacted)
 	}
+	var updated SessionUpdated
+	c.until(func(line wireLine) bool {
+		return line.Method == "session.updated" && json.Unmarshal(line.Params, &updated) == nil && updated.Session == compacted.Into
+	}, "session.updated naming the compacted session")
 
 	var page, last LedgerReport
 	c.ask("17", "query.ledger", `{}`)
