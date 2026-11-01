@@ -162,7 +162,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			row.Origin = turn.RecordedOrigin(origin)
 			if said.Origin != "" || said.From != nil {
 				from := string(origin.Kind()) + "/" + string(origin.Source)
-				row.Kind, row.State, row.Text = kindInsert, from, from+": "+oneLine(text)
+				row.Kind, row.State, row.Text = kindInsert, from, from+": "+traced(carriedFiles(origin.Source, said.Content), oneLine(text))
 			}
 			if origin.Source == llm.SourceCronFire {
 				row.Kind = kindCron
@@ -319,6 +319,45 @@ func becauseOf(rows []traceRow, causes []stopCause, at int) string {
 		return said
 	}
 	return "no row before it says why"
+}
+
+const (
+	carryFilesHeading = "files read whole and not written or edited since, newest first, each exactly as its last read returned it, so it need not be read again:\n"
+	carryFileMark     = "file "
+	carryFileCall     = " bytes, read by call "
+	carryFileEnd      = ":\n"
+	carryUnseen       = "the last step read these whole and they came back over this session's budget, so they are not carried and were never seen: "
+	carryUnseenEnd    = ". read the lines needed"
+)
+
+func carriedFiles(source llm.Source, carry string) string {
+	if source != llm.SourceForkCarry {
+		return ""
+	}
+	var said []string
+	_, rest, found := strings.Cut(carry, carryFilesHeading)
+	for found && strings.HasPrefix(rest, carryFileMark) {
+		head, body, ended := strings.Cut(strings.TrimPrefix(rest, carryFileMark), carryFileEnd)
+		before, call, called := strings.Cut(head, carryFileCall)
+		at := strings.LastIndex(before, ", ")
+		if !ended || !called || at < 0 {
+			break
+		}
+		size, err := strconv.Atoi(before[at+2:])
+		if err != nil || size >= len(body) {
+			break
+		}
+		said = append(said, "carried "+before[:at]+", "+strconv.Itoa(size)+" bytes, call "+call)
+		rest = body[size+1:]
+	}
+	if found && rest != "" && !strings.HasPrefix(rest, carryUnseen) {
+		said = append(said, "files section unreadable after "+plural(len(said), "file"))
+	}
+	if _, unseen, named := strings.Cut(carry, carryUnseen); named {
+		unseen, _, _ = strings.Cut(unseen, carryUnseenEnd)
+		said = append(said, "never seen "+unseen)
+	}
+	return strings.Join(said, " · ")
 }
 
 func ruleWords(found []session.RuleFinding) string {
