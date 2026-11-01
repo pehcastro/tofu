@@ -108,8 +108,8 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			}
 			if what, name := libraryLoad(call); what != "" {
 				rows = append(rows, row)
-				row.Kind, row.State = kindLibrary, string(session.PartLoaded)
-				row.Text = traced(what+" "+name+" loaded by the model", libraryFiles[event.Agent+"\x00"+what+"\x00"+name])
+				row.Kind, row.State = kindLibrary, "asked"
+				row.Text = traced(what+" "+name+" asked by the model", libraryFiles[event.Agent+"\x00"+what+"\x00"+name])
 			}
 		case session.EventToolResult:
 			var result traceResult
@@ -127,6 +127,14 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			answered.Text = traced(call.Tool+" → "+answered.State, ruleWords(result.Rules), sized(result.ResultBytes), took(result.DurationMS), oneLine(reason), gate, oneLine(string(call.Args)))
 			if result.Error != "" || result.Refused || result.ToolOutcome == session.ToolOutcomeFailed || result.ToolOutcome == session.ToolOutcomeAborted {
 				answered.Outcome = traceProblem(result.ToolOutcome == session.ToolOutcomeAborted, cmp.Or(reason, answered.State))
+			}
+			if what, name := libraryLoad(call); what != "" {
+				loaded, said, why := &rows[placed+1], "loaded by the model", ""
+				loaded.State = string(session.PartLoaded)
+				if answered.Outcome != "" {
+					loaded.State, said, why = "refused", "refused", oneLine(cmp.Or(reason, answered.State))
+				}
+				loaded.Text = traced(what+" "+name+" "+said, why, libraryFiles[event.Agent+"\x00"+what+"\x00"+name])
 			}
 			if !result.Refused && (result.Verdict == "" || result.Verdict == string(ledger.VerdictAllow)) && (result.Reason == nil || result.Reason.RelaxedBy+result.Reason.AllowedBy == "") {
 				continue
