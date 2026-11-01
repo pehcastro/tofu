@@ -110,10 +110,17 @@ func (t *SpawnTool) answer(ctx context.Context, asking subagent.SubAgent, conver
 	if err != nil {
 		return "", err
 	}
-	system := t.base.System
+	sent := Sendable(WithoutThinking(conversation))
+	if len(sent) == 0 {
+		sent = []llm.Message{{Role: llm.RoleSystem, Content: t.base.System}}
+	}
+	var system, unruled string
+	if sent[0].Role == llm.RoleSystem {
+		system = sent[0].Content
+	}
 	for _, loaded := range rules {
 		if loaded.ID == "answer_asks" && !strings.Contains(system, loaded.Text) {
-			system = strings.TrimSpace(loaded.Text + "\n\n" + system)
+			unruled = loaded.Text + "\n\n"
 		}
 	}
 	var running []string
@@ -136,12 +143,20 @@ func (t *SpawnTool) answer(ctx context.Context, asking subagent.SubAgent, conver
 	for _, held := range t.roster.SubAgents() {
 		running = append(running, fmt.Sprintf("sub-agent %s is %s on %q, holding %s", held.ID, held.State, held.Mission, strings.Join(held.Owns, ", ")))
 	}
-	question := fmt.Sprintf("sub-agent %s, whose brief is %q, asks you: %s\nwhy: %s\nwhat it does with no answer: %s\n\nwhat runs now: %s\n\nanswer it in one line.",
-		asking.ID, asking.Brief, args.Question, args.Why, args.Default, strings.Join(running, "; "))
-	spoken := slices.DeleteFunc(slices.Clone(conversation), func(message llm.Message) bool { return message.Role == llm.RoleSystem })
-	messages := append([]llm.Message{{Role: llm.RoleSystem, Content: system}}, Sendable(WithoutThinking(spoken))...)
-	request := llm.Request{Messages: append(messages, llm.Message{Role: llm.RoleUser, Content: question})}
-	if tools := t.base.Tools.Definitions(); len(tools) > 0 {
+	question := fmt.Sprintf("%ssub-agent %s, whose brief is %q, asks you: %s\nwhy: %s\nwhat it does with no answer: %s\n\nwhat runs now: %s\n\n"+
+		"answer it in one line of text: that text is the whole answer %s receives, and no tool runs in this reply, so do not reach for message or any other tool.",
+		unruled, asking.ID, asking.Brief, args.Question, args.Why, args.Default, strings.Join(running, "; "), asking.ID)
+	request := llm.Request{Messages: append(sent, llm.Message{Role: llm.RoleUser, Content: question})}
+	tools := t.base.Tools.Definitions()
+	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
+	if lead, recorded := leadOf(site, asking.ID); recorded && t.base.Sessions != nil {
+		held, err := HeldPrefix(t.base.Sessions, site.log.ID(), lead)
+		if err != nil {
+			return "", err
+		}
+		tools = held.toolsOr(tools)
+	}
+	if len(tools) > 0 {
 		request.Tools, request.ToolChoice = tools, llm.ToolChoiceNone
 	}
 	within, cancel := context.WithTimeout(ctx, konst.SubAgentAskMillis*time.Millisecond)
@@ -165,6 +180,18 @@ func (t *SpawnTool) answer(ctx context.Context, asking subagent.SubAgent, conver
 	}
 	return "", fmt.Errorf("the orchestrator's model returned no answer text: it ended as %s, stop reason %q, calling %s",
 		decision.Outcome, decision.Stop, cmp.Or(strings.Join(called, ", "), "no tool"))
+}
+
+func leadOf(site spawnSite, asking string) (string, bool) {
+	if site.log == nil {
+		return "", false
+	}
+	runs := site.log.Header().Agents
+	at := slices.IndexFunc(runs, func(run session.AgentRun) bool { return run.Agent == asking })
+	if at < 0 {
+		return "", false
+	}
+	return runs[at].ParentAgent, true
 }
 
 func (t *SpawnTool) askThePerson(ctx context.Context, agent string, ticket boardy.Ticket, q boardy.Question) string {
@@ -214,15 +241,11 @@ func (t *SpawnTool) answeredOnBoard(id string, q boardy.Question, replies []Pers
 
 func (t *SpawnTool) traceAnswer(ctx context.Context, asking string, request llm.Request, started time.Time, attempts []llm.Attempt, decision llm.Decision, failed error) {
 	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
-	if site.log == nil {
+	lead, recorded := leadOf(site, asking)
+	if !recorded {
 		return
 	}
-	runs := site.log.Header().Agents
-	at := slices.IndexFunc(runs, func(run session.AgentRun) bool { return run.Agent == asking })
-	if at < 0 {
-		return
-	}
-	answering := &record{log: site.log, scope: site.turn, turn: site.turn, agent: runs[at].ParentAgent, said: map[string]string{}, announce: t.base.Sent, lastSent: &messagesKept{}}
+	answering := &record{log: site.log, scope: site.turn, turn: site.turn, agent: lead, said: map[string]string{}, announce: t.base.Sent, lastSent: &messagesKept{}}
 	id, why := session.NewEventID(), "answers "+asking+"'s ask"
 	if failed == nil {
 		why += fmt.Sprintf(": ended as %s, stop reason %q", decision.Outcome, decision.Stop)

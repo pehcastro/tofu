@@ -83,8 +83,11 @@ func TestASubAgentAsksAndItsNextStepSeesTheOrchestratorsAnswer(t *testing.T) {
 	if len(model.waiting) != 1 || model.waiting[0] != subagent.WaitingAnswer {
 		t.Errorf("while the side call ran the roster showed %v, want [%s]", model.waiting, subagent.WaitingAnswer)
 	}
-	if system := model.sideSaw[0]; system.Role != llm.RoleSystem || !strings.Contains(system.Content, "answer a sub-agent's ask in one line") {
-		t.Errorf("the side call's instruction is not the answer_asks rule: %+v", system)
+	if lead, side := model.script.requests(leadKey)[0].Messages[0], model.sideSaw[0]; side.Role != lead.Role || side.Content != lead.Content || strings.Contains(lead.Content, "answer a sub-agent's ask in one line") {
+		t.Errorf("the side call does not open on the lead's own first message, which lacks answer_asks:\nlead %+v\nside %+v", lead, side)
+	}
+	if asked := model.sideSaw[len(model.sideSaw)-1]; asked.Role != llm.RoleUser || !strings.Contains(asked.Content, "answer a sub-agent's ask in one line") {
+		t.Errorf("the side call's last user message does not carry the answer_asks rule: %+v", asked)
 	}
 	planned := false
 	for _, message := range model.sideSaw {
