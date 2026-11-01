@@ -406,7 +406,7 @@ func TestCompactCarriedKeepsTheWarmHeadAndTheNewSessionReadsBackShrunk(t *testin
 	if err := old.Close(); err != nil {
 		t.Fatal(err)
 	}
-	into, err := RecordCarried(store, old.ID(), compacted, time.Now())
+	into, err := RecordCarried(store, old.ID(), compacted, "the test", time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -264,6 +264,7 @@ type Compacted struct {
 	TokensAfter  int
 	Kept         int
 	Drops        []recall.Drop
+	Before       []llm.Message
 	Messages     []llm.Message
 }
 
@@ -296,10 +297,10 @@ func CompactCarried(project string, places sys.Places, wire, task string, carrie
 	for i := range shrunk {
 		shrunk[i].KeptHead = unchanged < len(shrunk) && i == unchanged-1
 	}
-	return Compacted{Results: shrink.results, TokensBefore: before, TokensAfter: HistoryTokens(artifacts.preview, shrunk), Kept: kept, Drops: shrink.drops, Messages: shrunk}, nil
+	return Compacted{Results: shrink.results, TokensBefore: before, TokensAfter: HistoryTokens(artifacts.preview, shrunk), Kept: kept, Drops: shrink.drops, Before: carried, Messages: shrunk}, nil
 }
 
-func RecordCarried(store *session.Store, from string, compacted Compacted, at time.Time) (string, error) {
+func RecordCarried(store *session.Store, from string, compacted Compacted, by string, at time.Time) (string, error) {
 	if _, err := store.Header(from); err != nil {
 		return "", err
 	}
@@ -336,10 +337,15 @@ func RecordCarried(store *session.Store, from string, compacted Compacted, at ti
 		}
 		written.add(session.Event{Kind: session.EventPrompt}, prompt)
 	}
-	request := ""
+	before, _ := written.keptList(compacted.Before)
+	after, _ := written.keptList(compacted.Messages)
+	_, err = log.Append(session.Event{Kind: session.EventListChange}, session.ListChangeBody{Kind: session.ListChangeFork, Before: before, After: after,
+		Why: string(ForkCompact) + " fork from " + was.ID + ", " + strconv.Itoa(compacted.TokensBefore) + " to " + strconv.Itoa(compacted.TokensAfter) + " tokens, asked by " + by})
+	written.note(err)
+	request, steps := "", 0
 	for _, message := range compacted.Messages {
 		if message.Role == llm.RoleAssistant {
-			request = session.NewEventID()
+			request, steps = session.NewEventID(), steps+1
 		}
 		written.message(message, request, nil)
 	}
@@ -351,11 +357,13 @@ func RecordCarried(store *session.Store, from string, compacted Compacted, at ti
 	if len(written.failed) > 0 {
 		return "", errors.Join(errors.New(strings.Join(written.failed, "; ")), log.Close(), ended.Close())
 	}
+	_, forked := ended.Append(session.Event{Kind: session.EventCompaction}, compactionRow{Fork: &Fork{Step: steps, Kind: ForkCompact, Into: into,
+		TokensBefore: compacted.TokensBefore, TokensAfter: compacted.TokensAfter}})
 	edited := ended.Edit(func(header *session.Header) {
 		header.ForkedInto, header.EndedAt, header.EndReason = into, &at, session.EndedByFork
 		header.ForkTokensBefore, header.ForkTokensAfter = compacted.TokensBefore, compacted.TokensAfter
 	})
-	return into, errors.Join(edited, log.Close(), ended.Close())
+	return into, errors.Join(forked, edited, log.Close(), ended.Close())
 }
 
 func shrinkTo(artifacts Artifacts, messages []llm.Message, estimate, target int, cause shrinkCause) (overflowShrink, error) {

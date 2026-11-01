@@ -9,7 +9,7 @@ import (
 const compactNothingCarried = "nothing to compact: this session carries no history yet"
 
 func compactSession(live *host.Host) string {
-	compacted, err := live.Compact()
+	compacted, err := live.Compact("the person, /compact in the terminal interface")
 	switch {
 	case err != nil:
 		return "nothing was compacted, and the next turn carries the history as it was: " + err.Error()
@@ -22,7 +22,7 @@ func compactSession(live *host.Host) string {
 	return compactNothingCarried
 }
 
-func compactCarried(live *host.Host) (host.Compaction, error) {
-	compacted, err := live.Compact()
+func compactCarried(live *host.Host, by string) (host.Compaction, error) {
+	compacted, err := live.Compact(by)
 	return compacted.Compaction, err
 }

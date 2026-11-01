@@ -48,7 +48,7 @@ type ServeConfig struct {
 	Sources  map[string]string
 	Ledger   func(LedgerParams) (LedgerReport, error)
 	Run      func(ctx context.Context, command string) (output string, stopped bool)
-	Compact  func(*Host) (Compaction, error)
+	Compact  func(live *Host, by string) (Compaction, error)
 	Stale    func() bool
 	Setup    func() []Requirement
 	SaveKey  func(provider, key string) (note string, err error)
@@ -478,7 +478,7 @@ func (s *server) compact(p SessionParams) (any, error) {
 	if turn, running := named.host.Turn(); running {
 		return nil, turnRunning(turn)
 	}
-	compacted, err := s.Compact(named.host)
+	compacted, err := s.Compact(named.host, s.asker("session.compact"))
 	if err != nil || compacted.Into == "" {
 		return compacted, err
 	}
@@ -506,12 +506,12 @@ type Compacted struct {
 	Kept int `json:"kept"`
 }
 
-func (h *Host) Compact() (Compacted, error) {
+func (h *Host) Compact(by string) (Compacted, error) {
 	if err := h.reachHost(); err != nil {
 		return Compacted{}, err
 	}
 	if f := h.following.Load(); f != nil {
-		reply := f.ask(followAsk{Op: followCompact})
+		reply := f.ask(followAsk{Op: followCompact, By: "member process " + strconv.Itoa(os.Getpid()) + ", " + by})
 		switch {
 		case reply.ID == 0:
 			return Compacted{}, errHostSilent
@@ -547,7 +547,7 @@ func (h *Host) Compact() (Compacted, error) {
 	if shrunk.Results == 0 {
 		return compacted, nil
 	}
-	into, err := turn.RecordCarried(store, id, shrunk, h.now())
+	into, err := turn.RecordCarried(store, id, shrunk, by, h.now())
 	if err == nil {
 		err = store.SetHead(into)
 	}
