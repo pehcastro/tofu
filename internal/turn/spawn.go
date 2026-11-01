@@ -407,7 +407,14 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if t.writesNothing && (len(args.Owns) > 0 || args.Ticket != "") {
 		return Result{}, ReadOnlyError{Tool: t.Name()}
 	}
+	var effort llm.Effort
+	if args.Effort != "" {
+		if effort, err = llm.ParseEffort(args.Effort); err != nil {
+			return Result{}, fmt.Errorf("spawn: %w", err)
+		}
+	}
 	var boardSizes map[string]int64
+	revision := 0
 	if args.Ticket != "" && t.base.Board != nil {
 		boardSizes = t.base.Board.Store.EventSizes()
 		if err := t.base.Board.Fire(rule.WhenBefore, rule.HookAgentSpawn, "", args.Ticket, t.base.Session); err != nil {
@@ -416,6 +423,14 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		ticket, err := t.base.Board.Get(args.Ticket)
 		if err != nil {
 			return Result{}, fmt.Errorf("spawn: %w", err)
+		}
+		thread, err := t.base.Board.Store.Thread(args.Ticket)
+		if err != nil {
+			return Result{}, fmt.Errorf("spawn: %w", err)
+		}
+		revision = len(ticket.Acceptance)
+		if err := raisedTwice(args.Ticket, thread, revision, effort); err != nil {
+			return Result{}, err
 		}
 		args.Owns = ticket.Owns
 	}
@@ -461,12 +476,6 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if err != nil {
 		return Result{}, fmt.Errorf("spawn: the sub-agent's prompt did not compose: %w", err)
 	}
-	var effort llm.Effort
-	if args.Effort != "" {
-		if effort, err = llm.ParseEffort(args.Effort); err != nil {
-			return Result{}, fmt.Errorf("spawn: %w", err)
-		}
-	}
 	timing.took("prompt")
 	if opened, err = t.open(definition, effort); err != nil {
 		return Result{}, fmt.Errorf("spawn: %w", err)
@@ -511,7 +520,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 			return Result{}, fmt.Errorf("spawn: %w", err)
 		}
 		spawned := boardy.Event{Ticket: args.Ticket, Kind: boardy.Spawned, Actor: t.base.Session, Author: lead, Session: t.base.Session, Agent: subAgentID, Call: site.call,
-			Text: subAgentID + ", " + agent.Mission, Brief: agent.Brief, Assignee: subAgentID, To: boardy.Doing}
+			Text: subAgentID + effortWords(effort) + ", " + agent.Mission, Brief: agent.Brief, Assignee: subAgentID, To: boardy.Doing, Effort: string(effort), Revision: revision}
 		if err := t.base.Board.Store.RecordTicket(spawned); err != nil {
 			t.roster.Release(subAgentID)
 			return Result{}, fmt.Errorf("spawn: %s's spawn was not written to %s's thread: %w", subAgentID, args.Ticket, err)

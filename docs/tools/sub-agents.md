@@ -2,7 +2,7 @@
 title: Sub-agent tools
 description: spawn, message, subagents and ask, the tools the lead and its sub-agents use to hand out work and talk while it runs.
 order: 7
-updated: 2026-10-31
+updated: 2026-11-01
 ---
 
 Four tools, tofu's own Go code. The lead gets `spawn`; the loop adds
@@ -18,6 +18,17 @@ because a mechanical change doesn't need deep thinking: at low effort a hard
 task finished in 63 s against 78 s at medium, with every hidden test passing.
 `ask` carries a default, so a sub-agent never waits forever.
 
+## One raise per acceptance
+
+A spawn on a ticket writes its effort into the ticket's thread, so `tofu
+boardy show` lists each spawn with the level it asked for. The first raise
+goes through. A second raise under the same acceptance is refused, naming the
+efforts already tried, because more thinking does not reach an outcome the
+first raise missed: the lead rewrites the outcome with `tofu boardy set
+<ID> --acceptance ... --reason ...`, or tells you what cannot be done, and
+the count starts again under the new acceptance. A spawn with no ticket is
+not counted.
+
 ## Parameters
 
 The lead calls them. You watch on the **sub-agents** tab, and raise the
@@ -28,7 +39,7 @@ limits in settings.
 | `spawn` | `task` | the brief, kept whole |
 | `spawn` | `owns` | the paths the sub-agent may write |
 | `spawn` | `agent` | a defined sub-agent, on its own model |
-| `spawn` | `effort` | `none` to `max`; left out, the lead's; one the model lacks runs at the nearest it has |
+| `spawn` | `effort` | `none` to `max`; left out, the lead's; one the model lacks runs at the nearest it has; on a ticket, a second raise under one acceptance is refused |
 | `message` | `to`, `text`, `stop` | more work, a correction, or a stop; resumes a finished one |
 | `subagents` | none | each sub-agent's state, steps and last tool |
 | `ask` | `question`, `why`, `default` | the default stands when no answer comes |

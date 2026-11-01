@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"tofu/internal/boardy"
 	"tofu/internal/llm"
 	"tofu/internal/subagent"
 )
@@ -47,6 +48,31 @@ func nearestEffort(wanted llm.Effort, takes []llm.Effort) llm.Effort {
 		}
 	}
 	return nearest
+}
+
+func raisedTwice(ticket string, thread []boardy.Event, revision int, asked llm.Effort) error {
+	rank := func(effort string) int { return slices.Index(llm.Efforts(), llm.Effort(effort)) }
+	var earlier []string
+	raised := false
+	for _, event := range thread {
+		if event.Kind != boardy.Spawned || event.Effort == "" || event.Revision != revision {
+			continue
+		}
+		raised = raised || len(earlier) > 0 && rank(event.Effort) > rank(earlier[len(earlier)-1])
+		earlier = append(earlier, event.Effort)
+	}
+	if asked == "" || !raised || rank(string(asked)) <= rank(earlier[len(earlier)-1]) {
+		return nil
+	}
+	return fmt.Errorf("spawn refused: %s already ran at %s under this acceptance, so %s would raise effort a second time, and a second raise does not reach an outcome the first one missed. rewrite the outcome instead: revise the acceptance with tofu boardy set %s --acceptance and --reason, or tell the person what cannot be done, then spawn again",
+		ticket, strings.Join(earlier, ", then "), asked, ticket)
+}
+
+func effortWords(effort llm.Effort) string {
+	if effort == "" {
+		return ""
+	}
+	return " at " + string(effort)
 }
 
 func clampedWords(asked llm.Effort, opened SubAgentModel) string {

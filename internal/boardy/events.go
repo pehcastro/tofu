@@ -51,6 +51,8 @@ type Event struct {
 	Files      []string         `json:"files,omitempty"`
 	Brief      string           `json:"brief,omitempty"`
 	Assignee   string           `json:"assignee,omitempty"`
+	Effort     string           `json:"effort,omitempty"`
+	Revision   int              `json:"revision,omitempty"`
 	Line       int              `json:"line,omitempty"`
 	Leave      []int            `json:"leave,omitempty"`
 	Verdict    Verdict          `json:"verdict,omitempty"`
