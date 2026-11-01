@@ -388,11 +388,16 @@ func Sendable(messages []llm.Message) []llm.Message {
 
 func NewestTask(messages []llm.Message) string {
 	for _, message := range slices.Backward(messages) {
-		if task, found := TaskIn(message.Content); found && message.Role == llm.RoleUser && (message.Origin.Source == "" || saidByThePerson(message.Origin)) {
+		if task, said := personTask(message); said {
 			return task
 		}
 	}
 	return ""
+}
+
+func personTask(message llm.Message) (string, bool) {
+	task, found := TaskIn(message.Content)
+	return task, found && message.Role == llm.RoleUser && (message.Origin.Source == "" || saidByThePerson(message.Origin))
 }
 
 func (r Row) PromptAccounting() llm.PromptAccounting {

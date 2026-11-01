@@ -65,6 +65,7 @@ type keepJudge struct {
 	ledger    *ledger.Writer
 	notify    func(string)
 	task      string
+	unfound   string
 	earlier   func() ([]session.Event, error)
 	mu        sync.Mutex
 	decided   map[string]keepDecision
@@ -164,11 +165,12 @@ func (j *keepJudge) decide(call llm.ToolCall, result, latest string) keepDecisio
 		return decided
 	}
 	body, _ := json.Marshal(struct {
-		Task   string `json:"task"`
-		Call   string `json:"call"`
-		Result string `json:"result"`
-		Latest string `json:"latest"`
-	}{j.task, call.Name + " " + string(call.Arguments), result, latest})
+		Task    string `json:"task"`
+		Unfound string `json:"no_task,omitempty"`
+		Call    string `json:"call"`
+		Result  string `json:"result"`
+		Latest  string `json:"latest"`
+	}{j.task, j.unfound, call.Name + " " + string(call.Arguments), result, latest})
 	row := ledger.Row{Point: keepResultPoint, Questions: j.set.Name, Version: j.set.QuestionsVersion, StateHash: ledger.HashOf(body), StateBuilder: keepResultBuilder, State: body, Verdict: ledger.VerdictAsk,
 		Reason: &ledger.Reason{Question: keepResultName, Comparison: ">= " + strconv.FormatFloat(j.threshold, 'f', -1, 64), Threshold: j.threshold, Mode: ledger.ModeEnforced}}
 	if j.unasked != nil {

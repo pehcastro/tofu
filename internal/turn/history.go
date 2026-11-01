@@ -102,7 +102,7 @@ func historyOf(messages []llm.Message) recall.Conversation {
 			step++
 		}
 		entry := recall.Entry{Step: step, Text: WithoutToolRef(message.Content), Images: len(message.Images), Memory: message.Origin.Source == llm.SourceMemoryView}
-		if task, found := TaskIn(message.Content); found && message.Role == llm.RoleUser && (message.Origin.Source == "" || saidByThePerson(message.Origin)) {
+		if task, said := personTask(message); said {
 			entry.Said = task
 		}
 		for _, call := range message.ToolCalls {
@@ -273,6 +273,12 @@ func CompactCarried(project string, places sys.Places, wire, task string, carrie
 		return Compacted{}, err
 	}
 	artifacts.preview, artifacts.keep = artifacts.preview.OnWire(wire), newKeepJudge(project, places.Log, task, nil)
+	if NewestTask(carried) == "" {
+		artifacts.keep.unfound = "no task was found in a message from the person, so the task is the one the session opened with"
+		if task == "" {
+			artifacts.keep.unfound = "no task was found: no message from the person is carried, and the session opened with none"
+		}
+	}
 	shrunk := slices.Clone(carried)
 	before := HistoryTokens(artifacts.preview, shrunk)
 	kept := warmFrom(artifacts.preview, shrunk)
