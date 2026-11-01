@@ -578,7 +578,11 @@ func runTurn(opts runOpts, selected models.Model, clock *startupClock, out, errO
 	home, _ := os.UserHomeDir()
 	warm := newWarmProcesses(tools.NewBrowserTabs(home))
 	defer warm.Close()
-	engine := &appEngine{dir: opts.dir, open: open, tabs: warm.tabs, warm: warm, places: places, missingJudge: missingJudgeRefuses}
+	missing := missingJudgeRefuses
+	if opts.gateArm == gateOff {
+		missing = missingJudgeRunsWithout
+	}
+	engine := &appEngine{dir: opts.dir, open: open, tabs: warm.tabs, warm: warm, places: places, missingJudge: missing}
 	same := func(model turn.Model) turn.Model { return model }
 	started, err := engine.startTurn(opts, host.Turn{}, host.Hooks{Lead: same, SubAgent: same, Say: writeNotice(errOut), Reads: turn.NewReadLedger()}, clock)
 	if started.Close != nil {

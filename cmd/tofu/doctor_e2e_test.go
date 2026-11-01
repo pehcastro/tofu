@@ -157,7 +157,7 @@ func TestE2EDoctorAndARunInTheSameHomeAgreeOnWhetherTheShellSiftCuts(t *testing.
 		row  string
 		code int
 	}{
-		{"a fresh home with no key", nil, "  ✗ shell_sift@1  unusable · the gate is off because no classifier is bound:", exitUsage},
+		{"a fresh home with no key", nil, "  ✗ shell_sift@1  unusable · the gate is off because no classifier is bound:", exitOK},
 		{"a fresh home with a key and a recorded jev", []string{"TYPESAFE_API_KEY=stub-key-not-a-real-credential", judgeEndpointEnvar + "=" + os.Getenv(judgeEndpointEnvar)},
 			"  ● shell_sift@1  enforced · thresholds from the rule\n", exitOK},
 	} {
@@ -193,8 +193,13 @@ func TestE2EDoctorAndARunInTheSameHomeAgreeOnWhetherTheShellSiftCuts(t *testing.
 			}
 		}
 		cut := strings.Contains(session, "bytes of output removed, the judged method")
-		refused := strings.TrimPrefix(strings.TrimSpace(ran), "tofu run: ")
-		agree := (said.Mode == "enforced") == cut && (said.Unusable == "" || said.Unusable == refused)
+		uncut := ""
+		for _, line := range strings.Split(ran, "\n") {
+			if reason, found := strings.CutPrefix(strings.TrimSpace(line), "tofu: no shell result is cut: "); found {
+				uncut = reason
+			}
+		}
+		agree := (said.Mode == "enforced") == cut && (said.Unusable == "" || said.Unusable == uncut)
 		if !strings.Contains(page, "\n"+step.row) || code != step.code || !agree {
 			t.Fatalf("%s: doctor says\n%s\nwant a row starting %q, and in JSON mode %q unusable %q; the run exited %d, want %d, and cut %v\n%s",
 				step.name, page, step.row, said.Mode, said.Unusable, code, step.code, cut, ran)
