@@ -18,6 +18,17 @@ import (
 
 const sessionFindUsage = "tofu session find <name|id> [--tool T] [--command C] [--file F] [--text T] [--failed] [--agent A] [--since 2h|RFC3339] [--until 2h|RFC3339] [--json]"
 
+const familyFlag = "--family"
+
+func generationAsked(handle string) (string, int, bool) {
+	cut := strings.LastIndex(handle, session.GenerationMark)
+	if cut < 0 || !strings.Contains(handle[:cut], session.FamilyMark) {
+		return handle, 0, false
+	}
+	number, err := strconv.Atoi(handle[cut+1:])
+	return handle[:cut], number, err == nil
+}
+
 type familyGeneration struct {
 	Generation int               `json:"generation"`
 	Session    string            `json:"session"`

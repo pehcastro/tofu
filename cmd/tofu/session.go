@@ -148,15 +148,32 @@ func sessionVerbRecalling(recent *session.Recent, args []string, in io.Reader, o
 	}
 	operands, wanted, known := sessionOperands(args[0])
 	if !known {
-		o.usageLine = "tofu session <name|id> [--json]"
-		if handles, _, err = verbArgs(args); err == nil && len(handles) != 1 {
+		o.usageLine = "tofu session <name|id>[.N] [--family] [--json]"
+		whole := slices.Contains(args, familyFlag)
+		if handles, _, err = verbArgs(slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return arg == familyFlag })); err == nil && len(handles) != 1 {
 			err = fmt.Errorf("%d operands, want <name|id>", len(handles))
 		}
 		if err != nil {
 			return o.usage(err)
 		}
-		return sessionReport(o, func(store *session.Store) (sessionFamilyReport, error) { return sessionFamilyOf(store, handles[0]) },
-			func(page cli.Page, report sessionFamilyReport) []string { return sessionFamilyLines(page, report, now) })
+		base, number, numbered := generationAsked(handles[0])
+		if whole || !numbered {
+			return sessionReport(o, func(store *session.Store) (sessionFamilyReport, error) { return sessionFamilyOf(store, handles[0]) },
+				func(page cli.Page, report sessionFamilyReport) []string { return sessionFamilyLines(page, report, now) })
+		}
+		store, err := session.Open()
+		if err != nil {
+			return o.fail(err)
+		}
+		family, _, err := sessionFamily(store, base)
+		if err != nil {
+			return o.fail(err)
+		}
+		if number < 1 || number > len(family.Generations) {
+			return o.refuse(exitUsage, cli.Problem{What: fmt.Sprintf("%s has no generation .%d; the last is %s", base, number, family.Handle()),
+				Hint: "tofu session " + family.Handle()})
+		}
+		args[0], operands, wanted = "info", "<name|id>", 1
 	}
 	o.verb, o.usageLine = "session "+args[0], strings.TrimSpace("tofu session "+args[0]+" "+operands)+" [--json]"
 	if err == nil && len(handles) != wanted {
