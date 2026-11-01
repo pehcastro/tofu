@@ -29,6 +29,7 @@ type sessionBranchReport struct {
 	Preset  string          `json:"preset,omitempty"`
 	Seed    turn.Seed       `json:"seed"`
 	Carried int             `json:"carried_messages"`
+	NoTask  bool            `json:"carries_no_task,omitempty"`
 	Model   string          `json:"model,omitempty"`
 	Effort  llm.Effort      `json:"effort,omitempty"`
 
@@ -99,13 +100,21 @@ func sessionBranch(store *session.Store, ask sessionBranchAsk) (sessionBranchRep
 	if err != nil {
 		return sessionBranchReport{}, err
 	}
+	noTask := false
+	if turn.Seed(ask.seed) == turn.SeedSummary && carried == 0 {
+		task, err := turn.SideTask(store, parent, header.BranchedFrom.Event)
+		if err != nil {
+			return sessionBranchReport{}, err
+		}
+		noTask = task == ""
+	}
 	if ask.name != "" {
 		if _, err := store.SetName(header.ID, ask.name); err != nil {
 			return sessionBranchReport{}, fmt.Errorf("side chat %s was made and keeps its own name, as %q is not one: %w", handleOf(store, header.ID), ask.name, err)
 		}
 	}
 	return sessionBranchReport{Session: header.ID, Handle: handleOf(store, header.ID), Kind: header.Kind, Parent: *header.BranchedFrom, Owns: append([]string{}, header.Owns...),
-		Preset: header.Preset, Seed: turn.Seed(ask.seed), Carried: carried, Model: header.Model, Effort: llm.Effort(header.Effort), parentHandle: handleOf(store, parent.ID)}, nil
+		Preset: header.Preset, Seed: turn.Seed(ask.seed), Carried: carried, NoTask: noTask, Model: header.Model, Effort: llm.Effort(header.Effort), parentHandle: handleOf(store, parent.ID)}, nil
 }
 
 func sessionBranchLines(page cli.Page, report sessionBranchReport) []string {
@@ -116,12 +125,16 @@ func sessionBranchLines(page cli.Page, report sessionBranchReport) []string {
 	if report.Preset != "" {
 		access = report.Preset + ": " + access
 	}
+	seed := string(report.Seed) + ", " + plural(report.Carried, "message")
+	if report.NoTask {
+		seed += ": the parent carries no task, so nothing of it is seeded"
+	}
 	lines := append(page.Title("Side chat", []string{report.Handle}, cli.Verdict{Mark: cli.Changed, Text: "branched"}), "")
 	facts := []cli.Fact{
 		{Label: "id", Text: report.Session},
 		{Label: "parent", Text: strings.TrimSuffix(report.parentHandle+" at "+report.Parent.Event, " at ")},
 		{Label: "access", Text: access},
-		{Label: "seed", Text: string(report.Seed) + ", " + plural(report.Carried, "message")},
+		{Label: "seed", Text: seed},
 	}
 	if report.Model != "" {
 		facts = append(facts, cli.Fact{Label: "model", Text: report.Model})

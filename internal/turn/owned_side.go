@@ -116,19 +116,9 @@ func sideSeed(store *session.Store, parent session.Header, events []session.Even
 	if err != nil {
 		return nil, err
 	}
-	recorded, err := store.Events(parent.ID)
+	task, err := SideTask(store, parent, events[len(events)-1].ID)
 	if err != nil {
 		return nil, err
-	}
-	task, last := "", events[len(events)-1].ID
-	for _, event := range recorded {
-		var start session.TurnStart
-		if event.Kind == session.EventTurnStart && event.Agent == "" && json.Unmarshal(event.Body, &start) == nil {
-			task = start.Task
-		}
-		if event.ID == last {
-			break
-		}
 	}
 	if task == "" || len(messages) == 0 {
 		return nil, nil
@@ -150,6 +140,34 @@ func sideSeed(store *session.Store, parent session.Header, events []session.Even
 	begun[at].Content = "this is a side chat beside session " + parent.ID + ", which keeps running and has not ended: " +
 		"the summary below is the one tofu writes when a session forks, and every session it names is that one.\n" + rest
 	return begun, nil
+}
+
+func SideTask(store *session.Store, parent session.Header, last string) (string, error) {
+	task, generation, carried := "", parent.ID, parent.CarriedFrom
+	for {
+		recorded, err := store.Events(generation)
+		if err != nil {
+			return "", err
+		}
+		for _, event := range recorded {
+			var start session.TurnStart
+			if event.Kind == session.EventTurnStart && event.Agent == "" && json.Unmarshal(event.Body, &start) == nil {
+				task = start.Task
+			}
+			if event.ID == last {
+				break
+			}
+		}
+		if task != "" || carried == nil {
+			return task, nil
+		}
+		generation, last = carried.Session, carried.Event
+		header, err := store.Header(generation)
+		if err != nil {
+			return "", err
+		}
+		carried = header.CarriedFrom
+	}
 }
 
 func sideChat(config Config) (Config, error) {
