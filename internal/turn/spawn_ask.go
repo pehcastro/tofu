@@ -16,9 +16,11 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 	"tofu/internal/rule"
+	"tofu/internal/safe"
 	"tofu/internal/session"
 	"tofu/internal/shell"
 	"tofu/internal/subagent"
+	"tofu/internal/sys"
 	shipped "tofu/library"
 )
 
@@ -163,6 +165,51 @@ func (t *SpawnTool) answer(ctx context.Context, asking subagent.SubAgent, conver
 	}
 	return "", fmt.Errorf("the orchestrator's model returned no answer text: it ended as %s, stop reason %q, calling %s",
 		decision.Outcome, decision.Stop, cmp.Or(strings.Join(called, ", "), "no tool"))
+}
+
+func (t *SpawnTool) askThePerson(ctx context.Context, agent string, ticket boardy.Ticket, q boardy.Question) string {
+	reason := strings.ReplaceAll(q.ELI5, "\n", " ")
+	note := fmt.Sprintf("\n\n%s reports %s not possible, so %s is %s on Q%d and the person decides it: no move of yours takes it out until they answer, and you take no option for them:\nQ%d %s\nreason: %s",
+		agent, ticket.ID, ticket.ID, ticket.Status, q.ID, q.ID, q.TLDR, reason)
+	recommended := q.Recommend - 1
+	asked := PersonQuestion{ID: "Q" + strconv.Itoa(q.ID), Header: ticket.ID + " not possible", Question: strings.TrimSuffix(reason, ".") + ": how should " + ticket.ID + " go?", Type: QuestionChoice, Recommended: &recommended}
+	for i, option := range q.Options {
+		note += fmt.Sprintf("\n%d. %s", i+1, option)
+		asked.Options = append(asked.Options, PersonOption{Label: option})
+	}
+	note += fmt.Sprintf("\nrecommended %d: %s", q.Recommend, q.Why)
+	form := PersonFormFrom(ctx)
+	if form == nil || t.Inbox == nil {
+		return note + fmt.Sprintf("\n\nnothing here shows the person a question, so put Q%d to them in this turn with %s, its reason and every option, the recommended one marked", q.ID, AskPersonToolName)
+	}
+	open := t.Inbox.Open(asked.Header + ": " + asked.Question)
+	safe.Go(sys.Crashes(t.Project), "not possible question", func() {
+		defer open.Close()
+		replies, err := form(context.WithoutCancel(ctx), []PersonQuestion{asked}, 0)
+		said := t.answeredOnBoard(ticket.ID, q, replies, err)
+		open.Answer(said, llm.Origin{Source: llm.SourceAnswer, Name: asked.ID, Shown: said})
+	})
+	return note + fmt.Sprintf("\n\ntofu has put Q%d to the person itself, and their answer reaches you as a message once it is written to %s", q.ID, ticket.ID)
+}
+
+func (t *SpawnTool) answeredOnBoard(id string, q boardy.Question, replies []PersonReply, asked error) string {
+	answer := ""
+	for _, reply := range replies {
+		for _, chosen := range reply.Chosen {
+			if at := slices.Index(q.Options, chosen); at >= 0 {
+				answer = strconv.Itoa(at + 1)
+			}
+		}
+		answer = strings.TrimSpace(answer + " " + reply.Text)
+	}
+	if answer == "" {
+		return fmt.Sprintf("the person gave no answer to %s Q%d (%v), so it stays in %s until they answer it in catch up", id, q.ID, asked, boardy.NeedsDecision)
+	}
+	ticket, err := t.base.Board.Answer(id, q.ID, answer, cmp.Or(t.base.Board.Person, string(boardy.RolePerson)))
+	if err != nil {
+		return fmt.Sprintf("the person answered %s Q%d with %q, and writing it to the ticket failed: %v", id, q.ID, answer, err)
+	}
+	return fmt.Sprintf("the person answered %s Q%d %q with %s, and %s is %s again", id, q.ID, q.TLDR, answer, id, ticket.Status)
 }
 
 func (t *SpawnTool) traceAnswer(ctx context.Context, asking string, request llm.Request, started time.Time, attempts []llm.Attempt, decision llm.Decision, failed error) {

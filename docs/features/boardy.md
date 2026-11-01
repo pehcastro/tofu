@@ -199,6 +199,22 @@ the ticket under Questions with an `Answer:` line beneath it, and catchup,
 the audit and the board's rows count only the questions still open. A move to `needs-decision`
 without a question carrying all of that is refused.
 
+An agent that finds its ticket cannot be done as asked says so with
+`ticket_not_possible`, giving the reason and two to four options:
+
+```
+{"id": "DEMO-1", "reason": "gpui has no backdrop filter, per its docs", "options": ["drop the blur", "use a flat tint"], "recommend": 2, "why": "a tint is what gpui can draw"}
+```
+
+The ticket gets the question `not possible as asked: <title>` with the reason
+under it, and moves to `needs-decision`. Nobody but you moves it on from there
+until you answer that question in catch up: the lead's move to done, doing or
+anywhere else is refused, naming the question, whether it uses `ticket_move` or
+runs `tofu boardy move` in its shell, and so is an answer the lead writes for
+you. Tofu puts the question to you itself, in the chat, in the same turn as
+the report, and your choice there is written to the ticket as your answer. A
+report with no reason goes back to the agent, naming the missing reason.
+
 A second board in the same project, `tofu boardy init --key OPS`, counts
 from `OPS-1`. With two boards, `new` and `list` take `--board KEY`.
 
@@ -233,7 +249,7 @@ line it proves, which `show --thread` folds into one count and the Log keeps
 for review. A move to review names the lines left for the lead in `leave`,
 and the `evidence_at_review` hook refuses it while a line is unmet. The report
 is one entry: the engineer's last words in at most two sentences, a `verdict`
-(done, done with concerns, blocked or needs you), and each acceptance line as
+(done, done with concerns, blocked, needs you or not possible), and each acceptance line as
 met, unmet or not mine to prove. Empty moves stay out of the thread.
 
 A sub-agent's ask and the lead's answer read as two people. The ask prints
@@ -332,7 +348,8 @@ tofu boardy manager add <lead session id>
 | `ticket_log` | every agent | appends evidence to its own ticket's Log |
 | `ticket_ask` | every agent | writes a question for a manager into its own ticket's Log |
 | `ticket_request` | every agent | writes a request into a board's triage |
-| `ticket_move` | every agent | an agent moves its own ticket from doing to review; a manager moves any ticket |
+| `ticket_move` | every agent | an agent moves its own ticket from doing to review; a manager moves any ticket, except one an agent reported not possible, which waits on the person |
+| `ticket_not_possible` | agents that manage nothing | reports its own ticket cannot be done as asked, with a reason and options; the ticket moves to needs-decision for the person |
 | `ticket_create` | managers | creates a numbered ticket, or a sub-ticket with `parent`; asks for `before`, `driven`, `still_works`, `error_case` and, for a visual or platform effect, `feasibility` |
 | `ticket_assign` | managers | assigns a ticket |
 | `ticket_list` | managers | lists a board's tickets by status, oldest first with the time since each last changed, up to ten and how many more |

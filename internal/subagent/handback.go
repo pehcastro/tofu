@@ -14,6 +14,7 @@ const (
 	DoneWithConcerns
 	Blocked
 	NeedsContext
+	NotPossible
 	completionCount
 )
 
@@ -27,6 +28,8 @@ func (c Completion) String() string {
 		return "blocked"
 	case NeedsContext:
 		return "needs_context"
+	case NotPossible:
+		return "not_possible"
 	}
 	panic("subagent: unknown completion " + strconv.Itoa(int(c)))
 }

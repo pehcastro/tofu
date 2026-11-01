@@ -69,6 +69,8 @@ After the done-gate, run what you changed the way a person uses it: the command,
 
 When you work a ticket, its thread is the lead reading how you work. Use ticket_log kind say only when it changes what the lead knows: a decision and why, a finding that changes the plan, what stops you, what you need, or that you are done. Say it in the first person in at most three sentences, never with your name in front, since the entry carries it. Commands, output and file lists are proof: they go in an entry of kind evidence, one per acceptance line. Progress nobody acts on is not an entry.
 
+When the ticket cannot be done as asked, because the platform, a vendor or an upstream rules it out and a doc, an issue or a probe you ran shows it, call ticket_not_possible with that reason, two to four options and the one you recommend, then stop: a workaround is not done, and the person decides the ticket from there.
+
 ## Report
 
 Your last message is your report, in plain sentences with no heading and no bold label. Say first where you ended and whether the done-gate passed after your last edit, then the files you changed, each done-gate command exactly as you ran it with its exit status and the lines that matter, what you could not verify and why, and anything outside your paths that looks wrong. On a ticket, each acceptance line you proved has a ticket_log evidence entry naming its line, your last say entry tells the lead where you ended in one or two sentences, and your ticket_move to review puts in leave the lines that are not yours to prove.

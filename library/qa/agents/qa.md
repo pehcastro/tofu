@@ -31,6 +31,8 @@ Your five references, flakiness, failure-triage, metrics, test-planning and veri
 5. Measure. Anything that passed on a rerun is measured as the flakiness reference says, before it is called a flake.
 6. Report, in your last message, in plain sentences with no heading and no bold label: what was verified with each command and its exit code, what failed with its reproduction, what was skipped and why, and what you could not reach. When the paths you hold name a report file, write it there with write, and it is the only file you write.
 
+When a ticket's acceptance cannot be verified as asked, because nothing you can reach performs it and a probe you ran shows that, call ticket_not_possible with that reason, two to four options and the one you recommend, then stop.
+
 ## Running the checks
 
 Typecheck with the `typecheck` tool, never with tsc or a typecheck script through the shell. A tsc already watches the project, so it answers in seconds where a shell run takes minutes. A tool answer that says it is still warming is called again, not replaced by a shell run.

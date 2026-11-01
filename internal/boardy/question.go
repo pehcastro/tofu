@@ -1,6 +1,7 @@
 package boardy
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"slices"
@@ -166,6 +167,54 @@ func (m Managed) Ask(id string, q Question, actor string) (Ticket, error) {
 	}
 	s.ticket = asked
 	return asked, m.after(s)
+}
+
+func (m Managed) ReportNotPossible(id string, q Question, actor string) (Ticket, error) {
+	ticket, board, err := m.ticketOnBoard(id)
+	switch {
+	case err != nil:
+		return ticket, err
+	case m.role(board, actor) != RoleAgent || !heldBy(ticket, actor):
+		return ticket, RefusedError{Ticket: id, Why: fmt.Sprintf("it is assigned to %q, and only the agent working a ticket reports it not possible", ticket.Assignee)}
+	case ticket.Status != Doing:
+		return ticket, RefusedError{Ticket: id, Why: fmt.Sprintf("it is %s, and an agent reports a ticket not possible while it is %s", ticket.Status, Doing)}
+	case strings.TrimSpace(q.ELI5) == "":
+		return ticket, RefusedError{Ticket: id, Why: "the not_possible report has no reason: say in reason what cannot be done as asked and how you know, such as a vendor doc, an upstream issue or a probe you ran"}
+	}
+	q.TLDR = "not possible as asked: " + ticket.Title
+	if runes := []rune(q.TLDR); len(runes) > konst.BoardTLDRRunesMost {
+		q.TLDR = string(runes[:konst.BoardTLDRRunesMost])
+	}
+	if ticket, err = m.Ask(id, q, actor); err != nil {
+		return ticket, err
+	}
+	asked := ticket.Questions[len(ticket.Questions)-1]
+	if err := m.Store.Record(board.Key, Event{Ticket: id, Kind: NotPossible, Actor: actor, Question: asked.ID, Text: asked.ELI5}); err != nil {
+		return ticket, err
+	}
+	return m.move(board, ticket, NeedsDecision, "reported not possible, so the person decides Q"+strconv.Itoa(asked.ID), actor, 0, nil)
+}
+
+func (m Managed) NotPossibleOpen(ticket Ticket) (Question, Event, bool, error) {
+	events, err := m.Store.ticketEvents(ticket.ID)
+	open := ticket.OpenQuestions()
+	for _, event := range slices.Backward(events) {
+		if at := slices.IndexFunc(open, func(q Question) bool { return q.ID == event.Question }); event.Kind == NotPossible && at >= 0 {
+			return open[at], event, true, err
+		}
+	}
+	return Question{}, Event{}, false, err
+}
+
+func (m Managed) heldForThePerson(ticket Ticket, actor, doing string) error {
+	if ticket.Status != NeedsDecision || m.Person != "" && actor == m.Person {
+		return nil
+	}
+	q, said, held, err := m.NotPossibleOpen(ticket)
+	if err != nil || !held {
+		return err
+	}
+	return RefusedError{Ticket: ticket.ID, Why: fmt.Sprintf("%s reported it not possible (%s), so Q%d %q is the person's to answer, and only the person %s until then: put Q%d to the person with its reason and options, and they answer it in catch up, in the desk or under it in %s, which tofu boardy catchup --answers applies", cmp.Or(said.Agent, said.Actor), said.Text, q.ID, q.TLDR, doing, q.ID, CatchupFileName)}
 }
 
 func decidable(ticket Ticket) error {

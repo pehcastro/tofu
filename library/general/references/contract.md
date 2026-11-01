@@ -28,9 +28,19 @@ The `evidence_at_review` hook refuses a move to review while any line is unmet, 
 
 ## The reported entry
 
-When the sub-agent ends, tofu writes one reported entry on the ticket. Its text is the sub-agent's last say entry, cut to two sentences, or the first line of its last message when it said nothing. It carries three fields: `verdict`, one of done, done with concerns, blocked and needs you; `acceptance`, each line with its state; and `files`, what tofu saw it write. A run stopped by a cap or an error is blocked, a run waiting on an answer needs you, and an unmet line or a concern turns done into done with concerns. The lead reads the same verdict and lines under the sub-agent's report.
+When the sub-agent ends, tofu writes one reported entry on the ticket. Its text is the sub-agent's last say entry, cut to two sentences, or the first line of its last message when it said nothing. It carries three fields: `verdict`, one of done, done with concerns, blocked, needs you and not possible; `acceptance`, each line with its state; and `files`, what tofu saw it write. A run stopped by a cap or an error is blocked, a run waiting on an answer needs you, and an unmet line or a concern turns done into done with concerns. The lead reads the same verdict and lines under the sub-agent's report.
 
 A sub-agent given no ticket, or a ticket with no acceptance lines, has no acceptance and reports through its last message alone.
+
+## When it cannot be done as asked
+
+A sub-agent that finds its ticket cannot be done as asked, because the platform, a library or the code does not give it, says so with `ticket_not_possible` instead of the move to review, and then ends:
+
+```json
+{"id": "DEMO-1", "reason": "gpui has no backdrop filter, per its docs", "options": ["drop the blur", "use a flat tint"], "recommend": 2, "why": "a tint is what gpui can draw"}
+```
+
+`reason` says what cannot be done and how it knows: a vendor doc, an upstream issue or a probe it ran. A call with no reason is refused, naming the reason. The ticket gets a question for the person and moves to needs-decision, the report's completion is `not_possible` and its verdict `not possible`, tofu puts the question to the person itself, and only the person moves the ticket on, by answering. It is for what cannot be done, never for work that is only hard.
 
 ## What it does not check
 

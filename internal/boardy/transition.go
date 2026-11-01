@@ -397,7 +397,7 @@ func (m Managed) mayMove(role Role, ticket Ticket, to Status, actor string) erro
 	}
 	switch role {
 	case RoleManager:
-		return nil
+		return m.heldForThePerson(ticket, actor, "moves it")
 	case RolePerson:
 		if !to.Live() {
 			return nil

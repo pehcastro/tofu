@@ -190,6 +190,9 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 func (t *SpawnTool) doneReview(ctx context.Context, held *heldSubAgent, claims []Row, recipes map[string]string) (why, task string) {
 	const notBelieved = "You reported this finished and the done review did not believe you: "
 	last := &claims[len(claims)-1]
+	if ruledOut(claims) {
+		return "", ""
+	}
 	if missed := gateMissed(t.Project, recipes, held.definition, held.boundary.Owns(), claims); len(missed) > 0 {
 		why = strings.Join(missed, "; ")
 		return why, notBelieved + fmt.Sprintf("you changed a %s file, and your gate is %s, each run after your last edit and passing: %s",

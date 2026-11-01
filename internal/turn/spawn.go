@@ -805,7 +805,8 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 	}
 	report := reportOf(agent, forked, []Row{wholeRun(claims)}, state)
 	report.Asked, report.Impact = asked, boardy.ImpactOf(t.SubAgents.Root, report.Wrote)
-	if len(asked) > 0 && state == subagent.Finished {
+	ruledOut := report.Completion == subagent.NotPossible
+	if len(asked) > 0 && state == subagent.Finished && !ruledOut {
 		report.Completion = subagent.NeedsContext
 	}
 	if len(sentBack) > 0 {
@@ -815,7 +816,7 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 		}
 		report.Findings = append(report.Findings, subagent.Finding{Bucket: subagent.Noted, Text: "sent back " + times + ": " + strings.Join(sentBack, "; then ")})
 	}
-	if unbelievedAtCap != "" {
+	if unbelievedAtCap != "" && !ruledOut {
 		report.Completion = subagent.Blocked
 		report.Findings = append(report.Findings, subagent.Finding{Bucket: subagent.ActOn, Text: "not done: " + unbelievedAtCap})
 	}
@@ -830,7 +831,7 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 	}
 	text := report.Text(t.proseStore())
 	if agent.Ticket != "" && t.base.Board != nil {
-		text += t.reportedOnBoard(agent, site.call, report, stoppedEarly(state, last.Outcome))
+		text += t.reportedOnBoard(ctx, agent, site.call, report, stoppedEarly(state, last.Outcome))
 	}
 	if runs := held.runsAs(); runs != "" {
 		text = agent.ID + " ran" + runs + "\n\n" + text
@@ -843,7 +844,7 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 	return text, report.Completion
 }
 
-func (t *SpawnTool) reportedOnBoard(agent subagent.SubAgent, call string, report SubAgentReport, stopped bool) string {
+func (t *SpawnTool) reportedOnBoard(ctx context.Context, agent subagent.SubAgent, call string, report SubAgentReport, stopped bool) string {
 	board := t.base.Board
 	sizes := board.Store.EventSizes()
 	ticket, err := board.Get(agent.Ticket)
@@ -881,6 +882,11 @@ func (t *SpawnTool) reportedOnBoard(agent subagent.SubAgent, call string, report
 	if err := board.Store.RecordTicket(reported); err != nil {
 		written += "\n\nthis report was not written to " + agent.Ticket + "'s thread: " + err.Error()
 	}
+	if q, _, held, err := board.NotPossibleOpen(ticket); err != nil {
+		written += "\n\nwhether " + ticket.ID + " holds a not-possible question could not be read: " + err.Error()
+	} else if held {
+		written += t.askThePerson(ctx, agent.ID, ticket, q)
+	}
 	if err := board.Fire(rule.WhenAfter, rule.HookAgentReport, "", agent.Ticket, actor); err != nil {
 		written += "\n\na board hook after agent.report failed: " + err.Error()
 	}
@@ -889,6 +895,8 @@ func (t *SpawnTool) reportedOnBoard(agent subagent.SubAgent, call string, report
 
 func verdictOf(completion subagent.Completion, stopped bool, lines []boardy.AcceptanceLine) boardy.Verdict {
 	switch {
+	case completion == subagent.NotPossible:
+		return boardy.VerdictNotPossible
 	case stopped || completion == subagent.Blocked:
 		return boardy.VerdictBlocked
 	case completion == subagent.NeedsContext:

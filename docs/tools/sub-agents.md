@@ -56,6 +56,19 @@ lead gets says `sent back` with each line it was sent back for. It makes no
 model or Jev call. `tofu settings set doneReview off` takes the hand-back as
 it is. See [Settings](/docs/features/settings).
 
+## When the work cannot be done as asked
+
+A sub-agent on a ticket that finds the platform or the code does not give
+what the ticket asks calls `ticket_not_possible` with the reason and two to
+four options. Its report says `not_possible`, its ticket moves to
+needs-decision with that question, and tofu puts the question, the reason
+and every option to you in the chat in the same turn, whatever the lead does.
+The lead cannot close it or overrule it: a move it makes, by tool or in its
+shell, is refused until you answer there or in catch up. The done review does
+not send such a run back for unmet acceptance lines. A call with no reason goes
+back to the sub-agent, naming the missing reason. See
+[Boardy](/docs/features/boardy).
+
 ## Who calls what it changed
 
 A sub-agent's report lists each file it wrote once, and then an impact

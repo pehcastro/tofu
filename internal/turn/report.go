@@ -73,6 +73,8 @@ func (c SubAgentCommand) checked() (string, bool) {
 	return name, true
 }
 
+const TicketNotPossibleToolName = "ticket_not_possible"
+
 type SubAgentReport struct {
 	ID         string              `json:"id"`
 	Mission    string              `json:"mission"`
@@ -126,6 +128,9 @@ func reportOf(agent subagent.SubAgent, forked, attempts []Row, state subagent.St
 		}
 	}
 	report.Completion = completionOf(state, report.Findings)
+	if ruledOut(append(slices.Clone(forked), row)) {
+		report.Completion = subagent.NotPossible
+	}
 	for i := len(row.Steps) - 1; i >= 0; i-- {
 		if spoken := strings.TrimSpace(row.Steps[i].AssistantText); spoken != "" {
 			report.Prose, report.ProseStep = spoken, i+1
@@ -133,6 +138,17 @@ func reportOf(agent subagent.SubAgent, forked, attempts []Row, state subagent.St
 		}
 	}
 	return report
+}
+
+func ruledOut(rows []Row) bool {
+	for _, row := range rows {
+		for _, step := range row.Steps {
+			if slices.ContainsFunc(step.ToolCalls, func(call ToolCallRow) bool { return call.Tool == TicketNotPossibleToolName && call.Error == "" }) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func attemptOf(row Row, ended Outcome) subagent.Attempt {

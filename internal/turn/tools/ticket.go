@@ -21,14 +21,15 @@ import (
 type ticketVerb string
 
 const (
-	ticketRead    ticketVerb = "ticket_read"
-	ticketLog     ticketVerb = turn.TicketLogToolName
-	ticketAsk     ticketVerb = "ticket_ask"
-	ticketRequest ticketVerb = "ticket_request"
-	ticketCreate  ticketVerb = "ticket_create"
-	ticketMove    ticketVerb = turn.TicketMoveToolName
-	ticketAssign  ticketVerb = "ticket_assign"
-	ticketList    ticketVerb = "ticket_list"
+	ticketRead        ticketVerb = "ticket_read"
+	ticketLog         ticketVerb = turn.TicketLogToolName
+	ticketAsk         ticketVerb = "ticket_ask"
+	ticketRequest     ticketVerb = "ticket_request"
+	ticketCreate      ticketVerb = "ticket_create"
+	ticketMove        ticketVerb = turn.TicketMoveToolName
+	ticketNotPossible ticketVerb = turn.TicketNotPossibleToolName
+	ticketAssign      ticketVerb = "ticket_assign"
+	ticketList        ticketVerb = "ticket_list"
 )
 
 type logKind string
@@ -77,6 +78,8 @@ func TicketTools(board boardy.Managed, actor string) ([]turn.Tool, error) {
 	verbs := []ticketVerb{ticketRead, ticketLog, ticketAsk, ticketRequest, ticketMove}
 	if manager {
 		verbs = append(verbs, ticketCreate, ticketAssign, ticketList)
+	} else {
+		verbs = append(verbs, ticketNotPossible)
 	}
 	list := make([]turn.Tool, len(verbs))
 	for i, verb := range verbs {
@@ -177,11 +180,18 @@ func (t ticketTool) Definition() llm.Tool {
 		statuses := []boardy.Status{boardy.Review}
 		describe = "moves your own ticket from doing to review once every acceptance line in force has an entry of kind evidence naming it, or is in leave; a board may also want a least amount of evidence, and the refusal says how much"
 		if t.manager {
-			statuses, describe = boardy.Statuses(), "moves a ticket on a board you manage to a status; blocked needs a reason. a ticket reaches doing, review or done only with Acceptance, review only with a Log entry, done only when every acceptance line in force has evidence naming it, it has an entry of kind before unless it is labelled docs-only, and the reason names nothing still open, and a parent reaches review or done only once its sub-tickets are done or dropped. a ticket moving into doing may not own a path a ticket in doing already owns; the refusal names the glob and the ticket"
+			statuses, describe = boardy.Statuses(), "moves a ticket on a board you manage to a status; blocked needs a reason. a ticket reaches doing, review or done only with Acceptance, review only with a Log entry, done only when every acceptance line in force has evidence naming it, it has an entry of kind before unless it is labelled docs-only, and the reason names nothing still open, and a parent reaches review or done only once its sub-tickets are done or dropped. a ticket moving into doing may not own a path a ticket in doing already owns; the refusal names the glob and the ticket. a ticket a sub-agent reported not possible stays in needs-decision until the person answers its question, and no move of yours takes it out"
 		}
 		properties["to"], properties["reason"], required = map[string]any{"type": "string", "enum": statuses}, stringParam("why, required for blocked"), append(required, "to")
 		describe += ". a reason is one sentence on one line, and anything longer goes in ticket_log"
 		properties["leave"] = map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "on a move to review, the acceptance lines, counted from 1, that are not yours to prove and that the lead proves"}
+	case ticketNotPossible:
+		describe = "reports that your own ticket cannot be done as asked, which is your status for this work beside done: the reason and the options go to the person as a question, the ticket moves to needs-decision, and nobody but the person moves it on, the lead included. use it when the platform, the library or the code does not give what the ticket asks, never for work that is only hard, and then end your work"
+		properties["reason"] = stringParam(fmt.Sprintf("one to %d plain lines: what cannot be done as asked and how you know, such as a vendor doc, an upstream issue or a probe you ran", konst.BoardELI5LinesMost))
+		properties["options"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": fmt.Sprintf("%d to %d ways the person may go, one line each, such as the nearest thing that can be done or dropping the ask", konst.AskPersonOptionsLeast, konst.AskPersonOptionsMost)}
+		properties["recommend"] = map[string]any{"type": "integer", "description": "the option you recommend, counted from 1"}
+		properties["why"] = stringParam("one line saying why you recommend it")
+		required = append(required, "reason", "options", "recommend", "why")
 	case ticketAssign:
 		describe = "assigns a ticket on a board you manage to a session or the person, by name"
 		properties["to"], required = stringParam("who the ticket goes to"), append(required, "to")
@@ -267,6 +277,10 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 			said = ticket.ID + " is " + string(ticket.Status)
 			if before.Status != ticket.Status {
 				said += ", was " + string(before.Status)
+			}
+		case ticketNotPossible:
+			if ticket, err = t.board.ReportNotPossible(args.ID, boardy.Question{ELI5: args.Reason, Options: args.Options, Recommend: args.Recommend, Why: args.Why}, t.actor); err == nil {
+				said = ticket.ID + " is " + string(ticket.Status) + ": the person decides it, so end your work here and say in your last message what cannot be done and why"
 			}
 		case ticketAssign:
 			ticket, err = t.board.Assign(args.ID, args.To, t.actor)

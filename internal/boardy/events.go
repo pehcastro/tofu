@@ -19,18 +19,19 @@ import (
 type EventKind string
 
 const (
-	Created   EventKind = "created"
-	Moved     EventKind = "moved"
-	Commented EventKind = "commented"
-	Evidence  EventKind = "evidence"
-	Captured  EventKind = "before"
-	Spawned   EventKind = "spawned"
-	Messaged  EventKind = "messaged"
-	Reported  EventKind = "reported"
+	Created     EventKind = "created"
+	Moved       EventKind = "moved"
+	Commented   EventKind = "commented"
+	Evidence    EventKind = "evidence"
+	Captured    EventKind = "before"
+	Spawned     EventKind = "spawned"
+	Messaged    EventKind = "messaged"
+	Reported    EventKind = "reported"
+	NotPossible EventKind = "not_possible"
 )
 
 func (EventKind) Enum() []string {
-	return enum(Created, Moved, Commented, Evidence, Captured, RuleFired, Waiting, Requested, Accepted, RequestDropped, Handed, Widened, ManagersChanged, Assigned, Asked, Answered, Spawned, Messaged, Reported, HookChanged, HookFailed)
+	return enum(Created, Moved, Commented, Evidence, Captured, RuleFired, Waiting, Requested, Accepted, RequestDropped, Handed, Widened, ManagersChanged, Assigned, Asked, Answered, Spawned, Messaged, Reported, NotPossible, HookChanged, HookFailed)
 }
 
 type Event struct {
@@ -63,14 +64,15 @@ type Event struct {
 type Verdict string
 
 const (
-	VerdictDone     Verdict = "done"
-	VerdictConcerns Verdict = "done with concerns"
-	VerdictBlocked  Verdict = "blocked"
-	VerdictNeedsYou Verdict = "needs you"
+	VerdictDone        Verdict = "done"
+	VerdictConcerns    Verdict = "done with concerns"
+	VerdictBlocked     Verdict = "blocked"
+	VerdictNeedsYou    Verdict = "needs you"
+	VerdictNotPossible Verdict = "not possible"
 )
 
 func (Verdict) Enum() []string {
-	return enum(VerdictDone, VerdictConcerns, VerdictBlocked, VerdictNeedsYou)
+	return enum(VerdictDone, VerdictConcerns, VerdictBlocked, VerdictNeedsYou, VerdictNotPossible)
 }
 
 type LineState string

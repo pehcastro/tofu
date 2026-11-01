@@ -171,6 +171,59 @@ func TestTicketToolsSplitATicketAndThreadTheAsk(t *testing.T) {
 	}
 }
 
+func TestANotPossibleReportHoldsTheTicketForThePerson(t *testing.T) {
+	board := ticketBoard(t)
+	if _, err := tools.TicketGrant(board, "DEMO-2", "lead", "go-dev-1"); err != nil {
+		t.Fatal(err)
+	}
+	lead, err := tools.TicketTools(board, "lead")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.ContainsFunc(lead, func(tool turn.Tool) bool { return tool.Name() == "ticket_not_possible" }) {
+		t.Error("the lead is offered ticket_not_possible, which is the sub-agent's to say")
+	}
+	notPossible := subAgentTool(t, board, "ticket_not_possible")
+	options := `"options":["drop the blur","use a flat tint"],"recommend":2,"why":"a tint is what gpui draws"`
+	if _, err := runTicket(notPossible, `{"id":"DEMO-2","reason":"  ",`+options+`}`); err == nil || !strings.Contains(err.Error(), "reason") {
+		t.Errorf("a not_possible with a blank reason gave %v, want a refusal naming the reason", err)
+	}
+	if _, err := runTicket(notPossible, `{"id":"DEMO-2","reason":"gpui has no backdrop filter","options":["drop it"],"recommend":1,"why":"w"}`); err == nil {
+		t.Error("a not_possible offering one option was accepted")
+	}
+	if _, err := runTicket(notPossible, `{"id":"DEMO-1","reason":"gpui has no backdrop filter",`+options+`}`); err == nil {
+		t.Error("a not_possible on a ticket assigned to someone else was accepted")
+	}
+	if held, _ := board.Store.Get("DEMO-2"); held.Status != boardy.Doing || len(held.Questions) != 0 {
+		t.Fatalf("the refused reports left DEMO-2 %s with %d questions", held.Status, len(held.Questions))
+	}
+	said, err := runTicket(notPossible, `{"id":"DEMO-2","reason":"gpui has no backdrop filter, per its docs",`+options+`}`)
+	held, _ := board.Store.Get("DEMO-2")
+	if err != nil || held.Status != boardy.NeedsDecision || len(held.OpenQuestions()) != 1 || held.Questions[0].ELI5 != "gpui has no backdrop filter, per its docs" || !slices.Equal(held.Questions[0].Options, []string{"drop the blur", "use a flat tint"}) {
+		t.Fatalf("ticket_not_possible said %q, %v and left DEMO-2 %s with %+v", said, err, held.Status, held.Questions)
+	}
+	for _, to := range []boardy.Status{boardy.Done, boardy.Doing, boardy.Dropped} {
+		if _, err := board.Move("DEMO-2", to, "the lead overrules it", "lead"); err == nil || !strings.Contains(err.Error(), "person") {
+			t.Errorf("the lead's move to %s gave %v, want a refusal naming the person", to, err)
+		}
+	}
+	if _, err := board.Answer("DEMO-2", 1, "2", "lead"); err == nil {
+		t.Error("the lead answered the not-possible question for the person")
+	}
+	if _, err := board.AddManager("DEMO", "person", "person"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := board.Answer("DEMO-2", 1, "2", "person"); err != nil {
+		t.Fatal(err)
+	}
+	if back, _ := board.Store.Get("DEMO-2"); back.Status != boardy.Doing {
+		t.Errorf("the person's answer left DEMO-2 %s, want it back in doing", back.Status)
+	}
+	if _, err := board.Move("DEMO-2", boardy.Blocked, "waiting on a tint", "lead"); err != nil {
+		t.Errorf("the lead's move after the person answered: %v", err)
+	}
+}
+
 func TestTicketToolsWriteNoBoardWhenThereIsNone(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), boardy.BoardsDirName)
 	list, err := tools.TicketTools(boardy.Managed{Local: boardy.Local{Store: boardy.Store{Dir: dir}}}, "lead")

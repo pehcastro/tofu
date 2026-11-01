@@ -58,8 +58,10 @@ there, not as a file outside the project.
 
 With `projectManagement` set to `boardy`, every agent gets `ticket_read`,
 `ticket_log`, `ticket_ask`, `ticket_request` and `ticket_move`; a session
-that manages a board also gets `ticket_create`, `ticket_assign` and `ticket_list`. An
-agent's `ticket_move` offers only review, and only for its own ticket.
+that manages a board also gets `ticket_create`, `ticket_assign` and `ticket_list`, and an
+agent that manages nothing gets `ticket_not_possible`. An agent's `ticket_move` offers only review, and only for its own ticket.
+
+`ticket_not_possible` is how an agent says its own ticket cannot be done as asked. It takes a `reason`, what cannot be done and how the agent knows, and two to four `options` with the one it `recommend`s and `why`. A report with no reason is refused back to the agent, naming the reason. The ticket gets a question, `not possible as asked: <title>`, with the reason as its eli5, and moves from doing to needs-decision. Until the person answers that question in catch up, a move of the ticket by anyone but the person is refused, the lead's included, and so is an answer the lead writes for them. The hold covers the lead's shell too: `tofu boardy move` run under the harness is refused the same way. The reported entry's verdict is `not possible`, and tofu puts the question to the person in the chat in the same turn as the report, whether or not the lead calls `ask_person`; the choice made there is written to the ticket as the person's answer.
 
 A spawn names a ticket by id. Its owns become the sub-agent's paths, the
 ticket is assigned to the sub-agent and moves to doing, and the ticket id
@@ -68,7 +70,7 @@ the ticket by that id and its last acceptance revision, never the first
 ticket-shaped word in the brief. The spawn and the report, with the files
 the sub-agent wrote, land on the ticket's thread, and so does a
 `ticket_ask`. `ticket_create` takes `parent` to make a sub-ticket, and asks for `before`, `driven`, `still_works`, `error_case` and, for a visual or platform effect, `feasibility`.
-Evidence names the line it proves with `line`, a move to review names lines left for the lead with `leave`, and `evidence_at_review` refuses review while a line is unmet. The report is one entry: the engineer's last words in two sentences at most, a `verdict` (done, done with concerns, blocked or needs you), and each line as met, unmet or not mine to prove.
+Evidence names the line it proves with `line`, a move to review names lines left for the lead with `leave`, and `evidence_at_review` refuses review while a line is unmet. The report is one entry: the engineer's last words in two sentences at most, a `verdict` (done, done with concerns, blocked, needs you or not possible), and each line as met, unmet or not mine to prove.
 
 With no managers the lead manages the board as the lead, never as you, with
 `board_rule`, `epic`, `sprint`, `milestone`, `triage`, and `epic` and `sprint` on `ticket_create`.

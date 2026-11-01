@@ -94,6 +94,9 @@ func (m Managed) Answer(id string, question int, answer, actor string) (Ticket, 
 	if err := m.Manages(board.Key, actor, "apply the person's answers"); err != nil {
 		return ticket, err
 	}
+	if err := m.heldForThePerson(ticket, actor, "answers it"); err != nil {
+		return ticket, err
+	}
 	open := ticket.OpenQuestions()
 	at := slices.IndexFunc(open, func(q Question) bool { return q.ID == question })
 	answer = strings.Join(strings.Fields(answer), " ")
