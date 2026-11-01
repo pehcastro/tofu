@@ -159,8 +159,11 @@ func (s standIns) forTurn() turn.Accounts {
 			if pinnedAt < 0 || !quota.Spent(candidates[pinnedAt].Report, s.held.spends, now) || len(candidates) == 1 {
 				return turn.Account{}, false, nil
 			}
-			after := candidates[(pinnedAt+1)%len(candidates)]
-			next, err := s.on(ctx, quota.Choice{ID: after.ID, Headroom: quota.Left(after.Report, s.held.spends, now)})
+			if err := everySpent(s.source, candidates, s.held.spends, now); err != nil {
+				return turn.Account{}, false, err
+			}
+			choice, _ := quota.Pick(candidates, quota.Provider(s.source), s.held.spends, now)
+			next, err := s.on(ctx, choice)
 			return next, err == nil, err
 		},
 		Resets: func(_ context.Context, pinned turn.Account) (time.Time, bool) {
@@ -218,12 +221,32 @@ func (a *accounts) next(ctx context.Context, pinned turn.Account) (turn.Account,
 	serving := slices.ContainsFunc(candidates, func(candidate quota.Candidate) bool {
 		return candidate.ID == pinned.ID && !quota.Spent(candidate.Report, a.spends, a.now())
 	})
+	if serving || len(candidates) < 2 {
+		return turn.Account{}, false, nil
+	}
+	if err := everySpent(string(a.provider), candidates, a.spends, a.now()); err != nil {
+		return turn.Account{}, false, err
+	}
 	choice, found := quota.Pick(candidates, quota.Provider(a.provider), a.spends, a.now())
-	if serving || !found || choice.ID == pinned.ID {
+	if !found || choice.ID == pinned.ID {
 		return turn.Account{}, false, nil
 	}
 	moved, err := a.account(choice, rows)
 	return moved, err == nil, err
+}
+
+func everySpent(source string, candidates []quota.Candidate, spends []string, now time.Time) error {
+	spent := &turn.EveryAccountSpent{Source: source}
+	for _, candidate := range candidates {
+		if !quota.Spent(candidate.Report, spends, now) {
+			return nil
+		}
+		spent.Spent = append(spent.Spent, candidate.ID)
+		if at, known := candidate.Report.WaitUntil(now); known && (spent.ResetAt.IsZero() || at.Before(spent.ResetAt)) {
+			spent.ResetAt = at
+		}
+	}
+	return spent
 }
 
 func (a *accounts) read(ctx context.Context) ([]quota.Candidate, map[int64]cred.Row, error) {

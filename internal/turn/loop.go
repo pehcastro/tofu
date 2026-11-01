@@ -1451,7 +1451,11 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			forced := ForkKind("")
 			if config.Accounts.Next != nil && !config.NoFork {
 				next, spent, nextErr := config.Accounts.Next(ctx, account)
+				var everySpent *EveryAccountSpent
 				switch {
+				case errors.As(nextErr, &everySpent):
+					keep(stepRow)
+					return fail(nextErr)
 				case nextErr != nil:
 					row.Warnings = append(row.Warnings,
 						"the pinned account's windows could not be read, so this session stays on it: "+nextErr.Error())
@@ -1685,6 +1689,24 @@ func withoutOlderCompactContext(messages, added []llm.Message) []llm.Message {
 		})
 	}
 	return slices.DeleteFunc(slices.Clone(messages), func(message llm.Message) bool { return compact(message) || writtenBeforeTheID(message) })
+}
+
+type EveryAccountSpent struct {
+	Source  string
+	Spent   []int64
+	ResetAt time.Time
+}
+
+func (e *EveryAccountSpent) Error() string {
+	named := make([]string, len(e.Spent))
+	for i, id := range e.Spent {
+		named[i] = "#" + strconv.FormatInt(id, 10)
+	}
+	said := "every " + e.Source + " account is spent (" + strings.Join(named, ", ") + "), so this turn stops here rather than move onto a spent one"
+	if e.ResetAt.IsZero() {
+		return said + "; no reading says when one resets"
+	}
+	return said + "; the first resets at " + e.ResetAt.Format(time.RFC3339)
 }
 
 func stepHold(preview recall.Config, bands recall.Bands, stepTokens int) int {
