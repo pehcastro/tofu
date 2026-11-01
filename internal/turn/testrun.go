@@ -22,10 +22,12 @@ import (
 )
 
 const (
-	testNoTests      = "test: this project has no tests"
-	testThroughShell = "test runs through the shell: "
-	testReplyMarker  = "TOFU-TEST-REPLY "
-	testRunnerScript = `process.env.TEST = 'true';
+	testNoTests       = "test: this project has no tests"
+	testThroughShell  = "test runs through the shell: "
+	testReplyMarker   = "TOFU-TEST-REPLY "
+	oldestVitestMajor = 2
+	oldestVitestMinor = 1
+	testRunnerScript  = `process.env.TEST = 'true';
 process.env.VITEST = 'true';
 process.env.NODE_ENV ??= 'test';
 const { createVitest } = await import('vitest/node');
@@ -35,22 +37,32 @@ const vitest = await createVitest('test', { watch: true, reporters: [], coverage
 vitest.scheduleRerun = async () => {};
 await vitest.init();
 const message = (error) => String((error && (error.stack || error.message)) || error);
+const current = typeof vitest.getModuleSpecifications === 'function';
+const specsOf = (file) => current ? vitest.getModuleSpecifications(file) : vitest.getFileWorkspaceSpecs(file);
+const relevant = async () => current ? vitest.getRelevantTestSpecifications() : vitest.filterTestsBySource(await vitest.globTestSpecs());
+const execute = async (specs) => {
+  if (current) return vitest.runTestSpecifications(specs);
+  await vitest.runFiles(specs, false);
+  const files = vitest.state.getFiles(specs.map((spec) => spec.moduleId));
+  return { unhandledErrors: vitest.state.getUnhandledErrors(), testModules: files.map((file) => vitest.state.getReportedEntity(file)).filter(Boolean) };
+};
+const moduleErrors = (module) => module.errors ? module.errors() : (module.task.result && module.task.result.errors) || [];
 const run = async (request) => {
-  let specs = request.files.flatMap((file) => vitest.getModuleSpecifications(file));
+  let specs = request.files.flatMap(specsOf);
   if (specs.length === 0) {
     vitest.config.related = request.files;
-    specs = await vitest.getRelevantTestSpecifications();
+    specs = await relevant();
     vitest.config.related = undefined;
   }
   if (specs.length === 0) return { id: request.id, none: true };
-  const result = await vitest.runTestSpecifications(specs);
+  const result = await execute(specs);
   const asked = new Set(specs.map((spec) => spec.moduleId));
   return {
     id: request.id,
     errors: result.unhandledErrors.map(message),
     modules: result.testModules.filter((module) => asked.has(module.moduleId)).map((module) => ({
       file: module.moduleId,
-      errors: module.errors().map((error) => error.message),
+      errors: moduleErrors(module).map((error) => error.message),
       tests: [...module.children.allTests()].map((test) => ({
         name: test.fullName,
         state: test.result().state,
@@ -207,7 +219,13 @@ func vitestPackage(from string) (string, Result) {
 	_, depended := manifest.Dependencies["vitest"]
 	command := manifest.Scripts["test"]
 	usesVitest := declared || depended || strings.Contains(command, "vitest")
-	_, installed := findUp(dir, "node_modules", "vitest", "package.json")
+	installedPath, installed := findUp(dir, "node_modules", "vitest", "package.json")
+	var vitest struct{ Version string }
+	if body, err := os.ReadFile(installedPath); err == nil {
+		_ = json.Unmarshal(body, &vitest)
+	}
+	var major, minor int
+	_, unread := fmt.Sscanf(vitest.Version, "%d.%d", &major, &minor)
 	switch {
 	case !usesVitest && command == "" && !holdsTests(dir):
 		return "", failure(testNoTests + "\n" + manifestPath + " names no test runner and no test script, and no .test. or .spec. file is under " + dir + ", so there is nothing to run")
@@ -217,6 +235,8 @@ func vitestPackage(from string) (string, Result) {
 		return "", failure(testThroughShell + lockfileManager(dir, manifest) + " run test\nthe test tool runs vitest, and " + manifestPath + " tests with " + command + ": run that through the shell")
 	case !installed:
 		return "", failure("test skipped: vitest is not installed under node_modules in " + dir + " or above it: install the project's dependencies first")
+	case unread == nil && (major < oldestVitestMajor || major == oldestVitestMajor && minor < oldestVitestMinor):
+		return "", failure(fmt.Sprintf("test skipped: %s holds vitest %s, older than %d.%d, the oldest the test tool runs, so run this project's tests through the shell", installedPath, vitest.Version, oldestVitestMajor, oldestVitestMinor))
 	}
 	return dir, Result{}
 }
