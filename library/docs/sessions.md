@@ -60,7 +60,7 @@ fresh.
     tofu session set <name|id> --model claude-sub/claude-sonnet-5
     tofu session branch <name|id> --side [--preset notes] [--seed none]
 
-`session set --model` runs the session on that model from its next resume, or its next turn when a host holds it. `session branch --side` opens a side chat, never the head and never spawning, from the fork summary. It writes `read` nothing, `notes` `.md` and `.html`, `files` anything, or `--owns` globs; `sideChatAccess` sets the default, `read`.
+`session set --model` runs the session on that model from its next resume, or its next turn when a host holds it. `session branch --side` opens a side chat, never the head and never spawning, from the fork summary. It writes `read` nothing, `notes` `.md` and `.html`, `files` anything, or `--owns` globs; `sideChatAccess` sets the default, `read`. `/side` in the app does the same beside the session in use and switches to it. A side chat sends the parent's system prompt and tool list byte for byte, so it reads the parent's cache; its side instructions and bash rules come in one message after that head, and the parent-only tools (`spawn`, `message`, `subagents`, `cron`, `remember` and the rest) stay listed and refuse when called.
 
 Clean up old sessions, stop the host, move what an older version left in the project, or stop and restart a shell an agent left running:
 

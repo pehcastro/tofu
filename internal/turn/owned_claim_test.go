@@ -5,8 +5,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"tofu/internal/llm"
 	"tofu/internal/session"
@@ -143,5 +145,109 @@ func TestASideChatsHeldPathsHoldAgainstSpawnGrantAndARunningSubAgent(t *testing.
 		if !strings.Contains(answered[call], "side chat notes-chat") {
 			t.Errorf("sub-1's %s into plan.md came back without the side chat's name: %q", call, answered[call])
 		}
+	}
+}
+
+func TestASideChatSendsItsParentsSystemBytesAndItsOwnInstructionsAfterTheHead(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	read, err := NewReadTool(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	write, err := NewWriteTool(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bash, err := NewBashTool(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	model := newCrew(map[string][]llm.Decision{leadKey: {claimDecision("parent"), spawnCall("side-spawn", "do the work", "**"), claimDecision("side"),
+		claimDecision("side again"), claimDecision("lone side")}})
+	store := session.OpenAt(t.TempDir())
+	base := Config{Model: model, Spend: SpendAPIKey, Caps: Caps{MaxSteps: 4}, ResultBytesCap: 4096, ArtifactDir: filepath.Join(root, "artifacts")}
+	spawn := NewSpawnTool("turn-lead", base, &subagent.Roster{})
+	opened := func(id string) string {
+		t.Helper()
+		log, err := store.Open(session.Header{ID: id})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := log.Close(); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	ran := func(id string) {
+		t.Helper()
+		prefix, err := HeldPrefix(store, id, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		composed, err := Compose(ComposeSpec{Task: "say hello", Environment: "cwd: " + root, ToolGuidance: "read before you answer"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		config := base
+		config.Tools, config.Inbox, config.System, config.Parts, config.Instructions, config.Task, config.Sessions, config.Session, config.Prefix =
+			NewRegistry(read, write, bash, spawn), spawn.Inbox, composed.Head(), composed.Parts, "the project's rules", "say hello", store, id, prefix
+		if _, err := Run(t.Context(), config); err != nil {
+			t.Fatal(err)
+		}
+	}
+	side := func(parent string) string {
+		t.Helper()
+		header, err := store.Header(parent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		branched, _, err := BranchSide(store, header, SideBranch{Seed: SeedNone}, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return branched.ID
+	}
+	system := func(request llm.Request) string { return request.Messages[0].Content }
+	afterTheHead := func(request llm.Request) string {
+		if at := slices.IndexFunc(request.Messages, promptChange); at > 0 {
+			return request.Messages[at].Content
+		}
+		return ""
+	}
+
+	ran(opened("parent-1"))
+	sideID := side("parent-1")
+	ran(sideID)
+	ran(sideID)
+	asked := model.requests(leadKey)
+	parent, first, again := asked[0], asked[1], asked[3]
+	if system(first) != system(parent) || system(again) != system(parent) {
+		t.Errorf("the side chat's system differs from its parent's, so it reads none of the parent's cache:\nparent %q\nfirst  %q\nagain  %q", system(parent), system(first), system(again))
+	}
+	tools := func(request llm.Request) string {
+		sent, err := json.Marshal(request.Tools)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(sent)
+	}
+	if tools(first) != tools(parent) || tools(again) != tools(parent) {
+		t.Errorf("the side chat's tool list differs from its parent's, so the cache stops before the system:\nparent %s\nfirst  %s", tools(parent), tools(first))
+	}
+	said := afterTheHead(first)
+	if !strings.Contains(said, "[instructions]") || !strings.Contains(said, "This is a side chat beside session parent-1") || !strings.Contains(said, "so a command runs only when every step reads") {
+		t.Errorf("the side chat's first request carries no side instructions and bash rules after the cached head: %q", said)
+	}
+	if strings.Contains(said, aToolIsGone) || strings.Contains(said, aToolChanged) {
+		t.Errorf("the side chat announces a tool change its parent never made: %q", said)
+	}
+	if got := answerTo(t, model, "side-spawn"); !strings.Contains(got, "spawn refused") || !strings.Contains(got, "orchestrator's") {
+		t.Errorf("the side chat's spawn came back without a refusal saying why: %q", got)
+	}
+
+	ran(side(opened("parent-2")))
+	if lone := model.requests(leadKey)[4]; !strings.Contains(system(lone), "This is a side chat beside session parent-2") || afterTheHead(lone) != "" {
+		t.Errorf("a side chat whose parent never sent a prompt composes its instructions into its own system, as before: %q", system(lone))
 	}
 }

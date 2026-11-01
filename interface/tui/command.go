@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -12,7 +13,9 @@ import (
 	"tofu/internal/command"
 	"tofu/internal/keymap"
 	isession "tofu/internal/session"
+	isettings "tofu/internal/settings"
 	"tofu/internal/sys"
+	"tofu/internal/turn"
 )
 
 const (
@@ -20,6 +23,8 @@ const (
 	waitsForSubAgentsNote = "the orchestrator is idle and its turn stays open until its sub-agents report, so this runs when the turn ends. ctrl+c twice stops them now"
 	noRecordYet           = "nothing is recorded under this repository yet"
 	undoWithCount         = "/undo "
+	noSideHere            = "this interface cannot switch sessions, so it opens no side chat. tofu session branch <session> --side makes one"
+	noSideOpened          = "no side chat was opened: "
 )
 
 func commands(options Options) []session.Command {
@@ -116,6 +121,8 @@ func (a *App) runCommand(name string) tea.Cmd {
 		a.reload()
 	case "resume":
 		return a.resumePicker()
+	case "side":
+		return a.openSide()
 	case "new":
 		a.carry(a.options.NewSession)
 	case "compact":
@@ -143,25 +150,66 @@ func (a *App) runCommand(name string) tea.Cmd {
 	return nil
 }
 
-func (a *App) recordedTalk() (isession.Conversation, string) {
+func (a *App) recordedSession() (*isession.Store, string, string) {
 	state, err := sys.ProjectStateDirAt(a.options.Root)
 	if err != nil {
-		return isession.Conversation{}, err.Error()
+		return nil, "", err.Error()
 	}
 	store := isession.OpenAt(state)
-	id := a.sessionID
-	if id == "" {
-		head, err := store.Head()
-		if err != nil {
-			return isession.Conversation{}, noRecordYet
-		}
-		id = head.ID
+	if a.sessionID != "" {
+		return store, a.sessionID, ""
+	}
+	head, err := store.Head()
+	if err != nil {
+		return nil, "", noRecordYet
+	}
+	return store, head.ID, ""
+}
+
+func (a *App) recordedTalk() (isession.Conversation, string) {
+	store, id, trouble := a.recordedSession()
+	if trouble != "" {
+		return isession.Conversation{}, trouble
 	}
 	talk, err := store.Conversation(id)
 	if err != nil {
 		return isession.Conversation{}, err.Error()
 	}
 	return talk, ""
+}
+
+func (a *App) openSide() tea.Cmd {
+	if a.options.Resume == nil {
+		a.view.Append(session.Entry{Kind: session.Note, Body: noSideHere})
+		return nil
+	}
+	if a.refusedMidTurn() {
+		return nil
+	}
+	side, err := a.branchSide()
+	if err != nil {
+		a.view.Append(session.Entry{Kind: session.Note, Body: noSideOpened + err.Error()})
+		return nil
+	}
+	a.view.Append(session.Entry{Kind: session.Note, Body: "a side chat beside " + side.BranchedFrom.Session + " opened, with " + a.text(isettings.SideChatAccess) + " access. the session it sits beside keeps running"})
+	return a.resumeTo(side.ID)
+}
+
+func (a *App) branchSide() (isession.Header, error) {
+	store, id, trouble := a.recordedSession()
+	if trouble != "" {
+		return isession.Header{}, errors.New(trouble)
+	}
+	parent, err := store.Header(id)
+	if err != nil {
+		return isession.Header{}, err
+	}
+	access, err := turn.AccessOf(a.text(isettings.SideChatAccess))
+	if err != nil {
+		return isession.Header{}, err
+	}
+	side, _, err := turn.BranchSide(store, parent, turn.SideBranch{Access: access, Seed: turn.SeedSummary}, a.options.Now())
+	return side, err
 }
 
 type recordedDialog struct {

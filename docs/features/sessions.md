@@ -117,10 +117,23 @@ tofu session branch brisk-amber-heron --side --preset notes
 tofu session branch brisk-amber-heron --side --owns "docs/**" --seed none
 ```
 
+In the app, `/side` opens one beside the session you are in, with the
+`sideChatAccess` access and the summary, and the app switches to it.
+
 `--seed none` starts it with no summary. `tofu session list` hides side
 chats; `tofu session list --all` shows them. A frontend opens one over
 `tofu serve` with `session.branch` and changes its access with
 `session.access`.
+
+**It reads the lead's cache.** A side chat sends the lead's system prompt
+and tool list byte for byte, so the provider reuses the cache the lead
+already paid for. What makes it a side chat comes after that cached head,
+in one message: that it sits beside the lead, what it may write, and the
+rules its `bash` runs under. `spawn`, `message`, `subagents`, `cron`,
+`remember` and the other tools only the lead uses stay in the list and
+refuse when called, saying why. `tofu session request` on the lead's last
+request and the side chat's first shows the same system text and the same
+tools.
 
 ## Continuing, naming and removing
 

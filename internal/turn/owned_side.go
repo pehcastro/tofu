@@ -162,6 +162,11 @@ func sideChat(config Config) (Config, error) {
 	}
 	store, own := config.Sessions, config.Session
 	boundary := subagent.NewBoundary(side.ID, "", side.Owns)
+	shellRules := ""
+	if bash, offered := config.Tools.byName[bashToolName]; offered && found {
+		shell := ownedShell{tool: bash, boundary: boundary}
+		shellRules = " Its bash runs a command under these rules: " + strings.TrimPrefix(shell.Definition().Description, bash.Definition().Description+", and ")
+	}
 	wrap := func(registry Registry) Registry {
 		if found {
 			registry = sideTools(registry, boundary)
@@ -175,11 +180,24 @@ func sideChat(config Config) (Config, error) {
 	if !found {
 		return config, nil
 	}
+	if config.Prefix == nil {
+		config.Prefix = &Prefix{}
+	}
+	if !config.Prefix.held {
+		parent, err := HeldPrefix(store, side.BranchedFrom.Session, "")
+		if err != nil {
+			return config, err
+		}
+		*config.Prefix = *parent
+	}
 	config.Instructions = strings.TrimSpace(config.Instructions + "\n\n" + "This is a side chat beside session " + side.BranchedFrom.Session +
-		", for talking with the person, not for doing that session's work: it never spawns, messages sub-agents, schedules, remembers, overrides a rule or changes a setting. " +
-		"It " + sideWrites(side.Owns) + ".")
+		", for talking with the person, not for doing that session's work: " + sideNever + ". " +
+		"Every tool of that session is listed, so the provider can reuse its cache, and " + strings.Join(orchestratorOnly(), ", ") + " refuse when called. " +
+		"It " + sideWrites(side.Owns) + "." + shellRules)
 	return config, nil
 }
+
+const sideNever = "it never spawns, messages sub-agents, schedules, remembers, overrides a rule or changes a setting"
 
 func sideWrites(owns []string) string {
 	if len(owns) == 0 {
@@ -194,9 +212,14 @@ func orchestratorOnly() []string {
 
 func sideTools(registry Registry, boundary *subagent.Boundary) Registry {
 	var kept []Tool
+	refused := func(tool Tool) sideRefused { return sideRefused{tool: tool, owns: boundary.Owns()} }
 	for _, tool := range registry.tools {
+		spawner, spawning := tool.(*SpawnTool)
 		switch name := tool.Name(); {
+		case spawning:
+			kept = append(kept, refused(spawner), refused(messageTool{orchestrator: spawner}), refused(subAgentsTool{orchestrator: spawner}))
 		case slices.Contains(orchestratorOnly(), name):
+			kept = append(kept, refused(tool))
 		case name == "write" || name == "edit":
 			kept = append(kept, sideWrite{tool: tool, boundary: boundary})
 		case name == bashToolName:
@@ -215,11 +238,7 @@ type sideWrite struct {
 
 func (t sideWrite) Name() string { return t.tool.Name() }
 
-func (t sideWrite) Definition() llm.Tool {
-	definition := t.tool.Definition()
-	definition.Description += ". This side chat " + sideWrites(t.boundary.Owns())
-	return definition
-}
+func (t sideWrite) Definition() llm.Tool { return t.tool.Definition() }
 
 func (t sideWrite) refusal(raw json.RawMessage) error {
 	paths, err := TargetPaths(t.Name(), raw)
@@ -262,11 +281,30 @@ func (t sideShell) refusal(raw json.RawMessage) error {
 	return err
 }
 
+func (t sideShell) Definition() llm.Tool { return t.tool.Definition() }
+
 func (t sideShell) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
 	if err := t.refusal(raw); err != nil {
 		return Result{}, err
 	}
 	return t.tool.Run(ctx, raw)
+}
+
+type sideRefused struct {
+	tool Tool
+	owns []string
+}
+
+func (t sideRefused) Name() string { return t.tool.Name() }
+
+func (t sideRefused) Definition() llm.Tool { return t.tool.Definition() }
+
+func (t sideRefused) refusal(json.RawMessage) error {
+	return SideRefusedError{Tool: t.Name(), What: "it is the orchestrator's, offered here only so the tool list matches the session this chat sits beside, and " + sideNever, Owns: t.owns}
+}
+
+func (t sideRefused) Run(_ context.Context, raw json.RawMessage) (Result, error) {
+	return Result{}, t.refusal(raw)
 }
 
 type SideRefusedError struct {

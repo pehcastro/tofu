@@ -56,6 +56,7 @@ func Table() []Command {
 		{Name: "remember", Args: "<what>", Summary: "keep a line for every later session: /remember <what>", Scope: Tofu, Needs: Always},
 		{Name: "reload", Summary: "re-read settings, rules, skills, sub-agents, models, instructions and keys from disk", Scope: Tofu, Needs: Reload},
 		{Name: "resume", Summary: "pick a session of this project to carry into the next task", Scope: Tofu, Needs: Resume},
+		{Name: "side", Summary: "open a side chat beside this session, on its cache, while it keeps running", Scope: Tofu, Needs: Resume},
 		{Name: "new", Summary: "start fresh, carrying nothing from the last session", Scope: Tofu, Needs: Fresh},
 		{Name: "compact", Summary: "shrink the old tool results the next turn carries to an artifact handle each", Scope: Tofu, Needs: Compact},
 		{Name: "undo", Args: "[N]", Summary: "put back the files the last turn changed, or the last N with /undo N", Scope: Tofu, Needs: Undo},

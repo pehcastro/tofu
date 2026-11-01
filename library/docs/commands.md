@@ -31,6 +31,7 @@ in tofu and never reaches the model. `tofu serve` answers the list as
 - `/reload`: read settings, rules, skills, sub-agents, models, instructions and keys again
 - `/resume`: pick a session of this project, newest first, and carry it into
   the next task; `/resume <name or id>` takes that session straight away
+- `/side`: a side chat on this session's cache, as `sideChatAccess` allows
 - `/new`: start fresh, carrying nothing from the last session
 - `/compact`: shrink the old tool results the next turn carries
 - `/undo`, `/undo N`: put back the files the last turn, or the last N, changed
