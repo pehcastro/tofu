@@ -131,17 +131,39 @@ func thresholdIn(files fs.FS, key string) (float64, error) {
 	return 0, fmt.Errorf("%s names no %s", pointFile, key)
 }
 
-func highest(standing float64, scores []float64, standingAt, at float64) (int, float64) {
-	best, value := -1, 0.0
-	if standing < standingAt {
-		return best, value
-	}
-	for i, score := range scores {
-		if score >= at && score > value {
-			best, value = i, score
+func highestPassing(scores []float64, from, to int, at float64) int {
+	best := -1
+	for i := from; i < to; i++ {
+		if scores[i] >= at && (best < 0 || scores[i] > scores[best]) {
+			best = i
 		}
 	}
-	return best, value
+	return best
+}
+
+func (t Thresholds) deciding(scores []float64, onEarlier int) (int, float64) {
+	at := func(i int) float64 {
+		if i >= onEarlier {
+			return t.Kept
+		}
+		return t.Repeats
+	}
+	best := highestPassing(scores, onEarlier, len(scores), t.Kept)
+	if best < 0 {
+		best = highestPassing(scores, 0, onEarlier, t.Repeats)
+	}
+	if best >= 0 {
+		return best, at(best)
+	}
+	for i := range scores {
+		if best < 0 || scores[i]-at(i) > scores[best]-at(best) {
+			best = i
+		}
+	}
+	if best < 0 {
+		return best, 0
+	}
+	return best, at(best)
 }
 
 func (j *Judge) Repeats(ctx context.Context, said string, earlier []Earlier, kept []Kept) (Found, error) {
@@ -175,7 +197,7 @@ func (j *Judge) Repeats(ctx context.Context, said string, earlier []Earlier, kep
 		return none, err
 	}
 	row := ledger.Row{Point: Point, Questions: j.set.Name, Version: j.set.QuestionsVersion, StateHash: ledger.HashOf(body), StateBuilder: stateBuilder, State: body,
-		Verdict: ledger.VerdictDeny, Reason: &ledger.Reason{Comparison: ">= " + strconv.FormatFloat(j.thresholds.Repeats, 'f', -1, 64), Threshold: j.thresholds.Repeats, Mode: ledger.ModeEnforced}}
+		Verdict: ledger.VerdictDeny, Reason: atLeast(j.thresholds.Standing)}
 	decision, err := j.client.Ask(ctx, request)
 	if err != nil {
 		failed := "jev could not answer, so no note is given: " + err.Error()
@@ -189,17 +211,19 @@ func (j *Judge) Repeats(ctx context.Context, said string, earlier []Earlier, kep
 		scores[i] = answer.Noul
 	}
 	standing, onEarlier := row.Answers[0].Noul, len(state.Earlier)
+	row.Reason.Question, row.Reason.Value = request.Questions[0].ID, standing
 	found := none
-	found.Kept, row.Reason.Value = highest(standing, scores[onEarlier:], j.thresholds.Standing, j.thresholds.Kept)
-	asked := onEarlier + found.Kept
-	if found.Kept >= 0 {
-		row.Reason.Comparison, row.Reason.Threshold = ">= "+strconv.FormatFloat(j.thresholds.Kept, 'f', -1, 64), j.thresholds.Kept
-	} else {
-		found.Earlier, row.Reason.Value = highest(standing, scores[:onEarlier], j.thresholds.Standing, j.thresholds.Repeats)
-		asked = found.Earlier
-	}
-	if found != none {
-		row.Verdict, row.Reason.Question = ledger.VerdictAllow, request.Questions[asked+1].ID
+	if best, at := j.thresholds.deciding(scores, onEarlier); standing >= j.thresholds.Standing && best >= 0 {
+		row.Reason = atLeast(at)
+		row.Reason.Question, row.Reason.Value = request.Questions[best+1].ID, scores[best]
+		if scores[best] >= at {
+			row.Verdict = ledger.VerdictAllow
+			if best >= onEarlier {
+				found.Kept = best - onEarlier
+			} else {
+				found.Earlier = best
+			}
+		}
 	}
 	written, err := j.ledger.Append(row)
 	if err != nil {
@@ -207,6 +231,10 @@ func (j *Judge) Repeats(ctx context.Context, said string, earlier []Earlier, kep
 	}
 	found.Score, found.Row = row.Reason.Value, written.ID
 	return found, nil
+}
+
+func atLeast(threshold float64) *ledger.Reason {
+	return &ledger.Reason{Comparison: ">= " + strconv.FormatFloat(threshold, 'f', -1, 64), Threshold: threshold, Mode: ledger.ModeEnforced}
 }
 
 func KeptNear(said string, kept []Kept, sharedStemsAtLeast int) []int {
