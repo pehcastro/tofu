@@ -18,7 +18,7 @@ import (
 	"tofu/library/questions"
 )
 
-const sessionTraceUsage = "tofu session trace <name|id> [--since 1h] [--from ORIGIN|T] [--to T] [--agent NAME|lead] [--turn ID] [--kind K,K] [--grep TEXT] [--last N] [--wide] [--full] [--json]"
+const sessionTraceUsage = "tofu session trace <name|id|head> [--since 1h] [--from ORIGIN|T] [--to T] [--agent NAME|lead] [--turn ID] [--kind K,K] [--grep TEXT] [--last N] [--wide] [--full] [--json]"
 
 type traceKind string
 

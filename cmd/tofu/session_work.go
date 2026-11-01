@@ -12,7 +12,7 @@ import (
 	"tofu/internal/session"
 )
 
-const sessionWorkUsage = "tofu session work <name|id> --ticket ID [--json]"
+const sessionWorkUsage = "tofu session work <name|id|head> --ticket ID [--json]"
 
 const (
 	workBrief  = "brief"

@@ -415,7 +415,7 @@ func verbHelp(name string, args []string) string {
 	case "version":
 		text = "tofu version [--json]"
 	case "context":
-		text = "tofu context [<name|id>] [--json]"
+		text = "tofu context [<name|id|head>] [--json]"
 	case "preview":
 		text = "tofu preview [--json]"
 	case "browser":

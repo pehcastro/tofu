@@ -16,7 +16,7 @@ import (
 	"tofu/internal/widget"
 )
 
-const sessionFindUsage = "tofu session find <name|id> [--tool T] [--command C] [--file F] [--text T] [--failed] [--agent A] [--since 2h|RFC3339] [--until 2h|RFC3339] [--json]"
+const sessionFindUsage = "tofu session find <name|id|head> [--tool T] [--command C] [--file F] [--text T] [--failed] [--agent A] [--since 2h|RFC3339] [--until 2h|RFC3339] [--json]"
 
 const familyFlag = "--family"
 

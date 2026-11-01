@@ -138,13 +138,13 @@ tools.
 ## Continuing, naming and removing
 
 - **Continue the last session**: `tofu --continue`, or `/resume` in the app.
-- **Continue another**: `tofu session resume <name|id>`.
+- **Continue another**: `tofu session resume <name|id|head>`.
 - **Start fresh**: `/new`.
-- **Name one**: `tofu session rename <name|id> "checkout redesign"` makes it
+- **Name one**: `tofu session rename <name|id|head> "checkout redesign"` makes it
   `checkout-redesign`, on every generation.
 - **Point at one generation**: `brisk-amber-heron#4mhr1.2`; the name alone
   is the newest.
-- **Change its model**: `tofu session set <name|id> --model
+- **Change its model**: `tofu session set <name|id|head> --model
   claude-sub/claude-sonnet-5` runs it on that model from its next resume, or
   from its next turn when a host holds it.
 - **Delete one**: remove its folder under `sessions/`, or let

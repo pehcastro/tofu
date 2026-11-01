@@ -570,14 +570,14 @@ exit 0
       },
       {
         "ask": "open an older session",
-        "do": "tofu session resume <name|id>",
+        "do": "tofu session resume <name|id|head>",
         "check": "tofu session list",
         "topic": "sessions"
       },
       {
         "ask": "give a session a name",
-        "do": "tofu session rename <name|id> \"<new name>\"",
-        "check": "tofu session info <name|id>",
+        "do": "tofu session rename <name|id|head> \"<new name>\"",
+        "check": "tofu session info <name|id|head>",
         "topic": "sessions"
       },
       {
@@ -588,8 +588,8 @@ exit 0
       },
       {
         "ask": "where did a session's tokens go",
-        "do": "tofu session drain <name|id>",
-        "check": "tofu session drain <name|id> --json",
+        "do": "tofu session drain <name|id|head>",
+        "check": "tofu session drain <name|id|head> --json",
         "topic": "drain"
       },
       {
@@ -601,7 +601,7 @@ exit 0
       {
         "ask": "free room in the context before the next turn",
         "do": "/compact in the app, between turns",
-        "check": "tofu session info <name|id>",
+        "check": "tofu session info <name|id|head>",
         "topic": "commands"
       },
       {

@@ -35,7 +35,7 @@ type (
 
 func contextVerb(args []string, out, errOut io.Writer) int {
 	handles, asJSON, err := verbArgs(args)
-	o := verbOutput{verb: "context", usageLine: "tofu context [<name|id>] [--json]", asJSON: asJSON, out: out, errOut: errOut}
+	o := verbOutput{verb: "context", usageLine: "tofu context [<name|id|head>] [--json]", asJSON: asJSON, out: out, errOut: errOut}
 	if err == nil && len(handles) > 1 {
 		err = fmt.Errorf("%d sessions, want one at most", len(handles))
 	}

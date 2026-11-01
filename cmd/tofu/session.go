@@ -31,8 +31,8 @@ import (
 )
 
 const (
-	sessionSubcommands = "tofu session <name|id>, or tofu session list [--all], or tofu session clean [--dry-run], or tofu session set <name|id> --model source/model, or tofu session work <name|id> --ticket ID, or tofu session info|trace|transcript|drain|reads|resume|rename|request|find|branch <name|id> [--json]"
-	sessionSetUsage    = "tofu session set <name|id> --model source/model [--json]"
+	sessionSubcommands = "tofu session <name|id|head>, or tofu session list [--all], or tofu session clean [--dry-run], or tofu session set <name|id|head> --model source/model, or tofu session work <name|id|head> --ticket ID, or tofu session info|trace|transcript|drain|reads|resume|rename|request|find|branch <name|id|head> [--json]"
+	sessionSetUsage    = "tofu session set <name|id|head> --model source/model [--json]"
 	sessionFresh       = "no session recorded here"
 	sessionDay         = 24 * time.Hour
 	sessionWeek        = 7 * sessionDay
@@ -91,11 +91,11 @@ func sessionOperands(subcommand string) (string, int, bool) {
 	case "list":
 		return "", 0, true
 	case "info", "reads", "resume":
-		return "<name|id>", 1, true
+		return "<name|id|head>", 1, true
 	case "rename":
-		return "<name|id> <new name>", 2, true
+		return "<name|id|head> <new name>", 2, true
 	case "request":
-		return "<name|id> <request id>", 2, true
+		return "<name|id|head> <request id>", 2, true
 	}
 	return "", 0, false
 }
@@ -155,7 +155,7 @@ func sessionVerbRecalling(recent *session.Recent, args []string, in io.Reader, o
 	}
 	operands, wanted, known := sessionOperands(args[0])
 	if !known {
-		o.usageLine = "tofu session <name|id>[.N] [--family] [--json]"
+		o.usageLine = "tofu session <name|id|head>[.N] [--family] [--json]"
 		whole := slices.Contains(args, familyFlag)
 		if handles, _, err = verbArgs(slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return arg == familyFlag })); err == nil && len(handles) != 1 {
 			err = fmt.Errorf("%d operands, want <name|id>", len(handles))
@@ -180,7 +180,7 @@ func sessionVerbRecalling(recent *session.Recent, args []string, in io.Reader, o
 			return o.refuse(exitUsage, cli.Problem{What: fmt.Sprintf("%s has no generation .%d; the last is %s", base, number, family.Handle()),
 				Hint: "tofu session " + family.Handle()})
 		}
-		args[0], operands, wanted = "info", "<name|id>", 1
+		args[0], operands, wanted = "info", "<name|id|head>", 1
 	}
 	o.verb, o.usageLine = "session "+args[0], strings.TrimSpace("tofu session "+args[0]+" "+operands)+" [--json]"
 	if err == nil && len(handles) != wanted {
@@ -251,7 +251,7 @@ func sessionVerbRecalling(recent *session.Recent, args []string, in io.Reader, o
 
 func continueVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	handles, asJSON, err := verbArgs(args)
-	o := verbOutput{verb: "--continue", usageLine: "tofu --continue [--json], or tofu session resume <name|id>", asJSON: asJSON, out: out, errOut: errOut}
+	o := verbOutput{verb: "--continue", usageLine: "tofu --continue [--json], or tofu session resume <name|id|head>", asJSON: asJSON, out: out, errOut: errOut}
 	if err == nil && len(handles) != 0 {
 		err = fmt.Errorf("takes the head, not %q", handles[0])
 	}

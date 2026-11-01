@@ -255,20 +255,20 @@
   check: tofu session list
   topic: sessions
 - ask: open an older session
-  do: tofu session resume <name|id>
+  do: tofu session resume <name|id|head>
   check: tofu session list
   topic: sessions
 - ask: give a session a name
-  do: tofu session rename <name|id> "<new name>"
-  check: tofu session info <name|id>
+  do: tofu session rename <name|id|head> "<new name>"
+  check: tofu session info <name|id|head>
   topic: sessions
 - ask: see how full the context window got
   do: tofu context
   check: tofu context --json
   topic: sessions
 - ask: where did a session's tokens go
-  do: tofu session drain <name|id>
-  check: tofu session drain <name|id> --json
+  do: tofu session drain <name|id|head>
+  check: tofu session drain <name|id|head> --json
   topic: drain
 - ask: how much has my API key spent, and what limit is left
   do: tofu login --status
@@ -276,7 +276,7 @@
   topic: api-keys
 - ask: free room in the context before the next turn
   do: /compact in the app, between turns
-  check: tofu session info <name|id>
+  check: tofu session info <name|id|head>
   topic: commands
 - ask: undo what the last turn changed
   do: tofu undo, or /undo in the app

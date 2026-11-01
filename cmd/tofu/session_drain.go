@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	sessionDrainUsage = "tofu session drain [name|id] [--claude <transcript.jsonl>] [--json]"
+	sessionDrainUsage = "tofu session drain [name|id|head] [--claude <transcript.jsonl>] [--json]"
 	claudeFlag        = "--claude"
 	drainShownRows    = 10
 	drainMillion      = 1_000_000

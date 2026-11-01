@@ -34,6 +34,6 @@ shells. **Esc** or the first **Ctrl+C** stops only the lead's turn.
 ## Commands
 
 ```
-tofu session list|info|trace|reads|resume|rename <name|id> [--json]
+tofu session list|info|trace|reads|resume|rename <name|id|head> [--json]
 tofu run --dir <path> [arguments] <task>
 ```

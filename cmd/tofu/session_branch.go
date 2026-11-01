@@ -13,7 +13,7 @@ import (
 	"tofu/internal/turn"
 )
 
-const sessionBranchUsage = "tofu session branch <name|id> --side [--preset read|notes|files | --owns GLOB,GLOB] [--seed summary|none] [--name NAME] [--model ID] [--effort LEVEL] [--at EVENT] [--json]"
+const sessionBranchUsage = "tofu session branch <name|id|head> --side [--preset read|notes|files | --owns GLOB,GLOB] [--seed summary|none] [--name NAME] [--model ID] [--effort LEVEL] [--at EVENT] [--json]"
 
 type sessionBranchAsk struct {
 	handle, preset, owns, seed, name, model, effort, at string

@@ -17,7 +17,7 @@ import (
 	"tofu/internal/turn"
 )
 
-const sessionTranscriptUsage = "tofu session transcript <name|id> [--from N] [--to N] [--md] [--json]"
+const sessionTranscriptUsage = "tofu session transcript <name|id|head> [--from N] [--to N] [--md] [--json]"
 
 type transcriptSpeaker string
 

@@ -100,7 +100,7 @@ drain  tofu session drain weighs every call of a session, says what woke the
   lead and each sub-agent, which context band and cache rebuilds took the most,
   and names eight patterns that waste tokens
   where did a session's tokens go
-    → tofu session drain <name|id>
+    → tofu session drain <name|id|head>
 
 drive  what tofu drive does, the steps a script takes, and what the requests
   step prints
@@ -237,9 +237,9 @@ sessions  continue where you left off, find an old session, and where sessions
   continue where I left off
     → tofu --continue
   open an older session
-    → tofu session resume <name|id>
+    → tofu session resume <name|id|head>
   give a session a name
-    → tofu session rename <name|id> "<new name>"
+    → tofu session rename <name|id|head> "<new name>"
   see how full the context window got
     → tofu context
 
