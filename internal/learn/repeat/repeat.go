@@ -63,6 +63,8 @@ type Thresholds struct {
 type Found struct {
 	Earlier int
 	Kept    int
+	Score   float64
+	Row     string
 }
 
 type Judge struct {
@@ -199,8 +201,12 @@ func (j *Judge) Repeats(ctx context.Context, said string, earlier []Earlier, kep
 	if found != none {
 		row.Verdict, row.Reason.Question = ledger.VerdictAllow, request.Questions[asked+1].ID
 	}
-	_, err = j.ledger.Append(row)
-	return found, err
+	written, err := j.ledger.Append(row)
+	if err != nil {
+		return none, err
+	}
+	found.Score, found.Row = row.Reason.Value, written.ID
+	return found, nil
 }
 
 func KeptNear(said string, kept []Kept, sharedStemsAtLeast int) []int {

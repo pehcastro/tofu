@@ -17,7 +17,7 @@ methods:
     cost: one jev call per assistant text while a question is open, p50 about 240 ms
   person_repeat:
     method: judged
-    why: jev catches 7 of 14 hand-labelled repeats with 2 false notes over 13 generations of one long session, against 1 of 14 with 3 false for the local stem matcher; the same request also asks whether a kept memory entry already covers the message, so the lead says it is in force rather than promising it again
+    why: jev catches 7 of 14 hand-labelled repeats with 2 false notes over 13 generations of one long session, against 1 of 14 with 3 false for the local stem matcher; the same request also asks whether a kept memory entry already covers the message, so the lead says it is in force rather than promising it again, citing the ledger row and score; at kept_at 0.9 every memory match was right over four runs of 45 mocked messages with 18 covered, 14 matches a run, recall 0.78, against one wrong match a run at the 0.5 prior, precision 0.93 to 0.94, recall 0.78 to 0.83, for $0.0021 a run
     cost: about $0.0069 for 42 requests over that corpus, p50 276 ms, worst 412 ms
   standing_order:
     method: judged

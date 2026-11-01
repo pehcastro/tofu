@@ -62,8 +62,10 @@ never reaches Jev, so an unrelated one is never named. Having to say it again
 means nothing held it, so the lead proposes the strongest check that would:
 a type, a lint, a rule in the library or a hook, with a ticket to build it.
 It never writes a memory line for it and never promises "from now on". When
-an entry already covers it, the lead names that entry, quotes it with the
-words it was kept from, and still proposes the check. When nothing covers it,
+Jev scores an entry at 0.9 or above as already covering it, the lead names
+that entry, quotes it with the words it was kept from, cites the ledger row
+and score that matched it, which `tofu why <row>` explains, and still
+proposes the check. Without a written row it says nothing about memory. When nothing covers it,
 the note quotes the clause of your earlier message that matched. Orders such as "always", "never" or "from now on" are
 carried across every fork in their own section, and a cron prompt is never
 taken for your words.

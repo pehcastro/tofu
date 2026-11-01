@@ -1,5 +1,5 @@
 {
-  "about": "a mocked chain for the person_repeat eval, read through TOFU_REPEAT_EVAL. kept holds what memory keeps; each item labels the earlier messages it repeats in accept and the kept entries that already cover it in kept. labels were written before any run.",
+  "about": "a mocked corpus for the person_repeat eval, read through TOFU_REPEAT_EVAL. kept holds what memory keeps. an item with chain is that message of chain, judged against the chain before it, with accept naming the earlier messages it repeats; an item with said stands alone with no earlier message. kept names the entries that already cover the item. items 16 to 45 calibrate kept_at: 12 rewordings of a kept entry, 15 near misses that share its words and ask for something else, 3 unrelated. labels were written before any run.",
   "kept": [
     {"id": "k1", "text": "Run gofmt -l over every Go file you touched before reporting."},
     {"id": "k2", "text": "Write dates in the chat as relative time, such as 3m ago."},
@@ -8,7 +8,13 @@
     {"id": "k5", "text": "Ask before deleting a branch."},
     {"id": "k6", "text": "Keep commit subjects under 72 characters."},
     {"id": "k7", "text": "Desk tabs close from inside the tab, never from a menu."},
-    {"id": "k8", "text": "Answer in short sentences with the conclusion first."}
+    {"id": "k8", "text": "Answer in short sentences with the conclusion first."},
+    {"id": "k9", "text": "Write every commit message in the present tense."},
+    {"id": "k10", "text": "Put scratch files under the scratch folder, never in the repository."},
+    {"id": "k11", "text": "Never print an API key or put it in a transcript."},
+    {"id": "k12", "text": "Run only the tests for the package you touched, never the whole suite."},
+    {"id": "k13", "text": "Ask before installing a new dependency."},
+    {"id": "k14", "text": "Show a test failing before you show it passing."}
   ],
   "chain": [
     "add a cart total to the checkout page",
@@ -43,6 +49,36 @@
     {"n": 12, "chain": 12, "repeat": false, "accept": [], "kept": ["k6"]},
     {"n": 13, "chain": 13, "repeat": false, "accept": [], "kept": []},
     {"n": 14, "chain": 14, "repeat": false, "accept": [], "kept": ["k5"]},
-    {"n": 15, "chain": 15, "repeat": false, "accept": [], "kept": []}
+    {"n": 15, "chain": 15, "repeat": false, "accept": [], "kept": []},
+    {"n": 16, "said": "do not run the whole test suite, only the tests for the package you changed", "repeat": false, "accept": [], "kept": ["k12"]},
+    {"n": 17, "said": "you printed the api key in the transcript again, never do that", "repeat": false, "accept": [], "kept": ["k11"]},
+    {"n": 18, "said": "ask me before you install any new dependency in the project", "repeat": false, "accept": [], "kept": ["k13"]},
+    {"n": 19, "said": "the commit message was in the past tense again, write it in the present tense", "repeat": false, "accept": [], "kept": ["k9"]},
+    {"n": 20, "said": "you left scratch files in the repository again, they belong in the scratch folder", "repeat": false, "accept": [], "kept": ["k10"]},
+    {"n": 21, "said": "show me the test failing first and only then show it passing", "repeat": false, "accept": [], "kept": ["k14"]},
+    {"n": 22, "said": "check with me before you delete any branch", "repeat": false, "accept": [], "kept": ["k5"]},
+    {"n": 23, "said": "use the theme package colours in the interface, not hardcoded colour values", "repeat": false, "accept": [], "kept": ["k4"]},
+    {"n": 24, "said": "dates in the chat should say how long ago, like 5m ago, not a timestamp", "repeat": false, "accept": [], "kept": ["k2"]},
+    {"n": 25, "said": "the tab should close from inside the tab itself, not from a menu", "repeat": false, "accept": [], "kept": ["k7"]},
+    {"n": 26, "said": "do not commit big files, any file over half a megabyte stays out of the commit", "repeat": false, "accept": [], "kept": ["k3"]},
+    {"n": 27, "said": "too long again, give me the conclusion first and answer in short sentences", "repeat": false, "accept": [], "kept": ["k8"]},
+    {"n": 28, "said": "run the tests for the auth package and tell me what fails", "repeat": false, "accept": [], "kept": []},
+    {"n": 29, "said": "rotate the api key that the transcript service reads", "repeat": false, "accept": [], "kept": []},
+    {"n": 30, "said": "install the new dependency for the date picker", "repeat": false, "accept": [], "kept": []},
+    {"n": 31, "said": "write the commit message for this change", "repeat": false, "accept": [], "kept": []},
+    {"n": 32, "said": "delete the stale branch feature-login now", "repeat": false, "accept": [], "kept": []},
+    {"n": 33, "said": "add a new colour to the theme package for warnings", "repeat": false, "accept": [], "kept": []},
+    {"n": 34, "said": "make the menu close when a tab opens", "repeat": false, "accept": [], "kept": []},
+    {"n": 35, "said": "the chat shows dates wrong, fix the relative time bug", "repeat": false, "accept": [], "kept": []},
+    {"n": 36, "said": "the test passing on my machine is failing in ci, look at it", "repeat": false, "accept": [], "kept": []},
+    {"n": 37, "said": "commit the release notes file now", "repeat": false, "accept": [], "kept": []},
+    {"n": 38, "said": "always put the tests in the same package as the code they test", "repeat": false, "accept": [], "kept": []},
+    {"n": 39, "said": "never use a menu for settings, put them in the sidebar", "repeat": false, "accept": [], "kept": []},
+    {"n": 40, "said": "always keep branch names short, under 20 characters", "repeat": false, "accept": [], "kept": []},
+    {"n": 41, "said": "never print debug output in the interface", "repeat": false, "accept": [], "kept": []},
+    {"n": 42, "said": "keep the scratch folder under 50 gigabytes", "repeat": false, "accept": [], "kept": []},
+    {"n": 43, "said": "add pagination to the orders endpoint", "repeat": false, "accept": [], "kept": []},
+    {"n": 44, "said": "what does the deploy script do", "repeat": false, "accept": [], "kept": []},
+    {"n": 45, "said": "thanks, that looks right", "repeat": false, "accept": [], "kept": []}
   ]
 }

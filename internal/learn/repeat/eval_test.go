@@ -34,6 +34,12 @@ func (m metered) Post(ctx context.Context, body []byte) (jev.Raw, error) {
 	return raw, err
 }
 
+type keptScores struct {
+	standing float64
+	kept     map[string]float64
+	covers   []string
+}
+
 func TestEvalCorpus(t *testing.T) {
 	corpus := os.Getenv("TOFU_REPEAT_EVAL")
 	if corpus == "" {
@@ -48,6 +54,7 @@ func TestEvalCorpus(t *testing.T) {
 		Items []struct {
 			N      int      `json:"n"`
 			Chain  int      `json:"chain"`
+			Said   string   `json:"said"`
 			Repeat bool     `json:"repeat"`
 			Accept []int    `json:"accept"`
 			Kept   []string `json:"kept"`
@@ -76,78 +83,109 @@ func TestEvalCorpus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, floor := range []int{0, konst.MemorySharedStemsToAskKept} {
-		repeats, caught, falseNotes, requests := 0, 0, 0, 0
-		keptRight, keptWrong, keptMissed, keptAsked := 0, 0, 0, 0
-		table := []string{"n\tlabel\truns\tnoted\tscore\tkept asked\tkept noted\tkept score"}
-		for _, item := range eval.Items {
-			log := t.TempDir()
-			judge, err := New(t.TempDir(), log)
-			if err != nil {
-				t.Fatal(err)
-			}
-			judge.client = client
-			said, earlier := eval.Chain[item.Chain], eval.Chain[:item.Chain]
-			picked := words.Candidates(earlier, said)
-			given := make([]Earlier, len(picked))
-			for i, at := range picked {
-				given[i].Text = earlier[at]
-			}
-			var near []Kept
-			for _, at := range KeptNear(said, eval.Kept, floor) {
-				near = append(near, eval.Kept[at])
-			}
-			keptAsked += len(near)
-			found, err := judge.Repeats(context.Background(), said, given, near)
-			if err != nil {
-				t.Fatal(err)
-			}
-			keptNoted, keptScore := "-", ""
-			if found.Kept >= 0 {
-				keptNoted = near[found.Kept].ID
-			}
-			switch {
-			case slices.Contains(item.Kept, keptNoted):
-				keptRight, keptScore = keptRight+1, "right"
-			case keptNoted != "-":
-				keptWrong, keptScore = keptWrong+1, "wrong"
-			case len(item.Kept) > 0:
-				keptMissed, keptScore = keptMissed+1, "missed"
-			}
-			var runs []string
-			if _, err := ledger.NewReader(log).Each(ledger.Filter{}, func(row ledger.Row) error {
-				requests++
-				at, named := strings.CutPrefix(row.Reason.Question, repeatsName+"_")
-				if !named {
-					runs = append(runs, "-")
-					return nil
-				}
-				i, err := strconv.Atoi(at)
-				runs = append(runs, strconv.Itoa(picked[i]))
-				return err
-			}); err != nil {
-				t.Fatal(err)
-			}
-			noted, score := -1, ""
-			if found.Earlier >= 0 {
-				noted = picked[found.Earlier]
-			}
-			right := item.Repeat && slices.Contains(item.Accept, noted)
-			switch {
-			case right:
-				caught, score = caught+1, "caught"
-			case noted >= 0:
-				falseNotes, score = falseNotes+1, "false"
-			case item.Repeat:
-				score = "missed"
-			}
-			if item.Repeat {
-				repeats++
-			}
-			table = append(table, strconv.Itoa(item.N)+"\t"+strconv.FormatBool(item.Repeat)+"\t"+strings.Join(runs, ",")+"\t"+strconv.Itoa(noted)+"\t"+score+"\t"+strconv.Itoa(len(near))+"\t"+keptNoted+"\t"+keptScore)
+	var memory []keptScores
+	var thresholds Thresholds
+	repeats, caught, falseNotes, covered := 0, 0, 0, 0
+	table := []string{"n\tlabel\truns\tnoted\tscore\tkept scores\tkept noted\tkept label"}
+	for _, item := range eval.Items {
+		log := t.TempDir()
+		judge, err := New(t.TempDir(), log)
+		if err != nil {
+			t.Fatal(err)
 		}
-		t.Logf("kept entries sharing at least %d stems with said\n%s", floor, strings.Join(table, "\n"))
-		t.Logf("floor %d: caught %d of %d repeats, %d false notes; memory matches %d right, %d wrong, %d missed, %d entries asked; %d messages, %d requests, %d input tokens so far, usd %.4f",
-			floor, caught, repeats, falseNotes, keptRight, keptWrong, keptMissed, keptAsked, len(eval.Items), requests, tokens, float64(tokens)*typesafe.DollarsPerInputToken)
+		judge.client, thresholds = client, judge.thresholds
+		said, earlier := item.Said, []string(nil)
+		if said == "" {
+			said, earlier = eval.Chain[item.Chain], eval.Chain[:item.Chain]
+		}
+		picked := words.Candidates(earlier, said)
+		given := make([]Earlier, len(picked))
+		for i, at := range picked {
+			given[i].Text = earlier[at]
+		}
+		var near []Kept
+		for _, at := range KeptNear(said, eval.Kept, konst.MemorySharedStemsToAskKept) {
+			near = append(near, eval.Kept[at])
+		}
+		found, err := judge.Repeats(context.Background(), said, given, near)
+		if err != nil {
+			t.Fatal(err)
+		}
+		keptNoted := "-"
+		if found.Kept >= 0 {
+			keptNoted = near[found.Kept].ID + "@" + found.Row
+		}
+		one := keptScores{kept: map[string]float64{}, covers: item.Kept}
+		var runs, shown []string
+		if _, err := ledger.NewReader(log).Each(ledger.Filter{}, func(row ledger.Row) error {
+			one.standing = row.Answers[0].Noul
+			for _, answer := range row.Answers {
+				if at, isKept := strings.CutPrefix(answer.Question, keptName+"_"); isKept {
+					i, err := strconv.Atoi(at)
+					if err != nil {
+						return err
+					}
+					one.kept[near[i].ID] = answer.Noul
+					shown = append(shown, near[i].ID+"="+strconv.FormatFloat(answer.Noul, 'f', 3, 64))
+				}
+			}
+			at, named := strings.CutPrefix(row.Reason.Question, repeatsName+"_")
+			if !named {
+				runs = append(runs, "-")
+				return nil
+			}
+			i, err := strconv.Atoi(at)
+			runs = append(runs, strconv.Itoa(picked[i]))
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+		memory = append(memory, one)
+		if len(item.Kept) > 0 {
+			covered++
+		}
+		noted, score := -1, ""
+		if found.Earlier >= 0 {
+			noted = picked[found.Earlier]
+		}
+		switch {
+		case item.Repeat && slices.Contains(item.Accept, noted):
+			caught, score = caught+1, "caught"
+		case noted >= 0:
+			falseNotes, score = falseNotes+1, "false"
+		case item.Repeat:
+			score = "missed"
+		}
+		if item.Repeat {
+			repeats++
+		}
+		table = append(table, strconv.Itoa(item.N)+"\t"+strconv.FormatBool(item.Repeat)+"\t"+strings.Join(runs, ",")+"\t"+strconv.Itoa(noted)+"\t"+score+"\t"+strings.Join(shown, ",")+"\t"+keptNoted+"\t"+strings.Join(item.Kept, ","))
 	}
+	t.Logf("kept entries sharing at least %d stems with said\n%s", konst.MemorySharedStemsToAskKept, strings.Join(table, "\n"))
+	t.Logf("caught %d of %d repeats, %d false notes; %d messages, %d input tokens, usd %.4f", caught, repeats, falseNotes, len(eval.Items), tokens, float64(tokens)*typesafe.DollarsPerInputToken)
+	sweep := []string{"kept_at\tnotes\tright\twrong\tprecision\trecall of " + strconv.Itoa(covered)}
+	for _, at := range []float64{0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95, 0.97, 0.99, thresholds.Kept} {
+		right, wrong := 0, 0
+		for _, one := range memory {
+			best, value := "", 0.0
+			for id, score := range one.kept {
+				if one.standing >= thresholds.Standing && score >= at && score > value {
+					best, value = id, score
+				}
+			}
+			switch {
+			case best == "":
+			case slices.Contains(one.covers, best):
+				right++
+			default:
+				wrong++
+			}
+		}
+		precision := 1.0
+		if right+wrong > 0 {
+			precision = float64(right) / float64(right+wrong)
+		}
+		sweep = append(sweep, strconv.FormatFloat(at, 'f', 2, 64)+"\t"+strconv.Itoa(right+wrong)+"\t"+strconv.Itoa(right)+"\t"+strconv.Itoa(wrong)+"\t"+strconv.FormatFloat(precision, 'f', 2, 64)+"\t"+strconv.FormatFloat(float64(right)/float64(covered), 'f', 2, 64))
+	}
+	t.Logf("memory match over %d messages, standing at or above %.2f, the last row is kept_at as shipped\n%s", len(memory), thresholds.Standing, strings.Join(sweep, "\n"))
 }

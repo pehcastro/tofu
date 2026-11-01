@@ -16,7 +16,7 @@ same view. When you repeat an instruction, even word for word, Jev compares it w
 and with the memory entries sharing at least two words with it; an entry sharing fewer never reaches Jev.
 A repeat means nothing held it, so the lead proposes the strongest check that would, a type, a lint, a rule
 in the library or a hook, and a ticket to build it, writes no memory line and never says "from now on".
-If an entry already covers it, the lead names it and quotes it with the words it was kept from. Orders like "always" or "from now on" carry
+If Jev scores an entry at 0.9 or above as covering it, the lead names it, quotes it with the words it was kept from, and cites the ledger row and score, which `tofu why <row>` explains; with no written row it says nothing about memory. Orders like "always" or "from now on" carry
 across forks in their own section, and a cron prompt is never your words.
 
 A kind says what it is about: `person` (how you work), `project` (a fact

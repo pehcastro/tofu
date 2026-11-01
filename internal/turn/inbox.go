@@ -635,7 +635,7 @@ func (b *Inbox) repeatNote(store *session.Store, id, said string) string {
 			evidence = `, kept from their words "` + entry.Said + `"`
 		}
 		return NotesAfterTheTask + "memory already keeps what the person asks here, as " + entry.ID + since + `: "` + strings.TrimSuffix(entry.Text, ".") + `"` + evidence +
-			". Say so plainly, naming " + entry.ID + " and quoting it. That line did not hold, since they had to ask again: " + repeatNeedsACheck
+			", matched at " + strconv.FormatFloat(found.Score, 'f', 2, 64) + " in ledger row " + found.Row + ". Say so plainly, naming " + entry.ID + ", quoting it and citing row " + found.Row + ". That line did not hold, since they had to ask again: " + repeatNeedsACheck
 	case found.Earlier < 0:
 		return ""
 	}

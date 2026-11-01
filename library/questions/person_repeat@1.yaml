@@ -17,14 +17,19 @@ notes: >-
   sharing fewer stems with said than konst.MemorySharedStemsToAskKept never
   reaches the request, so an unrelated entry cannot be matched. when
   standing passes and the highest kept answer is at or above kept_at, the note
-  names that entry and the words it was kept from instead of an earlier
-  message. either note asks the lead for a check and a ticket, never a memory
-  line. kept_at is the same uncalibrated prior.
+  names that entry, the words it was kept from, and the ledger row and score
+  that matched it, instead of an earlier message; a row that cannot be
+  written gives no note. either note asks the lead for a check and a ticket,
+  never a memory line. kept_at is calibrated on 45 mocked messages, 18 of
+  them covered by a kept entry, over four runs: at 0.5 precision 0.93 to
+  0.94, recall 0.78 to 0.83; at 0.9 precision 1.00 in all four, recall
+  0.78. the one wrong match scored 0.74 to 0.84, so 0.85 leaves too thin a
+  margin.
 
 thresholds:
   standing_at: 0.5
   repeats_at: 0.5
-  kept_at: 0.5
+  kept_at: 0.9
 
 state:
   - said
