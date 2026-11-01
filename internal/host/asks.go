@@ -22,7 +22,7 @@ type asks struct {
 	held     standingIn
 	session  func() standingIn
 	unkept   func(error)
-	granted  func(id string, standing bool, until time.Time)
+	granted  func(id string, said Resolution)
 }
 
 func (a *asks) follow() {
@@ -85,10 +85,20 @@ func (a *asks) wait(id, standsAt string) (<-chan Answer, func()) {
 }
 
 func (a *asks) answer(id string, given Answer) (answered, stands bool) {
-	return a.grant(id, given, time.Time{})
+	return a.grant(id, given, time.Time{}, nil)
 }
 
-func (a *asks) grant(id string, given Answer, until time.Time) (answered, stands bool) {
+func (a *asks) holding(id string, do func()) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	held := slices.ContainsFunc(a.waiting, func(one waitingAsk) bool { return one.id == id })
+	if held {
+		do()
+	}
+	return held
+}
+
+func (a *asks) grant(id string, given Answer, until time.Time, said *Resolution) (answered, stands bool) {
 	a.follow()
 	a.mu.Lock()
 	asked, waiting := a.take(id)
@@ -105,8 +115,10 @@ func (a *asks) grant(id string, given Answer, until time.Time) (answered, stands
 		}
 		keepErr = a.held.keep(a.standing, a.until)
 	}
-	if a.granted != nil {
-		a.granted(id, stands, until)
+	if said != nil {
+		bound := *said
+		bound.Standing, bound.Until = stands, until
+		a.granted(id, bound)
 	}
 	asked.reply <- given
 	a.mu.Unlock()

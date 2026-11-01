@@ -928,18 +928,18 @@ func (s *server) approvalAnswered(l *lane, asked Event, result json.RawMessage) 
 	if !l.host.takeAsk(approval) {
 		return withdrawn("approval " + approval)
 	}
-	l.host.Hear(approval, answer.Decision, s.client)
-	answered, stands, until := true, false, time.Time{}
+	said := &Resolution{Decision: answer.Decision, By: s.client}
+	answered, stands, until := false, false, time.Time{}
 	switch {
 	case answer.Decision == AllowFor:
 		until = time.Now().Add(time.Duration(cmp.Or(answer.ForSeconds, konst.ApprovalAllowForSeconds)) * time.Second)
-		answered, stands = l.host.AllowAskFor(approval, until)
+		answered, stands = l.host.AllowAskFor(approval, until, said)
 	case answer.Decision == Cancelled:
-		l.host.Stop(StopAsked{By: s.asker("approval " + approval + " answered cancelled"), Why: "the person cancelled the ask about " + asked.Tool})
+		answered = l.host.cancelAsk(approval, *said, StopAsked{By: s.asker("approval " + approval + " answered cancelled"), Why: "the person cancelled the ask about " + asked.Tool})
 	case asked.Tool == turn.RememberToolName:
-		answered = l.host.AnswerMemory(approval, keptAs(answer.Decision))
+		answered = l.host.answerMemory(approval, keptAs(answer.Decision), said)
 	default:
-		answered, stands = l.host.AnswerAsk(approval, personAnswerOf(answer.Decision))
+		answered, stands = l.host.AnswerAsk(approval, personAnswerOf(answer.Decision), said)
 	}
 	if !answered {
 		return s.unanswered(l, asked, "approval "+approval)

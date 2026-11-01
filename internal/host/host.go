@@ -182,8 +182,9 @@ func New(cfg Config) (*Host, []string) {
 		asks:        &asks{standing: map[string]Answer{}, until: map[string]time.Time{}},
 		questions:   &replies[answeredQuestion]{},
 		memoryPicks: &replies[memory.Scope]{},
+		bus:         bus{heard: map[string]Resolution{}, noted: map[string]Resolution{}},
 	}
-	h.asks.session, h.asks.unkept, h.asks.granted = h.standingIn, h.standingUnkept, h.granted
+	h.asks.session, h.asks.unkept, h.asks.granted = h.standingIn, h.standingUnkept, h.bind
 	if h.now == nil {
 		h.now = time.Now
 	}
@@ -505,7 +506,7 @@ func (h *Host) Answer(id string, answer Answer) bool {
 	if f := h.following.Load(); f != nil {
 		return f.ask(followAsk{Op: followAnswer, Asked: id, Answer: answer}).OK
 	}
-	if answered, _ := h.asks.answer(id, answer); answered {
+	if answered, _ := h.asks.grant(id, answer, time.Time{}, h.noteOf(id)); answered {
 		return true
 	}
 	select {
@@ -516,20 +517,20 @@ func (h *Host) Answer(id string, answer Answer) bool {
 	}
 }
 
-func (h *Host) AnswerAsk(id string, answer Answer) (answered, stands bool) {
+func (h *Host) AnswerAsk(id string, answer Answer, said *Resolution) (answered, stands bool) {
 	if f := h.following.Load(); f != nil {
-		reply := f.ask(followAsk{Op: followAnswerAsk, Asked: id, Answer: answer})
+		reply := f.ask(followAsk{Op: followAnswerAsk, Asked: id, Answer: answer, Said: said})
 		return reply.OK, reply.Stands
 	}
-	return h.asks.answer(id, answer)
+	return h.asks.grant(id, answer, time.Time{}, cmp.Or(said, h.noteOf(id)))
 }
 
-func (h *Host) AllowAskFor(id string, until time.Time) (answered, stands bool) {
+func (h *Host) AllowAskFor(id string, until time.Time, said *Resolution) (answered, stands bool) {
 	if f := h.following.Load(); f != nil {
-		reply := f.ask(followAsk{Op: followAllowFor, Asked: id, Until: until})
+		reply := f.ask(followAsk{Op: followAllowFor, Asked: id, Until: until, Said: said})
 		return reply.OK, reply.Stands
 	}
-	return h.asks.grant(id, AllowedAWhile, until)
+	return h.asks.grant(id, AllowedAWhile, until, cmp.Or(said, h.noteOf(id)))
 }
 
 func (h *Host) Revoke(target string) (StandingAnswer, bool) {

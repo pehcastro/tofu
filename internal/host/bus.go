@@ -6,7 +6,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"time"
 
 	"tofu/internal/konst"
 )
@@ -30,6 +29,7 @@ type bus struct {
 	seq   uint64
 	now   picture
 	heard map[string]Resolution
+	noted map[string]Resolution
 }
 
 func (p *picture) apply(event Event) Event {
@@ -145,11 +145,12 @@ func (h *Host) Events() <-chan Event { return h.events }
 func (h *Host) deliver(event Event) {
 	h.bus.mu.Lock()
 	h.bus.seq++
-	if said, held := h.bus.heard[event.ID]; held && event.Kind == EventResumed {
-		if event.Resolution == nil || *event.Resolution == *cancelledByTofu() && said.Decision == Cancelled {
+	if event.Kind == EventResumed {
+		if said, held := h.bus.heard[event.ID]; held && (event.Resolution == nil || *event.Resolution == *cancelledByTofu() && said.Decision == Cancelled) {
 			event.Resolution = &said
 		}
 		delete(h.bus.heard, event.ID)
+		delete(h.bus.noted, event.ID)
 	}
 	told := h.bus.now.apply(event)
 	h.fanOut(followLine{Seq: h.bus.seq, Event: &event})
@@ -222,29 +223,57 @@ func (h *Host) putBack(asked Event) (resumed Event, settled bool) {
 }
 
 func (h *Host) Hear(id string, decision ApprovalDecision, by string) {
+	said := Resolution{Decision: decision, By: by}
 	if f := h.following.Load(); f != nil {
-		f.ask(followAsk{Op: followHeard, Asked: id, Text: string(decision), By: by})
+		f.ask(followAsk{Op: followHeard, Asked: id, Said: &said})
+		return
+	}
+	if decision == Cancelled {
+		h.cancelling(id, said)
 		return
 	}
 	h.bus.mu.Lock()
 	defer h.bus.mu.Unlock()
-	if h.bus.heard == nil {
-		h.bus.heard = map[string]Resolution{}
-	}
-	h.bus.heard[id] = Resolution{Decision: decision, By: by}
+	h.bus.noted[id] = said
 }
 
-func (h *Host) granted(id string, standing bool, until time.Time) {
+func (h *Host) noteOf(id string) *Resolution {
 	h.bus.mu.Lock()
 	defer h.bus.mu.Unlock()
-	if said, held := h.bus.heard[id]; held {
-		said.Standing, said.Until = standing, until
-		h.bus.heard[id] = said
+	said, held := h.bus.noted[id]
+	if !held {
+		return nil
 	}
+	delete(h.bus.noted, id)
+	return &said
+}
+
+func (h *Host) bind(id string, said Resolution) {
+	h.bus.mu.Lock()
+	defer h.bus.mu.Unlock()
+	h.bus.heard[id] = said
+}
+
+func (h *Host) cancelling(id string, said Resolution) bool {
+	bind := func() { h.bind(id, said) }
+	return h.asks.holding(id, bind) || h.memoryPicks.holding(id, bind)
+}
+
+func (h *Host) cancelAsk(id string, said Resolution, stop StopAsked) bool {
+	if f := h.following.Load(); f != nil {
+		return f.ask(followAsk{Op: followCancel, Asked: id, Said: &said, Stop: stop.followed()}).OK
+	}
+	if !h.cancelling(id, said) {
+		return false
+	}
+	h.Stop(stop)
+	return true
 }
 
 func (h *Host) forget() {
 	h.bus.mu.Lock()
 	defer h.bus.mu.Unlock()
-	h.bus.now, h.bus.heard = picture{Settings: h.bus.now.Settings}, nil
+	h.bus.now = picture{Settings: h.bus.now.Settings}
+	clear(h.bus.heard)
+	clear(h.bus.noted)
 }

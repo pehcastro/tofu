@@ -183,10 +183,19 @@ func (s *server) memoryRead(named string, read func(*memtree.Store) ([]string, e
 }
 
 func (h *Host) AnswerMemory(id string, scope memory.Scope) bool {
+	return h.answerMemory(id, scope, nil)
+}
+
+func (h *Host) answerMemory(id string, scope memory.Scope, said *Resolution) bool {
 	if f := h.following.Load(); f != nil {
-		return f.ask(followAsk{Op: followMemory, Asked: id, Scope: scope}).OK
+		return f.ask(followAsk{Op: followMemory, Asked: id, Scope: scope, Said: said}).OK
 	}
-	return h.memoryPicks.answer(id, scope)
+	said = cmp.Or(said, h.noteOf(id))
+	return h.memoryPicks.answer(id, scope, func() {
+		if said != nil {
+			h.bind(id, *said)
+		}
+	})
 }
 
 func pickMemory(emit func(Event), book *replies[memory.Scope]) tools.MemoryPick {

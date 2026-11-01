@@ -122,7 +122,7 @@ func TestARememberPickSendsMemoryScoped(t *testing.T) {
 			if c.answer == nil {
 				cancel()
 			} else {
-				book.answer(id, *c.answer)
+				book.answer(id, *c.answer, func() {})
 			}
 			select {
 			case <-done:

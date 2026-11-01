@@ -30,13 +30,24 @@ func (q *replies[T]) wait(id string) chan T {
 	return reply
 }
 
-func (q *replies[T]) answer(id string, given T) bool {
+func (q *replies[T]) answer(id string, given T, taken func()) bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	reply, open := q.waiting[id]
 	if open {
+		taken()
 		delete(q.waiting, id)
 		reply <- given
+	}
+	return open
+}
+
+func (q *replies[T]) holding(id string, do func()) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	_, open := q.waiting[id]
+	if open {
+		do()
 	}
 	return open
 }
@@ -57,7 +68,7 @@ func (h *Host) AnswerQuestion(id string, answer QuestionAnswer, by string) bool 
 	if f := h.following.Load(); f != nil {
 		return f.ask(followAsk{Op: followQuestion, Asked: id, Question: answer, By: by}).OK
 	}
-	return h.questions.answer(id, answeredQuestion{answer, by})
+	return h.questions.answer(id, answeredQuestion{answer, by}, func() {})
 }
 
 func askForm(emit func(Event), book *replies[answeredQuestion]) turn.PersonForm {

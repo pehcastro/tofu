@@ -16,12 +16,12 @@ import (
 
 func answeredStanding(t *testing.T, h *Host, request turn.GateRequest, given Answer) turn.PersonAnswer {
 	t.Helper()
-	return answeredWith(t, h, request, func(id string) { h.AnswerAsk(id, given) })
+	return answeredWith(t, h, request, func(id string) { h.AnswerAsk(id, given, nil) })
 }
 
 func answeredFor(t *testing.T, h *Host, request turn.GateRequest, until time.Time) {
 	t.Helper()
-	answeredWith(t, h, request, func(id string) { h.AllowAskFor(id, until) })
+	answeredWith(t, h, request, func(id string) { h.AllowAskFor(id, until, nil) })
 }
 
 func answeredWith(t *testing.T, h *Host, request turn.GateRequest, answer func(id string)) turn.PersonAnswer {

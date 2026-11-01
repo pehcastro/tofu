@@ -43,6 +43,7 @@ const (
 	followQuestion  followOp = "question"
 	followMemory    followOp = "memory"
 	followHeard     followOp = "heard"
+	followCancel    followOp = "cancel"
 	followSteer     followOp = "steer"
 	followSendNow   followOp = "sendNow"
 	followUnsteer   followOp = "unsteer"
@@ -77,6 +78,7 @@ type followAsk struct {
 	Command   string         `json:",omitempty"`
 	Stopped   bool           `json:",omitempty"`
 	Stop      StopAsked      `json:",omitzero"`
+	Said      *Resolution    `json:",omitempty"`
 	Until     time.Time      `json:",omitzero"`
 	Shell     string         `json:",omitempty"`
 	Cols      int            `json:",omitempty"`
@@ -363,9 +365,11 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 	case followAnswer:
 		reply.OK = h.Answer(ask.Asked, ask.Answer)
 	case followAnswerAsk:
-		reply.OK, reply.Stands = h.AnswerAsk(ask.Asked, ask.Answer)
+		reply.OK, reply.Stands = h.AnswerAsk(ask.Asked, ask.Answer, ask.Said)
 	case followAllowFor:
-		reply.OK, reply.Stands = h.AllowAskFor(ask.Asked, ask.Until)
+		reply.OK, reply.Stands = h.AllowAskFor(ask.Asked, ask.Until, ask.Said)
+	case followCancel:
+		reply.OK = h.cancelAsk(ask.Asked, *ask.Said, ask.Stop)
 	case followRevoke:
 		gone, revoked := h.Revoke(ask.Asked)
 		reply.OK, reply.Standing = revoked, []StandingAnswer{gone}
@@ -374,9 +378,9 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 	case followQuestion:
 		reply.OK = h.AnswerQuestion(ask.Asked, ask.Question, ask.By)
 	case followMemory:
-		reply.OK = h.AnswerMemory(ask.Asked, ask.Scope)
+		reply.OK = h.answerMemory(ask.Asked, ask.Scope, ask.Said)
 	case followHeard:
-		h.Hear(ask.Asked, ApprovalDecision(ask.Text), ask.By)
+		h.Hear(ask.Asked, ask.Said.Decision, ask.Said.By)
 	case followSteer:
 		h.received(ask.Images)
 		reply.Steered = h.steerFor(ask.Text)

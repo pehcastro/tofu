@@ -34,7 +34,7 @@ func TestAStandingAnswerNeverTrustsHooksThatChangedAfterIt(t *testing.T) {
 		}()
 		select {
 		case id := <-asked:
-			h.AnswerAsk(id, answer)
+			h.AnswerAsk(id, answer, nil)
 			return <-got, true
 		case answered := <-got:
 			return answered, false
