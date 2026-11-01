@@ -873,6 +873,11 @@ func (r *record) end(row Row) {
 	r.note(r.inbox.release(r.log))
 }
 
+func forkHeader(from session.Header, into string, kind ForkKind, at time.Time) session.Header {
+	return session.Header{ID: into, At: at, ForkKind: string(kind), Root: cmp.Or(from.Root, from.ID), Task: from.Task, Wire: from.Wire, Model: from.Model,
+		Chosen: from.Chosen, CarriedFrom: &session.Carried{Session: from.ID, Event: from.Head}}
+}
+
 func (r *record) fork(ended, next Row, fork *Fork, at time.Time) {
 	if r == nil || !r.own {
 		return
@@ -886,8 +891,7 @@ func (r *record) fork(ended, next Row, fork *Fork, at time.Time) {
 	}))
 	r.note(r.inbox.release(r.log))
 	from := r.log.Header()
-	log, err := r.inbox.open(r.store, session.Header{ID: into, At: at, ForkKind: string(fork.Kind), Root: cmp.Or(from.Root, from.ID), Chosen: from.Chosen,
-		CarriedFrom: &session.Carried{Session: from.ID, Event: from.Head}})
+	log, err := r.inbox.open(r.store, forkHeader(from, into, fork.Kind, at))
 	if err != nil {
 		r.note(err)
 		return
