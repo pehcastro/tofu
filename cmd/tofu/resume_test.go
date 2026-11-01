@@ -13,8 +13,10 @@ import (
 func continuedScreen(t *testing.T, waitFor string) string {
 	t.Helper()
 	script := written(t, t.TempDir(), "continue.drive", "wait "+waitFor+"\nscreen\n")
+	home := os.Getenv("HOME")
+	realHomeIs(t, t.TempDir())
 	var out, errOut bytes.Buffer
-	if code := driveVerb([]string{script, "--home", os.Getenv("HOME"), "--continue", "--plain", "--timeout", "30s"}, strings.NewReader(""), &out, &errOut); code != exitOK {
+	if code := driveVerb([]string{script, "--home", home, "--continue", "--plain", "--timeout", "30s"}, strings.NewReader(""), &out, &errOut); code != exitOK {
 		t.Fatalf("tofu drive --continue exited %d: %s\n%s", code, errOut.String(), out.String())
 	}
 	return out.String()

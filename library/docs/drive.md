@@ -20,7 +20,10 @@ answer the same.
   is not given. Without one no wire opens and a turn fails saying so.
 - the home: without `--home` the run makes an empty one, reads no settings
   file of yours, and deletes it at the end. `--home PATH` reads the
-  settings under that home instead.
+  settings under that home instead. Your real home, a folder above it,
+  its `.tofu`, or any folder under it outside the temp folder is refused
+  with exit 2 before anything there is opened. A home made by `mktemp -d`
+  drives, even where the temp folder sits inside your profile.
 
 The run prints the settings it resolved before the first step, so a pasted
 run carries the conditions it was taken under.
@@ -76,4 +79,5 @@ fields.
 
 A run without `--home` writes nothing of yours: its home is deleted when
 it ends. A run with `--home` writes its session under that home, so delete
-the session there, or point `--home` at a folder made for the run.
+the session there, or point `--home` at a folder made for the run. It
+never writes your real home: `--home` refuses it.

@@ -91,7 +91,10 @@ Settings come from the script or from nowhere. Without --home the run makes an
 empty home of its own, reads no settings file you own, and deletes that home
 when it ends, so every setting is its declared default and two runs of one
 script answer the same. --home PATH reads PATH/.tofu/settings.json instead,
-which is how you drive the app against a configuration you keep. Either way the
+which is how you drive the app against a configuration you keep. Your real
+home, a folder above it, its .tofu, or a folder under it outside the temp
+folder is refused with exit 2 before anything there is opened, so keep that
+configuration in a copy, such as one under mktemp -d. Either way the
 run prints the settings it resolved before the first step, so a pasted
 transcript carries the conditions it was taken under.
 
@@ -812,6 +815,8 @@ func driveHome(named string) (release func(), err error) {
 		if home, err = os.MkdirTemp("", driveHomePrefix); err != nil {
 			return nil, err
 		}
+	} else if err = refuseTheRealHome(named); err != nil {
+		return nil, err
 	}
 	previous := map[string]string{}
 	for _, variable := range []string{"HOME", "USERPROFILE"} {
@@ -828,6 +833,39 @@ func driveHome(named string) (release func(), err error) {
 			_ = os.RemoveAll(home)
 		}
 	}, nil
+}
+
+func refuseTheRealHome(named string) error {
+	real, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("--home %s cannot be checked against your real home, so the drive does not start: %w", named, err)
+	}
+	absolute := func(path string) string {
+		abs, _ := filepath.Abs(path)
+		return abs
+	}
+	linked := func(path string) string {
+		abs := absolute(path)
+		if target, err := filepath.EvalSymlinks(abs); err == nil {
+			return target
+		}
+		return abs
+	}
+	within := func(parent, child string) bool {
+		for _, spelled := range []func(string) string{absolute, linked} {
+			inside, err := filepath.Rel(spelled(parent), spelled(child))
+			if err == nil && inside != ".." && !strings.HasPrefix(inside, ".."+string(filepath.Separator)) {
+				return true
+			}
+		}
+		return false
+	}
+	temp := os.TempDir()
+	scratch := within(temp, named) && !within(temp, real)
+	if within(named, real) || within(filepath.Join(real, sys.StateDirName), named) || within(real, named) && !scratch {
+		return fmt.Errorf("--home %s is your real home %s, a folder above it, or a folder under it outside %s, and a drive never runs against it; name a folder made for the run, or leave --home out for a fresh one", named, real, temp)
+	}
+	return nil
 }
 
 func printDriveSettings(out io.Writer, dir, named string) {

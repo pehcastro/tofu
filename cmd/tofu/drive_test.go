@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -423,11 +424,16 @@ func TestASpawnDrivenTwiceProducesTheSameConversationBothTimes(t *testing.T) {
 	}
 }
 
+func realHomeIs(t *testing.T, home string) string {
+	t.Helper()
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOME", home)
+	return home
+}
+
 func pollutedHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
-	t.Setenv("USERPROFILE", home)
-	t.Setenv("HOME", home)
 	state := filepath.Join(home, sys.StateDirName)
 	if err := os.MkdirAll(state, 0o700); err != nil {
 		t.Fatal(err)
@@ -473,7 +479,7 @@ const answerAfterTheRead, fullToolRow = "note.txt holds one line", "the note say
 
 func TestADrivenRunIgnoresASettingsFilePlantedInTheAmbientHome(t *testing.T) {
 	dir := drivenProject(t)
-	pollutedHome(t)
+	realHomeIs(t, pollutedHome(t))
 	printed := drivenRead(t, dir)
 	if strings.Contains(printed, fullToolRow) {
 		t.Errorf("the run drew the full tool row, so it took chatShowsTools from a home the script never named:\n%s", printed)
@@ -704,5 +710,69 @@ func TestDrivenRequestsCarryTheSameToolsEachStepAndNoToolChoiceOnlyAtTheCap(t *t
 		if capped := line[4] != ""; capped != (index == 4) {
 			t.Errorf("request %s printed tool_choice none %v, and only the fifth, at the cap, asks for no tool", line[1], capped)
 		}
+	}
+}
+
+func TestADriveRefusesTheRealHomeAndEveryPathUnderItBeforeTouchingIt(t *testing.T) {
+	dir := drivenProject(t)
+	real := realHomeIs(t, pollutedHome(t))
+	listing := func() []string {
+		var seen []string
+		_ = filepath.WalkDir(real, func(path string, _ os.DirEntry, _ error) error {
+			info, _ := os.Stat(path)
+			seen = append(seen, path+" "+info.ModTime().String())
+			return nil
+		})
+		return seen
+	}
+	before := listing()
+	script := written(t, dir, "look.drive", "wait "+session.Placeholder+"\n")
+	named := []string{real, real + string(filepath.Separator), filepath.Join(real, sys.StateDirName, "x"), filepath.Join(real, "projects", "x")}
+	if filepath.VolumeName(real) != "" {
+		named = append(named, strings.ToUpper(real))
+	}
+	for _, home := range named {
+		var out, errOut bytes.Buffer
+		if code := driveVerb([]string{script, "--home", home, "--timeout", "30s"}, strings.NewReader(""), &out, &errOut); code != exitUsage {
+			t.Errorf("--home %s exited %d, wanted %d: %s", home, code, exitUsage, errOut.String())
+		}
+		if !strings.Contains(errOut.String(), real) {
+			t.Errorf("the refusal of --home %s never names the real home %s:\n%s", home, real, errOut.String())
+		}
+	}
+	if after := listing(); !slices.Equal(before, after) {
+		t.Errorf("the real home changed under a refused drive:\nbefore %v\nafter  %v", before, after)
+	}
+	sibling := real + "-sibling"
+	if err := os.MkdirAll(sibling, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	if code := driveVerb([]string{script, "--home", sibling, "--timeout", "30s"}, strings.NewReader(""), &out, &errOut); code != exitOK {
+		t.Errorf("a home beside the real one, its name sharing the real one as a prefix, exited %d: %s", code, errOut.String())
+	}
+}
+
+func TestAFreshTempHomeDrivesWhenTheTempFolderLivesInsideTheRealHome(t *testing.T) {
+	dir := drivenProject(t)
+	real := realHomeIs(t, t.TempDir())
+	temp := filepath.Join(real, "AppData", "Local", "Temp")
+	if err := os.MkdirAll(temp, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, variable := range []string{"TMP", "TEMP", "TMPDIR"} {
+		t.Setenv(variable, temp)
+	}
+	fresh, err := os.MkdirTemp("", "drive-home")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := written(t, dir, "look.drive", "wait "+session.Placeholder+"\n")
+	var out, errOut bytes.Buffer
+	if code := driveVerb([]string{script, "--home", fresh, "--timeout", "30s"}, strings.NewReader(""), &out, &errOut); code != exitOK {
+		t.Errorf("a home made by mktemp under %s exited %d, so every scratch home on Windows is refused: %s", temp, code, errOut.String())
+	}
+	if _, err := os.Stat(filepath.Join(fresh, sys.StateDirName)); err != nil {
+		t.Errorf("the drive left no state under the fresh home it was named: %v", err)
 	}
 }
