@@ -150,6 +150,16 @@
     "version": "0.5.20+dev"
   },
   {
+    "report": "bench/forkcache/report-2026-11-01-realwire.txt",
+    "figure": "46725",
+    "says": "Checked against a real claude-sub run, rapid-sable-finch#ub4fl.1, where an ask sent with tool_choice none read 18561, the 17098 read plus 1463 written of the step before it: the stand-in now keeps the message cache across a tool_choice switch, so every working-state ask switch reads all its prior, 46725 of 46725 on the first, and messages hit. Each fork in that arm writes 9497 to 16568 tokens of cache against 8201 to 14190 for episode carry, the first request after /compact reads 61998 of a 62270 shared prefix at reach 0, and no request reaches past the 20-block lookback.",
+    "from": "rerun",
+    "sample": "4 mocked recorded turns, 2 carry arms, 8 forks, 4 compact runs, checked against 1 real claude-sub trace",
+    "skips": "no fork-off arm: tofu run has no switch for it, so carrying on is computed from the parent's last request",
+    "commit": "671f4291",
+    "version": "0.5.20+dev"
+  },
+  {
     "report": "bench/harness/report-2026-09-20.md",
     "figure": "10 write calls",
     "says": "The three-arm comparison this package exists for has never been run. The one real figure it produces is a transform measure over 1 recorded turn and its 10 write calls.",

@@ -11,7 +11,7 @@ import (
 const (
 	forkHead    = "%-18s %-22s %4s %4s %7s %7s %7s %7s %8s %8s %6s %5s %5s %5s %5s %7s %7s %5s %5s\n"
 	sessionHead = "%-18s %-22s %5s %8s %5s %6s %10s %10s %5s\n"
-	flipHead    = "%-18s %-22s %7s %-16s %-16s %7s %7s %7s %7s %5s %5s %8s\n"
+	flipHead    = "%-18s %-22s %7s %-16s %-16s %7s %7s %7s %7s %7s %5s %5s %8s\n"
 	summaryHead = "%-18s %5s %-21s %-21s %10s %10s %8s %-16s %9s\n"
 )
 
@@ -153,6 +153,7 @@ func compactReport(rows []compactRow) string {
 
 const flipLegend = `
 from     the tool_choice of the request before; to, this request's, with an absent tool_choice read as auto
+prior    the request before's cache read plus written, what it left in the cache; a switch to none that reads all of it read every block the step wrote
 shared   tokens of the longest block prefix this request and the one before have in common
 messages hit when the cache read reaches past the tools and system blocks, miss when it stops at them
 `
@@ -160,13 +161,13 @@ messages hit when the cache read reaches past the tools and system blocks, miss 
 func flipReport(runs []measured, compacts []compactRow) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "\ntool_choice, one row per request whose tool_choice differs from the request before it\n")
-	fmt.Fprintf(&b, flipHead, "arm", "session", "request", "from", "to", "read", "written", "shared", "cached", "reach", "check", "messages")
+	fmt.Fprintf(&b, flipHead, "arm", "session", "request", "from", "to", "prior", "read", "written", "shared", "cached", "reach", "check", "messages")
 	row := func(arm, session string, f flip) {
 		reached, messages := f.look.columns(), "miss"
 		if f.look.readBlocks > f.head {
 			messages = "hit"
 		}
-		fmt.Fprintf(&b, flipHead, arm, session, fmt.Sprint(f.request), f.from, f.choice, fmt.Sprint(f.billed.read), fmt.Sprint(f.billed.written()), fmt.Sprint(f.shared),
+		fmt.Fprintf(&b, flipHead, arm, session, fmt.Sprint(f.request), f.from, f.choice, fmt.Sprint(f.prior), fmt.Sprint(f.billed.read), fmt.Sprint(f.billed.written()), fmt.Sprint(f.shared),
 			reached[0], reached[1], reached[2], messages)
 	}
 	for _, r := range runs {

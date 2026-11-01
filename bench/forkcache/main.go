@@ -221,7 +221,8 @@ head        subscription: the stand-in's token carries the oauth marker, so ever
 model       %s, build id the stand-in reported: %s
 ceiling     --context-ceiling %d on every tofu run; the compact arm runs under tofu serve --stdio at its own context budget
 weights     input %.2f, cache read %.2f, write 5m %.2f, write 1h %.2f, in base input tokens
-key         tools, system, tool_choice, then messages: a tool_choice change keeps the tools and system prefix and misses every message block
+key         tools, system, then messages; tool_choice is not in the key, so a switch to none keeps the message cache
+checked     against a real claude-sub run, claude-haiku-5-5 on 2026-11-01, trace rapid-sable-finch#ub4fl.1: step #640793 read 17098 wrote 1463, then the ask #9e8c41 sent with tool_choice none read 18561
 lookback    %d blocks back from each cache breakpoint; a row whose reach is past it reads fail and the run exits nonzero
 warm-up     none: no request is discarded
 

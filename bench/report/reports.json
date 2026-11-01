@@ -5828,6 +5828,28 @@
     {
       "package": "forkcache",
       "date": "2026-11-01",
+      "source": "bench/forkcache/report-2026-11-01-realwire.txt",
+      "figure": "46725",
+      "built_from": "rerun",
+      "sample": "4 mocked recorded turns, 2 carry arms, 8 forks, 4 compact runs, checked against 1 real claude-sub trace",
+      "skips": "no fork-off arm: tofu run has no switch for it, so carrying on is computed from the parent's last request",
+      "commit": "671f4291",
+      "version": "0.5.20+dev",
+      "previous_run": "bench/forkcache/report-2026-11-01-toolchoice.txt",
+      "conclusion": [
+        {
+          "text": "Hand read from bench/report/handread.json: Checked against a real claude-sub run, rapid-sable-finch#ub4fl.1, where an ask sent with tool_choice none read 18561, the 17098 read plus 1463 written of the step before it: the stand-in now keeps the message cache across a tool_choice switch, so every working-state ask switch reads all its prior, 46725 of 46725 on the first, and messages hit. Each fork in that arm writes 9497 to 16568 tokens of cache against 8201 to 14190 for episode carry, the first request after /compact reads 61998 of a 62270 shared prefix at reach 0, and no request reaches past the 20-block lookback.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
+    {
+      "package": "forkcache",
+      "date": "2026-11-01",
       "source": "bench/forkcache/report-2026-11-01-toolchoice.txt",
       "figure": "61998",
       "built_from": "rerun",
@@ -5843,9 +5865,9 @@
         }
       ],
       "conclusion_unparsed": false,
-      "state": "stands",
-      "state_source": "",
-      "state_note": ""
+      "state": "stale",
+      "state_source": "bench/report/withdrawals.json",
+      "state_note": "superseded by bench/forkcache/report-2026-11-01-realwire.txt, by TOFU-1963 on 2026-11-01 and not by the file. Its stand-in put tool_choice in the cache key, so every working-state ask switch to none read 20957 and missed every message block. A real claude-sub run, trace rapid-sable-finch#ub4fl.1, shows the opposite: the ask #9e8c41 sent with tool_choice none read 18561, the 17098 read plus 1463 written of step #640793 before it. Its compact figure, 61998 of 62270 at reach 0, stands unchanged in the rerun."
     },
     {
       "package": "forkcache",
@@ -5867,7 +5889,7 @@
       "conclusion_unparsed": false,
       "state": "stale",
       "state_source": "bench/report/withdrawals.json",
-      "state_note": "superseded by bench/forkcache/report-2026-11-01-toolchoice.txt, by TOFU-1962 on 2026-11-01 and not by the file. It was measured at 6f24504b, before 236a0826 and 879adede, with tool_choice left out of the cache key, so a request that switches tool_choice to none read as a cache hit there, and its /compact rows read 22146 tokens at a reach counted from the end of the shared prefix. The rerun at 1dd22a45 keys tool_choice, counts reach from the deepest cached prefix, and reads 61998 after /compact."
+      "state_note": "superseded by bench/forkcache/report-2026-11-01-toolchoice.txt, by TOFU-1962 on 2026-11-01 and not by the file. It was measured at 6f24504b, before 236a0826 and 879adede, and its /compact rows read 22146 tokens at a reach counted from the end of the shared prefix. The rerun counts reach from the deepest cached prefix and reads 61998 after /compact. Its tool_choice handling, a switch to none that keeps the message cache, matches the real claude-sub trace rapid-sable-finch#ub4fl.1 and stands."
     },
     {
       "package": "enforce",
@@ -7593,11 +7615,11 @@
     }
   ],
   "counts": {
-    "reports": 73,
+    "reports": 74,
     "packages_with_a_dated_report": 44,
     "packages_with_no_dated_report": 24,
     "withdrawn_whole_or_in_part": 19,
-    "stale": 2,
+    "stale": 3,
     "unparsed": 2
   },
   "withdrawals_declared_from_outside_live_in": "bench/report/withdrawals.json",

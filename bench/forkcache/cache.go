@@ -84,7 +84,6 @@ func blocksOf(body wireBody) []block {
 	for _, system := range body.System {
 		add("system", system)
 	}
-	running = sha256.Sum256(append(running[:], "tool_choice"+body.choice()...))
 	for _, message := range body.Messages {
 		var content []map[string]any
 		if json.Unmarshal(message.Content, &content) != nil {

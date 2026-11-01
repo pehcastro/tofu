@@ -297,6 +297,11 @@
   {
     "report": "bench/forkcache/report-2026-11-01.txt",
     "state": "stale",
-    "why": "superseded by bench/forkcache/report-2026-11-01-toolchoice.txt, by TOFU-1962 on 2026-11-01 and not by the file. It was measured at 6f24504b, before 236a0826 and 879adede, with tool_choice left out of the cache key, so a request that switches tool_choice to none read as a cache hit there, and its /compact rows read 22146 tokens at a reach counted from the end of the shared prefix. The rerun at 1dd22a45 keys tool_choice, counts reach from the deepest cached prefix, and reads 61998 after /compact."
+    "why": "superseded by bench/forkcache/report-2026-11-01-toolchoice.txt, by TOFU-1962 on 2026-11-01 and not by the file. It was measured at 6f24504b, before 236a0826 and 879adede, and its /compact rows read 22146 tokens at a reach counted from the end of the shared prefix. The rerun counts reach from the deepest cached prefix and reads 61998 after /compact. Its tool_choice handling, a switch to none that keeps the message cache, matches the real claude-sub trace rapid-sable-finch#ub4fl.1 and stands."
+  },
+  {
+    "report": "bench/forkcache/report-2026-11-01-toolchoice.txt",
+    "state": "stale",
+    "why": "superseded by bench/forkcache/report-2026-11-01-realwire.txt, by TOFU-1963 on 2026-11-01 and not by the file. Its stand-in put tool_choice in the cache key, so every working-state ask switch to none read 20957 and missed every message block. A real claude-sub run, trace rapid-sable-finch#ub4fl.1, shows the opposite: the ask #9e8c41 sent with tool_choice none read 18561, the 17098 read plus 1463 written of step #640793 before it. Its compact figure, 61998 of 62270 at reach 0, stands unchanged in the rerun."
   }
 ]

@@ -22,13 +22,15 @@ type flip struct {
 	request int
 	from    string
 	shared  int
+	prior   int
 }
 
 func flipsOf(sent []exchange) []flip {
 	var flips []flip
 	for at := 1; at < len(sent); at++ {
 		if sent[at].choice != sent[at-1].choice {
-			flips = append(flips, flip{exchange: sent[at], request: at + 1, from: sent[at-1].choice, shared: sharedTokens(sent[at-1].blocks, sent[at].blocks)})
+			flips = append(flips, flip{exchange: sent[at], request: at + 1, from: sent[at-1].choice, shared: sharedTokens(sent[at-1].blocks, sent[at].blocks),
+				prior: sent[at-1].billed.read + sent[at-1].billed.written()})
 		}
 	}
 	return flips
