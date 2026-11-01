@@ -137,6 +137,8 @@ const (
 	SourceAnswer     Source = "answer"
 	SourceLateAnswer Source = "answer.late"
 	SourceNoAnswer   Source = "answer.none"
+	SourceDismissed  Source = "answer.dismissed"
+	SourceUnasked    Source = "answer.undelivered"
 	SourceForkTask   Source = "fork.task"
 	SourceBrief      Source = "brief"
 	SourceReport     Source = "report"
@@ -188,7 +190,8 @@ func sourceRows() []sourceRow {
 	return []sourceRow{
 		{SourceTask, OriginPerson, "task"}, {SourceTyped, OriginPerson, "typed by the person"}, {SourceSteer, OriginPerson, "steer"},
 		{SourceAnswer, OriginTofu, "question answer"}, {SourceLateAnswer, OriginTofu, "late question answer"},
-		{SourceNoAnswer, OriginTofu, "question with no answer yet"}, {SourceForkTask, OriginPerson, "fork task"},
+		{SourceNoAnswer, OriginTofu, "question with no answer yet"}, {SourceDismissed, OriginTofu, "dismissed question"},
+		{SourceUnasked, OriginTofu, "question nobody could be asked"}, {SourceForkTask, OriginPerson, "fork task"},
 		{SourceBrief, OriginAgent, "sub-agent brief"}, {SourceReport, OriginAgent, "sub-agent report"},
 		{SourceReportFor, OriginAgent, "sub-agent report needing the lead"}, {SourceAsk, OriginAgent, "sub-agent gate ask"},
 		{SourceMessage, OriginAgent, "message to this sub-agent"},
@@ -275,6 +278,7 @@ func LegacyOrigin(recorded string) Origin {
 type Origin struct {
 	Source   Source
 	Name     string
+	Shown    string
 	ID       string
 	Schedule string
 	Exit     *int

@@ -218,7 +218,11 @@ func (a AskPerson) reply(ctx context.Context, raw json.RawMessage, questions []t
 
 func (a AskPerson) answerLater(open *turn.Asked, replied <-chan personReply, recorded <-chan []string, questions []turn.PersonQuestion) {
 	defer open.Close()
-	intro, from := "the answer to your "+turn.AskPersonToolName+" question: ", llm.SourceAnswer
+	ids := make([]string, len(questions))
+	for i, q := range questions {
+		ids[i] = q.ID
+	}
+	asked, late := strings.Join(ids, ","), false
 	var reply personReply
 	select {
 	case reply = <-replied:
@@ -230,27 +234,29 @@ func (a AskPerson) answerLater(open *turn.Asked, replied <-chan personReply, rec
 			none.Answers = append(none.Answers, askAnswer{ID: q.ID, Status: askUnanswered, Chosen: []string{}})
 		}
 		told, _ := json.Marshal(none)
-		open.Answer("no answer yet to your "+turn.AskPersonToolName+" question: "+string(told), llm.SourceNoAnswer, shownToPerson(noAnswerHead, none, questions))
-		intro, from = "the answer to your "+turn.AskPersonToolName+" question, which came after you were told none had: ", llm.SourceLateAnswer
-		reply = <-replied
+		open.Answer("no answer yet to your "+turn.AskPersonToolName+" question: "+string(told), llm.Origin{Source: llm.SourceNoAnswer, Name: asked, Shown: shownToPerson(noAnswerHead, none, questions)})
+		late, reply = true, <-replied
 	}
 	if errors.Is(reply.err, context.Canceled) {
 		return
 	}
 	result := answered(reply, questions)
 	said, _ := json.Marshal(result)
-	open.Answer(intro+string(said), from, shownToPerson(headOf(result.Outcome), result, questions))
+	from, intro, head := postedAs(result.Outcome, late)
+	open.Answer(intro+string(said), llm.Origin{Source: from, Name: asked, Shown: shownToPerson(head, result, questions)})
 }
 
-func headOf(outcome askOutcome) string {
-	switch outcome {
-	case askSubmitted:
-		return "you answered"
-	case askCancelled:
-		return "the question was dismissed, so the recommended option stands"
-	case askUndelivered:
-		return "the question could not be asked, so the recommended option stands"
-	case askTimedOut, askTakenInAuto:
+func postedAs(outcome askOutcome, late bool) (llm.Source, string, string) {
+	yours := "your " + turn.AskPersonToolName + " question"
+	switch {
+	case outcome == askSubmitted && late:
+		return llm.SourceLateAnswer, "the answer to " + yours + ", which came after you were told none had: ", "you answered"
+	case outcome == askSubmitted:
+		return llm.SourceAnswer, "the answer to " + yours + ": ", "you answered"
+	case outcome == askCancelled:
+		return llm.SourceDismissed, "the person dismissed " + yours + ": ", "the question was dismissed, so the recommended option stands"
+	case outcome == askUndelivered:
+		return llm.SourceUnasked, yours + " could not be put to the person: ", "the question could not be asked, so the recommended option stands"
 	}
 	panic("ask_person: no answer is posted for outcome " + string(outcome))
 }

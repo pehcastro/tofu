@@ -303,6 +303,8 @@ func drawChat(view *session.Model, event Event, status string) {
 	switch event.Kind {
 	case EventTask:
 		switch {
+		case event.Origin.Shown != "":
+			view.Append(session.Entry{Kind: session.Note, Body: event.Origin.Shown})
 		case (event.Origin.Sub.Answer() || event.Origin.Sub == llm.SourceNoAnswer) && event.Origin.Name != "":
 			view.Append(session.Entry{Kind: session.Note, Body: event.Origin.Name})
 		case event.Origin.Kind == host.OriginPerson || event.Origin.Sub.Answer():

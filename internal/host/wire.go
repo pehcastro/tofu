@@ -269,6 +269,7 @@ type Origin struct {
 	Kind       OriginKind `json:"kind"`
 	Sub        OriginSub  `json:"sub"`
 	Name       string     `json:"name,omitempty"`
+	Shown      string     `json:"shown,omitempty"`
 	ID         string     `json:"id,omitempty"`
 	Job        string     `json:"job,omitempty"`
 	Schedule   string     `json:"schedule,omitempty"`
@@ -277,7 +278,7 @@ type Origin struct {
 }
 
 func wireOrigin(origin llm.Origin) Origin {
-	wired := Origin{Kind: origin.Kind(), Sub: origin.Source, Name: origin.Name, ID: origin.ID, Schedule: origin.Schedule, Exit: origin.Exit, DurationMs: origin.Ran.Milliseconds()}
+	wired := Origin{Kind: origin.Kind(), Sub: origin.Source, Name: origin.Name, Shown: origin.Shown, ID: origin.ID, Schedule: origin.Schedule, Exit: origin.Exit, DurationMs: origin.Ran.Milliseconds()}
 	if origin.Source == llm.SourceCronFire {
 		wired.Job, wired.ID = origin.ID, ""
 	}

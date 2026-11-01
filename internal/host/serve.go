@@ -1016,7 +1016,7 @@ func (s *server) publish(event Event) {
 		if event.Questions != nil && !s.answers {
 			by := cmp.Or(s.client, "this client")
 			safe.Go(s.report, "serve undelivered question", func() {
-				l.host.questions.answer(event.ID, answeredQuestion{QuestionAnswer{Outcome: QuestionUndelivered}, by})
+				l.host.AnswerQuestion(event.ID, QuestionAnswer{Outcome: QuestionUndelivered}, by)
 			})
 			return
 		}
