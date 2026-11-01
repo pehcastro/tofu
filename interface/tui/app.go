@@ -818,22 +818,19 @@ func (a *App) clearDialogs() tea.Cmd {
 }
 
 func (a *App) closed() tea.Cmd {
-	unread := a.steeredUnread
-	a.busy, a.leading, a.edits.Busy, a.steeredUnread = false, false, false, nil
+	a.busy, a.leading, a.edits.Busy = false, false, false
 	a.running, a.pressedAt, a.sentNow = 0, time.Time{}, false
 	clear(a.steered)
 	a.parkSubAgentsTheTurnLeftBehind()
 	a.stopWhatStillRuns()
 	a.view.Stop()
-	a.dropSteering()
 	a.countCrons()
 	a.carryHeld()
-	next := tea.Batch(a.pollQuota(), a.readPaths(), a.pollShells(), a.listen())
-	if task, queued := a.view.Release(); queued {
-		unread = append(unread, task)
+	if carried := a.carrySteers(); len(carried) > 0 {
+		a.busy, a.edits.Busy = true, true
+		a.leadTurnBegins()
+		a.view.Release()
+		a.steeredUnread = append(a.steeredUnread, carried...)
 	}
-	if len(unread) > 0 {
-		a.start(strings.Join(unread, unreadJoin))
-	}
-	return next
+	return tea.Batch(a.pollQuota(), a.readPaths(), a.pollShells(), a.listen())
 }

@@ -120,8 +120,9 @@ type heldSettings struct {
 }
 
 type audience struct {
-	mu    sync.Mutex
-	seats map[*seat]struct{}
+	mu      sync.Mutex
+	sending sync.Mutex
+	seats   map[*seat]struct{}
 }
 
 type link struct {
@@ -348,18 +349,21 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 	switch ask.Op {
 	case followSend:
 		h.received(ask.Images)
-		if _, running := h.Turn(); running {
-			reply.OK = false
-			break
-		}
 		_, pick := h.Settings()
 		if ask.Pick != (Pick{}) {
 			pick = ask.Pick
+		}
+		a.sending.Lock()
+		if _, running := h.Turn(); running {
+			reply.OK = false
+			a.sending.Unlock()
+			break
 		}
 		h.emitter().emit(Event{Kind: EventTask, Text: ask.Text, Origin: wireOrigin(llm.Origin{Source: llm.SourceTask}), Images: shownPending(ask.Text, ask.Images)})
 		if reply.OK = h.Send(pick, ask.Text); reply.OK {
 			reply.Turn, _ = h.Turn()
 		}
+		a.sending.Unlock()
 	case followStop:
 		h.Stop(ask.Stop)
 	case followStopLead:
@@ -439,8 +443,10 @@ func (h *Host) rosterRows() []SubAgentRow {
 }
 
 func (h *Host) steerFor(text string) string {
-	id := h.Steer(text)
-	h.emitter().emit(h.withImages(Event{Kind: EventSteerQueued, ID: id, Text: text}))
+	id := h.queueSteer(text)
+	out := h.emitter()
+	out.emit(h.withImages(Event{Kind: EventSteerQueued, ID: id, Text: text}))
+	h.carrySteers(out)
 	return id
 }
 

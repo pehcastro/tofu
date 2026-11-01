@@ -54,7 +54,6 @@ const (
 	readClock          = "15:04"
 	foldKey            = "f"
 	readBackFailed     = "the folded sub-agents were not all read back from the session: "
-	unreadJoin         = "\n\n"
 	messageTool        = "message"
 )
 
@@ -239,6 +238,13 @@ func (a *App) dropSteering() {
 	if a.options.Host != nil {
 		a.options.Host.DropSteering()
 	}
+}
+
+func (a *App) carrySteers() []string {
+	if a.options.Host == nil {
+		return nil
+	}
+	return a.options.Host.CarrySteers()
 }
 
 func (a *App) unqueue() {

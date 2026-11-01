@@ -177,6 +177,7 @@ func (h *Host) ended(out *emitter) {
 	h.finish(slices.DeleteFunc(fired, func(id string) bool {
 		return slices.ContainsFunc(unread, func(again cron.Fire) bool { return again.ID == id })
 	}), answer)
+	h.carrySteers(out)
 	h.fire(unread)
 	if !stopped {
 		h.fireAfterTurn()

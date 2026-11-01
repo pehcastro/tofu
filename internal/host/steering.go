@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	"tofu/internal/llm"
 	"tofu/internal/session"
 )
 
@@ -14,6 +15,7 @@ type steerQueue struct {
 	overflow []string
 	ids      []string
 	now      []string
+	held     []steered
 }
 
 type steered struct {
@@ -97,6 +99,17 @@ func (h *Host) Steer(text string) string {
 		images := h.takePending(text)
 		return h.keepUndelivered(f.ask(followAsk{Op: followSteer, Text: text, Images: images}), images).Steered
 	}
+	return h.queueSteer(text)
+}
+
+func (h *Host) CarrySteers() []string {
+	if h.following.Load() != nil {
+		return nil
+	}
+	return h.carrySteers(h.emitter())
+}
+
+func (h *Host) queueSteer(text string) string {
 	h.steering.mu.Lock()
 	defer h.steering.mu.Unlock()
 	id := session.NewEventID()
@@ -148,8 +161,33 @@ func (h *Host) DropSteering() {
 	}
 	h.steering.mu.Lock()
 	defer h.steering.mu.Unlock()
-	h.steering.drain()
+	h.steering.held = append(h.steering.held, h.steering.drain()...)
 	h.steering.now = nil
+}
+
+func (h *Host) carrySteers(out *emitter) []string {
+	h.mu.Lock()
+	if h.closed || h.running {
+		h.mu.Unlock()
+		return nil
+	}
+	h.steering.mu.Lock()
+	h.steering.held = append(h.steering.held, h.steering.drain()...)
+	unread := h.steering.held
+	h.steering.held, h.steering.now = nil, nil
+	h.steering.mu.Unlock()
+	texts := make([]string, 0, len(unread))
+	for _, entry := range unread {
+		texts = append(texts, entry.text)
+	}
+	if len(unread) > 0 {
+		h.begin(Pick{Wire: h.pick.Wire, Model: h.pick.Model, Effort: h.pick.Effort}, strings.Join(texts, "\n\n"), llm.Origin{Source: llm.SourceTyped})
+	}
+	h.mu.Unlock()
+	for _, entry := range unread {
+		out.emit(Event{Kind: EventSteered, ID: entry.id, Text: entry.text, Step: 1, Origin: wireOrigin(llm.Origin{Source: llm.SourceTyped})})
+	}
+	return texts
 }
 
 func (h *Host) Unsteer(text string) bool {
@@ -158,8 +196,13 @@ func (h *Host) Unsteer(text string) bool {
 	}
 	h.steering.mu.Lock()
 	defer h.steering.mu.Unlock()
+	typed := func(entry steered) bool { return entry.text == text }
+	if at := slices.IndexFunc(h.steering.held, typed); at >= 0 {
+		h.steering.held = slices.Delete(h.steering.held, at, at+1)
+		return true
+	}
 	entries := h.steering.drain()
-	at := slices.IndexFunc(entries, func(entry steered) bool { return entry.text == text })
+	at := slices.IndexFunc(entries, typed)
 	if at >= 0 {
 		entries = slices.Delete(entries, at, at+1)
 	}
