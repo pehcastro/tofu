@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io/fs"
 	"slices"
 	"strings"
 	"time"
@@ -245,6 +247,9 @@ type heldPrefix struct {
 
 func HeldPrefix(store *session.Store, id, agent string) (*Prefix, error) {
 	events, err := store.Events(id)
+	if errors.Is(err, fs.ErrNotExist) {
+		return &Prefix{}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +265,15 @@ func HeldPrefix(store *session.Store, id, agent string) (*Prefix, error) {
 		prompts = append(prompts, prompt)
 	}
 	if len(prompts) == 0 {
-		return &Prefix{}, nil
+		header, err := store.Header(id)
+		if err != nil || header.CarriedFrom == nil {
+			return &Prefix{}, err
+		}
+		from := header.CarriedFrom.Session
+		if _, err := store.Header(from); err != nil {
+			return &Prefix{}, fmt.Errorf("%s carries on from %s, which was not read: %w", id, from, err)
+		}
+		return HeldPrefix(store, from, agent)
 	}
 	blobs, err := store.Blobs(id)
 	if err != nil {

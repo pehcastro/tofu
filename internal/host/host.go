@@ -731,7 +731,12 @@ func (h *Host) carry(resumed Carry) error {
 	}
 	if h.prefix, err = turn.HeldPrefix(store, resumed.Session, ""); err != nil {
 		h.prefix = &turn.Prefix{}
-		return fmt.Errorf("the system prompt and tools %s first sent were not read back, so the next turn sends them anew: %w", resumed.Session, err)
+		err = fmt.Errorf("the system prompt and tools %s first sent were not read back, so the next turn sends them anew: %w", resumed.Session, err)
+		if !h.joins {
+			notice := session.StopBody{NoticeBody: session.NoticeBody{Text: err.Error(), From: turn.RecordedOrigin(llm.Origin{Source: llm.SourceNotice})}}
+			err = errors.Join(err, appendNotice(h.dir, resumed.Session, session.Event{Kind: session.EventNotice}, notice))
+		}
+		return err
 	}
 	if header, err := store.Header(resumed.Session); err == nil {
 		h.carriedOn = header.Wire
