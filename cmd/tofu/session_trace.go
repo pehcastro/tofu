@@ -368,12 +368,12 @@ func chainForks(store *session.Store, chain []session.Header) ([]traceRow, error
 	var events []session.Event
 	recorded := map[string]string{}
 	for _, header := range slices.Backward(chain) {
-		read, err := store.Events(header.ID)
+		read, err := store.EventsOf(header.ID, session.EventCompaction, session.EventListChange)
 		if err != nil {
 			return nil, err
 		}
 		for _, event := range read {
-			if event.Kind != session.EventCompaction && event.Kind != session.EventListChange || header.CarriedFrom != nil && event.Turn == header.ID {
+			if header.CarriedFrom != nil && event.Turn == header.ID {
 				continue
 			}
 			if header.ID != chain[0].ID {

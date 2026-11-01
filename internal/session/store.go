@@ -880,6 +880,26 @@ func (s *Store) EachEvent(id string, wanted func(agent string) bool, visit func(
 	})
 }
 
+func (s *Store) EventsOf(id string, kinds ...EventKind) ([]Event, error) {
+	var kept []Event
+	keep := func(event Event) bool {
+		if slices.Contains(kinds, event.Kind) {
+			kept = append(kept, event)
+		}
+		return true
+	}
+	err := s.scanEvents(id, keep, func(line []byte, number int) (bool, error) {
+		_, fromKind, _ := bytes.Cut(line, []byte(`"kind":"`))
+		kind, _, _ := bytes.Cut(fromKind, []byte(`"`))
+		if !slices.Contains(kinds, EventKind(kind)) {
+			return true, nil
+		}
+		event, err := parseLine[Event](line, id, number)
+		return err == nil && keep(event), err
+	})
+	return kept, err
+}
+
 func (s *Store) scanEvents(id string, held func(Event) bool, scanned func(line []byte, number int) (bool, error)) error {
 	if err := namesOneSession(id); err != nil {
 		return err
@@ -903,7 +923,7 @@ func (s *Store) scanEvents(id string, held func(Event) bool, scanned func(line [
 		return fmt.Errorf("session: %s has no events: %w", id, err)
 	}
 	defer func() { _ = file.Close() }()
-	reader, line := bufio.NewReader(file), []byte(nil)
+	reader, line := bufio.NewReaderSize(file, bufio.MaxScanTokenSize), []byte(nil)
 	for number := 0; ; {
 		chunk, err := reader.ReadSlice('\n')
 		line = append(line[:0], chunk...)
