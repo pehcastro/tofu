@@ -392,20 +392,17 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			row.Warnings = append(row.Warnings, notSummarized+err.Error())
 		}
 	}
-	episodesCarried := konst.MemtreeViewBytes
 	episodesFor := func(sized recall.Budget, head []llm.Message, saidElsewhere []string) string {
 		config.Inbox.compacted()
 		room := (sized.Bands.Target() - sized.Tokens(artifacts.preview, historyOf(head))) * artifacts.preview.BytesPerThousandTokens / 1000
-		allowed := min(room*konst.EpisodeViewPercentOfRoom/100, episodesCarried)
+		allowed := min(room*konst.EpisodeViewPercentOfRoom/100, konst.MemtreeViewBytes)
 		if allowed < konst.MemtreeLineBytes {
-			episodesCarried = 0
 			return ""
 		}
 		view, err := keeper.Episodes(allowed, saidElsewhere)
 		if err != nil {
 			row.Warnings = append(row.Warnings, "the episode view is not carried: "+err.Error())
 		}
-		episodesCarried = len(view)
 		return view
 	}
 	carried, view := slices.DeleteFunc(slices.Clone(config.History), func(message llm.Message) bool {
@@ -724,6 +721,8 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	guard := newLoopGuard(config.Caps)
 	forks, stopContinuations, handbacks := 0, 0, 0
+	forkCapReached := "this turn reached its cap of " + strconv.Itoa(config.Caps.MaxForks) + " forks, and the work is not finished"
+	pastForkCap := func(fork *Fork) bool { return fork != nil && config.Caps.MaxForks > 0 && forks >= config.Caps.MaxForks }
 	var recordedGrants []subagent.Question
 	if config.Boundary != nil {
 		recordedGrants = config.Boundary.Asked()
@@ -886,6 +885,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				fork, begun, err := forkHistory(artifacts, budget, config.forkOpening(taskOrigin), messages, "", forks+1, config.Caps.MaxForks)
 				if err != nil {
 					return fail(err)
+				}
+				if pastForkCap(fork) {
+					return endAt(OutcomeStepCap, forkCapReached, messages), nil
 				}
 				if fork != nil {
 					forks++
@@ -1350,10 +1352,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 					keep(stepRow)
 					return fail(err)
 				}
-				if fork != nil && config.Caps.MaxForks > 0 && forks >= config.Caps.MaxForks {
+				if pastForkCap(fork) {
 					keep(stepRow)
-					lead := "this turn reached its cap of " + strconv.Itoa(config.Caps.MaxForks) + " forks, and the work is not finished"
-					return endAt(OutcomeStepCap, lead, messages), nil
+					return endAt(OutcomeStepCap, forkCapReached, messages), nil
 				}
 				if fork != nil {
 					forks++
