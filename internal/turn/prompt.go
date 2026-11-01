@@ -219,15 +219,34 @@ func readInstructions(path string) string {
 }
 
 func gitBranch(dir string) string {
-	head, found := findUp(dir, ".git", "HEAD")
-	if !found {
-		return ""
+	at := absolute(dir)
+	for {
+		marker := filepath.Join(at, ".git")
+		if info, err := os.Stat(marker); err == nil {
+			gitDir := marker
+			if !info.IsDir() {
+				body, err := os.ReadFile(marker)
+				pointer, found := strings.CutPrefix(strings.TrimSpace(string(body)), "gitdir: ")
+				if err != nil || !found {
+					return ""
+				}
+				gitDir = filepath.Join(at, pointer)
+				if filepath.IsAbs(pointer) {
+					gitDir = pointer
+				}
+			}
+			head, err := os.ReadFile(filepath.Join(gitDir, "HEAD"))
+			if err != nil {
+				return ""
+			}
+			return strings.TrimPrefix(strings.TrimSpace(string(head)), "ref: refs/heads/")
+		}
+		parent := filepath.Dir(at)
+		if parent == at {
+			return ""
+		}
+		at = parent
 	}
-	body, err := os.ReadFile(head)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimPrefix(strings.TrimSpace(string(body)), "ref: refs/heads/")
 }
 
 func findUp(dir string, name ...string) (string, bool) {

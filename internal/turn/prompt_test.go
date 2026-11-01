@@ -131,3 +131,32 @@ func TestInstructionFilesPerFolder(t *testing.T) {
 		})
 	}
 }
+
+func TestGitBranchFollowsAGitFile(t *testing.T) {
+	root := t.TempDir()
+	files := map[string]string{
+		".git/HEAD":              "ref: refs/heads/main\n",
+		".git/worktrees/wt/HEAD": "ref: refs/heads/feature\n",
+		".git/modules/sub/HEAD":  "ref: refs/heads/sub-branch\n",
+		"wt/.git":                "gitdir: " + filepath.ToSlash(filepath.Join(root, ".git/worktrees/wt")) + "\n",
+		"sub/.git":               "gitdir: ../.git/modules/sub\r\n",
+		"broken/.git":            "gitdir: " + filepath.Join(root, "nowhere") + "\n",
+		"garbled/.git":           "not a pointer\n",
+		"plain/.git/HEAD":        "ref: refs/heads/trunk\n",
+		"plain/deep/keep.txt":    "",
+	}
+	for name, body := range files {
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for dir, want := range map[string]string{"wt": "feature", "sub": "sub-branch", "broken": "", "garbled": "", "plain/deep": "trunk", ".": "main"} {
+		if got := gitBranch(filepath.Join(root, dir)); got != want {
+			t.Errorf("gitBranch(%s) = %q, want %q", dir, got, want)
+		}
+	}
+}
