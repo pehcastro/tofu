@@ -31,6 +31,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 	var unfinished []int
 	calls, asked := map[string]int{}, map[string]session.CallBody{}
 	libraryFiles, tickets := map[string]string{}, map[string]string{}
+	forked := map[string]*turn.Fork{}
 	for _, event := range events {
 		row := traceRow{At: event.At, Agent: event.Agent, Turn: event.Turn, ID: event.ID}
 		switch event.Kind {
@@ -206,12 +207,19 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 				}
 			}
 			if compacted.Fork != nil {
+				forked[event.Agent] = compacted.Fork
 				row.Text = "forked at " + strconv.Itoa(compacted.Fork.TokensBefore) + " tokens, carried " + strconv.Itoa(compacted.Fork.TokensAfter)
 			}
 		case session.EventListChange:
 			var change session.ListChangeBody
 			_ = json.Unmarshal(event.Body, &change)
-			row.Kind, row.Text = kindList, traced(change.Kind+" "+strconv.Itoa(len(change.Before))+" to "+plural(len(change.After), "message"), change.Why)
+			counts := strconv.Itoa(len(change.Before)) + " to " + plural(len(change.After), "message")
+			row.Kind, row.Text = kindList, traced(change.Kind+" "+counts, change.Why)
+			if change.Kind == session.ListChangeFork {
+				step, carried := forkWords(forked[event.Agent])
+				row.Kind, row.Text = kindFork, traced(step, counts, carried, change.Why)
+				delete(forked, event.Agent)
+			}
 		case session.EventRead:
 			var read session.Read
 			_ = json.Unmarshal(event.Body, &read)
@@ -348,6 +356,16 @@ func carriedFiles(source llm.Source, carry string) string {
 		said = append(said, "never seen "+carried.Unseen)
 	}
 	return strings.Join(said, " · ")
+}
+
+func forkWords(fork *turn.Fork) (step, carried string) {
+	switch {
+	case fork == nil:
+		return "step and files in the segment before, see --kind fork", ""
+	case len(fork.Carry.Files) == 0:
+		return "after step " + strconv.Itoa(fork.Step), "carried no file whole"
+	}
+	return "after step " + strconv.Itoa(fork.Step), "carried " + strings.Join(fork.Carry.Files, ", ")
 }
 
 func ruleWords(found []session.RuleFinding) string {

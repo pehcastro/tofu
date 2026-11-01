@@ -41,6 +41,7 @@ const (
 	kindCache      traceKind = "cache"
 	kindCompaction traceKind = "compaction"
 	kindList       traceKind = "list"
+	kindFork       traceKind = "fork"
 	kindRead       traceKind = "read"
 	kindStartup    traceKind = "startup"
 	kindNotice     traceKind = "notice"
@@ -50,7 +51,7 @@ const (
 
 func traceKinds() []traceKind {
 	return []traceKind{kindTurn, kindStop, kindError, kindSpawn, kindReport, kindMessage, kindInsert, kindCron, kindRequest, kindMemory,
-		kindCall, kindShell, kindGate, kindHook, kindCache, kindCompaction, kindList, kindRead, kindStartup, kindNotice, kindAttachment, kindLibrary}
+		kindCall, kindShell, kindGate, kindHook, kindCache, kindCompaction, kindList, kindFork, kindRead, kindStartup, kindNotice, kindAttachment, kindLibrary}
 }
 
 type traceOutcome string
@@ -351,7 +352,39 @@ func sessionTimeline(store *session.Store, handle string, filter traceFilter) (t
 		}
 		rows = append(rows, borrowed...)
 	}
+	if slices.Contains(filter.Kinds, kindFork) {
+		forks, err := chainForks(store, append([]session.Header{header}, ancestors...))
+		if err != nil {
+			return traceTimeline{}, err
+		}
+		rows = append(slices.DeleteFunc(rows, func(row traceRow) bool { return row.Kind == kindFork }), forks...)
+	}
 	slices.SortStableFunc(rows, func(a, b traceRow) int { return a.At.Compare(b.At) })
 	timeline.Rows, timeline.Matched = rows, len(rows)
 	return timeline, nil
+}
+
+func chainForks(store *session.Store, chain []session.Header) ([]traceRow, error) {
+	var events []session.Event
+	recorded := map[string]string{}
+	for _, header := range slices.Backward(chain) {
+		read, err := store.Events(header.ID)
+		if err != nil {
+			return nil, err
+		}
+		for _, event := range read {
+			if event.Kind != session.EventCompaction && event.Kind != session.EventListChange || header.CarriedFrom != nil && event.Turn == header.ID {
+				continue
+			}
+			if header.ID != chain[0].ID {
+				recorded[event.ID] = handleOf(store, header.ID)
+			}
+			events = append(events, event)
+		}
+	}
+	forks := slices.DeleteFunc(traceRows(events, nil), func(row traceRow) bool { return row.Kind != kindFork })
+	for i := range forks {
+		forks[i].RecordedIn = recorded[forks[i].ID]
+	}
+	return forks, nil
 }

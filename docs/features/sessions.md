@@ -234,8 +234,13 @@ one line each, and filters combine: `--since`, `--from` and `--to` (`1h`,
 `04:10`, or a date and time), `--agent` (a name, or `lead`), `--turn`,
 `--grep`, `--last N`, and `--kind` with any of `turn`, `stop`, `error`,
 `spawn`, `report`, `message`, `insert`, `cron`, `request`, `memory`, `call`,
-`shell`, `gate`, `hook`, `cache`, `compaction`, `list`, `read`, `startup`,
-`notice`, `attachment` and `library`. `--from` also takes an origin, one of
+`shell`, `gate`, `hook`, `cache`, `compaction`, `list`, `fork`, `read`,
+`startup`, `notice`, `attachment` and `library`. `--kind fork` lists every
+fork across the session's generations, each with its agent, the step it
+forked after, its messages before and after, and the files it carried
+whole, such as `after step 3 · 16 to 5 messages · carried no file whole`;
+a fork from an earlier generation says which one recorded it. `list` keeps
+every other change to the message list. `--from` also takes an origin, one of
 `person`, `agent`, `tofu`, `cron`, `hook`, `memory`, `skill`, `library` and
 `plugin`, and lists the messages that origin wrote: `--from person` lists the
 task you typed, every message you sent mid-turn, and your answers to
