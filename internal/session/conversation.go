@@ -50,6 +50,7 @@ type MessageBody struct {
 	From              *Origin           `json:"from,omitempty"`
 	PostedAt          *time.Time        `json:"posted_at,omitempty"`
 	TakenAt           *time.Time        `json:"taken_at,omitempty"`
+	KeptHead          bool              `json:"kept_head,omitempty"`
 }
 
 type StepToolCall struct {

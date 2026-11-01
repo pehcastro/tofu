@@ -61,6 +61,68 @@ func TestALongConversationStaysInsideTheBreakpointAllowance(t *testing.T) {
 	}
 }
 
+func TestAKeptHeadPastTheLookbackTakesTheSecondBreakpoint(t *testing.T) {
+	for _, held := range []struct {
+		name      string
+		exchanges int
+		calls     int
+		lastCalls int
+		markAt    int
+		want      []int
+	}{
+		{name: "kept head 24 blocks before the tip", exchanges: 15, calls: 1, lastCalls: 1, markAt: 6, want: []int{6, 30}},
+		{name: "kept head 18 blocks before the tip", exchanges: 12, calls: 1, lastCalls: 1, markAt: 6, want: []int{22, 24}},
+		{name: "no kept head", exchanges: 15, calls: 1, lastCalls: 1, markAt: -1, want: []int{28, 30}},
+		{name: "kept head on the first of two results in one message", exchanges: 15, calls: 2, lastCalls: 2, markAt: 2, want: []int{3, 60}},
+		{name: "a last step wider than the lookback keeps the committed breakpoint", exchanges: 15, calls: 1, lastCalls: 22, markAt: 6, want: []int{28, 72}},
+	} {
+		t.Run(held.name, func(t *testing.T) {
+			request := minimalRequest()
+			bulk := strings.Repeat("a line of a file that was read\n", 200)
+			for step := 1; step <= held.exchanges; step++ {
+				width := held.calls
+				if step == held.exchanges {
+					width = held.lastCalls
+				}
+				asked := llm.Message{Role: llm.RoleAssistant}
+				var answered []llm.Message
+				for call := range width {
+					id := fmt.Sprintf("toolu_%d_%d", step, call)
+					asked.ToolCalls = append(asked.ToolCalls, llm.ToolCall{ID: id, Name: "read"})
+					answered = append(answered, llm.Message{Role: llm.RoleTool, ToolCallID: id, Content: bulk})
+				}
+				request.Messages = append(append(request.Messages, asked), answered...)
+			}
+			if held.markAt >= 0 {
+				request.Messages[held.markAt].KeptHead = true
+			}
+			body, err := request.Encode(true)
+			if err != nil {
+				t.Fatalf("encoding: %v", err)
+			}
+			var decoded struct {
+				Messages []wireMessage `json:"messages"`
+			}
+			if err := json.Unmarshal(body, &decoded); err != nil {
+				t.Fatalf("decoding: %v", err)
+			}
+			var marked []int
+			at := 0
+			for _, message := range decoded.Messages {
+				for _, block := range message.Content {
+					if block.CacheControl != nil {
+						marked = append(marked, at)
+					}
+					at++
+				}
+			}
+			if fmt.Sprint(marked) != fmt.Sprint(held.want) {
+				t.Fatalf("breakpoints on blocks %v, want %v", marked, held.want)
+			}
+		})
+	}
+}
+
 func TestTheEncodedRequestPlacesItsMarkersWhereTheGoldenSays(t *testing.T) {
 	request := minimalRequest()
 	for step := 1; step <= 3; step++ {

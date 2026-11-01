@@ -269,6 +269,7 @@ func messageRowOf(message llm.Message) MessageRow {
 		ToolResultBytes: message.ToolResultBytes,
 		Thinking:        message.Thinking.Text,
 		From:            RecordedOrigin(message.Origin),
+		KeptHead:        message.KeptHead,
 	}
 	if message.Role == llm.RoleUser {
 		row.Origin = message.Origin.Legacy()
@@ -299,7 +300,7 @@ func messageOf(m MessageRow) (llm.Message, error) {
 		signature = codex.EncodeReasoning(m.Reasoning.ID, m.Reasoning.EncryptedContent)
 	}
 	message := llm.Message{Content: m.Content, ToolCallID: m.ToolCallID, ToolResultBytes: m.ToolResultBytes,
-		Thinking: llm.Thinking{Text: m.Thinking, Signature: signature}, Origin: OriginOf(m)}
+		Thinking: llm.Thinking{Text: m.Thinking, Signature: signature}, Origin: OriginOf(m), KeptHead: m.KeptHead}
 	if m.PostedAt != nil {
 		message.Origin.PostedAt = *m.PostedAt
 	}
@@ -506,6 +507,7 @@ type resultRow struct {
 	Content     string            `json:"content"`
 	ToolOutcome string            `json:"tool_outcome,omitempty"`
 	Pictures    []session.Picture `json:"pictures,omitempty"`
+	KeptHead    bool              `json:"kept_head,omitempty"`
 }
 
 type compactionRow struct {
@@ -634,7 +636,7 @@ func (r *record) message(message llm.Message, request string, results map[string
 		}
 		held, _ := r.heldRow(message)
 		r.add(session.Event{Kind: session.EventToolResult, Call: message.ToolCallID, Request: request},
-			resultRow{ToolCallRow: row, Content: message.Content, ToolOutcome: toolOutcomeName(message.ToolOutcome), Pictures: held.Pictures})
+			resultRow{ToolCallRow: row, Content: message.Content, ToolOutcome: toolOutcomeName(message.ToolOutcome), Pictures: held.Pictures, KeptHead: message.KeptHead})
 	case llm.RoleAssistant:
 		if len(message.ToolCalls) > 0 {
 			r.undoStarted()

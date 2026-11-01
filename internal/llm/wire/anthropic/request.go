@@ -47,6 +47,7 @@ const (
 	historyCacheMinPrefixChars    = 1
 	historyCacheCommittedMinChars = 4096
 	cacheBreakpointsPerRequest    = 4
+	cacheLookbackBlocks           = 20
 
 	adaptiveThinkingMajor = 4
 	adaptiveThinkingMinor = 7
@@ -82,6 +83,7 @@ type contentBlock struct {
 	Signature string          `json:"signature,omitempty"`
 
 	CacheControl *cacheControl `json:"cache_control,omitempty"`
+	keptHead     bool
 }
 
 type wireMessage struct {
@@ -311,11 +313,38 @@ func applyHistoryCaching(messages []wireMessage, ttl string, budget int) {
 		return
 	}
 	markPrefixEnd(messages[len(messages)-1].Content, ttl)
-	committed := committedPrefixEnd(messages)
-	if budget < 2 || committed < 1 || historyChars(messages[:committed+1]) < historyCacheCommittedMinChars {
+	if budget < 2 {
 		return
 	}
-	markPrefixEnd(messages[committed].Content, ttl)
+	committed := committedPrefixEnd(messages)
+	anchored := committed >= 1 && historyChars(messages[:committed+1]) >= historyCacheCommittedMinChars
+	tipReachesCommitted := !anchored || blocksAfter(messages, committed, len(messages[committed].Content)-1) <= cacheLookbackBlocks
+	if m, b := keptHead(messages); m >= 0 && tipReachesCommitted && blocksAfter(messages, m, b) > cacheLookbackBlocks {
+		messages[m].Content[b].CacheControl = ephemeral(ttl)
+		return
+	}
+	if anchored {
+		markPrefixEnd(messages[committed].Content, ttl)
+	}
+}
+
+func keptHead(messages []wireMessage) (int, int) {
+	for m := len(messages) - 1; m >= 0; m-- {
+		for b := len(messages[m].Content) - 1; b >= 0; b-- {
+			if messages[m].Content[b].keptHead {
+				return m, b
+			}
+		}
+	}
+	return -1, -1
+}
+
+func blocksAfter(messages []wireMessage, message, block int) int {
+	after := len(messages[message].Content) - 1 - block
+	for _, later := range messages[message+1:] {
+		after += len(later.Content)
+	}
+	return after
 }
 
 func committedPrefixEnd(messages []wireMessage) int {
@@ -407,14 +436,16 @@ func encodeMessages(messages []llm.Message, oauth bool) ([]wireMessage, error) {
 			if err != nil {
 				return nil, err
 			}
-			encoded = append(encoded, wireMessage{Role: "user", Content: append(blocks, pictures...)})
+			blocks = append(blocks, pictures...)
+			blocks[len(blocks)-1].keptHead = message.KeptHead
+			encoded = append(encoded, wireMessage{Role: "user", Content: blocks})
 
 		case llm.RoleTool:
 			if message.ToolCallID == "" {
 				return nil, transport.Fail("anthropic.Encode", transport.KindBadRequest, nil,
 					"message %d is a tool result with no tool call id", index)
 			}
-			result := contentBlock{Type: "tool_result", ToolUseID: message.ToolCallID, Content: message.Content}
+			result := contentBlock{Type: "tool_result", ToolUseID: message.ToolCallID, Content: message.Content, keptHead: message.KeptHead}
 			if len(message.Images) > 0 {
 				pictures, err := pictureBlocks(index, message.Images)
 				if err != nil {
@@ -453,6 +484,7 @@ func encodeMessages(messages []llm.Message, oauth bool) ([]wireMessage, error) {
 				blocks = append(blocks, contentBlock{Type: "tool_use", ID: call.ID,
 					Name: EncodeToolName(call.Name, oauth), Input: input})
 			}
+			blocks[len(blocks)-1].keptHead = message.KeptHead
 			encoded = append(encoded, wireMessage{Role: "assistant", Content: blocks})
 
 		case llm.RoleUnknown:

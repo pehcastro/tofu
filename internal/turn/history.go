@@ -271,6 +271,16 @@ func CompactCarried(artifactDir, wire string, carried []llm.Message) (Compacted,
 	if err != nil {
 		return Compacted{}, err
 	}
+	unchanged := 0
+	for unchanged < len(shrunk) && shrunk[unchanged].Content == carried[unchanged].Content && len(shrunk[unchanged].Images) == len(carried[unchanged].Images) {
+		unchanged++
+	}
+	for unchanged > 0 && unchanged < len(shrunk) && shrunk[unchanged].Role != llm.RoleAssistant {
+		unchanged--
+	}
+	for i := range shrunk {
+		shrunk[i].KeptHead = unchanged < len(shrunk) && i == unchanged-1
+	}
 	return Compacted{Results: shrink.results, TokensBefore: before, TokensAfter: HistoryTokens(artifacts.preview, shrunk), Kept: kept, Drops: shrink.drops, Messages: shrunk}, nil
 }
 

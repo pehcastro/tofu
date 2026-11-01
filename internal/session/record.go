@@ -141,6 +141,7 @@ type ResultBody struct {
 	ExitCode    *int          `json:"exit_code,omitempty"`
 	Error       string        `json:"error,omitempty"`
 	Rules       []RuleFinding `json:"rules,omitempty"`
+	KeptHead    bool          `json:"kept_head,omitempty"`
 }
 
 type RuleFinding struct {

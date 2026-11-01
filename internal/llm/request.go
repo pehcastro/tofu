@@ -107,6 +107,7 @@ type Message struct {
 	ToolHits        *int `json:"-"`
 	Thinking        Thinking
 	Origin          Origin `json:"-"`
+	KeptHead        bool   `json:"-"`
 }
 
 type OriginKind string
