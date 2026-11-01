@@ -151,6 +151,12 @@ func contextOf(store *session.Store, handle string, build recall.Bands, nextCeil
 	}
 	if report.Fork == nil && header.ForkedInto != "" {
 		report.Fork = &contextForkReport{Into: header.ForkedInto}
+		if into, err := store.Header(header.ForkedInto); err == nil {
+			report.Fork.Kind = into.ForkKind
+		}
+		if header.ForkTokensBefore > 0 {
+			report.Fork.Counts = &contextForkCounts{TokensBefore: header.ForkTokensBefore, TokensAfter: header.ForkTokensAfter}
+		}
 	}
 	report.Items = recall.Items(cfg, itemBands, conversation)
 	return report, nil
@@ -232,12 +238,16 @@ func forkFact(store *session.Store, fork *contextForkReport) string {
 	if fork == nil {
 		return ""
 	}
-	into := "into " + handleOf(store, fork.Into)
+	parts := []string{"into " + handleOf(store, fork.Into)}
 	if _, err := store.Header(fork.Into); errors.Is(err, fs.ErrNotExist) {
-		into = "into " + fork.Into + ", no longer here"
+		parts[0] = "into " + fork.Into + ", not on disk"
 	}
-	if fork.Counts == nil {
-		return into + " · counts not recorded"
+	if fork.Kind != "" {
+		parts = append(parts, fork.Kind)
 	}
-	return into + " · " + fork.Kind + " · " + strconv.Itoa(fork.Counts.TokensBefore) + " → " + strconv.Itoa(fork.Counts.TokensAfter) + " tokens"
+	counts := "counts not recorded"
+	if fork.Counts != nil {
+		counts = strconv.Itoa(fork.Counts.TokensBefore) + " → " + strconv.Itoa(fork.Counts.TokensAfter) + " tokens"
+	}
+	return strings.Join(append(parts, counts), " · ")
 }
