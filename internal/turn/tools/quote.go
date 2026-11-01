@@ -131,12 +131,9 @@ func ResolveQuote(store *session.Store, recorded, ref string) (Quoted, error) {
 	if store == nil || recorded == "" {
 		return Quoted{}, errors.New("this turn is recording no session, so there is nothing to look up")
 	}
-	newest, err := store.Header(recorded)
+	newest, err := turn.NewestOnTheLine(store, recorded)
 	if errors.Is(err, fs.ErrNotExist) {
 		return Quoted{Outcome: QuoteNotFound, Hash: hash}, nil
-	}
-	for err == nil && newest.ForkedInto != "" && newest.ForkedInto != newest.ID {
-		newest, err = store.Header(newest.ForkedInto)
 	}
 	if err != nil {
 		return Quoted{}, err

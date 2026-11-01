@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"slices"
 	"strconv"
@@ -410,11 +411,21 @@ const (
 	repeatNeedsACheck = "unless it only fits this one task, propose the strongest check that holds it with nobody keeping it in mind, a type, a lint, a rule in the library or a hook, and a ticket to build that check. A memory line is not a check: write none, and never promise from now on."
 )
 
-func (b *Inbox) SaidInChain(store *session.Store, id string) ([]PersonSaid, error) {
-	newest, err := store.Header(id)
-	for err == nil && newest.ForkedInto != "" && newest.ForkedInto != newest.ID {
-		newest, err = store.Header(newest.ForkedInto)
+func NewestOnTheLine(store *session.Store, id string) (session.Header, error) {
+	here, err := store.Header(id)
+	for err == nil && here.ForkedInto != "" && here.ForkedInto != here.ID {
+		into, intoErr := store.Header(here.ForkedInto)
+		movedOn := intoErr == nil && into.CarriedFrom != nil && into.CarriedFrom.Event != "" && into.CarriedFrom.Event != here.Head
+		if errors.Is(intoErr, fs.ErrNotExist) || movedOn {
+			return here, nil
+		}
+		here, err = into, intoErr
 	}
+	return here, err
+}
+
+func (b *Inbox) SaidInChain(store *session.Store, id string) ([]PersonSaid, error) {
+	newest, err := NewestOnTheLine(store, id)
 	if err != nil {
 		return nil, err
 	}
