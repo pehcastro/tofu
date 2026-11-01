@@ -132,12 +132,12 @@ func goSymbolAttempt(source string, matched map[string]string) Attempt {
 	if len(files) == 0 {
 		return Attempt{
 			Candidate: GoSymbol,
-			NotRun:    "no go file matched, and go is the only language parsed here: a tree in another language gets the text forms and no symbol form",
+			NotRun:    "no go file matched, and this form parses go alone: the symbols tool answers definitions and callers for rust and typescript",
 		}
 	}
 	slices.Sort(files)
 	started := time.Now()
-	graph := symbolGraph(files, source, func(rel string) ([]byte, error) { return []byte(matched[rel]), nil })
+	graph := symbolGraph(files, func(called string) bool { return called == source }, func(rel string) ([]byte, error) { return []byte(matched[rel]), nil })
 	spent := time.Since(started)
 	where := make(map[string]bool, len(graph.Definitions)+len(graph.Callers))
 	for _, definition := range graph.Definitions {

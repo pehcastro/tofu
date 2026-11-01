@@ -20,7 +20,7 @@ The compiler proves what it can. You own what it cannot, and you are done when t
 ## Read first
 
 - package.json, tsconfig.json with every file it extends or references, and AGENTS.md or CLAUDE.md when present. What the project says wins over this page.
-- Every file the change touches, and every caller of what it changes. Search for the call, not the name.
+- Every file the change touches, and every caller of what it changes. Ask `symbols` for a function's callers before you change it; it skips comments and strings. Then search for the call where an import renames it, since `symbols` matches the name.
 
 ## The done-gate
 

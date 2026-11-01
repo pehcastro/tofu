@@ -18,6 +18,7 @@ import (
 	"unicode"
 
 	"tofu/internal/konst"
+	"tofu/internal/search"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
 )
@@ -73,7 +74,7 @@ func (m Managed) ownedCallers(ticket Ticket, reason string) (string, error) {
 }
 
 func callerSources(root string) ([]string, string) {
-	listed, err := gitOut(root, "", "ls-files", "--cached", "--others", "--exclude-standard", "--", "*.go", "*.rs")
+	listed, err := gitOut(root, "", "ls-files", "--cached", "--others", "--exclude-standard", "--", "*.go", "*.rs", "*.ts", "*.tsx")
 	if err != nil {
 		return nil, "the scan for callers did not run: " + err.Error()
 	}
@@ -110,7 +111,7 @@ func scanCallers(root string, ticket Ticket) (callerScan, error) {
 	module := goModule(root)
 	var items []callerItem
 	for _, rel := range sources {
-		if !owned(rel) {
+		if !owned(rel) || path.Ext(rel) != ".go" && path.Ext(rel) != ".rs" {
 			continue
 		}
 		raw, err := read(rel)
@@ -146,8 +147,95 @@ func scanCallers(root string, ticket Ticket) (callerScan, error) {
 			}
 		}
 	}
+	scan.sites = append(scan.sites, functionCallers(root, sources, owned, text)...)
 	slices.SortStableFunc(scan.sites, func(a, b callerSite) int { return strings.Compare(a.item, b.item) })
 	return scan, nil
+}
+
+func functionCallers(root string, sources []string, owned func(string) bool, text string) []callerSite {
+	var mine, others []string
+	for _, rel := range sources {
+		if path.Ext(rel) == ".go" {
+			continue
+		}
+		if owned(rel) {
+			mine = append(mine, rel)
+		} else {
+			others = append(others, rel)
+		}
+	}
+	lines := map[string][]string{}
+	lineOf := func(rel string, number int) string {
+		if lines[rel] == nil {
+			raw, _ := os.ReadFile(filepath.Join(root, rel))
+			lines[rel] = strings.Split(string(raw), "\n")
+		}
+		if number > len(lines[rel]) {
+			return ""
+		}
+		return strings.TrimSpace(lines[rel][number-1])
+	}
+	home := map[string]string{}
+	for _, definition := range search.Index(root, mine, func(string) bool { return true }).Definitions {
+		head := definition.FirstLine
+		for head < definition.LastLine && strings.HasPrefix(lineOf(definition.Path, head), "#[") {
+			head++
+		}
+		name := bareName(definition.Symbol)
+		public := definition.Kind == search.KindFunc && path.Ext(definition.Path) == ".rs" && strings.HasPrefix(lineOf(definition.Path, head), "pub")
+		if home[name] == "" && (public || named(text, "fn "+name) && (definition.Kind == search.KindFunc || definition.Kind == search.KindMethod)) {
+			home[name] = definition.Path
+		}
+	}
+	if len(home) == 0 {
+		return nil
+	}
+	graph := search.Index(root, others, func(name string) bool { return home[name] != "" })
+	definedIn := map[string][]string{}
+	for _, definition := range graph.Definitions {
+		name := bareName(definition.Symbol)
+		definedIn[name] = append(definedIn[name], definition.Path)
+	}
+	crates := map[string]string{}
+	crate := func(rel string) string {
+		if _, known := crates[path.Dir(rel)]; !known {
+			crates[path.Dir(rel)] = crateOf(root, rel)
+		}
+		return crates[path.Dir(rel)]
+	}
+	var sites []callerSite
+	at := map[string]int{}
+	for _, call := range graph.Callers {
+		from := home[call.Name]
+		rust := path.Ext(from) == ".rs"
+		inCrate := rust && crate(from) != "" && crate(call.Path) == crate(from) && !slices.ContainsFunc(definedIn[call.Name], func(rel string) bool { return crate(rel) == crate(from) })
+		if rust != (path.Ext(call.Path) == ".rs") || slices.Contains(definedIn[call.Name], call.Path) || !inCrate && !named(text, "fn "+call.Name) {
+			continue
+		}
+		item := "fn " + call.Name + " (" + from + ")"
+		if seen, found := at[item+"\n"+call.Path]; found {
+			sites[seen].extra++
+			continue
+		}
+		at[item+"\n"+call.Path] = len(sites)
+		sites = append(sites, callerSite{item: item, file: call.Path, line: call.Line, text: clipped(lineOf(call.Path, call.Line))})
+	}
+	return sites
+}
+
+func bareName(symbol string) string {
+	return symbol[strings.LastIndex(symbol, ".")+1:]
+}
+
+func crateOf(root, rel string) string {
+	for dir := path.Dir(rel); ; dir = path.Dir(dir) {
+		if _, err := os.Stat(filepath.Join(root, dir, "Cargo.toml")); err == nil {
+			return dir
+		}
+		if dir == "." {
+			return ""
+		}
+	}
 }
 
 func rootedOwns(root string, owns []string) []string {
@@ -249,12 +337,12 @@ func rustItems(rel string, raw []byte) []callerItem {
 		}
 		if found := rustPublic().FindStringSubmatch(line); found != nil {
 			kind, name := found[1], found[2]
+			if kind == "fn" {
+				continue
+			}
 			use := `\b` + name + `\b`
-			var decl *regexp.Regexp
 			shadow := regexp.MustCompile(`\b(?:enum|struct|trait|type|union|mod|const|static)\s+` + name + `\b`)
 			switch kind {
-			case "fn":
-				use, decl, shadow = `\b`+name+`\s*(?:::<[^>]*>\s*)?\(`, regexp.MustCompile(`\bfn\s+`+name+`\b`), nil
 			case "enum":
 				use = `\b` + name + `::\w`
 			case "mod":
@@ -264,7 +352,7 @@ func rustItems(rel string, raw []byte) []callerItem {
 				owner = name
 			}
 			pattern := regexp.MustCompile(use)
-			items = append(items, callerItem{label: kind + " " + name, word: name, file: rel, near: pattern, far: pattern, decl: decl, shadow: shadow})
+			items = append(items, callerItem{label: kind + " " + name, word: name, file: rel, near: pattern, far: pattern, shadow: shadow})
 			continue
 		}
 		if found := rustField().FindStringSubmatch(line); found != nil && owner != "" {

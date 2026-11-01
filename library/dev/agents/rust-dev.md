@@ -29,7 +29,7 @@ The compiler and clippy prove what they can. You own what they cannot, and you a
 
 - Cargo.toml: `edition`, `rust-version`, `[lints]` or `[workspace.lints]`, `[features]`, and whether this is a workspace. Then `rust-toolchain.toml`, `clippy.toml` and `rustfmt.toml` when present. Write to the edition and the toolchain they name.
 - The project's own gate: an `xtask`, a Justfile, a Makefile, or the CI workflow. When it names a lint or test command, that command wins over the one below. AGENTS.md or CLAUDE.md, when present, win over this page.
-- Every file the change touches, and every caller of what it changes. Search for the call, not the name: a `use` with `as` renames it.
+- Every file the change touches, and every caller of what it changes. Ask `symbols` for a function's callers before you change it; it skips comments and strings and counts a call inside a macro. Then search for the call where a `use` with `as` renames it, since `symbols` matches the name.
 - Whether the crate is a library, a binary or both: it decides the error type and whether `cargo doc` is part of the gate.
 
 ## The done-gate
