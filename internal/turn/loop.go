@@ -561,7 +561,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		if config.SpawnedFrom != "" {
 			return nil
 		}
-		return sessionStartMessages(sessionSourceCompact, fire(ctx, hook.Input{Event: hook.SessionStart, Source: sessionSourceCompact}).Context, now())
+		return sessionStartMessages(hook.SessionCompact, fire(ctx, hook.Input{Event: hook.SessionStart, Source: hook.SessionCompact}).Context, now())
 	}
 	trims := !config.NoCompaction && budget.Automatic
 	trimFrom := func(step int, when string, from int) (*Compaction, error) {
@@ -1663,17 +1663,17 @@ func runningSubAgents(tools []Tool) []string {
 	return running
 }
 
-func sessionStartMessages(source string, added []hook.Context, at time.Time) []llm.Message {
+func sessionStartMessages(source hook.SessionSource, added []hook.Context, at time.Time) []llm.Message {
 	messages := hookMessages(llm.SourceSessionStart, added, at)
 	for i := range messages {
-		messages[i].Origin.ID = source
+		messages[i].Origin.ID = string(source)
 	}
 	return messages
 }
 
 func withoutOlderCompactContext(messages, added []llm.Message) []llm.Message {
 	compact := func(message llm.Message) bool {
-		return message.Origin.Source == llm.SourceSessionStart && message.Origin.ID == sessionSourceCompact
+		return message.Origin.Source == llm.SourceSessionStart && message.Origin.ID == string(hook.SessionCompact)
 	}
 	if !slices.ContainsFunc(added, compact) {
 		return messages

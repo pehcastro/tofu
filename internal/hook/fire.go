@@ -23,6 +23,15 @@ import (
 	"tofu/internal/sys"
 )
 
+type SessionSource string
+
+const (
+	SessionStartup SessionSource = "startup"
+	SessionCleared SessionSource = "clear"
+	SessionResumed SessionSource = "resume"
+	SessionCompact SessionSource = "compact"
+)
+
 type Input struct {
 	Event       Event
 	Session     string
@@ -37,7 +46,7 @@ type Input struct {
 	Prompt      string
 	LastMessage string
 	StopActive  bool
-	Source      string
+	Source      SessionSource
 	Reason      string
 	Gate        *GateFacts
 	Spawn       *SpawnFacts
@@ -90,7 +99,7 @@ type stdinPayload struct {
 	Prompt       string          `json:"prompt,omitempty"`
 	StopActive   *bool           `json:"stop_hook_active,omitempty"`
 	LastMessage  string          `json:"last_assistant_message,omitempty"`
-	Source       string          `json:"source,omitempty"`
+	Source       SessionSource   `json:"source,omitempty"`
 	Reason       string          `json:"reason,omitempty"`
 	Gate         *GateFacts      `json:"gate,omitempty"`
 	Spawn        *SpawnFacts     `json:"spawn,omitempty"`
@@ -111,7 +120,7 @@ func (e *Engine) Fire(ctx context.Context, in Input) Verdict {
 	case SubagentSpawn:
 		subjects = []string{in.Spawn.Definition}
 	case SessionStart:
-		subjects = []string{in.Source}
+		subjects = []string{string(in.Source)}
 	case SessionEnd:
 		subjects = []string{in.Reason}
 	}

@@ -19,6 +19,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/internal/cron"
+	"tofu/internal/hook"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/memory"
@@ -31,10 +32,6 @@ import (
 )
 
 const (
-	SourceStartup  = "startup"
-	SourceCleared  = "clear"
-	SourceResumed  = "resume"
-	SourceCompact  = "compact"
 	ImageTokenHead = "[Image #"
 	ranPreface     = "before sending this, the person ran a command in the project with !, outside any turn, and it printed:\n$ "
 )
@@ -126,7 +123,7 @@ type Host struct {
 	checkIn   *turn.LeadCheckIn
 	checking  *time.Timer
 	id        string
-	started   string
+	started   hook.SessionSource
 	carried   []llm.Message
 	carriedOn string
 	prefix    *turn.Prefix
@@ -179,7 +176,7 @@ func New(cfg Config) (*Host, []string) {
 		joins:       cfg.Joins,
 		member:      MemberTUI,
 		id:          cfg.Resumed.Session,
-		started:     SourceStartup,
+		started:     hook.SessionStartup,
 		asks:        &asks{standing: map[string]Answer{}, until: map[string]time.Time{}},
 		questions:   &replies[answeredQuestion]{},
 		memoryPicks: &replies[memory.Scope]{},
@@ -204,7 +201,7 @@ func New(cfg Config) (*Host, []string) {
 		return h, troubles
 	}
 	if !cfg.Unrecorded {
-		h.started = SourceResumed
+		h.started = hook.SessionResumed
 	}
 	if err := h.enter(h.id); err != nil {
 		return h, append(troubles, err.Error())
@@ -848,7 +845,7 @@ func (h *Host) freshAlone() error {
 	h.letGo()
 	h.forget()
 	_ = h.carry(Carry{})
-	h.id, h.pending, h.started = "", nil, SourceCleared
+	h.id, h.pending, h.started = "", nil, hook.SessionCleared
 	return h.cron.Load("")
 }
 
@@ -875,7 +872,7 @@ func (h *Host) Resume(carry Carry) (Opened, error) {
 		return Opened{}, err
 	}
 	h.mu.Lock()
-	h.id, h.pending, h.started = carry.Session, nil, SourceResumed
+	h.id, h.pending, h.started = carry.Session, nil, hook.SessionResumed
 	restoreErr := h.carry(carry)
 	h.mu.Unlock()
 	if f := h.following.Load(); f != nil {
@@ -897,7 +894,7 @@ func (h *Host) Opening(carry Carry) Opened { return resumedChat(carry, h.dir) }
 func (h *Host) Compacted(into string, messages []llm.Message) error {
 	h.mu.Lock()
 	h.dropCheckIn()
-	h.id, h.carried, h.started = into, messages, SourceCompact
+	h.id, h.carried, h.started = into, messages, hook.SessionCompact
 	h.mu.Unlock()
 	if err := h.enter(into); err != nil {
 		return err

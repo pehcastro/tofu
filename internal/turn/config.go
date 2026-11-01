@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"tofu/internal/boardy"
+	"tofu/internal/hook"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/models"
@@ -96,7 +97,7 @@ type Config struct {
 	SpawnedFrom     string
 	AgentType       string
 	Project         string
-	SessionSource   string
+	SessionSource   hook.SessionSource
 	System          string
 	Parts           []PromptPart
 	References      map[string]string

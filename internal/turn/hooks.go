@@ -18,8 +18,6 @@ type hookEngineKey struct{}
 
 type hookFireKey struct{}
 
-const sessionSourceCompact = "compact"
-
 func hookMessages(source llm.Source, added []hook.Context, at time.Time) []llm.Message {
 	messages := make([]llm.Message, len(added))
 	for i, one := range added {

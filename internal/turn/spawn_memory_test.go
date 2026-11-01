@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/hook"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 	"tofu/internal/session"
@@ -64,10 +65,13 @@ func TestTheMemoryViewIsOnceInEveryRequestHeldWithinAGenerationAndFreshAtEachFor
 	forks := func(request llm.Request) int {
 		return len(slices.DeleteFunc(slices.Clone(request.Messages), func(message llm.Message) bool { return !strings.HasPrefix(message.Content, "this is fork ") }))
 	}
-	for at, next := range []struct{ task, memory, source string }{
+	for at, next := range []struct {
+		task, memory string
+		source       hook.SessionSource
+	}{
 		{task: "read big.txt", memory: view},
 		{task: "now read big.txt again", memory: view + "\n" + saved},
-		{task: "read big.txt once more", memory: view + "\n" + saved + "\n" + resumed, source: "resume"},
+		{task: "read big.txt once more", memory: view + "\n" + saved + "\n" + resumed, source: hook.SessionResumed},
 	} {
 		opened := len(model.asked)
 		config.Task, config.Memory, config.SessionSource, model.replies = next.task, next.memory, next.source, []llm.Decision{reading, done}

@@ -20,6 +20,7 @@ import (
 	"tofu/internal/boardy"
 	"tofu/internal/browser/jevloop"
 	"tofu/internal/cron"
+	"tofu/internal/hook"
 	"tofu/internal/host"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
@@ -887,7 +888,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		Spend:         run.spend,
 		Tools:         turn.NewRegistry(built...),
 		Project:       dir,
-		SessionSource: host.SourceStartup,
+		SessionSource: hook.SessionStartup,
 		Task:          opts.task,
 		Wire:          opts.wire,
 		Slug:          run.orchestrator.Slug(),
