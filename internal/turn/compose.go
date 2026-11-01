@@ -770,8 +770,6 @@ type referenceTool struct {
 	held map[string]string
 }
 
-func (referenceTool) Name() string { return ReferenceToolName }
-
 func (referenceTool) Definition() llm.Tool {
 	return llm.Tool{
 		Name:        ReferenceToolName,
