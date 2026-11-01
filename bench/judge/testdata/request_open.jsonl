@@ -1,0 +1,40 @@
+{"said":"make the desk app feel faster","open":true,"shape":"speed with no target"}
+{"said":"the chat list should feel smoother when it scrolls","open":true,"shape":"feel"}
+{"said":"make the sidebar look more like the native macOS one","open":true,"shape":"like something else"}
+{"said":"improve the theme system so adding a theme is easier","open":true,"shape":"design direction"}
+{"said":"the glass effect looks cheap, make it look expensive","open":true,"shape":"taste"}
+{"said":"the code in crates/ui/src/components/chat.rs is a mess, improve it","open":true,"shape":"named file, open change"}
+{"said":"tofu should ask me fewer questions","open":true,"shape":"behaviour direction"}
+{"said":"the tickets keep missing things, they need to get better","open":true,"shape":"process direction"}
+{"said":"the status bar is cluttered, tidy it up","open":true,"shape":"taste"}
+{"said":"the sub-agents board should be more useful","open":true,"shape":"usefulness"}
+{"said":"startup is slow, sort it out","open":true,"shape":"speed with no target"}
+{"said":"the composer should behave closer to a real text editor","open":true,"shape":"like something else"}
+{"said":"I want the tabs to work the way a browser's do","open":true,"shape":"like something else"}
+{"said":"the reports are hard to read, rework them","open":true,"shape":"readability"}
+{"said":"the colour picker in color_picker.rs is awkward to use","open":true,"shape":"named file, complaint"}
+{"said":"we keep getting regressions in the desk app, stop that","open":true,"shape":"process direction"}
+{"said":"polish the intro screen","open":true,"shape":"taste"}
+{"said":"the mention popup should be smarter about what it offers","open":true,"shape":"smarter"}
+{"said":"the docks get unusable with fifty files open","open":true,"shape":"scale complaint"}
+{"said":"tofu should plan more before it starts building","open":true,"shape":"behaviour direction"}
+{"said":"rename ThemeCatalog to Palettes in crates/desk/src/screens/theme/catalog.rs and its callers","open":false,"shape":"rename"}
+{"said":"tabs.rs panics with index out of range at line 212 when the last tab closes; fix it","open":false,"shape":"named defect"}
+{"said":"set the tooltip delay in tooltip.rs to 400 ms instead of 800","open":false,"shape":"value change"}
+{"said":"make the tooltip show faster: 400 ms in tooltip.rs, not 800","open":false,"shape":"quality word, exact change"}
+{"said":"delete the glass bench screen and its entry in screens/mod.rs","open":false,"shape":"deletion"}
+{"said":"add a --json flag to tofu boardy list that prints the tickets as one array","open":false,"shape":"flag"}
+{"said":"run cargo clippy over apps/desk and paste the warnings","open":false,"shape":"command"}
+{"said":"revert commit 4f2a9c1, it broke the composer cursor","open":false,"shape":"revert"}
+{"said":"move the colours in intro_setup/colours.rs into themes/tofu-flat.json under an intro key","open":false,"shape":"move"}
+{"said":"change the status bar height from 28 to 24 pixels in status_bar.rs","open":false,"shape":"value change"}
+{"said":"the ask_person card header should show the question text, not its id","open":false,"shape":"exact display change"}
+{"said":"in feed.rs sort the items by posted time instead of by id","open":false,"shape":"exact behaviour change"}
+{"said":"take the em dash out of the 0.5.9 changelog entry","open":false,"shape":"edit"}
+{"said":"yes, go with the second option","open":false,"shape":"answer"}
+{"said":"which commit reverted the tab drag?","open":false,"shape":"question"}
+{"said":"looks right, go ahead","open":false,"shape":"approval"}
+{"said":"thanks, that fixed it","open":false,"shape":"news"}
+{"said":"why did the sub-agent stop at step 40?","open":false,"shape":"question"}
+{"said":"the build passes on my machine now","open":false,"shape":"news"}
+{"said":"no, only the chat list, leave the editor as it is","open":false,"shape":"correction to a restatement"}

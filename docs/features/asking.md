@@ -18,9 +18,16 @@ two never mix: a question is never a request to run something.
 
 **In auto, a question never stops the work.** The lead hears at once that
 it asked and keeps going on whatever doesn't depend on the answer. With no
-answer in `askPersonWaitSeconds`, 120 by default, the recommended option
-stands, marked auto-selected after timeout, and the form stays open: an
-answer you give later still reaches the lead, so it can change course.
+answer in `askPersonWaitSeconds`, 120 by default, the lead is told none
+came and picks nothing for you, and the form stays open and says no answer
+yet: an answer you give later still reaches the lead.
+
+**An open request is restated before work starts.** When a message you
+type leaves the work to the lead, such as `make the desk faster`, Jev's
+`request_open` question says so, and the lead's first reply restates the
+request with what is in and out and waits for your go. A precise request,
+such as a named rename, starts at once. On 40 mocked requests Jev was
+right on 36, where restating every request is right on 20.
 
 **A reversible choice doesn't reach you at all in auto.** When the lead
 marks every question `reversible`, meaning its recommended option can be
@@ -32,7 +39,7 @@ reads `taken_in_auto`.
 **A recommendation is always there.** Every question but a free-text one
 carries the option the lead would pick. When you press `Esc`, when the turn
 stops, or when nobody can be asked, the lead takes that option, says which,
-and carries on.
+and carries on. A timeout is not one of these: it is no answer.
 
 **It is offered only where someone can answer.** `ask_person` doesn't exist
 in `tofu run`, in a turn a cron job started, or in a sub-agent. A

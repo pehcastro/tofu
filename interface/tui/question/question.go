@@ -136,7 +136,7 @@ func (f *Form) Lines(width int, now time.Time) []string {
 	inner := width - 2*padX
 	head := look.Style(look.Amber).Render("? "+q.Header) + look.Muted("  "+strconv.Itoa(f.at+1)+" of "+strconv.Itoa(len(f.questions)))
 	lines := []string{widget.Fit(head, inner)}
-	if waiting := f.countdown(q, now); waiting != "" {
+	if waiting := f.countdown(now); waiting != "" {
 		lines = append(lines, widget.Fit(look.Style(look.Amber).Render(waiting), inner))
 	}
 	lines = append(lines, widget.Fit(look.Title(q.Question), inner))
@@ -176,13 +176,13 @@ func (f *Form) Lines(width int, now time.Time) []string {
 	return strings.Split(look.Surface(width, len(lines), look.Panel, padX, strings.Join(lines, "\n")), "\n")
 }
 
-func (f *Form) countdown(q turn.PersonQuestion, now time.Time) string {
+func (f *Form) countdown(now time.Time) string {
 	left := f.wait - now.Sub(f.opened)
 	switch {
-	case f.wait == 0 || q.Recommended == nil:
+	case f.wait == 0:
 		return ""
 	case left <= 0:
-		return "auto-selected " + q.Options[*q.Recommended].Label + " after timeout; answering still changes it"
+		return "no answer yet; the lead was told none came, and answering still reaches it"
 	}
-	return "auto-selects " + q.Options[*q.Recommended].Label + " in " + widget.Until(left)
+	return "no answer yet; the lead hears in " + widget.Until(left) + " that none came, and picks nothing"
 }

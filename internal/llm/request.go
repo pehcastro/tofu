@@ -136,6 +136,7 @@ const (
 	SourceSteer      Source = "steer"
 	SourceAnswer     Source = "answer"
 	SourceLateAnswer Source = "answer.late"
+	SourceNoAnswer   Source = "answer.none"
 	SourceForkTask   Source = "fork.task"
 	SourceBrief      Source = "brief"
 	SourceReport     Source = "report"
@@ -186,7 +187,8 @@ type sourceRow struct {
 func sourceRows() []sourceRow {
 	return []sourceRow{
 		{SourceTask, OriginPerson, "task"}, {SourceTyped, OriginPerson, "typed by the person"}, {SourceSteer, OriginPerson, "steer"},
-		{SourceAnswer, OriginTofu, "question answer"}, {SourceLateAnswer, OriginTofu, "late question answer"}, {SourceForkTask, OriginPerson, "fork task"},
+		{SourceAnswer, OriginTofu, "question answer"}, {SourceLateAnswer, OriginTofu, "late question answer"},
+		{SourceNoAnswer, OriginTofu, "question with no answer yet"}, {SourceForkTask, OriginPerson, "fork task"},
 		{SourceBrief, OriginAgent, "sub-agent brief"}, {SourceReport, OriginAgent, "sub-agent report"},
 		{SourceReportFor, OriginAgent, "sub-agent report needing the lead"}, {SourceAsk, OriginAgent, "sub-agent gate ask"},
 		{SourceMessage, OriginAgent, "message to this sub-agent"},

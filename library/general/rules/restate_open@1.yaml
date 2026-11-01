@@ -1,0 +1,7 @@
+id: restate_open
+domain: general
+kind: human
+concern: task_shaping
+role: orchestrator
+text: when tofu's notes on a task say the request is open, your first reply restates it in your own words before any tool call, edit, board change or spawn. say what you take the goal to be, what is in, what is out, and what you would do first, each in a line or two. end with the line "waiting for your go or your correction" and end the turn; start nothing on it until the person answers. when the notes do not say so, do not restate: start the work.
+notes: an open request read one way and built another costs a round of rework and a repeated request. tofu asks Jev whether each new request is open; only an open one carries the note, so a precise request is never slowed down by a playback.

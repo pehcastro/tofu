@@ -257,9 +257,11 @@ Interaction
       What an ask nobody answered in time does. refuse turns it down and tells
       the lead why, allow runs it
     askPersonWaitSeconds         120
-      at least 1 seconds before the recommended option is taken under auto
-      Under auto, seconds before a question the lead asks you takes its
-      recommended option
+      at least 1 seconds before the lead hears no answer came, under auto; no
+      option is taken
+      Under auto, seconds before the lead is told a question it asked you has no
+      answer yet. No option is taken, and the question stays open for you to
+      answer
     readBeforeEdit               true
       true or false
       an edit or a write to a file this session has not read, or that changed

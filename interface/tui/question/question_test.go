@@ -78,11 +78,11 @@ func TestAFormLeavesTypingToTheComposer(t *testing.T) {
 	}
 }
 
-func TestAFormMarksTheRecommendedAndSaysWhenItAutoSelects(t *testing.T) {
+func TestAFormMarksTheRecommendedAndNeverAutoSelects(t *testing.T) {
 	opened := openedAt()
 	form := Open("q1", asked(), 2*time.Minute, opened)
 	before := plain(form.Lines(80, opened.Add(8*time.Second)))
-	for _, want := range []string{"HTTP client", "1 of 4", "net/http", "(recommended)", "standard library, no dependency", "other", "auto-selects net/http in"} {
+	for _, want := range []string{"HTTP client", "1 of 4", "net/http", "(recommended)", "standard library, no dependency", "other", "no answer yet", "the lead hears in"} {
 		if !strings.Contains(before, want) {
 			t.Errorf("the form does not show %q:\n%s", want, before)
 		}
@@ -96,8 +96,11 @@ func TestAFormMarksTheRecommendedAndSaysWhenItAutoSelects(t *testing.T) {
 		t.Errorf("the focused option's preview is not drawn:\n%s", focused)
 	}
 	after := plain(form.Lines(80, opened.Add(3*time.Minute)))
-	if !strings.Contains(after, "auto-selected net/http after timeout") {
-		t.Errorf("past the wait the form does not say it auto-selected:\n%s", after)
+	if !strings.Contains(after, "no answer yet") || !strings.Contains(after, "answering still reaches it") || strings.Contains(after, "select") {
+		t.Errorf("past the wait the form does not say no answer came and the question is still open:\n%s", after)
+	}
+	if text := plain(Open("q2", asked()[3:], 2*time.Minute, opened).Lines(80, opened.Add(3*time.Minute))); !strings.Contains(text, "no answer yet") {
+		t.Errorf("a text question with no recommended option does not say no answer came:\n%s", text)
 	}
 	for _, line := range form.Lines(80, opened) {
 		if cells := ansi.StringWidth(line); cells != 80 {

@@ -28,7 +28,7 @@ func handedBack(reply string) string {
 
 func pollNote(open []string) string {
 	return "your " + AskPersonToolName + " questions are still open, and the person can answer them after this turn:\n" + strings.Join(open, "\n") +
-		"\nend your report with them as a poll: each question, its options, and the option you took for now."
+		"\nend your report with them as a poll: each question and its options, saying it has no answer yet. take no option for the person and do nothing that depends on one."
 }
 
 func handbackNote(closing string, tools Registry) string {

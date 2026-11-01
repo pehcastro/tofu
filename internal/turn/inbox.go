@@ -3,6 +3,7 @@ package turn
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -13,6 +14,10 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"tofu/internal/classifier"
+	"tofu/internal/judge/jev"
+	"tofu/internal/judge/ledger"
+	"tofu/internal/judge/question"
 	"tofu/internal/konst"
 	"tofu/internal/learn/repeat"
 	"tofu/internal/learn/words"
@@ -22,6 +27,7 @@ import (
 	"tofu/internal/session"
 	"tofu/internal/shell"
 	"tofu/internal/sys"
+	"tofu/library/questions"
 )
 
 type inboxItem struct {
@@ -53,11 +59,12 @@ type Inbox struct {
 	queued   laterCompaction
 	said     map[string][]PersonSaid
 	repeats  *repeat.Judge
+	opens    *openJudge
 	project  string
 	watched  map[string]bool
 	typed    <-chan string
 
-	repeatsRead bool
+	judgesOpened bool
 
 	compactions       context.Context
 	cancelCompactions context.CancelFunc
@@ -457,20 +464,114 @@ func (b *Inbox) SaidInChain(store *session.Store, id string) ([]PersonSaid, erro
 	return said, nil
 }
 
-func (b *Inbox) judgeRepeats(config Config) {
+func (b *Inbox) openJudges(config Config) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.repeatsRead {
+	if b.judgesOpened {
 		return
 	}
-	b.repeatsRead, b.project = true, config.Project
+	b.judgesOpened, b.project = true, config.Project
 	places, err := config.ResolvedPlaces()
-	if err == nil {
-		b.repeats, err = repeat.New(config.Project, places.Log)
+	if err != nil {
+		config.notifyNoJev("a repeated instruction goes unnoticed and an open request goes unrestated", err)
+		return
 	}
-	if err != nil && config.Notify != nil {
-		config.Notify("a repeated instruction goes unnoticed, since Jev cannot be asked: " + err.Error())
+	if b.repeats, err = repeat.New(config.Project, places.Log); err != nil {
+		config.notifyNoJev("a repeated instruction goes unnoticed", err)
 	}
+	if b.opens, err = newOpenJudge(config.Project, places.Log); err != nil {
+		config.notifyNoJev("an open request goes unrestated", err)
+	}
+}
+
+func (c Config) notifyNoJev(unseen string, err error) {
+	if c.Notify != nil {
+		c.Notify(unseen + ", since Jev cannot be asked: " + err.Error())
+	}
+}
+
+const (
+	requestOpenRef     = "request_open@1"
+	requestOpenName    = "open"
+	requestOpenBuilder = "request_open_state@1"
+	requestOpenNote    = "this request is open: it leaves to you what the work is. before any tool call, restate it in your own words with the goal, what is in, what is out and what you would do first, " +
+		"then end the turn and wait for the person's go or correction, as the rule restate_open says."
+)
+
+type openJudge struct {
+	client    *jev.Client
+	set       question.Set
+	asked     jev.Question
+	threshold float64
+	ledger    *ledger.Writer
+}
+
+func newOpenJudge(project, log string) (*openJudge, error) {
+	layers, err := question.Layers(questions.Files(), project)
+	if err != nil {
+		return nil, err
+	}
+	set, fields, err := question.Resolve(requestOpenRef, layers)
+	if err != nil {
+		return nil, err
+	}
+	asked, found := set.Question(requestOpenName)
+	at := slices.IndexFunc(fields, func(f question.Field) bool { return f.Path == "thresholds."+requestOpenName+"_at" })
+	if !found || at < 0 {
+		return nil, fmt.Errorf("%s names no %s question or no thresholds.%s_at", requestOpenRef, requestOpenName, requestOpenName)
+	}
+	threshold, err := strconv.ParseFloat(fields[at].Value, 64)
+	if err != nil {
+		return nil, err
+	}
+	client, err := classifier.Open(project, jev.ReadKeyring(), 1)
+	if err != nil {
+		return nil, err
+	}
+	return &openJudge{client: client, set: set, asked: asked.ToJev(), threshold: threshold, ledger: ledger.NewWriter(log)}, nil
+}
+
+func (j *openJudge) opens(ctx context.Context, said string) (bool, error) {
+	body, err := json.Marshal(struct {
+		Said string `json:"said"`
+	}{said})
+	if err != nil {
+		return true, err
+	}
+	asked := []jev.Question{j.asked}
+	row := ledger.Row{Point: j.set.Name, Questions: j.set.Name, Version: j.set.QuestionsVersion, StateHash: ledger.HashOf(body), StateBuilder: requestOpenBuilder, State: body,
+		Verdict: ledger.VerdictAsk, Reason: &ledger.Reason{Question: requestOpenName, Comparison: ">= " + strconv.FormatFloat(j.threshold, 'f', -1, 64), Threshold: j.threshold, Mode: ledger.ModeEnforced}}
+	decision, err := j.client.Ask(ctx, jev.Request{State: json.RawMessage(body), Questions: asked})
+	if err != nil {
+		failed := "jev could not answer, so the request is taken as open and restated: " + err.Error()
+		row.Reason.ModeReason = &failed
+		_, unwritten := j.ledger.Append(row)
+		return true, errors.Join(err, unwritten)
+	}
+	decision.Record(&row, asked, j.set.QuestionsVersion)
+	row.Reason.Value = row.Answers[0].Noul
+	if row.Reason.Value < j.threshold {
+		row.Verdict = ledger.VerdictAllow
+	}
+	_, err = j.ledger.Append(row)
+	return row.Verdict == ledger.VerdictAsk, err
+}
+
+func (b *Inbox) notesOn(ctx context.Context, store *session.Store, id, said string) string {
+	notes := b.repeatNote(store, id, said)
+	b.mu.Lock()
+	judge := b.opens
+	b.mu.Unlock()
+	if said = beforeCronFire(said); judge == nil || said == "" {
+		return notes
+	}
+	if open, _ := judge.opens(ctx, said); !open {
+		return notes
+	}
+	if notes == "" {
+		return NotesAfterTheTask + requestOpenNote
+	}
+	return notes + "\n" + requestOpenNote
 }
 
 func (b *Inbox) repeatNote(store *session.Store, id, said string) string {
@@ -1046,9 +1147,9 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 	config.Inbox.mu.Lock()
 	config.Inbox.typed = typed
 	config.Inbox.mu.Unlock()
-	config.Inbox.judgeRepeats(config)
+	config.Inbox.openJudges(config)
 	if config.TaskOrigin.Source == "" || saidByThePerson(config.TaskOrigin) {
-		config.Task += config.Inbox.repeatNote(config.Sessions, config.Session, config.Task)
+		config.Task += config.Inbox.notesOn(ctx, config.Sessions, config.Session, config.Task)
 	}
 	for {
 		config.Inbox.mu.Lock()
@@ -1065,7 +1166,7 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 			if heard != nil {
 				heard(said)
 			}
-			note = config.Inbox.repeatNote(config.Sessions, cmp.Or(row.Session, config.Session), said)
+			note = config.Inbox.notesOn(ctx, config.Sessions, cmp.Or(row.Session, config.Session), said)
 			if config.Steering != nil {
 				said = strings.Join(append([]string{said}, config.Steering()...), "\n\n")
 			}

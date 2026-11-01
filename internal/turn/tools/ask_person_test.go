@@ -124,7 +124,7 @@ func TestAskPersonSaysWhatHappenedToEachQuestion(t *testing.T) {
 	}
 }
 
-func TestAskPersonInAutoNeverStopsTheWorkAndALaterAnswerIsASteer(t *testing.T) {
+func TestAskPersonInAutoATimeoutIsNeverAnAnswer(t *testing.T) {
 	release := make(chan struct{})
 	slow := func(ctx context.Context, _ turn.GateRequest, _ turn.GateDecision) (turn.PersonAnswer, error) {
 		<-release
@@ -133,16 +133,28 @@ func TestAskPersonInAutoNeverStopsTheWorkAndALaterAnswerIsASteer(t *testing.T) {
 	inbox := turn.NewInbox()
 	tool := tools.AskPerson{Person: slow, Auto: func() bool { return true }, Wait: 20 * time.Millisecond, Inbox: inbox}
 	result, err := tool.Run(t.Context(), json.RawMessage(twoLibraries))
-	if err != nil || !strings.Contains(result.Content, "comes as a message") {
-		t.Fatalf("got %q, %v, want the call back at once saying the answer comes as a message", result.Content, err)
+	if err != nil || !strings.Contains(result.Content, "comes as a message") || strings.Contains(result.Content, "recommended") {
+		t.Fatalf("got %q, %v, want the call back at once saying the answer comes as a message and naming no option to take", result.Content, err)
 	}
 	timedOut := inboxSays(t, inbox)
-	if !strings.Contains(timedOut, `"timed_out"`) || !strings.Contains(timedOut, "auto-selected after timeout") || !strings.Contains(timedOut, "net/http") {
-		t.Fatalf("after the wait the lead read %q, want timed_out with net/http auto-selected", timedOut)
+	var told askedResult
+	_, carried, _ := strings.Cut(timedOut, "question: ")
+	if err := json.Unmarshal([]byte(carried), &told); err != nil {
+		t.Fatalf("the timeout note %q carries no result: %v", timedOut, err)
+	}
+	switch {
+	case told.Outcome != "timed_out":
+		t.Fatalf("after the wait the lead read %q, want timed_out", timedOut)
+	case len(told.Answers) != 1 || len(told.Answers[0].Chosen) != 0 || told.Answers[0].Status != "unanswered":
+		t.Fatalf("a timeout chose %+v for the person, want nothing chosen", told.Answers)
+	case strings.Contains(timedOut, "recommended") || strings.Contains(timedOut, "auto-selected"):
+		t.Fatalf("a timeout tells the lead to take an option: %q", timedOut)
+	case !strings.Contains(timedOut, "no answer") || !strings.Contains(timedOut, "still answer"):
+		t.Fatalf("a timeout does not tell the lead no answer came and the question stays open: %q", timedOut)
 	}
 	close(release)
-	if later := inboxSays(t, inbox); !strings.Contains(later, `"submitted"`) || !strings.Contains(later, `"lib"`) {
-		t.Fatalf("the later answer reached the lead as %q, want submitted naming lib", later)
+	if later := inboxSays(t, inbox); !strings.Contains(later, `"submitted"`) || !strings.Contains(later, `"lib"`) || strings.Contains(later, "correct course") {
+		t.Fatalf("the later answer reached the lead as %q, want submitted naming lib, as an answer rather than a correction", later)
 	}
 }
 

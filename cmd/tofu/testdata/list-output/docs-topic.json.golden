@@ -111,9 +111,9 @@ exit 0
         "key": "askPersonWaitSeconds",
         "category": "Interaction",
         "default": "120",
-        "takes": "at least 1 seconds before the recommended option is taken under auto",
+        "takes": "at least 1 seconds before the lead hears no answer came, under auto; no option is taken",
         "restart": false,
-        "description": "Under auto, seconds before a question the lead asks you takes its recommended option"
+        "description": "Under auto, seconds before the lead is told a question it asked you has no answer yet. No option is taken, and the question stays open for you to answer"
       },
       {
         "key": "readBeforeEdit",

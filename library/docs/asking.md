@@ -41,18 +41,25 @@ a message under `auto`:
 
 - outcome: `submitted`; `cancelled`, you pressed Esc or the turn stopped,
   and the recommended option stands; `timed_out`, no answer in time under
-  auto; `undelivered`, nobody could be asked; `taken_in_auto`, the
-  question never reached you, see below
+  auto, nothing chosen; `undelivered`, nobody could be asked;
+  `taken_in_auto`, the question never reached you, see below
 - status: `answered`; `skipped`, you chose nothing; `unanswered`
 - a client of `tofu serve` sees it as a `tofu/askPerson` request; see
   `tofu docs serve`
 
-On anything but `submitted` the lead takes each recommended option, says
-which, and carries on.
+On `cancelled` or `undelivered` the lead takes each recommended option,
+says which, and carries on. On `timed_out` it picks nothing for you and
+does nothing that depends on the answer.
 
 The tool is not offered where nobody can answer: in `tofu run`, in a turn
 a cron job started, and in a sub-agent. A sub-agent asks the lead
 instead, and the lead may put the question to you naming it.
+
+Each message you type is put to Jev's `request_open` question. When it
+judges the request open, leaving the work to the lead, the task carries a
+note and the rule `restate_open` has the first reply restate it, with
+what is in and out, and wait. `tofu why --last 1 --point request_open`
+shows the row.
 
 ## Change it
 
@@ -62,10 +69,10 @@ waits:
 - `auto`: the work never stops on a question. The lead hears at once that
   it asked and keeps working on what does not depend on the answer. Your
   answer reaches it as a message. With none in `askPersonWaitSeconds`,
-  120 by default, the recommended option is taken, marked auto-selected
-  after timeout, and the form stays open: an answer you give later still
-  arrives, so it can correct course. A turn that ends with a question
-  open ends its report with it as a poll. When every question is marked
+  120 by default, the lead is told no answer came, no option is taken,
+  and the form stays open and says no answer yet: an answer you give
+  later still arrives. A turn that ends with a question open ends its
+  report with it as a poll, saying it has no answer yet. When every question is marked
   `reversible` and the ask judge says proceed on each, the recommended
   options are taken without showing you the form.
 - `ask`: the lead waits until you answer, with no timeout.

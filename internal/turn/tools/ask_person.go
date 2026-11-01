@@ -40,14 +40,17 @@ const (
 	askUnanswered askStatus = "unanswered"
 )
 
-const autoSelected = "the recommended option, auto-selected after timeout"
-
-const askedAndWorking = "asked; the answer comes as a message. keep working on what does not depend on it, and take the recommended option where it does until the answer arrives."
+const askedAndWorking = "asked; the answer comes as a message. keep working on what does not depend on it, and take no action that does until the answer arrives."
 
 const nothingTyped = "nothing was typed, so this one is yours to decide"
 
 const takeTheRecommended = "on any outcome but submitted, take each recommended option, say which you took, and continue. " +
-	"on submitted, follow what was chosen; a skipped question is yours to decide. a later answer from the person arrives as a message: correct course if it differs."
+	"on submitted, follow what was chosen; a skipped question is yours to decide."
+
+const noAnswerYet = "no answer came in time, so nothing was chosen and the question stays open: the person can still answer it, and that answer arrives as a message. " +
+	"take no action that depends on it and pick no option for them. keep to work that does not depend on it, or end the turn saying it waits on this question."
+
+const noAnswerHead = "no answer yet; nothing was chosen and the question stays open"
 
 type askAnswer struct {
 	ID     string    `json:"id"`
@@ -107,7 +110,8 @@ func (AskPerson) Definition() llm.Tool {
 		Description: "puts a decision only the person can make to them: a choice between libraries or designs, a matter of taste, spending money, something that cannot be undone. " +
 			"never for permission to run a tool; the gate asks that. one call at a time, 1 to " + strconv.Itoa(konst.AskPersonQuestionsMost) + " questions, each with options and the one you recommend. " +
 			"tofu adds a free-text other to every choice, so never write one. the answer says the outcome and, for each question, its status and what was chosen. " +
-			"in auto the work never stops on it: with no answer in time the recommended option is taken, and a reversible recommendation the ask judge agrees with is taken without asking",
+			"in auto the work never stops on it: with no answer in time you are told none came, nothing is chosen, and the question stays open until the person answers. " +
+			"a reversible recommendation the ask judge agrees with is taken without asking",
 		Parameters: map[string]any{
 			"type":       "object",
 			"properties": map[string]any{"questions": map[string]any{"type": "array", "items": question, "minItems": 1, "maxItems": konst.AskPersonQuestionsMost}},
@@ -214,41 +218,39 @@ func (a AskPerson) reply(ctx context.Context, raw json.RawMessage, questions []t
 
 func (a AskPerson) answerLater(open *turn.Asked, replied <-chan personReply, recorded <-chan []string, questions []turn.PersonQuestion) {
 	defer open.Close()
-	var first askResult
-	stopped := false
+	intro, from := "the answer to your "+turn.AskPersonToolName+" question: ", llm.SourceAnswer
+	var reply personReply
 	select {
-	case reply := <-replied:
-		first, stopped = answered(reply, questions), errors.Is(reply.err, context.Canceled)
+	case reply = <-replied:
+		a.backfill(<-recorded, answered(reply, questions).Outcome)
 	case <-time.After(a.Wait):
-		first = resolved(askTimedOut, questions, autoSelected)
+		a.backfill(<-recorded, askTimedOut)
+		none := askResult{Outcome: askTimedOut, Next: noAnswerYet}
+		for _, q := range questions {
+			none.Answers = append(none.Answers, askAnswer{ID: q.ID, Status: askUnanswered, Chosen: []string{}})
+		}
+		told, _ := json.Marshal(none)
+		open.Answer("no answer yet to your "+turn.AskPersonToolName+" question: "+string(told), llm.SourceNoAnswer, shownToPerson(noAnswerHead, none, questions))
+		intro, from = "the answer to your "+turn.AskPersonToolName+" question, which came after you were told none had: ", llm.SourceLateAnswer
+		reply = <-replied
 	}
-	a.backfill(<-recorded, first.Outcome)
-	if stopped {
+	if errors.Is(reply.err, context.Canceled) {
 		return
 	}
-	said, _ := json.Marshal(first)
-	open.Answer("the answer to your "+turn.AskPersonToolName+" question: "+string(said), llm.SourceAnswer, shownToPerson(headOf(first.Outcome), first, questions))
-	if first.Outcome != askTimedOut {
-		return
-	}
-	if later := answered(<-replied, questions); later.Outcome == askSubmitted {
-		said, _ := json.Marshal(later)
-		open.Answer("the person answered your "+turn.AskPersonToolName+" question after the timeout, so correct course where it differs from the option you took: "+string(said),
-			llm.SourceLateAnswer, shownToPerson("you answered after the timeout", later, questions))
-	}
+	result := answered(reply, questions)
+	said, _ := json.Marshal(result)
+	open.Answer(intro+string(said), from, shownToPerson(headOf(result.Outcome), result, questions))
 }
 
 func headOf(outcome askOutcome) string {
 	switch outcome {
 	case askSubmitted:
 		return "you answered"
-	case askTimedOut:
-		return "nobody answered in time, so the recommended option stands"
 	case askCancelled:
 		return "the question was dismissed, so the recommended option stands"
 	case askUndelivered:
 		return "the question could not be asked, so the recommended option stands"
-	case askTakenInAuto:
+	case askTimedOut, askTakenInAuto:
 	}
 	panic("ask_person: no answer is posted for outcome " + string(outcome))
 }
