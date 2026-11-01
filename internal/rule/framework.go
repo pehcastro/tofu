@@ -110,12 +110,51 @@ func cargoDependencies(data []byte) ([]string, error) {
 	return names, nil
 }
 
+func cargoWorkspaceMembers(root string) ([]string, error) {
+	data, err := os.ReadFile(filepath.Join(root, "Cargo.toml"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var uncommented strings.Builder
+	for line := range strings.Lines(string(data)) {
+		kept, _, _ := strings.Cut(line, "#")
+		uncommented.WriteString(kept + "\n")
+	}
+	listed := regexp.MustCompile(`(?m)^\s*members\s*=\s*\[([^\]]*)\]`).FindStringSubmatch(uncommented.String())
+	if listed == nil {
+		return nil, nil
+	}
+	var members []string
+	for _, quoted := range regexp.MustCompile(`"([^"]+)"`).FindAllStringSubmatch(listed[1], -1) {
+		found, err := filepath.Glob(filepath.Join(root, filepath.FromSlash(quoted[1])))
+		if err != nil {
+			return nil, err
+		}
+		for _, member := range found {
+			if rel, err := filepath.Rel(root, member); err == nil {
+				members = append(members, filepath.ToSlash(rel))
+			}
+		}
+	}
+	return members, nil
+}
+
 func Frameworks(root string, paths []string) ([]string, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
 	}
 	dirs := []string{"."}
+	if len(paths) == 0 {
+		members, err := cargoWorkspaceMembers(root)
+		if err != nil {
+			return nil, fmt.Errorf("the Cargo.toml in %s names the workspace members a task naming no path may touch and cannot be read: %w", root, err)
+		}
+		dirs = append(dirs, members...)
+	}
 	for _, p := range paths {
 		if filepath.IsAbs(p) {
 			if p, err = filepath.Rel(absRoot, p); err != nil {

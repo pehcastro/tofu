@@ -329,3 +329,31 @@ func TestAQARuleScopedToTestFilesFiresForATestTaskBeforeTheFileIsNamed(t *testin
 		}
 	}
 }
+
+func TestAFrameworkRuleFiresOnThePathATaskNamesAndOnItsTouchesOnlyWhenItNamesNone(t *testing.T) {
+	r, err := parseRule([]byte("id: motion\ndomain: dev\nkind: human\nconcern: code_rules\nframework: gpui-ce\ntouches: (?i)animat|motion\ntext: x\n"), "motion@1.yaml")
+	if err != nil {
+		t.Fatalf("parseRule: %v", err)
+	}
+	for _, c := range []struct {
+		task  Task
+		fires bool
+		why   string
+	}{
+		{Task{Role: RoleSubAgent, Text: "make crates/ui/src/panel.rs ease in", Paths: []string{"crates/ui/src/panel.rs"}, Frameworks: []string{"gpui-ce"}}, true,
+			"the writer's task names crates/ui/src/panel.rs, so the path decides rather than the touches (?i)animat|motion and a Cargo.toml lists gpui-ce"},
+		{Task{Role: RoleSubAgent, Text: "make the panel ease in", Frameworks: []string{"gpui-ce"}}, false,
+			"the writer's task names no path, so the touches (?i)animat|motion decides, and it matches nothing in the task"},
+		{Task{Role: RoleSubAgent, Text: "animate the panel", Frameworks: []string{"gpui-ce"}}, true,
+			"the writer's task names no path, so the touches (?i)animat|motion decides, and it matched \"animat\" and a Cargo.toml lists gpui-ce"},
+		{Task{Role: RoleSubAgent, Text: "make crates/ui/src/panel.rs ease in", Paths: []string{"crates/ui/src/panel.rs"}}, false,
+			"no Cargo.toml the task reaches lists gpui-ce"},
+		{Task{Role: RoleSubAgent, Alone: true, Text: "animate the panel in docs/notes.md", Paths: []string{"docs/notes.md"}}, false,
+			"no Cargo.toml the task reaches lists gpui-ce"},
+	} {
+		fires, why := r.Trigger.firesFor(c.task)
+		if fires != c.fires || why != c.why {
+			t.Errorf("%q with paths %v: fires = %v, why %q, want %v, %q", c.task.Text, c.task.Paths, fires, why, c.fires, c.why)
+		}
+	}
+}

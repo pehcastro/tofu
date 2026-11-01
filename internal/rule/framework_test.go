@@ -255,3 +255,27 @@ func TestSvelteAndVueFilesHaveTheirOwnLanguage(t *testing.T) {
 		}
 	}
 }
+
+func TestATaskNamingNoPathReachesTheFrameworkAWorkspaceMemberLists(t *testing.T) {
+	gpuiMember := "[package]\nname = \"ui\"\n\n[dependencies]\ngpui = { package = \"gpui-ce\", path = \"x\" }\n"
+	plainMember := "[package]\nname = \"core\"\n\n[dependencies]\nserde = \"1\"\n"
+	for _, c := range []struct {
+		name  string
+		files map[string]string
+		paths []string
+		want  bool
+	}{
+		{"a listed member", map[string]string{"Cargo.toml": "[workspace]\nmembers = [\"crates/core\", \"crates/ui\"]\n", "crates/ui/Cargo.toml": gpuiMember, "crates/core/Cargo.toml": plainMember}, nil, true},
+		{"a member glob", map[string]string{"Cargo.toml": "[workspace]\nmembers = [\"crates/*\"]\n", "crates/ui/Cargo.toml": gpuiMember}, nil, true},
+		{"a members array over lines", map[string]string{"Cargo.toml": "[workspace]\nresolver = \"3\"\nmembers = [\n  \"crates/core\",\n  \"crates/ui\", # the view\n]\n", "crates/ui/Cargo.toml": gpuiMember}, nil, true},
+		{"a member missing on disk", map[string]string{"Cargo.toml": "[workspace]\nmembers = [\"crates/gone\", \"crates/ui\"]\n", "crates/ui/Cargo.toml": gpuiMember}, nil, true},
+		{"an excluded folder", map[string]string{"Cargo.toml": "[workspace]\nmembers = [\"crates/core\"]\nexclude = [\"vendor/ui\"]\n", "crates/core/Cargo.toml": plainMember, "vendor/ui/Cargo.toml": gpuiMember}, nil, false},
+		{"default members alone", map[string]string{"Cargo.toml": "[workspace]\ndefault-members = [\"crates/ui\"]\n", "crates/ui/Cargo.toml": gpuiMember}, nil, false},
+		{"a path into a member that lists nothing", map[string]string{"Cargo.toml": "[workspace]\nmembers = [\"crates/*\"]\n", "crates/ui/Cargo.toml": gpuiMember, "crates/core/Cargo.toml": plainMember}, []string{"crates/core/src/lib.rs"}, false},
+	} {
+		frameworks, err := Frameworks(project(t, c.files), c.paths)
+		if err != nil || slices.Contains(frameworks, "gpui-ce") != c.want {
+			t.Errorf("%s: paths %v read %v, %v, want gpui-ce %v", c.name, c.paths, frameworks, err, c.want)
+		}
+	}
+}

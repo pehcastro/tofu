@@ -335,11 +335,15 @@ func (t Trigger) firesFor(task Task) (bool, string) {
 		why = append(why, fmt.Sprintf("the condition %s matched %q", t.condition, found))
 	}
 	if t.touches != nil && (task.Role == RoleSubAgent || task.Alone) {
-		found := t.touches.FindString(strings.Join(append([]string{task.Text}, task.Paths...), "\n"))
-		if found == "" {
-			return false, fmt.Sprintf("the touches %s matches nothing in the writer's task or paths", t.touches)
+		found := t.touches.FindString(task.Text)
+		switch {
+		case len(task.Paths) > 0:
+			why = append(why, fmt.Sprintf("the writer's task names %s, so the path decides rather than the touches %s", task.Paths[0], t.touches))
+		case found == "":
+			return false, fmt.Sprintf("the writer's task names no path, so the touches %s decides, and it matches nothing in the task", t.touches)
+		default:
+			why = append(why, fmt.Sprintf("the writer's task names no path, so the touches %s decides, and it matched %q", t.touches, found))
 		}
-		why = append(why, fmt.Sprintf("the writer's task touches %q", found))
 	}
 	if t.scope != "" {
 		reached := ""
