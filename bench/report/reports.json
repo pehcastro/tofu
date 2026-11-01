@@ -5477,7 +5477,7 @@
       "on": true,
       "switched_on": "yes, through the judged method",
       "costs": "about $0.0069 for 42 requests over that corpus, p50 276 ms, worst 412 ms",
-      "why": "jev catches 7 of 14 hand-labelled repeats with 2 false notes over 13 generations of one long session, against 1 of 14 with 3 false for the local stem matcher; the same request also asks whether a kept memory entry already covers the message, so the lead says it is in force rather than promising it again",
+      "why": "jev catches 7 of 14 hand-labelled repeats with 2 false notes over 13 generations of one long session, against 1 of 14 with 3 false for the local stem matcher; the same request also asks whether a kept memory entry already covers the message, so the lead says it is in force rather than promising it again, citing the ledger row and score; at kept_at 0.9 every memory match was right over four runs of 45 mocked messages with 18 covered, 14 matches a run, recall 0.78, against one wrong match a run at the 0.5 prior, precision 0.93 to 0.94, recall 0.78 to 0.83, for $0.0021 a run",
       "called_by": "internal/turn/inbox.go"
     },
     {
@@ -5500,8 +5500,8 @@
       "point": "stop_check",
       "on": true,
       "switched_on": "yes, through the judged method",
-      "costs": "a median $0.000067 a session over the 20 recorded sessions that ran it, worst $0.004574, $0.0089 over the whole recorded ledger, and the call is already made in shadow",
-      "why": "jev agrees with 71 of 78 hand labels against the repeat check's 68, 1.04x, and makes a false stop a third as often",
+      "costs": "a median $0.000067 a session over the 20 recorded sessions that ran it, worst $0.004574, $0.0089 over the whole recorded ledger; one call a hand-back, an open acceptance line included, $0.00093 and p50 202 ms over the 24 mocked ones",
+      "why": "jev agrees with 71 of 78 hand labels against the repeat check's 68, 1.04x, and makes a false stop a third as often; on 24 mocked sub-agent hand-backs it is right on 23 on four passes at jev-1.14.0, against 12 for the arm that never stops the turn, the one miss a stop after only reading the file it was told to change. the rule ships shadow, where the acceptance-line screen decides and the row decides nothing",
       "called_by": "cmd/tofu/run_done.go"
     },
     {
@@ -5584,6 +5584,46 @@
       "switched_on": "not wired",
       "costs": "nothing, and no call is made",
       "why": "the point reads library/questions/config/thrift_rule@1.yaml directly, which ships mode off, and nothing is cut until a measurement moves it"
+    },
+    {
+      "point": "request_open",
+      "on": true,
+      "switched_on": "yes, through the judged method",
+      "costs": "one jev call per message the person types to the lead, p50 178 to 198 ms, p99 228 to 261 ms over those passes; the dollar cost is not measured",
+      "why": "jev reads 37 and 36 of 40 mocked requests right on two passes, and 36 of 40 on a third, against 20 of 40 for the arm that always restates, which restates all 20 closed requests; jev restates 1 to 2 closed ones and misses 2 open ones a pass. the corpus is 40 requests written by one author, so this is a ceiling rather than a rate",
+      "called_by": "internal/turn/inbox.go"
+    },
+    {
+      "point": "done_reason",
+      "on": true,
+      "switched_on": "yes, through the judged method",
+      "costs": "one jev request per move to done with a reason that is not blank; latency and cost are not measured",
+      "why": "not measured against labels. no hand-labelled sample exists and no free arm, such as a phrase list over except, later and follow up, has been run beside it. a replay of the board's past done moves refuses 94 of 1740 reasons, 5.4 percent, against 27 to 41 percent a hand count found admitting an open part, and open_at 0.5 is an uncalibrated prior until a labelled sample moves it",
+      "called_by": "internal/boardy/transition.go"
+    },
+    {
+      "point": "ticket_feasibility",
+      "on": true,
+      "switched_on": "yes, through the judged method",
+      "costs": "one jev request per ticket made without a Feasibility section; latency and cost are not measured",
+      "why": "not measured. no corpus and no free arm, such as a word list over blur, shader, vibrancy and tray, has been run beside it; one driven ticket asking for a blur behind the desk sidebar scored platform 0.92 and was refused, and platform_at 0.5 is an uncalibrated prior until a labelled sample moves it",
+      "called_by": "internal/boardy/transition.go"
+    },
+    {
+      "point": "keep_result",
+      "on": true,
+      "switched_on": "yes, through the judged method",
+      "costs": "one jev request a result compaction could drop, asked once a turn; 29 requests a run, cost reported 0, p50 199 and 204 ms",
+      "why": "on 6 mocked sessions with 29 tool results, 14 of them needed later, /compact under jev dropped 14 and 13 results with 2 and 1 of the needed ones among them over two runs, against the age rule's 29 dropped and 14 needed; jev kept 3 of 15 spent results, so it carried 16758 and 17620 tokens after against 6694",
+      "called_by": "internal/turn/loop.go"
+    },
+    {
+      "point": "rule_applies",
+      "on": true,
+      "switched_on": "yes, through the judged method",
+      "costs": "one jev request a writer's prompt with a framework rule that declares touches, every such rule asked in it; 11 questions in 192 to 227 ms, a $0.00018 to $0.00024 list charge over 4 driven requests",
+      "why": "on 5 mocked writer tasks in a gpui-ce and a react workspace, 16 labelled rules among the framework's touches rules, jev fires 15 of 16 on three passes with 3 to 5 fired that the labels hold, against the touches keyword's 9 of 16 with 4; on make the panel ease in jev fires 6 of 7 motion rules and the keyword 1. the tasks, the labels and the one wording change were written by one author on the same 5 tasks, so 15 of 16 is a ceiling rather than a rate",
+      "called_by": "cmd/tofu/run.go"
     }
   ],
   "what_decides_what_read_from": "library/decisions/methods@1.yaml",
@@ -5788,6 +5828,28 @@
     {
       "package": "forkcache",
       "date": "2026-11-01",
+      "source": "bench/forkcache/report-2026-11-01-toolchoice.txt",
+      "figure": "61998",
+      "built_from": "rerun",
+      "sample": "4 mocked recorded turns, 2 carry arms, 8 forks, 4 compact runs",
+      "skips": "no fork-off arm: tofu run has no switch for it, so carrying on is computed from the parent's last request",
+      "commit": "1dd22a45",
+      "version": "0.5.20+dev",
+      "previous_run": "bench/forkcache/report-2026-11-01.txt",
+      "conclusion": [
+        {
+          "text": "Hand read from bench/report/handread.json: With tool_choice in the cache key and reach counted from the deepest prefix the cache holds, the first request after /compact reads 61998 of a 62270 shared prefix at reach 0, and no request on any arm reaches past the 20-block lookback. In the working-state ask arm every switch from auto to none reads 20957, the tools and system blocks alone, and misses every message block, so each fork there writes 36449 to 42337 tokens of cache against 8201 to 14190 for episode carry.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
+    {
+      "package": "forkcache",
+      "date": "2026-11-01",
       "source": "bench/forkcache/report-2026-11-01.txt",
       "figure": "58.5%",
       "built_from": "rerun",
@@ -5803,9 +5865,9 @@
         }
       ],
       "conclusion_unparsed": false,
-      "state": "stands",
-      "state_source": "",
-      "state_note": ""
+      "state": "stale",
+      "state_source": "bench/report/withdrawals.json",
+      "state_note": "superseded by bench/forkcache/report-2026-11-01-toolchoice.txt, by TOFU-1962 on 2026-11-01 and not by the file. It was measured at 6f24504b, before 236a0826 and 879adede, with tool_choice left out of the cache key, so a request that switches tool_choice to none read as a cache hit there, and its /compact rows read 22146 tokens at a reach counted from the end of the shared prefix. The rerun at 1dd22a45 keys tool_choice, counts reach from the deepest cached prefix, and reads 61998 after /compact."
     },
     {
       "package": "enforce",
@@ -7531,11 +7593,11 @@
     }
   ],
   "counts": {
-    "reports": 72,
+    "reports": 73,
     "packages_with_a_dated_report": 44,
     "packages_with_no_dated_report": 24,
     "withdrawn_whole_or_in_part": 19,
-    "stale": 1,
+    "stale": 2,
     "unparsed": 2
   },
   "withdrawals_declared_from_outside_live_in": "bench/report/withdrawals.json",

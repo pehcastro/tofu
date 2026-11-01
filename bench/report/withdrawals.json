@@ -293,5 +293,10 @@
       "typed arm: 71 of 78 labelled steps, 91.0%. of the 15 steps labelled stop it caught 11, of the 63 labelled continue it left 60 alone",
       "labelled steps: 78"
     ]
+  },
+  {
+    "report": "bench/forkcache/report-2026-11-01.txt",
+    "state": "stale",
+    "why": "superseded by bench/forkcache/report-2026-11-01-toolchoice.txt, by TOFU-1962 on 2026-11-01 and not by the file. It was measured at 6f24504b, before 236a0826 and 879adede, with tool_choice left out of the cache key, so a request that switches tool_choice to none read as a cache hit there, and its /compact rows read 22146 tokens at a reach counted from the end of the shared prefix. The rerun at 1dd22a45 keys tool_choice, counts reach from the deepest cached prefix, and reads 61998 after /compact."
   }
 ]

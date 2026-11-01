@@ -57,7 +57,7 @@
   {
     "point": "request_open",
     "file": "internal/turn/inbox.go",
-    "symbol": "requestOpenRef"
+    "symbol": "newOpenJudge"
   },
   {
     "point": "done_reason",
@@ -68,5 +68,15 @@
     "point": "ticket_feasibility",
     "file": "internal/boardy/transition.go",
     "symbol": "feasibilityRef"
+  },
+  {
+    "point": "keep_result",
+    "file": "internal/turn/loop.go",
+    "symbol": "newKeepJudge"
+  },
+  {
+    "point": "rule_applies",
+    "file": "cmd/tofu/run.go",
+    "symbol": "NewRuleJudge"
   }
 ]
