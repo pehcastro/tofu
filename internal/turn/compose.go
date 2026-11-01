@@ -216,6 +216,41 @@ func autoloadedSkills(definition subagent.Definition, skills []skill.Skill) (str
 	return text.String(), loaded, nil
 }
 
+func autoloadedReferences(definition subagent.Definition, skills []skill.Skill, loaded []PromptPart) ([]subagent.Reference, []PromptPart, error) {
+	if definition.Origin == "library" {
+		var err error
+		if skills, err = skill.Shipped(shipped.Files(), ""); err != nil {
+			return nil, nil, err
+		}
+	}
+	var references []subagent.Reference
+	var parts []PromptPart
+	for _, part := range loaded {
+		at := slices.IndexFunc(skills, func(one skill.Skill) bool { return one.Name == part.Name })
+		if at < 0 {
+			return nil, nil, fmt.Errorf("the sub-agent %s loads the skill %s from %s, which declares another name", definition.Name, part.Name, part.File)
+		}
+		files, err := skill.ReferenceFiles(shipped.Files(), part.Name, skills[at].References)
+		if err != nil {
+			return nil, nil, err
+		}
+		read, err := libraryReferences(shipped.Files(), files)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, reference := range read {
+			decided := slices.ContainsFunc(slices.Concat(definition.References, definition.Unreached, references), func(held subagent.Reference) bool { return held.Path == reference.Path })
+			if decided || slices.Contains(definition.Cut, reference.Name) {
+				continue
+			}
+			references = append(references, reference)
+			parts = append(parts, PromptPart{Concern: ConcernReferences, Agent: definition.Name, Name: reference.Name, File: reference.Path, State: session.PartOffered,
+				Why: "the skill " + part.Name + ", which the sub-agent's definition loads, names it"})
+		}
+	}
+	return references, parts, nil
+}
+
 func librarySkillFiles(library fs.FS, name string) []string {
 	found, _ := fs.Glob(library, "*/skills/"+name+".md")
 	deeper, _ := fs.Glob(library, "*/*/skills/"+name+".md")
@@ -324,10 +359,18 @@ func Compose(spec ComposeSpec) (Composed, error) {
 		if err != nil {
 			return Composed{}, err
 		}
+		named, namedParts, err := autoloadedReferences(spec.Agent, spec.Skills, autoloaded)
+		if err != nil {
+			return Composed{}, err
+		}
 		part := agentPart(spec.Agent)
 		part.Text += text
+		if len(named) > 0 {
+			part.Text += "\n\n" + referenceIndex(named)
+		}
 		composed.Parts = append(composed.Parts, part)
-		loaded, composed.Unsent = autoloaded, slices.Concat(autoloaded, referenceParts(spec.Agent))
+		loaded, composed.Unsent = autoloaded, slices.Concat(autoloaded, referenceParts(spec.Agent), namedParts)
+		offered, composed.References = slices.Concat(offered, named), named
 	} else {
 		files, _ := fs.Glob(shipped.Files(), "general/references/*.md")
 		indexed := len(files)
@@ -743,7 +786,7 @@ func (r referenceTool) Run(_ context.Context, raw json.RawMessage) (Result, erro
 	}
 	text, held := r.held[args.Name]
 	if !held {
-		return Result{}, fmt.Errorf("reference: no reference is named %q; the references are %s", args.Name, strings.Join(slices.Sorted(maps.Keys(r.held)), ", "))
+		return Result{}, fmt.Errorf("reference: no reference is named %q; the references are %s", args.Name, cmp.Or(strings.Join(slices.Sorted(maps.Keys(r.held)), ", "), "none"))
 	}
 	return Result{Content: text, Command: ReferenceToolName + " " + args.Name, Origin: llm.Origin{Source: llm.SourceReference, Name: args.Name}}, nil
 }
