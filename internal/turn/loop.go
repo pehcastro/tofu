@@ -462,6 +462,10 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		if config.SessionSource != "" {
 			hooked = sessionStartMessages(config.SessionSource, fire(ctx, hook.Input{Event: hook.SessionStart, Source: config.SessionSource}).Context, start)
 		}
+		if kept := withoutOlderCompactContext(config.History, hooked); len(kept) < len(config.History) {
+			recorded.listChange("carried", "the compact context this session starts with replaces the one the conversation carried", config.History, kept)
+			carried, messages = withoutOlderCompactContext(carried, hooked), withoutOlderCompactContext(messages, hooked)
+		}
 		prompted := fire(ctx, hook.Input{Event: hook.UserPromptSubmit, Prompt: config.Task})
 		promptRefused, hooked = prompted.Block, append(hooked, hookMessages(llm.SourcePromptSubmit, prompted.Context, start)...)
 	}
@@ -1648,10 +1652,16 @@ func sessionStartMessages(source string, added []hook.Context, at time.Time) []l
 }
 
 func withoutOlderCompactContext(messages, added []llm.Message) []llm.Message {
-	if len(added) == 0 {
+	compact := func(message llm.Message) bool {
+		return message.Origin.Source == llm.SourceSessionStart && message.Origin.ID == sessionSourceCompact
+	}
+	if !slices.ContainsFunc(added, compact) {
 		return messages
 	}
-	return slices.DeleteFunc(slices.Clone(messages), func(message llm.Message) bool {
-		return message.Origin.Source == llm.SourceSessionStart && message.Origin.ID == sessionSourceCompact
-	})
+	writtenBeforeTheID := func(message llm.Message) bool {
+		return message.Origin.Source == llm.SourceSessionStart && message.Origin.ID == "" && slices.ContainsFunc(added, func(newer llm.Message) bool {
+			return newer.Origin.Name == message.Origin.Name && newer.Content == message.Content
+		})
+	}
+	return slices.DeleteFunc(slices.Clone(messages), func(message llm.Message) bool { return compact(message) || writtenBeforeTheID(message) })
 }
