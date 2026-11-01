@@ -367,7 +367,10 @@ func (t *SpawnTool) boardLine(reports string) string {
 }
 
 func BoardNudges(store boardy.Store, sizes map[string]int64) string {
-	nudges := store.NudgesSince(sizes)
+	return NudgesText(store.NudgesSince(sizes))
+}
+
+func NudgesText(nudges []string) string {
 	if len(nudges) == 0 {
 		return ""
 	}

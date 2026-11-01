@@ -120,8 +120,8 @@ const (
 	boardNotifiesOpening = "board hooks notify you: "
 )
 
-func UnreadBoardNotifies(board *boardy.Managed) string {
-	text, _ := readBoardNotifies(board)
+func UnreadBoardNotifies(board *boardy.Managed, foreseen ...string) string {
+	text, _ := readBoardNotifies(board, foreseen...)
 	return text
 }
 
@@ -131,7 +131,7 @@ func boardNotifies(board *boardy.Managed) string {
 	return text
 }
 
-func readBoardNotifies(board *boardy.Managed) (string, func()) {
+func readBoardNotifies(board *boardy.Managed, foreseen ...string) (string, func()) {
 	if board == nil {
 		return "", func() {}
 	}
@@ -141,6 +141,7 @@ func readBoardNotifies(board *boardy.Managed) (string, func()) {
 		_ = json.Unmarshal(raw, &sizes)
 	}
 	notes, read := board.Store.NotifiesSince(sizes)
+	notes = append(notes, foreseen...)
 	markRead := func() {
 		if raw, err := json.Marshal(read); err == nil && !maps.Equal(read, sizes) {
 			_ = sys.WriteFile(path, raw, 0o600)

@@ -1063,18 +1063,7 @@ func foreseeLead(board boardy.Managed, session string) leadForeseen {
 		all.Nudges, all.Notifies, all.Effects = append(all.Nudges, one.Nudges...), append(all.Notifies, one.Notifies...), append(all.Effects, one.Effects...)
 		return err
 	})
-	foreseen := leadForeseen{attached: attachFailed(err), notified: turn.UnreadBoardNotifies(&board), effects: all.Effects}
-	if len(all.Nudges) > 0 {
-		foreseen.attached = "\n\na board hook nudges you: " + strings.Join(all.Nudges, "; ") + foreseen.attached
-	}
-	switch notes := strings.Join(all.Notifies, "; "); {
-	case notes == "":
-	case foreseen.notified == "":
-		foreseen.notified = turn.NotesAfterTheTask + "board hooks notify you: " + notes
-	default:
-		foreseen.notified += "; " + notes
-	}
-	return foreseen
+	return leadForeseen{attached: turn.NudgesText(all.Nudges) + attachFailed(err), notified: turn.UnreadBoardNotifies(&board, all.Notifies...), effects: all.Effects}
 }
 
 func eachLedBoard(board boardy.Managed, session string, do func(key string) error) error {
