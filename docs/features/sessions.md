@@ -250,10 +250,16 @@ tofu session work brisk-amber-heron --ticket DEMO-1
 
 lists the work done on one ticket in order: the brief the lead gave, the
 spawn, the sub-agent's move with `ticket_move`, its end and its whole
-report. With `--json` of `tofu session trace`, the spawn call, the spawn
-and end rows, the report row and the `ticket_move` call row carry `ticket`
-beside `agent`, which is what this view joins on. An id no row carries
-prints `no row carries DEMO-9` and exits 0.
+report. It reads every generation of the session, so after a fork the
+report still names its ticket, even when the spawn was in an earlier
+generation. It also lists the board's own moves of that ticket, as `board`
+rows: the move to doing at the spawn, a `tofu boardy move` run from the
+session's shell, and a board hook's move while the session ran, such as
+`board  hook:report_to_review  moved  doing to review`. A board move that a
+`ticket_move` row already shows is not listed twice. With `--json` of
+`tofu session trace`, the spawn call, the spawn and end rows, the report
+row and the `ticket_move` call row carry `ticket` beside `agent`. An id no
+row carries prints `no row carries DEMO-9` and exits 0.
 
 `--kind library` lists what the library and your own files gave each agent,
 under that agent's name, each with the file it came from:

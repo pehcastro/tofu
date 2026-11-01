@@ -104,7 +104,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			case call.Tool == turn.SpawnToolName && json.Unmarshal(call.Args, &ticketed) == nil:
 				row.Ticket, row.work = ticketed.Ticket, workStep{what: workBrief, said: ticketed.Task}
 			case call.Tool == turn.TicketMoveToolName && json.Unmarshal(call.Args, &ticketed) == nil:
-				row.Ticket, row.work = ticketed.ID, workStep{what: workMove, said: traced("to "+ticketed.To, ticketed.Reason)}
+				row.Ticket, row.work = ticketed.ID, workStep{what: workMove, said: traced("to "+ticketed.To, ticketed.Reason), to: ticketed.To}
 			}
 			if what, name := libraryLoad(call); what != "" {
 				rows = append(rows, row)
