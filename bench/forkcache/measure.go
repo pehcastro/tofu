@@ -13,6 +13,35 @@ type forkRow struct {
 	asides                               usage
 	lived                                int
 	held, named, gone                    int
+	shared                               int
+	look                                 reading
+}
+
+type flip struct {
+	exchange
+	request int
+	from    string
+	shared  int
+}
+
+func flipsOf(sent []exchange) []flip {
+	var flips []flip
+	for at := 1; at < len(sent); at++ {
+		if sent[at].choice != sent[at-1].choice {
+			flips = append(flips, flip{exchange: sent[at], request: at + 1, from: sent[at-1].choice, shared: sharedTokens(sent[at-1].blocks, sent[at].blocks)})
+		}
+	}
+	return flips
+}
+
+func pastLookback(sent []exchange) int {
+	past := 0
+	for _, e := range sent {
+		if e.look.pastLookback() {
+			past++
+		}
+	}
+	return past
 }
 
 func (f forkRow) grown() int { return max(0, f.parentLast.total()-f.parentBefore.total()) }
@@ -37,10 +66,12 @@ type measured struct {
 	forks              []forkRow
 	listedForks        int
 	inside, insideGone int
+	flips              []flip
+	past               int
 }
 
 func measure(armName string, played script, sent []exchange, lookups []lookup, listed string) measured {
-	m := measured{arm: armName, session: played.name, requests: len(sent)}
+	m := measured{arm: armName, session: played.name, requests: len(sent), flips: flipsOf(sent), past: pastLookback(sent)}
 	var sessions struct {
 		Data struct {
 			Sessions []struct {
@@ -85,7 +116,7 @@ func measure(armName string, played script, sent []exchange, lookups []lookup, l
 
 func forked(sent []exchange, lookups []lookup, steps []int, generation, k int) forkRow {
 	child, parent := steps[k], steps[k-1]
-	row := forkRow{step: k, parentLast: sent[parent].billed, childFirst: sent[child].billed}
+	row := forkRow{step: k, parentLast: sent[parent].billed, childFirst: sent[child].billed, shared: sharedTokens(sent[parent].blocks, sent[child].blocks), look: sent[child].look}
 	if k > 1 && steps[k-2] >= generation {
 		row.parentBefore = sent[steps[k-2]].billed
 	}

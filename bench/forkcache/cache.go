@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"regexp"
 )
 
@@ -51,9 +52,15 @@ type wireBody struct {
 		Role    string          `json:"role"`
 		Content json.RawMessage `json:"content"`
 	} `json:"messages"`
-	ToolChoice *struct {
-		Type string `json:"type"`
-	} `json:"tool_choice"`
+	ToolChoice map[string]any `json:"tool_choice"`
+}
+
+func (b wireBody) choice() string {
+	if b.ToolChoice == nil {
+		return `{"type":"auto"}`
+	}
+	text, _ := json.Marshal(b.ToolChoice)
+	return string(text)
 }
 
 func blocksOf(body wireBody) []block {
@@ -77,6 +84,7 @@ func blocksOf(body wireBody) []block {
 	for _, system := range body.System {
 		add("system", system)
 	}
+	running = sha256.Sum256(append(running[:], "tool_choice"+body.choice()...))
 	for _, message := range body.Messages {
 		var content []map[string]any
 		if json.Unmarshal(message.Content, &content) != nil {
@@ -91,30 +99,41 @@ func blocksOf(body wireBody) []block {
 	return blocks
 }
 
-type sharedPrefix struct {
-	tokens int
-	reach  int
-}
-
-func sharedWith(before, after []block) sharedPrefix {
+func sharedTokens(before, after []block) int {
 	shared, bytes := 0, 0
 	for ; shared < min(len(before), len(after)) && before[shared].prefix == after[shared].prefix; shared++ {
 		bytes += before[shared].bytes
 	}
-	reach := -1
-	for at := max(shared-1, 0); at < len(after) && reach < 0; at++ {
-		if after[at].breakpoint != "" {
-			reach = at - (shared - 1)
-		}
+	return tokens(bytes)
+}
+
+type reading struct {
+	readBlocks   int
+	cachedTokens int
+	reach        int
+}
+
+func (r reading) pastLookback() bool { return r.reach > lookbackBlocks }
+
+func (r reading) columns() []string {
+	if r.reach < 0 {
+		return []string{fmt.Sprint(r.cachedTokens), "none", "ok"}
 	}
-	return sharedPrefix{tokens: tokens(bytes), reach: reach}
+	check := "ok"
+	if r.pastLookback() {
+		check = "fail"
+	}
+	return []string{fmt.Sprint(r.cachedTokens), fmt.Sprint(r.reach), check}
 }
 
 type promptCache map[[32]byte]bool
 
-func (c promptCache) bill(blocks []block) usage {
-	last, readTo := -1, 0
+func (c promptCache) bill(blocks []block) (usage, reading) {
+	last, readTo, cachedTo := -1, 0, 0
 	for at, b := range blocks {
+		if c[b.prefix] {
+			cachedTo = at + 1
+		}
 		if b.breakpoint == "" {
 			continue
 		}
@@ -126,10 +145,19 @@ func (c promptCache) bill(blocks []block) usage {
 			}
 		}
 	}
-	readBytes, inputBytes, ttl := 0, 0, ""
+	look := reading{readBlocks: readTo, reach: -1}
+	for at := cachedTo - 1; cachedTo > 0 && at < len(blocks) && look.reach < 0; at++ {
+		if blocks[at].breakpoint != "" {
+			look.reach = at - (cachedTo - 1)
+		}
+	}
+	readBytes, cachedBytes, inputBytes, ttl := 0, 0, 0, ""
 	written := map[string]int{}
 	for at := len(blocks) - 1; at >= 0; at-- {
 		b := blocks[at]
+		if at < cachedTo {
+			cachedBytes += b.bytes
+		}
 		if b.breakpoint != "" {
 			ttl = b.breakpoint
 			c[b.prefix] = true
@@ -143,5 +171,6 @@ func (c promptCache) bill(blocks []block) usage {
 			inputBytes += b.bytes
 		}
 	}
-	return usage{read: tokens(readBytes), input: tokens(inputBytes), write1h: tokens(written[ttlOneHour]), write5m: tokens(written[ttlFiveMinutes])}
+	look.cachedTokens = tokens(cachedBytes)
+	return usage{read: tokens(readBytes), input: tokens(inputBytes), write1h: tokens(written[ttlOneHour]), write5m: tokens(written[ttlFiveMinutes])}, look
 }

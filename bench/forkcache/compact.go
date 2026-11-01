@@ -29,8 +29,11 @@ type compactRow struct {
 	compaction    host.Compaction
 	before, after usage
 	asides        usage
-	shared        sharedPrefix
+	shared        int
+	look          reading
 	first         host.Compaction
+	flips         []flip
+	past          int
 }
 
 type wireLine struct {
@@ -170,6 +173,7 @@ func compactOnce(exe, work string, played script) (compactRow, error) {
 	if err := s.kept(work, compactArm); err != nil {
 		return compactRow{}, err
 	}
+	row.flips, row.past = flipsOf(s.stood.sent), pastLookback(s.stood.sent)
 	var before []block
 	for at, e := range s.stood.sent {
 		switch {
@@ -179,7 +183,7 @@ func compactOnce(exe, work string, played script) (compactRow, error) {
 		case !e.step:
 			row.asides = row.asides.plus(e.billed)
 		default:
-			row.after, row.shared = e.billed, sharedWith(before, e.blocks)
+			row.after, row.shared, row.look = e.billed, sharedTokens(before, e.blocks), e.look
 			return row, nil
 		}
 	}

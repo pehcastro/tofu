@@ -86,7 +86,17 @@ func run() error {
 		}
 		compacts = append(compacts, row)
 	}
-	fmt.Print(header + report(runs) + compactReport(compacts))
+	fmt.Print(header + report(runs) + compactReport(compacts) + flipReport(runs, compacts))
+	past := 0
+	for _, r := range runs {
+		past += r.past
+	}
+	for _, c := range compacts {
+		past += c.past
+	}
+	if past > 0 {
+		return fmt.Errorf("%d requests reach past the %d-block lookback", past, lookbackBlocks)
+	}
 	return nil
 }
 
@@ -211,8 +221,10 @@ head        subscription: the stand-in's token carries the oauth marker, so ever
 model       %s, build id the stand-in reported: %s
 ceiling     --context-ceiling %d on every tofu run; the compact arm runs under tofu serve --stdio at its own context budget
 weights     input %.2f, cache read %.2f, write 5m %.2f, write 1h %.2f, in base input tokens
+key         tools, system, tool_choice, then messages: a tool_choice change keeps the tools and system prefix and misses every message block
+lookback    %d blocks back from each cache breakpoint; a row whose reach is past it reads fail and the run exits nonzero
 warm-up     none: no request is discarded
 
 `, strings.TrimSpace(string(commit)), strings.Join(strings.Fields(string(version)), " "), time.Now().Format(time.DateOnly),
-		runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), model, reportedModel, ceiling, inputWeight, readWeight, write5mWeight, write1hWeight)
+		runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), model, reportedModel, ceiling, inputWeight, readWeight, write5mWeight, write1hWeight, lookbackBlocks)
 }

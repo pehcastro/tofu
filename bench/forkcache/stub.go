@@ -29,6 +29,9 @@ var markerPattern = regexp.MustCompile(`MOCKHELD-\d{6}`)
 type exchange struct {
 	step     bool
 	billed   usage
+	look     reading
+	choice   string
+	head     int
 	messages int
 	body     string
 	blocks   []block
@@ -135,8 +138,9 @@ func (s *stand) answer(w http.ResponseWriter, r *http.Request) {
 	s.held.Lock()
 	defer s.held.Unlock()
 	blocks := blocksOf(body)
-	sent := exchange{step: len(body.Tools) > 0 && (body.ToolChoice == nil || body.ToolChoice.Type != "none"), billed: s.cache.bill(blocks),
-		messages: len(body.Messages), body: string(raw), blocks: blocks}
+	billed, look := s.cache.bill(blocks)
+	sent := exchange{step: len(body.Tools) > 0 && body.ToolChoice["type"] != "none", billed: billed, look: look, choice: body.choice(),
+		head: len(body.Tools) + len(body.System), messages: len(body.Messages), body: string(raw), blocks: blocks}
 	s.sent = append(s.sent, sent)
 	reply := sse{w: w, flusher: w.(http.Flusher)}
 	reply.start(len(s.sent), sent.billed)
