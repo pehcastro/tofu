@@ -44,7 +44,7 @@ func recordedCallByHash(hash string) (recordedCall, bool, error) {
 				continue
 			}
 			for _, call := range step.ToolCalls {
-				if sessionstore.DrawnAs(call.ID, hash) {
+				if sessionstore.DrawnAs(call.ID, hash) || sessionstore.DrawnAs(call.Call, hash) {
 					return recordedCall{Session: header.ID, Step: step.Index, Attempt: event.Attempt, Call: call}, true, nil
 				}
 			}
