@@ -4803,41 +4803,6 @@
       "worse_word": "more"
     },
     {
-      "bench": "forkcache",
-      "task": "the first request after a context fork",
-      "measure": "forks whose first request reads cache and writes none",
-      "unit": "fork pairs, compared as a share",
-      "better": "higher",
-      "tofu": [
-        {
-          "label": "as reported",
-          "date": "2026-09-22",
-          "commit": "a8e9f43b",
-          "version": "0.4.8",
-          "build": "a8e9f43b",
-          "figure": "21 of 21",
-          "value": 100,
-          "source": "bench/forkcache/report-2026-09-22.txt",
-          "evidence": "matches the 21 pinned pairs"
-        },
-        {
-          "label": "rechecked against the live store",
-          "date": "2026-10-10",
-          "commit": "82890ac1",
-          "version": "0.5.10-fix1",
-          "build": "82890ac1",
-          "figure": "6 of 63",
-          "value": 9.5,
-          "source": "bench/forkcache/report-2026-09-22.txt",
-          "evidence": "57 of the 63 first billed a prefix read AND written: the first request read 15,673 to 28,240 tokens of cache and wrote 19,226 to 52,489, where carrying on would have presented 165,236 to 218,554. 6 read only."
-        }
-      ],
-      "short": "forks whose first request reads cache and writes none",
-      "corpus_moved": true,
-      "better_word": "more",
-      "worse_word": "less"
-    },
-    {
       "bench": "recall",
       "task": "the largest billed request in recorded sessions",
       "measure": "largest billed request",

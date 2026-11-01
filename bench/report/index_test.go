@@ -70,8 +70,8 @@ func TestTheCostReportSaysItsOwnWithdrawal(t *testing.T) {
 }
 
 func TestAReportIsWithdrawnFromOutsideItself(t *testing.T) {
-	report := find(t, "bench/forkcache/report-2026-09-22.txt")
-	body, err := os.ReadFile(filepath.Join("..", "forkcache", "report-2026-09-22.txt"))
+	report := find(t, "bench/websift/report-2026-09-21.md")
+	body, err := os.ReadFile(filepath.Join("..", "websift", "report-2026-09-21.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestAReportIsWithdrawnFromOutsideItself(t *testing.T) {
 	if report.StateSource != WithdrawalsPath {
 		t.Errorf("the withdrawal is credited to %q rather than %q", report.StateSource, WithdrawalsPath)
 	}
-	if !strings.Contains(report.StateNote, "BOARD.md") {
+	if !strings.Contains(report.StateNote, "TOFU-440") {
 		t.Errorf("the note does not say who withdrew it: %q", report.StateNote)
 	}
 }

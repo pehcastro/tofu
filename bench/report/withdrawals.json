@@ -1,15 +1,5 @@
 [
   {
-    "report": "bench/forkcache/report-2026-09-22.txt",
-    "state": "withdrawn in part",
-    "why": "the estimator section only, withdrawn by the board entry of 2026-09-22 in .local/boji/tickets/BOARD.md and not by the file. Two of its rows compare numbers taken from two different conversations, so that section does not measure the estimator against the provider. Both rows are quoted below with the sentence that introduces them, because the rows are where the figures are and a withdrawal that quotes only the lead-in leaves them standing. Every other section of the file stands.",
-    "fell": [
-      "v7 set the rule that a fork is proved by the provider's number and not by ours. Both forks carry our own before-figure in the header, so the rule can be checked here:",
-      "turn-18d724d865ed9264 ours 66,162 provider 66,354 0.3 percent under",
-      "turn-18d6f8d9e45f8efc ours 57,326 provider 44,189 29.7 percent over"
-    ]
-  },
-  {
     "report": "bench/websift/report-2026-09-21.md",
     "state": "withdrawn in part",
     "why": "one sentence of the Arm that won section, withdrawn by TOFU-440 on 2026-09-23 and not by the file. Both halves of it have moved. There is no file at that path: the rule is library/tools/fetch/rules/page_sift@1.yaml, renamed when 0.4.8 made catalog into library. And the sentence predates library/decisions/methods@1.yaml, so it reads shadow as a lock a later ticket would pull, where the method table now records page_sift as unwired because web.Reduce already strips the link-only rows the sieve would strip, 0.00 percent of further bytes on all 24 recorded pages. Everything not struck stands, including the skip the file declares.",

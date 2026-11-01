@@ -37,11 +37,21 @@
   {
     "point": "person_repeat",
     "file": "internal/turn/inbox.go",
-    "symbol": "judgeRepeats"
+    "symbol": "openJudges"
   },
   {
     "point": "memory_same",
     "file": "internal/turn/tools/remember.go",
     "symbol": "duplicate"
+  },
+  {
+    "point": "task_kind",
+    "file": "internal/turn/compose.go",
+    "symbol": "NewKindJudge"
+  },
+  {
+    "point": "standing_order",
+    "file": "internal/turn/standing.go",
+    "symbol": "newStandingJudge"
   }
 ]

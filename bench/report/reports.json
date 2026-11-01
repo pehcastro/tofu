@@ -4781,41 +4781,6 @@
         ]
       },
       {
-        "bench": "forkcache",
-        "task": "the first request after a context fork",
-        "measure": "forks whose first request reads cache and writes none",
-        "short": "forks whose first request reads cache and writes none",
-        "unit": "fork pairs, compared as a share",
-        "better_word": "more",
-        "worse_word": "less",
-        "corpus_moved": true,
-        "better": "higher",
-        "tofu": [
-          {
-            "label": "as reported",
-            "date": "2026-09-22",
-            "commit": "a8e9f43b",
-            "version": "0.4.8",
-            "build": "a8e9f43b",
-            "figure": "21 of 21",
-            "value": 100,
-            "source": "bench/forkcache/report-2026-09-22.txt",
-            "evidence": "matches the 21 pinned pairs"
-          },
-          {
-            "label": "rechecked against the live store",
-            "date": "2026-10-10",
-            "commit": "82890ac1",
-            "version": "0.5.10-fix1",
-            "build": "82890ac1",
-            "figure": "6 of 63",
-            "value": 9.5,
-            "source": "bench/forkcache/report-2026-09-22.txt",
-            "evidence": "57 of the 63 first billed a prefix read AND written: the first request read 15,673 to 28,240 tokens of cache and wrote 19,226 to 52,489, where carrying on would have presented 165,236 to 218,554. 6 read only."
-          }
-        ]
-      },
-      {
         "bench": "recall",
         "task": "the largest billed request in recorded sessions",
         "measure": "largest billed request",
@@ -5516,6 +5481,14 @@
       "called_by": "internal/turn/inbox.go"
     },
     {
+      "point": "standing_order",
+      "on": true,
+      "switched_on": "yes, through the judged method",
+      "costs": "one jev call per new sentence the person wrote, at each fork, p50 194 to 196 ms, worst 291 ms, cost reported 0",
+      "why": "jev keeps 19 of 20 standing orders with 0 non-orders kept over two passes, against 9 of 20 with 11 non-orders kept for the word list konst.CarryStandingPhrases, on a 40-sentence corpus",
+      "called_by": "internal/turn/standing.go"
+    },
+    {
       "point": "browser_step",
       "on": true,
       "switched_on": "yes, through the judged method",
@@ -5596,6 +5569,14 @@
       "switched_on": "not wired",
       "costs": "nothing, and no call is made",
       "why": "nothing is measured, and it waits on one recorded orchestrator and sub-agent"
+    },
+    {
+      "point": "task_kind",
+      "on": true,
+      "switched_on": "yes, through the judged method",
+      "costs": "one jev call each time a prompt is composed for a task, the lead's and each spawn's, p50 192 ms, p95 226 ms, worst 302 ms and a mean $0.0000257 list charge over 80 calls",
+      "why": "jev names the kind of 40 of 40 mocked tasks on two passes against the word list's 11 of 40, which reads a crash, a diff to look over or a question about a fault as no kind and an add a debug flag task as debug. the corpus and the question were written by one author, so 40 of 40 is a ceiling rather than a rate",
+      "called_by": "internal/turn/compose.go"
     },
     {
       "point": "thrift",
@@ -5804,6 +5785,28 @@
     }
   ],
   "reports": [
+    {
+      "package": "forkcache",
+      "date": "2026-11-01",
+      "source": "bench/forkcache/report-2026-11-01.txt",
+      "figure": "58.5%",
+      "built_from": "rerun",
+      "sample": "4 mocked recorded turns, 2 carry arms, 6 forks",
+      "skips": "no fork-off arm: tofu run has no switch for it, so carrying on is computed from the parent's last request",
+      "commit": "0842f289",
+      "version": "0.5.20+dev",
+      "previous_run": "none, the first dated report of bench/forkcache",
+      "conclusion": [
+        {
+          "text": "Hand read from bench/report/handread.json: Of the parent's last 20 lookups, 58.5% are no longer held in the first request after a fork, against 0.0% inside a session; each fork writes 12,645 to 21,912 tokens of cache and repays in 17.1 to 36.4 requests.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
     {
       "package": "enforce",
       "date": "2026-10-28",
@@ -6731,31 +6734,6 @@
       "state_note": "the session-read count only, withdrawn on 2026-09-24 by TOFU-560 and by this file rather than by an edit to the report. bench/corpus.ReadTurnDir concatenated a session directory whose body.jsonl carries more than one outcome line into one flattened turn with a repeated step-index sequence, instead of returning one turn per outcome. Six directories under .tofu/sessions do this: turn-18d6ea32da3230c0 (4 outcome lines, so 3 extra turns), turn-18d6f22be5cb6180, turn-18d6f8d9e45f8efc, turn-18d724d865ed9264 and turn-18d7474e7fae090c (2 outcome lines each, 1 extra turn apiece), all dated 2026-09-20 or 2026-09-21 and already in the corpus this report read. corpus.WalkSessions now returns one Turn per outcome segment, so the true count at this report's 111-entry, 110-session read was 117 sessions, not 110. No step or tool call moves between turns and none of the seven added segments was ever skipped, so every call, failure and byte figure in this report is computed from the identical set of calls and stands exactly as measured: the session count moves, nothing else does."
     },
     {
-      "package": "forkcache",
-      "date": "2026-09-22",
-      "source": "bench/forkcache/report-2026-09-22.txt",
-      "figure": "zero cache write",
-      "built_from": "prose",
-      "sample": "2 recorded context forks",
-      "skips": "the account fork arm could not be measured, because no recorded account fork exists",
-      "commit": "a8e9f43b",
-      "version": "0.4.8",
-      "rechecked_on": "2026-10-10",
-      "rechecked_commit": "82890ac1",
-      "rechecked_version": "0.5.10-fix1",
-      "previous_run": "none, the first dated report of bench/forkcache",
-      "conclusion": [
-        {
-          "text": "The first request after a context fork READS cache and writes none. On both recorded forks it read the whole cacheable head and paid zero cache write.",
-          "withdrawn": false
-        }
-      ],
-      "conclusion_unparsed": false,
-      "state": "withdrawn in part",
-      "state_source": "bench/report/withdrawals.json",
-      "state_note": "the estimator section only, withdrawn by the board entry of 2026-09-22 in .local/boji/tickets/BOARD.md and not by the file. Two of its rows compare numbers taken from two different conversations, so that section does not measure the estimator against the provider. Both rows are quoted below with the sentence that introduces them, because the rows are where the figures are and a withdrawal that quotes only the lead-in leaves them standing. Every other section of the file stands."
-    },
-    {
       "package": "harness",
       "date": "2026-09-22",
       "source": "bench/harness/report-2026-09-22.md",
@@ -7462,6 +7440,11 @@
       "note": "drives 8 long-session flows on cassettes, each on a fresh home and project, and writes a pass stamp keyed by HEAD's tree when every flow passes on a clean tree. A gate, not a measurement: 0 dated reports."
     },
     {
+      "package": "judge",
+      "kind": "measurement with no dated report",
+      "note": "Jev against the word list on the task kind and the open request, added at ce5eb3a8 with 2 test-driven corpora, 0 dated reports so far."
+    },
+    {
       "package": "learn",
       "kind": "measurement with no dated report",
       "note": "learn/jobs, TOFU-1305, 2026-10-13 at 6d565412 and rerun 2026-10-14 at 9586ec60: 4 of 5 labelled repeated jobs found, 0 false, on 5 made-up sessions; the output is in bench/report/runs/learn-jobs-2026-10-14.txt and on the first tab. The labels.txt run of TOFU-1176 needs Jev and claude and has no committed number."
@@ -7490,6 +7473,11 @@
       "package": "profile",
       "kind": "measurement with no dated report",
       "note": "report.md, undated by name, runs of 2026-10-13 on the build 0.5.13-fix1+dev at f360965a and after TOFU-1319 at 60c41fb3, 1 run per row. runs/ holds every row as JSON."
+    },
+    {
+      "package": "reach",
+      "kind": "measurement with no dated report",
+      "note": "which library items reach which agent, added at 7308d98e as a runner that prints, 0 dated reports so far."
     },
     {
       "package": "report",
@@ -7527,6 +7515,11 @@
       "note": "median, p95 and p99 over a slice of floats, called by every bench that reports a spread."
     },
     {
+      "package": "symbols",
+      "kind": "measurement with no dated report",
+      "note": "symbols over Rust and TypeScript, added at b567fdc8 as one test file, 0 dated reports so far."
+    },
+    {
       "package": "thread",
       "kind": "measurement with no dated report",
       "note": "replays one recorded lead and sub-agent cassette through a before and an after tofu binary, each in a fresh home, and prints the thread, engineer and evidence characters per arm; it prints to the terminal and writes 0 files, so 0 numbers from it are on this page."
@@ -7540,8 +7533,8 @@
   "counts": {
     "reports": 72,
     "packages_with_a_dated_report": 44,
-    "packages_with_no_dated_report": 21,
-    "withdrawn_whole_or_in_part": 20,
+    "packages_with_no_dated_report": 24,
+    "withdrawn_whole_or_in_part": 19,
     "stale": 1,
     "unparsed": 2
   },

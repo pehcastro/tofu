@@ -130,17 +130,14 @@
     "version": "none, older than konst.Version"
   },
   {
-    "report": "bench/forkcache/report-2026-09-22.txt",
-    "figure": "zero cache write",
-    "says": "The first request after a context fork reads the whole cacheable head and pays zero cache write, on both recorded forks.",
-    "from": "prose",
-    "sample": "2 recorded context forks",
-    "skips": "the account fork arm could not be measured, because no recorded account fork exists",
-    "commit": "a8e9f43b",
-    "version": "0.4.8",
-    "rechecked_on": "2026-10-10",
-    "rechecked_commit": "82890ac1",
-    "rechecked_version": "0.5.10-fix1"
+    "report": "bench/forkcache/report-2026-11-01.txt",
+    "figure": "58.5%",
+    "says": "Of the parent's last 20 lookups, 58.5% are no longer held in the first request after a fork, against 0.0% inside a session; each fork writes 12,645 to 21,912 tokens of cache and repays in 17.1 to 36.4 requests.",
+    "from": "rerun",
+    "sample": "4 mocked recorded turns, 2 carry arms, 6 forks",
+    "skips": "no fork-off arm: tofu run has no switch for it, so carrying on is computed from the parent's last request",
+    "commit": "0842f289",
+    "version": "0.5.20+dev"
   },
   {
     "report": "bench/harness/report-2026-09-20.md",

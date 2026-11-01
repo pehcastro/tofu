@@ -35,6 +35,21 @@
     "note": "TOFU-1401, in progress on 2026-10-15: a long session with hundreds of sub-agents, 0 dated reports so far."
   },
   {
+    "package": "judge",
+    "kind": "measurement with no dated report",
+    "note": "Jev against the word list on the task kind and the open request, added at ce5eb3a8 with 2 test-driven corpora, 0 dated reports so far."
+  },
+  {
+    "package": "reach",
+    "kind": "measurement with no dated report",
+    "note": "which library items reach which agent, added at 7308d98e as a runner that prints, 0 dated reports so far."
+  },
+  {
+    "package": "symbols",
+    "kind": "measurement with no dated report",
+    "note": "symbols over Rust and TypeScript, added at b567fdc8 as one test file, 0 dated reports so far."
+  },
+  {
     "package": "memtree",
     "kind": "measurement with no dated report",
     "note": "TOFU-1218, 2026-10-08, at b5859988, owing its dated report because an agent may not write a report file. 10000 synthetic items with a fake compaction function: prefix stability 97.84% batched against 79.39% merging at every append, 1.47 line-inputs per item against 13.30, 1.149 model calls per item."

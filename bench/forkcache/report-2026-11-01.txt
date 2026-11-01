@@ -1,0 +1,49 @@
+bench/forkcache, fork cost and quality on mocked recorded sessions
+
+commit      0842f289
+tofu        version 0.5.20+dev commit 0842f289c376635a35b130d241bbfd2d6fd7688b-dirty go go1.27.1
+date        2026-11-01
+machine     windows/amd64, 32 cpu
+wire        anthropic messages to a local stand-in that bills by Anthropic's prompt cache rules; no model, no network
+project     billed as W:\mock\project in every request, so the length of -work moves no count
+credential  mock claude-sub login against the stand-in, so a subscription credential kind
+model       claude-sub/claude-sonnet-5, build id the stand-in reported: claude-sonnet-5
+ceiling     --context-ceiling 60000 on every run
+weights     input 1.00, cache read 0.10, write 5m 1.25, write 1h 2.00, in base input tokens
+warm-up     none: no request is discarded
+
+forks, one row per fork, in tokens and in base input token units
+arm                session                fork step  before   after    read written    extra    saved   even lived  held named  gone
+episode carry      turn-18d6a7961d933ee8     1   21   46229   34141   21496   12645    21693     1265   17.1    16     6     9     0
+episode carry      turn-18d6a7961d933ee8     2   37   47456   36114   21496   14618    25886     1172   22.1     7     5     1     0
+episode carry      turn-18d6a27c7dfb1644     1   25   47792   35073   21496   13577    23946     1301   18.4    10     6    14     0
+episode carry      turn-18d69bfed2bf52a0  none    -       -       -       -       -        -        -      -     -     -     -     -
+episode carry      turn-18d6a5df2caeac68  none    -       -       -       -       -        -        -      -     -     -     -     -
+working-state ask  turn-18d6a7961d933ee8     1   21   45574   34046   20841   16564    34088     1209   28.2    17     6     9     0
+working-state ask  turn-18d6a7961d933ee8     2   38   47947   36446   20841   16305    33522     1209   27.7     6     5     1     0
+working-state ask  turn-18d6a27c7dfb1644     1   25   47137   34978   20841   21912    45330     1245   36.4    10     6    14     0
+working-state ask  turn-18d69bfed2bf52a0  none    -       -       -       -       -        -        -      -     -     -     -     -
+working-state ask  turn-18d6a5df2caeac68  none    -       -       -       -       -        -        -      -     -     -     -     -
+
+step     the fork came after this step; before and after are the parent's last request and the sub-session's first, in tokens billed
+read     cache read on the first request after the fork; written adds every cache write from the parent's last request to it
+extra    what the fork's first request cost over carrying on: carrying on reads the parent's whole request and writes what its last step added
+saved    what each later request saves: a tenth of the tokens the fork took out
+even     requests after the fork until extra is repaid, extra over saved; lived counts the sub-session's requests
+held     of the parent's last 20 lookups, results still in the first request after the fork; named only by source; gone, neither
+
+sessions, repeat-lookup share: of the last 20 lookups, the share whose result the next request no longer holds
+arm                session                steps requests forks listed after fork     inside
+episode carry      turn-18d6a7961d933ee8     44       44     2      2      47.6%       0.0%
+episode carry      turn-18d6a27c7dfb1644     35       35     1      1      70.0%       0.0%
+episode carry      turn-18d69bfed2bf52a0     13       13     0      0          -       0.0%
+episode carry      turn-18d6a5df2caeac68      2        2     0      0          -       0.0%
+working-state ask  turn-18d6a7961d933ee8     44       46     2      2      47.6%       0.0%
+working-state ask  turn-18d6a27c7dfb1644     35       36     1      1      70.0%       0.0%
+working-state ask  turn-18d69bfed2bf52a0     13       13     0      0          -       0.0%
+working-state ask  turn-18d6a5df2caeac68      2        2     0      0          -       0.0%
+
+summary per arm, median [least, most] over forks
+arm                forks written               read                  after fork  not named   inside break-even       paid back
+episode carry          3 13577 [12645, 14618]  21496 [21496, 21496]       58.5%       0.0%     0.0% 18.4 [17.1, 22.1]    0 of 3
+working-state ask      3 16564 [16305, 21912]  20841 [20841, 20841]       58.5%       0.0%     0.0% 28.2 [27.7, 36.4]    0 of 3
