@@ -18,6 +18,7 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 	if err != nil {
 		return runFail(errOut, err)
 	}
+	opts.shell = shell
 	named, _, err := buildRunToolsForRun(opts.dir, opts.toolSet, readsWhen(opts.readBeforeEdit, turn.NewReadLedger()), nil, shell)
 	if err != nil {
 		return runFail(errOut, err)
