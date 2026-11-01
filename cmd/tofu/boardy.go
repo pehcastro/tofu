@@ -171,6 +171,8 @@ func boardyFlags(args []string) (map[string]string, []string, error) {
 			return nil, nil, fmt.Errorf("--%s needs a value", name)
 		case (name == "acceptance" || name == "still-works") && flags[name] != "":
 			flags[name], i = flags[name]+"\n"+args[i+1], i+1
+		case name == "owns" && flags[name] != "":
+			flags[name], i = flags[name]+","+args[i+1], i+1
 		default:
 			flags[name], i = args[i+1], i+1
 		}
