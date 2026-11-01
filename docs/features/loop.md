@@ -78,5 +78,7 @@ stop_check · 2026-09-25-7395f9499b3d5d43e0a547a0e1e545cd · 8d 21h ago    ✓ A
   threshold    stop_pressure 0.63 vs risk_ask_at 1.50 · stop_check@1
 ```
 
-An `ALLOW` here sends the sub-agent back to work. `tofu run` takes
+stop_check ships in shadow: every hand-back writes a row like this one, and
+the acceptance-line screen decides. Once stop_check is enforced, an `ALLOW`
+here sends the sub-agent back to work. `tofu run` takes
 `--max-steps`, `--loop-guard-repeats` and `--loop-guard-window` for one run.
