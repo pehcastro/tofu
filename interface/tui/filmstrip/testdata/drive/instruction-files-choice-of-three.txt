@@ -4,7 +4,9 @@ key enter
 key right
 key right
 key right
-wait Instruction files
+wait Project instructions
+key down
+key down
 key down
 key down
 key down

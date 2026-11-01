@@ -2,17 +2,17 @@
   tofu settings         Context                                         global scope (shift+tab)    
   Global preferences    Choose a row to inspect and change its value.                               
                                                                                                     
-  CATEGORIES              Thinking summary                                        summarized  ▾     
-    Appearance    05      summarized asks Claude for a summary of its thinking. omitted asks fo…    
+  CATEGORIES              Project instructions                                         32768  ▾     
+    Appearance    05      bytes of your instruction files sent each turn                            
     Models & rol… 03                                                                                
-    Interaction   09      Images                                                        auto  ▾     
-  › Context       15      auto sends a pasted image only to a model that can see, inline always…    
+    Interaction   09      Context ceiling                                             450000  ▾     
+  › Context       17      The most tokens one request may carry. The conversation forks before …    
     Files         03                                                                                
-    Shell         04      Project instructions                                         32768  ▾     
-    Turn          17      bytes of your instruction files sent each turn                            
-    Projects      05                                                                                
-    Browser       08      Context ceiling                                             450000  ▾     
-                          The most tokens one request may carry. The conversation forks before …    
+    Shell         04      Fork                                                              ● on    
+    Turn          18      on starts a fresh conversation carrying the work's state when one nea…    
+    Projects      06                                                                                
+    Browser       09      Auto compaction                                                   ● on    
+                          on trims old tool results, kept under a handle, as the conversation n…    
   NAVIGATE                                                                                          
   ↑↓ setting · ←→       › Instruction files                                     claude-first  ▾     
   section                 Which of AGENTS.md and CLAUDE.md a folder with both sends. both sends…    
@@ -32,17 +32,17 @@
   tofu settings         Context                                         global scope (shift+tab)    
   Global preferences    Choose a row to inspect and change its value.                               
                                                                                                     
-  CATEGORIES              Thinking summary                                        summarized  ▾     
-    Appearance    05      summarized asks Claude for a summary of its thinking. omitted asks fo…    
+  CATEGORIES              Project instructions                                         32768  ▾     
+    Appearance    05      bytes of your instruction files sent each turn                            
     Models & rol… 03                                                                                
-    Interaction   09      Images                                                        auto  ▾     
-  › Context       15                                                         see, inline always…    
+    Interaction   09      Context ceiling                                             450000  ▾     
+  › Context       17                                                         tion forks before …    
     Files         03     Instruction files                              esc                         
-    Shell         04     Which of AGENTS.md and CLAUDE.md a folder with                32768  ▾     
-    Turn          17     both sends. both sends both and costs more tokens                          
-    Projects      05                                                                                
-    Browser       08       agents-first                                               450000  ▾     
-                                                                             tion forks before …    
+    Shell         04     Which of AGENTS.md and CLAUDE.md a folder with                     ● on    
+    Turn          18     both sends. both sends both and costs more tokens   state when one nea…    
+    Projects      06                                                                                
+    Browser       09       agents-first                                                     ● on    
+                                                                             the conversation n…    
   NAVIGATE               >  claude-first                                                            
   ↑↓ setting · ←→                                                               claude-first  ▾     
   section                  both                                               sends. both sends…    
@@ -62,17 +62,17 @@
   tofu settings         Context                                         global scope (shift+tab)    
   Global preferences    Choose a row to inspect and change its value.                               
                                                                                                     
-  CATEGORIES              Thinking summary                                        summarized  ▾     
-    Appearance    05      summarized asks Claude for a summary of its thinking. omitted asks fo…    
+  CATEGORIES              Project instructions                                         32768  ▾     
+    Appearance    05      bytes of your instruction files sent each turn                            
     Models & rol… 03                                                                                
-    Interaction   09      Images                                                        auto  ▾     
-  › Context       15                                                         see, inline always…    
+    Interaction   09      Context ceiling                                             450000  ▾     
+  › Context       17                                                         tion forks before …    
     Files         03     Instruction files                              esc                         
-    Shell         04     Which of AGENTS.md and CLAUDE.md a folder with                32768  ▾     
-    Turn          17     both sends. both sends both and costs more tokens                          
-    Projects      05                                                                                
-    Browser       08       agents-first                                               450000  ▾     
-                                                                             tion forks before …    
+    Shell         04     Which of AGENTS.md and CLAUDE.md a folder with                     ● on    
+    Turn          18     both sends. both sends both and costs more tokens   state when one nea…    
+    Projects      06                                                                                
+    Browser       09       agents-first                                                     ● on    
+                                                                             the conversation n…    
   NAVIGATE                 claude-first                                                             
   ↑↓ setting · ←→                                                                       both  ▾     
   section                >  both                                              sends. both sends…    
