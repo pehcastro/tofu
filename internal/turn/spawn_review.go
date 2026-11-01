@@ -293,6 +293,11 @@ func (t *SpawnTool) cleanReport(task string) string {
 		len(gateMissed(t.Project, projectRecipes(t.Project), definition, agents[at].Owns, rows)) > 0 {
 		return ""
 	}
+	for _, reason := range gateExemptions(t.Project, definition, rows) {
+		if _, skipped := skipReason(reason); skipped {
+			return ""
+		}
+	}
 	edited := false
 	for _, row := range rows {
 		for _, step := range row.Steps {

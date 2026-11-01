@@ -35,9 +35,23 @@ func editedSince(project string, definition subagent.Definition, rounds []Row) (
 }
 
 func gateExemptions(project string, definition subagent.Definition, rounds []Row) map[string]string {
-	_, lastEdit := editedSince(project, definition, rounds)
+	sinceEdit, lastEdit := editedSince(project, definition, rounds)
 	exempt := map[string]string{}
-	if project == "" || lastEdit == "" {
+	if lastEdit == "" {
+		return exempt
+	}
+	for _, check := range []string{"test", "typecheck"} {
+		last := ""
+		for _, call := range sinceEdit {
+			if call.Tool == check && call.Error != typecheckUnanswered {
+				last = call.Error
+			}
+		}
+		if _, skipped := skipReason(last); skipped && slices.Contains(definition.Gate, check) {
+			exempt[check] = last
+		}
+	}
+	if project == "" {
 		return exempt
 	}
 	if slices.Contains(definition.Gate, "test") {
@@ -160,7 +174,7 @@ func gateMissed(project string, recipes map[string]string, definition subagent.D
 			case call.Tool == "typecheck" && call.Error != "" && !typecheckNamesOwnFile(project, owns, call, rounds):
 				said = ""
 			case call.Error != "" && !strings.HasPrefix(call.Error, testNoTests):
-				said = check + " failed"
+				said = check + " failed" + quoted
 			default:
 				said = ""
 			}
@@ -229,6 +243,15 @@ func printedBy(rounds []Row, call string) string {
 		}
 	}
 	return printed
+}
+
+func skipReason(failure string) (string, bool) {
+	for _, tool := range []string{"test", "typecheck"} {
+		if reason, skipped := strings.CutPrefix(failure, tool+" skipped: "); skipped {
+			return reason, true
+		}
+	}
+	return "", false
 }
 
 func checkerMissing(printed string) bool {

@@ -23,6 +23,7 @@ type SubAgentCommand struct {
 	Error      string `json:"error,omitempty"`
 	Failed     bool   `json:"failed,omitempty"`
 	FirstError string `json:"first_error,omitempty"`
+	Skipped    string `json:"skipped,omitempty"`
 }
 
 func commandOf(call ToolCallRow, printed string) SubAgentCommand {
@@ -31,7 +32,10 @@ func commandOf(call ToolCallRow, printed string) SubAgentCommand {
 		ran.Asked = call.Proxy.Asked
 	}
 	line := errorLine(printed)
+	reason, skipped := skipReason(call.Error)
 	switch {
+	case skipped:
+		ran.Skipped = reason
 	case call.Error != "":
 		ran.Failed, line = true, cmp.Or(line, call.Error)
 	case call.ExitCode != nil && *call.ExitCode != 0:
@@ -55,6 +59,8 @@ func (c SubAgentCommand) checked() (string, bool) {
 	switch {
 	case c.ExitCode == nil && !slices.Contains([]string{bashToolName, "test", "typecheck"}, c.Tool):
 		return "", false
+	case c.Skipped != "":
+		return name + " skipped: " + c.Skipped, true
 	case c.ExitCode == nil && c.Failed:
 		name += " failed"
 	case c.ExitCode == nil:
@@ -199,6 +205,10 @@ func findings(row Row, state subagent.State) []subagent.Finding {
 		}) {
 			continue
 		}
+		if _, skipped := skipReason(call.Error); skipped {
+			found = append(found, subagent.Finding{Bucket: subagent.Consider, Text: call.Error + ", and nothing after it ran " + call.Tool + ", so what it checks is unverified"})
+			continue
+		}
 		failure := call.Error
 		if failure == "" {
 			failure = "exit code " + strconv.Itoa(*call.ExitCode)
@@ -294,13 +304,13 @@ func (r SubAgentReport) Text(store *recall.Store) string {
 		}
 	}
 	var checks []string
-	checkFailed := false
+	notPassed := false
 	for _, ran := range r.Ran {
 		if line, check := ran.checked(); check {
-			checks, checkFailed = append(checks, "  "+line), checkFailed || ran.Failed
+			checks, notPassed = append(checks, "  "+line), notPassed || ran.Failed || ran.Skipped != ""
 		}
 	}
-	if checkFailed {
+	if notPassed {
 		fmt.Fprintf(body, "checks it ran, each with its exit code and first error line:\n%s\n", strings.Join(checks, "\n"))
 	}
 	for _, finding := range r.Findings {
