@@ -37,6 +37,24 @@ items for one session, turn by turn.
     tofu library reach --never
     tofu library reach --json
 
+On a project with two sessions the first prints:
+
+    Library reach · 2 sessions                                34 reached
+
+    32 rules
+      ✓ announce_spawn    reached 2 sessions · held in 1 session · last 1m ago
+      ✓ answer_asks       reached 2 sessions · held in 1 session · last 1m ago
+
+and `--never` prints the rest, each held or never offered:
+
+    Library never reached · 2 sessions                 249 never reached
+
+    147 rules
+      ○ bounded_change    held in 2 sessions · last 1m ago
+      ○ browse            held in 2 sessions · last 1m ago
+
+A `✓` row reached an agent at least once and a `○` row never did.
+
 The first groups the items by kind, each with the sessions it reached,
 the sessions it was held in, its calls and when it was last seen. A
 project with no session prints that no session is recorded and exits 0.

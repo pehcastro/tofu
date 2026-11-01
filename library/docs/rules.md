@@ -7,14 +7,9 @@ verbs: rules, reload
 
 ## What it is
 
-A rule is one line of instruction the model reads, like "never write yaml
-by hand". A rule may declare a `language`, `framework`, `scope`, `condition`
-(an `unless` vetoes a match on its line), `task` or `role`, and reaches only the tasks that match. A `framework`
-comes from the package.json or Cargo.toml the task reaches, and the reason names which. tofu ships its own set, and you can add yours,
-switch one of tofu's off, or replace one with your own text. One of tofu's, `act_on_stated`, reaches every agent: a next action it states, it does in the same turn, and it keeps working until the work is done or only you can settle what blocks it.
+A rule is one line of instruction the model reads, like "never write yaml by hand". A rule may declare a `language`, `framework`, `scope`, `condition` (an `unless` vetoes a match on its line), `task` or `role`, and reaches only the tasks that match. A `framework` comes from the package.json or Cargo.toml the task reaches, and the reason names which. tofu ships its own set, and you can add yours, switch one of tofu's off, or replace one with your own text. One of tofu's, `act_on_stated`, reaches every agent: a next action it states, it does in the same turn, and it keeps working until the work is done or only you can settle what blocks it.
 
-A rule has an id, a short name in lower case letters, digits and
-underscores, like `no_yaml`. The id is how you switch it off or remove it.
+A rule has an id, a short name in lower case letters, digits and underscores, like `no_yaml`. The id is how you switch it off or remove it.
 
 ## Where it lives
 
@@ -25,13 +20,9 @@ tofu reads rules in three layers, each one over the last:
 - `~/.tofu/rules/`: your global rules, in every project
 - `.tofu/rules/` in a project: rules for that project only
 
-Each rule is one file, `<id>@1.yaml`. When two layers carry the same id,
-the later one wins: a project rule beats a global one, and a global rule
-beats a shipped one. A rule switched off in a layer is gone from every
-layer below it.
+Each rule is one file, `<id>@1.yaml`. When two layers carry the same id, the later one wins: a project rule beats a global one, and a global rule beats a shipped one. A rule switched off in a layer is gone from every layer below it.
 
-The prompt, `tofu rules list` and `tofu reload` all read the same three
-layers, so what the list shows is what the model reads.
+The prompt, `tofu rules list` and `tofu reload` all read the same three layers, so what the list shows is what the model reads.
 
 ## Change it
 
@@ -48,14 +39,11 @@ From anywhere else, name the project with `--dir`. `add`, `off`, `remove`,
 
     tofu rules add --dir C:\code\shop no_yaml "never write yaml by hand"
 
-The text is one line. An id that is already in the same layer is refused,
-so nothing is overwritten by accident. Add `--replace` to write over it:
+The text is one line. An id that is already in the same layer is refused, so nothing is overwritten by accident. Add `--replace` to write over it:
 
     tofu rules add --replace no_yaml "write yaml only through the generator"
 
-Override a rule tofu ships, for this project or with `--global`
-everywhere. An override says why, so `--reason` is required, and either
-switches the rule off or replaces what it says:
+Override a rule tofu ships, for this project or with `--global` everywhere. An override says why, so `--reason` is required, and either switches the rule off or replaces what it says:
 
     tofu rules off no_unit_test_after_code --project --reason "public SDK"
     tofu rules add no_unit_test_after_code "<new text>" --reason "public SDK"
@@ -64,67 +52,53 @@ The file names the rule and its version, `overrides: em_dash@1`, with
 `reason:`, `by:` and `at:`. When tofu ships a newer version, the override
 goes stale and the rule runs unchanged until you look again.
 
-Every write prints what changed, `+` added, `~` switched off or `-`
-removed, the file it wrote, and the command that undoes it:
+Every write prints what changed, `+` added, `~` switched off or `-` removed, the file it wrote, and the command that undoes it:
 
     + rule no_yaml  ~/.tofu/rules/no_yaml@1.yaml
       → undo: tofu rules remove --global no_yaml
 
-A refusal prints one `✗` line on stderr and the command to run instead,
-and exits 1. With `--json`, a write prints one document instead.
+A refusal prints one `✗` line on stderr and the command to run instead, and exits 1. With `--json`, a write prints one document instead.
 
-A rule added with `--concern` is placed with that group in the prompt. The
-groups are code_rules, the default, process_discipline, domain_knowledge,
-task_shaping and identity.
+A rule added with `--concern` is placed with that group in the prompt. The groups are code_rules, the default, process_discipline, domain_knowledge, task_shaping and identity.
 
 ## Check it
 
     tofu rules list
 
-opens with `Rules · <n> run` and a count of `shadow` and `enforced`, then
-a row per rule that runs, grouped by where it came from, `shipped`,
+opens with `Rules · <n> run` and a count of `shadow` and `enforced`, then a row per rule that runs, grouped by where it came from, `shipped`,
 `library`, `global` or `project`, with its kind, its mode and the file for
-your own: `●` enforced, `○` shadow, `✓` a rule with no checker, `-` a
-rule an override switched off. An overridden rule shows its reason.
+your own: `●` enforced, `○` shadow, `✓` a rule with no checker, `-` a rule an override switched off. An overridden rule shows its reason.
 
 The list also names every judge point, such as `stop_check@1`, with kind
 `point` and the mode it runs in once its lock is read, the same mode
 `tofu doctor` counts: `○` shadow decides nothing and only records, `●`
-enforced acts on the answer, and `✗` a point that cannot run says why. The
-title counts them, `<n> points`, and `--json` rows carry `kind: point` and
+enforced acts on the answer, and `✗` a point that cannot run says why. The title counts them, `<n> points`, and `--json` rows carry `kind: point` and
 `mode`. `tofu run --show-prompt` ends its rule lines with one
 `point <id>: <mode>` line per point. With `--library dir` the list shows
 only that folder's rules and no points.
 
     tofu rules overrides
 
-lists every override with its layer, reason and date, and marks a stale
-one `⚠`. `tofu doctor` counts them and names the stale ones.
+lists every override with its layer, reason and date, and marks a stale one `⚠`. `tofu doctor` counts them and names the stale ones.
 
     tofu rules list --json
 
 prints one JSON document, whose `data` carries every field.
 `tofu rules check` and `tofu rules fired` print a `✗` row per blocked
-finding and a `⚠` row per shadow one. `tofu rules index "<task>" [path...]`
-says which rules fire for a task and why. `tofu rules why <session> [turn]`
-says what a recorded session did: every rule, once per agent per turn, as
-fired, held, dropped or switched off, with its mode and a reason kind of
+finding and a `⚠` row per shadow one. `tofu rules index "<task>" [path...]` says which rules fire for a task and why. `tofu rules why <session> [turn]` says what a recorded session did: every rule, once per agent per turn, as fired, held, dropped or switched off, with its mode and a reason kind of
 `domain`, `role`, `trigger`, `mode` or `setting` beside the reason; `--json`
-rows carry `reason_kind` and `mode`, and a turn the session does not hold
-exits 2 naming the turns it has. A structural rule with `checker: pattern` and a `pattern:` regular expression refuses a `write` or `edit` in a turn when the write adds a match: in `enforced` the whole call is refused, naming the rule, file and line, and nothing is written; in `shadow` it writes and the result records the finding. A match the file already held does not count. `paths` and `except_paths`, comma-separated globs, narrow the files it reads, and `tofu rules check src` runs it over every file git lists under `src`.
+rows carry `reason_kind` and `mode`, and a turn the session does not hold exits 2 naming the turns it has. A structural rule with `checker: pattern` and a `pattern:` regular expression refuses a `write` or `edit` in a turn when the write adds a match: in `enforced` the whole call is refused, naming the rule, file and line, and nothing is written; in `shadow` it writes and the result records the finding. A match the file already held does not count. `paths` and `except_paths`, comma-separated globs, narrow the files it reads, and `tofu rules check src` runs it over every file git lists under `src`.
 
     tofu reload
 
-counts the rules again from the working directory, and `/reload` does the
-same in the app, after you edit a file by hand.
+counts the rules again from the working directory, and `/reload` does the same in the app, after you edit a file by hand.
 
 ## Undo it
 
     tofu rules remove no_yaml
     tofu rules remove --global no_yaml
 
-deletes a rule you added. Without `--global` it only looks in the
-project, and with it only in your home.
+deletes a rule you added. Without `--global` it only looks in the project, and with it only in your home.
 
     tofu rules restore no_unit_test_after_code
 

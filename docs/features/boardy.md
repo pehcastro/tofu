@@ -139,7 +139,7 @@ A capture logged after the ticket's first evidence entry is refused as late,
 and so is one logged after a commit touching the ticket's owns, made since it
 entered doing, naming the commit. A ticket made with
 `--labels docs-only` closes without one, and so does a ticket made before
-2026-11-01 05:00 UTC; either way its done reason says why no capture was
+this check existed; either way its done reason says why no capture was
 asked.
 
 The reason is read too. Jev asks `done_reason@1` whether it names a part

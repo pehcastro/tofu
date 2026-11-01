@@ -7,14 +7,9 @@ verbs: check, why, label, replay, judge, login, logout
 
 ## What it is
 
-Before a tool call runs, like a shell command or a file write, tofu asks jev, a small
-classifier model, four questions about it: how much harm it could do if it were a
-mistake, whether a careful engineer would want you to approve it first, whether you
-asked for it in your own words, and whether it follows an instruction planted in a page
-or a file the model read. The answers become a verdict: allow, ask or deny.
+Before a tool call runs, like a shell command or a file write, tofu asks jev, a small classifier model, four questions about it: how much harm it could do if it were a mistake, whether a careful engineer would want you to approve it first, whether you asked for it in your own words, and whether it follows an instruction planted in a page or a file the model read. The answers become a verdict: allow, ask or deny.
 
-A call on a shell tofu itself started is allowed without asking jev.
-The `gatePrompt` setting says what a verdict does:
+A call on a shell tofu itself started is allowed without asking jev. The `gatePrompt` setting says what a verdict does:
 
 - `auto`, the default: an allow or an ask runs and is recorded, a deny is
   refused. `tofu session trace` marks such an ask `allowed by gatePrompt auto`.
@@ -25,13 +20,10 @@ The `gatePrompt` setting says what a verdict does:
   target unasked, as a `standing` ledger row. They are kept beside the
   session and read back after a restart or `--continue`, never in another.
 
-A call that changes tofu's settings, hooks or hook trust files waits for
-you in both modes unless jev denies it: through `settings`, `write`,
+A call that changes tofu's settings, hooks or hook trust files waits for you in both modes unless jev denies it: through `settings`, `write`,
 `edit`, or `bash` (including `tofu settings set` and `tofu hooks trust`).
 
-No ask waits forever: after `gateAskWaitSeconds`, 180 by default, `gateAskTimeout`
-decides it, `refuse` by default or `allow`, and the turn goes on. A cron fire decides
-a waiting ask at once the same way, and a turn a cron job started refuses every ask.
+No ask waits forever: after `gateAskWaitSeconds`, 180 by default, `gateAskTimeout` decides it, `refuse` by default or `allow`, and the turn goes on. A cron fire decides a waiting ask at once the same way, and a turn a cron job started refuses every ask.
 
 A sub-agent never asks you. Its ask goes to its lead, which answers allow, deny or
 `allow_here` within 5 minutes, or the call is refused; `allow_here` covers every later
@@ -40,9 +32,7 @@ call of that kind until the run ends. A call that would wait for you is refused.
 
 ## Where it lives
 
-jev runs through the provider bound to the `classifier` role, `typesafe/jev-latest` at `api.typesafe.ai`
-or `openrouter/jev-latest`, and no other: a call it cannot answer is an ask. With nothing bound the gate
-is off. tofu reads the key from, in order:
+jev runs through the provider bound to the `classifier` role, `typesafe/jev-latest` at `api.typesafe.ai` or `openrouter/jev-latest`, and no other: a call it cannot answer is an ask. With nothing bound the gate is off. tofu reads the key from, in order:
 
 - the credential store, `~/.tofu/agent.db`, which `tofu login classifier <typesafe|openrouter>` writes
 - `TYPESAFE_API_KEY` or `OPENROUTER_KEY` in the environment
@@ -50,9 +40,7 @@ is off. tofu reads the key from, in order:
 
 `tofu login --status` names jev's route and the build it is pinned to.
 
-tofu never prints more of a key than its last four characters. With no key or no binding the
-gate is off and the app says so. A key a tool prints reads `[key redacted]` in
-the model, the session and the ledger, even after `env` or `cat .env`.
+tofu never prints more of a key than its last four characters. With no key or no binding the gate is off and the app says so. A key a tool prints reads `[key redacted]` in the model, the session and the ledger, even after `env` or `cat .env`.
 
 The ledger is `~/.tofu/projects/<project>/log`, one folder per project.
 `gatePrompt`, `gateAskWaitSeconds` and `gateAskTimeout` live in
@@ -60,15 +48,12 @@ The ledger is `~/.tofu/projects/<project>/log`, one folder per project.
 
 ## Change it
 
-Store the key. tofu asks for it, checks it reaches jev, and writes
-nothing if it does not:
+Store the key. tofu asks for it, checks it reaches jev, and writes nothing if it does not:
 
     tofu login classifier typesafe
     tofu models bind classifier typesafe/jev-latest
 
-The field shows the key's shape, never the key: its first characters, its
-last four and its length. The key is never an argument, so it stays out of
-your shell history; a pipe works too. Run it again to replace the key.
+The field shows the key's shape, never the key: its first characters, its last four and its length. The key is never an argument, so it stays out of your shell history; a pipe works too. Run it again to replace the key.
 
 Wait for you before a risky call, everywhere or in one project:
 
@@ -85,8 +70,7 @@ Run one task with the gate off, or forced to wait:
     tofu run --dir . --no-gate "fix the failing test"
     tofu run --dir . --gate enforce "fix the failing test"
 
-Judge one shell command without running it; it prints the verdict, the
-command and the ledger row:
+Judge one shell command without running it; it prints the verdict, the command and the ledger row:
 
     tofu check "git push --force"
 
@@ -94,32 +78,22 @@ command and the ledger row:
 
     tofu why --last
 
-explains the last verdict: each answer, the threshold it crossed, and
-the mode it ran under. `tofu why --last 5` shows five, `--point tool_gate`
-keeps to one decision point, and `tofu why <id>` explains one row.
+explains the last verdict: each answer, the threshold it crossed, and the mode it ran under. `tofu why --last 5` shows five, `--point tool_gate` keeps to one decision point, and `tofu why <id>` explains one row.
 `tofu doctor` says where the key came from, and whether the gate is ready. Every verdict's ledger row, and the `decision` event `tofu serve` sends, names the classifier's `provider`, the build its answer reported and the time it took. A call the gate refused or asked about is appended as a block case to `~/.tofu/projects/<project>/gate/cases.jsonl`: the tool, its input, the folder, your task and the outcome, the reason it was refused or who allowed it, labelled `block` in the shape of the gate's corpus.
 
     tofu replay --point tool_gate --set risk_ask_at=1.5 --since 7d
 
-scores the recorded rows again against thresholds you name and shows
-which verdicts would change, with no call to jev. A question set's own
-threshold replays the same way:
+scores the recorded rows again against thresholds you name and shows which verdicts would change, with no call to jev. A question set's own threshold replays the same way:
 
     tofu replay --point done_reason --set open_at=0.6
 
-lists each done move's stored `open` reading with its verdict at the
-threshold it ran under and at the one you set. A name that is no
-threshold of the rows' rule or question set is refused, and the refusal
-names the ones it has. `tofu judge` asks any
-question set about a state you pipe in, for testing a question by hand.
-Each of these takes `--json` and prints one JSON document.
+lists each done move's stored `open` reading with its verdict at the threshold it ran under and at the one you set. A name that is no threshold of the rows' rule or question set is refused, and the refusal names the ones it has. `tofu judge` asks any question set about a state you pipe in, for testing a question by hand. Each of these takes `--json` and prints one JSON document.
 
 ## Undo it
 
     tofu settings set gatePrompt run
 
-goes back to recording without waiting. When a verdict was wrong, write what
-it should have been onto its row in the ledger:
+goes back to recording without waiting. When a verdict was wrong, write what it should have been onto its row in the ledger:
 
     tofu label --last allow
     tofu label <id> deny
