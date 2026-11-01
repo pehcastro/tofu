@@ -299,7 +299,8 @@ func wholeFiles(c Conversation) []wholeFile {
 		failed, ranged := strings.HasPrefix(entry.Text, errorResult), args.StartLine > 0 || args.EndLine > 0
 		switch {
 		case entry.Tool == "":
-			for _, file := range carriedFiles(entry.Text) {
+			files, _, _ := carriedFiles(entry.Text)
+			for _, file := range files {
 				if settles(file.path) && !held {
 					files = append(files, file)
 				}
@@ -319,26 +320,47 @@ func wholeFiles(c Conversation) []wholeFile {
 	return files
 }
 
-func carriedFiles(text string) []wholeFile {
-	_, rest, found := strings.Cut(text, carryFiles)
-	var files []wholeFile
+func carriedFiles(text string) (files []wholeFile, rest string, found bool) {
+	_, rest, found = strings.Cut(text, carryFiles)
 	for found {
-		var head string
-		head, rest, found = strings.Cut(rest, carryFileEnd)
+		head, body, ended := strings.Cut(rest, carryFileEnd)
 		named, marked := strings.CutPrefix(head, carryFileMark)
 		before, call, called := strings.Cut(named, carryFileCall)
 		at := strings.LastIndex(before, ", ")
-		if !found || !marked || !called || at < 0 {
+		if !ended || !marked || !called || at < 0 {
 			break
 		}
 		size, err := strconv.Atoi(before[at+2:])
-		if err != nil || size >= len(rest) {
+		if err != nil || size >= len(body) {
 			break
 		}
-		files = append(files, wholeFile{path: before[:at], call: call, text: rest[:size]})
-		rest = rest[size+1:]
+		files = append(files, wholeFile{path: before[:at], call: call, text: body[:size]})
+		rest = body[size+1:]
 	}
-	return files
+	return files, rest, found
+}
+
+type CarriedFile struct {
+	Path, Call string
+	Bytes      int
+}
+
+type CarriedFiles struct {
+	Held       []CarriedFile
+	Unseen     string
+	Unreadable bool
+}
+
+func ReadCarried(text string) CarriedFiles {
+	files, rest, found := carriedFiles(text)
+	carried := CarriedFiles{Unreadable: found && rest != "" && !strings.HasPrefix(rest, carryUnseen)}
+	for _, file := range files {
+		carried.Held = append(carried.Held, CarriedFile{Path: file.path, Call: file.call, Bytes: len(file.text)})
+	}
+	if _, unseen, named := strings.Cut(text, carryUnseen); named {
+		carried.Unseen, _, _ = strings.Cut(unseen, carryUnseenRead)
+	}
+	return carried
 }
 
 const saidMark = "said: "
