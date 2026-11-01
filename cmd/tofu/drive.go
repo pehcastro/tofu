@@ -21,6 +21,7 @@ import (
 	"tofu/interface/tui/filmstrip"
 	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/frame"
+	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
@@ -111,6 +112,8 @@ Steps:
   wheel X Y up|down [N]                  turn the wheel N notches over a cell, 1 if no N
   resize W H                             resize the terminal to W columns and H rows
   wait TEXT    wait until TEXT is on the screen, and fail saying so if it never is
+  idle         wait until no turn runs and no sub-agent works, and fail naming
+               the turn and the callers still asking the cassette if that never comes
   absent TEXT  fail if TEXT is on the screen now
   screen       print the screen as it stands
   environment  print the environment block the last turn sent to the model
@@ -232,6 +235,7 @@ type recordedReply struct {
 	unfinished    bool
 	holdAfterStop time.Duration
 	refused       error
+	caller        string
 }
 
 type cassette struct {
@@ -239,6 +243,7 @@ type cassette struct {
 	decks         map[string][]recordedReply
 	mutex         sync.Mutex
 	taken         map[string]int
+	asking        map[string]int
 	callers       map[string]string
 	firstOnSystem map[string]string
 	last          llm.Request
@@ -308,6 +313,7 @@ func readCassette(path string) (*cassette, error) {
 		name:          filepath.Base(path),
 		decks:         map[string][]recordedReply{},
 		taken:         map[string]int{},
+		asking:        map[string]int{},
 		callers:       map[string]string{},
 		firstOnSystem: map[string]string{},
 		dump:          os.Getenv(requestsVariable),
@@ -449,7 +455,10 @@ func (c *cassette) take(request llm.Request) (recordedReply, error) {
 			return recordedReply{}, fmt.Errorf("%s: %w", requestsVariable, err)
 		}
 	}
-	return c.decks[name][c.taken[name]-1], nil
+	c.asking[name]++
+	reply := c.decks[name][c.taken[name]-1]
+	reply.caller = name
+	return reply, nil
 }
 
 func (c *cassette) requests(form requestsForm, width int) string {
@@ -520,6 +529,11 @@ func (c *cassette) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 	if err != nil {
 		return llm.Decision{}, err
 	}
+	defer func() {
+		c.mutex.Lock()
+		c.asking[reply.caller]--
+		c.mutex.Unlock()
+	}()
 	if reply.refused != nil {
 		return llm.Decision{}, reply.refused
 	}
@@ -537,6 +551,41 @@ func (c *cassette) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 	<-ctx.Done()
 	time.Sleep(reply.holdAfterStop)
 	return llm.Decision{}, ctx.Err()
+}
+
+func (c *cassette) askers() string {
+	if c == nil {
+		return ""
+	}
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	var asking []string
+	for name, count := range c.asking {
+		if count > 0 {
+			asking = append(asking, callerName(name))
+		}
+	}
+	if len(asking) == 0 {
+		return ", between requests to the cassette"
+	}
+	slices.Sort(asking)
+	return ", with " + strings.Join(asking, " and ") + " still waiting on a recorded reply"
+}
+
+func awaitIdle(driver *filmstrip.Driver, live *host.Host, deck *cassette, within time.Duration) error {
+	deadline := time.Now().Add(within)
+	for {
+		if err := driver.Settle(); err != nil {
+			return err
+		}
+		id, running := live.Turn()
+		if !running {
+			return driver.Settle()
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("waited %s for no turn to run, and turn %s still runs%s", within, id, deck.askers())
+		}
+	}
 }
 
 func (c *cassette) environment() string {
@@ -625,7 +674,7 @@ func readQuotas(path string, held heldStore) (func() []frame.Quota, error) {
 	}, nil
 }
 
-func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePlan, launch appLaunch, held heldStore, quotas func() []frame.Quota) *tui.App {
+func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePlan, launch appLaunch, held heldStore, quotas func() []frame.Quota) (*tui.App, *host.Host) {
 	shown := cassetteBuild
 	if deck != nil {
 		shown = deck.name
@@ -666,7 +715,8 @@ func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePla
 		now:   clock,
 		joins: plan.host,
 	}
-	return tui.New(appOptions(dir, plan.arms, recorded, launch, held))
+	options := appOptions(dir, plan.arms, recorded, launch, held)
+	return tui.New(options), options.Host
 }
 
 func readScript(path string, in io.Reader) ([]filmstrip.Step, error) {
@@ -959,7 +1009,8 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	defer printRecorded(out, store, eventSizes(store), dir, plan.home)
 	launch := launchOf(dir, resumed, plan.fresh)
 	defer leaveShells(launch.registry)
-	driver := filmstrip.Drive(drivenApp(dir, deck, clock, plan, launch, held, quotas), plan.width, plan.height, crashDir(dir))
+	app, live := drivenApp(dir, deck, clock, plan, launch, held, quotas)
+	driver := filmstrip.Drive(app, plan.width, plan.height, crashDir(dir))
 	defer driver.Close()
 	defer (*launch.release)()
 	defer func() {
@@ -968,11 +1019,11 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		}
 	}()
 	for _, step := range steps {
-		err := playStep(driver, deck, step, plan, out)
+		err := playStep(driver, deck, live, step, plan, out)
 		if err == nil {
 			continue
 		}
-		if step.Verb == "wait" || step.Verb == "absent" {
+		if step.Verb == "wait" || step.Verb == "idle" || step.Verb == "absent" {
 			_, _ = fmt.Fprintf(errOut, "tofu drive: line %d: %v\n\n%s\n", step.Line, err, driver.Plain())
 			return exitVerdict
 		}
@@ -1023,9 +1074,14 @@ func printRecorded(out io.Writer, store *sessionstore.Store, before map[string]i
 	_, _ = fmt.Fprintf(out, "drive: recorded session %s; read it with: cd %s && %s=%s %s session trace %s\n", handle, quoted(dir), variable, quoted(home), quoted(binary), quoted(handle))
 }
 
-func playStep(driver *filmstrip.Driver, deck *cassette, step filmstrip.Step, plan drivePlan, out io.Writer) error {
+func playStep(driver *filmstrip.Driver, deck *cassette, live *host.Host, step filmstrip.Step, plan drivePlan, out io.Writer) error {
 	said := deck.environment
 	switch step.Verb {
+	case "idle":
+		if step.Text != "" {
+			return fmt.Errorf("idle takes nothing, and was given %q", step.Text)
+		}
+		return awaitIdle(driver, live, deck, plan.timeout)
 	case "environment":
 	case "images":
 		said = deck.images
