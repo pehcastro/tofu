@@ -10,6 +10,7 @@ import (
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/question"
+	"tofu/internal/judge/state"
 	shipped "tofu/library"
 	"tofu/library/questions"
 )
@@ -138,6 +139,9 @@ func resolveRule(ref string, set battery) (gate.Rule, error) {
 }
 
 func loadRulePoint(ref, dir string) (gate.Rule, gate.Origin, error) {
+	if ref == state.StopCheckRuleRef {
+		return state.StopCheckRule()
+	}
 	layers, err := question.Layers(questions.Files(), dir)
 	if err != nil {
 		return gate.Rule{}, "", err

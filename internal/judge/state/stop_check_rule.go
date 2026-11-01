@@ -41,16 +41,19 @@ func StopCheckRule() (gate.Rule, gate.Origin, error) {
 	return r, origin, nil
 }
 
-func stopCheckThresholds(r gate.Rule) (gate.Thresholds, error) {
-	var t gate.Thresholds
-	slots := map[string]*float64{
+func StopCheckThresholdSlots(t *gate.Thresholds) map[string]*float64 {
+	return map[string]*float64{
 		stopCheckAskAt:              &t.RiskAskAt,
 		stopCheckDenyAt:             &t.RiskDenyAt,
 		"work_remains_relax_at":     &t.UserRequestedRelaxAt,
 		"stalled_relax_at":          &t.ApprovalRelaxAt,
 		"budget_exhausted_block_at": &t.FromUntrustedBlockAt,
 	}
-	for name, dest := range slots {
+}
+
+func stopCheckThresholds(r gate.Rule) (gate.Thresholds, error) {
+	var t gate.Thresholds
+	for name, dest := range StopCheckThresholdSlots(&t) {
 		v, ok := r.ForeignThresholds[name]
 		if !ok {
 			return gate.Thresholds{}, fmt.Errorf("%s: thresholds has no %q", r.File, name)

@@ -24,12 +24,14 @@ import (
 
 const replayUsage = "tofu replay --point name [--set threshold=value]... [--since 7d] [--verbose] [--json]"
 
-var replayThresholdFields = []string{
-	"risk_ask_at",
-	"risk_deny_at",
-	"user_requested_relax_at",
-	"approval_relax_at",
-	"from_untrusted_block_at",
+func gateThresholdSlots(t *gate.Thresholds) map[string]*float64 {
+	return map[string]*float64{
+		"risk_ask_at":             &t.RiskAskAt,
+		"risk_deny_at":            &t.RiskDenyAt,
+		"user_requested_relax_at": &t.UserRequestedRelaxAt,
+		"approval_relax_at":       &t.ApprovalRelaxAt,
+		"from_untrusted_block_at": &t.FromUntrustedBlockAt,
+	}
 }
 
 type replayOpts struct {
@@ -46,6 +48,7 @@ type replayRule struct {
 	Schema string      `json:"schema,omitempty"`
 	Rows   int         `json:"rows"`
 	pol    gate.Rule
+	slots  func(*gate.Thresholds) map[string]*float64
 	err    error
 }
 
@@ -206,7 +209,10 @@ func runReplay(reader *ledger.Reader, filter ledger.Filter, sets map[string]floa
 			return rule.err
 		}
 		pol := rule.pol
-		pol.Thresholds = withOverrides(pol.Thresholds, sets)
+		named := rule.slots(&pol.Thresholds)
+		for key, value := range sets {
+			*named[key] = value
+		}
 		verdict, _, err := gate.Decide(ledgerAnswersToJev(row.Answers), pol)
 		if err != nil {
 			return err
@@ -286,19 +292,19 @@ func (r *replayReport) rule(ref string, load func() replayRule) *replayRule {
 }
 
 func gateRule(ref string, sets map[string]float64) replayRule {
-	rule := replayRule{Ref: ref}
-	if ref == state.StopCheckRuleRef {
-		rule.pol, rule.Origin, rule.err = state.StopCheckRule()
-	} else {
-		rule.pol, rule.Origin, rule.err = loadRulePoint(ref, "")
-		if rule.err == nil && rule.pol.Schema != gate.SchemaGate {
-			rule.Schema = rule.pol.Schema
-		}
-	}
-	if rule.err == nil && rule.Schema == "" {
-		rule.err = unknownIn(sets, replayThresholdFields, ref)
+	rule := replayRule{Ref: ref, slots: gateThresholdSlots}
+	if rule.pol, rule.Origin, rule.err = loadRulePoint(ref, ""); rule.err != nil {
+		return rule
 	}
 	rule.File = rule.pol.File
+	switch {
+	case ref == state.StopCheckRuleRef:
+		rule.slots = state.StopCheckThresholdSlots
+	case rule.pol.Schema != gate.SchemaGate:
+		rule.Schema = rule.pol.Schema
+		return rule
+	}
+	rule.err = unknownIn(sets, slices.Sorted(maps.Keys(rule.slots(&gate.Thresholds{}))), ref)
 	return rule
 }
 
@@ -327,24 +333,6 @@ func unknownIn(sets map[string]float64, want []string, ref string) error {
 		}
 	}
 	return nil
-}
-
-func withOverrides(t gate.Thresholds, sets map[string]float64) gate.Thresholds {
-	for key, value := range sets {
-		switch key {
-		case "risk_ask_at":
-			t.RiskAskAt = value
-		case "risk_deny_at":
-			t.RiskDenyAt = value
-		case "user_requested_relax_at":
-			t.UserRequestedRelaxAt = value
-		case "approval_relax_at":
-			t.ApprovalRelaxAt = value
-		case "from_untrusted_block_at":
-			t.FromUntrustedBlockAt = value
-		}
-	}
-	return t
 }
 
 func (r replayReport) lines(page cli.Page) []string {
