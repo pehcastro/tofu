@@ -25,8 +25,10 @@ yet: an answer you give later still reaches the lead.
 **An open request is restated before work starts.** When a message you
 type leaves the work to the lead, such as `make the desk faster`, Jev's
 `request_open` question says so, and the lead's first reply restates the
-request with what is in and out and waits for your go. A precise request,
-such as a named rename, starts at once. On 40 mocked requests Jev was
+request with what is in and out and waits for your go. A message you type
+while the lead works is asked the same question, so a new open request
+mid-turn is restated too, and a correction to the running task is not. A
+precise request, such as a named rename, starts at once. On 40 mocked requests Jev was
 right on 36, where restating every request is right on 20.
 
 **A reversible choice doesn't reach you at all in auto.** When the lead

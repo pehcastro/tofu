@@ -16,11 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"tofu/internal/classifier"
 	"tofu/internal/hook"
-	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/question"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
@@ -30,7 +27,6 @@ import (
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
-	"tofu/library/questions"
 )
 
 const theResponseHitTheOutputTokenLimit = "the response hit the output token limit, so its arguments may be truncated. " +
@@ -53,6 +49,7 @@ type openQuestion struct {
 	step      int
 	toolsHeld bool
 	endHeld   bool
+	restated  bool
 }
 
 func (q openQuestion) refusal() string {
@@ -62,76 +59,6 @@ func (q openQuestion) refusal() string {
 func (q openQuestion) sendBack() string {
 	return "the person asked \"" + q.said + "\" at step " + strconv.Itoa(q.step) + " and has no answer yet: answer it now, from what you know now, " +
 		"before any tool call, board work or spawn. never wait on your own running work or a sub-agent; research goes after the answer, in this turn."
-}
-
-const (
-	steerAnsweredRef     = "steer_answered@1"
-	steerAnsweredName    = "answered"
-	steerAnsweredBuilder = "steer_answered_state@1"
-)
-
-type steerJudge struct {
-	client    *jev.Client
-	set       question.Set
-	asked     jev.Question
-	threshold float64
-	ledger    *ledger.Writer
-}
-
-func newSteerJudge(config Config) (*steerJudge, error) {
-	places, err := config.ResolvedPlaces()
-	if err != nil {
-		return nil, err
-	}
-	layers, err := question.Layers(questions.Files(), config.Project)
-	if err != nil {
-		return nil, err
-	}
-	set, fields, err := question.Resolve(steerAnsweredRef, layers)
-	if err != nil {
-		return nil, err
-	}
-	asked, found := set.Question(steerAnsweredName)
-	at := slices.IndexFunc(fields, func(f question.Field) bool { return f.Path == "thresholds."+steerAnsweredName+"_at" })
-	if !found || at < 0 {
-		return nil, fmt.Errorf("%s names no %s question or no thresholds.%s_at", steerAnsweredRef, steerAnsweredName, steerAnsweredName)
-	}
-	threshold, err := strconv.ParseFloat(fields[at].Value, 64)
-	if err != nil {
-		return nil, err
-	}
-	client, err := classifier.Open(config.Project, jev.ReadKeyring(), 1)
-	if err != nil {
-		return nil, err
-	}
-	return &steerJudge{client: client, set: set, asked: asked.ToJev(), threshold: threshold, ledger: ledger.NewWriter(places.Log)}, nil
-}
-
-func (j *steerJudge) answers(ctx context.Context, said, reply string) (bool, error) {
-	body, err := json.Marshal(struct {
-		Said  string `json:"said"`
-		Reply string `json:"reply"`
-	}{said, reply})
-	if err != nil {
-		return false, err
-	}
-	asked := []jev.Question{j.asked}
-	row := ledger.Row{Point: j.set.Name, Questions: j.set.Name, Version: j.set.QuestionsVersion, StateHash: ledger.HashOf(body), StateBuilder: steerAnsweredBuilder, State: body,
-		Verdict: ledger.VerdictAsk, Reason: &ledger.Reason{Question: steerAnsweredName, Comparison: ">= " + strconv.FormatFloat(j.threshold, 'f', -1, 64), Threshold: j.threshold, Mode: ledger.ModeEnforced}}
-	decision, err := j.client.Ask(ctx, jev.Request{State: json.RawMessage(body), Questions: asked})
-	if err != nil {
-		failed := "jev could not answer, so a reply with text counts as the answer: " + err.Error()
-		row.Reason.ModeReason = &failed
-		_, unwritten := j.ledger.Append(row)
-		return false, errors.Join(err, unwritten)
-	}
-	decision.Record(&row, asked, j.set.QuestionsVersion)
-	row.Reason.Value = row.Answers[0].Noul
-	if row.Reason.Value >= j.threshold {
-		row.Verdict = ledger.VerdictAllow
-	}
-	_, err = j.ledger.Append(row)
-	return row.Verdict == ledger.VerdictAllow, err
 }
 
 const yourLastReplyWasEmpty = "[your last reply was empty: no text and no tool call. Answer the person, or call a tool]"
@@ -835,19 +762,24 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		recorded.notice(told)
 		messages = append(messages, inserted(llm.Origin{Source: llm.SourceAnswerFirst}, asked.sendBack()))
 	}
-	var steer *steerJudge
+	var steer *oneQuestion
 	answeredBy := func(reply string) (bool, error) {
-		if strings.TrimSpace(reply) == "" {
-			return false, nil
+		if strings.TrimSpace(reply) == "" || asked.restated {
+			return strings.TrimSpace(reply) != "", nil
 		}
 		if steer == nil {
-			built, err := newSteerJudge(config)
+			places, err := config.ResolvedPlaces()
 			if err != nil {
 				return false, err
 			}
-			steer = built
+			if steer, err = newSteerJudge(config.Project, places.Log); err != nil {
+				return false, err
+			}
 		}
-		return steer.answers(ctx, asked.said, reply)
+		return steer.reached(ctx, struct {
+			Said  string `json:"said"`
+			Reply string `json:"reply"`
+		}{asked.said, reply})
 	}
 	noticeStep := config.Caps.MaxSteps - max(1, int(math.Ceil(float64(config.Caps.MaxSteps)*konst.TurnStepCapNoticeShare)))
 	for step := 1; ; step++ {
@@ -865,7 +797,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				steeredAt = step
 				said := inserted(llm.Origin{Source: llm.SourceSteer}, steered)
 				if config.Inbox != nil {
-					said.Content += config.Inbox.repeatNote(config.Sessions, cmp.Or(row.Session, config.Session), steered)
+					notes := config.Inbox.notesOn(ctx, config.Sessions, cmp.Or(row.Session, config.Session), steered)
+					asked.restated = asked.restated || strings.Contains(notes, requestOpenNote)
+					said.Content += notes
 				}
 				if config.ImagesOf != nil {
 					said.Images = config.ImagesOf(steered)
@@ -1061,6 +995,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			switch {
 			case err != nil:
 				recorded.notice("the person's question from step " + strconv.Itoa(asked.step) + " counts as answered by the reply at step " + strconv.Itoa(step) + ", because jev could not judge it: " + err.Error())
+				asked = nil
+			case answered && asked.restated:
+				recorded.notice("the person's open request from step " + strconv.Itoa(asked.step) + " is answered by the restatement at step " + strconv.Itoa(step))
 				asked = nil
 			case answered:
 				recorded.notice("the person's question from step " + strconv.Itoa(asked.step) + " was answered at step " + strconv.Itoa(step))

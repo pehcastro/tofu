@@ -55,7 +55,8 @@ The tool is not offered where nobody can answer: in `tofu run`, in a turn
 a cron job started, and in a sub-agent. A sub-agent asks the lead
 instead, and the lead may put the question to you naming it.
 
-Each message you type is put to Jev's `request_open` question. When it
+Each message you type, between turns or while the lead works, is put to
+Jev's `request_open` question. When it
 judges the request open, leaving the work to the lead, the task carries a
 note and the rule `restate_open` has the first reply restate it, with
 what is in and out, and wait. `tofu why --last 1 --point request_open`

@@ -199,8 +199,13 @@ func TestAPersonsMessageReachesTheLeadAtItsNextStepWhileASubAgentRuns(t *testing
 
 func classifierSaysAnswered(t *testing.T) {
 	t.Helper()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = io.WriteString(w, `{"model":"jev-1.13.0","answers":{"answered":{"type":"noul","noul":0.9}},"usage":{"input_tokens":10,"output_tokens":2}}`)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked, _ := io.ReadAll(r.Body)
+		answer := `"answered":{"type":"noul","noul":0.9}`
+		if strings.Contains(string(asked), `"open"`) {
+			answer = `"open":{"type":"noul","noul":0.1}`
+		}
+		_, _ = io.WriteString(w, `{"model":"jev-1.13.0","answers":{`+answer+`},"usage":{"input_tokens":10,"output_tokens":2}}`)
 	}))
 	t.Cleanup(server.Close)
 	home := t.TempDir()
