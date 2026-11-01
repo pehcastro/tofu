@@ -472,11 +472,11 @@ func (s *server) compact(p SessionParams) (any, error) {
 		return nil, &Refusal{Code: CodeRefused, Message: "this tofu compacts no sessions"}
 	}
 	named, err := s.lane(p.Session)
-	switch {
-	case err != nil:
+	if err != nil {
 		return nil, err
-	case named.running():
-		return nil, errTurnRunning
+	}
+	if turn, running := named.host.Turn(); running {
+		return nil, turnRunning(turn)
 	}
 	compacted, err := s.Compact(named.host)
 	if err != nil || compacted.Into == "" {
@@ -620,8 +620,8 @@ func (s *server) shellRun(p ShellRunParams) (any, error) {
 		return nil, &Refusal{Code: CodeRefused, Message: "this tofu runs no commands"}
 	}
 	focus := s.focus()
-	if focus.running() {
-		return nil, errTurnRunning
+	if turn, running := focus.host.Turn(); running {
+		return nil, turnRunning(turn)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -644,8 +644,8 @@ func (s *server) undo(p UndoParams) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if l.running() {
-		return nil, errTurnRunning
+	if turn, running := l.host.Turn(); running {
+		return nil, turnRunning(turn)
 	}
 	args := []string{"undo", strconv.Itoa(max(p.Turns, 1)), "--session", p.Session}
 	if p.Turn != "" {

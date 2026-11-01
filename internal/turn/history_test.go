@@ -349,7 +349,7 @@ func TestForkAtTheDefaultCeilingRecordsTheCountThatDecidedAndKeepsANewestStepOve
 	}
 }
 
-func TestCompactCarriedShrinksEveryOldResultAndTheNewSessionReadsBackShrunk(t *testing.T) {
+func TestCompactCarriedKeepsTheWarmHeadAndTheNewSessionReadsBackShrunk(t *testing.T) {
 	big := strings.Repeat("a numbered line of a large file\n", 400)
 	read := func(id string) []llm.ToolCall {
 		return []llm.ToolCall{{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"` + id + `.txt"}`)}}
@@ -366,22 +366,38 @@ func TestCompactCarriedShrinksEveryOldResultAndTheNewSessionReadsBackShrunk(t *t
 		{Role: llm.RoleTool, ToolCallID: "c", Content: big},
 	}
 	artifacts := t.TempDir()
+	preview, err := recall.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tail := HistoryTokens(preview, carried[5:]); tail <= konst.TrimWarmSuffixTokens {
+		t.Fatalf("b and c hold %d tokens, under the %d token warm suffix, so a would fall inside it and the case proves nothing", tail, konst.TrimWarmSuffixTokens)
+	}
 	compacted, err := CompactCarried(artifacts, "", carried)
 	if err != nil {
 		t.Fatal(err)
 	}
 	shrunk := compacted.Messages
-	if compacted.Results != 2 || compacted.TokensAfter >= compacted.TokensBefore {
-		t.Fatalf("compacted %+v, want the two results before the last step shrunk and fewer tokens after", compacted)
+	if compacted.Results != 1 || compacted.TokensAfter >= compacted.TokensBefore {
+		t.Fatalf("compacted %d result(s), %d to %d tokens, want only b, the one result past the warm point and before the last step, shrunk and fewer tokens after",
+			compacted.Results, compacted.TokensBefore, compacted.TokensAfter)
 	}
-	if !strings.Contains(shrunk[2].Content, "artifact ") || !strings.Contains(shrunk[6].Content, "/compact") || shrunk[8].Content != big {
-		t.Fatalf("a and b should hold a handle naming /compact and the last step's c stay whole:\n%s\n%s\n%.80s", shrunk[2].Content, shrunk[6].Content, shrunk[8].Content)
+	if compacted.Kept <= 2 || compacted.Kept > 6 {
+		t.Fatalf("the warm head keeps %d messages, want a's result inside it and b's outside", compacted.Kept)
 	}
-	if carried[2].Content != big {
+	for i := range compacted.Kept {
+		if shrunk[i].Content != carried[i].Content {
+			t.Fatalf("message %d inside the warm head changed, so the next request misses the cache from there:\n%.80s", i, shrunk[i].Content)
+		}
+	}
+	if !strings.Contains(shrunk[6].Content, "/compact") || shrunk[8].Content != big {
+		t.Fatalf("b should hold a handle naming /compact and the last step's c stay whole:\n%s\n%.80s", shrunk[6].Content, shrunk[8].Content)
+	}
+	if carried[6].Content != big {
 		t.Fatal("the history handed in was shrunk in place, so a failed write would leave it shrunk")
 	}
-	if again, err := CompactCarried(artifacts, "", shrunk); err != nil || again.Results != 0 {
-		t.Fatalf("a second compact shrank %d result(s) again, err %v", again.Results, err)
+	if again, err := CompactCarried(artifacts, "", shrunk); err != nil || again.Messages[6].Content != shrunk[6].Content {
+		t.Fatalf("a second compact rewrote b's note again, err %v", err)
 	}
 
 	store := session.OpenAt(t.TempDir())
@@ -411,6 +427,23 @@ func TestCompactCarriedShrinksEveryOldResultAndTheNewSessionReadsBackShrunk(t *t
 		if message.Role != shrunk[i].Role || message.Content != shrunk[i].Content || message.ToolCallID != shrunk[i].ToolCallID || len(message.ToolCalls) != len(shrunk[i].ToolCalls) {
 			t.Errorf("message %d reads back as %+v, want %+v", i, message, shrunk[i])
 		}
+	}
+	all, err := store.Events(into)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cut []recall.Drop
+	for _, event := range all {
+		var row compactionRow
+		if event.Kind == session.EventCompaction && json.Unmarshal(event.Body, &row) == nil && row.Compaction != nil {
+			cut = append(cut, row.Compaction.Drops...)
+			if event.Turn == into {
+				t.Errorf("cut row %s is filed under turn %s, the carried copy, which a trace leaves out", event.ID, into)
+			}
+		}
+	}
+	if len(cut) != 1 || cut[0].Tool != "read" || cut[0].Handle == "" || cut[0].Bytes != len(big) || !strings.Contains(shrunk[6].Content, cut[0].Handle) {
+		t.Fatalf("the new session records cut results %+v, want one row for b naming the read tool, the handle its note carries and its %d bytes", cut, len(big))
 	}
 	ended, err := store.Header(old.ID())
 	if err != nil {

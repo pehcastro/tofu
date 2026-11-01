@@ -253,6 +253,8 @@ type Compacted struct {
 	Results      int
 	TokensBefore int
 	TokensAfter  int
+	Kept         int
+	Drops        []recall.Drop
 	Messages     []llm.Message
 }
 
@@ -264,11 +266,12 @@ func CompactCarried(artifactDir, wire string, carried []llm.Message) (Compacted,
 	artifacts.preview = artifacts.preview.OnWire(wire)
 	shrunk := slices.Clone(carried)
 	before := HistoryTokens(artifacts.preview, shrunk)
-	shrink, err := shrinkTo(artifacts, shrunk, before, 0, causeCompact)
+	kept := warmFrom(artifacts.preview, shrunk)
+	shrink, err := shrinkFrom(artifacts, shrunk, before, 0, kept, causeCompact)
 	if err != nil {
 		return Compacted{}, err
 	}
-	return Compacted{Results: shrink.results, TokensBefore: before, TokensAfter: HistoryTokens(artifacts.preview, shrunk), Messages: shrunk}, nil
+	return Compacted{Results: shrink.results, TokensBefore: before, TokensAfter: HistoryTokens(artifacts.preview, shrunk), Kept: kept, Drops: shrink.drops, Messages: shrunk}, nil
 }
 
 func RecordCarried(store *session.Store, from string, compacted Compacted, at time.Time) (string, error) {
@@ -292,6 +295,11 @@ func RecordCarried(store *session.Store, from string, compacted Compacted, at ti
 			request = session.NewEventID()
 		}
 		written.message(message, request, nil)
+	}
+	for _, drop := range compacted.Drops {
+		_, err := log.Append(session.Event{Kind: session.EventCompaction}, compactionRow{Compaction: &Compaction{Step: drop.Step,
+			TokensBefore: compacted.TokensBefore, TokensAfter: compacted.TokensAfter, Drops: []recall.Drop{drop}}})
+		written.note(err)
 	}
 	if len(written.failed) > 0 {
 		return "", errors.Join(errors.New(strings.Join(written.failed, "; ")), log.Close(), ended.Close())

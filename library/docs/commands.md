@@ -41,11 +41,12 @@ in tofu and never reaches the model. `tofu serve` answers the list as
   does, sends nothing; the next prompt carries its output, keys redacted.
   `Esc` stops it, and a stopped one is not carried. Refused mid-turn
 
-`/compact` replaces every old tool result in the history the next turn
-carries with a short note and an artifact handle. It is the same shrink tofu
-runs on its own when a request overflows the model's window, and it needs no
-model call. The result is stored whole, and the model reads any part of it
-again with `artifact_fetch`. The last step's results stay whole.
+`/compact` keeps the head of the history byte for byte, so the next request
+still reads it from cache: the system prompt, the tools and every message
+before the newest 8,000 tokens. With no model call, each old tool result
+after it becomes a note and a handle `artifact_fetch` reads back; the last
+step's results stay whole. `tofu session trace <name> --kind compaction`
+names each cut, with its handle and bytes.
 
 `/undo` puts back every file the last turn changed, whether by `edit`,
 `write`, `bash` or a sub-agent: a file it created is deleted and a file it
@@ -71,16 +72,12 @@ never written.
 
 ## Change it
 
-Between turns, type:
+Between turns, type `/compact`. The chat says what it shrank and kept:
 
-    /compact
-
-The chat says how many results were shrunk and how large the history was
-before and after, in tokens:
-
-    compacted 2 old tool result(s) to an artifact handle each: the history
-    went from about 1599 tokens to 695, and the next turn carries it as
-    session 6eae6fe1-0bc5-473f-bd01-ad4361d330c5
+    compacted 2 old tool result(s) after the first 6 message(s), which stay
+    as they were so the next request reads them from cache: the history went
+    from about 21332 tokens to 11218, and the next turn carries it as
+    session 84bbad34-9a69-4cb9-9aa2-f6d2d128587d
 
 While the lead works, `/compact` does nothing and says to stop the turn
 first with ctrl+c. While the lead is idle but waits on its sub-agents,

@@ -179,6 +179,9 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			row.Kind, row.Text = kindCompaction, "compacted"
 			if compacted.Compaction != nil {
 				row.Text += " " + strconv.Itoa(compacted.Compaction.TokensBefore) + " to " + strconv.Itoa(compacted.Compaction.TokensAfter) + " tokens"
+				for _, drop := range compacted.Compaction.Drops {
+					row.Text = traced(row.Text, "cut "+drop.Tool+" handle "+drop.Handle+", "+strconv.Itoa(drop.Bytes)+" bytes")
+				}
 			}
 			if compacted.Fork != nil {
 				row.Text = "forked at " + strconv.Itoa(compacted.Fork.TokensBefore) + " tokens, carried " + strconv.Itoa(compacted.Fork.TokensAfter)

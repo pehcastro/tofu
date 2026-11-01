@@ -63,9 +63,11 @@ the carry names from any of them.
   brings back the 250,000 cap of 0.5.12 and earlier from the next turn. A
   model whose window is smaller still stops at its window less the
   answer's reserve, and `TOFU_CONTEXT_CEILING` wins over the setting.
-- Free room before the next turn: type `/compact` in the app. Every old
-  tool result is shrunk to its handle at once, with no model call, and the
-  shrunk history becomes a new session.
+- Free room before the next turn: type `/compact` in the app. The system
+  prompt, the tools and every message before the newest 8,000 tokens stay
+  byte for byte, so the next request reads them from cache. Every old tool
+  result after that is shrunk to its handle at once, with no model call,
+  and the shrunk history becomes a new session.
 - What a lead's fork carries: `tofu settings set episodes off` makes the
   model write the working state at the fork instead of carrying the
   episode view.

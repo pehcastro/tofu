@@ -126,8 +126,8 @@ func TestServeStopsTheLeadUnsteersRunsCommandsCompactsAndPagesHistory(t *testing
 		t.Error("shell.run during a turn was accepted")
 	}
 	c.ask("6", "session.compact", `{}`)
-	if refused := c.until(func(line wireLine) bool { return string(line.ID) == `"6"` }, "the answer to 6"); refused.Error == nil {
-		t.Error("session.compact during a turn was accepted")
+	if refused := c.until(func(line wireLine) bool { return string(line.ID) == `"6"` }, "the answer to 6"); refused.Error == nil || !strings.Contains(refused.Error.Message, sent.Turn) {
+		t.Errorf("session.compact during turn %s answered %+v, want a refusal naming that turn", sent.Turn, refused.Error)
 	}
 	for id, text := range map[string]string{"7a": "keep this", "7b": "take this back"} {
 		c.ask(id, "turn.steer", `{"session":"`+resumed.ID+`","expectedTurnId":"`+sent.Turn+`","text":"`+text+`"}`)

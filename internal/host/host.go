@@ -40,10 +40,11 @@ const (
 
 func ImageToken(index int) string { return ImageTokenHead + strconv.Itoa(index) + "]" }
 
-var (
-	errTurnRunning = errors.New("a turn is running: wait for it to end, or stop it")
-	errProjectTurn = errors.New("another session in this project's tofu host is already working, and this project lets one session work at a time: wait for it, or set oneWorkingSessionPerProject off")
-)
+func turnRunning(turn string) error {
+	return errors.New("turn " + turn + " is running: wait for it to end, or stop it")
+}
+
+var errProjectTurn = errors.New("another session in this project's tofu host is already working, and this project lets one session work at a time: wait for it, or set oneWorkingSessionPerProject off")
 
 type Play func(ctx context.Context, pick Pick, task string, live Live)
 
@@ -811,7 +812,7 @@ func (h *Host) Fresh() error {
 	defer h.mu.Unlock()
 	h.dropCheckIn()
 	if h.running {
-		return errTurnRunning
+		return turnRunning(h.turn)
 	}
 	h.letGo()
 	h.forget()
@@ -823,10 +824,10 @@ func (h *Host) Fresh() error {
 func (h *Host) Resume(carry Carry) (Opened, error) {
 	h.mu.Lock()
 	h.dropCheckIn()
-	running := h.running
+	turn, running := h.turn, h.running
 	h.mu.Unlock()
 	if running {
-		return Opened{}, errTurnRunning
+		return Opened{}, turnRunning(turn)
 	}
 	h.forget()
 	h.mu.Lock()
