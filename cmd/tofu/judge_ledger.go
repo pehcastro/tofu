@@ -160,49 +160,31 @@ func (l rowLedger) appendFallback(state json.RawMessage, set battery, in rowInpu
 	return l.writer.Append(row)
 }
 
-type judgeAsker struct {
-	client   *jev.Client
-	request  jev.Request
-	wording  int
-	set      battery
-	decision jev.Decision
-	verdict  ledger.Verdict
-}
-
-func (a *judgeAsker) Ask(ctx context.Context, _ ledger.Request) (ledger.Entry, error) {
-	decision, err := a.client.Ask(ctx, a.request)
+func askFresh(ctx context.Context, client *jev.Client, req jev.Request, set battery) (judgeOutcome, ledger.Entry, error) {
+	decision, err := client.Ask(ctx, req)
 	if err != nil {
-		return ledger.Entry{}, a.recordUnavailable(err)
+		state, notEncoded := json.Marshal(req.State)
+		if notEncoded != nil {
+			return judgeOutcome{}, ledger.Entry{}, err
+		}
+		if _, unwritten := appendFallbackRow(state, set, rowInput{}, err); unwritten != nil {
+			return judgeOutcome{}, ledger.Entry{}, unwritten
+		}
+		return judgeOutcome{}, ledger.Entry{}, err
 	}
-	a.decision = decision
-	answers := toLedgerAnswers(a.wording, decision.Answers)
-	row, err := appendRow(a.request.State, a.set, rowInput{decision: &decision, answers: answers})
+	answers := toLedgerAnswers(set.QuestionsVersion, decision.Answers)
+	row, err := appendRow(req.State, set, rowInput{decision: &decision, answers: answers})
 	if err != nil {
-		return ledger.Entry{}, err
+		return judgeOutcome{}, ledger.Entry{}, err
 	}
-	a.verdict = row.Verdict
-	return ledger.Entry{RowID: row.ID, Build: decision.Build, RequestID: cmp.Or(decision.RequestID, decision.TransportID), Answers: answers}, nil
-}
-
-func (a *judgeAsker) recordUnavailable(cause error) error {
-	state, err := json.Marshal(a.request.State)
-	if err != nil {
-		return cause
-	}
-	if _, err := appendFallbackRow(state, a.set, rowInput{}, cause); err != nil {
-		return err
-	}
-	return cause
+	entry := ledger.Entry{RowID: row.ID, Build: decision.Build, RequestID: cmp.Or(decision.RequestID, decision.TransportID), Answers: answers}
+	return judgeOutcome{answers: answers, fresh: true, decision: decision, verdict: row.Verdict, mode: set.Mode}, entry, nil
 }
 
 func runJudge(ctx context.Context, client *jev.Client, req jev.Request, set battery, noCache bool) (judgeOutcome, error) {
-	asker := &judgeAsker{client: client, request: req, wording: set.QuestionsVersion, set: set}
 	if noCache {
-		entry, err := asker.Ask(ctx, ledger.Request{})
-		if err != nil {
-			return judgeOutcome{}, err
-		}
-		return judgeOutcome{answers: entry.Answers, fresh: true, decision: asker.decision, verdict: asker.verdict, mode: set.Mode}, nil
+		outcome, _, err := askFresh(ctx, client, req, set)
+		return outcome, err
 	}
 
 	cacheDir, err := ledger.CacheDir()
@@ -220,18 +202,18 @@ func runJudge(ctx context.Context, client *jev.Client, req jev.Request, set batt
 		return judgeOutcome{}, err
 	}
 	if !hit {
-		entry, err = asker.Ask(ctx, ledgerReq)
+		outcome, entry, err := askFresh(ctx, client, req, set)
 		if err != nil {
 			return judgeOutcome{}, err
 		}
-		ledgerReq.Model = asker.decision.Alias
+		ledgerReq.Model = outcome.decision.Alias
 		if key, err = cache.Key(ledgerReq); err != nil {
 			return judgeOutcome{}, err
 		}
 		if err := cache.Store(key, ledgerReq, entry); err != nil {
 			return judgeOutcome{}, err
 		}
-		return judgeOutcome{answers: entry.Answers, fresh: true, decision: asker.decision, verdict: asker.verdict, mode: set.Mode}, nil
+		return outcome, nil
 	}
 	dir, err := sys.LogDir()
 	if err != nil {
