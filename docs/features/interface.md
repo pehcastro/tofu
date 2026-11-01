@@ -15,7 +15,7 @@ Run `tofu` in a project to open the app. Five tabs hold the work, and `/` with a
 
 ![Alt+K, the command palette](./media/tui-commands.png)
 
-`/` opens the slash commands, and each one is also a `tofu` verb. On first
+`/` opens the slash commands. On first
 start, a setup screen lists anything missing, such as a sign-in, with a
 number to fix each.
 
