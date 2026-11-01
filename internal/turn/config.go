@@ -157,14 +157,22 @@ func (c Config) upgradeNote() string {
 	if c.Sessions == nil || c.Session == "" || c.SpawnedFrom != "" {
 		return ""
 	}
-	last := ""
-	_ = c.Sessions.EachEvent(c.Session, func(agent string) bool { return agent == "" }, func(event session.Event) bool {
-		var start session.TurnStart
-		if event.Kind == session.EventTurnStart && json.Unmarshal(event.Body, &start) == nil {
-			last = start.Tofu
+	last, seen := "", map[string]bool{}
+	for id := c.Session; last == "" && id != "" && !seen[id]; {
+		seen[id] = true
+		_ = c.Sessions.EachEvent(id, func(agent string) bool { return agent == "" }, func(event session.Event) bool {
+			var start session.TurnStart
+			if event.Kind == session.EventTurnStart && json.Unmarshal(event.Body, &start) == nil {
+				last = start.Tofu
+			}
+			return true
+		})
+		header, err := c.Sessions.Header(id)
+		id = ""
+		if err == nil && header.CarriedFrom != nil {
+			id = header.CarriedFrom.Session
 		}
-		return true
-	})
+	}
 	if last == "" || last == konst.Version {
 		return ""
 	}
