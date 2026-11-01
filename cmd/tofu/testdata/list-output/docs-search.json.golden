@@ -85,6 +85,10 @@ exit 0
         "do": "tofu docs keys"
       },
       {
+        "text": "What reached your agents",
+        "do": "tofu docs library"
+      },
+      {
         "text": "Memory",
         "do": "tofu docs memory"
       },

@@ -106,11 +106,10 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			case call.Tool == turn.TicketMoveToolName && json.Unmarshal(call.Args, &ticketed) == nil:
 				row.Ticket, row.work = ticketed.ID, workStep{what: workMove, said: traced("to "+ticketed.To, ticketed.Reason)}
 			}
-			var named struct{ Name string }
-			if what := map[string]string{turn.SkillToolName: libraryWhatSkill, turn.ReferenceToolName: libraryWhatReference}[call.Tool]; what != "" && json.Unmarshal(call.Args, &named) == nil {
+			if what, name := libraryLoad(call); what != "" {
 				rows = append(rows, row)
 				row.Kind, row.State = kindLibrary, string(session.PartLoaded)
-				row.Text = traced(what+" "+named.Name+" loaded by the model", libraryFiles[event.Agent+"\x00"+what+"\x00"+named.Name])
+				row.Text = traced(what+" "+name+" loaded by the model", libraryFiles[event.Agent+"\x00"+what+"\x00"+name])
 			}
 		case session.EventToolResult:
 			var result traceResult
@@ -273,6 +272,15 @@ func libraryItem(part session.PromptPart) (string, string) {
 		return libraryWhatReference, part.Name
 	}
 	return "", ""
+}
+
+func libraryLoad(call session.CallBody) (string, string) {
+	var named struct{ Name string }
+	what := map[string]string{turn.SkillToolName: libraryWhatSkill, turn.ReferenceToolName: libraryWhatReference}[call.Tool]
+	if what == "" || json.Unmarshal(call.Args, &named) != nil {
+		return "", ""
+	}
+	return what, named.Name
 }
 
 type stopCause struct {

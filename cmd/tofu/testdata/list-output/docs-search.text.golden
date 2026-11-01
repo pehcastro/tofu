@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                           71 matches
+Docs · "change the colours"                                           72 matches
 
   change the colours
     → tofu settings set theme Nord
@@ -40,6 +40,8 @@ Docs · "change the colours"                                           71 matche
     → tofu docs hooks
   Keys
     → tofu docs keys
+  What reached your agents
+    → tofu docs library
   Memory
     → tofu docs memory
   Models

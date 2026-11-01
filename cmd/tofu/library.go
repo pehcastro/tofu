@@ -21,7 +21,7 @@ import (
 	"tofu/library/questions"
 )
 
-const libraryUsage = "tofu library [resolve <name>] [--dir <path>] [--json]"
+const libraryUsage = "tofu library [resolve <name>] [--dir <path>] [--json] | tofu library reach [--never] [--json]"
 
 type (
 	libraryLayer  = host.LibraryLayer
@@ -44,6 +44,8 @@ func libraryVerb(args []string, out, errOut io.Writer) int {
 		return o.usage(err)
 	case len(rest) == 0:
 		return libraryReportVerb(o, dir)
+	case rest[0] == "reach" && dir == "":
+		return libraryReachVerb(o, rest[1:], time.Now())
 	case len(rest) == 2 && rest[0] == "resolve":
 		o.verb = "library resolve"
 		return libraryResolve(o, rest[1], dir)

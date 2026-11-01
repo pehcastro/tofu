@@ -108,6 +108,11 @@ exit 0
         "summary": "read your own sessions for what keeps going wrong, sorted into tofu's bugs, tofu's rules, your own rules, settings and your project, with at most five findings to act on"
       },
       {
+        "topic": "library",
+        "title": "What reached your agents",
+        "summary": "tofu library reach counts which rules, references, skills, agents and tools reached an agent across this project's sessions, and lists the rest"
+      },
+      {
         "topic": "memory",
         "title": "Memory",
         "summary": "what tofu remembers for you across sessions, in four scopes from you everywhere to the team in one repository, and how to add, list and forget it"

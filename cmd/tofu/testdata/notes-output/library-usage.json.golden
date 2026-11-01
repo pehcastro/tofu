@@ -2,4 +2,4 @@ exit 2
 --- stdout
 --- stderr
 ✗ tofu library: unknown argument "--nope"
-  → tofu library [resolve <name>] [--dir <path>] [--json]
+  → tofu library [resolve <name>] [--dir <path>] [--json] | tofu library reach [--never] [--json]
