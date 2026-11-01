@@ -826,18 +826,10 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		recordedGrants = config.Boundary.Asked()
 	}
 	crashes := sys.Crashes(config.Project)
-	recordPicturesLeftOut := func(step int, before, after []llm.Message) {
-		drops := picturesLeftOut(before, after)
-		if len(drops) == 0 {
-			return
-		}
-		for _, drop := range drops {
-			if key := artifacts.keep.keyOf(drop); key != (dropKey{}) {
-				artifacts.keep.dropped[key] = &drop
-			}
-		}
+	recordPictureDrops := func(step, tokensBefore int, after []llm.Message, drops []recall.Drop) {
+		artifacts.keep.remember(drops)
 		recorded.add(session.Event{Kind: session.EventCompaction}, compactionRow{Compaction: &Compaction{Step: step,
-			TokensBefore: sentTokens(before), TokensAfter: sentTokens(after), Drops: drops}})
+			TokensBefore: tokensBefore, TokensAfter: sentTokens(after), Drops: drops}})
 	}
 	forkInto := func(fork *Fork, when string, beforeFork, begun []llm.Message, moved *Account) {
 		ended := row
@@ -896,7 +888,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		messages, sent, answering, budget = begun, 0, "", budget.Reported(0, recall.Occupancy{})
 		messages = append(messages, added...)
 		flush()
-		recordPicturesLeftOut(fork.Step, beforeFork, messages)
+		if drops := picturesLeftOut(beforeFork, messages); len(drops) > 0 {
+			recordPictureDrops(fork.Step, sentTokens(beforeFork), messages, drops)
+		}
 	}
 	endForked := func(fork *Fork, when string, beforeFork, begun []llm.Message, moved *Account, why string) Row {
 		forks++
@@ -1030,12 +1024,13 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			}
 			trimmedBefore = cmp.Or(unforked, trimmedBefore)
 		}
-		pictured := slices.Clone(messages)
-		if dropped := keepNewestPictures(messages); dropped > 0 {
+		if picturesToDrop(messages) > 0 {
+			tokensBefore := sentTokens(messages)
+			drops := keepNewestPictures(messages)
 			flush()
 			recorded.listChange("pictures dropped", "step "+strconv.Itoa(step)+" sends the newest "+strconv.Itoa(konst.ImageResultsKept)+
-				" pictures, so tofu dropped the "+strconv.Itoa(dropped)+" oldest", nil, messages)
-			recordPicturesLeftOut(step, pictured, messages)
+				" pictures, so tofu dropped the "+strconv.Itoa(len(drops))+" oldest", nil, messages)
+			recordPictureDrops(step, tokensBefore, messages, drops)
 		}
 		measureSent := func() recall.Occupancy {
 			sent := historyOf(messages)

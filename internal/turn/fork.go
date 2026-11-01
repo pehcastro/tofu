@@ -122,14 +122,7 @@ func picturesLeftOut(before, after []llm.Message) []recall.Drop {
 		if message.Role != llm.RoleTool || len(message.Images) == 0 || pictured[message.ToolCallID] {
 			continue
 		}
-		call := calls[message.ToolCallID]
-		var read readArgs
-		_ = json.Unmarshal(call.Arguments, &read)
-		bytes := 0
-		for _, image := range message.Images {
-			bytes += len(image.Data)
-		}
-		drops = append(drops, recall.Drop{Step: step, Tool: call.Name, Path: read.Path, Bytes: bytes, TokensFreed: len(message.Images) * konst.ImageTokens, Reason: recall.DroppedAged})
+		drops = append(drops, pictureDrop(step, calls[message.ToolCallID], message, len(message.Images)*konst.ImageTokens))
 	}
 	return drops
 }

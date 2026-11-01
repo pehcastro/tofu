@@ -210,6 +210,14 @@ type dropKey struct {
 	handle, path string
 }
 
+func (j *keepJudge) remember(drops []recall.Drop) {
+	for _, drop := range drops {
+		if key := j.keyOf(drop); key != (dropKey{}) {
+			j.dropped[key] = &drop
+		}
+	}
+}
+
 func (j *keepJudge) keyOf(drop recall.Drop) dropKey {
 	key := dropKey{handle: drop.Handle}
 	path := drop.Path

@@ -394,16 +394,9 @@ func shrinkFrom(artifacts Artifacts, messages []llm.Message, estimate, target, f
 			continue
 		}
 		if len(message.Images) > 0 && estimate > target {
-			pictureBytes := 0
-			for _, image := range message.Images {
-				pictureBytes += len(image.Data)
-			}
-			call := calls[message.ToolCallID]
-			var read readArgs
-			_ = json.Unmarshal(call.Arguments, &read)
-			freed := dropPicture(&messages[i]) - artifacts.preview.Tokens("\n"+pictureDropped)
-			estimate -= freed
-			shrink.drops = append(shrink.drops, recall.Drop{Step: step, Tool: call.Name, Path: read.Path, Bytes: pictureBytes, TokensFreed: freed, Reason: recall.DroppedAged})
+			drop := pictureDrop(step, calls[message.ToolCallID], message, dropPicture(&messages[i])-artifacts.preview.Tokens("\n"+pictureDropped))
+			estimate -= drop.TokensFreed
+			shrink.drops = append(shrink.drops, drop)
 			shrink.results++
 		}
 		if content := messages[i].Content; len(content) >= artifacts.preview.CompactFloorBytes && !recall.AlreadyDropped(content) && shrunkHandle(content) == "" {
@@ -431,11 +424,7 @@ func shrinkFrom(artifacts Artifacts, messages []llm.Message, estimate, target, f
 		shrink.results++
 	}
 	if artifacts.keep != nil {
-		for _, drop := range shrink.drops {
-			if key := artifacts.keep.keyOf(drop); key != (dropKey{}) {
-				artifacts.keep.dropped[key] = &drop
-			}
-		}
+		artifacts.keep.remember(shrink.drops)
 	}
 	shrink.bytesAfter = messagesBytes(messages)
 	return shrink, nil
@@ -461,20 +450,49 @@ func dropPicture(message *llm.Message) int {
 	return freed
 }
 
-func keepNewestPictures(messages []llm.Message) (dropped int) {
-	var pictured []int
-	for i, message := range messages {
+func pictureDrop(step int, call llm.ToolCall, message llm.Message, freed int) recall.Drop {
+	var read readArgs
+	_ = json.Unmarshal(call.Arguments, &read)
+	bytes := 0
+	for _, image := range message.Images {
+		bytes += len(image.Data)
+	}
+	return recall.Drop{Step: step, Tool: call.Name, Path: read.Path, Bytes: bytes, TokensFreed: freed, Reason: recall.DroppedAged}
+}
+
+func picturesToDrop(messages []llm.Message) int {
+	pictured := 0
+	for _, message := range messages {
 		if message.Role == llm.RoleTool && len(message.Images) > 0 {
-			pictured = append(pictured, i)
+			pictured++
 		}
 	}
-	if len(pictured) <= konst.ImageResultsCeiling {
+	if pictured <= konst.ImageResultsCeiling {
 		return 0
 	}
-	for _, i := range pictured[:len(pictured)-konst.ImageResultsKept] {
-		dropPicture(&messages[i])
+	return pictured - konst.ImageResultsKept
+}
+
+func keepNewestPictures(messages []llm.Message) []recall.Drop {
+	toDrop := picturesToDrop(messages)
+	calls := map[string]llm.ToolCall{}
+	var drops []recall.Drop
+	step := 0
+	for i, message := range messages {
+		if len(drops) == toDrop {
+			break
+		}
+		if message.Role == llm.RoleAssistant {
+			step++
+		}
+		for _, call := range message.ToolCalls {
+			calls[call.ID] = call
+		}
+		if message.Role == llm.RoleTool && len(message.Images) > 0 {
+			drops = append(drops, pictureDrop(step, calls[message.ToolCallID], message, dropPicture(&messages[i])))
+		}
 	}
-	return len(pictured) - konst.ImageResultsKept
+	return drops
 }
 
 func HistoryTokens(preview recall.Config, messages []llm.Message) int {
