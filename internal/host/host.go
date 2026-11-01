@@ -380,7 +380,7 @@ func (h *Host) Settings() (AskingMode, Pick) {
 }
 
 func (h *Host) OpenFresh() (string, error) {
-	if err := h.Fresh(); err != nil {
+	if err := h.freshAlone(); err != nil {
 		return "", err
 	}
 	id := h.pendingID()
@@ -830,6 +830,15 @@ func (c Carry) reading(dir string) (*session.Store, error) {
 }
 
 func (h *Host) Fresh() error {
+	if f := h.following.Load(); f != nil {
+		if refused := f.renew(); refused != "" {
+			return turnRunning(refused)
+		}
+	}
+	return h.freshAlone()
+}
+
+func (h *Host) freshAlone() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.dropCheckIn()

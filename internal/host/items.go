@@ -211,6 +211,9 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		return append(out, merged("plan.updated", "", &PlanUpdated{Identity: id, Items: steps}))
 	case EventSession:
 		s.session = event.ID
+		if event.ID == "" {
+			s.turn = ""
+		}
 		return append(out, sessionUpdated(s.identity("", event.ID), event))
 	case EventForkEnd:
 		if event.Fork == nil {

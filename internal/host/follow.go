@@ -61,6 +61,7 @@ const (
 	followTrace     followOp = "trace"
 	followBeat      followOp = "beat"
 	followCompact   followOp = "compact"
+	followRenew     followOp = "renew"
 )
 
 type followAsk struct {
@@ -194,6 +195,7 @@ type following struct {
 	chose   Pick
 	seq     uint64
 	joined  chan struct{}
+	renewed bool
 }
 
 func linked(conn net.Conn) link { return link{conn: conn, gone: make(chan struct{})} }
@@ -417,6 +419,12 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 		if reply.Compacted, err = h.Compact(ask.By); err != nil {
 			reply.OK, reply.Failed = false, err.Error()
 		}
+	case followRenew:
+		if turn, running := h.Turn(); running {
+			reply.OK, reply.Turn = false, turn
+			break
+		}
+		h.emitter().emit(Event{Kind: EventSession})
 	default:
 		reply.OK = false
 	}
@@ -559,6 +567,19 @@ func (f *following) send(pick Pick, task string, images []pendingImage) followRe
 	return reply
 }
 
+func (f *following) renew() string {
+	f.mu.Lock()
+	f.renewed = true
+	f.mu.Unlock()
+	reply := f.ask(followAsk{Op: followRenew})
+	if !reply.OK {
+		f.mu.Lock()
+		f.renewed = false
+		f.mu.Unlock()
+	}
+	return reply.Turn
+}
+
 func (reply followReply) delivered() bool { return reply.Refused == "" && reply.ID != 0 }
 
 func (h *Host) keepUndelivered(reply followReply, images []pendingImage) followReply {
@@ -584,6 +605,9 @@ func (f *following) chosen(pick Pick) bool {
 func (f *following) echoes(event Event) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if event.Kind == EventSession && event.ID == "" {
+		return f.renewed
+	}
 	echo := (event.Kind == EventTask || event.Kind == EventSteerQueued) && event.Text == f.typed
 	if echo {
 		f.typed = ""
@@ -666,6 +690,15 @@ func (h *Host) mirror(f *following, event Event) {
 	told := h.bus.now.apply(event)
 	h.bus.mu.Unlock()
 	h.hand(told, f.gone)
+	if event.Kind != EventSession || event.ID != "" {
+		return
+	}
+	left := h.ID()
+	if err := h.freshAlone(); err != nil {
+		h.note(err.Error())
+		return
+	}
+	h.note("another member of session " + left + " started a new session, so this window has no session yet until its first task")
 }
 
 func (h *Host) rejoin(f *following, now picture, seq uint64) {
