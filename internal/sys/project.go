@@ -69,11 +69,11 @@ func projectKey(path string) string {
 	return projectKeyAttempt(resolvedPath(path), 0)
 }
 
-func foldsCase() bool { return OS() == "windows" || OS() == "darwin" }
+func FoldsCase() bool { return OS() == "windows" || OS() == "darwin" }
 
 func projectKeyAttempt(resolved string, attempt int) string {
 	folded := resolved
-	if foldsCase() {
+	if FoldsCase() {
 		folded = strings.ToLower(resolved)
 	}
 	if attempt > 0 {
@@ -113,7 +113,7 @@ func dashed(s string) string {
 }
 
 func samePath(a, b string) bool {
-	if foldsCase() {
+	if FoldsCase() {
 		return strings.EqualFold(a, b)
 	}
 	return a == b

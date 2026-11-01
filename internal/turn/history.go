@@ -431,9 +431,11 @@ func shrinkFrom(artifacts Artifacts, messages []llm.Message, estimate, target, f
 		messages[candidate.at].Content = note
 		shrink.results++
 	}
-	for _, drop := range shrink.drops {
-		if artifacts.keep != nil && keyOf(drop) != (dropKey{}) {
-			artifacts.keep.dropped[keyOf(drop)] = &drop
+	if artifacts.keep != nil {
+		for _, drop := range shrink.drops {
+			if key := artifacts.keep.keyOf(drop); key != (dropKey{}) {
+				artifacts.keep.dropped[key] = &drop
+			}
 		}
 	}
 	shrink.bytesAfter = messagesBytes(messages)

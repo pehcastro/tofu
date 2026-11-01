@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 	"tofu/internal/session"
+	"tofu/internal/sys"
 	"tofu/library/questions"
 )
 
@@ -66,6 +68,7 @@ type keepJudge struct {
 	notify    func(string)
 	task      string
 	unfound   string
+	project   string
 	earlier   func() ([]session.Event, error)
 	mu        sync.Mutex
 	decided   map[string]keepDecision
@@ -86,7 +89,7 @@ type dropCandidate struct {
 }
 
 func newKeepJudge(project, log, task string, notify func(string)) *keepJudge {
-	judge := &keepJudge{ledger: ledger.NewWriter(log), notify: notify, task: task, decided: map[string]keepDecision{}, dropped: map[dropKey]*recall.Drop{}}
+	judge := &keepJudge{project: project, ledger: ledger.NewWriter(log), notify: notify, task: task, decided: map[string]keepDecision{}, dropped: map[dropKey]*recall.Drop{}}
 	judge.unasked = judge.open(project)
 	return judge
 }
@@ -204,8 +207,24 @@ type dropKey struct {
 	handle, path string
 }
 
-func keyOf(drop recall.Drop) dropKey {
-	return dropKey{handle: drop.Handle, path: drop.Path}
+func (j *keepJudge) keyOf(drop recall.Drop) dropKey {
+	key := dropKey{handle: drop.Handle}
+	path := drop.Path
+	if path == "" {
+		return key
+	}
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(j.project, path)
+	}
+	inProject, inside := within(j.project, filepath.Clean(path))
+	if !inside {
+		return key
+	}
+	key.path = filepath.ToSlash(inProject)
+	if sys.FoldsCase() {
+		key.path = strings.ToLower(key.path)
+	}
+	return key
 }
 
 func (j *keepJudge) refetched(called ToolCallRow) string {
@@ -217,24 +236,24 @@ func (j *keepJudge) refetched(called ToolCallRow) string {
 	key, what := dropKey{}, ""
 	switch {
 	case called.Tool == (FetchTool{}).Name() && json.Unmarshal(called.Args, &fetched) == nil:
-		key.handle, what = fetched.Handle, "artifact "+fetched.Handle
+		key, what = dropKey{handle: fetched.Handle}, "artifact "+fetched.Handle
 	case called.Tool == (&ReadTool{}).Name() && json.Unmarshal(called.Args, &read) == nil:
-		key.path, what = read.Path, "picture "+read.Path
+		key, what = j.keyOf(recall.Drop{Path: read.Path}), "picture "+read.Path
 	}
 	if key == (dropKey{}) {
 		return ""
 	}
-	drop, known := j.dropped[key]
-	if !known && j.earlier != nil {
-		drop = droppedEarlier(j.earlier, key)
+	if _, known := j.dropped[key]; !known && j.earlier != nil {
+		j.recallEarlier()
 	}
+	drop := j.dropped[key]
 	if drop == nil {
 		return ""
 	}
 	j.dropped[key] = nil
 	said := what + " was read again after compaction dropped it"
 	if drop.Decision == "" {
-		return said + ", so it is labelled " + refetchedOutcome
+		return said + "; no " + keepResultPoint + " row decided that drop, so this notice is the only record that it was " + refetchedOutcome
 	}
 	said += ", so " + keepResultPoint + " row " + drop.Decision
 	if err := j.ledger.Backfill(drop.Decision, ledger.Outcome{Kind: refetchedOutcome, Detail: string(ledger.VerdictAllow)}); err != nil {
@@ -243,24 +262,29 @@ func (j *keepJudge) refetched(called ToolCallRow) string {
 	return said + " is labelled " + refetchedOutcome
 }
 
-func droppedEarlier(earlier func() ([]session.Event, error), key dropKey) *recall.Drop {
-	events, err := earlier()
+func (j *keepJudge) recallEarlier() {
+	events, err := j.earlier()
+	j.earlier = nil
 	if err != nil {
-		return nil
+		return
 	}
-	var found *recall.Drop
+	logged := map[dropKey]*recall.Drop{}
 	for _, event := range events {
 		var row compactionRow
 		if event.Kind != session.EventCompaction || json.Unmarshal(event.Body, &row) != nil || row.Compaction == nil {
 			continue
 		}
 		for _, drop := range row.Compaction.Drops {
-			if keyOf(drop) == key {
-				found = &drop
+			if key := j.keyOf(drop); key != (dropKey{}) {
+				logged[key] = &drop
 			}
 		}
 	}
-	return found
+	for key, drop := range logged {
+		if _, held := j.dropped[key]; !held {
+			j.dropped[key] = drop
+		}
+	}
 }
 
 func NewArtifacts(dir string, handles bool) (Artifacts, error) {
