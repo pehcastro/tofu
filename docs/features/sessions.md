@@ -320,6 +320,13 @@ the body sent; when no body was kept, as on a recorded model, tofu encodes the
 messages through the anthropic wire again and says so, and a wire with no
 cache markers says `none`. In `--json` every message carries `kept_head` and
 `breakpoint`, and `breakpoints` says where they came from.
+`tofu session request <name> --has memory/view` lists every request with
+its message count and the positions where a message from that origin sits,
+such as `at 1`, or `none`, so one command shows which requests carried a
+memory view, a fork carry or a notice. The origin is spelled the way the
+message list prints it, `<kind>/<source>`, and an unknown one is refused with
+every known origin, exit 2. In `--json` each request carries `messages` and
+`at`.
 `tofu session reads <name>` prints every file it read. Each takes `--json`,
 and `tofu session trace --json` with a filter prints the same rows.
 Over `tofu serve`, `session.info` carries the same history as

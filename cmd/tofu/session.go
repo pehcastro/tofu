@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	sessionSubcommands = "tofu session <name|id|head>, or tofu session list [--all], or tofu session clean [--dry-run], or tofu session set <name|id|head> --model source/model, or tofu session work <name|id|head> --ticket ID, or tofu session info|trace|transcript|drain|reads|resume|rename|find|branch <name|id|head> [--json], or tofu session request <name|id|head> [<request id>|last] [--json]"
+	sessionSubcommands = "tofu session <name|id|head>, or tofu session list [--all], or tofu session clean [--dry-run], or tofu session set <name|id|head> --model source/model, or tofu session work <name|id|head> --ticket ID, or tofu session info|trace|transcript|drain|reads|resume|rename|find|branch <name|id|head> [--json], or tofu session request <name|id|head> [<request id>|last|--has kind/source] [--json]"
 	sessionSetUsage    = "tofu session set <name|id|head> --model source/model [--json]"
 	sessionFresh       = "no session recorded here"
 	sessionDay         = 24 * time.Hour
@@ -96,7 +96,7 @@ func sessionOperands(subcommand string) (string, int, bool) {
 	case "rename":
 		return "<name|id|head> <new name>", 2, true
 	case "request":
-		return "<name|id|head> [<request id>|last]", 2, true
+		return "<name|id|head> [<request id>|last|--has kind/source]", 2, true
 	}
 	return "", 0, false
 }
@@ -108,6 +108,12 @@ func sessionVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 func sessionVerbRecalling(recent *session.Recent, args []string, in io.Reader, out, errOut io.Writer) int {
 	all := len(args) > 0 && args[0] == "list" && slices.Contains(args, "--all")
 	args = slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return all && arg == "--all" })
+	has, asksHas := "", false
+	if at := slices.Index(args, hasFlag); at > 0 && args[0] == "request" {
+		end := min(at+2, len(args))
+		has, asksHas = strings.Join(args[at+1:end], ""), true
+		args = slices.Delete(args, at, end)
+	}
 	handles, _, err := verbArgs(args[min(1, len(args)):])
 	o := verbOutput{verb: "session", usageLine: sessionSubcommands, asJSON: jsonAsked(args), out: out, errOut: errOut}
 	if len(withoutJSON(args)) == 0 {
@@ -188,8 +194,14 @@ func sessionVerbRecalling(recent *session.Recent, args []string, in io.Reader, o
 	if err == nil && len(handles) != wanted && !listsRequests {
 		err = fmt.Errorf("%d operands, want %s", len(handles), cmp.Or(operands, "none"))
 	}
+	if err == nil && asksHas && !listsRequests {
+		err = errors.New(hasFlag + " lists every request, so it takes no request id")
+	}
 	if err != nil {
 		return o.usage(err)
+	}
+	if asksHas && !slices.Contains(requestOrigins(), has) {
+		return o.refuse(exitUsage, cli.Problem{What: fmt.Sprintf("no origin %q", has), Hint: "known origins: " + strings.Join(requestOrigins(), ", ")})
 	}
 	store, err := session.Open()
 	if err != nil {
@@ -229,6 +241,13 @@ func sessionVerbRecalling(recent *session.Recent, args []string, in io.Reader, o
 		}
 		return o.done(true, report, func(page cli.Page) []string { return sessionReadsLines(page, report) })
 	case "request":
+		if asksHas {
+			report, err := sessionRequestsHaving(store, handles[0], has)
+			if err != nil {
+				return o.fail(err)
+			}
+			return o.done(true, report, func(page cli.Page) []string { return sessionRequestsHavingLines(page, report) })
+		}
 		if listsRequests {
 			report, err := sessionRequestList(store, handles[0])
 			if err != nil {
@@ -1505,6 +1524,79 @@ func sessionRequestListLines(page cli.Page, report sessionRequestListReport) []s
 	return append(lines, cli.Indent(page.Label("open one with tofu session request "+report.Handle+" <request id>, or last for the newest"))...)
 }
 
+const hasFlag = "--has"
+
+func requestOrigins() []string {
+	var named []string
+	for _, source := range llm.Source("").Enum() {
+		named = append(named, string(llm.Source(source).Kind())+"/"+source)
+	}
+	return named
+}
+
+func originName(message session.MessageBody) (string, bool) {
+	origin := turn.OriginOf(message)
+	return string(origin.Kind()) + "/" + string(origin.Source), message.Origin != "" || message.From != nil
+}
+
+type requestHaving struct {
+	Request  string `json:"request"`
+	Agent    string `json:"agent,omitempty"`
+	Messages int    `json:"messages"`
+	At       []int  `json:"at"`
+}
+
+type sessionRequestsHavingReport struct {
+	Session  string          `json:"session"`
+	Handle   string          `json:"handle"`
+	Origin   string          `json:"origin"`
+	Requests []requestHaving `json:"requests"`
+}
+
+func sessionRequestsHaving(store *session.Store, handle, origin string) (sessionRequestsHavingReport, error) {
+	listed, err := sessionRequestList(store, handle)
+	report := sessionRequestsHavingReport{Session: listed.Session, Handle: listed.Handle, Origin: origin}
+	if err != nil {
+		return report, err
+	}
+	for _, row := range listed.Requests {
+		view, err := store.Request(listed.Session, row.Request)
+		if err != nil {
+			return report, err
+		}
+		having := requestHaving{Request: row.Request, Agent: row.Agent, Messages: len(view.Messages), At: []int{}}
+		for i, message := range view.Messages {
+			if name, marked := originName(message); marked && name == origin {
+				having.At = append(having.At, i)
+			}
+		}
+		report.Requests = append(report.Requests, having)
+	}
+	return report, nil
+}
+
+func sessionRequestsHavingLines(page cli.Page, report sessionRequestsHavingReport) []string {
+	carrying := 0
+	rows := make([]cli.Row, len(report.Requests))
+	for i, request := range report.Requests {
+		positions := make([]string, len(request.At))
+		for j, at := range request.At {
+			positions[j] = strconv.Itoa(at)
+		}
+		mark, where := cli.Idle, "none"
+		if len(positions) > 0 {
+			carrying++
+			mark, where = cli.Done, "at "+strings.Join(positions, ", ")
+		}
+		rows[i] = cli.Row{Mark: mark, Cells: []string{turn.ShortID(request.Request), cmp.Or(request.Agent, session.AuthorOrchestrator), plural(request.Messages, "message"), where}}
+	}
+	lines := append(page.Title("Requests", []string{report.Handle, plural(len(report.Requests), "request"), strconv.Itoa(carrying) + " from " + report.Origin}, cli.Verdict{}), "")
+	if len(rows) == 0 {
+		return append(lines, cli.Indent(page.Label("none recorded in this session"))...)
+	}
+	return append(lines, cli.Indent(page.Rows(rows)...)...)
+}
+
 func breakpointBody(view session.RequestView, attempts []requestAttempt) (json.RawMessage, breakpointSource, error) {
 	if len(attempts) > 0 && len(attempts[len(attempts)-1].Body) > 0 {
 		return attempts[len(attempts)-1].Body, breakpointsSent, nil
@@ -1748,8 +1840,8 @@ func sessionRequestLines(page cli.Page, report sessionRequestReport) []string {
 		if message.Answers != "" {
 			cells = append(cells, "answers "+message.Answers+" "+message.Outcome)
 		}
-		if origin := turn.OriginOf(session.MessageBody{Role: message.Role, Origin: message.Origin, From: message.From}); message.Origin != "" || message.From != nil {
-			cells = append(cells, "from "+string(origin.Kind())+"/"+string(origin.Source))
+		if origin, marked := originName(session.MessageBody{Role: message.Role, Origin: message.Origin, From: message.From}); marked {
+			cells = append(cells, "from "+origin)
 		}
 		if message.KeptHead {
 			cells = append(cells, "kept head")
