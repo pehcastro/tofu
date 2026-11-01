@@ -482,10 +482,7 @@ func (s *server) compact(p SessionParams) (any, error) {
 	if err != nil || compacted.Into == "" {
 		return compacted, err
 	}
-	labelled := Event{Kind: EventSession, ID: compacted.Into, Root: compacted.Into}
-	if store, err := session.OpenIn(s.Host.dir); err == nil {
-		labelled = labelledAs(store, labelled)
-	}
+	labelled := s.Host.sessionLabelled(compacted.Into)
 	s.mu.Lock()
 	named.items.session = compacted.Into
 	named.replace(nil)
@@ -493,6 +490,74 @@ func (s *server) compact(p SessionParams) (any, error) {
 	s.mu.Unlock()
 	safe.Go(s.report, "serve list", func() { s.listed(named) })
 	s.rebuild(named)
+	return compacted, nil
+}
+
+func (h *Host) sessionLabelled(id string) Event {
+	labelled := Event{Kind: EventSession, ID: id, Root: id}
+	if store, err := session.OpenIn(h.dir); err == nil {
+		labelled = labelledAs(store, labelled)
+	}
+	return labelled
+}
+
+type Compacted struct {
+	Compaction
+	Kept int `json:"kept"`
+}
+
+func (h *Host) Compact() (Compacted, error) {
+	if err := h.reachHost(); err != nil {
+		return Compacted{}, err
+	}
+	if f := h.following.Load(); f != nil {
+		reply := f.ask(followAsk{Op: followCompact})
+		switch {
+		case reply.ID == 0:
+			return Compacted{}, errHostSilent
+		case reply.Failed != "":
+			return Compacted{}, errors.New(reply.Failed)
+		}
+		return reply.Compacted, nil
+	}
+	if turn, running := h.Turn(); running {
+		return Compacted{}, turnRunning(turn)
+	}
+	id, carried := h.ID(), h.Carried()
+	if id == "" || len(carried) == 0 {
+		return Compacted{}, nil
+	}
+	store, err := session.OpenIn(h.dir)
+	if err != nil {
+		return Compacted{}, err
+	}
+	header, err := store.Header(id)
+	if err != nil {
+		return Compacted{}, err
+	}
+	state, err := sys.ProjectStateDirAt(h.dir)
+	if err != nil {
+		return Compacted{}, err
+	}
+	shrunk, err := turn.CompactCarried(filepath.Join(state, "artifacts"), header.Wire, carried)
+	if err != nil {
+		return Compacted{}, err
+	}
+	compacted := Compacted{Compaction: Compaction{Results: shrunk.Results, TokensBefore: shrunk.TokensBefore, TokensAfter: shrunk.TokensAfter}, Kept: shrunk.Kept}
+	if shrunk.Results == 0 {
+		return compacted, nil
+	}
+	into, err := turn.RecordCarried(store, id, shrunk, h.now())
+	if err == nil {
+		err = store.SetHead(into)
+	}
+	if err == nil {
+		err = h.Compacted(into, shrunk.Messages)
+	}
+	if err != nil {
+		return Compacted{}, err
+	}
+	compacted.Into = into
 	return compacted, nil
 }
 

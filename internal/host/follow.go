@@ -58,6 +58,7 @@ const (
 	followRelease   followOp = "release"
 	followTrace     followOp = "trace"
 	followBeat      followOp = "beat"
+	followCompact   followOp = "compact"
 )
 
 type followAsk struct {
@@ -84,18 +85,19 @@ type followAsk struct {
 }
 
 type followReply struct {
-	ID       int
-	OK       bool
-	Stands   bool
-	Steered  string
-	Turn     string `json:",omitempty"`
-	Refused  string `json:",omitempty"`
-	Cron     cron.Reply
-	Failed   string           `json:",omitempty"`
-	Agents   []SubAgentRow    `json:",omitempty"`
-	Standing []StandingAnswer `json:",omitempty"`
-	Hold     shell.Hold       `json:",omitzero"`
-	Shell    shell.Refused    `json:",omitempty"`
+	ID        int
+	OK        bool
+	Stands    bool
+	Steered   string
+	Turn      string `json:",omitempty"`
+	Refused   string `json:",omitempty"`
+	Cron      cron.Reply
+	Failed    string           `json:",omitempty"`
+	Agents    []SubAgentRow    `json:",omitempty"`
+	Standing  []StandingAnswer `json:",omitempty"`
+	Hold      shell.Hold       `json:",omitzero"`
+	Shell     shell.Refused    `json:",omitempty"`
+	Compacted Compacted        `json:",omitzero"`
 }
 
 type followLine struct {
@@ -403,6 +405,13 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 		reply.Agents = h.rosterRows()
 	case followBeat:
 		_ = s.conn.SetReadDeadline(time.Now().Add(hubBeatMissed))
+	case followCompact:
+		var err error
+		if reply.Compacted, err = h.Compact(); err != nil {
+			reply.OK, reply.Failed = false, err.Error()
+		} else if reply.Compacted.Into != "" {
+			h.emitter().emit(h.sessionLabelled(reply.Compacted.Into))
+		}
 	default:
 		reply.OK = false
 	}

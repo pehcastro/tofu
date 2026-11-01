@@ -83,6 +83,8 @@ While the lead works, `/compact` does nothing and says to stop the turn
 first with ctrl+c. While the lead is idle but waits on its sub-agents,
 `/compact`, `/new` and `/undo` say so and run when the turn ends. With no
 history yet, or nothing left to shrink, it says so and changes nothing.
+In an app that joined the project's tofu host, `/compact` shrinks the
+session the host holds, and every member moves to the new session.
 
 Between turns, `/undo 2` undoes the last two turns, and a second `/undo`
 goes one turn further back. From a terminal:

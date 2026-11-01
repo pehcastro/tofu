@@ -38,7 +38,7 @@ func TestCompactShrinksTheCarriedHistoryAndARestartCarriesItShrunk(t *testing.T)
 		t.Fatal(err)
 	}
 	resumed := continueCarry(store)
-	live := newAppSession(t.TempDir(), nil, nil, time.Now, resumed)
+	live := newAppSession(store.Project(), nil, nil, time.Now, resumed)
 	t.Cleanup(live.Close)
 
 	said := live.compact()

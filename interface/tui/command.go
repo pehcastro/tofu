@@ -351,8 +351,15 @@ func (a *App) undoCommand() bool {
 }
 
 func (a *App) refusedMidTurn() bool {
-	if a.busy {
-		a.view.Append(session.Entry{Kind: session.Note, Body: turnRunningNote})
+	if !a.busy {
+		return false
 	}
-	return a.busy
+	note := turnRunningNote
+	if a.options.Host != nil {
+		if turn, running := a.options.Host.Turn(); running {
+			note += " (" + turn + ")"
+		}
+	}
+	a.view.Append(session.Entry{Kind: session.Note, Body: note})
+	return true
 }
