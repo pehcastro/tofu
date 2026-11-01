@@ -26,5 +26,7 @@ func shapes() []shape {
 		{"ts-dev", "fix the dialog in src/app.tsx so Escape closes it", "react"},
 		{"ts-dev", "fix the counter in src/routes/+page.svelte so it updates when clicked", "svelte"},
 		{"ts-dev", "fix the form in src/App.vue so it shows the saved name", "vue"},
+		{"py-dev", "fix the retry in src/app/fetch.py so it closes the session on a timeout", "python"},
+		{"browser", "open example.com and report the page title", ""},
 	}
 }
