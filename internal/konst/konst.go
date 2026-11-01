@@ -322,6 +322,12 @@ const (
 
 const TemporaryProjectIdleHours = 2
 
+const (
+	ProjectRegistryTries          = 20
+	ProjectRegistryRetryMillis    = 50
+	ProjectRegistryLockWaitMillis = 3000
+)
+
 const NearestWordBytesPerEdit = 3
 
 const (

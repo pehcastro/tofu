@@ -31,9 +31,6 @@ const (
 	projectOpenDirName  = "open"
 	projectNameLimit    = 40
 	projectHashLength   = 8
-	registryLockWait    = 3 * time.Second
-	registryRetry       = 50 * time.Millisecond
-	registryWriteTries  = 10
 )
 
 type ProjectEntry struct {
@@ -137,9 +134,27 @@ func (r projectRegistry) folder(name string) *ProjectEntry {
 	return nil
 }
 
+func retryRegistry(attempt func() error) error {
+	for try := 1; ; try++ {
+		err := attempt()
+		if err == nil || errors.Is(err, fs.ErrNotExist) || try == konst.ProjectRegistryTries {
+			return err
+		}
+		time.Sleep(konst.ProjectRegistryRetryMillis * time.Millisecond)
+	}
+}
+
+func readRegistryFile(name string) (raw []byte, err error) {
+	err = retryRegistry(func() error {
+		raw, err = os.ReadFile(name)
+		return err
+	})
+	return raw, err
+}
+
 func readProjectRegistry(home string) (projectRegistry, error) {
 	var registry projectRegistry
-	raw, err := os.ReadFile(filepath.Join(home, ProjectRegistryName))
+	raw, err := readRegistryFile(filepath.Join(home, ProjectRegistryName))
 	if errors.Is(err, fs.ErrNotExist) {
 		return registry, nil
 	}
@@ -160,14 +175,13 @@ type registeredEntry struct {
 
 func registeredFolder(home, path string) (registeredEntry, error) {
 	name := filepath.Join(home, ProjectRegistryName)
-	file, err := os.Open(name)
+	raw, err := readRegistryFile(name)
 	if errors.Is(err, fs.ErrNotExist) {
 		return registeredEntry{}, nil
 	}
 	if err == nil {
-		defer func() { _ = file.Close() }()
 		var found registeredEntry
-		if found, err = folderHolding(json.NewDecoder(file), path); err == nil {
+		if found, err = folderHolding(json.NewDecoder(bytes.NewReader(raw)), path); err == nil {
 			return found, nil
 		}
 	}
@@ -393,7 +407,7 @@ func ReapTemporaryProjects(home string, now time.Time) ([]string, error) {
 
 func reapIdle(home, projects string, now time.Time) ([]string, error) {
 	name := filepath.Join(home, ProjectRegistryName)
-	raw, err := os.ReadFile(name)
+	raw, err := readRegistryFile(name)
 	if errors.Is(err, fs.ErrNotExist) || err == nil && !bytes.Contains(raw, []byte(`"temporary": true`)) {
 		return nil, nil
 	}
@@ -519,7 +533,7 @@ func (p Project) editRegistry(edit func(*projectRegistry) (*ProjectEntry, error)
 	}
 	lockPath := filepath.Join(p.home, projectLockName)
 	var lock *os.File
-	for deadline := time.Now().Add(registryLockWait); lock == nil; {
+	for deadline := time.Now().Add(konst.ProjectRegistryLockWaitMillis * time.Millisecond); lock == nil; {
 		file, held, err := TryLock(lockPath)
 		switch {
 		case err != nil:
@@ -529,7 +543,7 @@ func (p Project) editRegistry(edit func(*projectRegistry) (*ProjectEntry, error)
 		case time.Now().After(deadline):
 			return fmt.Errorf("the project registry lock %s is held by another tofu", lockPath)
 		default:
-			time.Sleep(registryRetry)
+			time.Sleep(konst.ProjectRegistryRetryMillis * time.Millisecond)
 		}
 	}
 	defer func() { _ = Unlock(lock) }()
@@ -550,13 +564,9 @@ func (p Project) editRegistry(edit func(*projectRegistry) (*ProjectEntry, error)
 	if err != nil {
 		return err
 	}
-	for try := 1; ; try++ {
-		err := WriteFile(filepath.Join(p.home, ProjectRegistryName), append(body, '\n'), 0o644)
-		if err == nil || try == registryWriteTries {
-			return err
-		}
-		time.Sleep(registryRetry)
-	}
+	return retryRegistry(func() error {
+		return WriteFile(filepath.Join(p.home, ProjectRegistryName), append(body, '\n'), 0o644)
+	})
 }
 
 func projectTOML(entry ProjectEntry) []byte {
