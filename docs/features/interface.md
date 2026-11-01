@@ -1,16 +1,17 @@
 ---
 title: The interface
-description: "The tofu app in the terminal: four tabs, a command palette, and a composer that keeps working while the model does."
+description: "The tofu app in the terminal: five tabs, a command palette, and a composer that keeps working while the model does."
 order: 10
 updated: 2026-10-24
 ---
 
-Run `tofu` in a project to open the app. Four tabs hold the work:
+Run `tofu` in a project to open the app. Five tabs hold the work, and `/` with a tab's name opens it:
 
 - **chat**: the conversation with the lead and the composer
 - **sub-agents**: every agent by state, and each one's thinking and tool calls
 - **file edits**: every changed line, who changed it, and where
 - **shells**: the processes an agent left running
+- **orders**: every order the lead gave a sub-agent, one line each
 
 ![Alt+K, the command palette](./media/tui-commands.png)
 

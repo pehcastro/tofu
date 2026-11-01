@@ -43,6 +43,7 @@ func Table() []Command {
 		{Name: "sub-agents", Summary: "every tool call and every sub-agent, in one feed", Scope: Interface, Needs: Always},
 		{Name: "file-edits", Summary: "every changed line, who made it and where", Scope: Interface, Needs: Always},
 		{Name: "shells", Summary: "the persistent processes an agent left running", Scope: Interface, Needs: Always},
+		{Name: "orders", Summary: "every order the lead gave a sub-agent, one line each", Scope: Interface, Needs: Always},
 		{Name: "models", Summary: "every model the signed subscriptions serve, and which one the next turn runs", Scope: Tofu, Needs: Always},
 		{Name: "status", Summary: "each subscription's quota windows and when they reset", Scope: Interface, Needs: Always},
 		{Name: "attach", Summary: "reference a file in this workspace", Scope: Interface, Needs: Always},
