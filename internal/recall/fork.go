@@ -314,8 +314,8 @@ func wholeFiles(c Conversation) []wholeFile {
 		failed, ranged := strings.HasPrefix(entry.Text, errorResult), args.StartLine > 0 || args.EndLine > 0
 		switch {
 		case entry.Tool == "":
-			files, _, _ := carriedFiles(entry.Text)
-			for _, file := range files {
+			carried, _, _ := carriedFiles(entry.Text)
+			for _, file := range carried {
 				if settles(file.path) && !held {
 					files = append(files, file)
 				}
