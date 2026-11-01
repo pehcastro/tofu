@@ -92,13 +92,9 @@ func claudeDrain(o verbOutput, path string) int {
 }
 
 func sessionDrain(store *session.Store, handles []string) (drainReport, error) {
-	once, handle := store.ReadOnce(), ""
+	once, handle := store.ReadOnce(), session.HeadHandle
 	if len(handles) == 1 {
 		handle = handles[0]
-	} else if head, err := once.Head(); err == nil {
-		handle = head.ID
-	} else {
-		return drainReport{}, err
 	}
 	header, err := sessionHeader(once, handle)
 	if err != nil {
