@@ -16,6 +16,7 @@ import (
 	"tofu/internal/rule"
 	"tofu/internal/session"
 	"tofu/internal/subagent"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 	"tofu/internal/widget"
 )
@@ -125,7 +126,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 				answered.State = "refused"
 			}
 			reason, gate := callReason(result.ResultBody), gateWords(result, nil, event.Call)
-			answered.Text = traced(call.Tool+" → "+answered.State, ruleWords(result.Rules), sized(result.ResultBytes), took(result.DurationMS), oneLine(reason), gate, oneLine(string(call.Args)))
+			answered.Text = traced(call.Tool+" → "+answered.State, ruleWords(result.Rules), sized(result.ResultBytes), took(result.DurationMS), oneLine(cmp.Or(reason, checkSummary(call.Tool, result.Content))), gate, oneLine(string(call.Args)))
 			if result.ToolOutcome != session.ToolOutcomeSkipped && (result.Error != "" || result.Refused || result.ToolOutcome == session.ToolOutcomeFailed || result.ToolOutcome == session.ToolOutcomeAborted) {
 				answered.Outcome = traceProblem(result.ToolOutcome == session.ToolOutcomeAborted, cmp.Or(reason, answered.State))
 			}
@@ -260,6 +261,15 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			Text: "read " + strconv.Itoa(cut.Read) + " of " + strconv.Itoa(cut.Cached) + " cached, " + cut.Gap + " after " + cut.After + ", first difference: " + cut.Differs})
 	}
 	return rows
+}
+
+var checkCounts = sys.LazyRegexp(`[^\s,;][^,;]*: \d+ passed, \d+ failed(, \d+ skipped)?|errors in [^,]*: \d+(, in other files: \d+)?`)
+
+func checkSummary(tool, content string) string {
+	if tool != "test" && tool != "typecheck" {
+		return ""
+	}
+	return strings.Join(checkCounts().FindAllString(content, -1), "; ")
 }
 
 const (
