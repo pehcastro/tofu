@@ -148,6 +148,7 @@ func (c Config) ResolvedPlaces() (sys.Places, error) {
 const (
 	environmentBeforeTheTask = "<env>"
 	TheTaskFollows           = "\n\n[the task]\n"
+	taskItemsApart           = "\n\n"
 	NotesAfterTheTask        = "\n\n[tofu's notes on this task, not the person's words]\n"
 )
 
@@ -206,13 +207,20 @@ func (c Config) forkOpening(task llm.Origin) llm.Message {
 	if task.Kind() == llm.OriginPerson {
 		task.Source = llm.SourceForkTask
 	}
-	if len(c.Arrived) == 0 {
+	if len(c.Arrived) == 0 || c.environmentInHistory() {
 		return llm.Message{Role: llm.RoleUser, Content: c.FirstUserMessage(), Origin: task}
 	}
 	return llm.Message{Role: llm.RoleUser, Content: c.Task, Origin: task}
 }
 
+func (c Config) environmentInHistory() bool {
+	return c.SpawnedFrom != "" && len(c.History) > 0
+}
+
 func (c Config) opening(task llm.Origin, notes ...string) []llm.Message {
+	if c.environmentInHistory() {
+		c.Environment = ""
+	}
 	if len(c.Arrived) == 0 {
 		return []llm.Message{{Role: llm.RoleUser, Content: c.FirstUserMessage(notes...), Images: c.Images, Origin: task}}
 	}

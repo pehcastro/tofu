@@ -548,24 +548,20 @@ func shrunkHandle(text string) string {
 }
 
 func arrivedTogether(messages []llm.Message, task string) (string, int, int) {
-	for at := len(messages) - 1; at >= 0; at-- {
-		environment := environmentBefore(messages[:at+1])
-		if environment == "" {
-			continue
+	for from := len(messages); from >= 0; from-- {
+		environment := environmentBefore(messages[:from])
+		to, joined := from, ""
+		for to < len(messages) && messages[to].Role == llm.RoleUser && strings.HasPrefix(task, joined+messages[to].Content) {
+			joined, to = joined+messages[to].Content+taskItemsApart, to+1
 		}
-		var texts []string
-		to := at + 1
-		for _, item := range messages[at+1:] {
-			texts = append(texts, item.Content)
-			if item.Role != llm.RoleUser || !strings.HasPrefix(task, strings.Join(texts, "\n\n")) {
-				break
-			}
-			to++
-		}
-		if to == at+1 {
+		switch {
+		case environment != "" && to > from:
+			return environment, from, to
+		case environment != "":
 			return "", 0, 0
+		case to > from && joined == task+taskItemsApart:
+			return "", from, to
 		}
-		return environment, at + 1, to
 	}
 	return "", 0, 0
 }
@@ -606,8 +602,15 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 			}
 		}
 	}
-	if environment, from, to := arrivedTogether(messages, task); !slices.ContainsFunc(messages, isTask) && environment != "" {
-		opening.Content, foldedFrom, foldedTo = environment+TheTaskFollows+task, from, to
+	_, bare, framedTask := strings.Cut(task, TheTaskFollows)
+	if !framedTask {
+		bare = task
+	}
+	if environment, from, to := arrivedTogether(messages, bare); !slices.ContainsFunc(messages, isTask) && to > from {
+		if environment != "" {
+			opening.Content = environment + TheTaskFollows + bare
+		}
+		foldedFrom, foldedTo = from, to
 		for _, item := range messages[from:to] {
 			opening.Images = append(opening.Images, item.Images...)
 		}

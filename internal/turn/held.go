@@ -24,6 +24,7 @@ type heldSubAgent struct {
 	system      string
 	parts       []PromptPart
 	environment string
+	briefFiles  string
 	prefix      Prefix
 	readPrefix  func() (*Prefix, error)
 	boundary    *subagent.Boundary

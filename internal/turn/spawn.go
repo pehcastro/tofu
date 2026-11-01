@@ -538,7 +538,8 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	}
 	timing.took("scratch")
 	held := &heldSubAgent{agent: agent, definition: definition, effort: opened.Effort, askedEffort: effort, system: system, parts: parts,
-		environment: environment + scratchWords(scratch) + t.briefFiles(context.WithValue(ctx, subAgentKey{}, subAgentID), args, site.conversation),
+		environment: environment + scratchWords(scratch),
+		briefFiles:  t.briefFiles(context.WithValue(ctx, subAgentKey{}, subAgentID), args, site.conversation),
 		boundary:    subagent.NewBoundary(subAgentID, scratch.Dir(), args.Owns), scratch: scratch, inbox: NewInbox(),
 		trace: spawnTrace{definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, ticket: args.Ticket, depth: t.depth + 1}}
 	runCtx, cancel := outlivingTheWave(ctx)
@@ -642,7 +643,7 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 		if len(next) == 0 {
 			return
 		}
-		task, taskOrigin, items, warm = strings.Join(textsOf(next), "\n\n"), next[0].origin, arrived(next), nil
+		task, taskOrigin, items, warm = strings.Join(textsOf(next), taskItemsApart), next[0].origin, arrived(next), nil
 		t.roster.Reached(held.agent.ID, subagent.Working, resumedWords)
 	}
 }
@@ -731,7 +732,8 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 	subAgent.Caps.MaxSteps, subAgent.Caps.MaxForks = cmp.Or(subAgent.Caps.MaxSteps, konst.SubAgentMaxSteps), konst.SubAgentMaxForks
 	subAgent.Caps.WallClock = cmp.Or(limits.WallClock, konst.SubAgentWallClockSeconds*time.Second)
 	held.kept.Lock()
-	subAgent.System, subAgent.Parts, subAgent.Environment, subAgent.History, subAgent.Prefix = held.system, held.parts, held.environment, held.history, &held.prefix
+	subAgent.System, subAgent.Parts, subAgent.Environment, subAgent.History, subAgent.Prefix = held.system, held.parts, held.environment+held.briefFiles, held.history, &held.prefix
+	held.briefFiles = ""
 	held.kept.Unlock()
 	subAgent.References = heldReferences(t.base.References, subAgent.Parts)
 	subAgent.Memory = ""

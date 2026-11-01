@@ -171,8 +171,9 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 		last.Warnings = append(last.Warnings, t.writeMoves(subAgent, agent.ID)...)
 		t.roster.Reached(agent.ID, subagent.Working, "sent back: "+why)
 		sentBack = append(sentBack, why)
-		subAgent.History = held.history
-		subAgent.Task = task
+		held.kept.Lock()
+		subAgent.History, subAgent.Environment, subAgent.Task = held.history, held.environment, task
+		held.kept.Unlock()
 		reRow, reErr := Run(subAgentCtx, subAgent)
 		claims = append(claims, reRow)
 		held.remember(reRow)
