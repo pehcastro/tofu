@@ -36,11 +36,14 @@ func recordedJudgedNouls() []float64 { return []float64{0.91, 0.62, 0.44, 0.18, 
 
 var chunkPosition = regexp.MustCompile(`chunk (\d+) of`)
 
-func judgedReply(index int, ids []string, nouls []float64) string {
-	answers := make([]string, len(ids))
-	for i, id := range ids {
-		answers[i] = fmt.Sprintf(`%q:{"type":"noul","noul":%g}`, id, nouls[i])
+func recordedRunAnswers() map[string]string {
+	return map[string]string{
+		"kind": `{"type":"choice","choice":"explore","probabilities":{"debug":0.02,"review":0.02,"explore":0.9,"write":0.03,"plan":0.02,"none":0.01},"confidence":0.9}`,
+		"open": `{"type":"noul","noul":0.08}`,
 	}
+}
+
+func judgedReply(index int, answers []string) string {
 	return fmt.Sprintf(`{"model":"typesafe/jev-1.13-20260917","provider":"TypeSafe","id":"gen-recorded-%04d",`+
 		`"answers":{%s},`+
 		`"usage":{"input_tokens":1042,"output_tokens":12,"cost":%g}}`,
@@ -61,13 +64,16 @@ func stubRecordedJudgedReplies(t *testing.T) {
 		if err := json.Unmarshal(raw, &asked); err != nil {
 			t.Errorf("the scorer sent no json: %v", err)
 		}
-		ids := slices.Sorted(maps.Keys(asked.Questions))
-		nouls := make([]float64, len(ids))
-		for i, id := range ids {
-			nouls[i] = recordedJudgedNouls()[chunkAsked(t, id, string(raw))%len(recordedJudgedNouls())]
+		var answers []string
+		for _, id := range slices.Sorted(maps.Keys(asked.Questions)) {
+			answer, recorded := recordedRunAnswers()[id]
+			if !recorded {
+				answer = fmt.Sprintf(`{"type":"noul","noul":%g}`, recordedJudgedNouls()[chunkAsked(t, id, string(raw))%len(recordedJudgedNouls())])
+			}
+			answers = append(answers, fmt.Sprintf("%q:%s", id, answer))
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, judgedReply(int(served.Add(1))-1, ids, nouls))
+		_, _ = io.WriteString(w, judgedReply(int(served.Add(1))-1, answers))
 	}))
 	t.Cleanup(server.Close)
 	t.Setenv(judgeEndpointEnvar, server.URL)
@@ -82,6 +88,10 @@ func chunkAsked(t *testing.T, id, request string) int {
 			t.Errorf("the question %q names no chunk index", id)
 		}
 		return at + 1
+	}
+	if id != sift.NeededQuestion {
+		t.Errorf("the recorded jev has no reply for the question %q: %.200s", id, request)
+		return 0
 	}
 	found := chunkPosition.FindStringSubmatch(request)
 	if found == nil {
