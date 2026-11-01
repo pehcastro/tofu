@@ -303,8 +303,11 @@ words read as you, in the trace, the chat and `tofu serve`.
 context budget, the error it ended on, and its `history`: what it began
 with and what it holds now, such as `fresh, holds 40 messages` or
 `12 messages from brisk-amber-heron#4mhr1.1, holds 52 messages`, and
-`nothing to resume` when it holds none. `tofu session request <name>
-<request id>` prints one request exactly as it was sent with its response or
+`nothing to resume` when it holds none. `tofu session request <name>` with
+no request id lists the session's requests, each with its short id, agent,
+step, tokens in, cache read and cache written, and `0 requests` when none was
+recorded. `tofu session request <name> <request id>`, or `last` for the
+newest, prints one request exactly as it was sent with its response or
 error body, and a section on what went into it: each prompt part, such as a
 rule, an agent or the system prompt, with its tokens and whether it was
 switched off, the skills loaded, the memory, the tokens by kind, the images,
