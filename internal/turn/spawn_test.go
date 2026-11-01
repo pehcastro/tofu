@@ -144,7 +144,7 @@ func (m *foreverActing) Ask(_ context.Context, request llm.Request) (llm.Decisio
 	return toolCallDecision(llm.ToolCall{ID: "act-" + strconv.Itoa(m.acts), Name: "browser_act", Arguments: args}), nil
 }
 
-func TestASubAgentThatForksForeverStopsAtTheForkCapAndEachCarrySaysWhatItTried(t *testing.T) {
+func TestASubAgentWhoseForksCannotShrinkStopsAtTheSecondForkAndItsCarrySaysWhatItTried(t *testing.T) {
 	model, acts := &foreverActing{}, 0
 	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(actReporting{acts: &acts}), ResultBytesCap: 4096,
 		ArtifactDir: t.TempDir(), NewID: func() string { return "turn-orchestrator" }, Budget: recall.Budget{Bands: recall.Bands{Recent: 1}}}
@@ -159,8 +159,13 @@ func TestASubAgentThatForksForeverStopsAtTheForkCapAndEachCarrySaysWhatItTried(t
 	reported(t, spawn)
 	rows := spawn.SubAgentRows()
 	last := rows[len(rows)-1]
-	if last.Outcome != OutcomeStepCap || !strings.HasSuffix(last.ID, "-f11") {
-		t.Fatalf("the sub-agent ended as %s in %s after %d acts, want %s in the session after fork 10", last.Outcome, last.ID, model.acts, OutcomeStepCap)
+	if steps := last.Steps; len(steps) == 0 || steps[len(steps)-1].AssistantText != "stopped at the fork cap, the search for Atibaia is filled" {
+		t.Errorf("the sub-agent's last word was not sent or not answered: %v", last.Warnings)
+	}
+	if last.Outcome != OutcomeStepCap || !strings.HasSuffix(last.ID, "-f3") || !slices.ContainsFunc(last.Warnings, func(warning string) bool {
+		return strings.Contains(warning, "no smaller than the fork before it")
+	}) {
+		t.Fatalf("the sub-agent ended as %s in %s after %d acts with %v, want %s after fork 2 saying it cannot shrink", last.Outcome, last.ID, model.acts, last.Warnings, OutcomeStepCap)
 	}
 	var afterSecondFork string
 	for _, request := range model.requests {

@@ -721,8 +721,25 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	guard := newLoopGuard(config.Caps)
 	forks, stopContinuations, handbacks := 0, 0, 0
-	forkCapReached := "this turn reached its cap of " + strconv.Itoa(config.Caps.MaxForks) + " forks, and the work is not finished"
-	pastForkCap := func(fork *Fork) bool { return fork != nil && config.Caps.MaxForks > 0 && forks >= config.Caps.MaxForks }
+	overTargetAfter := 0
+	lastForkWhy := func(fork *Fork) string {
+		previous := overTargetAfter
+		overTargetAfter = 0
+		switch {
+		case fork == nil:
+			return ""
+		case config.Caps.MaxForks > 0 && forks+1 >= config.Caps.MaxForks:
+			return "this turn reached its cap of " + strconv.Itoa(config.Caps.MaxForks) + " forks, and the work is not finished"
+		case fork.Kind != ForkContinuation || fork.TokensAfter <= budget.Bands.Target():
+			return ""
+		}
+		overTargetAfter = fork.TokensAfter
+		if previous == 0 || fork.TokensAfter < previous {
+			return ""
+		}
+		return fmt.Sprintf("this turn stopped forking: fork %d leaves the conversation at %d tokens, over its %d token target and no smaller than the fork before it, so another fork would not help",
+			forks+1, fork.TokensAfter, budget.Bands.Target())
+	}
 	var recordedGrants []subagent.Question
 	if config.Boundary != nil {
 		recordedGrants = config.Boundary.Asked()
@@ -781,6 +798,13 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			compacted()
 		}
 		flush()
+	}
+	endForked := func(fork *Fork, when string, beforeFork, begun []llm.Message, moved *Account, why string) Row {
+		forks++
+		fork.Into = origin + "-f" + strconv.Itoa(forks+1)
+		forkInto(fork, when, beforeFork, begun, moved)
+		row.Warnings = append(row.Warnings, why)
+		return endAt(OutcomeStepCap, why, messages)
 	}
 	askedAgainAfterBlank, polled, nudged := false, false, false
 	steeredAt := 0
@@ -886,8 +910,8 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				if err != nil {
 					return fail(err)
 				}
-				if pastForkCap(fork) {
-					return endAt(OutcomeStepCap, forkCapReached, messages), nil
+				if why := lastForkWhy(fork); why != "" {
+					return endForked(fork, before, beforeFork, begun, nil, why), nil
 				}
 				if fork != nil {
 					forks++
@@ -1352,9 +1376,10 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 					keep(stepRow)
 					return fail(err)
 				}
-				if pastForkCap(fork) {
+				if why := lastForkWhy(fork); why != "" {
+					fork.Step, stepRow.Fork = step, fork
 					keep(stepRow)
-					return endAt(OutcomeStepCap, forkCapReached, messages), nil
+					return endForked(fork, "after step "+strconv.Itoa(step), beforeFork, begun, moved, why), nil
 				}
 				if fork != nil {
 					forks++
