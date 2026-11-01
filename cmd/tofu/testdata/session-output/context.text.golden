@@ -10,7 +10,7 @@ Context · store-walk · 1 step                                           ✓ st
   total        ▓▓░░░░░░░░░░  15%  17500 / 113400
   ceiling      ░░░░░░░░░░░░   3%  17500 / 450000
   caps         this build's, the step marked 50000
-  bytes        2310 per thousand tokens
+  bytes        2830 per thousand tokens
 
 unreadable      ✗ 1
   ✗ turn-broken  session: the header of turn-broken does not parse: invalid

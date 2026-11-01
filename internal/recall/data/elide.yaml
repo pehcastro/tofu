@@ -3,4 +3,5 @@ head_bytes: 512
 tail_bytes: 512
 bytes_per_thousand_tokens: 2310
 bytes_per_thousand_tokens_codex: 3000
+bytes_per_thousand_tokens_anthropic: 2830
 compact_floor_bytes: 256

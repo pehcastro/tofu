@@ -93,6 +93,7 @@ func contextOf(store *session.Store, handle string, build recall.Bands, nextCeil
 	if err != nil {
 		return contextReport{}, err
 	}
+	cfg = cfg.OnWire(header.Wire)
 	steps, err := contextSteps(events)
 	if err != nil {
 		return contextReport{}, err
@@ -151,7 +152,7 @@ func contextOf(store *session.Store, handle string, build recall.Bands, nextCeil
 	if report.Fork == nil && header.ForkedInto != "" {
 		report.Fork = &contextForkReport{Into: header.ForkedInto}
 	}
-	report.Items = recall.Items(cfg.OnWire(header.Wire), itemBands, conversation)
+	report.Items = recall.Items(cfg, itemBands, conversation)
 	return report, nil
 }
 
