@@ -65,17 +65,31 @@ type PromptBody struct {
 	Parts        []PromptPart `json:"parts,omitempty"`
 }
 
+type PartState string
+
+const (
+	PartFired   PartState = ""
+	PartHeld    PartState = "held"
+	PartDropped PartState = "dropped"
+	PartOffered PartState = "offered"
+	PartLoaded  PartState = "loaded"
+)
+
 type PromptPart struct {
-	Kind    string `json:"kind"`
-	Rule    string `json:"rule,omitempty"`
-	Agent   string `json:"agent,omitempty"`
-	File    string `json:"file,omitempty"`
-	Why     string `json:"why,omitempty"`
-	Tokens  int    `json:"tokens"`
-	Blob    string `json:"blob,omitempty"`
-	PerTurn bool   `json:"per_turn,omitempty"`
-	Off     bool   `json:"off,omitempty"`
+	Kind    string    `json:"kind"`
+	Rule    string    `json:"rule,omitempty"`
+	Agent   string    `json:"agent,omitempty"`
+	Name    string    `json:"name,omitempty"`
+	File    string    `json:"file,omitempty"`
+	State   PartState `json:"state,omitempty"`
+	Why     string    `json:"why,omitempty"`
+	Tokens  int       `json:"tokens"`
+	Blob    string    `json:"blob,omitempty"`
+	PerTurn bool      `json:"per_turn,omitempty"`
+	Off     bool      `json:"off,omitempty"`
 }
+
+func (p PromptPart) Sent() bool { return p.State == PartFired }
 
 type SentBody struct {
 	Why      string         `json:"why,omitempty"`

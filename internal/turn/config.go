@@ -272,12 +272,17 @@ func (c Config) promptParts(preview recall.Config) []keptPart {
 		{PromptPart: session.PromptPart{Kind: partInstructions}, text: c.Instructions},
 	}
 	for _, part := range c.Parts {
-		if part.Concern != rule.ConcernEnvironment {
-			parts = append(parts, keptPart{PromptPart: session.PromptPart{Kind: string(part.Concern), Rule: part.RuleID, Agent: part.Agent, File: part.File, Why: part.Why,
-				PerTurn: part.ByTask, Off: part.Off}, text: part.rendered()})
+		if part.Concern == rule.ConcernEnvironment {
+			continue
 		}
+		kept := keptPart{PromptPart: session.PromptPart{Kind: string(part.Concern), Rule: part.RuleID, Agent: part.Agent, Name: part.Name, File: part.File, State: part.State, Why: part.Why,
+			PerTurn: part.ByTask, Off: part.Off}}
+		if kept.Sent() {
+			kept.text = part.rendered()
+		}
+		parts = append(parts, kept)
 	}
-	parts = slices.DeleteFunc(parts, func(part keptPart) bool { return strings.TrimSpace(part.text) == "" })
+	parts = slices.DeleteFunc(parts, func(part keptPart) bool { return part.Sent() && strings.TrimSpace(part.text) == "" })
 	for i := range parts {
 		parts[i].Tokens = preview.Tokens(parts[i].text)
 	}

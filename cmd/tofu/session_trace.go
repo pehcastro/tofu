@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"fmt"
+	"io/fs"
 	"os"
 	"slices"
 	"strconv"
@@ -10,7 +11,10 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/judge/ledger"
 	"tofu/internal/session"
+	"tofu/internal/sys"
+	"tofu/library/questions"
 )
 
 const sessionTraceUsage = "tofu session trace <name|id> [--since 1h] [--from T] [--to T] [--agent NAME|lead] [--turn ID] [--kind K,K] [--grep TEXT] [--last N] [--wide] [--full] [--json]"
@@ -39,11 +43,12 @@ const (
 	kindStartup    traceKind = "startup"
 	kindNotice     traceKind = "notice"
 	kindAttachment traceKind = "attachment"
+	kindLibrary    traceKind = "library"
 )
 
 func traceKinds() []traceKind {
 	return []traceKind{kindTurn, kindStop, kindError, kindSpawn, kindReport, kindMessage, kindInsert, kindCron, kindRequest, kindMemory,
-		kindCall, kindShell, kindGate, kindHook, kindCache, kindCompaction, kindList, kindRead, kindStartup, kindNotice, kindAttachment}
+		kindCall, kindShell, kindGate, kindHook, kindCache, kindCompaction, kindList, kindRead, kindStartup, kindNotice, kindAttachment, kindLibrary}
 }
 
 type traceOutcome string
@@ -207,6 +212,38 @@ func sessionTraceArgs(args []string, now time.Time) (traceAsk, error) {
 	return ask, nil
 }
 
+func jevRows(events []session.Event, since time.Time) ([]traceRow, error) {
+	turns, agents := map[string]bool{}, map[string]bool{}
+	for _, event := range events {
+		turns[event.Turn], turns[event.Agent], agents[event.Agent] = true, true, true
+	}
+	delete(turns, "")
+	dir, err := sys.LogDir()
+	if err != nil || len(turns) == 0 {
+		return nil, err
+	}
+	var rows []traceRow
+	_, err = ledger.NewReader(dir).Each(ledger.Filter{Turns: turns, Since: since}, func(decided ledger.Row) error {
+		set := decided.Questions + "@" + strconv.Itoa(decided.Version)
+		file := "library/questions/" + set + ".yaml"
+		if _, missing := fs.Stat(questions.Files(), set+".yaml"); missing != nil {
+			file = "the set " + set + " is not one the library ships"
+		}
+		asked := make([]string, len(decided.Answers))
+		for i, answer := range decided.Answers {
+			asked[i] = answer.Question
+		}
+		row := traceRow{At: decided.At.Local(), Kind: kindLibrary, Turn: decided.TurnID, ID: decided.ID, State: "asked",
+			Text: traced("jev "+decided.Point+" asked "+plural(len(asked), "question")+", "+decided.Verdict.String(), strings.Join(asked, ", "), file)}
+		if agents[decided.TurnID] {
+			row.Agent = decided.TurnID
+		}
+		rows = append(rows, row)
+		return nil
+	})
+	return rows, err
+}
+
 func traceTime(value string, now time.Time) (time.Time, error) {
 	if ago, err := time.ParseDuration(value); err == nil {
 		return now.Add(-ago), nil
@@ -254,6 +291,13 @@ func sessionTimeline(store *session.Store, handle string, filter traceFilter) (t
 	}
 	carried := func(event session.Event) bool { return header.CarriedFrom != nil && event.Turn == header.ID }
 	rows := traceRows(slices.DeleteFunc(slices.Clone(events), carried), exchanges)
+	if slices.Contains(filter.Kinds, kindLibrary) {
+		asked, err := jevRows(events, header.At)
+		if err != nil {
+			return traceTimeline{}, err
+		}
+		rows = append(rows, asked...)
+	}
 	timeline := traceTimeline{Session: header.ID, Handle: handleOf(store, header.ID), Filter: filter, Events: len(events), began: header.At, agents: slices.Clone(header.Agents)}
 	outsideHere := func(event session.Event) bool {
 		return event.Agent == "" || event.At.Before(header.At) || header.EndedAt != nil && !event.At.Before(*header.EndedAt)

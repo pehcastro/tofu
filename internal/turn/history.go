@@ -65,7 +65,7 @@ func RecordedContext(events []session.Event) (recall.Conversation, error) {
 		sent := Config{System: prompt.System, Instructions: prompt.Instructions}.SystemMessage()
 		conversation.Instructions, conversation.ToolSchemas = sent+conversation.Instructions, prompt.ToolSchemas
 		for _, part := range prompt.Parts {
-			if !part.PerTurn && part.Kind != string(rule.ConcernEnvironment) {
+			if part.Sent() && !part.PerTurn && part.Kind != string(rule.ConcernEnvironment) {
 				conversation.Parts = append(conversation.Parts, recall.PromptPart{Name: identityPartName(part), Tokens: part.Tokens})
 			}
 		}
@@ -77,7 +77,7 @@ func identityPartName(part session.PromptPart) string {
 	switch {
 	case part.Kind == partInstructions:
 		return recall.PartInstructionFiles
-	case part.Kind == string(concernSkills):
+	case part.Kind == string(ConcernSkills):
 		return recall.PartSkills
 	case part.Agent != "":
 		return recall.PartSubAgent

@@ -59,6 +59,7 @@ type Definition struct {
 	Notices      []string     `json:"notices,omitempty"`
 	References   []Reference  `json:"references,omitempty"`
 	Cut          []string     `json:"cut_references,omitempty"`
+	Unreached    []Reference  `json:"unreached_references,omitempty"`
 }
 
 type Reference struct {
@@ -361,9 +362,14 @@ func (s Scan) resolve(definition *Definition, assigned assignment) {
 }
 
 func (d Definition) Reaching(frameworks []string) Definition {
-	reached := slices.DeleteFunc(slices.Clone(d.References), func(reference Reference) bool {
-		return reference.Framework != "" && !slices.Contains(frameworks, reference.Framework)
-	})
+	var reached []Reference
+	for _, reference := range d.References {
+		if reference.Framework != "" && !slices.Contains(frameworks, reference.Framework) {
+			d.Unreached = append(d.Unreached, reference)
+			continue
+		}
+		reached = append(reached, reference)
+	}
 	kept, cut := budgeted(reached)
 	d.References, d.Cut = kept, append(cut, d.Cut...)
 	return d

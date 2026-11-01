@@ -35,7 +35,7 @@ func (s SubAgents) prompt(inherited Config, definition subagent.Definition, task
 		if err != nil {
 			return "", nil, "", err
 		}
-		system, parts, environment = composed.Head(), composed.Parts, composed.WithTaskRules(spec.Environment)
+		system, parts, environment = composed.Head(), composed.Recorded(), composed.WithTaskRules(spec.Environment)
 	case definition.Name != "":
 		system += "\n\n" + agentPart(definition).Text
 	}

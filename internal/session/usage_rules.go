@@ -63,7 +63,7 @@ func (s *Store) RuleFires(now time.Time) (map[string]RuleFires, []Skip, error) {
 				markedRules(sent.Content, event.At, fired)
 			case event.Kind == EventSent:
 				for _, part := range parts[event.Agent] {
-					if key := event.Turn + "\x00" + event.Agent + "\x00" + part.Rule; part.Rule != "" && !part.Off && !counted[key] {
+					if key := event.Turn + "\x00" + event.Agent + "\x00" + part.Rule; part.Rule != "" && part.Sent() && !part.Off && !counted[key] {
 						counted[key] = true
 						fired(part.Rule, event.At)
 					}
@@ -127,7 +127,8 @@ func (s *Store) RequestParts(id, handle string) (RequestParts, error) {
 		if DrawnAs(event.Request, handle) {
 			var prompt PromptBody
 			_ = json.Unmarshal(prompts[event.Agent], &prompt)
-			found = append(found, RequestParts{Request: event.Request, Agent: event.Agent, Turn: event.Turn, At: event.At, Prompt: prompt.Parts, Sent: sent,
+			sentParts := slices.DeleteFunc(prompt.Parts, func(part PromptPart) bool { return !part.Sent() })
+			found = append(found, RequestParts{Request: event.Request, Agent: event.Agent, Turn: event.Turn, At: event.At, Prompt: sentParts, Sent: sent,
 				Carried: slices.Clone(carried[event.Agent])})
 		}
 	})

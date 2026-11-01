@@ -1,6 +1,7 @@
 package session
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 	"time"
@@ -43,6 +44,35 @@ func TestRuleFiresCountEachPromptThatCarriedTheRuleOnce(t *testing.T) {
 		"go-errors-wrap": {Fires: 2, Week: [daysInAWeek]int{0, 0, 0, 0, 1, 0, 1}},
 	}
 	if !reflect.DeepEqual(fires, want) {
+		t.Fatalf("fires\n got %+v\nwant %+v", fires, want)
+	}
+}
+
+func TestRuleFiresCountAPartWithNoStateAndNoPartThatWasHeldOrDropped(t *testing.T) {
+	now := time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC)
+	store := NewStore(t.TempDir())
+	log, err := store.Open(Header{ID: "s", At: now.Add(-time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompt := json.RawMessage(`{"system":"x","parts":[{"kind":"code_rules","rule":"written-before-state","tokens":3},` +
+		`{"kind":"code_rules","rule":"held","state":"held","tokens":0},{"kind":"code_rules","rule":"dropped","state":"dropped","tokens":0}]}`)
+	for _, said := range []struct {
+		kind EventKind
+		body any
+	}{{EventPrompt, prompt}, {EventSent, SentBody{Messages: 1}}} {
+		if _, err := log.Append(Event{At: now.Add(-time.Minute), Turn: "t1", Kind: said.kind}, said.body); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := log.Close(); err != nil {
+		t.Fatal(err)
+	}
+	fires, _, err := store.RuleFires(now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := map[string]RuleFires{"written-before-state": {Fires: 1, Week: Week{0, 0, 0, 0, 0, 0, 1}}}; !reflect.DeepEqual(fires, want) {
 		t.Fatalf("fires\n got %+v\nwant %+v", fires, want)
 	}
 }

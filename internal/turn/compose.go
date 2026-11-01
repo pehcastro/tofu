@@ -18,6 +18,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/prompt"
 	"tofu/internal/rule"
+	"tofu/internal/session"
 	"tofu/internal/skill"
 	"tofu/internal/subagent"
 	shipped "tofu/library"
@@ -29,9 +30,11 @@ type PromptPart struct {
 	Concern rule.Concern
 	RuleID  string
 	Agent   string
+	Name    string
 	File    string
 	Text    string
 	Why     string
+	State   session.PartState
 	ByTask  bool
 	Off     bool
 }
@@ -65,13 +68,17 @@ type ComposeSpec struct {
 	WindowTokens int
 	Role         rule.Role
 	Frameworks   []string
+	Dropped      []PromptPart
 }
 
-const concernSkills rule.Concern = "skills"
+const (
+	ConcernSkills     rule.Concern = "skills"
+	ConcernReferences rule.Concern = "references"
+)
 
 const SkillToolName = "skill"
 
-const referencesOnDemand = "your references, each read whole with the " + referenceToolName + " tool when the work reaches it:"
+const referencesOnDemand = "your references, each read whole with the " + ReferenceToolName + " tool when the work reaches it:"
 
 func agentPart(definition subagent.Definition) PromptPart {
 	var text strings.Builder
@@ -104,9 +111,34 @@ func agentPart(definition subagent.Definition) PromptPart {
 	return PromptPart{Concern: rule.ConcernIdentity, Agent: definition.Name, File: filepath.ToSlash(definition.Path), Text: text.String()}
 }
 
-func autoloadedSkills(definition subagent.Definition, skills []skill.Skill) (string, error) {
+func referenceParts(definition subagent.Definition) []PromptPart {
+	var parts []PromptPart
+	for _, reference := range definition.References {
+		parts = append(parts, PromptPart{Concern: ConcernReferences, Agent: definition.Name, Name: reference.Name, File: reference.Path, State: session.PartOffered})
+	}
+	for _, reference := range definition.Unreached {
+		parts = append(parts, PromptPart{Concern: ConcernReferences, Agent: definition.Name, Name: reference.Name, File: reference.Path, State: session.PartDropped,
+			Why: "the reference is for " + reference.Framework + ", which no manifest the task reaches lists"})
+	}
+	for _, name := range definition.Cut {
+		parts = append(parts, PromptPart{Concern: ConcernReferences, Agent: definition.Name, Name: name, State: session.PartDropped,
+			Why: fmt.Sprintf("cut to keep the references within %d bytes", konst.SubAgentReferenceBytes)})
+	}
+	return parts
+}
+
+func autoloadedSkills(definition subagent.Definition, skills []skill.Skill) (string, []PromptPart, error) {
+	var loaded []PromptPart
 	if definition.Origin == "library" {
-		return librarySkills(shipped.Files(), definition)
+		text, err := librarySkills(shipped.Files(), definition)
+		if err != nil {
+			return "", nil, err
+		}
+		for _, name := range definition.Skills {
+			loaded = append(loaded, PromptPart{Concern: ConcernSkills, Agent: definition.Name, Name: name, File: "library/" + librarySkillFiles(shipped.Files(), name)[0], State: session.PartLoaded,
+				Why: "the library sub-agent's definition names it"})
+		}
+		return text, loaded, nil
 	}
 	var text strings.Builder
 	for _, name := range definition.Skills {
@@ -114,19 +146,27 @@ func autoloadedSkills(definition subagent.Definition, skills []skill.Skill) (str
 		switch {
 		case err == nil:
 			text.WriteString("\n\nthe skill " + name + ", loaded before your task:\n" + body)
+			at := slices.IndexFunc(skills, func(one skill.Skill) bool { return one.Name == name })
+			loaded = append(loaded, PromptPart{Concern: ConcernSkills, Agent: definition.Name, Name: name, File: filepath.ToSlash(skills[at].File), State: session.PartLoaded,
+				Why: "the sub-agent's definition names it"})
 		case definition.Origin == ".tofu" || definition.Origin == "~/.tofu":
-			return "", fmt.Errorf("the sub-agent %s names the skill %s: %w", definition.Name, name, err)
+			return "", nil, fmt.Errorf("the sub-agent %s names the skill %s: %w", definition.Name, name, err)
 		}
 	}
-	return text.String(), nil
+	return text.String(), loaded, nil
+}
+
+func librarySkillFiles(library fs.FS, name string) []string {
+	found, _ := fs.Glob(library, "*/skills/"+name+".md")
+	deeper, _ := fs.Glob(library, "*/*/skills/"+name+".md")
+	return append(found, deeper...)
 }
 
 func librarySkills(library fs.FS, definition subagent.Definition) (string, error) {
 	var text strings.Builder
 	for _, name := range definition.Skills {
-		found, _ := fs.Glob(library, "*/skills/"+name+".md")
-		deeper, _ := fs.Glob(library, "*/*/skills/"+name+".md")
-		if found = append(found, deeper...); len(found) != 1 {
+		found := librarySkillFiles(library, name)
+		if len(found) != 1 {
 			return "", fmt.Errorf("the library sub-agent %s names the skill %s, which the library ships %d times: %s", definition.Name, name, len(found), strings.Join(found, ", "))
 		}
 		data, err := fs.ReadFile(library, found[0])
@@ -142,11 +182,44 @@ func librarySkills(library fs.FS, definition subagent.Definition) (string, error
 	return text.String(), nil
 }
 
+func skillParts(skills []skill.Skill, skillTool bool, loaded []PromptPart) []PromptPart {
+	var parts []PromptPart
+	for _, one := range skills {
+		part := PromptPart{Concern: ConcernSkills, Name: one.Name, File: filepath.ToSlash(one.File), State: session.PartOffered}
+		switch {
+		case slices.ContainsFunc(loaded, func(loaded PromptPart) bool { return loaded.Name == one.Name }):
+			continue
+		case !skillTool:
+			part.State, part.Why = session.PartDropped, "the sub-agent has no "+SkillToolName+" tool"
+		case one.Hidden:
+			part.State, part.Why = session.PartHeld, "the skill is hidden from the listing"
+		}
+		parts = append(parts, part)
+	}
+	return parts
+}
+
+func unofferedLibrarySkills(library fs.FS, listed []skill.Skill, loaded []PromptPart) []PromptPart {
+	var dropped []PromptPart
+	for _, file := range librarySkillFiles(library, "*") {
+		name := strings.TrimSuffix(path.Base(file), ".md")
+		if slices.ContainsFunc(listed, func(one skill.Skill) bool { return one.Name == name }) || slices.ContainsFunc(loaded, func(part PromptPart) bool { return part.Name == name }) {
+			continue
+		}
+		dropped = append(dropped, PromptPart{Concern: ConcernSkills, Name: name, File: "library/" + file, State: session.PartDropped,
+			Why: "a library skill reaches only a library sub-agent that names it, and the skill listing reads .tofu, .agents, .claude and ~/.tofu/skills"})
+	}
+	return dropped
+}
+
 type Composed struct {
 	Task     rule.Task
 	Parts    []PromptPart
 	HeldBack []rule.Match
+	Unsent   []PromptPart
 }
+
+func (c Composed) Recorded() []PromptPart { return slices.Concat(c.Parts, c.Unsent) }
 
 func composedOrder() []rule.Concern {
 	return []rule.Concern{
@@ -169,14 +242,16 @@ func Compose(spec ComposeSpec) (Composed, error) {
 	for _, owned := range spec.Paths {
 		composed.Task.Paths = append(composed.Task.Paths, filepath.ToSlash(owned))
 	}
+	var loaded []PromptPart
 	if spec.Agent.Name != "" {
-		loaded, err := autoloadedSkills(spec.Agent, spec.Skills)
+		text, autoloaded, err := autoloadedSkills(spec.Agent, spec.Skills)
 		if err != nil {
 			return Composed{}, err
 		}
 		part := agentPart(spec.Agent)
-		part.Text += loaded
+		part.Text += text
 		composed.Parts = append(composed.Parts, part)
+		loaded, composed.Unsent = autoloaded, slices.Concat(autoloaded, referenceParts(spec.Agent))
 	}
 	if composed.Task.Language = spec.Agent.Language; composed.Task.Language != "" && !rule.KnownLanguage(composed.Task.Language) {
 		return Composed{}, fmt.Errorf("the sub-agent %s declares the language %q, which no rule knows", spec.Agent.Name, composed.Task.Language)
@@ -195,7 +270,9 @@ func Compose(spec ComposeSpec) (Composed, error) {
 	withoutTask := rule.IndexReaching(spec.Rules, agentDomain, rule.Task{Role: composed.Task.Role, Language: composed.Task.Language, Frameworks: composed.Task.Frameworks})
 	for i, match := range rule.IndexReaching(spec.Rules, agentDomain, composed.Task) {
 		if !match.Fires {
+			held := spec.Rules[i]
 			composed.HeldBack = append(composed.HeldBack, match)
+			composed.Unsent = append(composed.Unsent, PromptPart{Concern: held.Concern, RuleID: held.ID, File: filepath.ToSlash(held.File), Why: match.Why, State: session.PartHeld})
 			continue
 		}
 		fired := spec.Rules[i]
@@ -213,6 +290,7 @@ func Compose(spec ComposeSpec) (Composed, error) {
 			ByTask:  !withoutTask[i].Fires,
 		})
 	}
+	composed.Unsent = append(composed.Unsent, spec.Dropped...)
 	for _, off := range spec.SwitchedOff {
 		text := "the person switched this rule off on purpose, so it does not apply here"
 		if off.Rule.Override.Reason != "" {
@@ -224,9 +302,11 @@ func Compose(spec ComposeSpec) (Composed, error) {
 	slices.SortStableFunc(composed.Parts, func(a, b PromptPart) int {
 		return slices.Index(order, a.Concern) - slices.Index(order, b.Concern)
 	})
-	if len(spec.Agent.Tools) == 0 || slices.Contains(spec.Agent.Tools, SkillToolName) {
+	skillTool := len(spec.Agent.Tools) == 0 || slices.Contains(spec.Agent.Tools, SkillToolName)
+	composed.Unsent = slices.Concat(composed.Unsent, skillParts(spec.Skills, skillTool, loaded), unofferedLibrarySkills(shipped.Files(), spec.Skills, loaded))
+	if skillTool {
 		if listing := skill.Listing(spec.Skills, spec.WindowTokens); listing != "" {
-			composed.Parts = append(composed.Parts, PromptPart{Concern: concernSkills, Text: listing})
+			composed.Parts = append(composed.Parts, PromptPart{Concern: ConcernSkills, Text: listing})
 		}
 		return composed, nil
 	}
@@ -237,7 +317,7 @@ func Compose(spec ComposeSpec) (Composed, error) {
 	if named := skillsNamedIn(spec.Task, spec.Skills, spec.Agent.Skills); len(named) > 0 {
 		text += ". your brief names " + strings.Join(named, ", ") + ", which you cannot load: work without it and say so in your report"
 	}
-	composed.Parts = append(composed.Parts, PromptPart{Concern: concernSkills, Text: text})
+	composed.Parts = append(composed.Parts, PromptPart{Concern: ConcernSkills, Text: text})
 	return composed, nil
 }
 
@@ -267,7 +347,7 @@ func (c Composed) WithTaskRules(environment string) string {
 func (c Composed) render(keep func(PromptPart) bool) string {
 	var block strings.Builder
 	for _, part := range c.Parts {
-		if part.Concern == rule.ConcernEnvironment || !keep(part) {
+		if part.Concern == rule.ConcernEnvironment || part.State != session.PartFired || !keep(part) {
 			continue
 		}
 		if block.Len() > 0 {
@@ -324,17 +404,17 @@ func verbNamed(word string) rule.Verb {
 	return rule.VerbNone
 }
 
-const referenceToolName = "reference"
+const ReferenceToolName = "reference"
 
 type referenceTool struct {
 	held map[string]string
 }
 
-func (referenceTool) Name() string { return referenceToolName }
+func (referenceTool) Name() string { return ReferenceToolName }
 
 func (referenceTool) Definition() llm.Tool {
 	return llm.Tool{
-		Name:        referenceToolName,
+		Name:        ReferenceToolName,
 		Description: "returns one of your references whole, named as your instructions list it, such as go-verify",
 		Parameters: map[string]any{
 			"type":       "object",
@@ -355,5 +435,5 @@ func (r referenceTool) Run(_ context.Context, raw json.RawMessage) (Result, erro
 	if !held {
 		return Result{}, fmt.Errorf("reference: no reference is named %q; the references are %s", args.Name, strings.Join(slices.Sorted(maps.Keys(r.held)), ", "))
 	}
-	return Result{Content: text, Command: referenceToolName + " " + args.Name, Origin: llm.Origin{Source: llm.SourceReference, Name: args.Name}}, nil
+	return Result{Content: text, Command: ReferenceToolName + " " + args.Name, Origin: llm.Origin{Source: llm.SourceReference, Name: args.Name}}, nil
 }

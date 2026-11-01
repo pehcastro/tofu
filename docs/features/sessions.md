@@ -216,10 +216,29 @@ one line each, and filters combine: `--since`, `--from` and `--to` (`1h`,
 `--grep`, `--last N`, and `--kind` with any of `turn`, `stop`, `error`,
 `spawn`, `report`, `message`, `insert`, `cron`, `request`, `memory`, `call`,
 `shell`, `gate`, `hook`, `cache`, `compaction`, `list`, `read`, `startup`,
-`notice` and `attachment`. `--wide` prints each row whole, and `--full`
+`notice`, `attachment` and `library`. `--wide` prints each row whole, and `--full`
 prints every request, call, hook and message section. `--kind notice` lists
 each sub-agent move, spawned, reviewed, reopened or accepted, with its round
 and reason, such as `go-dev reopened, round 2: acceptance line 3 fails`.
+
+`--kind library` lists what the library and your own files gave each agent,
+under that agent's name, each with the file it came from:
+
+- every rule that fired, was held back or was dropped, with the reason:
+  `rule go_wrap_errors held · a rule for how code is written reaches the
+  agent that writes it ...`, or `rule board_lead dropped · the rule's mode
+  is off`
+- the sub-agent definition used, its references offered or dropped by
+  framework or size, and the ones the model read
+- every skill offered, loaded by a definition, loaded by the model, or never
+  offered and why
+- every Jev question set asked in the session's turns, with its verdict, the
+  questions, and the set's file, such as `jev tool_gate asked 4 questions,
+  allow · ... · library/questions/tool_gate@7.yaml`
+
+A prompt is recorded again only when it changes, so a turn whose prompt
+matches the last one adds no rows. A session from an older tofu lists only
+what it fired.
 A sub-agent that kept writing to the session before a continue shows with
 the session it was recorded in.
 

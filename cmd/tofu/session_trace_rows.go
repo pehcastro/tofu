@@ -12,6 +12,7 @@ import (
 	"tofu/internal/hook"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/llm"
+	"tofu/internal/rule"
 	"tofu/internal/session"
 	"tofu/internal/subagent"
 	"tofu/internal/turn"
@@ -27,9 +28,30 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 	var causes []stopCause
 	var unfinished []int
 	calls, asked := map[string]int{}, map[string]session.CallBody{}
+	libraryFiles := map[string]string{}
 	for _, event := range events {
 		row := traceRow{At: event.At, Agent: event.Agent, Turn: event.Turn, ID: event.ID}
 		switch event.Kind {
+		case session.EventPrompt:
+			var prompt session.PromptBody
+			_ = json.Unmarshal(event.Body, &prompt)
+			for _, part := range prompt.Parts {
+				what, name := libraryItem(part)
+				if what == "" {
+					continue
+				}
+				libraryFiles[event.Agent+"\x00"+what+"\x00"+name] = part.File
+				state := cmp.Or(string(part.State), "fired")
+				switch {
+				case part.Off:
+					state = "switched off"
+				case what == libraryWhatAgent && part.Sent():
+					state = "used"
+				}
+				row.Kind, row.State, row.Text = kindLibrary, state, traced(what+" "+name+" "+state, oneLine(part.Why), part.File)
+				rows = append(rows, row)
+			}
+			continue
 		case session.EventTurnStart:
 			var start session.TurnStart
 			_ = json.Unmarshal(event.Body, &start)
@@ -76,6 +98,12 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			var message struct{ To, Do string }
 			if call.Tool == "message" && json.Unmarshal(call.Args, &message) == nil && (message.Do == "kill" || message.Do == "stop") {
 				causes = append(causes, stopCause{row: len(rows), took: []string{message.To}})
+			}
+			var named struct{ Name string }
+			if what := map[string]string{turn.SkillToolName: libraryWhatSkill, turn.ReferenceToolName: libraryWhatReference}[call.Tool]; what != "" && json.Unmarshal(call.Args, &named) == nil {
+				rows = append(rows, row)
+				row.Kind, row.State = kindLibrary, string(session.PartLoaded)
+				row.Text = traced(what+" "+named.Name+" loaded by the model", libraryFiles[event.Agent+"\x00"+what+"\x00"+named.Name])
 			}
 		case session.EventToolResult:
 			var result traceResult
@@ -207,6 +235,27 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			Text: "read " + strconv.Itoa(cut.Read) + " of " + strconv.Itoa(cut.Cached) + " cached, " + cut.Gap + " after " + cut.After + ", first difference: " + cut.Differs})
 	}
 	return rows
+}
+
+const (
+	libraryWhatRule      = "rule"
+	libraryWhatAgent     = "agent"
+	libraryWhatSkill     = "skill"
+	libraryWhatReference = "reference"
+)
+
+func libraryItem(part session.PromptPart) (string, string) {
+	switch {
+	case part.Rule != "":
+		return libraryWhatRule, part.Rule
+	case part.Kind == string(rule.ConcernIdentity) && (part.Agent != "" || part.File != ""):
+		return libraryWhatAgent, cmp.Or(part.Agent, "unnamed")
+	case part.Kind == string(turn.ConcernSkills) && part.Name != "":
+		return libraryWhatSkill, part.Name
+	case part.Kind == string(turn.ConcernReferences):
+		return libraryWhatReference, part.Name
+	}
+	return "", ""
 }
 
 type stopCause struct {

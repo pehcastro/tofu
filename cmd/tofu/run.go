@@ -725,8 +725,10 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 	} else {
 		opts.subAgentList = turn.SubAgentList(discovered.Definitions)
 	}
+	var brokenAgents []turn.PromptPart
 	for _, broken := range discovered.Broken {
 		say("the sub-agent in " + broken.Path + " is not offered: " + broken.Reason)
+		brokenAgents = append(brokenAgents, turn.PromptPart{Concern: rule.ConcernIdentity, File: filepath.ToSlash(broken.Path), Why: broken.Reason, State: session.PartDropped})
 	}
 	run.startup.step("sub-agent definitions")
 	stack, err := stackRules("", cmp.Or(opts.dir, "."))
@@ -775,10 +777,32 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 			return slices.Contains([]string{"orchestrate", verifySubAgentsRule, "plan_before_spawn", "spawn_effort", "research_fan_out", "brief_from_references", "announce_spawn"}, loaded.ID)
 		})
 	}
+	subAgents.Prompt.Dropped = slices.Concat(brokenAgents, droppedRules(stack, rules, switchedOff, opts))
+	spec.Dropped = slices.Concat(brokenAgents, droppedRules(stack, spec.Rules, switchedOff, opts))
 	composed, err := turn.Compose(spec)
 	run.startup.step("frameworks and prompt")
 	return composedRun{opts: opts, environment: environment, files: files, memory: remembered, instructions: instructions, composed: composed, subAgents: subAgents, skills: skills,
 		checksWork: slices.ContainsFunc(rules, func(loaded rule.Rule) bool { return loaded.ID == verifySubAgentsRule })}, err
+}
+
+func droppedRules(stack ruleStack, kept []rule.Rule, switchedOff []rule.Overriding, opts runOpts) []turn.PromptPart {
+	var dropped []turn.PromptPart
+	for _, one := range slices.Concat(stack.rules, stack.shippedOff) {
+		if slices.ContainsFunc(kept, func(r rule.Rule) bool { return r.ID == one.ID }) || slices.ContainsFunc(switchedOff, func(off rule.Overriding) bool { return off.Base.ID == one.ID }) {
+			continue
+		}
+		why := "the run's setting --tools three sends no " + one.ID
+		switch key := ruleSetting(one.ID); {
+		case one.Mode == rule.ModeOff && key != "":
+			why = "the rule's mode is off, and the setting " + key + " does not turn it on here"
+		case one.Mode == rule.ModeOff:
+			why = "the rule's mode is off"
+		case opts.leadAlone:
+			why = "the run's lead alone setting: the task names few files in one folder, so the spawn rules are not sent"
+		}
+		dropped = append(dropped, turn.PromptPart{Concern: one.Concern, RuleID: one.ID, File: filepath.ToSlash(one.File), Why: why, State: session.PartDropped})
+	}
+	return dropped
 }
 
 func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool, error) {
@@ -827,7 +851,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		Wire:          opts.wire,
 		Slug:          run.orchestrator.Slug(),
 		System:        composed.Head(),
-		Parts:         composed.Parts,
+		Parts:         composed.Recorded(),
 		Environment:   composed.WithTaskRules(environment),
 		Instructions:  prompt.files,
 		Memory:        prompt.memory,

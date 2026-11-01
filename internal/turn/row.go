@@ -572,9 +572,11 @@ func (r *record) begin(row Row, task llm.Origin) {
 	r.add(session.Event{Kind: session.EventTurnStart}, start)
 	prompt := session.PromptBody{System: row.System, Tools: row.Tools, Instructions: r.instructionFiles, ToolSchemas: row.ToolSchemas}
 	for _, part := range row.Parts {
-		var err error
-		part.Blob, err = r.log.Keep(part.text)
-		r.note(err)
+		if part.Sent() {
+			var err error
+			part.Blob, err = r.log.Keep(part.text)
+			r.note(err)
+		}
 		prompt.Parts = append(prompt.Parts, part.PromptPart)
 	}
 	if !r.log.Prompted(r.agent, prompt) {
