@@ -251,6 +251,7 @@ type Prefix struct {
 	held     bool
 	first    heldPrefix
 	tools    []llm.Tool
+	offered  []llm.Tool
 	inForce  []keptPart
 	appended []keptPart
 	removed  []keptPart
@@ -304,7 +305,11 @@ func HeldPrefix(store *session.Store, id, agent string) (*Prefix, error) {
 	if err != nil {
 		return nil, err
 	}
-	held := &Prefix{held: true, tools: tools, first: heldPrefix{head: first.System, instructions: first.Instructions, system: Config{System: first.System, Instructions: first.Instructions}.SystemMessage()}}
+	offered, err := toldTools(events, agent, tools)
+	if err != nil {
+		return nil, err
+	}
+	held := &Prefix{held: true, tools: tools, offered: offered, first: heldPrefix{head: first.System, instructions: first.Instructions, system: Config{System: first.System, Instructions: first.Instructions}.SystemMessage()}}
 	for _, recorded := range last.Parts {
 		part := keptPart{PromptPart: recorded}
 		if part.Sent() {
@@ -351,6 +356,30 @@ func heldTools(prompts []session.PromptBody) ([]llm.Tool, error) {
 		}
 	}
 	return held, nil
+}
+
+func toldTools(events []session.Event, agent string, held []llm.Tool) ([]llm.Tool, error) {
+	told := slices.Clone(held)
+	for _, event := range events {
+		if event.Kind != session.EventMessage || event.Agent != agent {
+			continue
+		}
+		var message session.MessageBody
+		if err := json.Unmarshal(event.Body, &message); err != nil {
+			return nil, err
+		}
+		if message.Role != llm.RoleUser.String() || !strings.HasPrefix(message.Content, thePromptChangedSince) {
+			continue
+		}
+		for _, change := range strings.Split(message.Content, "\n\n") {
+			described, isDescription := strings.CutPrefix(change, aToolDescriptionChanged)
+			name, description, _ := strings.Cut(described, " now reads: ")
+			if at := slices.IndexFunc(told, func(tool llm.Tool) bool { return tool.Name == name }); isDescription && at >= 0 {
+				told[at].Description = description
+			}
+		}
+	}
+	return told, nil
 }
 
 func (p *Prefix) lastSent() *messagesKept {
@@ -443,14 +472,18 @@ func (p *Prefix) holdTools(now []llm.Tool) []string {
 		switch {
 		case at < 0:
 			changes = append(changes, aToolIsGone+was.Name)
-		case sameDefinition(was, now[at]):
-			kept = append(kept, was)
-		case sameDefinition(llm.Tool{Parameters: was.Parameters}, llm.Tool{Parameters: now[at].Parameters}):
-			kept = append(kept, was)
-			changes = append(changes, aToolDescriptionChanged+was.Name+" now reads: "+now[at].Description)
-		default:
+		case !sameDefinition(llm.Tool{Parameters: was.Parameters}, llm.Tool{Parameters: now[at].Parameters}):
 			kept = append(kept, now[at])
 			changes = append(changes, aToolChanged+was.Name)
+		default:
+			kept = append(kept, was)
+			said := was
+			if before := slices.IndexFunc(p.offered, func(tool llm.Tool) bool { return tool.Name == was.Name }); before >= 0 {
+				said = p.offered[before]
+			}
+			if said.Description != now[at].Description {
+				changes = append(changes, aToolDescriptionChanged+was.Name+" now reads: "+now[at].Description)
+			}
 		}
 	}
 	for _, tool := range now {
@@ -459,7 +492,7 @@ func (p *Prefix) holdTools(now []llm.Tool) []string {
 			changes = append(changes, aToolIsNew+tool.Name)
 		}
 	}
-	p.tools = kept
+	p.tools, p.offered = kept, now
 	return changes
 }
 
