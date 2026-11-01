@@ -614,7 +614,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 		asked := beforeFork
 		if sentTokens(asked) > budget.Ceiling() {
-			asked = begun
+			asked, budget = begun, unreported
 		}
 		request := llm.Request{Messages: append(slices.Clone(asked), inserted(llm.Origin{Source: llm.SourceForkState}, forkStateAsk())), Tools: tools}
 		if len(tools) > 0 {
@@ -797,7 +797,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		row.Session = recorded.session()
 		recorded.listChange(session.ListChangeFork, string(fork.Kind)+" fork "+strconv.Itoa(forks)+" "+when+" from "+ended.Session+", "+
 			strconv.Itoa(fork.TokensBefore)+" to "+strconv.Itoa(fork.TokensAfter)+" tokens, "+strconv.Itoa(fork.TailMessages)+" tail messages", beforeFork, begun)
-		messages, sent, answering = begun, 0, ""
+		messages, sent, answering, budget = begun, 0, "", budget.Reported(0, recall.Occupancy{})
 		if fork.Kind == ForkCompact {
 			compacted()
 		}
