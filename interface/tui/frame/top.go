@@ -43,23 +43,37 @@ const (
 )
 
 func Top(head Head, tabs []Tab, current int, width int) (string, []Hit) {
-	nav, hits := chips(tabLabels(tabs, width), current)
-	navWidth := cells(nav)
+	labels := tabLabels(tabs, width)
+	nav, hits := chips(labels, current, " ")
 	left, right := topLeft(head, width, dropNothing), topRight(head, width, dropNothing)
-	for drop := dropBranch; drop <= dropClock && cells(left)+navWidth+cells(right)+2*sideGap > width; drop++ {
+	for drop := dropBranch; drop <= dropClock && cells(left)+cells(nav)+cells(right)+2*sideGap > width; drop++ {
 		left, right = topLeft(head, width, drop), topRight(head, width, drop)
 	}
 	leftWidth, rightWidth := cells(left), cells(right)
+	if room := width - leftWidth - rightWidth - 2*sideGap; cells(nav) > room {
+		nav, hits = chips(labels, current, "")
+		for index := len(labels) - 1; cells(nav) > room && index >= 0; index-- {
+			if index != current {
+				labels[index] = labels[index][:1]
+				nav, hits = chips(labels, current, "")
+			}
+		}
+	}
+	navWidth := cells(nav)
 	start := max(leftWidth+sideGap, (width-navWidth)/2)
 	if start+navWidth+sideGap+rightWidth > width {
 		start = max(leftWidth+sideGap, width-navWidth-sideGap-rightWidth)
 	}
 	navRow := draw(nav)
 	if room := max(0, width-start-sideGap-rightWidth); navWidth > room {
-		navRow, navWidth = ansi.Truncate(navRow, room, ""), room
 		for len(hits) > 0 && hits[len(hits)-1].End > room {
 			hits = hits[:len(hits)-1]
 		}
+		navWidth = 0
+		if len(hits) > 0 {
+			navWidth = hits[len(hits)-1].End
+		}
+		navRow = ansi.Truncate(navRow, navWidth, "")
 	}
 	for index := range hits {
 		hits[index].Start += start
@@ -159,7 +173,7 @@ func tabLabels(tabs []Tab, width int) []string {
 	return labels
 }
 
-func chips(labels []string, current int) ([]span, []Hit) {
+func chips(labels []string, current int, pad string) ([]span, []Hit) {
 	nav := make([]span, 0, 2*len(labels))
 	hits := make([]Hit, 0, len(labels)+1)
 	column := 0
@@ -168,9 +182,9 @@ func chips(labels []string, current int) ([]span, []Hit) {
 			nav = append(nav, fill(1, look.Background))
 			column++
 		}
-		chip := span{text: " " + label + " ", fg: look.MutedColor, bg: look.Panel}
+		chip := span{text: pad + label + pad, fg: look.MutedColor, bg: look.Panel}
 		if index == current {
-			chip.fg, chip.bg = look.Background, look.Mint
+			chip = span{text: " " + label + " ", fg: look.Background, bg: look.Mint}
 		}
 		end := column + widget.Cells(chip.text)
 		nav = append(nav, chip)

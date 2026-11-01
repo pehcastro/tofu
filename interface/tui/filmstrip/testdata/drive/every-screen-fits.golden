@@ -1,4 +1,4 @@
- tofu    chat   agents   edits   shells   order  [settings] 
+ tofu         chat  agents edits shells orders   [settings] 
                                                             
                                                            │
                                                            │
@@ -18,7 +18,7 @@
   █ Ask tofu to build, inspect, or delegate                 
                                                             
  ctx 118k/250k  |  claude-sub 5h 62%                        
- tofu    chat   agents   edits   shells   order  [settings] 
+ tofu        chat  agents  edits shells orders   [settings] 
                                                             
                                                            │
   All activity                    9-10/10 · wheel ↑ older  │
@@ -38,7 +38,7 @@
   │                                                   │    ┃
   ╰───────────────────────────────────────────────────╯     
  ctx 118k/250k  |  claude-sub 5h 62%                        
- tofu    chat   agents   edits   shells   order  [settings] 
+ tofu        chat agents  edits  shells orders   [settings] 
                                                             
 All changes                       2 edits · oldest → newest 
 Select an edit reference to read every changed line.        
@@ -58,7 +58,7 @@ Select an edit reference to read every changed line.
                                                             
                                                             
  ctx 118k/250k  |  claude-sub 5h 62%                        
- tofu    chat   agents   edits   shells   order  [settings] 
+ tofu        chat agents edits  shells  orders   [settings] 
                                                             
                                                            │
   Shells            dev-server                   running   │
