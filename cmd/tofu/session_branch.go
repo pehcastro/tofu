@@ -108,25 +108,18 @@ func sessionBranch(store *session.Store, ask sessionBranchAsk) (sessionBranchRep
 		}
 		chosen = &session.Chosen{Wire: library.WireOf(model), Model: model.Slug()}
 	}
-	header, carried, err := turn.BranchSide(store, parent, turn.SideBranch{Access: access, Seed: turn.Seed(ask.seed), Chosen: chosen, Effort: effort, From: ask.at}, time.Now())
+	opened, err := turn.BranchSide(store, parent, turn.SideBranch{Access: access, Seed: turn.Seed(ask.seed), Chosen: chosen, Effort: effort, From: ask.at}, time.Now())
 	if err != nil {
 		return sessionBranchReport{}, err
 	}
-	noTask := false
-	if turn.Seed(ask.seed) == turn.SeedSummary && carried == 0 {
-		task, err := turn.SideTask(store, parent, header.BranchedFrom.Event)
-		if err != nil {
-			return sessionBranchReport{}, err
-		}
-		noTask = task == ""
-	}
+	header := opened.Header
 	if ask.name != "" {
 		if _, err := store.SetName(header.ID, ask.name); err != nil {
 			return sessionBranchReport{}, fmt.Errorf("side chat %s was made and keeps its own name, as %q is not one: %w", handleOf(store, header.ID), ask.name, err)
 		}
 	}
 	return sessionBranchReport{Session: header.ID, Handle: handleOf(store, header.ID), Kind: header.Kind, Parent: *header.BranchedFrom, Owns: append([]string{}, header.Owns...),
-		Preset: header.Preset, Seed: turn.Seed(ask.seed), Carried: carried, NoTask: noTask, Model: header.Model, Effort: llm.Effort(header.Effort), parentHandle: handleOf(store, parent.ID)}, nil
+		Preset: header.Preset, Seed: turn.Seed(ask.seed), Carried: opened.Carried, NoTask: opened.NoTask, Model: header.Model, Effort: llm.Effort(header.Effort), parentHandle: handleOf(store, parent.ID)}, nil
 }
 
 func sessionBranchLines(page cli.Page, report sessionBranchReport) []string {
@@ -139,7 +132,7 @@ func sessionBranchLines(page cli.Page, report sessionBranchReport) []string {
 	}
 	seed := string(report.Seed) + ", " + plural(report.Carried, "message")
 	if report.NoTask {
-		seed += ": the parent carries no task, so nothing of it is seeded"
+		seed += ": " + turn.SideNoTask
 	}
 	lines := append(page.Title("Side chat", []string{report.Handle}, cli.Verdict{Mark: cli.Changed, Text: "branched"}), "")
 	facts := []cli.Fact{

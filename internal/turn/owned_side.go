@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 	"tofu/internal/session"
@@ -66,36 +67,45 @@ type SideBranch struct {
 	From   string
 }
 
-func BranchSide(store *session.Store, parent session.Header, side SideBranch, at time.Time) (session.Header, int, error) {
+type SideOpened struct {
+	Header  session.Header
+	Carried int
+	NoTask  bool
+}
+
+const SideNoTask = "the parent carries no task, so nothing of it is seeded"
+
+func BranchSide(store *session.Store, parent session.Header, side SideBranch, at time.Time) (SideOpened, error) {
 	events, err := store.Body(parent.ID)
 	if err != nil {
-		return session.Header{}, 0, err
+		return SideOpened{}, err
 	}
 	if side.From != "" {
 		upTo := slices.IndexFunc(events, func(event session.Event) bool { return event.ID == side.From })
 		if upTo < 0 {
-			return session.Header{}, 0, fmt.Errorf("event %q is not in session %s, so there is no point to branch from", side.From, parent.ID)
+			return SideOpened{}, fmt.Errorf("event %q is not in session %s, so there is no point to branch from", side.From, parent.ID)
 		}
 		events = events[:upTo+1]
 	}
 	var seeded []llm.Message
+	noTask := false
 	switch side.Seed {
 	case SeedSummary:
-		if seeded, err = sideSeed(store, parent, events); err != nil {
-			return session.Header{}, 0, err
+		if seeded, noTask, err = sideSeed(store, parent, events); err != nil {
+			return SideOpened{}, err
 		}
 	case SeedNone:
 	default:
-		return session.Header{}, 0, fmt.Errorf("seed %q is neither %s nor %s", side.Seed, SeedSummary, SeedNone)
+		return SideOpened{}, fmt.Errorf("seed %q is neither %s nor %s", side.Seed, SeedSummary, SeedNone)
 	}
 	id, chosen, model := session.NewEventID(), cmp.Or(side.Chosen, parent.Chosen), ""
 	if chosen != nil {
 		model = chosen.Model
 	}
 	log, err := store.Open(session.Header{ID: id, At: at, Root: id, Kind: session.KindSide, Owns: side.Access.Owns, Preset: side.Access.Preset, Wire: parent.Wire,
-		Model: model, Chosen: chosen, Effort: string(side.Effort), BranchedFrom: &session.Carried{Session: parent.ID, Event: cmp.Or(side.From, parent.Head)}})
+		Model: model, Chosen: chosen, Effort: cmp.Or(string(side.Effort), parent.Effort), BranchedFrom: &session.Carried{Session: parent.ID, Event: cmp.Or(side.From, parent.Head)}})
 	if err != nil {
-		return session.Header{}, 0, err
+		return SideOpened{}, err
 	}
 	written := &record{store: store, log: log, scope: id, turn: id, said: map[string]string{}}
 	request := ""
@@ -108,33 +118,34 @@ func BranchSide(store *session.Store, parent session.Header, side SideBranch, at
 	if len(written.failed) > 0 {
 		err = errors.New(strings.Join(written.failed, "; "))
 	}
-	return log.Header(), len(seeded), errors.Join(err, log.Close())
+	return SideOpened{Header: log.Header(), Carried: len(seeded), NoTask: noTask}, errors.Join(err, log.Close())
 }
 
-func sideSeed(store *session.Store, parent session.Header, events []session.Event) ([]llm.Message, error) {
+func sideSeed(store *session.Store, parent session.Header, events []session.Event) ([]llm.Message, bool, error) {
 	if len(events) == 0 {
-		return nil, nil
+		return nil, true, nil
 	}
 	messages, err := ConversationFrom(events)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	task, err := SideTask(store, parent, events[len(events)-1].ID)
-	if err != nil {
-		return nil, err
-	}
-	if task == "" || len(messages) == 0 {
-		return nil, nil
+	task, err := sideTask(store, parent, events[len(events)-1].ID)
+	if err != nil || task == "" || len(messages) == 0 {
+		return nil, task == "", err
 	}
 	artifacts, err := NewArtifacts(filepath.Join(store.State(), "artifacts"), true)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	artifacts.preview = artifacts.preview.OnWire(parent.Wire)
-	opening := llm.Message{Role: llm.RoleUser, Content: task, Origin: llm.Origin{Source: llm.SourceForkTask}}
-	fork, begun, err := forkHistory(artifacts, recall.Budget{Bands: recall.ShippedBands()}, opening, messages, ForkContinuation, 0, 0)
+	budget, err := sideBudget(store, parent, artifacts.preview)
 	if err != nil {
-		return nil, err
+		return nil, false, err
+	}
+	opening := llm.Message{Role: llm.RoleUser, Content: task, Origin: llm.Origin{Source: llm.SourceForkTask}}
+	fork, begun, err := forkHistory(artifacts, budget, opening, messages, ForkContinuation, 0, 0)
+	if err != nil {
+		return nil, false, err
 	}
 	carryState(fork, begun, "", parent.ID)
 	begun = slices.DeleteFunc(begun, standsAtTheHead)
@@ -142,10 +153,27 @@ func sideSeed(store *session.Store, parent session.Header, events []session.Even
 	_, rest, _ := strings.Cut(begun[at].Content, "\n")
 	begun[at].Content = "this is a side chat beside session " + parent.ID + ", which keeps running and has not ended: " +
 		"the summary below is the one tofu writes when a session forks, and every session it names is that one.\n" + rest
-	return begun, nil
+	return begun, false, nil
 }
 
-func SideTask(store *session.Store, parent session.Header, last string) (string, error) {
+func sideBudget(store *session.Store, parent session.Header, preview recall.Config) (recall.Budget, error) {
+	budget, err := recall.BudgetUnder(parent.Model, 0, konst.ContextCeilingTokens)
+	if err != nil {
+		return budget, err
+	}
+	if parent.ContextCeiling > 0 {
+		budget = budget.At(parent.ContextCeiling, fmt.Sprintf("the %d token ceiling session %s last ran under", parent.ContextCeiling, parent.ID))
+	}
+	budget.Bands = budget.Bands.Less(min(konst.ForkStateBytes*1000/preview.BytesPerThousandTokens, budget.Bands.Target()*konst.ForkRoomMostPercent/100))
+	held, err := HeldPrefix(store, parent.ID, "")
+	if err != nil {
+		return budget, err
+	}
+	schemas, err := json.Marshal(held.tools)
+	return budget.Sending(preview, string(schemas)), err
+}
+
+func sideTask(store *session.Store, parent session.Header, last string) (string, error) {
 	task, generation, carried := "", parent.ID, parent.CarriedFrom
 	for {
 		recorded, err := store.Events(generation)

@@ -202,11 +202,11 @@ func TestASideChatSendsItsParentsSystemBytesAndItsOwnInstructionsAfterTheHead(t 
 		if err != nil {
 			t.Fatal(err)
 		}
-		branched, _, err := BranchSide(store, header, SideBranch{Seed: SeedNone}, time.Now())
+		branched, err := BranchSide(store, header, SideBranch{Seed: SeedNone}, time.Now())
 		if err != nil {
 			t.Fatal(err)
 		}
-		return branched.ID
+		return branched.Header.ID
 	}
 	system := func(request llm.Request) string { return request.Messages[0].Content }
 	afterTheHead := func(request llm.Request) string {
