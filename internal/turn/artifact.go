@@ -216,11 +216,11 @@ func (j *keepJudge) keyOf(drop recall.Drop) dropKey {
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(j.project, path)
 	}
-	inProject, inside := within(j.project, filepath.Clean(path))
-	if !inside {
-		return key
+	path = filepath.Clean(path)
+	if inProject, inside := within(j.project, path); inside {
+		path = inProject
 	}
-	key.path = filepath.ToSlash(inProject)
+	key.path = filepath.ToSlash(path)
 	if sys.FoldsCase() {
 		key.path = strings.ToLower(key.path)
 	}
@@ -264,10 +264,10 @@ func (j *keepJudge) refetched(called ToolCallRow) string {
 
 func (j *keepJudge) recallEarlier() {
 	events, err := j.earlier()
-	j.earlier = nil
 	if err != nil {
 		return
 	}
+	j.earlier = nil
 	logged := map[dropKey]*recall.Drop{}
 	for _, event := range events {
 		var row compactionRow
