@@ -155,7 +155,12 @@ func sessionTraceVerb(o verbOutput, args []string, now time.Time) int {
 	if ask.filter.Last > 0 && ask.filter.Last < len(timeline.Rows) {
 		timeline.Rows = timeline.Rows[len(timeline.Rows)-ask.filter.Last:]
 	}
-	return o.done(true, timeline, func(page cli.Page) []string { return traceRowLines(page, timeline, ask.wide) })
+	if o.asJSON {
+		for i, row := range timeline.Rows {
+			timeline.Rows[i].Text = strings.TrimPrefix(row.Text, row.State+": ")
+		}
+	}
+	return o.done(true, timeline, func(page cli.Page) []string { return traceRowLines(page, timeline, ask.wide || ask.full) })
 }
 
 func sessionTraceArgs(args []string, now time.Time) (traceAsk, error) {
@@ -219,9 +224,6 @@ func sessionTraceArgs(args []string, now time.Time) (traceAsk, error) {
 	}
 	if len(handles) != 1 {
 		return ask, fmt.Errorf("%d operands, want <name|id>", len(handles))
-	}
-	if ask.full && !ask.filter.empty() {
-		return ask, fmt.Errorf("--full prints every section and takes no filter")
 	}
 	ask.handle = handles[0]
 	return ask, nil
