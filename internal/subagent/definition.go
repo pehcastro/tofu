@@ -63,10 +63,10 @@ type Definition struct {
 }
 
 type Reference struct {
-	Name      string `json:"name"`
-	Path      string `json:"path"`
-	Framework string `json:"framework,omitempty"`
-	Text      string `json:"-"`
+	Name       string   `json:"name"`
+	Path       string   `json:"path"`
+	Frameworks []string `json:"frameworks,omitempty"`
+	Text       string   `json:"-"`
 }
 
 type Broken struct {
@@ -364,7 +364,7 @@ func (s Scan) resolve(definition *Definition, assigned assignment) {
 func (d Definition) Reaching(frameworks []string) Definition {
 	var reached []Reference
 	for _, reference := range d.References {
-		if reference.Framework != "" && !slices.Contains(frameworks, reference.Framework) {
+		if reference.Frameworks != nil && !slices.ContainsFunc(reference.Frameworks, func(framework string) bool { return slices.Contains(frameworks, framework) }) {
 			d.Unreached = append(d.Unreached, reference)
 			continue
 		}
@@ -380,14 +380,36 @@ func budgeted(references []Reference) ([]Reference, []string) {
 	var cut []string
 	used := 0
 	for _, reference := range references {
-		if used+len(reference.Text) > konst.SubAgentReferenceBytes {
+		entry := len(reference.IndexEntry())
+		if used+entry > konst.SubAgentReferenceBytes {
 			cut = append(cut, reference.Name)
 			continue
 		}
-		used += len(reference.Text)
+		used += entry
 		kept = append(kept, reference)
 	}
 	return kept, cut
+}
+
+func (r Reference) IndexEntry() string {
+	var title string
+	var sections []string
+	for line := range strings.Lines(r.Text) {
+		line = strings.TrimSpace(line)
+		heading, isTitle := strings.CutPrefix(line, "# ")
+		section, isSection := strings.CutPrefix(line, "## ")
+		switch {
+		case isTitle && title == "":
+			title = heading
+		case isSection:
+			sections = append(sections, section)
+		}
+	}
+	entry := "\n- " + r.Name + ": " + cmp.Or(title, r.Name)
+	if len(sections) > 0 {
+		entry += ", on " + strings.Join(sections, "; ")
+	}
+	return entry
 }
 
 func (s Scan) place(definition *Definition, tofuWrote bool) {
@@ -425,9 +447,9 @@ func (s Scan) place(definition *Definition, tofuWrote bool) {
 			definition.Refused = append(definition.Refused, fmt.Sprintf("the reference %q does not read: %v", reference.Name, err))
 			continue
 		}
-		read = append(read, Reference{Name: reference.Name, Path: libraryOrigin + "/" + found[0], Text: text, Framework: strings.Join(fields["framework"], " ")})
+		read = append(read, Reference{Name: reference.Name, Path: libraryOrigin + "/" + found[0], Text: text, Frameworks: fields["framework"]})
 	}
-	_, definition.Cut = budgeted(slices.DeleteFunc(slices.Clone(read), func(reference Reference) bool { return reference.Framework != "" }))
+	_, definition.Cut = budgeted(slices.DeleteFunc(slices.Clone(read), func(reference Reference) bool { return reference.Frameworks != nil }))
 	definition.References = slices.DeleteFunc(read, func(reference Reference) bool { return slices.Contains(definition.Cut, reference.Name) })
 }
 

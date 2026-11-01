@@ -1,6 +1,7 @@
 ---
 id: react-rendering
 domain: dev
+framework: react
 document: rendering cost, keys, transitions, hydration and motion in React
 ---
 

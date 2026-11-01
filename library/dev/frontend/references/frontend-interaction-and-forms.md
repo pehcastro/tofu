@@ -1,6 +1,7 @@
 ---
 id: frontend-interaction-and-forms
 domain: dev
+framework: [react, svelte, vue]
 document: loading, empty and error states, feedback after an action, form fields and validation, URL state and real content
 ---
 

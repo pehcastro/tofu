@@ -1,6 +1,7 @@
 ---
 id: vue-components-and-reactivity
 domain: dev
+framework: vue
 document: Vue 3 components, reactivity, computed values, watchers and type checking
 ---
 

@@ -409,13 +409,15 @@ func TestRustDevCarriesTheGpuiReferencesOnlyWhereItsOwnsReachGpuiCe(t *testing.T
 		}
 		reported(t, spawn)
 		system := model.requests[0].Messages[0].Content
-		_, cut, _ := strings.Cut(system, "these references were cut")
-		cut, _, _ = strings.Cut(cut, "\n")
-		listed := strings.Contains(system, "\n- gpui-layout: ") && strings.Contains(system, "\n- gpui-input-and-focus: ")
-		named := strings.Contains(cut, "gpui-motion")
-		t.Logf("%s owning %s: gpui listed %v, cut%s", strings.TrimSpace(c.manifest), c.owns, listed, cut)
-		if listed != c.gpui || named != c.gpui || !c.gpui && strings.Contains(system, "\n- gpui-") {
-			t.Errorf("%s owning %s: gpui pages listed %v and cut pages named %v, want %v", strings.TrimSpace(c.manifest), c.owns, listed, named, c.gpui)
+		gpuiPages := strings.Count(system, "\n- gpui-")
+		t.Logf("%s owning %s: %d gpui pages listed", strings.TrimSpace(c.manifest), c.owns, gpuiPages)
+		switch {
+		case c.gpui && gpuiPages != 8 || !c.gpui && gpuiPages != 0:
+			t.Errorf("%s owning %s: %d gpui pages listed, want all 8 = %v", strings.TrimSpace(c.manifest), c.owns, gpuiPages, c.gpui)
+		case !strings.Contains(system, "\n- rust-verify: "):
+			t.Errorf("%s owning %s: rust-verify is listed whatever the framework", strings.TrimSpace(c.manifest), c.owns)
+		case strings.Contains(system, "these references were cut"):
+			t.Errorf("%s owning %s: every index entry fits the budget, yet the prompt names a cut", strings.TrimSpace(c.manifest), c.owns)
 		}
 	}
 }

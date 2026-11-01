@@ -1,6 +1,7 @@
 ---
 id: react-effects
 domain: dev
+framework: react
 document: when an effect is needed, its dependencies, its cleanup and what to do instead
 ---
 

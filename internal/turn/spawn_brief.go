@@ -30,7 +30,6 @@ func (s SubAgents) prompt(inherited Config, definition subagent.Definition, task
 		spec.Frameworks = append(slices.Clone(spec.Frameworks), owned...)
 		slices.Sort(spec.Frameworks)
 		spec.Frameworks = slices.Compact(spec.Frameworks)
-		spec.Agent = definition.Reaching(spec.Frameworks)
 		composed, err := Compose(spec)
 		if err != nil {
 			return "", nil, "", err

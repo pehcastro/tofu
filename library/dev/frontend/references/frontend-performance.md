@@ -1,6 +1,7 @@
 ---
 id: frontend-performance
 domain: dev
+framework: [react, svelte, vue]
 document: Core Web Vitals, LCP, INP and CLS, and keeping animation and layout off the main thread
 ---
 

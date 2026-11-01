@@ -1,6 +1,7 @@
 ---
 id: svelte-runes
 domain: dev
+framework: svelte
 document: Svelte 5 runes, snippets and templates, with the compiler and runtime codes for each mistake
 ---
 

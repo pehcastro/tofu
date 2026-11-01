@@ -65,6 +65,17 @@ Sub-agents · 13 defined                                               ✗ 1 bro
     and is done only when the project's own typecheck, lint and tests pass.
     tools      read, glob, search, symbols, edit, typecheck, test, write,
       bash, skill
+    reference  react-effects  4.1 KB
+    reference  react-rules-and-compiler  4.7 KB
+    reference  react-rendering  4.1 KB
+    reference  svelte-runes  5.1 KB
+    reference  sveltekit-data-and-forms  4.0 KB
+    reference  vue-components-and-reactivity  5.3 KB
+    reference  vue-stores-routing-and-ssr  3.6 KB
+    reference  frontend-accessibility  2.9 KB
+    reference  frontend-interaction-and-forms  3.6 KB
+    reference  frontend-performance  2.7 KB
+    reference  frontend-motion  3.4 KB
     reference  ts-strict-config  2.8 KB
     reference  ts-type-design  3.0 KB
     reference  ts-boundaries  2.4 KB

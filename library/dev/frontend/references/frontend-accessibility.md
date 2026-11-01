@@ -1,6 +1,7 @@
 ---
 id: frontend-accessibility
 domain: dev
+framework: [react, svelte, vue]
 document: accessible names, contrast, focus, dialogs, keyboard patterns and form semantics, with the axe, jsx-a11y, Svelte compiler and vuejs-accessibility checks that catch each
 ---
 

@@ -47,6 +47,8 @@ func knownFrameworks() []string {
 	return slices.Compact(known)
 }
 
+func KnownFramework(name string) bool { return slices.Contains(knownFrameworks(), name) }
+
 func manifestListing(frameworks ...string) string {
 	var files []string
 	for _, m := range manifests() {

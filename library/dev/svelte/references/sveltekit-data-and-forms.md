@@ -1,6 +1,7 @@
 ---
 id: sveltekit-data-and-forms
 domain: dev
+framework: svelte
 document: SvelteKit routing, load functions, cookies, errors, form actions, state and server-only modules
 ---
 

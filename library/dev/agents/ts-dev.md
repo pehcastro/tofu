@@ -3,6 +3,17 @@ name: ts-dev
 domain: dev
 description: Writes and fixes TypeScript in the project it is given. Reads before it edits, changes the least it can, and is done only when the project's own typecheck, lint and tests pass.
 references:
+  - react-effects
+  - react-rules-and-compiler
+  - react-rendering
+  - svelte-runes
+  - sveltekit-data-and-forms
+  - vue-components-and-reactivity
+  - vue-stores-routing-and-ssr
+  - frontend-accessibility
+  - frontend-interaction-and-forms
+  - frontend-performance
+  - frontend-motion
   - ts-strict-config
   - ts-type-design
   - ts-boundaries

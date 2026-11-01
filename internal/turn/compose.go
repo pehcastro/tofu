@@ -110,23 +110,7 @@ func agentPart(definition subagent.Definition) PromptPart {
 func referenceIndex(references []subagent.Reference) string {
 	text := referencesOnDemand
 	for _, reference := range references {
-		var title string
-		var sections []string
-		for line := range strings.Lines(reference.Text) {
-			line = strings.TrimSpace(line)
-			heading, isTitle := strings.CutPrefix(line, "# ")
-			section, isSection := strings.CutPrefix(line, "## ")
-			switch {
-			case isTitle && title == "":
-				title = heading
-			case isSection:
-				sections = append(sections, section)
-			}
-		}
-		text += "\n- " + reference.Name + ": " + cmp.Or(title, reference.Name)
-		if len(sections) > 0 {
-			text += ", on " + strings.Join(sections, "; ")
-		}
+		text += reference.IndexEntry()
 	}
 	return text
 }
@@ -151,7 +135,7 @@ func referenceParts(definition subagent.Definition) []PromptPart {
 	}
 	for _, reference := range definition.Unreached {
 		parts = append(parts, PromptPart{Concern: ConcernReferences, Agent: definition.Name, Name: reference.Name, File: reference.Path, State: session.PartDropped,
-			Why: "the reference is for " + reference.Framework + ", which no manifest the task reaches lists"})
+			Why: "the reference is for " + strings.Join(reference.Frameworks, " or ") + ", which no manifest the task reaches lists"})
 	}
 	for _, name := range definition.Cut {
 		parts = append(parts, PromptPart{Concern: ConcernReferences, Agent: definition.Name, Name: name, State: session.PartDropped,
@@ -271,6 +255,12 @@ func composedOrder() []rule.Concern {
 }
 
 func Compose(spec ComposeSpec) (Composed, error) {
+	for _, reference := range spec.Agent.References {
+		if unknown := slices.IndexFunc(reference.Frameworks, func(framework string) bool { return !rule.KnownFramework(framework) }); unknown >= 0 {
+			return Composed{}, fmt.Errorf("the reference %s in %s declares the framework %q, which no manifest detector knows", reference.Name, reference.Path, reference.Frameworks[unknown])
+		}
+	}
+	spec.Agent = spec.Agent.Reaching(spec.Frameworks)
 	composed := Composed{Task: TaskNamed(spec.Task)}
 	composed.Task.Role, composed.Task.Frameworks, composed.Task.Alone, composed.Task.Languages = spec.Role, spec.Frameworks, spec.Alone, spec.Languages
 	var wordsDecided error

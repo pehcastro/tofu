@@ -1,6 +1,7 @@
 ---
 id: react-rules-and-compiler
 domain: dev
+framework: react
 document: the rules React relies on, purity, hooks and immutability, and the React Compiler with its lint rules
 ---
 

@@ -262,8 +262,9 @@ func TestReferences(t *testing.T) {
 			t.Fatalf("%s should carry its body without front matter, got %q", reference.Name, reference.Text)
 		}
 	}
-	if !slices.Equal(names, []string{"ts-strict-config", "ts-type-design", "ts-boundaries", "verify-a-running-service", "interface-craft"}) || len(tsDev.Cut) != 0 {
-		t.Fatalf("ts-dev carries its five references whole, got %q cut %q", names, tsDev.Cut)
+	if !slices.Equal(names, []string{"react-effects", "react-rules-and-compiler", "react-rendering", "svelte-runes", "sveltekit-data-and-forms", "vue-components-and-reactivity", "vue-stores-routing-and-ssr",
+		"frontend-accessibility", "frontend-interaction-and-forms", "frontend-performance", "frontend-motion", "ts-strict-config", "ts-type-design", "ts-boundaries", "verify-a-running-service", "interface-craft"}) || len(tsDev.Cut) != 0 {
+		t.Fatalf("ts-dev carries its sixteen references whole, got %q cut %q", names, tsDev.Cut)
 	}
 	if qa := definitionNamed(t, found, "qa"); len(qa.References) != 5 || len(qa.Cut) != 0 {
 		t.Fatalf("qa carries its five references whole, four from qa and verify-a-running-service from dev, got %+v cut %q", qa.References, qa.Cut)
@@ -277,10 +278,10 @@ func TestReferences(t *testing.T) {
 	reader := definitionNamed(t, found, "reader")
 	total := 0
 	for _, reference := range reader.References {
-		total += len(reference.Text)
+		total += len(reference.IndexEntry())
 	}
-	if len(reader.Cut) == 0 || total > konst.SubAgentReferenceBytes || len(reader.References)+len(reader.Cut) != 7 {
-		t.Fatalf("seven references pass the budget, so the tail is cut and named: kept %d bytes, cut %q", total, reader.Cut)
+	if len(reader.Cut) != 0 || total > konst.SubAgentReferenceBytes || len(reader.References) != 7 {
+		t.Fatalf("the prompt carries an index entry per reference, so seven fit the budget: kept %d bytes, cut %q", total, reader.Cut)
 	}
 }
 
@@ -295,7 +296,7 @@ func TestAFrameworkReferenceReachesOnlyATaskOfThatFramework(t *testing.T) {
 		reaching := rustDev.Reaching(c.frameworks)
 		total, named := 0, slices.Clone(reaching.Cut)
 		for _, reference := range reaching.References {
-			total += len(reference.Text)
+			total += len(reference.IndexEntry())
 			named = append(named, reference.Name)
 		}
 		gpui := slices.ContainsFunc(named, func(name string) bool { return strings.HasPrefix(name, "gpui-") })
@@ -310,7 +311,7 @@ func TestAFrameworkReferenceReachesOnlyATaskOfThatFramework(t *testing.T) {
 		case !kept(reaching, "rust-verify") || c.gpui && !kept(reaching, "gpui-verify"):
 			t.Errorf("frameworks %v: the verify pages the done gate checks against are kept, got %+v cut %q", c.frameworks, reaching.References, reaching.Cut)
 		case slices.ContainsFunc(rustDev.References, func(reference Reference) bool {
-			return slices.Contains(reaching.Cut, reference.Name) && total+len(reference.Text) <= konst.SubAgentReferenceBytes
+			return slices.Contains(reaching.Cut, reference.Name) && total+len(reference.IndexEntry()) <= konst.SubAgentReferenceBytes
 		}):
 			t.Errorf("frameworks %v: a cut page fits in the %d bytes left: cut %q", c.frameworks, konst.SubAgentReferenceBytes-total, reaching.Cut)
 		}
@@ -318,6 +319,42 @@ func TestAFrameworkReferenceReachesOnlyATaskOfThatFramework(t *testing.T) {
 	}
 	if len(rustDev.References) != held {
 		t.Fatalf("Reaching changed the definition it was called on: %d references, held %d", len(rustDev.References), held)
+	}
+}
+
+func TestAFrontendReferenceReachesTsDevOnAnyFrameworkItLists(t *testing.T) {
+	tsDev := definitionNamed(t, Definitions(scanOf(t, "", "tofu")), "ts-dev")
+	for _, c := range []struct {
+		frameworks []string
+		first      string
+		absent     []string
+	}{
+		{nil, "ts-strict-config", []string{"react-effects", "svelte-runes", "vue-components-and-reactivity", "frontend-accessibility"}},
+		{[]string{"react"}, "react-effects", []string{"svelte-runes", "sveltekit-data-and-forms", "vue-components-and-reactivity"}},
+		{[]string{"svelte"}, "svelte-runes", []string{"react-effects", "vue-components-and-reactivity"}},
+		{[]string{"vue"}, "vue-components-and-reactivity", []string{"react-effects", "svelte-runes"}},
+	} {
+		reaching := tsDev.Reaching(c.frameworks)
+		named := slices.Clone(reaching.Cut)
+		total := 0
+		for _, reference := range reaching.References {
+			named = append(named, reference.Name)
+			total += len(reference.IndexEntry())
+		}
+		frontend := slices.ContainsFunc(named, func(name string) bool { return strings.HasPrefix(name, "frontend-") })
+		switch {
+		case !kept(reaching, c.first):
+			t.Errorf("frameworks %v: %s is offered, got %+v cut %q", c.frameworks, c.first, reaching.References, reaching.Cut)
+		case slices.ContainsFunc(c.absent, func(name string) bool { return slices.Contains(named, name) }):
+			t.Errorf("frameworks %v: none of %q is kept or cut, got %q", c.frameworks, c.absent, named)
+		case frontend != (c.frameworks != nil):
+			t.Errorf("frameworks %v: a frontend page is named = %v, want %v: %q", c.frameworks, frontend, c.frameworks != nil, named)
+		case len(reaching.Cut) > 0 || !kept(reaching, "ts-strict-config"):
+			t.Errorf("frameworks %v: every index entry fits under %d bytes and the base references stay, cut %q", c.frameworks, konst.SubAgentReferenceBytes, reaching.Cut)
+		case total > konst.SubAgentReferenceBytes:
+			t.Errorf("frameworks %v: %d bytes kept, past %d", c.frameworks, total, konst.SubAgentReferenceBytes)
+		}
+		t.Logf("frameworks %v: kept %d bytes, cut %q", c.frameworks, total, reaching.Cut)
 	}
 }
 

@@ -1,6 +1,7 @@
 ---
 id: frontend-motion
 domain: dev
+framework: [react, svelte, vue]
 document: whether to animate, duration, easing, springs, what to animate, interaction states, orchestration, performance and reduced motion
 ---
 

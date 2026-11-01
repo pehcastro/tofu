@@ -1,6 +1,7 @@
 ---
 id: vue-stores-routing-and-ssr
 domain: dev
+framework: vue
 document: Pinia stores, Vue Router guards, Nuxt data fetching and server rendering
 ---
 
