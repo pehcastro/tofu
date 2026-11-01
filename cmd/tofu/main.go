@@ -367,7 +367,7 @@ func verbNamed(name string) verb {
 	case "lint":
 		return verb{withoutIn(lintVerb), lintUsage}
 	case "rules":
-		return verb{withoutIn(rulesVerb), strings.Join([]string{rulesSubcommands, rulesListUsage, rulesOverridesUsage, rulesCheckUsage, rulesAddUsage, rulesOffUsage, rulesIDUsage}, " ")}
+		return verb{withoutIn(rulesVerb), strings.Join([]string{rulesSubcommands, rulesListUsage, rulesOverridesUsage, rulesCheckUsage, rulesAddUsage, rulesOffUsage, rulesIDUsage, rulesWhyUsage}, " ")}
 	case "boardy":
 		return verb{withoutIn(boardyVerb), boardyUsage}
 	case "scratch":
