@@ -90,7 +90,7 @@ func LeadWorksAlone(dir, task string, defined []subagent.Definition) bool {
 		files++
 		packages[filepath.Dir(at)] = true
 	}
-	return files > 0 && files <= LeadAloneMostNamedFiles && len(packages) == 1
+	return files <= LeadAloneMostNamedFiles && len(packages) == 1
 }
 
 const InstructionsOff = "sends no instruction file at all: " +

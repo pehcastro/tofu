@@ -1,6 +1,7 @@
 package rule
 
 import (
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -80,6 +81,52 @@ func TestAScopeFiresForAnOwnedGlobInsideItAndNotForOneOutside(t *testing.T) {
 	for owned, wants := range map[string]bool{"src/**": true, "src/ui/*.tsx": true, "docs/**": false} {
 		if fires, why := scoped.firesFor(Task{Paths: []string{owned}}); fires != wants {
 			t.Errorf("owning %s: fires = %v, want %v: %s", owned, fires, wants, why)
+		}
+	}
+}
+
+func TestLanguagesReadsTheFilesInTheFoldersATaskNames(t *testing.T) {
+	root := t.TempDir()
+	for file, body := range map[string]string{"internal/konst/konst.go": "package konst\n", "docs/guide.md": "# guide\n", "internal/deep/inner/x.rs": "fn main() {}\n"} {
+		if err := os.MkdirAll(filepath.Join(root, filepath.Dir(file)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, file), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, c := range []struct {
+		name  string
+		paths []string
+		want  []string
+	}{
+		{"a named folder", []string{"internal/konst"}, []string{"go"}},
+		{"a named file reads its folder", []string{"internal/konst/new.go"}, []string{"go"}},
+		{"an absolute folder", []string{filepath.ToSlash(filepath.Join(root, "docs"))}, []string{"markdown"}},
+		{"two folders, sorted once", []string{"docs/guide.md", "internal/konst", "internal/konst/konst.go"}, []string{"go", "markdown"}},
+		{"a folder that does not exist", []string{"missing/dir"}, nil},
+		{"a folder holding only folders", []string{"internal/deep"}, nil},
+		{"no path", nil, nil},
+	} {
+		got, err := Languages(root, c.paths)
+		if err != nil || !slices.Equal(got, c.want) {
+			t.Errorf("%s: Languages = %q, %v, want %q", c.name, got, err, c.want)
+		}
+	}
+}
+
+func TestALoneLeadsLanguagesReachTheLanguageRules(t *testing.T) {
+	golang := Trigger{languages: []string{"go"}}
+	for _, c := range []struct {
+		task  Task
+		fires bool
+	}{
+		{Task{Text: "rename konst.Foo", Languages: []string{"go"}}, true},
+		{Task{Text: "rename konst.Foo", Languages: []string{"markdown"}}, false},
+		{Task{Text: "rename konst.Foo"}, false},
+	} {
+		if fires, why := golang.firesFor(c.task); fires != c.fires {
+			t.Errorf("%q: fires = %v, want %v: %s", c.task.Languages, fires, c.fires, why)
 		}
 	}
 }

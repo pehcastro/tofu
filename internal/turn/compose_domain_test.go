@@ -1,6 +1,8 @@
 package turn
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -140,6 +142,83 @@ func TestALeadThatPlansReceivesTheQAAndWriterRulesInTheTaskHalf(t *testing.T) {
 			if held.Why == "" {
 				t.Errorf("%q: %s is held back with no reason", c.task, held.RuleID)
 			}
+		}
+	}
+}
+
+func TestALeadAloneGetsTheCodingRulesAndALeadThatSpawnsDoesNot(t *testing.T) {
+	rules, err := rule.LoadFS(shipped.Files(), "library")
+	if err != nil {
+		t.Fatalf("LoadFS: %v", err)
+	}
+	goRules := []string{"comments", "go_wrap_errors", "go_no_blank_error"}
+	order := []string{"design_first", "read_first"}
+	testOrder := []string{"failure_modes_first", "no_unit_test_after_code"}
+	for _, c := range []struct {
+		task          string
+		alone         bool
+		languages     []string
+		frameworks    []string
+		fire, notFire []string
+	}{
+		{"fix the nil check in internal/turn/loop.go and add tests", true, nil, nil, slices.Concat(goRules, order, testOrder), nil},
+		{"fix the nil check in internal/turn/loop.go and add tests", false, nil, nil, nil, slices.Concat(goRules, order, testOrder)},
+		{"rename konst.Foo to konst.Bar in internal/konst", true, []string{"go"}, nil, slices.Concat(goRules, order), testOrder},
+		{"rename konst.Foo to konst.Bar in internal/konst", false, []string{"go"}, nil, nil, slices.Concat(goRules, order)},
+		{"rename the title in docs/guide", true, []string{"markdown"}, nil, order, goRules},
+		{"fix the button in src/app.tsx", true, nil, []string{"react"}, order, []string{"fe_dialog"}},
+		{"fix the dialog in src/app.tsx", true, nil, []string{"react"}, []string{"fe_dialog"}, nil},
+	} {
+		composed, err := Compose(ComposeSpec{Task: c.task, Environment: "<env/>", ToolGuidance: "read reads a whole file", Rules: rules, Role: rule.RoleOrchestrator,
+			Alone: c.alone, Languages: c.languages, Frameworks: c.frameworks})
+		if err != nil {
+			t.Fatalf("Compose %q: %v", c.task, err)
+		}
+		fired := map[string]bool{}
+		for _, part := range composed.Parts {
+			fired[part.RuleID] = part.RuleID != ""
+		}
+		for _, id := range c.fire {
+			if !fired[id] {
+				t.Errorf("%q alone %v in %q: %s is held back, want it fired", c.task, c.alone, c.languages, id)
+			}
+		}
+		for _, id := range c.notFire {
+			if fired[id] {
+				t.Errorf("%q alone %v in %q: %s fired, want it held back", c.task, c.alone, c.languages, id)
+			}
+		}
+	}
+}
+
+func TestALeadWorksAloneOnOneNamedFolderAndAGoSelectorIsNotAFile(t *testing.T) {
+	dir := t.TempDir()
+	for _, folder := range []string{"internal/konst", "internal/other"} {
+		if err := os.MkdirAll(filepath.Join(dir, folder), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "internal/konst/konst.go"), []byte("package konst\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for task, alone := range map[string]bool{
+		"rename konst.Foo to konst.Bar in internal/konst":     true,
+		"fix the typo in internal/konst/konst.go":             true,
+		"move internal/konst/konst.go into internal/other":    false,
+		"make the desk faster":                                false,
+		"rename konst.Foo to konst.Bar":                       false,
+		"rename konst.Foo in internal/konst with a sub-agent": false,
+	} {
+		if got := LeadWorksAlone(dir, task, nil); got != alone {
+			t.Errorf("%q: alone %v, want %v", task, got, alone)
+		}
+	}
+	for task, paths := range map[string][]string{
+		"rename konst.Foo to konst.Bar in internal/konst": {"internal/konst"},
+		"fix main.go and README.md and app.tsx":           {"main.go", "README.md", "app.tsx"},
+	} {
+		if got := TaskNamed(task).Paths; !slices.Equal(got, paths) {
+			t.Errorf("%q names %q, want %q", task, got, paths)
 		}
 	}
 }

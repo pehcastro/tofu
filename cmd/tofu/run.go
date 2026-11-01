@@ -785,6 +785,10 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 		spec.Rules = slices.DeleteFunc(slices.Clone(rules), func(loaded rule.Rule) bool {
 			return slices.Contains([]string{"orchestrate", verifySubAgentsRule, "plan_before_spawn", "spawn_effort", "research_fan_out", "brief_from_references", "announce_spawn"}, loaded.ID)
 		})
+		spec.Alone = true
+		if spec.Languages, err = rule.Languages(cmp.Or(opts.dir, "."), turn.TaskNamed(opts.task).Paths); err != nil {
+			say("no language rule fires from the folders the task names: " + err.Error())
+		}
 	}
 	subAgents.Prompt.Dropped = slices.Concat(brokenAgents, unloaded, droppedRules(stack, rules, switchedOff, opts))
 	spec.Dropped = slices.Concat(brokenAgents, unloaded, droppedRules(stack, spec.Rules, switchedOff, opts))

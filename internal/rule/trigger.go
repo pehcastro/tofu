@@ -4,8 +4,11 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
+	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -61,6 +64,8 @@ type Task struct {
 	Language   string
 	Role       Role
 	Frameworks []string
+	Alone      bool
+	Languages  []string
 }
 
 func (t Task) touchesTests() bool {
@@ -85,6 +90,33 @@ func (t Task) touchesTests() bool {
 }
 
 func KnownLanguage(name string) bool { return languageExtensions()[name] != nil }
+
+func Languages(root string, paths []string) ([]string, error) {
+	var languages []string
+	for _, named := range paths {
+		folder := filepath.FromSlash(named)
+		if !filepath.IsAbs(folder) {
+			folder = filepath.Join(root, folder)
+		}
+		if held, err := os.Stat(folder); err != nil || !held.IsDir() {
+			folder = filepath.Dir(folder)
+		}
+		entries, err := os.ReadDir(folder)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("%s holds the files whose language the task reaches and cannot be read: %w", folder, err)
+		}
+		for _, entry := range entries {
+			if language := LanguageOf(entry.Name()); language != "" && !entry.IsDir() {
+				languages = append(languages, language)
+			}
+		}
+	}
+	slices.Sort(languages)
+	return slices.Compact(languages), nil
+}
 
 func LanguageOf(file string) string {
 	extension := strings.ToLower(path.Ext(file))
@@ -302,12 +334,12 @@ func (t Trigger) firesFor(task Task) (bool, string) {
 		}
 		why = append(why, fmt.Sprintf("the condition %s matched %q", t.condition, found))
 	}
-	if t.touches != nil && task.Role == RoleSubAgent {
+	if t.touches != nil && (task.Role == RoleSubAgent || task.Alone) {
 		found := t.touches.FindString(strings.Join(append([]string{task.Text}, task.Paths...), "\n"))
 		if found == "" {
-			return false, fmt.Sprintf("the touches %s matches nothing in the sub-agent's task or paths", t.touches)
+			return false, fmt.Sprintf("the touches %s matches nothing in the writer's task or paths", t.touches)
 		}
-		why = append(why, fmt.Sprintf("the sub-agent's task touches %q", found))
+		why = append(why, fmt.Sprintf("the writer's task touches %q", found))
 	}
 	if t.scope != "" {
 		reached := ""
@@ -332,6 +364,9 @@ func (t Trigger) firesFor(task Task) (bool, string) {
 		}
 		if reached == "" && slices.Contains(t.languages, task.Language) {
 			language, reached = task.Language, "the language the sub-agent declares"
+		}
+		if at := slices.IndexFunc(task.Languages, func(held string) bool { return slices.Contains(t.languages, held) }); reached == "" && at >= 0 {
+			language, reached = task.Languages[at], "a file in the folders the task names"
 		}
 		if reached == "" {
 			return false, fmt.Sprintf("no path the task names is %s", strings.Join(t.languages, " or "))
@@ -401,8 +436,10 @@ func Index(rules []Rule, task Task) []Match {
 		switch {
 		case !fires && task.Verb == VerbPlan && r.Domain == DomainQA && r.Trigger.onlyPaths():
 			fires, why = true, "the task plans work, and a qa rule scoped to paths reaches the plan before the paths exist"
-		case fires && task.Role == RoleOrchestrator && task.Verb != VerbPlan && r.forTheWriterOnly():
-			fires, why = false, "a rule for how code is written reaches the agent that writes it or a lead that plans, and the prompt is the orchestrator's on a task that plans nothing"
+		case fires && task.Role == RoleOrchestrator && task.Verb != VerbPlan && !task.Alone && r.forTheWriterOnly():
+			fires, why = false, "a rule for how code is written reaches the agent that writes it, a lead that plans or a lead that works alone, and the prompt is the orchestrator's on a task that plans nothing and may spawn"
+		case fires && task.Alone && r.forTheWriterOnly():
+			why += ", and the lead works alone, so it writes the code itself"
 		}
 		index[i] = Match{RuleID: r.ID, Fires: fires, Why: why}
 	}

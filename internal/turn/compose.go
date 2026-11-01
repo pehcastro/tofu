@@ -77,6 +77,8 @@ type ComposeSpec struct {
 	WindowTokens int
 	Role         rule.Role
 	Frameworks   []string
+	Alone        bool
+	Languages    []string
 	Dropped      []PromptPart
 	Kinds        *KindJudge
 }
@@ -248,7 +250,7 @@ func composedOrder() []rule.Concern {
 
 func Compose(spec ComposeSpec) (Composed, error) {
 	composed := Composed{Task: TaskNamed(spec.Task)}
-	composed.Task.Role, composed.Task.Frameworks = spec.Role, spec.Frameworks
+	composed.Task.Role, composed.Task.Frameworks, composed.Task.Alone, composed.Task.Languages = spec.Role, spec.Frameworks, spec.Alone, spec.Languages
 	var wordsDecided error
 	if spec.Kinds != nil {
 		composed.Task.Verb, wordsDecided = spec.Kinds.Of(spec.Task, composed.Task.Verb)
@@ -418,7 +420,7 @@ func namedExtension(word string) bool {
 		return false
 	}
 	for _, letter := range extension {
-		if !unicode.IsLetter(letter) {
+		if !unicode.IsLower(letter) {
 			return false
 		}
 	}
