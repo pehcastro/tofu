@@ -1,6 +1,7 @@
 package turn
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -223,10 +224,19 @@ func (c Config) opening(task llm.Origin, notes ...string) []llm.Message {
 }
 
 type Prefix struct {
-	held   bool
-	system string
-	tools  []llm.Tool
-	sent   messagesKept
+	held     bool
+	first    heldPrefix
+	tools    []llm.Tool
+	inForce  []keptPart
+	appended []keptPart
+	sent     messagesKept
+}
+
+type heldPrefix struct {
+	head, system string
+	parts        []keptPart
+	changed      string
+	composedNow  bool
 }
 
 func (p *Prefix) lastSent() *messagesKept {
@@ -236,14 +246,58 @@ func (p *Prefix) lastSent() *messagesKept {
 	return &p.sent
 }
 
-func (p *Prefix) hold(system string, tools []llm.Tool) string {
+const (
+	thePromptChangedSince = "the system prompt above is kept as this session's first turn sent it, so the provider can reuse its cache. what changed in it since then:"
+	noLongerApplies       = "no longer applies, so disregard it in the system prompt above: "
+	PartAppendedWhy       = "sent in a message after the cached system prompt, because it changed after this session's first turn"
+)
+
+func inTheSystem(part keptPart) bool { return part.Sent() && !part.PerTurn }
+
+func promptChange(message llm.Message) bool {
+	return message.Role == llm.RoleUser && message.Origin.Source == llm.SourceEnvironment && strings.HasPrefix(message.Content, thePromptChangedSince)
+}
+
+func (part keptPart) samePart(other keptPart) bool {
+	return part.Kind == other.Kind && part.Rule == other.Rule && part.Agent == other.Agent && part.Name == other.Name && part.File == other.File && part.Off == other.Off
+}
+
+func (c Config) holdPrefix(tools []llm.Tool, preview recall.Config) heldPrefix {
+	now := heldPrefix{head: c.System, system: c.SystemMessage(), parts: c.promptParts(preview), composedNow: true}
+	p := c.Prefix
 	if p == nil {
-		return system
+		return now
 	}
+	head := slices.DeleteFunc(slices.Clone(now.parts), func(part keptPart) bool { return !inTheSystem(part) })
 	if !p.held {
-		p.held, p.system, p.tools = true, system, tools
+		p.held, p.first, p.tools, p.inForce = true, heldPrefix{head: now.head, system: now.system, parts: head}, tools, head
+		return now
 	}
-	return p.system
+	var changes []string
+	for _, part := range head {
+		if slices.ContainsFunc(p.inForce, func(was keptPart) bool { return was.samePart(part) && was.text == part.text }) {
+			continue
+		}
+		text := part.text
+		if part.Kind == partInstructions {
+			text = "[" + partInstructions + "]\n" + text
+		}
+		changes = append(changes, text)
+		part.PerTurn, part.Why = true, strings.TrimPrefix(part.Why+"; "+PartAppendedWhy, "; ")
+		p.appended = append(p.appended, part)
+	}
+	for _, was := range p.inForce {
+		if !slices.ContainsFunc(head, was.samePart) {
+			changes = append(changes, strings.TrimSpace(noLongerApplies+cmp.Or(was.Rule, was.Agent, was.Name, was.Kind)+" "+was.File))
+		}
+	}
+	p.inForce = head
+	held := p.first
+	held.parts = slices.Concat(p.first.parts, p.appended, slices.DeleteFunc(now.parts, inTheSystem))
+	if len(changes) > 0 {
+		held.changed = thePromptChangedSince + "\n\n" + strings.Join(changes, "\n\n")
+	}
+	return held
 }
 
 func (p *Prefix) toolsOr(tools []llm.Tool) []llm.Tool {

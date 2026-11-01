@@ -501,7 +501,7 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 	var system []llm.Message
 	for _, message := range messages {
 		switch {
-		case standsAtTheHead(message):
+		case standsAtTheHead(message) || promptChange(message):
 			system = append(system, message)
 		case isTask(message):
 			opening.Images = message.Images
@@ -512,7 +512,7 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 		if at := slices.IndexFunc(tail, isTask); at >= 0 {
 			tail = tail[at:]
 		}
-		tail = slices.Clone(tail)
+		tail = slices.DeleteFunc(slices.Clone(tail), promptChange)
 		for i := range tail {
 			tail[i].Thinking = llm.Thinking{}
 		}

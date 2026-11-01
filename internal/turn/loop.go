@@ -305,7 +305,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	if err != nil {
 		return Row{}, err
 	}
-	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, Account: account.ID, SpawnedFrom: config.SpawnedFrom, SpawnedBy: config.SpawnedBy, Budget: budget, System: config.System, Tools: usedTools, ToolSchemas: string(sentSchemas), Parts: config.promptParts(artifacts.preview)}
+	headTools := NewRegistry(withLoopTools(source().tools)...).Definitions()
+	held := config.holdPrefix(headTools, artifacts.preview)
+	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, Account: account.ID, SpawnedFrom: config.SpawnedFrom, SpawnedBy: config.SpawnedBy, Budget: budget, System: held.head, Tools: usedTools, ToolSchemas: string(sentSchemas), Parts: held.parts}
 
 	upgraded := config.upgradeNote()
 	recorded, err = openRecord(config, row)
@@ -345,9 +347,8 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	ctx = context.WithValue(ctx, hookFireKey{}, fire)
 
 	messages := make([]llm.Message, 0, len(config.History)+2)
-	headTools := NewRegistry(withLoopTools(source().tools)...).Definitions()
-	if system := config.Prefix.hold(config.SystemMessage(), headTools); system != "" {
-		messages = append(messages, llm.Message{Role: llm.RoleSystem, Content: system})
+	if held.system != "" {
+		messages = append(messages, llm.Message{Role: llm.RoleSystem, Content: held.system})
 	}
 	afterSystem := len(messages)
 	var keeper episodeKeeper
@@ -445,7 +446,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		episodesCarried = len(view)
 		return view
 	}
-	carried, view := slices.DeleteFunc(slices.Clone(config.History), func(message llm.Message) bool { return message.Origin.Source == llm.SourceSpawnLine }), []llm.Message(nil)
+	carried, view := slices.DeleteFunc(slices.Clone(config.History), func(message llm.Message) bool {
+		return message.Origin.Source == llm.SourceSpawnLine || held.composedNow && promptChange(message)
+	}), []llm.Message(nil)
 	if config.opensGeneration() {
 		carried, view = withoutMemoryViews(carried), config.MemoryMessage()
 	}
@@ -453,6 +456,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		view = withEpisodes(view, episodesFor(budget.Sending(artifacts.preview, string(schemas)), slices.Concat(messages, view), nil))
 	}
 	messages = slices.Concat(messages, carried, view)
+	if held.changed != "" {
+		messages = append(messages, llm.Message{Role: llm.RoleUser, Content: held.changed, Origin: llm.Origin{Source: llm.SourceEnvironment, TakenAt: start}})
+	}
 	concluding, taken := "", ""
 	var lead *SpawnTool
 	for _, tool := range config.Tools.tools {
@@ -774,6 +780,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			System:      row.System,
 			Tools:       row.Tools,
 			ToolSchemas: row.ToolSchemas,
+			Parts:       row.Parts,
 		}
 		if moved != nil {
 			row.Account = moved.ID

@@ -1352,15 +1352,19 @@ func requestPartsLines(page cli.Page, parts *session.RequestParts) []string {
 	}
 	rows := make([]cli.Row, len(parts.Prompt))
 	for i, part := range parts.Prompt {
+		why, appended := strings.CutSuffix(part.Why, turn.PartAppendedWhy)
 		placed := "system prompt"
-		if part.PerTurn {
+		switch {
+		case appended:
+			placed, why = "in a message after the cached system prompt, changed mid-session", strings.TrimSuffix(why, "; ")
+		case part.PerTurn:
 			placed = "with the task"
 		}
 		cells := []string{part.Kind, cmp.Or(part.Rule, part.Agent, "tofu"), placed, strconv.Itoa(part.Tokens) + " tokens"}
 		if part.Off {
 			cells = append(cells, "switched off")
 		}
-		rows[i] = cli.Row{Mark: cli.Idle, Cells: cells, Detail: strings.Join(slices.DeleteFunc([]string{part.Why, part.File}, func(said string) bool { return said == "" }), " · ")}
+		rows[i] = cli.Row{Mark: cli.Idle, Cells: cells, Detail: strings.Join(slices.DeleteFunc([]string{why, part.File}, func(said string) bool { return said == "" }), " · ")}
 	}
 	var skills, memories []string
 	for _, item := range parts.Carried {
