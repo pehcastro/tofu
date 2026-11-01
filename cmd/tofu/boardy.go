@@ -27,7 +27,7 @@ func boardyUsageOf(subcommand string) string {
 	case "init":
 		return "tofu boardy init --key KEY [--name text] [--json]"
 	case "new":
-		return "tofu boardy new [--board KEY | --parent ID] [--type story|task|bug|subtask] [--priority P0..P4] [--status s] [--points n] [--size S|M|L] [--spec path] [--owns a,b] [--epic E] [--sprint S] [--problem text] [--scope text] --before text --driven text --still-works line... --error-case text [--feasibility text] [--acceptance line]... [--as name] <title> [--json]"
+		return "tofu boardy new [--board KEY | --parent ID] [--type story|task|bug|subtask] [--priority P0..P4] [--status s] [--points n] [--size S|M|L] [--spec path] [--owns a,b] [--labels docs-only,...] [--epic E] [--sprint S] [--problem text] [--scope text] --before text --driven text --still-works line... --error-case text [--feasibility text] [--acceptance line]... [--as name] <title> [--json]"
 	case "list":
 		return "tofu boardy list [--board KEY] [--status s] [--all] [--fields id,status,assignee,owns] [--json]"
 	case "held":
@@ -37,7 +37,7 @@ func boardyUsageOf(subcommand string) string {
 	case "move":
 		return "tofu boardy move <ticket> <status> [--reason text] [--as name] [--json]"
 	case "log":
-		return "tofu boardy log <ticket> <text> [--evidence [--line n]] [--as name] [--json]"
+		return "tofu boardy log <ticket> [<text>] [--evidence [--line n] | --before <what you ran and what it printed>] [--as name] [--json]"
 	case "lint":
 		return "tofu boardy lint [--board KEY] [--json]"
 	case "boards":
@@ -224,7 +224,7 @@ func (c boardyCall) create() int {
 	if err != nil {
 		return c.o.fail(err)
 	}
-	ticket := boardy.Ticket{Front: boardy.Front{Title: title, Owns: splitList(c.flags["owns"]), Spec: c.flags["spec"], Parent: c.flags["parent"], Epic: c.flags["epic"], Sprint: c.flags["sprint"]}, Problem: c.flags["problem"], Scope: c.flags["scope"]}
+	ticket := boardy.Ticket{Front: boardy.Front{Title: title, Owns: splitList(c.flags["owns"]), Labels: splitList(c.flags["labels"]), Spec: c.flags["spec"], Parent: c.flags["parent"], Epic: c.flags["epic"], Sprint: c.flags["sprint"]}, Problem: c.flags["problem"], Scope: c.flags["scope"]}
 	if acceptance := c.flags["acceptance"]; acceptance != "" {
 		ticket.Acceptance = []string{acceptance}
 	}
@@ -543,7 +543,8 @@ func (c boardyCall) move() int {
 }
 
 func (c boardyCall) log() int {
-	if len(c.args) < 2 {
+	before, capturing := c.flags["before"]
+	if len(c.args) < 1 || len(c.args) < 2 && !capturing {
 		return c.o.usage(errors.New("name a " + c.words.Ticket + " and the text to log"))
 	}
 	text := strings.Join(c.args[1:], " ")
@@ -552,6 +553,10 @@ func (c boardyCall) log() int {
 	switch line := c.flags["line"]; {
 	case c.flags["evidence"] == "" && line != "":
 		return c.o.usage(errors.New("--line names the acceptance line an --evidence entry proves"))
+	case capturing && c.flags["evidence"] != "":
+		return c.o.usage(errors.New("an entry is a --before capture or --evidence, not both"))
+	case capturing:
+		ticket, err = c.managed.CaptureBefore(c.args[0], strings.TrimSpace(before+" "+text), c.actor)
 	case c.flags["evidence"] == "":
 		ticket, err = c.managed.Comment(c.args[0], text, c.actor)
 	default:

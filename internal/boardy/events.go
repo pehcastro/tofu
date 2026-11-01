@@ -23,13 +23,14 @@ const (
 	Moved     EventKind = "moved"
 	Commented EventKind = "commented"
 	Evidence  EventKind = "evidence"
+	Captured  EventKind = "before"
 	Spawned   EventKind = "spawned"
 	Messaged  EventKind = "messaged"
 	Reported  EventKind = "reported"
 )
 
 func (EventKind) Enum() []string {
-	return enum(Created, Moved, Commented, Evidence, RuleFired, Waiting, Requested, Accepted, RequestDropped, Handed, Widened, ManagersChanged, Assigned, Asked, Answered, Spawned, Messaged, Reported, HookChanged, HookFailed)
+	return enum(Created, Moved, Commented, Evidence, Captured, RuleFired, Waiting, Requested, Accepted, RequestDropped, Handed, Widened, ManagersChanged, Assigned, Asked, Answered, Spawned, Messaged, Reported, HookChanged, HookFailed)
 }
 
 type Event struct {

@@ -94,6 +94,9 @@ func TestTicketToolsKeepASubAgentToItsOwnTicket(t *testing.T) {
 	if _, err := runTicket(logged, `{"id":"DEMO-2","kind":"say","text":"go-dev-1: ran it\nok  demo/internal/a"}`); err == nil {
 		t.Error("a said entry carrying command output was written")
 	}
+	if _, err := runTicket(logged, `{"id":"DEMO-2","kind":"before","text":"go run ./cmd/a utf8.txt\nerror: invalid byte"}`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := runTicket(logged, `{"id":"DEMO-2","kind":"say","text":"go-dev-1: UTF-8 input parses and the test passes."}`); err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +110,7 @@ func TestTicketToolsKeepASubAgentToItsOwnTicket(t *testing.T) {
 		t.Fatal(err)
 	}
 	read, err := runTicket(subAgentTool(t, board, "ticket_read"), `{"id":"DEMO-2"}`)
-	if err != nil || !strings.Contains(read, "status: review") || !strings.Contains(read, "- "+time.Now().Format(time.DateOnly)+" go-dev-1: UTF-8 input parses") || !strings.Contains(read, "go-dev-1 (evidence): go test ./internal/a") {
+	if err != nil || !strings.Contains(read, "status: review") || !strings.Contains(read, "- "+time.Now().Format(time.DateOnly)+" go-dev-1: UTF-8 input parses") || !strings.Contains(read, "go-dev-1 (evidence): go test ./internal/a") || !strings.Contains(read, "go-dev-1: before capture: go run ./cmd/a utf8.txt") {
 		t.Errorf("ticket_read gave %v:\n%s", err, read)
 	}
 	if _, err := runTicket(subAgentTool(t, board, "ticket_request"), `{"board":"DEMO",`+drafted+`"title":"a follow-up","acceptance":"- it is filed"}`); err != nil {
@@ -121,7 +124,7 @@ func TestTicketToolsKeepASubAgentToItsOwnTicket(t *testing.T) {
 	for _, event := range events {
 		seen = append(seen, string(event.Kind)+" "+event.Actor)
 	}
-	for _, want := range []string{"assigned lead", "moved lead", "commented go-dev-1", "evidence go-dev-1", "moved go-dev-1", "requested go-dev-1"} {
+	for _, want := range []string{"assigned lead", "moved lead", "before go-dev-1", "commented go-dev-1", "evidence go-dev-1", "moved go-dev-1", "requested go-dev-1"} {
 		if !slices.Contains(seen, want) {
 			t.Errorf("events.jsonl has no %q: %q", want, seen)
 		}

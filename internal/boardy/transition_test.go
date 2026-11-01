@@ -36,6 +36,9 @@ func ticketWith(title string, owns ...string) Ticket {
 
 func proved(t *testing.T, m Managed, id string) {
 	t.Helper()
+	if _, err := m.CaptureBefore(id, "ran it and read what it printed before the change", manager); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := m.Evidence(id, "ran it and read what it printed", manager, 0); err != nil {
 		t.Fatal(err)
 	}

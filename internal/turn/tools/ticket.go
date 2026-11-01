@@ -36,6 +36,7 @@ type logKind string
 const (
 	logSay      logKind = "say"
 	logEvidence logKind = logKind(boardy.Evidence)
+	logBefore   logKind = logKind(boardy.Captured)
 )
 
 func sentencesIn(words []string) int {
@@ -134,8 +135,8 @@ func (t ticketTool) Definition() llm.Tool {
 	case ticketRead:
 		describe = "reads a ticket by its id from any board of this project: front matter, Problem, Scope, every Acceptance revision (the last one is in force) and Log"
 	case ticketLog:
-		describe = fmt.Sprintf("adds one entry to your own ticket, under your name, so never start it with your name. kind say is you talking to the lead in the first person, at most %d sentences and %d words on one line and no command output: a decision and why, a finding that changes the plan, what stops you, what you need, or that you are done. kind evidence proves one acceptance line, named by line: the command exactly as you ran it and the output lines that matter; the lead reads it at review and it stays out of the conversation. your last say entry is where you ended, and the lead reads it as your report: say it plainly, with no heading and no bold label. progress nobody acts on is not an entry", konst.BoardSaidSentencesMost, konst.BoardSaidWordsMost)
-		properties["kind"] = map[string]any{"type": "string", "enum": []logKind{logSay, logEvidence}}
+		describe = fmt.Sprintf("adds one entry to your own ticket, under your name, so never start it with your name. kind say is you talking to the lead in the first person, at most %d sentences and %d words on one line and no command output: a decision and why, a finding that changes the plan, what stops you, what you need, or that you are done. kind evidence proves one acceptance line, named by line: the command exactly as you ran it and the output lines that matter; the lead reads it at review and it stays out of the conversation. kind before captures how things work now, before you change anything: the same steps as the driven path and what they printed; a ticket that changes behaviour reaches done only with one, and one logged after an evidence entry or after a commit touching the ticket's owns is refused as late. your last say entry is where you ended, and the lead reads it as your report: say it plainly, with no heading and no bold label. progress nobody acts on is not an entry", konst.BoardSaidSentencesMost, konst.BoardSaidWordsMost)
+		properties["kind"] = map[string]any{"type": "string", "enum": []logKind{logSay, logEvidence, logBefore}}
 		properties["line"] = map[string]any{"type": "integer", "description": "for kind evidence, the acceptance line in force it proves, counted from 1"}
 		properties["text"], required = stringParam("what you say, or the evidence"), append(required, "kind", "text")
 	case ticketAsk:
@@ -157,6 +158,7 @@ func (t ticketTool) Definition() llm.Tool {
 			"scope": stringParam("what is in and out"), "acceptance": stringParam("acceptance lines, one per line, each starting with - "),
 			"owns":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "the path globs the work may write"},
 			"parent": stringParam("a ticket to split, such as DEMO-2: the new one becomes its sub-ticket DEMO-2-1, and its owns must sit inside the parent's"),
+			"labels": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "labels; " + boardy.DocsOnlyLabel + " marks a ticket that changes no behaviour, which reaches done with no before capture"},
 		}
 		required = []string{"board", "title", "acceptance"}
 		var drafted boardy.Ticket
@@ -175,7 +177,7 @@ func (t ticketTool) Definition() llm.Tool {
 		statuses := []boardy.Status{boardy.Review}
 		describe = "moves your own ticket from doing to review once every acceptance line in force has an entry of kind evidence naming it, or is in leave; a board may also want a least amount of evidence, and the refusal says how much"
 		if t.manager {
-			statuses, describe = boardy.Statuses(), "moves a ticket on a board you manage to a status; blocked needs a reason. a ticket reaches doing, review or done only with Acceptance, review only with a Log entry, done only when every acceptance line in force has evidence naming it and the reason names nothing still open, and a parent reaches review or done only once its sub-tickets are done or dropped. a ticket moving into doing may not own a path a ticket in doing already owns; the refusal names the glob and the ticket"
+			statuses, describe = boardy.Statuses(), "moves a ticket on a board you manage to a status; blocked needs a reason. a ticket reaches doing, review or done only with Acceptance, review only with a Log entry, done only when every acceptance line in force has evidence naming it, it has an entry of kind before unless it is labelled docs-only, and the reason names nothing still open, and a parent reaches review or done only once its sub-tickets are done or dropped. a ticket moving into doing may not own a path a ticket in doing already owns; the refusal names the glob and the ticket"
 		}
 		properties["to"], properties["reason"], required = map[string]any{"type": "string", "enum": statuses}, stringParam("why, required for blocked"), append(required, "to")
 		describe += ". a reason is one sentence on one line, and anything longer goes in ticket_log"
@@ -197,7 +199,7 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 		StillWorks                                                                                                        string `json:"still_works"`
 		ErrorCase                                                                                                         string `json:"error_case"`
 		Kind                                                                                                              logKind
-		Owns, Options                                                                                                     []string
+		Owns, Options, Labels                                                                                             []string
 		Recommend, Line                                                                                                   int
 		Leave                                                                                                             []int
 	}
@@ -223,8 +225,10 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 				}
 			case logEvidence:
 				ticket, err = t.board.Evidence(args.ID, args.Text, t.actor, args.Line)
+			case logBefore:
+				ticket, err = t.board.CaptureBefore(args.ID, args.Text, t.actor)
 			default:
-				err = fmt.Errorf("kind is %s or %s, not %q", logSay, logEvidence, args.Kind)
+				err = fmt.Errorf("kind is %s, %s or %s, not %q", logSay, logEvidence, logBefore, args.Kind)
 			}
 			said = "logged on " + ticket.ID
 		case ticketAsk:
@@ -238,7 +242,7 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 			said = "asked in the Log of " + ticket.ID + "; a manager answers there"
 		case ticketRequest, ticketCreate:
 			command = string(t.verb) + " " + args.Board
-			draft := boardy.Ticket{Front: boardy.Front{Title: args.Title, Owns: args.Owns, Parent: args.Parent, Epic: args.Epic, Sprint: args.Sprint}, Problem: args.Problem, Scope: args.Scope,
+			draft := boardy.Ticket{Front: boardy.Front{Title: args.Title, Owns: args.Owns, Labels: args.Labels, Parent: args.Parent, Epic: args.Epic, Sprint: args.Sprint}, Problem: args.Problem, Scope: args.Scope,
 				Before: args.Before, Driven: args.Driven, StillWorks: args.StillWorks, ErrorCase: args.ErrorCase, Feasibility: args.Feasibility, Acceptance: []string{args.Acceptance}}
 			file := t.board.Create
 			if t.verb == ticketRequest {

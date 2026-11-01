@@ -135,6 +135,8 @@ type Ticket struct {
 	Log         string     `json:"log"`
 }
 
+const DocsOnlyLabel = "docs-only"
+
 const (
 	FeasibilityHeading = "Feasibility"
 	feasibilitySays    = "what the platform gives, what it does not, and the source"

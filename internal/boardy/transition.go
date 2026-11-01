@@ -131,6 +131,9 @@ func (m Managed) move(board Board, ticket Ticket, to Status, reason, actor strin
 		if err := m.closable(ticket, reason, actor); err != nil {
 			return ticket, err
 		}
+		if excused, _ := m.unbefored(ticket); excused != "" {
+			reason = strings.TrimSpace(reason + " (" + excused + ")")
+		}
 	}
 	if to == Doing {
 		var err error
@@ -224,6 +227,73 @@ func (m Managed) Evidence(id, text, actor string, line int) (Ticket, error) {
 	return m.entry(board, ticket, Event{Kind: Evidence, Text: text, Line: line}, actor, 0)
 }
 
+func (m Managed) CaptureBefore(id, text, actor string) (Ticket, error) {
+	ticket, board, err := m.mayAppend(id, actor)
+	if err != nil {
+		return ticket, err
+	}
+	events, err := m.Store.ticketEvents(id)
+	if err != nil {
+		return ticket, err
+	}
+	if slices.ContainsFunc(events, func(e Event) bool { return e.Kind == Evidence }) {
+		return ticket, RefusedError{Ticket: id, Why: "its before is late: an evidence entry is already logged, so the change was proved before anything showed how things worked without it, and a before is captured before the first evidence entry and the ticket's first commit"}
+	}
+	entered, first, err := m.firstCommit(ticket)
+	if err != nil {
+		return ticket, err
+	}
+	if first != "" {
+		return ticket, RefusedError{Ticket: id, Why: fmt.Sprintf("its before is late: commit %s touched its owns after it entered %s at %s, and a before is captured before the ticket's first commit, while it still shows how things work without the change", first, Doing, entered.UTC().Format(time.DateTime))}
+	}
+	return m.entry(board, ticket, Event{Kind: Captured, Text: text}, actor, 0)
+}
+
+func (m Managed) firstCommit(ticket Ticket) (time.Time, string, error) {
+	events, err := m.Store.ticketEvents(ticket.ID)
+	at := slices.IndexFunc(events, func(e Event) bool {
+		return e.To == Doing && (e.Kind == Created || e.Kind == Moved || e.Kind == Accepted)
+	})
+	if err != nil || at < 0 || len(ticket.Owns) == 0 || m.Store.Root == "" {
+		return time.Time{}, "", err
+	}
+	entered := events[at].At
+	if _, noCommit := gitOut(m.Store.Root, "", "rev-parse", "--verify", "--quiet", "HEAD"); noCommit != nil {
+		return entered, "", nil
+	}
+	args := []string{"log", "--format=%h %ct", "--since=@" + strconv.FormatInt(entered.Unix(), 10), "--"}
+	for _, glob := range ticket.Owns {
+		args = append(args, ":(glob,icase)"+glob)
+	}
+	out, err := gitOut(m.Store.Root, "", args...)
+	first := ""
+	for line := range strings.Lines(out) {
+		hash, committed, _ := strings.Cut(strings.TrimSpace(line), " ")
+		if unix, parseErr := strconv.ParseInt(committed, 10, 64); parseErr == nil && unix > entered.Unix() {
+			first = hash + " at " + time.Unix(unix, 0).UTC().Format(time.DateTime)
+		}
+	}
+	return entered, first, err
+}
+
+func beforeGateFrom() time.Time { return time.Date(2026, 11, 1, 5, 0, 0, 0, time.UTC) }
+
+func (m Managed) unbefored(ticket Ticket) (excused, missing string) {
+	events, err := m.Store.ticketEvents(ticket.ID)
+	from := beforeGateFrom().Format(time.DateTime) + " UTC"
+	switch {
+	case err != nil:
+		return "", "its before capture could not be read: " + err.Error()
+	case slices.ContainsFunc(events, func(e Event) bool { return e.Kind == Captured }):
+		return "", ""
+	case slices.Contains(ticket.Labels, DocsOnlyLabel):
+		return "labelled " + DocsOnlyLabel + ", so no before capture was asked", ""
+	case ticket.Created.Before(beforeGateFrom()):
+		return "made before " + from + ", so no before capture was asked", ""
+	}
+	return "", fmt.Sprintf("it has no before capture, and a ticket made from %s on reaches done only with one, logged before its first evidence entry and its first commit: tofu boardy log %s --before \"what you ran and what it printed\", or ticket_log kind before. A ticket labelled %s is not asked for one, and a ticket made before %s closes without one and its done reason says so", from, ticket.ID, DocsOnlyLabel, from)
+}
+
 func (m Managed) appended(id string, kind EventKind, text, actor string) (Ticket, error) {
 	ticket, board, err := m.mayAppend(id, actor)
 	if err != nil {
@@ -252,7 +322,11 @@ func (m Managed) entry(board Board, ticket Ticket, event Event, actor string, de
 	if err := m.gate(&s); err != nil {
 		return ticket, err
 	}
-	logged, err := m.appendLog(ticket.ID, event.Text, actor, event)
+	text := event.Text
+	if event.Kind == Captured {
+		text = "before capture: " + text
+	}
+	logged, err := m.appendLog(ticket.ID, text, actor, event)
 	if err != nil {
 		return logged, err
 	}
@@ -369,6 +443,9 @@ func (m Managed) validMove(board Board, ticket Ticket, to Status) error {
 		leftForNobody := []int{}
 		if unproved := m.unevidenced(ticket, leftForNobody); unproved != "" {
 			return RefusedError{Ticket: ticket.ID, Why: unproved + ", and a ticket reaches done only when every line in force has evidence, a line left for the lead included: tofu boardy log " + ticket.ID + " --evidence --line <n>"}
+		}
+		if _, missing := m.unbefored(ticket); missing != "" {
+			return RefusedError{Ticket: ticket.ID, Why: missing}
 		}
 	}
 	if to == Review || to == Done {

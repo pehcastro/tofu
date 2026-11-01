@@ -127,6 +127,21 @@ naming it, a line left for the lead included, and the refusal names the line:
 DEMO-3 refused: 1 of 2 acceptance lines in force have no evidence entry naming them: line 2, the dark theme shows the priority colour
 ```
 
+A move to done needs a before capture too: how things work before the
+change, on the same steps as the Driven path, logged before the ticket's
+first commit. The Log shows it as `before capture:` beside the evidence:
+
+```
+tofu boardy log DEMO-3 --before "tofu boardy list printed no priority column"
+```
+
+A capture logged after the ticket's first evidence entry is refused as late,
+and so is one logged after a commit touching the ticket's owns, made since it
+entered doing, naming the commit. A ticket made with
+`--labels docs-only` closes without one, and so does a ticket made before
+2026-11-01 05:00 UTC; either way its done reason says why no capture was
+asked.
+
 The reason is read too. Jev asks `done_reason@1` whether it names a part
 still open, and a reason such as `all done except the dark theme, follow up
 later` is refused, quoting the part:
@@ -335,8 +350,9 @@ the lead gives it.
 | `tofu boardy list [--board KEY] [--status s] [--all] [--fields id,status,assignee,owns]` | lists live tickets, or only the named front matter fields |
 | `tofu boardy held <path>` | names the ticket holding a path on any board, and the glob, or says it is not held |
 | `tofu boardy show <ticket> [--thread]` | prints one ticket; `--thread` adds its Activity in order |
-| `tofu boardy move <ticket> <status> [--reason text]` | changes its status; done needs evidence on every line and a reason naming nothing open |
+| `tofu boardy move <ticket> <status> [--reason text]` | changes its status; done needs evidence on every line, a before capture unless it is labelled docs-only, and a reason naming nothing open |
 | `tofu boardy log <ticket> <text> [--evidence [--line n]]` | appends a dated line to its Log; `--evidence` marks it as proof, and `--line` names the acceptance line it proves |
+| `tofu boardy log <ticket> --before <text>` | records how things work before the change, refused once a commit touched the ticket's owns |
 | `tofu boardy ask <ticket> --tldr t --eli5 e --options "a \| b" --recommend n --why w` | puts a question on a ticket |
 | `tofu boardy catchup [--board KEY] [--answers]` | lists open questions and writes `catchup.md`; `--answers` applies what the person wrote |
 | `tofu boardy lint [--board KEY]` | checks every ticket, exits 1 on a finding |

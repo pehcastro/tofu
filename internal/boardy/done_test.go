@@ -133,6 +133,9 @@ func TestDoneNeedsEveryAcceptanceLineProved(t *testing.T) {
 	if _, err := m.Store.Edit(left.ID, func(t *Ticket) error { t.Acceptance = []string{"- mine\n- the lead's"}; return nil }); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := m.CaptureBefore(left.ID, "drove it by hand before the change", agent); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := m.Evidence(left.ID, "go test passed", agent, 1); err != nil {
 		t.Fatal(err)
 	}
@@ -146,6 +149,126 @@ func TestDoneNeedsEveryAcceptanceLineProved(t *testing.T) {
 	}
 	if moved, err := m.Move(left.ID, Done, "", manager); err != nil || moved.Status != Done {
 		t.Fatalf("every line proved and still refused: %v", err)
+	}
+}
+
+func TestDoneNeedsABeforeCapture(t *testing.T) {
+	m := managedBoard(t, "DEMO")
+	made, err := m.Create("DEMO", ticketWith("behaviour", "library/**"), manager)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.CaptureBefore(made.ID, "tofu x printed the old row", manager); err != nil {
+		t.Fatal(err)
+	}
+	_, err = m.Move(made.ID, Done, "", manager)
+	refused(t, err, "line 1")
+	if _, err := m.Evidence(made.ID, "tofu x printed the new row", manager, 1); err != nil {
+		t.Fatal(err)
+	}
+	if moved, err := m.Move(made.ID, Done, "", manager); err != nil || moved.Status != Done {
+		t.Fatalf("a ticket with a before capture and every line proved: %v", err)
+	}
+
+	evidenced := func(id string) {
+		if _, err := m.Evidence(id, "tofu x printed the new row", manager, 1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bare, err := m.Create("DEMO", ticketWith("no before", "library/**"), manager)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidenced(bare.ID)
+	_, err = m.CaptureBefore(bare.ID, "written after the change was proved", manager)
+	refused(t, err, "late")
+	refused(t, err, "evidence")
+	if _, err := m.Store.Edit(bare.ID, func(t *Ticket) error { t.Status = Review; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	_, err = m.Move(bare.ID, Done, "", manager)
+	refused(t, err, "no before capture")
+	refused(t, err, "tofu boardy log "+bare.ID+" --before")
+	refused(t, err, "made before")
+	if _, err := m.Check("move", bare.ID, Done, manager); err == nil {
+		t.Error("check allowed a move to done that the move refuses")
+	}
+	attention, err := m.Attention("DEMO", time.Now())
+	if err != nil || slices.ContainsFunc(attention.Closable, func(n Need) bool { return n.ID == bare.ID }) {
+		t.Errorf("attention counts a ticket with no before capture as closable: %+v, %v", attention.Closable, err)
+	}
+
+	docs := ticketWith("docs", "docs/**")
+	docs.Labels = []string{DocsOnlyLabel}
+	marked, err := m.Create("DEMO", docs, manager)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidenced(marked.ID)
+	if moved, err := m.Move(marked.ID, Done, "", manager); err != nil || !strings.Contains(moved.Reason, DocsOnlyLabel) {
+		t.Fatalf("a docs-only ticket with no before capture: reason %q, %v", moved.Reason, err)
+	}
+
+	old, err := m.Create("DEMO", ticketWith("made before the gate", "library/**"), manager)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Store.Edit(old.ID, func(t *Ticket) error { t.Created = time.Date(2026, 10, 29, 0, 0, 0, 0, time.UTC); return nil }); err != nil {
+		t.Fatal(err)
+	}
+	evidenced(old.ID)
+	if moved, err := m.Move(old.ID, Done, "", manager); err != nil || !strings.Contains(moved.Reason, "made before") {
+		t.Fatalf("a ticket made before the gate: reason %q, %v", moved.Reason, err)
+	}
+}
+
+func TestABeforeAfterTheTicketsFirstCommitIsLate(t *testing.T) {
+	repo := t.TempDir()
+	commit := func(path string, at time.Time) {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(repo, path)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(repo, path), []byte(at.String()), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		gitIn(t, repo, "add", "-A")
+		cmd := exec.Command("git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", path)
+		cmd.Dir, cmd.Env = repo, append(os.Environ(), "GIT_COMMITTER_DATE="+at.Format(time.RFC3339), "GIT_AUTHOR_DATE="+at.Format(time.RFC3339))
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("commit %s: %v %s", path, err, out)
+		}
+	}
+	gitIn(t, repo, "init", "-q")
+	m := managedBoard(t, "DEMO")
+	m.Store.Root = repo
+	empty := ticketWith("no commit yet", "lib/**")
+	empty.Status = Doing
+	fresh, err := m.Create("DEMO", empty, manager)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.CaptureBefore(fresh.ID, "a repository with no commit has nothing late", manager); err != nil {
+		t.Fatalf("a before in a repository with no commit: %v", err)
+	}
+	if _, err := m.Move(fresh.ID, Dropped, "", manager); err != nil {
+		t.Fatal(err)
+	}
+	commit("lib/a.txt", time.Now().Add(-time.Hour))
+	doing := ticketWith("late", "lib/**")
+	doing.Status = Doing
+	made, err := m.Create("DEMO", doing, manager)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit("elsewhere/b.txt", time.Now().Add(time.Hour))
+	if _, err := m.CaptureBefore(made.ID, "a commit outside the owns leaves the before on time", manager); err != nil {
+		t.Fatalf("a before after a commit outside the owns: %v", err)
+	}
+	commit("lib/a.txt", time.Now().Add(2*time.Hour))
+	_, err = m.CaptureBefore(made.ID, "too late", manager)
+	refused(t, err, "late")
+	if thread, _ := m.Store.Thread(made.ID); slices.ContainsFunc(thread, func(e Event) bool { return e.Text == "too late" }) {
+		t.Error("a late before was written to the thread")
 	}
 }
 

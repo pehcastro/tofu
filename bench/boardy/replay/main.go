@@ -28,10 +28,11 @@ type fixture struct {
 	Acceptance string `json:"acceptance"`
 	Evidence   []int  `json:"evidence"`
 	Reason     string `json:"reason"`
+	Before     bool   `json:"before"`
 }
 
 type verdict struct {
-	lines, open, unread bool
+	lines, open, unread, before bool
 }
 
 func main() {
@@ -155,15 +156,18 @@ func read(tofu, board string) ([]fixture, error) {
 			}
 			return lines
 		}
+		capturedBy := func(at time.Time) bool {
+			return slices.ContainsFunc(shown.Thread, func(event boardy.Event) bool { return event.Kind == boardy.Captured && !event.At.After(at) })
+		}
 		reasoned := false
 		for _, event := range shown.Thread {
 			if event.Kind == boardy.Moved && event.To == boardy.Done {
 				reasoned = true
-				fixtures = append(fixtures, fixture{Acceptance: inForce, Evidence: evidenceBy(event.At), Reason: event.Text})
+				fixtures = append(fixtures, fixture{Acceptance: inForce, Evidence: evidenceBy(event.At), Reason: event.Text, Before: capturedBy(event.At)})
 			}
 		}
 		if !reasoned && ticket.Status == boardy.Done {
-			fixtures = append(fixtures, fixture{Acceptance: inForce, Evidence: evidenceBy(ticket.Updated)})
+			fixtures = append(fixtures, fixture{Acceptance: inForce, Evidence: evidenceBy(ticket.Updated), Before: capturedBy(ticket.Updated)})
 		}
 	}
 	return fixtures, nil
@@ -190,9 +194,12 @@ func replay(m boardy.Managed, key string, f fixture) (verdict, error) {
 	if len(lines) == 0 {
 		lines = []string{"no acceptance line was written"}
 	}
-	evidenced := func(evidence []int) (boardy.Ticket, error) {
+	evidenced := func(evidence []int, captured bool) (boardy.Ticket, error) {
 		made, err := m.Create(key, boardy.Ticket{Front: boardy.Front{Title: "replayed done move"}, Problem: "replayed", Scope: "replayed",
 			Before: "replayed", Driven: "replayed", StillWorks: "replayed", ErrorCase: "replayed", Feasibility: "replayed", Acceptance: []string{"- " + strings.Join(lines, "\n- ")}}, replayActor)
+		if err == nil && captured {
+			_, err = m.CaptureBefore(made.ID, "replayed before capture", replayActor)
+		}
 		for _, line := range evidence {
 			if err == nil && line <= len(lines) {
 				_, err = m.Evidence(made.ID, "replayed evidence", replayActor, line)
@@ -201,20 +208,26 @@ func replay(m boardy.Managed, key string, f fixture) (verdict, error) {
 		return made, err
 	}
 	var v verdict
-	historical, err := evidenced(f.Evidence)
+	historical, err := evidenced(f.Evidence, true)
 	if err != nil {
 		return v, err
 	}
 	_, err = m.Move(historical.ID, boardy.Done, "", replayActor)
 	v.lines = refused(err)
-	if strings.TrimSpace(f.Reason) == "" {
-		return v, nil
-	}
 	every := make([]int, len(lines))
 	for i := range every {
 		every[i] = i + 1
 	}
-	proved, err := evidenced(every)
+	uncaptured, err := evidenced(every, f.Before)
+	if err != nil {
+		return v, err
+	}
+	_, err = m.Move(uncaptured.ID, boardy.Done, "", replayActor)
+	v.before = refused(err)
+	if strings.TrimSpace(f.Reason) == "" {
+		return v, nil
+	}
+	proved, err := evidenced(every, true)
 	if err != nil {
 		return v, err
 	}
@@ -250,6 +263,7 @@ func report(board string, fixtures []fixture, verdicts []verdict) {
 	fmt.Printf("| an acceptance line with no evidence entry | %s |\n", share(count(func(_ fixture, v verdict) bool { return v.lines }), all))
 	fmt.Printf("| the reason names an open part (Jev done_reason@1) | %s reasoned moves |\n", share(count(func(_ fixture, v verdict) bool { return v.open }), reasoned))
 	fmt.Printf("| Jev could not read the reason, held for the person | %s reasoned moves |\n", share(count(func(_ fixture, v verdict) bool { return v.unread }), reasoned))
+	fmt.Printf("| no before capture logged before the move | %s |\n", share(count(func(_ fixture, v verdict) bool { return v.before }), all))
 	fmt.Printf("| either gate | %s |\n", share(count(func(_ fixture, v verdict) bool { return v.lines || v.open }), all))
 	fmt.Printf("| either gate, moves with evidence entries only | %s |\n", share(
 		count(func(f fixture, v verdict) bool { return len(f.Evidence) > 0 && (v.lines || v.open) }),
