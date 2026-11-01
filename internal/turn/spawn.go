@@ -346,7 +346,7 @@ func (t *SpawnTool) Definition() llm.Tool {
 		Name: SpawnToolName,
 		Description: "hands one piece of work to a sub-agent with its own context and its own conversation, and returns at once with its name while it works in the background. task is the whole brief the sub-agent starts from. " +
 			"its report, rather than its transcript, comes to you later as a message naming it. a reply whose calls are all spawns ends your turn once they start. " +
-			"owns lists the paths the sub-agent may write, every other path is refused at the write, and no two sub-agents may hold overlapping paths; leave owns out for a sub-agent that only reads, runs commands or researches, and every write it tries is refused. " + ticketNeed(enabledSubAgents(t.SubAgents.Defined)) + cite +
+			"owns lists the paths the sub-agent may write, every other path is refused at the write, and no two sub-agents may hold overlapping paths; leave owns out for a sub-agent that only reads, runs commands or researches, and every write it tries is refused. " + t.ticketNeed() + cite +
 			fmt.Sprintf("At most %d sub-agents running at once, nested at most %d deep. These are the person's settings %s and %s: %s",
 				limits.Running, limits.Depth, settings.SubAgentsPerTurn, settings.SubAgentDepth, raise),
 		Parameters: map[string]any{
@@ -355,6 +355,25 @@ func (t *SpawnTool) Definition() llm.Tool {
 			"required":   []string{"task"},
 		},
 	}
+}
+
+func (t *SpawnTool) ticketNeed() string {
+	var readers, editors []string
+	for _, definition := range enabledSubAgents(t.SubAgents.Defined) {
+		if len(definition.Tools) > 0 && !slices.Contains(definition.Tools, "edit") {
+			readers = append(readers, definition.Name)
+		} else {
+			editors = append(editors, definition.Name)
+		}
+	}
+	said := ""
+	if len(editors) > 0 && t.base.Board != nil {
+		said = "agents that edit need a ticket naming them: " + strings.Join(editors, ", ") + ". "
+	}
+	if len(readers) > 0 {
+		said += "agents with no edit tool only read and start with no ticket and no owns: " + strings.Join(readers, ", ") + ". "
+	}
+	return said
 }
 
 type spawnArgs struct {
