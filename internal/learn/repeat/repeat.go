@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -14,6 +15,7 @@ import (
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
+	"tofu/internal/learn/words"
 	"tofu/library/questions"
 )
 
@@ -199,6 +201,19 @@ func (j *Judge) Repeats(ctx context.Context, said string, earlier []Earlier, kep
 	}
 	_, err = j.ledger.Append(row)
 	return found, err
+}
+
+func KeptNear(said string, kept []Kept, sharedStemsAtLeast int) []int {
+	stems := words.Stems(said)
+	shared := make([]int, len(kept))
+	var near []int
+	for i, one := range kept {
+		if shared[i] = words.Shared(stems, words.Stems(one.Text), nil); shared[i] >= sharedStemsAtLeast {
+			near = append(near, i)
+		}
+	}
+	slices.SortStableFunc(near, func(x, y int) int { return shared[y] - shared[x] })
+	return near
 }
 
 func (j *Judge) request(state State) jev.Request {

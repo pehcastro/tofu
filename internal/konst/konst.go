@@ -460,6 +460,7 @@ const (
 	MemoryAuthorScryptCost      = 1 << 15
 	MemoryAuthorScryptBlock     = 8
 	MemoryAuthorScryptThreads   = 1
+	MemorySharedStemsToAskKept  = 2
 )
 
 const (

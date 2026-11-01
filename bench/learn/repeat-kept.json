@@ -1,0 +1,48 @@
+{
+  "about": "a mocked chain for the person_repeat eval, read through TOFU_REPEAT_EVAL. kept holds what memory keeps; each item labels the earlier messages it repeats in accept and the kept entries that already cover it in kept. labels were written before any run.",
+  "kept": [
+    {"id": "k1", "text": "Run gofmt -l over every Go file you touched before reporting."},
+    {"id": "k2", "text": "Write dates in the chat as relative time, such as 3m ago."},
+    {"id": "k3", "text": "Never commit a file over half a megabyte."},
+    {"id": "k4", "text": "Use the theme package for every colour in the interface."},
+    {"id": "k5", "text": "Ask before deleting a branch."},
+    {"id": "k6", "text": "Keep commit subjects under 72 characters."},
+    {"id": "k7", "text": "Desk tabs close from inside the tab, never from a menu."},
+    {"id": "k8", "text": "Answer in short sentences with the conclusion first."}
+  ],
+  "chain": [
+    "add a cart total to the checkout page",
+    "stop writing long paragraphs at me, give me the conclusion first and keep it short",
+    "the checkout test fails on windows, look at it",
+    "you reported done again without running gofmt, check formatting before you say done",
+    "rename the price field to amount everywhere",
+    "never push to main without asking me",
+    "why is the cart page so slow",
+    "again, do not push to main unless I say so",
+    "the colours in the sidebar are hardcoded, use the theme ones",
+    "write the release notes for 1.2",
+    "I told you, short answers, conclusion on top",
+    "always add a test that fails first before fixing a bug",
+    "keep commit messages short, the subject line was way too long again",
+    "make the order list sortable by date",
+    "please stop deleting branches without asking me first",
+    "from now on, run the linter before you hand anything back"
+  ],
+  "items": [
+    {"n": 1, "chain": 1, "repeat": false, "accept": [], "kept": ["k8"]},
+    {"n": 2, "chain": 2, "repeat": false, "accept": [], "kept": []},
+    {"n": 3, "chain": 3, "repeat": false, "accept": [], "kept": ["k1"]},
+    {"n": 4, "chain": 4, "repeat": false, "accept": [], "kept": []},
+    {"n": 5, "chain": 5, "repeat": false, "accept": [], "kept": []},
+    {"n": 6, "chain": 6, "repeat": false, "accept": [], "kept": []},
+    {"n": 7, "chain": 7, "repeat": true, "accept": [5], "kept": []},
+    {"n": 8, "chain": 8, "repeat": false, "accept": [], "kept": ["k4"]},
+    {"n": 9, "chain": 9, "repeat": false, "accept": [], "kept": []},
+    {"n": 10, "chain": 10, "repeat": true, "accept": [1], "kept": ["k8"]},
+    {"n": 11, "chain": 11, "repeat": false, "accept": [], "kept": []},
+    {"n": 12, "chain": 12, "repeat": false, "accept": [], "kept": ["k6"]},
+    {"n": 13, "chain": 13, "repeat": false, "accept": [], "kept": []},
+    {"n": 14, "chain": 14, "repeat": false, "accept": [], "kept": ["k5"]},
+    {"n": 15, "chain": 15, "repeat": false, "accept": [], "kept": []}
+  ]
+}

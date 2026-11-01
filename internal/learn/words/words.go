@@ -158,9 +158,6 @@ func Themes(units []Unit, rare map[string]bool) []Theme {
 }
 
 func Candidates(earlier []string, said string) []int {
-	if slices.Contains(earlier, said) {
-		return nil
-	}
 	stems := Stems(said)
 	shared := make([]int, len(earlier))
 	var picked []int

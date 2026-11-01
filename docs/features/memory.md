@@ -55,15 +55,16 @@ rewrite the cached prompt. It is written fresh at every fork and every
 `tofu --continue`, so an entry added between sessions reaches the lead, and
 every sub-agent gets the same view in its first request.
 
-**Saying it twice is enough.** When you repeat an instruction, Jev checks it
-against what memory already keeps and against your earlier messages in the
-session. When an entry already covers it, the lead gets a note naming that
-entry and the date it was kept, and answers that it is already in force,
-such as "we already do this, kept as m7-2b1e since Thu 2 Oct 2026", keeping
-only a detail you added rather than promising "from now on". When nothing
-covers it, the note quotes the clause of your earlier message that matched,
-so the lead keeps the instruction with `remember` instead of waiting to hear
-it a third time. Orders such as "always", "never" or "from now on" are
+**Saying it twice is enough.** When you repeat an instruction, even word for
+word, Jev checks it against your earlier messages and against the memory
+entries that share at least two words with it. An entry that shares fewer
+never reaches Jev, so an unrelated one is never named. Having to say it again
+means nothing held it, so the lead proposes the strongest check that would:
+a type, a lint, a rule in the library or a hook, with a ticket to build it.
+It never writes a memory line for it and never promises "from now on". When
+an entry already covers it, the lead names that entry, quotes it with the
+words it was kept from, and still proposes the check. When nothing covers it,
+the note quotes the clause of your earlier message that matched. Orders such as "always", "never" or "from now on" are
 carried across every fork in their own section, and a cron prompt is never
 taken for your words.
 

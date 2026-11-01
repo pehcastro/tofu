@@ -405,6 +405,7 @@ type PersonSaid struct {
 const (
 	repeatNoteOpening = "the person has said this before"
 	repeatQuoteOpens  = `: "`
+	repeatNeedsACheck = "unless it only fits this one task, propose the strongest check that holds it with nobody keeping it in mind, a type, a lint, a rule in the library or a hook, and a ticket to build that check. A memory line is not a check: write none, and never promise from now on."
 )
 
 func (b *Inbox) SaidInChain(store *session.Store, id string) ([]PersonSaid, error) {
@@ -497,10 +498,16 @@ func (b *Inbox) repeatNote(store *session.Store, id, said string) string {
 		return before[i].Session == id && before[i].Quoted != "" || slices.ContainsFunc(quoted, func(q string) bool { return strings.Contains(flattened, q) })
 	})
 	shelves, _ := memory.Open(b.project)
-	entries, stems := shelves.All(), words.Stems(said)
-	slices.SortStableFunc(entries, func(x, y memory.Entry) int {
-		return words.Shared(stems, words.Stems(y.Text), nil) - words.Shared(stems, words.Stems(x.Text), nil)
-	})
+	all := shelves.All()
+	everyKept := make([]repeat.Kept, len(all))
+	for i, entry := range all {
+		everyKept[i] = repeat.Kept{ID: entry.ID, Text: entry.Text}
+	}
+	var entries []memory.Entry
+	var kept []repeat.Kept
+	for _, at := range repeat.KeptNear(said, everyKept, konst.MemorySharedStemsToAskKept) {
+		entries, kept = append(entries, all[at]), append(kept, everyKept[at])
+	}
 	if len(picked) == 0 && len(entries) == 0 {
 		return ""
 	}
@@ -510,10 +517,6 @@ func (b *Inbox) repeatNote(store *session.Store, id, said string) string {
 		if before[at].At != nil {
 			earlier[i].At = before[at].At.Format(time.RFC3339)
 		}
-	}
-	kept := make([]repeat.Kept, len(entries))
-	for i, entry := range entries {
-		kept[i] = repeat.Kept{ID: entry.ID, Text: entry.Text}
 	}
 	found, err := judge.Repeats(context.Background(), said, earlier, kept)
 	switch {
@@ -525,8 +528,12 @@ func (b *Inbox) repeatNote(store *session.Store, id, said string) string {
 		if !entry.At.IsZero() {
 			since = " since " + entry.At.Local().Format("Mon 2 Jan 2006")
 		}
-		return NotesAfterTheTask + "memory already keeps what the person asks here, as " + entry.ID + since + `: "` + strings.TrimSuffix(entry.Text, ".") + `". It is already in force: answer plainly that we already do this, kept as ` + entry.ID + since +
-			". If they added a detail the entry lacks, say which, and keep only that detail with remember, replaces " + entry.ID + "; otherwise call no remember. Never answer from now on, which tells them it was not kept."
+		evidence := ""
+		if entry.Said != "" {
+			evidence = `, kept from their words "` + entry.Said + `"`
+		}
+		return NotesAfterTheTask + "memory already keeps what the person asks here, as " + entry.ID + since + `: "` + strings.TrimSuffix(entry.Text, ".") + `"` + evidence +
+			". Say so plainly, naming " + entry.ID + " and quoting it. That line did not hold, since they had to ask again: " + repeatNeedsACheck
 	case found.Earlier < 0:
 		return ""
 	}
@@ -536,6 +543,7 @@ func (b *Inbox) repeatNote(store *session.Store, id, said string) string {
 		when = "on " + first.At.Local().Format("Mon 2 Jan 15:04")
 	}
 	units := words.Units([]string{strings.Join(strings.Fields(first.Words), " ")})
+	stems := words.Stems(said)
 	closest := slices.MaxFunc(units, func(x, y words.Unit) int {
 		return words.Shared(stems, x.Stems, nil) - words.Shared(stems, y.Stems, nil)
 	})
@@ -547,7 +555,7 @@ func (b *Inbox) repeatNote(store *session.Store, id, said string) string {
 		}
 		quote, cut = quote[:end], "..."
 	}
-	return NotesAfterTheTask + repeatNoteOpening + ", " + when + repeatQuoteOpens + quote + `"` + cut + ". Having to say it again makes it a standing instruction: unless it only fits this one task, keep it with remember, quoting their words from either message."
+	return NotesAfterTheTask + repeatNoteOpening + ", " + when + repeatQuoteOpens + quote + `"` + cut + ". Having to say it again means nothing holds it yet: " + repeatNeedsACheck
 }
 
 func beforeCronFire(said string) string {

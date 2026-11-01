@@ -13,10 +13,13 @@ notes: >-
   repeats_at, naming that earlier message. both sit at the middle of the noul
   range, uncalibrated priors. state.kept holds the entries memory already
   keeps, each with its id, present and empty when memory keeps none, and
-  kept_rubric is asked once for each of them in that same request. when
+  kept_rubric is asked once for each of them in that same request. an entry
+  sharing fewer stems with said than konst.MemorySharedStemsToAskKept never
+  reaches the request, so an unrelated entry cannot be matched. when
   standing passes and the highest kept answer is at or above kept_at, the note
-  names that entry instead of an earlier message and tells the lead it is
-  already in force. kept_at is the same uncalibrated prior.
+  names that entry and the words it was kept from instead of an earlier
+  message. either note asks the lead for a check and a ticket, never a memory
+  line. kept_at is the same uncalibrated prior.
 
 thresholds:
   standing_at: 0.5
