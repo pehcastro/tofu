@@ -1805,9 +1805,13 @@ func parseRunArgs(args []string) (runOpts, error) {
 		return runOpts{}, fmt.Errorf("--tools %q is neither %s nor %s, the arm that offers read, write and bash alone",
 			opts.toolSet, toolSetFull, toolSetThree)
 	}
-	if without := spawnlessFlag(opts); opts.doneArm != "" && opts.doneArm != settingspkg.DoneReviewOff && without != "" {
+	without := spawnlessFlag(opts)
+	if opts.doneArm != "" && opts.doneArm != settingspkg.DoneReviewOff && without != "" {
 		return runOpts{}, fmt.Errorf("--done-review %s with %s: that arm has no spawn tool, so no sub-agent is ever reviewed and the flag would say a check is running that is not",
 			opts.doneArm, without)
+	}
+	if opts.agent != "" && without != "" {
+		return runOpts{}, fmt.Errorf("--agent %s with %s: that arm spawns no sub-agent, so there is no spawn prompt to show", opts.agent, without)
 	}
 	return opts, nil
 }
