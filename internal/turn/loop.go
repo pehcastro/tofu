@@ -805,11 +805,11 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		landing := budget
 		heldForStep = 0
 		if forced == "" && budget.Crossed(artifacts.preview, historyOf(messages)) {
-			heldForStep = konst.ForkStateBytes * 1000 / artifacts.preview.BytesPerThousandTokens
+			step := 0
 			if last := lastAssistant(messages); last >= 0 {
-				heldForStep += sentTokens(messages) - sentTokens(messages[:last])
+				step = sentTokens(messages) - sentTokens(messages[:last])
 			}
-			heldForStep = min(heldForStep, budget.Bands.Target()*konst.ForkRoomMostPercent/100)
+			heldForStep = stepHold(artifacts.preview, budget.Bands, step)
 			landing.Bands = budget.Bands.Less(heldForStep)
 		}
 		return forkHistory(artifacts, landing, config.forkOpening(taskOrigin), messages, forced, forks+1, config.Caps.MaxForks)
@@ -1678,4 +1678,8 @@ func withoutOlderCompactContext(messages, added []llm.Message) []llm.Message {
 		})
 	}
 	return slices.DeleteFunc(slices.Clone(messages), func(message llm.Message) bool { return compact(message) || writtenBeforeTheID(message) })
+}
+
+func stepHold(preview recall.Config, bands recall.Bands, stepTokens int) int {
+	return min(konst.ForkStateBytes*1000/preview.BytesPerThousandTokens+stepTokens, bands.Target()*konst.ForkRoomMostPercent/100)
 }

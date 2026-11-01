@@ -164,7 +164,7 @@ func sideBudget(store *session.Store, parent session.Header, preview recall.Conf
 	if parent.ContextCeiling > 0 {
 		budget = budget.At(parent.ContextCeiling, fmt.Sprintf("the %d token ceiling session %s last ran under", parent.ContextCeiling, parent.ID))
 	}
-	budget.Bands = budget.Bands.Less(min(konst.ForkStateBytes*1000/preview.BytesPerThousandTokens, budget.Bands.Target()*konst.ForkRoomMostPercent/100))
+	budget.Bands = budget.Bands.Less(stepHold(preview, budget.Bands, 0))
 	held, err := HeldPrefix(store, parent.ID, "")
 	if err != nil {
 		return budget, err
