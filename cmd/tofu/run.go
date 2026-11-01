@@ -875,6 +875,8 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 			LoopGuardWindow:  opts.loopGuardWindow,
 		},
 		ResultBytesCap: konst.TurnResultBytesCap,
+		NoFork:         settingText(dir, settingspkg.Fork, run.notify) == settingspkg.Off,
+		NoCompaction:   settingText(dir, settingspkg.AutoCompaction, run.notify) == settingspkg.Off,
 		Budget:         run.budget,
 		Sessions:       run.sessions,
 		Session:        sessionID,

@@ -14,7 +14,7 @@ The settings come in groups:
 - Appearance: theme, density, animations, statusBar, colorMode
 - Models & roles: continueOnSubscription, subscriptionOrder, continueOnAPIModel
 - Interaction: composer, gatePrompt, gateAskWaitSeconds, gateAskTimeout, askPersonWaitSeconds, readBeforeEdit, autoUpdate
-- Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images, projectInstructionsCap, contextCeiling, instructionSources, skills, memory, autoMemory, episodes, memoryFromAllUsers, memoryModel, learn
+- Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images, projectInstructionsCap, contextCeiling, fork, autoCompaction, instructionSources, skills, memory, autoMemory, episodes, memoryFromAllUsers, memoryModel, learn
 - Files: diffContext, hyperlinks, groupByAgent
 - Shell: persistentRegistry, logTail, killConfirm, shell
 - Turn: decisionCap, turnMaySpawn, oneWorkingSessionPerProject, planEveryStep, sideChatAccess, subAgentsPerTurn, subAgentDepth, leadCache, subAgentCache, subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents, doneReview, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb
@@ -42,6 +42,8 @@ Each setting's own line is two sentences at most. The rest is here.
 - `autoUpdate`: the lookup runs at most once an hour. With it off, `tofu update` installs the release. A build from source never updates.
 - `thinkingSummary`: `omitted` means no thinking reaches the sub-agents feed.
 - `contextCeiling`: a model whose window is smaller stops at its window less the answer's reserve. `TOFU_CONTEXT_CEILING` and `--context-ceiling` win over it, and the next turn reads the new value.
+- `fork`: off keeps one conversation however long it grows, with `autoCompaction` the only thing holding it near the ceiling. A request over the model's window is still refused before it is sent. Sub-agents follow the lead, and the next turn reads the new value.
+- `autoCompaction`: off sends every tool result in full until the conversation reaches the ceiling, where it forks unless `fork` is off too. Sub-agents follow the lead, and the next turn reads the new value.
 - `instructionSources`: `agents-first` sends AGENTS.md and `claude-first` sends CLAUDE.md. They are read from the working directory up to its git root, and the home directory gives only `~/.tofu/AGENTS.md`.
 - `skills`: the skill folders are `.tofu`, `.agents` and `.claude` in the project, and only `~/.tofu/skills` in the home directory.
 - `memory`: on also lets the lead offer one short rule. `tofu memory` lists the entries.

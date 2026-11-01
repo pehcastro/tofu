@@ -279,6 +279,32 @@ exit 0
         "unit": "tokens a request may carry"
       },
       {
+        "key": "fork",
+        "category": "Context",
+        "value": "on",
+        "source": "default",
+        "label": "Fork",
+        "description": "on starts a fresh conversation carrying the work's state when one nears the context ceiling. off never forks",
+        "kind": "choice",
+        "choices": [
+          "on",
+          "off"
+        ]
+      },
+      {
+        "key": "autoCompaction",
+        "category": "Context",
+        "value": "on",
+        "source": "default",
+        "label": "Auto compaction",
+        "description": "on trims old tool results, kept under a handle, as the conversation nears its target. off never trims",
+        "kind": "choice",
+        "choices": [
+          "on",
+          "off"
+        ]
+      },
+      {
         "key": "instructionSources",
         "category": "Context",
         "value": "agents-first",

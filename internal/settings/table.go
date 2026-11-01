@@ -105,6 +105,8 @@ const (
 	ContinueOnSubscription      = "continueOnSubscription"
 	SubscriptionOrder           = "subscriptionOrder"
 	ContinueOnAPIModel          = "continueOnAPIModel"
+	Fork                        = "fork"
+	AutoCompaction              = "autoCompaction"
 )
 
 const ModelsCategory = "Models & roles"
@@ -133,6 +135,11 @@ func InstructionFiles(choice string) []string {
 	}
 	return []string{"AGENTS.md", "CLAUDE.md"}
 }
+
+const (
+	On  = "on"
+	Off = "off"
+)
 
 const (
 	SkillsOn  = "on"
@@ -303,6 +310,10 @@ func Default() []Spec {
 			Least: 1, Most: konst.ProjectInstructionsBytesMost, Unit: "bytes of AGENTS.md and CLAUDE.md sent each turn"},
 		{Key: ContextCeiling, Label: "Context ceiling", Description: "The most tokens one request may carry. The conversation forks before it", Category: "Context", Kind: Int, Default: konst.ContextCeilingTokens,
 			Least: 1, Most: math.MaxInt32, Unit: "tokens a request may carry"},
+		{Key: Fork, Label: "Fork", Description: "on starts a fresh conversation carrying the work's state when one nears the context ceiling. off never forks", Category: "Context", Kind: Text, DefaultText: On,
+			Choices: []string{On, Off}},
+		{Key: AutoCompaction, Label: "Auto compaction", Description: "on trims old tool results, kept under a handle, as the conversation nears its target. off never trims", Category: "Context", Kind: Text, DefaultText: On,
+			Choices: []string{On, Off}},
 		{Key: InstructionSources, Label: "Instruction files", Description: "Which of AGENTS.md and CLAUDE.md a folder with both sends. both sends both and costs more tokens", Category: "Context", Kind: Text, DefaultText: InstructionsAgentsFirst,
 			Choices: []string{InstructionsAgentsFirst, InstructionsClaudeFirst, InstructionsBoth},
 			Aliases: map[string]string{"AGENTS.md,CLAUDE.md": InstructionsAgentsFirst, "AGENTS.md": InstructionsAgentsFirst, "CLAUDE.md,AGENTS.md": InstructionsClaudeFirst, "CLAUDE.md": InstructionsClaudeFirst}},

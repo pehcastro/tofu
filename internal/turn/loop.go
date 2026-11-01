@@ -581,8 +581,19 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		reached, _, err := trimRead(holdingNothing, budget, step, slices.Clone(messages), from)
 		return err == nil && reached != nil && reached.TokensAfter <= tokens
 	}
+	compactionOffSaid, forkOffSaid := false, false
+	sayCompactionOff := func(when string, crossed func() bool) {
+		if config.NoCompaction && !compactionOffSaid && crossed() {
+			compactionOffSaid = true
+			recorded.notice(when + ": the conversation crossed its budget and compaction is off, so no tool result is trimmed this turn")
+		}
+	}
 	trimUnderTarget := func(step int, when string) (*Compaction, error) {
-		if !trims || sentTokens(messages) <= budget.Bands.Target() {
+		if !trims {
+			sayCompactionOff(when, func() bool { return sentTokens(messages) > budget.Bands.Target() })
+			return nil, nil
+		}
+		if sentTokens(messages) <= budget.Bands.Target() {
 			return nil, nil
 		}
 		firstMissing := sort.Search(len(messages)+1, func(from int) bool { return !landsFrom(step, from, budget.Bands.Target()) })
@@ -590,6 +601,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	trim := func(step int, when string) (*Compaction, error) {
 		if !trims {
+			sayCompactionOff(when, func() bool { return landsFrom(step, 0, budget.Bands.Target()*konst.ContextTrimPercentOfTarget/100) })
 			return nil, nil
 		}
 		from := 0
@@ -601,6 +613,12 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			return nil, nil
 		}
 		return trimFrom(step, when, from)
+	}
+	sayForkOff := func(when string) {
+		if !forkOffSaid && budget.Crossed(artifacts.preview, historyOf(messages)) {
+			forkOffSaid = true
+			recorded.notice(when + ": the conversation crossed its fork threshold and fork is off, so it carries on unforked this turn")
+		}
 	}
 	stateCarried := func(fork *Fork, step int, beforeFork, begun []llm.Message, tools []llm.Tool) ([]llm.Message, string) {
 		begun = config.withFreshMemoryView(begun)
@@ -909,6 +927,8 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 						row.Warnings = append(row.Warnings, missing)
 					}
 				}
+			} else {
+				sayForkOff(before)
 			}
 			unforked, err := trimUnderTarget(step, before)
 			if err != nil {
@@ -1372,6 +1392,8 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 					}
 					continue
 				}
+			} else {
+				sayForkOff("after step " + strconv.Itoa(step))
 			}
 			unforked, err := trimUnderTarget(step, "after step "+strconv.Itoa(step))
 			stepRow.Compaction = cmp.Or(unforked, stepRow.Compaction)

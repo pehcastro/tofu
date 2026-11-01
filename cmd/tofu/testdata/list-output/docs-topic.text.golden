@@ -16,8 +16,9 @@ What it is
   - Interaction: composer, gatePrompt, gateAskWaitSeconds, gateAskTimeout,
     askPersonWaitSeconds, readBeforeEdit, autoUpdate
   - Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images,
-    projectInstructionsCap, contextCeiling, instructionSources, skills, memory,
-    autoMemory, episodes, memoryFromAllUsers, memoryModel, learn
+    projectInstructionsCap, contextCeiling, fork, autoCompaction,
+    instructionSources, skills, memory, autoMemory, episodes,
+    memoryFromAllUsers, memoryModel, learn
   - Files: diffContext, hyperlinks, groupByAgent
   - Shell: persistentRegistry, logTail, killConfirm, shell
   - Turn: decisionCap, turnMaySpawn, oneWorkingSessionPerProject, planEveryStep,
@@ -87,6 +88,13 @@ The detail
   - `contextCeiling`: a model whose window is smaller stops at its window less
     the answer's reserve. `TOFU_CONTEXT_CEILING` and `--context-ceiling` win
     over it, and the next turn reads the new value.
+  - `fork`: off keeps one conversation however long it grows, with
+    `autoCompaction` the only thing holding it near the ceiling. A request over
+    the model's window is still refused before it is sent. Sub-agents follow the
+    lead, and the next turn reads the new value.
+  - `autoCompaction`: off sends every tool result in full until the conversation
+    reaches the ceiling, where it forks unless `fork` is off too. Sub-agents
+    follow the lead, and the next turn reads the new value.
   - `instructionSources`: `agents-first` sends AGENTS.md and `claude-first`
     sends CLAUDE.md. They are read from the working directory up to its git
     root, and the home directory gives only `~/.tofu/AGENTS.md`.
@@ -297,6 +305,14 @@ Context
     contextCeiling               450000
       at least 1 tokens a request may carry
       The most tokens one request may carry. The conversation forks before it
+    fork                         on
+      one of on, off
+      on starts a fresh conversation carrying the work's state when one nears
+      the context ceiling. off never forks
+    autoCompaction               on
+      one of on, off
+      on trims old tool results, kept under a handle, as the conversation nears
+      its target. off never trims
     instructionSources           agents-first
       one of agents-first, claude-first, both
       Which of AGENTS.md and CLAUDE.md a folder with both sends. both sends both

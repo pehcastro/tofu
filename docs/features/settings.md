@@ -8,7 +8,7 @@ updated: 2026-11-01
 A setting is a named switch with a default, like `gatePrompt` or
 `subAgentsPerTurn`. You write only the ones you change, in
 `~/.tofu/settings.json` for every project or `.tofu/settings.json` for one.
-The project wins over yours, and yours over the default. 70 settings sit in
+The project wins over yours, and yours over the default. 72 settings sit in
 nine groups: Appearance, Models & roles, Interaction, Context, Files, Shell,
 Turn, Projects and Browser. Models & roles holds where work continues when a
 subscription runs out, and Projects holds boardy, the ticket board, and the
@@ -129,6 +129,13 @@ sub-agents feed. `omitted` asks for none and sends the thinking request the
 vendor's own command line sends: Claude Code's on `claude-sub` and codex's on
 `codex-sub`. Either way, the thinking tokens Sonnet spends are recorded in
 the session.
+
+`fork` and `autoCompaction` turn off the two things that keep a long
+conversation under its context ceiling. With `fork` off the conversation is
+never handed to a fresh one carrying its state, and with `autoCompaction` off no
+old tool result is trimmed to a handle. Both are `on` by default, sub-agents
+follow the lead, and the next turn reads the new value:
+`tofu settings set fork off`.
 
 `sideChatAccess` and `shell` offer their usual values as a choice and take
 any other value too. `sideChatAccess` offers `read`, which writes nothing,
