@@ -32,6 +32,35 @@ import (
 const theResponseHitTheOutputTokenLimit = "the response hit the output token limit, so its arguments may be truncated. " +
 	"Re-issue the tool call with complete arguments."
 
+const memoryAddedSince = "added to memory outside this session since its memory was sent, and held from now on:\n"
+
+func memoryUnsent(memory string, carried []llm.Message, inbox *Inbox) []string {
+	said := make([]string, 0, len(carried))
+	for _, message := range carried {
+		said = append(said, message.Content)
+	}
+	if inbox != nil {
+		inbox.mu.Lock()
+		for _, item := range inbox.items {
+			said = append(said, item.text)
+		}
+		inbox.mu.Unlock()
+	}
+	var unsent []string
+	for _, line := range strings.Split(memory, "\n") {
+		head, text, cut := strings.Cut(line, "] ")
+		at := strings.Index(head, "[memory#")
+		ref, text := head[max(at, 0):]+"]", strings.TrimSuffix(strings.TrimSpace(text), ".")
+		if !cut || at < 0 || ref == "[memory#"+memoryLineShape+"]" {
+			continue
+		}
+		if !slices.ContainsFunc(said, func(message string) bool { return strings.Contains(message, ref) && strings.Contains(message, text) }) {
+			unsent = append(unsent, line)
+		}
+	}
+	return unsent
+}
+
 const theTurnEndsOnACleanReport = "this turn ends on a clean sub-agent report, so it runs no tool"
 
 const andThisIsItsLastStep = ", and this is its last step: answer now from what you already have, " +
@@ -384,6 +413,8 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}), []llm.Message(nil)
 	if config.opensGeneration() {
 		carried, view = withoutMemoryViews(carried), config.MemoryMessage()
+	} else if unsent := memoryUnsent(config.Memory, carried, config.Inbox); len(unsent) > 0 {
+		view = []llm.Message{{Role: llm.RoleUser, Content: memoryAddedSince + strings.Join(unsent, "\n"), Origin: llm.Origin{Source: llm.SourceMemorySaved, TakenAt: start}}}
 	}
 	if schemas, err := json.Marshal(headTools); err == nil && keeper != nil && len(config.History) == 0 {
 		view = withEpisodes(view, episodesFor(budget.Sending(artifacts.preview, string(schemas)), slices.Concat(messages, view), nil))
