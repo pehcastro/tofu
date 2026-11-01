@@ -248,6 +248,10 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	var forking sync.Mutex
 	var awaitingSession *turn.Row
 	announceIntoSession := func(ended turn.Row, into string) {
+		kept := cronFile(sessions, into)
+		if err := h.cron.Keep(kept); err != nil {
+			say("cron jobs were not written to " + kept + ": " + err.Error())
+		}
 		announce(ended, "", into)
 		emit(labelledAs(sessions, Event{Kind: EventSession, ID: into, Root: into}))
 	}
