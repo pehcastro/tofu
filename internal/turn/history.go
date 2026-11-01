@@ -574,6 +574,12 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 	}
 	opening.Origin.TakenAt = started
 	carried := func(tail []llm.Message) ([]llm.Message, recall.Carry, int, error) {
+		lost := 0
+		for _, message := range messages[:len(messages)-len(tail)] {
+			if message.Role == llm.RoleUser && !isTask(message) {
+				lost += len(message.Images)
+			}
+		}
 		if at := slices.IndexFunc(tail, isTask); at >= 0 {
 			tail = tail[at:]
 		}
@@ -584,6 +590,9 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 		ended.HeldWhole = len(tail)
 		carry, err := recall.JudgedCarry(artifacts.store, artifacts.preview, ended, artifacts.standing)
 		carry.Text = counted + ".\n" + carry.Text
+		if lost > 0 {
+			carry.Text += "\n" + strconv.Itoa(lost) + picturesLost
+		}
 		said := llm.Message{Role: llm.RoleUser, Content: carry.Text, Origin: llm.Origin{Source: llm.SourceForkCarry, TakenAt: started}}
 		if len(tail) > 0 && isTask(tail[0]) {
 			return slices.Concat(system, tail[:1], []llm.Message{said}, tail[1:]), carry, len(tail), err
@@ -618,7 +627,10 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 	}, begun, nil
 }
 
-const forkCounted = "this is fork "
+const (
+	forkCounted  = "this is fork "
+	picturesLost = " picture(s) the person pasted before this fork did not fit under the context budget and are not in this session: ask the person to paste them again if they still matter.\n"
+)
 
 func forkNumberIn(messages []llm.Message) int {
 	newest := 0
@@ -637,7 +649,7 @@ func tailStart(preview recall.Config, messages []llm.Message, room int) int {
 	if floor < 0 {
 		return start
 	}
-	for i := len(messages) - 1; i >= floor && len(messages[i].Images) == 0; i-- {
+	for i := len(messages) - 1; i >= floor; i-- {
 		if messages[i].Role == llm.RoleTool {
 			continue
 		}

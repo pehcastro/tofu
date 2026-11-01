@@ -249,7 +249,7 @@ func checkedFork(t *testing.T, budget recall.Budget, forced ForkKind, messages [
 	}
 	tail := begun[3:]
 	if fork.TailMessages != len(tail) || !slices.EqualFunc(tail, messages[len(messages)-len(tail):], func(a, b llm.Message) bool {
-		return a.Content == b.Content && a.ToolCallID == b.ToolCallID && len(a.ToolCalls) == len(b.ToolCalls)
+		return a.Content == b.Content && a.ToolCallID == b.ToolCallID && len(a.ToolCalls) == len(b.ToolCalls) && len(a.Images) == len(b.Images)
 	}) {
 		t.Fatalf("the fork records a tail of %d and keeps %d messages after the carry, want the end of the old history word for word", fork.TailMessages, len(tail))
 	}
@@ -263,9 +263,6 @@ func checkedFork(t *testing.T, budget recall.Budget, forced ForkKind, messages [
 		}
 		if message.Role == llm.RoleTool && !called[message.ToolCallID] {
 			t.Errorf("the result of %s is kept and its call is not", message.ToolCallID)
-		}
-		if len(message.Images) > 0 && i >= 3 {
-			t.Errorf("message %d in the tail carries an image the estimate never priced", i)
 		}
 	}
 	if budget.Crossed(artifacts.preview, historyOf(begun)) {
@@ -296,8 +293,8 @@ func TestForkKeepsWholeStepsOfTheTailAndNeverSplitsACallFromItsResult(t *testing
 			history(forkStep("old", large), forkStep("read three files at once", small, small, small)), 4},
 		{"a tail bigger than the budget on its own", ForkContinuation,
 			history(forkStep("old", small), forkStep("read the whole generated table", large, large)), 0},
-		{"an image in the tail", ForkContinuation,
-			history(forkStep("old", small), []llm.Message{{Role: llm.RoleUser, Content: "this one", Images: []llm.Image{{MediaType: "image/png", Data: []byte("png")}}}}, forkStep("read it", small)), 2},
+		{"an image in the tail is priced and kept with its message", ForkContinuation,
+			history(forkStep("old", small), []llm.Message{{Role: llm.RoleUser, Content: "this one", Images: []llm.Image{{MediaType: "image/png", Data: []byte("png")}}}}, forkStep("read it", small)), 5},
 		{"a forced fork with almost no history", ForkAccountSpent,
 			history(forkStep("read the parser", small)), 2},
 	} {

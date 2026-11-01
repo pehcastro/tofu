@@ -35,9 +35,9 @@ func TestAForkKeepsTheImageOfTheTaskItCarriesAndNoOther(t *testing.T) {
 	for _, message := range begun {
 		carried = append(carried, message.Images...)
 	}
-	opening := slices.IndexFunc(begun, func(message llm.Message) bool { return message.Role == llm.RoleUser && message.Content == task })
-	if opening < 0 || len(begun[opening].Images) != 1 || string(begun[opening].Images[0].Data) != "flag" {
-		t.Fatalf("the fork's task message lost the image the person sent with it: %d images on it", len(begun[max(opening, 0)].Images))
+	holder := slices.IndexFunc(begun, func(message llm.Message) bool { return len(message.Images) > 0 })
+	if holder < 0 || begun[holder].Role != llm.RoleUser || !strings.Contains(begun[holder].Content, task) || string(begun[holder].Images[0].Data) != "flag" {
+		t.Fatalf("the fork's task message lost the image the person sent with it: %d images carried", len(carried))
 	}
 	if len(carried) != 1 {
 		t.Fatalf("the fork carries %d images, want only the task's own", len(carried))
