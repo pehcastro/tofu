@@ -302,7 +302,7 @@ func verbNamed(name string) verb {
 	case "--continue":
 		return verb{run: continueVerb}
 	case "session":
-		return verb{sessionVerb, strings.Join([]string{sessionSubcommands, sessionBranchUsage, sessionDrainUsage, sessionFindUsage, sessionTraceUsage}, " ")}
+		return verb{sessionVerb, strings.Join([]string{sessionSubcommands, sessionBranchUsage, sessionDrainUsage, sessionFindUsage, sessionTraceUsage, sessionTranscriptUsage}, " ")}
 	case "shells":
 		return verb{run: withoutIn(shellsVerb)}
 	case "hooks":

@@ -289,6 +289,19 @@ Over `tofu serve`, `session.info` carries the same history as
 `carried_from`: the session, its handle and how many messages came over.
 
 ```sh
+tofu session transcript brisk-amber-heron --from 1 --to 2 --md
+```
+
+prints the family's conversation in order: what you said, the lead's
+replies, each brief a sub-agent was given and each report it sent back,
+with no tool calls and no tool output. `--from N` and `--to N` pick
+generations, and `--md` writes it as one markdown file. A report a
+sub-agent sent after a fork shows in the generation that received it. A
+`--from` past the last generation prints nothing and exits 2. On a session
+of two generations and one sub-agent the transcript is 756 bytes where the
+trace JSON of the same range is 19,436.
+
+```sh
 tofu session drain brisk-amber-heron
 ```
 

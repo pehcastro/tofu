@@ -46,7 +46,8 @@ tofu run --dir <path> [arguments] <task>
 tofu --continue [--json]
 tofu --temporary-project
 tofu --profile, with --continue or tofu run
-tofu session <name|id>, or tofu session list [--all], or tofu session clean [--dry-run], or tofu session set <name|id> --model source/model, or tofu session info|trace|drain|reads|resume|rename|request|find|branch <name|id> [--json]
+tofu session <name|id>, or tofu session list [--all], or tofu session clean [--dry-run], or tofu session set <name|id> --model source/model, or tofu session info|trace|transcript|drain|reads|resume|rename|request|find|branch <name|id> [--json]
+tofu session transcript <name|id> [--from N] [--to N] [--md] [--json]
 tofu session find <name|id> [--tool T] [--command C] [--file F] [--text T] [--failed] [--agent A] [--since 2h|RFC3339] [--until 2h|RFC3339] [--json]
 tofu session drain [name|id] [--claude <transcript.jsonl>] [--json]
 tofu host ensure|status|stop|run [--dir PATH] [--json]
