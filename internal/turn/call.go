@@ -211,7 +211,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		switch outcome {
 		case llm.ToolOutcomeAborted:
 			body = theToolWasAbortedAndPrintedNothing
-		case llm.ToolOutcomeFailed:
+		case llm.ToolOutcomeFailed, llm.ToolOutcomeSkipped:
 			body = theToolFailedAndPrintedNothing
 		default:
 			body = theToolSucceededAndPrintedNothing

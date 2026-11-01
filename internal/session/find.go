@@ -26,7 +26,9 @@ type Ran struct {
 	Error    string `json:"error,omitempty"`
 }
 
-func (r *Ran) Failed() bool { return r != nil && r.Outcome == ToolOutcomeFailed }
+func (r *Ran) Failed() bool {
+	return r != nil && (r.Outcome == ToolOutcomeFailed || r.Outcome == ToolOutcomeSkipped)
+}
 
 type Hit struct {
 	Generation int             `json:"generation"`

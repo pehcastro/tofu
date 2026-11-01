@@ -200,12 +200,12 @@ func findings(row Row, state subagent.State) []subagent.Finding {
 		calls = append(calls, step.ToolCalls...)
 	}
 	for i, call := range calls {
-		if call.Outcome() != llm.ToolOutcomeFailed || slices.ContainsFunc(calls[i+1:], func(later ToolCallRow) bool {
+		if !call.Outcome().Failed() || slices.ContainsFunc(calls[i+1:], func(later ToolCallRow) bool {
 			return later.Tool == call.Tool && later.Outcome() == llm.ToolOutcomeRan
 		}) {
 			continue
 		}
-		if _, skipped := skipReason(call.Error); skipped {
+		if call.Outcome() == llm.ToolOutcomeSkipped {
 			found = append(found, subagent.Finding{Bucket: subagent.Consider, Text: call.Error + ", and nothing after it ran " + call.Tool + ", so what it checks is unverified"})
 			continue
 		}

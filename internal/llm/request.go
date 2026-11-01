@@ -51,13 +51,14 @@ const (
 	ToolOutcomeRan
 	ToolOutcomeFailed
 	ToolOutcomeAborted
+	ToolOutcomeSkipped
 )
 
 func (o ToolOutcome) Failed() bool {
 	switch o {
 	case ToolOutcomeUnset, ToolOutcomeRan, ToolOutcomeAborted:
 		return false
-	case ToolOutcomeFailed:
+	case ToolOutcomeFailed, ToolOutcomeSkipped:
 		return true
 	}
 	panic("llm: unknown tool outcome")

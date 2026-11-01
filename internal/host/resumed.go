@@ -207,7 +207,11 @@ func (l *resumedLead) replay(messages []llm.Message, generation int) {
 			}
 		case llm.RoleTool:
 			if recorded := l.calls[message.ToolCallID]; recorded != nil && recorded.result.Call != "" {
-				ran := resultOf(recorded.result)
+				ran, err := resultOf(recorded.result)
+				if err != nil {
+					l.watch.emit(Event{Kind: EventFailure, ID: recorded.result.ID, Text: err.Error()})
+					break
+				}
 				message.ToolExitCode, message.ToolHits = ran.ToolExitCode, ran.ToolHits
 				l.replaying(recorded.result)
 			}
@@ -316,24 +320,23 @@ func callOf(event session.Event) llm.ToolCall {
 	return llm.ToolCall{ID: event.Call, Name: call.Tool, Arguments: call.Args}
 }
 
-func resultOf(event session.Event) llm.Message {
+func resultOf(event session.Event) (llm.Message, error) {
 	var result struct {
 		session.ResultBody
 		Hits *int `json:"hits"`
 	}
 	_ = json.Unmarshal(event.Body, &result)
-	message := llm.Message{Role: llm.RoleTool, ToolCallID: event.Call, Content: turn.WithoutToolRef(result.Content), ToolResultBytes: result.ResultBytes, ToolExitCode: result.ExitCode, ToolHits: result.Hits}
-	switch result.ToolOutcome {
-	case "":
-		message.ToolOutcome = llm.ToolOutcomeUnset
-	case session.ToolOutcomeRan:
-		message.ToolOutcome = llm.ToolOutcomeRan
-	case session.ToolOutcomeAborted:
-		message.ToolOutcome = llm.ToolOutcomeAborted
-	default:
-		message.ToolOutcome = llm.ToolOutcomeFailed
+	outcome, err := turn.ToolOutcomeOf(result.ToolOutcome)
+	return llm.Message{Role: llm.RoleTool, ToolCallID: event.Call, Content: turn.WithoutToolRef(result.Content), ToolResultBytes: result.ResultBytes, ToolExitCode: result.ExitCode, ToolHits: result.Hits, ToolOutcome: outcome}, err
+}
+
+func (l *resumedLead) replayResult(event session.Event, agent string) {
+	ran, err := resultOf(event)
+	if err != nil {
+		l.watch.emit(Event{Kind: EventFailure, ID: event.ID, Agent: agent, Text: err.Error()})
+		return
 	}
-	return message
+	l.watch.result(ran, agent)
 }
 
 func (l *resumedLead) spawned(row SubAgentRow) {
@@ -343,7 +346,7 @@ func (l *resumedLead) spawned(row SubAgentRow) {
 		if event.Kind == session.EventToolCall {
 			l.watch.called(callOf(event), event.Agent)
 		} else {
-			l.watch.result(resultOf(event), event.Agent)
+			l.replayResult(event, event.Agent)
 		}
 	}
 }
@@ -417,7 +420,7 @@ func (l *resumedLead) linked(agent string) bool {
 			l.replaying(recorded.call)
 			l.watch.called(callOf(recorded.call), "")
 			l.replaying(recorded.result)
-			l.watch.result(resultOf(recorded.result), "")
+			l.replayResult(recorded.result, "")
 			l.spawned(recorded.spawn)
 			return true
 		}

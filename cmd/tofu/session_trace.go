@@ -15,6 +15,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/session"
 	"tofu/internal/sys"
+	"tofu/internal/turn"
 	"tofu/library/questions"
 )
 
@@ -298,6 +299,9 @@ func sessionTimeline(store *session.Store, handle string, filter traceFilter) (t
 	if err != nil {
 		return traceTimeline{}, err
 	}
+	if err := turn.CheckToolOutcomes(events); err != nil {
+		return traceTimeline{}, err
+	}
 	exchanges, err := store.Exchanges(header.ID)
 	if err != nil {
 		return traceTimeline{}, err
@@ -330,6 +334,9 @@ func sessionTimeline(store *session.Store, handle string, filter traceFilter) (t
 		}
 		events, err := store.Events(from.ID)
 		if err != nil {
+			return traceTimeline{}, err
+		}
+		if err := turn.CheckToolOutcomes(events); err != nil {
 			return traceTimeline{}, err
 		}
 		borrowed, there := traceRows(slices.DeleteFunc(slices.Clone(events), outsideHere), nil), handleOf(store, from.ID)

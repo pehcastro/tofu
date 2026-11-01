@@ -126,7 +126,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			}
 			reason, gate := callReason(result.ResultBody), gateWords(result, nil, event.Call)
 			answered.Text = traced(call.Tool+" → "+answered.State, ruleWords(result.Rules), sized(result.ResultBytes), took(result.DurationMS), oneLine(reason), gate, oneLine(string(call.Args)))
-			if result.Error != "" || result.Refused || result.ToolOutcome == session.ToolOutcomeFailed || result.ToolOutcome == session.ToolOutcomeAborted {
+			if result.ToolOutcome != session.ToolOutcomeSkipped && (result.Error != "" || result.Refused || result.ToolOutcome == session.ToolOutcomeFailed || result.ToolOutcome == session.ToolOutcomeAborted) {
 				answered.Outcome = traceProblem(result.ToolOutcome == session.ToolOutcomeAborted, cmp.Or(reason, answered.State))
 			}
 			if what, name := libraryLoad(call); what != "" {

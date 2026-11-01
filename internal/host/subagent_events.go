@@ -1,6 +1,7 @@
 package host
 
 import (
+	"cmp"
 	"encoding/json"
 	"slices"
 
@@ -32,6 +33,7 @@ func (h *Host) SubAgentEvents(names []string, visit func(Event) bool) error {
 		wanted[name] = true
 	}
 	stopped := false
+	var failed error
 	var logged *session.Event
 	mask := sys.LoadKeyRedactor().Redact
 	watch := &watcher{seen: &shownResults{ids: map[string]bool{}}, spawner: &turn.SpawnTool{}, emit: func(event Event) {
@@ -52,12 +54,17 @@ func (h *Host) SubAgentEvents(names []string, visit func(Event) bool) error {
 				delete(watch.cards.open, event.Agent)
 				watch.called(callOf(event), event.Agent)
 			case session.EventToolResult:
-				watch.result(resultOf(event), event.Agent)
+				ran, unknown := resultOf(event)
+				if unknown != nil {
+					failed = unknown
+					return false
+				}
+				watch.result(ran, event.Agent)
 			}
 			return !stopped
 		})
-		if err != nil || stopped {
-			return err
+		if err != nil || failed != nil || stopped {
+			return cmp.Or(err, failed)
 		}
 	}
 	return nil

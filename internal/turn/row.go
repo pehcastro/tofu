@@ -93,6 +93,9 @@ func hookRunOf(event hook.Event, verdict hook.Verdict) []HookRun {
 }
 
 func (r ToolCallRow) Outcome() llm.ToolOutcome {
+	if _, skipped := skipReason(r.Error); skipped {
+		return llm.ToolOutcomeSkipped
+	}
 	if r.Error != "" || (r.ExitCode != nil && *r.ExitCode != 0) {
 		return llm.ToolOutcomeFailed
 	}
@@ -240,6 +243,8 @@ func toolOutcomeName(outcome llm.ToolOutcome) string {
 		return session.ToolOutcomeFailed
 	case llm.ToolOutcomeAborted:
 		return session.ToolOutcomeAborted
+	case llm.ToolOutcomeSkipped:
+		return session.ToolOutcomeSkipped
 	}
 	panic("turn: unknown tool outcome")
 }
@@ -321,18 +326,11 @@ func messageOf(m MessageRow) (llm.Message, error) {
 	default:
 		return llm.Message{}, errors.New("turn: a recorded message names the role " + strconv.Quote(m.Role) + ", which is none this build sends")
 	}
-	switch m.ToolOutcome {
-	case "":
-		message.ToolOutcome = llm.ToolOutcomeUnset
-	case session.ToolOutcomeRan:
-		message.ToolOutcome = llm.ToolOutcomeRan
-	case session.ToolOutcomeFailed:
-		message.ToolOutcome = llm.ToolOutcomeFailed
-	case session.ToolOutcomeAborted:
-		message.ToolOutcome = llm.ToolOutcomeAborted
-	default:
-		return llm.Message{}, errors.New("turn: a recorded message names the tool outcome " + strconv.Quote(m.ToolOutcome) + ", which is none this build records")
+	outcome, err := ToolOutcomeOf(m.ToolOutcome)
+	if err != nil {
+		return llm.Message{}, err
 	}
+	message.ToolOutcome = outcome
 	for _, call := range m.ToolCalls {
 		message.ToolCalls = append(message.ToolCalls, llm.ToolCall{ID: call.ID, Name: call.Name, Arguments: call.Arguments})
 	}
@@ -342,6 +340,35 @@ func messageOf(m MessageRow) (llm.Message, error) {
 		}
 	}
 	return message, nil
+}
+
+func ToolOutcomeOf(recorded string) (llm.ToolOutcome, error) {
+	switch recorded {
+	case "":
+		return llm.ToolOutcomeUnset, nil
+	case session.ToolOutcomeRan:
+		return llm.ToolOutcomeRan, nil
+	case session.ToolOutcomeFailed:
+		return llm.ToolOutcomeFailed, nil
+	case session.ToolOutcomeAborted:
+		return llm.ToolOutcomeAborted, nil
+	case session.ToolOutcomeSkipped:
+		return llm.ToolOutcomeSkipped, nil
+	}
+	return llm.ToolOutcomeUnset, errors.New("turn: a recorded tool result names the tool outcome " + strconv.Quote(recorded) + ", which is none this build records")
+}
+
+func CheckToolOutcomes(events []session.Event) error {
+	for _, event := range events {
+		var result session.ResultBody
+		if event.Kind != session.EventToolResult || json.Unmarshal(event.Body, &result) != nil {
+			continue
+		}
+		if _, err := ToolOutcomeOf(result.ToolOutcome); err != nil {
+			return errors.New("call " + event.Call + " of " + cmp.Or(event.Agent, "the lead") + ": " + err.Error())
+		}
+	}
+	return nil
 }
 
 func ConversationFrom(events []session.Event) ([]llm.Message, error) {

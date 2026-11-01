@@ -514,6 +514,9 @@ func sessionSummary(store *session.Store, handle string) (sessionRow, []session.
 	if err != nil {
 		return sessionRow{}, nil, err
 	}
+	if err := turn.CheckToolOutcomes(events); err != nil {
+		return sessionRow{}, nil, err
+	}
 	row := sessionHeadRow(store, header)
 	for _, event := range events {
 		var outcome struct {
@@ -1076,6 +1079,9 @@ func sessionTrace(store *session.Store, handle string) (sessionTraceReport, erro
 	if err != nil {
 		return sessionTraceReport{}, err
 	}
+	if err := turn.CheckToolOutcomes(events); err != nil {
+		return sessionTraceReport{}, err
+	}
 	report, err := traceBody(store, header.ID, events, func(string, time.Time) bool { return true })
 	if err != nil {
 		return sessionTraceReport{}, err
@@ -1228,6 +1234,8 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 			calls[i].Mark, calls[i].Detail = cli.Fail, oneLine(call.Reason)
 		case call.Outcome == session.ToolOutcomeAborted:
 			calls[i].Mark = cli.Warn
+		case call.Outcome == session.ToolOutcomeSkipped:
+			calls[i].Mark, calls[i].Detail = cli.Warn, oneLine(call.Reason)
 		}
 		for _, ran := range call.Hooks {
 			calls[i].Detail += " · " + ran.Event + " hook ran " + strconv.Itoa(ran.Ran) + strings.TrimSuffix(" "+cmp.Or(ran.Block, ran.Ask), " ")

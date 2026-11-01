@@ -16,6 +16,7 @@ const (
 	ToolOutcomeRan     = "ran"
 	ToolOutcomeFailed  = "failed"
 	ToolOutcomeAborted = "aborted"
+	ToolOutcomeSkipped = "skipped"
 )
 
 type MessageToolCall struct {

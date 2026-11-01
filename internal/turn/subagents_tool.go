@@ -172,7 +172,7 @@ func (t *SpawnTool) failedCalls(held *heldSubAgent) []string {
 			switch call.Outcome() {
 			case llm.ToolOutcomeRan:
 				failed = nil
-			case llm.ToolOutcomeFailed:
+			case llm.ToolOutcomeFailed, llm.ToolOutcomeSkipped:
 				why := call.Error
 				if why == "" && call.ExitCode != nil {
 					why = "exit code " + strconv.Itoa(*call.ExitCode)
