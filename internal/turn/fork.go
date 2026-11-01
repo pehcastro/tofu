@@ -11,6 +11,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/memtree"
+	"tofu/internal/recall"
 	"tofu/internal/session"
 )
 
@@ -99,6 +100,38 @@ func carryState(fork *Fork, begun []llm.Message, state, session string) {
 	}
 	fork.Carry.Text, fork.Carry.State = text+rest, state
 	begun[at].Content = fork.Carry.Text
+}
+
+func picturesLeftOut(before, after []llm.Message) []recall.Drop {
+	pictured := map[string]bool{}
+	for _, message := range after {
+		if message.Role == llm.RoleTool && len(message.Images) > 0 {
+			pictured[message.ToolCallID] = true
+		}
+	}
+	calls := map[string]llm.ToolCall{}
+	var drops []recall.Drop
+	step := 0
+	for _, message := range before {
+		if message.Role == llm.RoleAssistant {
+			step++
+		}
+		for _, call := range message.ToolCalls {
+			calls[call.ID] = call
+		}
+		if message.Role != llm.RoleTool || len(message.Images) == 0 || pictured[message.ToolCallID] {
+			continue
+		}
+		call := calls[message.ToolCallID]
+		var read readArgs
+		_ = json.Unmarshal(call.Arguments, &read)
+		bytes := 0
+		for _, image := range message.Images {
+			bytes += len(image.Data)
+		}
+		drops = append(drops, recall.Drop{Step: step, Tool: call.Name, Path: read.Path, Bytes: bytes, TokensFreed: len(message.Images) * konst.ImageTokens, Reason: recall.DroppedAged})
+	}
+	return drops
 }
 
 type lookupTool struct {
