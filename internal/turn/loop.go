@@ -844,9 +844,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		recorded.listChange(session.ListChangeFork, string(fork.Kind)+" fork "+strconv.Itoa(forks)+" "+when+" from "+ended.Session+", "+
 			strconv.Itoa(fork.TokensBefore)+" to "+strconv.Itoa(fork.TokensAfter)+" tokens, "+strconv.Itoa(fork.TailMessages)+" tail messages"+held, beforeFork, begun)
 		messages, sent, answering, budget = begun, 0, "", budget.Reported(0, recall.Occupancy{})
-		if fork.Kind == ForkCompact {
-			compacted()
-		}
+		compacted()
 		flush()
 	}
 	endForked := func(fork *Fork, when string, beforeFork, begun []llm.Message, moved *Account, why string) Row {

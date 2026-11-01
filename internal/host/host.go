@@ -34,6 +34,7 @@ const (
 	SourceStartup  = "startup"
 	SourceCleared  = "clear"
 	SourceResumed  = "resume"
+	SourceCompact  = "compact"
 	ImageTokenHead = "[Image #"
 	ranPreface     = "before sending this, the person ran a command in the project with !, outside any turn, and it printed:\n$ "
 )
@@ -869,7 +870,7 @@ func (h *Host) Opening(carry Carry) Opened { return resumedChat(carry, h.dir) }
 func (h *Host) Compacted(into string, messages []llm.Message) error {
 	h.mu.Lock()
 	h.dropCheckIn()
-	h.id, h.carried = into, messages
+	h.id, h.carried, h.started = into, messages, SourceCompact
 	h.mu.Unlock()
 	if err := h.enter(into); err != nil || h.joins {
 		return err
