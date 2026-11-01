@@ -550,6 +550,10 @@ func (c boardyCall) log() int {
 		return c.o.usage(errors.New("name a " + c.words.Ticket + " and the text to log"))
 	}
 	text := strings.Join(c.args[1:], " ")
+	_, firstNotTicket := boardy.SplitID(c.args[0])
+	if _, beforeNotTicket := boardy.SplitID(before); capturing && firstNotTicket != nil && beforeNotTicket == nil {
+		return c.o.usage(fmt.Errorf("--before takes the text and the %s comes first: tofu boardy log %s --before %q", c.words.Ticket, before, strings.Join(c.args, " ")))
+	}
 	var ticket boardy.Ticket
 	var err error
 	switch line := c.flags["line"]; {
