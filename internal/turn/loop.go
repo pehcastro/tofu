@@ -271,16 +271,16 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	headTools := NewRegistry(withLoopTools(source().tools)...).Definitions()
 	held := config.holdPrefix(headTools, artifacts.preview)
 	config.Instructions = held.instructions
-	heldTools := config.Prefix.toolsOr(currentTools().Definitions())
-	var usedTools []string
-	for _, tool := range sending(heldTools) {
-		usedTools = append(usedTools, tool.Name)
+	sentTools := sending(currentTools().Definitions())
+	usedTools := make([]string, len(sentTools))
+	for i, tool := range sentTools {
+		usedTools[i] = tool.Name
 	}
-	heldSchemas, err := json.Marshal(heldTools)
+	sentSchemas, err := json.Marshal(sentTools)
 	if err != nil {
 		return Row{}, err
 	}
-	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, Account: account.ID, SpawnedFrom: config.SpawnedFrom, SpawnedBy: config.SpawnedBy, Budget: budget, System: held.head, Tools: usedTools, ToolSchemas: string(heldSchemas), Parts: held.parts}
+	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, Account: account.ID, SpawnedFrom: config.SpawnedFrom, SpawnedBy: config.SpawnedBy, Budget: budget, System: held.head, Tools: usedTools, ToolSchemas: string(sentSchemas), Parts: held.parts}
 
 	upgraded := config.upgradeNote()
 	recorded, err = openRecord(config, row)

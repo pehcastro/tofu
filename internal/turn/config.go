@@ -299,8 +299,8 @@ func HeldPrefix(store *session.Store, id, agent string) (*Prefix, error) {
 		return nil, err
 	}
 	first, last := prompts[0], prompts[len(prompts)-1]
-	var tools []llm.Tool
-	if err := json.Unmarshal([]byte(cmp.Or(last.ToolSchemas, "null")), &tools); err != nil {
+	tools, err := heldTools(prompts)
+	if err != nil {
 		return nil, err
 	}
 	held := &Prefix{held: true, tools: tools, first: heldPrefix{head: first.System, instructions: first.Instructions, system: Config{System: first.System, Instructions: first.Instructions}.SystemMessage()}}
@@ -322,6 +322,31 @@ func HeldPrefix(store *session.Store, id, agent string) (*Prefix, error) {
 			held.inForce = append(held.inForce, part)
 		case unloadedSkill(part):
 			held.unloaded = append(held.unloaded, part)
+		}
+	}
+	return held, nil
+}
+
+func heldTools(prompts []session.PromptBody) ([]llm.Tool, error) {
+	var held []llm.Tool
+	for i, prompt := range slices.Backward(prompts) {
+		var sent []llm.Tool
+		if err := json.Unmarshal([]byte(cmp.Or(prompt.ToolSchemas, "null")), &sent); err != nil {
+			return nil, err
+		}
+		at := slices.IndexFunc(sent, func(tool llm.Tool) bool { return tool.Name == AskPersonToolName })
+		switch {
+		case i == len(prompts)-1:
+			held = sent
+			if at >= 0 {
+				return held, nil
+			}
+		case at >= 0:
+			after := min(at, len(held))
+			if before := slices.IndexFunc(held, func(tool llm.Tool) bool { return at > 0 && tool.Name == sent[at-1].Name }); before >= 0 {
+				after = before + 1
+			}
+			return slices.Insert(held, after, sent[at]), nil
 		}
 	}
 	return held, nil
