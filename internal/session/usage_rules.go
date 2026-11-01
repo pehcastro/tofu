@@ -1,18 +1,12 @@
 package session
 
 import (
-	"bufio"
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 	"slices"
 	"strings"
 	"time"
-
-	"tofu/internal/konst"
 )
 
 const (
@@ -43,7 +37,11 @@ func (s *Store) RuleFires(now time.Time) (map[string]RuleFires, []Skip, error) {
 	}
 	for _, header := range listing.Sessions {
 		parts, counted := map[string][]PromptPart{}, map[string]bool{}
-		err := s.eachOf(header.ID, []EventKind{EventPrompt, EventMessage, EventSent}, func(event Event) {
+		events, err := s.EventsOf(header.ID, EventPrompt, EventMessage, EventSent)
+		if err != nil {
+			skipped = append(skipped, Skip{ID: header.ID, Reason: err})
+		}
+		for _, event := range events {
 			var sent struct {
 				System  string       `json:"system"`
 				Parts   []PromptPart `json:"parts"`
@@ -51,7 +49,7 @@ func (s *Store) RuleFires(now time.Time) (map[string]RuleFires, []Skip, error) {
 				Content string       `json:"content"`
 			}
 			if json.Unmarshal(event.Body, &sent) != nil {
-				return
+				continue
 			}
 			switch {
 			case event.Kind == EventPrompt:
@@ -69,9 +67,6 @@ func (s *Store) RuleFires(now time.Time) (map[string]RuleFires, []Skip, error) {
 					}
 				}
 			}
-		})
-		if err != nil {
-			skipped = append(skipped, Skip{ID: header.ID, Reason: err})
 		}
 	}
 	return fires, skipped, nil
@@ -108,14 +103,15 @@ var ErrSentBeforeParts = errors.New("session: nothing records what went into thi
 func (s *Store) RequestParts(id, handle string) (RequestParts, error) {
 	prompts, carried := map[string]json.RawMessage{}, map[string][]SentItem{}
 	var found []RequestParts
-	err := s.eachOf(id, []EventKind{EventPrompt, EventSent}, func(event Event) {
+	events, err := s.EventsOf(id, EventPrompt, EventSent)
+	for _, event := range events {
 		if event.Kind == EventPrompt {
 			prompts[event.Agent] = event.Body
-			return
+			continue
 		}
 		var sent SentBody
 		if json.Unmarshal(event.Body, &sent) != nil {
-			return
+			continue
 		}
 		kept := carried[event.Agent]
 		for _, dropped := range sent.Dropped {
@@ -131,7 +127,7 @@ func (s *Store) RequestParts(id, handle string) (RequestParts, error) {
 			found = append(found, RequestParts{Request: event.Request, Agent: event.Agent, Turn: event.Turn, At: event.At, Prompt: sentParts, Sent: sent,
 				Carried: slices.Clone(carried[event.Agent])})
 		}
-	})
+	}
 	switch {
 	case err != nil:
 		return RequestParts{}, err
@@ -141,67 +137,4 @@ func (s *Store) RequestParts(id, handle string) (RequestParts, error) {
 		return RequestParts{}, fmt.Errorf("%w: %q matches %d requests", ErrEventHashAmbiguous, handle, len(found))
 	}
 	return found[0], nil
-}
-
-func (s *Store) eachOf(id string, kinds []EventKind, visit func(Event)) error {
-	if err := namesOneSession(id); err != nil {
-		return err
-	}
-	if events, read := s.parsed[id]; read || s.legacy(id) {
-		var err error
-		if !read {
-			events, err = s.legacyEvents(id)
-		}
-		for _, event := range events {
-			if slices.Contains(kinds, event.Kind) {
-				visit(event)
-			}
-		}
-		return err
-	}
-	file, err := os.Open(s.EventsPath(id))
-	if err != nil {
-		return fmt.Errorf("session: %s has no events: %w", id, err)
-	}
-	defer func() { _ = file.Close() }()
-	reader, line := bufio.NewReaderSize(file, konst.EventScanBytes), []byte(nil)
-	for number := 0; ; {
-		chunk, err := reader.ReadSlice('\n')
-		blank, wanted := len(bytes.TrimSpace(chunk)) == 0, slices.Contains(kinds, kindOf(chunk))
-		if wanted {
-			line = append(line[:0], chunk...)
-		}
-		for errors.Is(err, bufio.ErrBufferFull) {
-			chunk, err = reader.ReadSlice('\n')
-			if wanted {
-				line = append(line, chunk...)
-			}
-		}
-		switch {
-		case errors.Is(err, io.EOF):
-			return nil
-		case err != nil:
-			return err
-		case blank:
-			continue
-		}
-		number++
-		if !wanted {
-			continue
-		}
-		event, err := parseLine[Event](line, id, number)
-		if err != nil {
-			return err
-		}
-		visit(event)
-	}
-}
-
-func kindOf(head []byte) EventKind {
-	_, after, found := bytes.Cut(head, []byte(`"kind":"`))
-	kind, _, closed := bytes.Cut(after, []byte(`"`))
-	if !found || !closed {
-		return ""
-	}
-	return EventKind(kind)
 }

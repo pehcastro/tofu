@@ -508,7 +508,6 @@ const (
 	ServeQuotaPollMinutes = 5
 	ServeLedgerPageRows   = 200
 	CPUsPerReadWorker     = 2
-	EventScanBytes        = 1 << 20
 )
 
 const (
