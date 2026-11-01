@@ -27,7 +27,7 @@ The outcome sequence is the first clue. `[pass fail fail]` is state left behind 
 
 ## 3. Categorise before fixing
 
-Take the class from `references/failure-triage.md`, then the cause from `references/flakiness.md`: timing, shared state, an external dependency, or ordering. The category names the fix. Skipping this step is how a wait gets added.
+Take the class from the failure-triage reference, then the cause from the flakiness reference: timing, shared state, an external dependency, or ordering. The category names the fix. Skipping this step is how a wait gets added.
 
 ## 4. Fix the cause
 

@@ -26,13 +26,14 @@ const (
 )
 
 type Skill struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Domain      string `json:"domain,omitempty"`
-	Origin      Origin `json:"origin"`
-	File        string `json:"path"`
-	Dir         string `json:"dir"`
-	Hidden      bool   `json:"hidden"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Domain      string   `json:"domain,omitempty"`
+	Origin      Origin   `json:"origin"`
+	File        string   `json:"path"`
+	Dir         string   `json:"dir"`
+	Hidden      bool     `json:"hidden"`
+	References  []string `json:"references,omitempty"`
 }
 
 type Found struct {
@@ -129,11 +130,24 @@ func Shipped(library fs.FS, root string) ([]Skill, error) {
 		fields, _ := frontMatter(string(data))
 		file := path.Join(root, name)
 		shipped = append(shipped, Skill{Name: cmp.Or(strings.Join(fields["name"], " "), strings.TrimSuffix(path.Base(name), ".md")),
-			Description: strings.Join(fields["description"], " "), Domain: strings.Join(fields["domain"], " "), Origin: OriginLibrary, File: file, Dir: path.Dir(file)})
+			Description: strings.Join(fields["description"], " "), Domain: strings.Join(fields["domain"], " "), Origin: OriginLibrary, File: file, Dir: path.Dir(file), References: fields["references"]})
 		return nil
 	})
 	slices.SortFunc(shipped, func(a, b Skill) int { return strings.Compare(a.Name, b.Name) })
 	return shipped, err
+}
+
+func ReferenceFiles(library fs.FS, owner string, names []string) ([]string, error) {
+	var files []string
+	for _, name := range names {
+		found, _ := fs.Glob(library, "*/references/"+name+".md")
+		deeper, _ := fs.Glob(library, "*/*/references/"+name+".md")
+		if found = append(found, deeper...); len(found) != 1 {
+			return nil, fmt.Errorf("the skill %s names the reference %s, which the library ships %d times", owner, name, len(found))
+		}
+		files = append(files, found[0])
+	}
+	return files, nil
 }
 
 func ProjectFolders(project, home string) []string {
@@ -245,9 +259,15 @@ func Load(skills []Skill, library fs.FS, name, path string) (string, error) {
 		if path != "" {
 			return "", fmt.Errorf("the library skill %s is one file, so it has no %s to read", name, path)
 		}
+		if _, err := ReferenceFiles(library, name, one.References); err != nil {
+			return "", err
+		}
 		_, inLibrary, _ := strings.Cut(one.File, "/")
 		data, err := fs.ReadFile(library, inLibrary)
 		_, body := frontMatter(string(data))
+		if len(one.References) > 0 {
+			body += "\n\nthis skill names the references " + strings.Join(one.References, ", ") + "; read one whole with the reference tool."
+		}
 		return body, err
 	}
 	if path == "" {

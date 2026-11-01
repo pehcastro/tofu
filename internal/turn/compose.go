@@ -131,8 +131,7 @@ func referenceIndex(references []subagent.Reference) string {
 	return text
 }
 
-func leadReferences(library fs.FS) ([]subagent.Reference, error) {
-	files, _ := fs.Glob(library, "general/references/*.md")
+func libraryReferences(library fs.FS, files []string) ([]subagent.Reference, error) {
 	var references []subagent.Reference
 	for _, file := range files {
 		data, err := fs.ReadFile(library, file)
@@ -296,13 +295,19 @@ func Compose(spec ComposeSpec) (Composed, error) {
 		composed.Parts = append(composed.Parts, part)
 		loaded, composed.Unsent = autoloaded, slices.Concat(autoloaded, referenceParts(spec.Agent))
 	} else {
-		references, err := leadReferences(shipped.Files())
+		files, _ := fs.Glob(shipped.Files(), "general/references/*.md")
+		indexed := len(files)
+		for _, one := range spec.Skills {
+			named, _ := skill.ReferenceFiles(shipped.Files(), one.Name, one.References)
+			files = append(files, slices.DeleteFunc(named, func(file string) bool { return slices.Contains(files, file) })...)
+		}
+		references, err := libraryReferences(shipped.Files(), files)
 		if err != nil {
 			return Composed{}, err
 		}
 		composed.References = references
-		composed.Parts = append(composed.Parts, PromptPart{Concern: rule.ConcernIdentity, Text: referenceIndex(references)})
-		composed.Unsent = referenceParts(subagent.Definition{References: references})
+		composed.Parts = append(composed.Parts, PromptPart{Concern: rule.ConcernIdentity, Text: referenceIndex(references[:indexed])})
+		composed.Unsent = referenceParts(subagent.Definition{References: references[:indexed]})
 	}
 	if composed.Task.Language = spec.Agent.Language; composed.Task.Language != "" && !rule.KnownLanguage(composed.Task.Language) {
 		return Composed{}, fmt.Errorf("the sub-agent %s declares the language %q, which no rule knows", spec.Agent.Name, composed.Task.Language)
