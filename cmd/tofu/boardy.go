@@ -27,7 +27,7 @@ func boardyUsageOf(subcommand string) string {
 	case "init":
 		return "tofu boardy init --key KEY [--name text] [--json]"
 	case "new":
-		return "tofu boardy new [--board KEY | --parent ID] [--type story|task|bug|subtask] [--priority P0..P4] [--status s] [--points n] [--size S|M|L] [--spec path] [--owns a,b] [--labels docs-only,...] [--epic E] [--sprint S] [--problem text] [--scope text] --before text --driven text --still-works line... --error-case text [--feasibility text] [--acceptance line]... [--as name] <title> [--json]"
+		return "tofu boardy new [--board KEY | --parent ID] [--type story|task|bug|subtask] [--priority P0..P4] [--status s] [--points n] [--size S|M|L] [--spec path] [--owns a,b]... [--labels docs-only,...]... [--epic E] [--sprint S] [--problem text] [--scope text] --before text --driven text --still-works line... --error-case text [--feasibility text] [--acceptance line]... [--as name] <title> [--json]"
 	case "list":
 		return "tofu boardy list [--board KEY] [--status s] [--all] [--fields id,status,assignee,owns] [--json]"
 	case "held":
@@ -43,7 +43,7 @@ func boardyUsageOf(subcommand string) string {
 	case "boards":
 		return "tofu boardy boards [--json]"
 	case "set":
-		return "tofu boardy set <ticket | request [--board KEY]> [--title text] [--owns a,b] [--epic E] [--sprint S] [--acceptance line]... [--reason text] [--before text] [--driven text] [--still-works line]... [--error-case text] [--feasibility text] [--as name] [--json]"
+		return "tofu boardy set <ticket | request [--board KEY]> [--title text] [--owns a,b]... [--epic E] [--sprint S] [--acceptance line]... [--reason text] [--before text] [--driven text] [--still-works line]... [--error-case text] [--feasibility text] [--as name] [--json]"
 	case "tick":
 		return "tofu boardy tick [--board KEY] [--json]"
 	case "fire":
@@ -171,7 +171,7 @@ func boardyFlags(args []string) (map[string]string, []string, error) {
 			return nil, nil, fmt.Errorf("--%s needs a value", name)
 		case (name == "acceptance" || name == "still-works") && flags[name] != "":
 			flags[name], i = flags[name]+"\n"+args[i+1], i+1
-		case name == "owns" && flags[name] != "":
+		case (name == "owns" || name == "labels") && flags[name] != "":
 			flags[name], i = flags[name]+","+args[i+1], i+1
 		default:
 			flags[name], i = args[i+1], i+1
