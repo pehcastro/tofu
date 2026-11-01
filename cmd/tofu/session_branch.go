@@ -96,7 +96,19 @@ func sessionBranch(store *session.Store, ask sessionBranchAsk) (sessionBranchRep
 			return sessionBranchReport{}, err
 		}
 	}
-	header, carried, err := turn.BranchSide(store, parent, turn.SideBranch{Access: access, Seed: turn.Seed(ask.seed), Model: ask.model, Effort: effort, From: ask.at}, time.Now())
+	var chosen *session.Chosen
+	if ask.model != "" {
+		library, err := modelLibrary(".")
+		if err != nil {
+			return sessionBranchReport{}, err
+		}
+		model, err := library.Select(ask.model)
+		if err != nil {
+			return sessionBranchReport{}, err
+		}
+		chosen = &session.Chosen{Wire: library.WireOf(model), Model: model.Slug()}
+	}
+	header, carried, err := turn.BranchSide(store, parent, turn.SideBranch{Access: access, Seed: turn.Seed(ask.seed), Chosen: chosen, Effort: effort, From: ask.at}, time.Now())
 	if err != nil {
 		return sessionBranchReport{}, err
 	}

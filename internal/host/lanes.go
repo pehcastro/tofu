@@ -2,7 +2,6 @@ package host
 
 import (
 	"bytes"
-	"cmp"
 	"encoding/json"
 	"hash/fnv"
 	"maps"
@@ -326,6 +325,7 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 	was := l.items.session
 	l.items.session = carry.Session
 	s.mu.Unlock()
+	_, held := l.host.Settings()
 	opened, err := l.host.Resume(carry)
 	if err != nil {
 		s.mu.Lock()
@@ -336,13 +336,8 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 	defer l.asks(p.Asking)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if store, err := session.OpenIn(s.Host.dir); err == nil {
-		if side, found, _ := store.Side(carry.Session); found && side.Model != "" {
-			asking, pick := l.host.Settings()
-			pick.Wire, pick.Model = cmp.Or(side.Wire, pick.Wire), side.Model
-			l.host.Choose(pick)
-			s.box.push(merged("session.settings", "", &SessionSettings{Identity: Identity{Session: carry.Session}, Asking: asking, Pick: s.shown(pick)}))
-		}
+	if asking, pick := l.host.Settings(); pick != held {
+		s.box.push(merged("session.settings", "", &SessionSettings{Identity: Identity{Session: carry.Session}, Asking: asking, Pick: s.shown(pick)}))
 	}
 	read := newItems(carry.Session)
 	lines := read.all(opened.Chat)

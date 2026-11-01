@@ -193,7 +193,9 @@ func New(cfg Config) (*Host, []string) {
 		h.play = h.run
 	}
 	var troubles []string
-	h.restorePick(cfg.Resumed)
+	if err := h.restorePick(cfg.Resumed); err != nil {
+		troubles = append(troubles, err.Error())
+	}
 	if err := h.carry(cfg.Resumed); err != nil {
 		troubles = append(troubles, err.Error())
 	}
@@ -754,22 +756,35 @@ func (h *Host) carry(resumed Carry) error {
 	return err
 }
 
-func (h *Host) restorePick(resumed Carry) {
+func (h *Host) restorePick(resumed Carry) error {
 	if resumed.Session == "" {
-		return
+		return nil
 	}
 	store, err := resumed.reading(h.dir)
 	if err != nil {
-		return
+		return nil
 	}
 	header, err := store.Header(resumed.Session)
-	if err != nil || header.Chosen == nil {
-		return
+	if err != nil {
+		return nil
 	}
-	library := libraryAt(h.dir)
-	if model, known := library.Resolve(header.Chosen.Model); known && library.WireOf(model) == header.Chosen.Wire {
-		h.pick.Wire, h.pick.Model = header.Chosen.Wire, model.Slug()
+	library, chosen := libraryAt(h.dir), header.Chosen
+	side, isSide, _ := store.Side(resumed.Session)
+	if model, known := library.Resolve(side.Model); chosen == nil && isSide && known && model.Slug() == side.Model {
+		chosen = &session.Chosen{Wire: library.WireOf(model), Model: side.Model}
 	}
+	if chosen == nil {
+		return nil
+	}
+	if model, known := library.Resolve(chosen.Model); known && library.WireOf(model) == chosen.Wire {
+		h.pick.Wire, h.pick.Model = chosen.Wire, model.Slug()
+		return nil
+	}
+	if !isSide {
+		return nil
+	}
+	return fmt.Errorf("side chat %s runs on %s, which the model library no longer has: pick another with tofu session set %s --model source/model",
+		resumed.Session, chosen.Model, resumed.Session)
 }
 
 func SettleHeld(project, id string, pick Pick) (bool, error) {
@@ -839,9 +854,12 @@ func (h *Host) Resume(carry Carry) (Opened, error) {
 	h.forget()
 	h.mu.Lock()
 	was := h.pick
-	h.restorePick(carry)
+	err := h.restorePick(carry)
 	h.mu.Unlock()
-	if err := h.enter(carry.Session); err != nil {
+	if err == nil {
+		err = h.enter(carry.Session)
+	}
+	if err != nil {
 		h.mu.Lock()
 		h.pick = was
 		h.mu.Unlock()
