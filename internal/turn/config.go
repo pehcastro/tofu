@@ -87,6 +87,7 @@ type Config struct {
 	Person          Person
 	GatePromptAsks  func() bool
 	Task            string
+	Notes           []string
 	TaskOrigin      llm.Origin
 	Arrived         []llm.Message
 	Images          []llm.Image
@@ -189,7 +190,7 @@ func (c Config) FirstUserMessage(notes ...string) string {
 	if c.Environment != "" {
 		first = c.Environment + TheTaskFollows + c.Task
 	}
-	return first + notesOn(notes)
+	return first + notesOn(slices.Concat(c.Notes, notes))
 }
 
 func notesOn(notes []string) string {
@@ -235,7 +236,7 @@ func (c Config) opening(task llm.Origin, notes ...string) []llm.Message {
 		return []llm.Message{{Role: llm.RoleUser, Content: c.FirstUserMessage(notes...), Images: c.Images, Origin: task}}
 	}
 	var opened []llm.Message
-	if framing := strings.TrimSpace(c.Environment + notesOn(notes)); framing != "" {
+	if framing := strings.TrimSpace(c.Environment + notesOn(slices.Concat(c.Notes, notes))); framing != "" {
 		opened = append(opened, llm.Message{Role: llm.RoleUser, Content: framing, Origin: llm.Origin{Source: llm.SourceEnvironment, TakenAt: task.TakenAt}})
 	}
 	for _, item := range c.Arrived {

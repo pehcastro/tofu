@@ -516,7 +516,7 @@ func (b *Inbox) notesOn(ctx context.Context, store *session.Store, id, said stri
 		return notes
 	}
 	if notes == "" {
-		return NotesAfterTheTask + requestOpenNote
+		return requestOpenNote
 	}
 	return notes + "\n" + requestOpenNote
 }
@@ -580,7 +580,7 @@ func (b *Inbox) repeatNote(store *session.Store, id, said string) string {
 		if entry.Said != "" {
 			evidence = `, kept from their words "` + entry.Said + `"`
 		}
-		return NotesAfterTheTask + "memory already keeps what the person asks here, as " + entry.ID + since + `: "` + strings.TrimSuffix(entry.Text, ".") + `"` + evidence +
+		return "memory already keeps what the person asks here, as " + entry.ID + since + `: "` + strings.TrimSuffix(entry.Text, ".") + `"` + evidence +
 			", matched at " + strconv.FormatFloat(found.Score, 'f', 2, 64) + " in ledger row " + found.Row + ". Say so plainly, naming " + entry.ID + ", quoting it and citing row " + found.Row + ". That line did not hold, since they had to ask again: " + repeatNeedsACheck
 	case found.Earlier < 0:
 		return ""
@@ -603,7 +603,7 @@ func (b *Inbox) repeatNote(store *session.Store, id, said string) string {
 		}
 		quote, cut = quote[:end], "..."
 	}
-	return NotesAfterTheTask + repeatNoteOpening + ", " + when + repeatQuoteOpens + quote + `"` + cut + ". Having to say it again means nothing holds it yet: " + repeatNeedsACheck
+	return repeatNoteOpening + ", " + when + repeatQuoteOpens + quote + `"` + cut + ". Having to say it again means nothing holds it yet: " + repeatNeedsACheck
 }
 
 func beforeCronFire(said string) string {
@@ -1134,15 +1134,15 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 	config.Inbox.mu.Unlock()
 	config.Inbox.openJudges(config)
 	if config.TaskOrigin.Source == "" || saidByThePerson(config.TaskOrigin) {
-		config.Task += config.Inbox.notesOn(ctx, config.Sessions, config.Session, config.Task)
+		config.Notes = []string{config.Inbox.notesOn(ctx, config.Sessions, config.Session, config.Task)}
 	}
 	for {
 		config.Inbox.mu.Lock()
 		config.Inbox.stopped, config.Inbox.led = false, true
 		config.Inbox.mu.Unlock()
-		config.Task += boardNotifies(config.Board)
 		config.Environment = Redated(config.Environment, config.Now)
 		framed := config
+		framed.Notes = append(slices.Clone(config.Notes), boardNotifies(config.Board))
 		framed.Environment += attached
 		attached = ""
 		row, err := Run(ctx, framed)
@@ -1172,7 +1172,7 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 		} else {
 			config = config.Inbox.retasked(config, said)
 		}
-		config.Task, config.Images, config.NewID, config.SessionSource = cmp.Or(said, strings.Join(textsOf(next), "\n\n"))+note, nil, nil, ""
+		config.Task, config.Notes, config.Images, config.NewID, config.SessionSource = cmp.Or(said, strings.Join(textsOf(next), "\n\n")), []string{note}, nil, nil, ""
 		if said != "" && config.ImagesOf != nil {
 			config.Images = config.ImagesOf(said)
 		}

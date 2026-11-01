@@ -150,7 +150,7 @@ func readBoardNotifies(board *boardy.Managed, foreseen ...string) (string, func(
 	if len(notes) == 0 {
 		return "", markRead
 	}
-	return NotesAfterTheTask + boardNotifiesOpening + strings.Join(notes, "; "), markRead
+	return boardNotifiesOpening + strings.Join(notes, "; "), markRead
 }
 
 type leadWork struct {

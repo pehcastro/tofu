@@ -946,7 +946,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				if config.Inbox != nil {
 					notes := config.Inbox.notesOn(ctx, config.Sessions, cmp.Or(row.Session, config.Session), steered)
 					asked.restated = asked.restated || strings.Contains(notes, requestOpenNote)
-					said.Content += notes
+					said.Content += notesOn([]string{notes})
 				}
 				if config.ImagesOf != nil {
 					said.Images = config.ImagesOf(steered)
