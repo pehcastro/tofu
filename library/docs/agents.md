@@ -38,6 +38,28 @@ The lead may change up to 200 source lines a turn itself, in any folder, before 
 A name is one plain lower-case word: letters, digits and `-`, starting
 with a letter, like `planner` or `ts-dev`.
 
+## The checks it ran
+
+When any check a sub-agent ran failed, its report lists every check it
+ran, in order, each with its exit code and the first error line it
+printed:
+
+    checks it ran, each with its exit code and first error line:
+      go vet ./... exited 0
+      go test ./... exited 1: --- FAIL: TestAdd (0.00s)
+      cargo test 2>&1 | tail -5 exited 0 at the last stage of its pipe, and printed a failure: test result: FAILED. 0 passed; 1 failed
+      go test ./... exited 0
+    noted: sent back once: go test exited 1: --- FAIL: TestAdd (0.00s)
+
+A check is a shell command, `test` or `typecheck`. A report where every
+check passed has no list, and a send-back quotes the same line.
+
+A pipe exits with its last stage, so `cargo test | tail -5` exits 0 when
+the test failed, and the line names that exit. For `go test`, `go vet` and
+`cargo test`, tofu also reads what the command printed: when it shows a
+failure the line says `exited 0 at the last stage of its pipe, and printed
+a failure`, and the check counts as failed.
+
 ## Where it lives
 
 A sub-agent is one file, `<name>.md`, read from these places, the first
