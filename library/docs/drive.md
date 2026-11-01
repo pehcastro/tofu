@@ -40,6 +40,9 @@ The steps a script takes, among others:
 
 - `type TEXT`, `paste TEXT`, `key NAME`: what a person types and presses
 - `wait TEXT`, `absent TEXT`: what must or must not be on the screen
+- `count TEXT`: print how many rows of the screen hold TEXT, as
+  `count TEXT: N`, so a run proves a message shows once rather than only
+  that it shows; `count` with no text is refused
 - `screen`: print the screen as it stands
 - `environment`: print the environment block the last turn sent
 - `requests`: print every request sent so far

@@ -115,6 +115,8 @@ Steps:
   idle         wait until no turn runs and no sub-agent works, and fail naming
                the turn and the callers still asking the cassette if that never comes
   absent TEXT  fail if TEXT is on the screen now
+  count TEXT   print how many rows of the screen hold TEXT, so a run proves a
+               message shows once
   screen       print the screen as it stands
   environment  print the environment block the last turn sent to the model
   images       print how many images the last request's user message carried
@@ -1091,6 +1093,19 @@ func playStep(driver *filmstrip.Driver, deck *cassette, live *host.Host, step fi
 			return fmt.Errorf("idle takes nothing, and was given %q", step.Text)
 		}
 		return awaitIdle(driver, live, deck, plan.timeout)
+	case "count":
+		if step.Text == "" {
+			return errors.New("count takes the text to count, and was given none")
+		}
+		said = func() string {
+			held := 0
+			for row := range strings.SplitSeq(driver.Plain(), "\n") {
+				if strings.Contains(row, step.Text) {
+					held++
+				}
+			}
+			return fmt.Sprintf("count %s: %d", step.Text, held)
+		}
 	case "environment":
 	case "images":
 		said = deck.images
