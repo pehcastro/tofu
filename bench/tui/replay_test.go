@@ -39,10 +39,11 @@ const (
 
 type recordedCall struct {
 	ID          string          `json:"id"`
+	Call        string          `json:"call"`
 	Tool        string          `json:"tool"`
 	Args        json.RawMessage `json:"args"`
 	Command     string          `json:"command"`
-	SubAgentID  string          `json:"child_id"`
+	SubAgentID  string          `json:"sub_agent_id"`
 	ExitCode    *int            `json:"exit_code"`
 	Error       string          `json:"error"`
 	ResultBytes int             `json:"result_bytes"`
@@ -76,6 +77,7 @@ type sitting struct {
 	events      int
 	largestEdit int
 	largestRows int
+	subAgents   int
 	outcomes    map[host.ToolOutcome]int
 }
 
@@ -171,7 +173,7 @@ func (r recorded) sitting(b *testing.B, last int) sitting {
 				answered := resultAt(results, call)
 				content, outcome := answered.content, outcomeOf(b, answered.outcome, recordedCall)
 				if recordedCall.SubAgentID != "" {
-					subAgents = append(subAgents, r.subAgentRow(b, recordedCall, len(subAgents)))
+					subAgents = append(subAgents, r.subAgentRow(b, header, recordedCall))
 					events = append(events, app.Event{Kind: app.EventSubAgent, SubAgents: slices.Clone(subAgents)})
 				}
 				result := app.Event{Kind: app.EventToolResult, ID: id, Text: summary(content, recordedCall.ResultBytes), Bytes: recordedCall.ResultBytes,
@@ -193,6 +195,7 @@ func (r recorded) sitting(b *testing.B, last int) sitting {
 				call++
 			}
 		}
+		replayed.subAgents += len(subAgents)
 		events = append(events, app.Event{Kind: app.EventDone, Text: header.Outcome})
 		replayed.turns = append(replayed.turns, replayedTurn{task: header.Task, events: events})
 		replayed.events += len(events)
@@ -200,38 +203,40 @@ func (r recorded) sitting(b *testing.B, last int) sitting {
 	return replayed
 }
 
-func (r recorded) subAgentRow(b *testing.B, spawn recordedCall, index int) subagent.Row {
+func (r recorded) subAgentRow(b *testing.B, header session.Header, spawn recordedCall) subagent.Row {
 	b.Helper()
-	var args struct {
-		Owns    []string `json:"owns"`
-		Mission string   `json:"mission"`
+	part := header.ID + session.TurnMark + spawn.SubAgentID
+	steps, results := r.read(b, part)
+	if len(steps) == 0 {
+		b.Fatal("bench/tui: recorded spawn " + spawn.Call + " in session " + header.ID + " names sub-agent " + spawn.SubAgentID + ", and the session records nothing it did")
 	}
-	if err := json.Unmarshal(spawn.Args, &args); err != nil {
+	row := subagent.Row{Name: spawn.SubAgentID, Total: konst.TurnMaxSteps, State: roster.Finished}
+	events, err := r.store.Events(header.ID)
+	if err != nil {
 		b.Fatal(err)
 	}
-	row := subagent.Row{Name: "c" + strconv.Itoa(index+1), Owns: args.Owns, Doing: args.Mission, Total: konst.TurnMaxSteps, State: roster.Finished}
-	if fields := strings.Fields(spawn.Command); len(fields) > 1 {
+	for _, event := range events {
+		var spawned session.SpawnBody
+		if event.Kind == session.EventSpawn && json.Unmarshal(event.Body, &spawned) == nil && spawned.Agent == spawn.SubAgentID {
+			row.Agent, row.Model, row.Owns, row.Ticket, row.Doing = spawned.Definition, spawned.Model, spawned.Owns, spawned.Ticket, spawned.Mission
+		}
+	}
+	for _, run := range header.Agents {
 		for _, state := range roster.States() {
-			if state.String() == strings.TrimSuffix(fields[1], ":") {
+			if run.Agent == spawn.SubAgentID && state.String() == run.Status {
 				row.State = state
 			}
 		}
 	}
-	for _, header := range r.headers {
-		if !strings.HasPrefix(header.ID, spawn.SubAgentID) {
-			continue
-		}
-		steps, results := r.read(b, header.ID)
-		call := 0
-		for _, step := range steps {
-			row.Steps++
-			row.Tokens += step.PromptTokens + step.CompletionTokens
-			row.Report = cmp.Or(step.AssistantText, row.Report)
-			for _, recordedCall := range step.ToolCalls {
-				row.Calls = append(row.Calls, subagent.Call{ID: session.EventIDFor(header.ID, recordedCall.ID), Tool: recordedCall.Tool,
-					Text: recordedCall.Command, Result: summary(resultAt(results, call).content, recordedCall.ResultBytes)})
-				call++
-			}
+	call := 0
+	for _, step := range steps {
+		row.Steps++
+		row.Tokens += step.PromptTokens + step.CompletionTokens
+		row.Report = cmp.Or(step.AssistantText, row.Report)
+		for _, recordedCall := range step.ToolCalls {
+			row.Calls = append(row.Calls, subagent.Call{ID: session.EventIDFor(part, recordedCall.ID), Tool: recordedCall.Tool,
+				Text: recordedCall.Command, Result: summary(resultAt(results, call).content, recordedCall.ResultBytes)})
+			call++
 		}
 	}
 	return row

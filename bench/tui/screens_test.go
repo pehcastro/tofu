@@ -93,6 +93,7 @@ func onEachScreen(b *testing.B, screens []string, last int, measure func(b *test
 			measure(b, built)
 			b.ReportMetric(float64(len(replayed.turns)), "turns")
 			b.ReportMetric(float64(replayed.events), "events")
+			b.ReportMetric(float64(replayed.subAgents), "sub-agents")
 			for outcome, calls := range replayed.outcomes {
 				b.ReportMetric(float64(calls), string(outcome)+"-calls")
 			}
