@@ -22,8 +22,9 @@ answer the same.
   file of yours, and deletes it at the end. `--home PATH` reads the
   settings under that home instead. Your real home, a folder above it,
   its `.tofu`, or any folder under it outside the temp folder is refused
-  with exit 2 before anything there is opened. A home made by `mktemp -d`
-  drives, even where the temp folder sits inside your profile.
+  with exit 2 before anything there is opened. A folder inside the temp
+  folder always drives: one made by `mktemp -d` does even where the temp
+  folder sits inside your profile, and so does one that `HOME` points at.
 
 The run prints the settings it resolved before the first step, so a pasted
 run carries the conditions it was taken under.

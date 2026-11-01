@@ -716,6 +716,7 @@ func TestDrivenRequestsCarryTheSameToolsEachStepAndNoToolChoiceOnlyAtTheCap(t *t
 func TestADriveRefusesTheRealHomeAndEveryPathUnderItBeforeTouchingIt(t *testing.T) {
 	dir := drivenProject(t)
 	real := realHomeIs(t, pollutedHome(t))
+	tempIs(t, t.TempDir())
 	listing := func() []string {
 		var seen []string
 		_ = filepath.WalkDir(real, func(path string, _ os.DirEntry, _ error) error {
@@ -760,9 +761,7 @@ func TestAFreshTempHomeDrivesWhenTheTempFolderLivesInsideTheRealHome(t *testing.
 	if err := os.MkdirAll(temp, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	for _, variable := range []string{"TMP", "TEMP", "TMPDIR"} {
-		t.Setenv(variable, temp)
-	}
+	tempIs(t, temp)
 	fresh, err := os.MkdirTemp("", "drive-home")
 	if err != nil {
 		t.Fatal(err)
@@ -774,5 +773,22 @@ func TestAFreshTempHomeDrivesWhenTheTempFolderLivesInsideTheRealHome(t *testing.
 	}
 	if _, err := os.Stat(filepath.Join(fresh, sys.StateDirName)); err != nil {
 		t.Errorf("the drive left no state under the fresh home it was named: %v", err)
+	}
+}
+
+func tempIs(t *testing.T, temp string) {
+	t.Helper()
+	for _, variable := range []string{"TMP", "TEMP", "TMPDIR"} {
+		t.Setenv(variable, temp)
+	}
+}
+
+func TestAHomeInsideTheTempFolderDrivesEvenWhenItIsTheAmbientHome(t *testing.T) {
+	dir := drivenProject(t)
+	home := realHomeIs(t, t.TempDir())
+	script := written(t, dir, "look.drive", "wait "+session.Placeholder+"\n")
+	var out, errOut bytes.Buffer
+	if code := driveVerb([]string{script, "--home", home, "--timeout", "30s"}, strings.NewReader(""), &out, &errOut); code != exitOK {
+		t.Errorf("a home inside %s that is also HOME, as bench/flows sets it, exited %d: %s", os.TempDir(), code, errOut.String())
 	}
 }

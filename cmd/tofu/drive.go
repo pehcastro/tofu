@@ -94,7 +94,8 @@ script answer the same. --home PATH reads PATH/.tofu/settings.json instead,
 which is how you drive the app against a configuration you keep. Your real
 home, a folder above it, its .tofu, or a folder under it outside the temp
 folder is refused with exit 2 before anything there is opened, so keep that
-configuration in a copy, such as one under mktemp -d. Either way the
+configuration in a copy, such as one under mktemp -d. A folder inside the temp
+folder always drives, even when HOME points at it. Either way the
 run prints the settings it resolved before the first step, so a pasted
 transcript carries the conditions it was taken under.
 
@@ -861,9 +862,10 @@ func refuseTheRealHome(named string) error {
 		return false
 	}
 	temp := os.TempDir()
-	scratch := within(temp, named) && !within(temp, real)
-	if within(named, real) || within(filepath.Join(real, sys.StateDirName), named) || within(real, named) && !scratch {
-		return fmt.Errorf("--home %s is your real home %s, a folder above it, or a folder under it outside %s, and a drive never runs against it; name a folder made for the run, or leave --home out for a fresh one", named, real, temp)
+	insideTemp := func(path string) bool { return within(temp, path) && !within(path, temp) }
+	state := within(filepath.Join(real, sys.StateDirName), named) && !insideTemp(real)
+	if state || !insideTemp(named) && (within(named, real) || within(real, named)) {
+		return fmt.Errorf("--home %s is your real home %s, its %s, a folder above it, or a folder under it outside %s, and a drive never runs against it; name a folder made for the run, or leave --home out for a fresh one", named, real, sys.StateDirName, temp)
 	}
 	return nil
 }
