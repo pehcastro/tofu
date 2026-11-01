@@ -49,7 +49,30 @@ func workspaceFiles() map[string]map[string]string {
 			"package.json": "{\"name\":\"fe\",\"dependencies\":{\"react\":\"18.0.0\"}}\n",
 			"src/app.tsx":  "export const App = () => null\n",
 		},
+		"svelte": {
+			"package.json":            "{\"name\":\"fe\",\"devDependencies\":{\"@sveltejs/kit\":\"2.0.0\",\"svelte\":\"5.0.0\"}}\n",
+			"src/routes/+page.svelte": "<script>\n\tlet count = $state(0)\n</script>\n",
+		},
+		"vue": {
+			"package.json": "{\"name\":\"fe\",\"dependencies\":{\"vue\":\"3.5.0\"}}\n",
+			"src/App.vue":  "<script setup>\n</script>\n",
+		},
 	}
+}
+
+func writeWorkspaces(scratch string) error {
+	for name, files := range workspaceFiles() {
+		for file, body := range files {
+			at := filepath.Join(scratch, name, filepath.FromSlash(file))
+			if err := os.MkdirAll(filepath.Dir(at), 0o755); err != nil {
+				return err
+			}
+			if err := os.WriteFile(at, []byte(body), 0o644); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 type appliesRun struct {
@@ -73,16 +96,8 @@ func measureApplies(classifier string, passes int, tree bool, out io.Writer) err
 	if err != nil {
 		return err
 	}
-	for name, files := range workspaceFiles() {
-		for file, body := range files {
-			at := filepath.Join(scratch, name, filepath.FromSlash(file))
-			if err := os.MkdirAll(filepath.Dir(at), 0o755); err != nil {
-				return err
-			}
-			if err := os.WriteFile(at, []byte(body), 0o644); err != nil {
-				return err
-			}
-		}
+	if err := writeWorkspaces(scratch); err != nil {
+		return err
 	}
 	arms := []string{"keyword"}
 	for pass := 1; pass <= passes; pass++ {

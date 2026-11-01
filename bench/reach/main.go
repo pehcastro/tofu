@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"cmp"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -18,12 +19,13 @@ import (
 )
 
 type run struct {
-	number  int
-	shape   shape
-	refused string
-	alone   bool
-	kind    string
-	reached reached
+	number     int
+	shape      shape
+	refused    string
+	alone      bool
+	kind       string
+	frameworks string
+	reached    reached
 }
 
 func main() {
@@ -104,9 +106,16 @@ func measure(never, tree bool, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	if err := writeWorkspaces(scratch); err != nil {
+		return err
+	}
 	var runs []run
 	for i, each := range shapes() {
-		runs = append(runs, compose(binary, project, home, binding != "", i+1, each))
+		dir := project
+		if each.workspace != "" {
+			dir = filepath.Join(scratch, each.workspace)
+		}
+		runs = append(runs, compose(binary, dir, home, binding != "", i+1, each))
 	}
 	report(out, never, fmt.Sprintf("reach at %s, %s/%s, %s, %s, %s, fresh home, no .tofu, no model call, %s",
 		commit, runtime.GOOS, runtime.GOARCH, runtime.Version(), time.Now().Format(time.DateOnly), from, kindBy), runs, universe(library, runs))
@@ -156,7 +165,30 @@ func compose(binary, project, home string, classifierKeys bool, number int, each
 	if read := regexp.MustCompile(`(?m)^tofu reads this task as (.+?), as (Jev|the word list) reads it`).FindStringSubmatch(stdout.String()); read != nil {
 		kind = read[1] + ", " + read[2]
 	}
-	return run{number: number, shape: each, alone: strings.Contains(stderr.String(), "the lead works alone"), kind: kind, reached: parseReached(stdout.String())}
+	return run{number: number, shape: each, alone: strings.Contains(stderr.String(), "the lead works alone"), kind: kind, frameworks: detectedFrameworks(binary, project, home, each), reached: parseReached(stdout.String())}
+}
+
+func detectedFrameworks(binary, project, home string, each shape) string {
+	args := []string{"rules", "index", each.task, "--dir", project, "--json"}
+	if each.agent != "" {
+		args = append(args, "--agent", each.agent)
+	}
+	command := exec.Command(binary, args...)
+	command.Dir = project
+	command.Env = freshHome(home, false)
+	said, err := command.Output()
+	var index struct {
+		Data struct {
+			Frameworks []string `json:"frameworks"`
+		} `json:"data"`
+	}
+	if err == nil {
+		err = json.Unmarshal(said, &index)
+	}
+	if err != nil {
+		return "unread: " + err.Error()
+	}
+	return strings.Join(index.Data.Frameworks, ", ")
 }
 
 func freshHome(home string, classifierKeys bool) []string {
@@ -196,6 +228,10 @@ func report(out io.Writer, never bool, conditions string, runs []run, items []it
 			composed++
 		}
 		_, _ = fmt.Fprintf(table, "%d\t%s\t%s\t%s\t%s\n", each.number, cmp.Or(each.shape.agent, "lead"), each.shape.task, cmp.Or(each.kind, "-"), status)
+	}
+	_, _ = fmt.Fprintf(table, "\nshape\tworkspace\tframeworks\n")
+	for _, each := range runs {
+		_, _ = fmt.Fprintf(table, "%d\t%s\t%s\n", each.number, cmp.Or(each.shape.workspace, "clone"), cmp.Or(each.frameworks, "none"))
 	}
 	_, _ = fmt.Fprintf(table, "\nnever reached over the %d of %d shapes that composed\nkind\titems\tlines\tnever\tnever lines\n", composed, len(runs))
 	shapesOf := func(one item) []string {
