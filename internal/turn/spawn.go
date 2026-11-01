@@ -284,7 +284,9 @@ func (t *SpawnTool) Announce(sent CalledAsEachRequestIsSent, stepped CalledAsASu
 	t.base.Sent, t.stepped = sent, stepped
 }
 
-func (t *SpawnTool) Name() string { return "spawn" }
+const SpawnToolName = "spawn"
+
+func (t *SpawnTool) Name() string { return SpawnToolName }
 
 func (t *SpawnTool) SubAgentRows() []Row {
 	t.tree.mu.Lock()
@@ -341,7 +343,7 @@ func (t *SpawnTool) Definition() llm.Tool {
 		properties["agent"] = agent
 	}
 	return llm.Tool{
-		Name: "spawn",
+		Name: SpawnToolName,
 		Description: "hands one piece of work to a sub-agent with its own context and its own conversation, and returns at once with its name while it works in the background. task is the whole brief the sub-agent starts from. " +
 			"its report, rather than its transcript, comes to you later as a message naming it. a reply whose calls are all spawns ends your turn once they start. " +
 			"owns lists the paths the sub-agent may write, every other path is refused at the write, and no two sub-agents may hold overlapping paths; leave owns out for a sub-agent that only reads, runs commands or researches, and every write it tries is refused. " + ticketNeed(enabledSubAgents(t.SubAgents.Defined)) + cite +

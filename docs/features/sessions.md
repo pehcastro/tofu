@@ -244,6 +244,17 @@ prints every request, call, hook and message section. `--kind notice` lists
 each sub-agent move, spawned, reviewed, reopened or accepted, with its round
 and reason, such as `go-dev reopened, round 2: acceptance line 3 fails`.
 
+```sh
+tofu session work brisk-amber-heron --ticket DEMO-1
+```
+
+lists the work done on one ticket in order: the brief the lead gave, the
+spawn, the sub-agent's move with `ticket_move`, its end and its whole
+report. With `--json` of `tofu session trace`, the spawn call, the spawn
+and end rows, the report row and the `ticket_move` call row carry `ticket`
+beside `agent`, which is what this view joins on. An id no row carries
+prints `no row carries DEMO-9` and exits 0.
+
 `--kind library` lists what the library and your own files gave each agent,
 under that agent's name, each with the file it came from:
 

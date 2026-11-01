@@ -28,7 +28,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 	var causes []stopCause
 	var unfinished []int
 	calls, asked := map[string]int{}, map[string]session.CallBody{}
-	libraryFiles := map[string]string{}
+	libraryFiles, tickets := map[string]string{}, map[string]string{}
 	for _, event := range events {
 		row := traceRow{At: event.At, Agent: event.Agent, Turn: event.Turn, ID: event.ID}
 		switch event.Kind {
@@ -99,6 +99,13 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			if call.Tool == "message" && json.Unmarshal(call.Args, &message) == nil && (message.Do == "kill" || message.Do == "stop") {
 				causes = append(causes, stopCause{row: len(rows), took: []string{message.To}})
 			}
+			var ticketed struct{ ID, Ticket, Task, To, Reason string }
+			switch {
+			case call.Tool == turn.SpawnToolName && json.Unmarshal(call.Args, &ticketed) == nil:
+				row.Ticket, row.work = ticketed.Ticket, workStep{what: workBrief, said: ticketed.Task}
+			case call.Tool == turn.TicketMoveToolName && json.Unmarshal(call.Args, &ticketed) == nil:
+				row.Ticket, row.work = ticketed.ID, workStep{what: workMove, said: traced("to "+ticketed.To, ticketed.Reason)}
+			}
 			var named struct{ Name string }
 			if what := map[string]string{turn.SkillToolName: libraryWhatSkill, turn.ReferenceToolName: libraryWhatReference}[call.Tool]; what != "" && json.Unmarshal(call.Args, &named) == nil {
 				rows = append(rows, row)
@@ -156,7 +163,8 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 		case session.EventSpawn:
 			var spawned session.SpawnBody
 			_ = json.Unmarshal(event.Body, &spawned)
-			row.Kind, row.Agent, row.State = kindSpawn, spawned.Agent, "spawned"
+			row.Kind, row.Agent, row.State, row.Ticket = kindSpawn, spawned.Agent, "spawned", spawned.Ticket
+			tickets[spawned.Agent] = spawned.Ticket
 			staggered := ""
 			if spawned.Stagger != "" {
 				staggered = "stagger " + spawned.Stagger + ": " + spawned.StaggerWhy
@@ -165,7 +173,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 		case session.EventAgentEnd:
 			var ended session.AgentEndBody
 			_ = json.Unmarshal(event.Body, &ended)
-			row.Kind, row.State, row.Text = kindSpawn, ended.Status, traced("ended "+ended.Status, spent(ended.CostUSD))
+			row.Kind, row.State, row.Text, row.Ticket = kindSpawn, ended.Status, traced("ended "+ended.Status, spent(ended.CostUSD)), tickets[event.Agent]
 			if ended.Status != subagent.Finished.String() {
 				row.Kind, row.Outcome = kindStop, traceStopped
 				unfinished = append(unfinished, len(rows))
@@ -173,7 +181,8 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 		case session.EventReport:
 			var report session.ReportBody
 			_ = json.Unmarshal(event.Body, &report)
-			row.Kind, row.State, row.Text = kindReport, report.State, report.State+": "+oneLine(report.Text)
+			row.Kind, row.State, row.Text, row.Ticket = kindReport, report.State, report.State+": "+oneLine(report.Text), tickets[event.Agent]
+			row.work = workStep{what: workReport, said: report.Text}
 		case session.EventCompaction:
 			var compacted struct {
 				Compaction *turn.Compaction `json:"compaction"`

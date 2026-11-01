@@ -65,6 +65,7 @@ type traceRow struct {
 	At         time.Time       `json:"at"`
 	Kind       traceKind       `json:"kind"`
 	Agent      string          `json:"agent,omitempty"`
+	Ticket     string          `json:"ticket,omitempty"`
 	Turn       string          `json:"turn,omitempty"`
 	ID         string          `json:"id,omitempty"`
 	State      string          `json:"state,omitempty"`
@@ -73,6 +74,8 @@ type traceRow struct {
 	Text       string          `json:"text"`
 	Origin     *session.Origin `json:"origin,omitempty"`
 	RecordedIn string          `json:"recorded_in,omitempty"`
+
+	work workStep
 }
 
 func (row traceRow) is(kind traceKind) bool {

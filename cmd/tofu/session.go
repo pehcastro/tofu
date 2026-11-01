@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	sessionSubcommands = "tofu session <name|id>, or tofu session list [--all], or tofu session clean [--dry-run], or tofu session set <name|id> --model source/model, or tofu session info|trace|transcript|drain|reads|resume|rename|request|find|branch <name|id> [--json]"
+	sessionSubcommands = "tofu session <name|id>, or tofu session list [--all], or tofu session clean [--dry-run], or tofu session set <name|id> --model source/model, or tofu session work <name|id> --ticket ID, or tofu session info|trace|transcript|drain|reads|resume|rename|request|find|branch <name|id> [--json]"
 	sessionSetUsage    = "tofu session set <name|id> --model source/model [--json]"
 	sessionFresh       = "no session recorded here"
 	sessionDay         = 24 * time.Hour
@@ -122,6 +122,9 @@ func sessionVerbRecalling(recent *session.Recent, args []string, in io.Reader, o
 	}
 	if args[0] == "trace" {
 		return sessionTraceVerb(o, args[1:], now)
+	}
+	if args[0] == "work" {
+		return sessionWorkVerb(o, args[1:])
 	}
 	if args[0] == "transcript" {
 		return sessionTranscriptVerb(o, args[1:])
