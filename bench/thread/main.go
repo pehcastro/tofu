@@ -52,6 +52,8 @@ func drive(label, tofu, cassette string, proof []string, work string) (counted, 
 	for _, args := range [][]string{
 		{"boardy", "init", "--key", boardKey, "--name", "demo"},
 		{"boardy", "epic", "new", "CFG", "config", "--board", boardKey},
+		{"boardy", "epic", "research", "CFG", "viper and koanf read one file and keep the defaults", "--board", boardKey},
+		{"boardy", "epic", "design", "CFG", "one parser over one file", "--first", "parse the config", "--board", boardKey},
 		{"boardy", "new", "--board", boardKey, "--epic", "CFG", "--owns", "internal/parse/**", "--acceptance", acceptance,
 			"--before", "the config is not read", "--driven", "go test ./internal/parse/...", "--still-works", "a missing config keeps the defaults", "--error-case", "a malformed config is refused naming the line",
 			"--feasibility", "none: no platform or visual effect", "parse the config"},

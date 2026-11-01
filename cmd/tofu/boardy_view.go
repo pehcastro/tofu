@@ -26,7 +26,7 @@ func boardyViewUsageOf(subcommand string) string {
 	case "attention":
 		return "tofu boardy attention [--board KEY] [--json]"
 	case "epic":
-		return "tofu boardy epic list|new <ID> <title> [--milestone M]|milestone <ID> <title> [--due YYYY-MM-DD|Nd]|done <ID> [--board KEY] [--json]"
+		return "tofu boardy epic list|new <ID> <title> [--milestone M]|research <ID> <note>|design <ID> <design> --first <smallest first version>|milestone <ID> <title> [--due YYYY-MM-DD|Nd]|done <ID> [--board KEY] [--json]"
 	case "sprint":
 		return "tofu boardy sprint list|new <ID> <title> [--start YYYY-MM-DD|Nd] [--end YYYY-MM-DD|Nd]|start <ID>|close <ID> [--board KEY] [--json]"
 	}
@@ -259,6 +259,18 @@ func (c boardyCall) epic() int {
 	case len(c.args) >= 3 && c.args[0] == "new":
 		epic := boardy.Epic{ID: c.args[1], Title: strings.Join(c.args[2:], " "), Milestone: c.flags["milestone"]}
 		return c.planSaved(key, words.Epic+" "+epic.ID, epic, func() error { return c.store.SaveEpic(key, epic) })
+	case len(c.args) >= 3 && c.args[0] == "research":
+		var epic boardy.Epic
+		return c.planSaved(key, words.Epic+" "+c.args[1]+" research", &epic, func() (err error) {
+			epic, err = c.store.Research(key, c.args[1], strings.Join(c.args[2:], " "))
+			return err
+		})
+	case len(c.args) >= 3 && c.args[0] == "design":
+		var epic boardy.Epic
+		return c.planSaved(key, words.Epic+" "+c.args[1]+" design, first version "+c.flags["first"], &epic, func() (err error) {
+			epic, err = c.store.Design(key, c.args[1], strings.Join(c.args[2:], " "), c.flags["first"])
+			return err
+		})
 	case len(c.args) >= 3 && c.args[0] == "milestone":
 		due, err := boardyDate(c.flags["due"], daysAhead)
 		if err != nil {
@@ -276,7 +288,7 @@ func (c boardyCall) epic() int {
 		}
 		return c.o.fail(errors.Join(err, fmt.Errorf("the %s %s has no %s %s", words.Board, key, words.Epic, c.args[1])))
 	}
-	return c.o.usage(errors.New("name list, new, milestone or done"))
+	return c.o.usage(errors.New("name list, new, research, design, milestone or done"))
 }
 
 func (c boardyCall) sprint() int {

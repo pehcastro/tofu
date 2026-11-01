@@ -89,6 +89,21 @@ command that fired it, and the same line goes on the ticket's thread:
 nudge follow: create follow up DRV-2 did not run: refused: "follow up DRV-2" has no Before, Driven path, ...
 ```
 
+An epic runs one small version before it grows. A new epic takes its first
+ticket only after a research note, what two rivals do and the options, and a
+design naming the smallest first version that runs:
+
+```
+tofu boardy epic new THEME themes
+tofu boardy epic research THEME zed reads one json file, helix one toml file
+tofu boardy epic design THEME one theme file read at start --first the chat colour from the file
+```
+
+It takes a second ticket only once one of its tickets is done with a Driven
+path, and the refusal names the ticket waiting. Dropped tickets, triage
+requests and sub-tickets do not count, and an epic made before this step
+takes tickets as it always did.
+
 `tofu boardy set <id> --before text --driven text --still-works line
 --error-case text --feasibility text` fills the sections of a ticket made
 before they existed, the Log records each one, and the receipt names the

@@ -20,6 +20,10 @@ type Epic struct {
 	Done      bool   `json:"done"`
 	Milestone string `json:"milestone,omitempty"`
 	Text      string `json:"text,omitempty"`
+	Gated     bool   `json:"gated,omitempty"`
+	Research  string `json:"research,omitempty"`
+	Design    string `json:"design,omitempty"`
+	First     string `json:"first,omitempty"`
 }
 
 type Milestone struct {
@@ -57,7 +61,8 @@ func (s Store) Epics(key string) ([]Epic, error) {
 	files, err := s.planFiles(key, "epics")
 	epics := make([]Epic, 0, len(files))
 	for _, file := range files {
-		epics = append(epics, Epic{ID: file.fields["id"], Title: file.fields["title"], Done: file.fields["done"] == "true", Milestone: file.fields["milestone"], Text: file.text})
+		epics = append(epics, Epic{ID: file.fields["id"], Title: file.fields["title"], Done: file.fields["done"] == "true", Milestone: file.fields["milestone"], Text: file.text,
+			Gated: file.fields["gated"] == "true", Research: file.fields["research"], Design: file.fields["design"], First: file.fields["first"]})
 	}
 	return epics, err
 }
@@ -71,8 +76,10 @@ func (s Store) SaveEpic(key string, epic Epic) error {
 		if err := m.gate(&planned); err != nil {
 			return err
 		}
+		epic.Gated = true
 	}
-	if err := s.savePlan(key, "epics", epic.ID, epic.Text, "title", epic.Title, "done", fmt.Sprint(epic.Done), "milestone", epic.Milestone); err != nil {
+	if err := s.savePlan(key, "epics", epic.ID, epic.Text, "title", epic.Title, "done", fmt.Sprint(epic.Done), "milestone", epic.Milestone,
+		"gated", fmt.Sprint(epic.Gated), "research", epic.Research, "design", epic.Design, "first", epic.First); err != nil {
 		return err
 	}
 	switch {
@@ -83,6 +90,30 @@ func (s Store) SaveEpic(key string, epic Epic) error {
 		return m.after(planned)
 	}
 	return nil
+}
+
+func (s Store) Research(key, id, note string) (Epic, error) {
+	if strings.TrimSpace(note) == "" {
+		return Epic{}, errors.New("a research note says what the rivals do and the options it found")
+	}
+	return s.shaped(key, id, func(epic *Epic) { epic.Research = note })
+}
+
+func (s Store) Design(key, id, design, first string) (Epic, error) {
+	if strings.TrimSpace(design) == "" || strings.TrimSpace(first) == "" {
+		return Epic{}, errors.New("a design says the shape and names the smallest first version that runs")
+	}
+	return s.shaped(key, id, func(epic *Epic) { epic.Design, epic.First = design, first })
+}
+
+func (s Store) shaped(key, id string, change func(*Epic)) (Epic, error) {
+	epics, err := s.Epics(key)
+	at := slices.IndexFunc(epics, func(e Epic) bool { return e.ID == id })
+	if at < 0 {
+		return Epic{}, errors.Join(err, fmt.Errorf("%s has no epic %s: tofu boardy epic new %s <title>", key, id, id))
+	}
+	change(&epics[at])
+	return epics[at], s.SaveEpic(key, epics[at])
 }
 
 func (s Store) Milestones(key string) ([]Milestone, error) {
@@ -159,7 +190,9 @@ func (s Store) savePlan(key, collection, id, text string, pairs ...string) error
 	var b strings.Builder
 	b.WriteString("---\nid: " + id + "\n")
 	for i := 0; i+1 < len(pairs); i += 2 {
-		b.WriteString(pairs[i] + ": " + strings.TrimSpace(pairs[i+1]) + "\n")
+		if value := strings.Join(strings.Fields(pairs[i+1]), " "); value != "" {
+			b.WriteString(pairs[i] + ": " + value + "\n")
+		}
 	}
 	b.WriteString("---\n")
 	if text = strings.TrimSpace(text); text != "" {

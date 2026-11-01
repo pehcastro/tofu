@@ -77,7 +77,9 @@ func (m Managed) Plan(id, epic, sprint, actor string) (Ticket, error) {
 		return Ticket{}, fmt.Errorf("name an epic, a sprint, or both")
 	}
 	return m.revise(id, "set "+strings.Join(said, ", "), actor, func(t *Ticket) error {
-		if err := m.Store.planned(t.Board(), Front{Epic: epic, Sprint: sprint}); err != nil {
+		joined := t.Front
+		joined.Epic = epic
+		if err := errors.Join(m.Store.planned(t.Board(), Front{Epic: epic, Sprint: sprint}), m.Store.epicReady(t.Board(), joined)); err != nil {
 			return err
 		}
 		t.Epic, t.Sprint = cmp.Or(epic, t.Epic), cmp.Or(sprint, t.Sprint)
@@ -136,6 +138,42 @@ func (s Store) planned(key string, front Front) error {
 		return errors.Join(sprintsErr, RefusedError{Ticket: front.ID, Why: fmt.Sprintf("%s has no sprint %s: tofu boardy sprint new %s <title>", key, front.Sprint, front.Sprint)})
 	}
 	return nil
+}
+
+func (s Store) epicReady(key string, front Front) error {
+	epics, _ := s.Epics(key)
+	at := slices.IndexFunc(epics, func(e Epic) bool { return e.ID == front.Epic })
+	if front.Epic == "" || front.Parent != "" || at < 0 || !epics[at].Gated {
+		return nil
+	}
+	epic := epics[at]
+	switch {
+	case epic.Research == "":
+		return RefusedError{Ticket: front.ID, Why: fmt.Sprintf("the epic %s has no research note, and its first ticket waits for one: spawn research to read how two rivals solve it, then tofu boardy epic research %s <what they do and the options>", epic.ID, epic.ID)}
+	case epic.Design == "" || epic.First == "":
+		return RefusedError{Ticket: front.ID, Why: fmt.Sprintf("the epic %s has research but no design naming the smallest first version that runs, and its first ticket waits for one: tofu boardy epic design %s <the shape> --first <the smallest first version>", epic.ID, epic.ID)}
+	}
+	fronts, err := s.Fronts(key)
+	if err != nil {
+		return err
+	}
+	var unrun []string
+	for _, held := range fronts {
+		if held.Epic != epic.ID || held.ID == front.ID || held.Parent != "" || held.Status == Dropped || held.Status == Triage {
+			continue
+		}
+		if held.Status == Done {
+			ticket, err := s.Get(held.ID)
+			if err != nil || ticket.Driven != "" {
+				return err
+			}
+		}
+		unrun = append(unrun, held.ID)
+	}
+	if len(unrun) == 0 {
+		return nil
+	}
+	return RefusedError{Ticket: front.ID, Why: fmt.Sprintf("the epic %s already has %s and none is done with a driven path, and an epic takes its next ticket only once its first one runs: drive %s, log the run, and move it to done", epic.ID, strings.Join(unrun, ", "), unrun[0])}
 }
 
 func (m Managed) changeManagers(key, name, actor string, change func(*Board) error) (Board, error) {

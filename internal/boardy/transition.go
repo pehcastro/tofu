@@ -196,6 +196,9 @@ func (m Managed) vetCreate(board Board, ticket Ticket, status Status, replaces s
 	if err := board.cited(ticket); err != nil {
 		return err
 	}
+	if err := m.Store.epicReady(board.Key, ticket.Front); err != nil {
+		return err
+	}
 	return m.ownsFree(board.Key, ticket.Front, ticket.Owns, status, replaces)
 }
 

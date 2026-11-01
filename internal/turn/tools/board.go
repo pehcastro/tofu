@@ -32,7 +32,7 @@ type boardTool struct {
 }
 
 type boardArgs struct {
-	Board, Action, ID, Title, Source, Scope, Ticket, To, Milestone, Start, End, Due, Request, Reason, Epic, Sprint string
+	Board, Action, ID, Title, Source, Scope, Ticket, To, Milestone, Start, End, Due, Request, Reason, Epic, Sprint, Note, Design, First string
 }
 
 func stringParam(about string) map[string]any {
@@ -66,10 +66,12 @@ func (t boardTool) Definition() llm.Tool {
 		properties["ticket"] = stringParam("the ticket test runs the hook against")
 		properties["to"] = stringParam("the status test assumes a move goes to")
 	case boardEpic:
-		describe = "lists a board's epics with their milestones, makes an epic, puts a ticket in one, or marks one done; every ticket belongs to one, so make the epic before the tickets that serve it"
-		actions = []string{"list", "new", "add", "done"}
+		describe = "lists a board's epics with their milestones, makes an epic, records its research and its design, puts a ticket in one, or marks one done; every ticket belongs to one, so make the epic before the tickets that serve it. a new epic takes its first ticket only after research (what two rivals do and the options, from a research spawn) and a design naming the smallest first version that runs, and its second only once the first is done with a driven path"
+		actions = []string{"list", "new", "research", "design", "add", "done"}
 		properties["id"], properties["title"] = stringParam("the epic id: letters, digits and dashes"), stringParam("one line, for new")
 		properties["milestone"], properties["ticket"] = stringParam("the milestone the epic reaches, for new"), stringParam("the ticket add puts in the epic")
+		properties["note"], properties["design"] = stringParam("what the rivals do and the options, for research"), stringParam("the shape of the work, for design")
+		properties["first"] = stringParam("the smallest first version that runs, for design")
 	case boardSprint:
 		describe = "lists a board's sprints, plans a new one, puts a ticket in one, starts one (closing the active one) or closes one"
 		actions = []string{"list", "new", "add", "start", "close"}
@@ -198,7 +200,17 @@ func (t boardTool) epic(a boardArgs) (string, error) {
 		if err := t.manages(a.Board); err != nil {
 			return "", err
 		}
-		return "made the epic " + a.ID, store.SaveEpic(a.Board, boardy.Epic{ID: a.ID, Title: a.Title, Milestone: a.Milestone})
+		return "made the epic " + a.ID + ": record its research and its design before its first ticket", store.SaveEpic(a.Board, boardy.Epic{ID: a.ID, Title: a.Title, Milestone: a.Milestone})
+	case "research", "design":
+		if err := t.manages(a.Board); err != nil {
+			return "", err
+		}
+		if a.Action == "research" {
+			_, err = store.Research(a.Board, a.ID, a.Note)
+		} else {
+			_, err = store.Design(a.Board, a.ID, a.Design, a.First)
+		}
+		return a.ID + " has its " + a.Action, err
 	case "add":
 		_, err := t.board.Plan(a.Ticket, a.ID, "", t.actor)
 		return a.Ticket + " is in the epic " + a.ID, err
@@ -213,7 +225,7 @@ func (t boardTool) epic(a boardArgs) (string, error) {
 		epics[at].Done = true
 		return a.ID + " is done", store.SaveEpic(a.Board, epics[at])
 	}
-	return "", unknownAction(a.Action, "list, new, add or done")
+	return "", unknownAction(a.Action, "list, new, research, design, add or done")
 }
 
 func (t boardTool) sprint(a boardArgs) (string, error) {

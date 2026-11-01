@@ -331,3 +331,83 @@ func TestCreateNeedsTheSectionsAPersonDrives(t *testing.T) {
 		t.Fatalf("the sections read back as %+v, %v", stored, err)
 	}
 }
+
+func TestAnEpicRunsItsFirstTicketBeforeItTakesASecond(t *testing.T) {
+	m := managedBoard(t, "DEMO")
+	in := func(title string) Ticket {
+		ticket := ticketWith(title)
+		ticket.Epic = "THEME"
+		return ticket
+	}
+	if err := m.Store.SaveEpic("DEMO", Epic{ID: "THEME", Title: "themes"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := m.Create("DEMO", in("first"), manager)
+	refused(t, err, "research")
+	if _, err := m.Store.Research("DEMO", "THEME", "zed reads a json file\nhelix reads toml"); err != nil {
+		t.Fatal(err)
+	}
+	_, err = m.Create("DEMO", in("first"), manager)
+	refused(t, err, "design")
+	if _, err := m.Store.Design("DEMO", "THEME", "one theme file read at start", ""); err == nil {
+		t.Fatal("a design naming no smallest first version was recorded")
+	}
+	if _, err := m.Store.Design("DEMO", "THEME", "one theme file read at start", "the chat colour from the file"); err != nil {
+		t.Fatal(err)
+	}
+	epics, err := m.Store.Epics("DEMO")
+	if err != nil || len(epics) != 1 || !epics[0].Gated || epics[0].Research != "zed reads a json file helix reads toml" || epics[0].First != "the chat colour from the file" {
+		t.Fatalf("the epic reads back as %+v, %v", epics, err)
+	}
+	dropped, err := m.Create("DEMO", in("dropped first"), manager)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Move(dropped.ID, Dropped, "wrong cut", manager); err != nil {
+		t.Fatal(err)
+	}
+	first, err := m.Create("DEMO", in("first"), manager)
+	if err != nil {
+		t.Fatalf("the first live ticket after a dropped one was refused: %v", err)
+	}
+	_, err = m.Create("DEMO", in("second"), manager)
+	refused(t, err, first.ID)
+	loose, err := m.Create("DEMO", ticketWith("loose"), manager)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = m.Plan(loose.ID, "THEME", "", manager)
+	refused(t, err, first.ID)
+	if _, err := m.Store.Edit(first.ID, func(t *Ticket) error { t.Status, t.Driven = Done, ""; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	_, err = m.Create("DEMO", in("second"), manager)
+	refused(t, err, "driven")
+	if _, err := m.Store.Edit(first.ID, func(t *Ticket) error { t.Driven = "tofu theme show"; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Create("DEMO", in("second"), manager); err != nil {
+		t.Fatalf("a second ticket after the first ran was refused: %v", err)
+	}
+	if _, err := m.Plan(loose.ID, "THEME", "", manager); err != nil {
+		t.Fatalf("a ticket planned into an epic that ran was refused: %v", err)
+	}
+	epics[0].Done = true
+	if err := m.Store.SaveEpic("DEMO", epics[0]); err != nil {
+		t.Fatal(err)
+	}
+	if epics, err = m.Store.Epics("DEMO"); err != nil || !epics[0].Done || !epics[0].Gated || epics[0].Design == "" {
+		t.Fatalf("marking the epic done lost its plan: %+v, %v", epics, err)
+	}
+	old := filepath.Join(m.Store.BoardDir("DEMO"), "epics", "OLD.md")
+	if err := os.WriteFile(old, []byte("---\nid: OLD\ntitle: made before the plan step\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, title := range []string{"old one", "old two"} {
+		ticket := ticketWith(title)
+		ticket.Epic = "OLD"
+		if _, err := m.Create("DEMO", ticket, manager); err != nil {
+			t.Fatalf("an epic made before the plan step refused %q: %v", title, err)
+		}
+	}
+}

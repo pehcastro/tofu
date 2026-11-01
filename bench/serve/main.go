@@ -21,7 +21,6 @@ import (
 const (
 	stepsPerTurn = 20
 	boardKey     = "BENCH"
-	boardEpic    = "BENCH-E1"
 	boardTickets = 3
 )
 
@@ -95,11 +94,8 @@ func build(tofu, root, deck string, steps int) (string, error) {
 	if err := verb(tofu, project, env, "boardy", "init", "--key", boardKey, "--name", "bench serve"); err != nil {
 		return "", err
 	}
-	if err := verb(tofu, project, env, "boardy", "epic", "new", boardEpic, "bench epic", "--board", boardKey); err != nil {
-		return "", err
-	}
 	for ticket := 1; ticket <= boardTickets; ticket++ {
-		if err := verb(tofu, project, env, "boardy", "new", "--board", boardKey, "--epic", boardEpic,
+		if err := verb(tofu, project, env, "boardy", "new", "--board", boardKey,
 			"--before", "the board is empty", "--driven", "tofu boardy list", "--still-works", "tofu serve answers", "--error-case", "an unknown id is refused",
 			"--feasibility", "none: no platform or visual effect", fmt.Sprintf("bench ticket %d", ticket)); err != nil {
 			return "", err

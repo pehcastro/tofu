@@ -33,13 +33,16 @@ Plan the work:
 
 ```
 tofu boardy epic new E1 Accounts
+tofu boardy epic research E1 two rivals keep one account file per person
+tofu boardy epic design E1 one account file read at start --first sign in with one account
 tofu boardy epic milestone M1 Public beta --due 2026-11-01
 tofu boardy epic new E2 Billing --milestone M1
 tofu boardy sprint new S1 First cut --start 2026-10-09 --end 2026-10-22
 tofu boardy sprint start S1
 ```
 
-A ticket names its epic and sprint in its front matter (`epic: E1`,
+A new epic takes its first ticket after its research and design, and its
+second once one of its tickets is done with a Driven path. A ticket names its epic and sprint in its front matter (`epic: E1`,
 `sprint: S1`), set with `tofu boardy new --epic E1 --sprint S1` or `tofu
 boardy set DEMO-1 --epic E1 --sprint S1`. `tofu boardy audit` names what is
 wrong with a board, with ticket ids: old reviews, reports nobody acted on,
@@ -84,7 +87,7 @@ A filter takes `statuses`, `live`, `sprint` (an id, or `active`), `epic`,
 |---|---|
 | `tofu boardy view [name] [--epic E] [--label l] [--assignee name]` | prints a view |
 | `tofu boardy report [--since YYYY-MM-DD\|Nd]` | sums the board |
-| `tofu boardy epic list\|new <ID> <title> [--milestone M]\|milestone <ID> <title> [--due date]\|done <ID>` | epics and milestones |
+| `tofu boardy epic list\|new <ID> <title> [--milestone M]\|research <ID> <note>\|design <ID> <design> --first <text>\|milestone <ID> <title> [--due date]\|done <ID>` | epics, their research and design, and milestones |
 | `tofu boardy sprint list\|new <ID> <title> [--start date] [--end date]\|start <ID>\|close <ID>` | sprints; starting one closes the active one |
 
 Every subcommand takes `--board KEY` and `--json`.

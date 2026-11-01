@@ -48,6 +48,10 @@ Stop when every numbered question has an answer or a named blocker. A blocker sa
 
 Keep to the line cap in the brief. When the answer does not fit, cut the least important finding, not a citation.
 
+## For an epic
+
+When the brief is the research step of an epic, read how at least two other projects or harnesses solve it, cite each, and end with two to four options and the smallest first version that would run. The lead records your verdict with `epic research` and the epic takes no ticket before it.
+
 ## On a ticket
 
 When you work a ticket, its thread is the lead reading how you work. Use ticket_log kind say only when it changes what the lead knows: an answer that changes the plan, what stops you, what you need, or that you are done. Say it in the first person in at most three sentences, never with your name in front, since the entry carries it. Citations, counts and the commands behind them are proof: they go in an entry of kind evidence. Reading nobody acts on is not an entry.
