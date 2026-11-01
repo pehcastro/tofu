@@ -2,6 +2,8 @@ package recall
 
 import (
 	"encoding/json"
+	"path"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -28,6 +30,8 @@ type Carry struct {
 	Standing        []string        `json:"standing,omitempty"`
 	StandingDropped int             `json:"standing_dropped,omitempty"`
 	Results         []CarriedResult `json:"results"`
+	Files           []string        `json:"files,omitempty"`
+	Unseen          []string        `json:"unseen,omitempty"`
 }
 
 const SaidCarryHeading = "what the person said in this line of sessions, oldest first, each message word for word as one quoted line. it stands until the person says otherwise:\n"
@@ -141,7 +145,7 @@ func WordsAlone(sentences []string) []bool {
 }
 
 func HandleCarry(store *Store, cfg Config, c Conversation) (Carry, error) {
-	return buildCarry(store, c, konst.FactSignpostBytes, WordsAlone)
+	return buildCarry(store, cfg, c, konst.FactSignpostBytes, WordsAlone, 0)
 }
 
 func DistilledCarry(store *Store, cfg Config, c Conversation) (Carry, error) {
@@ -149,10 +153,14 @@ func DistilledCarry(store *Store, cfg Config, c Conversation) (Carry, error) {
 }
 
 func JudgedCarry(store *Store, cfg Config, c Conversation, standing StandingOrders) (Carry, error) {
-	return buildCarry(store, c, konst.CarrySignpostBytes, standing)
+	return buildCarry(store, cfg, c, konst.CarrySignpostBytes, standing, 0)
 }
 
-func buildCarry(store *Store, c Conversation, signpostBytes int, standing StandingOrders) (Carry, error) {
+func CarryWithFiles(store *Store, cfg Config, c Conversation, standing StandingOrders, fileTokens int) (Carry, error) {
+	return buildCarry(store, cfg, c, konst.CarrySignpostBytes, standing, fileTokens)
+}
+
+func buildCarry(store *Store, cfg Config, c Conversation, signpostBytes int, standing StandingOrders, fileTokens int) (Carry, error) {
 	facts, kept, err := Distil(store, c, signpostBytes)
 	if err != nil {
 		return Carry{}, err
@@ -196,7 +204,141 @@ func buildCarry(store *Store, c Conversation, signpostBytes int, standing Standi
 	} else {
 		text.WriteString(carryHeldTail)
 	}
-	return Carry{Text: text.String(), Facts: facts, Said: said, Standing: orders, StandingDropped: dropped, Results: kept}, nil
+	files, unseen := holdFiles(cfg, c, fileTokens, text)
+	return Carry{Text: text.String(), Facts: facts, Said: said, Standing: orders, StandingDropped: dropped, Results: kept, Files: files, Unseen: unseen}, nil
+}
+
+const (
+	carryFiles      = "files read whole and not written or edited since, newest first, each exactly as its last read returned it, so it need not be read again:\n"
+	carryFileMark   = "file "
+	carryFileCall   = " bytes, read by call "
+	carryFileEnd    = ":\n"
+	carryUnseen     = "the last step read these whole and they came back over this session's budget, so they are not carried and were never seen: "
+	carryUnseenRead = ". read the lines needed with start_line and end_line rather than a whole file, or it will not fit again.\n"
+	readTool        = "read"
+	errorResult     = "error: "
+)
+
+func (c Carry) WithoutFiles() Carry {
+	before, after, found := strings.Cut(c.Text, carryFiles)
+	if !found {
+		return c
+	}
+	c.Text, c.Files = before, nil
+	if _, unseen, named := strings.Cut(after, carryUnseen); named {
+		c.Text += carryUnseen + unseen
+	}
+	return c
+}
+
+type wholeFile struct {
+	path, call, text string
+	unseen           bool
+}
+
+func (f wholeFile) block() string {
+	return carryFileMark + f.path + ", " + strconv.Itoa(len(f.text)) + carryFileCall + f.call + carryFileEnd + f.text + "\n"
+}
+
+func holdFiles(cfg Config, c Conversation, fileTokens int, text *strings.Builder) (held, unseen []string) {
+	if fileTokens <= 0 {
+		return nil, nil
+	}
+	room, section := fileTokens-cfg.Tokens(carryFiles), ""
+	for _, file := range wholeFiles(c) {
+		block := file.block()
+		switch {
+		case cfg.Tokens(block) <= room:
+			room -= cfg.Tokens(block)
+			held = append(held, file.path)
+			section += block
+		case file.unseen:
+			unseen = append(unseen, file.path+" ("+strconv.Itoa(len(file.text))+" bytes)")
+		}
+	}
+	if section != "" {
+		section = carryFiles + section
+	}
+	if len(unseen) > 0 {
+		section += carryUnseen + strings.Join(unseen, ", ") + carryUnseenRead
+	}
+	if section != "" && !strings.HasSuffix(text.String(), "\n") {
+		section = "\n" + section
+	}
+	text.WriteString(section)
+	return held, unseen
+}
+
+func wholeFiles(c Conversation) []wholeFile {
+	var files []wholeFile
+	settled := map[string]bool{}
+	settles := func(name string) bool {
+		key := path.Clean(filepath.ToSlash(name))
+		if name == "" || settled[key] {
+			return false
+		}
+		settled[key] = true
+		return true
+	}
+	last := 0
+	if len(c.Entries) > 0 {
+		last = c.Entries[len(c.Entries)-1].Step
+	}
+	for i, entry := range slices.Backward(c.Entries) {
+		held := i >= c.heldFrom()
+		_, raw, _ := strings.Cut(entry.SupersedeKey, " ")
+		var args struct {
+			Path      string `json:"path"`
+			StartLine int    `json:"start_line"`
+			EndLine   int    `json:"end_line"`
+			Edits     []struct {
+				Path string `json:"path"`
+			} `json:"edits"`
+		}
+		_ = json.Unmarshal([]byte(raw), &args)
+		failed, ranged := strings.HasPrefix(entry.Text, errorResult), args.StartLine > 0 || args.EndLine > 0
+		switch {
+		case entry.Tool == "":
+			for _, file := range carriedFiles(entry.Text) {
+				if settles(file.path) && !held {
+					files = append(files, file)
+				}
+			}
+		case entry.Tool == readTool && ranged && !failed:
+		case entry.Tool == readTool && !failed && entry.Images == 0 && !AlreadyDropped(entry.Text):
+			if settles(args.Path) && !held {
+				files = append(files, wholeFile{path: args.Path, call: entry.Call, text: entry.Text, unseen: entry.Step == last})
+			}
+		default:
+			settles(args.Path)
+			for _, edit := range args.Edits {
+				settles(edit.Path)
+			}
+		}
+	}
+	return files
+}
+
+func carriedFiles(text string) []wholeFile {
+	_, rest, found := strings.Cut(text, carryFiles)
+	var files []wholeFile
+	for found {
+		var head string
+		head, rest, found = strings.Cut(rest, carryFileEnd)
+		named, marked := strings.CutPrefix(head, carryFileMark)
+		before, call, called := strings.Cut(named, carryFileCall)
+		at := strings.LastIndex(before, ", ")
+		if !found || !marked || !called || at < 0 {
+			break
+		}
+		size, err := strconv.Atoi(before[at+2:])
+		if err != nil || size >= len(rest) {
+			break
+		}
+		files = append(files, wholeFile{path: before[:at], call: call, text: rest[:size]})
+		rest = rest[size+1:]
+	}
+	return files
 }
 
 const saidMark = "said: "
@@ -217,6 +359,7 @@ func personsWords(c Conversation, standing StandingOrders) (said, orders []strin
 	}
 	for _, entry := range c.Entries {
 		_, section, carried := strings.Cut(entry.Text, SaidCarryHeading)
+		section, _, _ = strings.Cut(section, carryFiles)
 		switch {
 		case entry.Tool != "":
 		case entry.Said != "":

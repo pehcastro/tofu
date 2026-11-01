@@ -362,11 +362,16 @@ func shrinkTo(artifacts Artifacts, messages []llm.Message, estimate, target int,
 	return shrinkFrom(artifacts, messages, estimate, target, 0, cause)
 }
 
-func shrinkFrom(artifacts Artifacts, messages []llm.Message, estimate, target, from int, cause shrinkCause) (overflowShrink, error) {
-	lastStep := len(messages) - 1
-	for lastStep >= 0 && messages[lastStep].Role != llm.RoleAssistant {
-		lastStep--
+func lastAssistant(messages []llm.Message) int {
+	last := len(messages) - 1
+	for last >= 0 && messages[last].Role != llm.RoleAssistant {
+		last--
 	}
+	return last
+}
+
+func shrinkFrom(artifacts Artifacts, messages []llm.Message, estimate, target, from int, cause shrinkCause) (overflowShrink, error) {
+	lastStep := lastAssistant(messages)
 	shrink := overflowShrink{bytesBefore: messagesBytes(messages)}
 	for i, message := range messages[:max(lastStep, 0)] {
 		if estimate <= target {
@@ -573,7 +578,7 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 		}
 	}
 	opening.Origin.TakenAt = started
-	carried := func(tail []llm.Message) ([]llm.Message, recall.Carry, int, error) {
+	carried := func(tail []llm.Message, fileTokens int) ([]llm.Message, recall.Carry, int, error) {
 		lost := 0
 		for _, message := range messages[:len(messages)-len(tail)] {
 			if message.Role == llm.RoleUser && !isTask(message) {
@@ -588,7 +593,7 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 			tail[i].Thinking = llm.Thinking{}
 		}
 		ended.HeldWhole = len(tail)
-		carry, err := recall.JudgedCarry(artifacts.store, artifacts.preview, ended, artifacts.standing)
+		carry, err := recall.CarryWithFiles(artifacts.store, artifacts.preview, ended, artifacts.standing, fileTokens)
 		carry.Text = counted + ".\n" + carry.Text
 		if lost > 0 {
 			carry.Text += "\n" + strconv.Itoa(lost) + picturesLost
@@ -599,19 +604,32 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 		}
 		return slices.Concat(system, []llm.Message{opening, said}, tail), carry, len(tail), err
 	}
-	begun, carry, held, err := carried(nil)
+	begun, carry, held, err := carried(nil, 0)
 	if err != nil {
 		return nil, nil, err
 	}
-	room := (budget.Bands.Target() - budget.Tokens(artifacts.preview, historyOf(begun))) * konst.ForkTailRoomPercent / 100
-	if tail := messages[tailStart(artifacts.preview, messages, room):]; len(tail) > 0 {
-		kept, keptCarry, keptTail, err := carried(tail)
-		if err != nil {
-			return nil, nil, err
+	stateTokens := konst.ForkStateBytes * 1000 / artifacts.preview.BytesPerThousandTokens
+	tokens := func() int { return budget.Tokens(artifacts.preview, historyOf(begun)) }
+	room := func() int { return (budget.Bands.Target() - tokens()) * konst.ForkTailRoomPercent / 100 }
+	chosen := len(messages)
+	take := func(start, fileTokens, spare int) error {
+		kept, keptCarry, keptTail, err := carried(messages[start:], fileTokens)
+		if after := budget.Tokens(artifacts.preview, historyOf(kept)); err == nil && after <= budget.Bands.Target() && after+spare <= budget.Ceiling() {
+			begun, carry, held, chosen = kept, keptCarry, keptTail, start
 		}
-		if !budget.Crossed(artifacts.preview, historyOf(kept)) {
-			begun, carry, held = kept, keptCarry, keptTail
-		}
+		return err
+	}
+	if start := tailStart(artifacts.preview, messages, room()); start < len(messages) {
+		err = take(start, 0, 0)
+	}
+	if last := lastAssistant(messages); err == nil && last >= 0 && last < chosen {
+		err = take(last, 0, stateTokens)
+	}
+	if fileTokens := min(room(), konst.ForkTailTokens); err == nil && fileTokens > 0 {
+		err = take(chosen, fileTokens, 0)
+	}
+	if err != nil {
+		return nil, nil, err
 	}
 	before, after := budget.Tokens(artifacts.preview, ended), budget.Tokens(artifacts.preview, historyOf(begun))
 	if forced == "" && after >= before {

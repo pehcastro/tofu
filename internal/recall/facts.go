@@ -168,7 +168,8 @@ func knownFacts(c Conversation) []string {
 		if entry.Tool != "" {
 			continue
 		}
-		for _, line := range strings.Split(entry.Text, "\n") {
+		said, _, _ := strings.Cut(entry.Text, carryFiles)
+		for _, line := range strings.Split(said, "\n") {
 			keep(line)
 		}
 	}

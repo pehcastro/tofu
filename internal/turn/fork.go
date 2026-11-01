@@ -86,6 +86,9 @@ func carryState(fork *Fork, begun []llm.Message, state, session string) {
 	at := slices.IndexFunc(begun, func(message llm.Message) bool {
 		return message.Origin.Source == llm.SourceForkCarry && message.Content == fork.Carry.Text
 	})
+	if state != "" {
+		fork.Carry = fork.Carry.WithoutFiles()
+	}
 	counted, rest, _ := strings.Cut(fork.Carry.Text, "\n")
 	text := counted + "\n"
 	if state != "" {
