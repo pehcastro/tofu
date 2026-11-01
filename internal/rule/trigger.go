@@ -66,6 +66,13 @@ type Task struct {
 	Frameworks []string
 	Alone      bool
 	Languages  []string
+	Judged     map[string]Judged
+	judged     *Judged
+}
+
+type Judged struct {
+	Applies bool
+	Why     string
 }
 
 func (t Task) touchesTests() bool {
@@ -335,14 +342,16 @@ func (t Trigger) firesFor(task Task) (bool, string) {
 		why = append(why, fmt.Sprintf("the condition %s matched %q", t.condition, found))
 	}
 	if t.touches != nil && (task.Role == RoleSubAgent || task.Alone) {
-		found := t.touches.FindString(task.Text)
+		found := t.touches.FindString(strings.Join(append([]string{task.Text}, task.Paths...), "\n"))
 		switch {
-		case len(task.Paths) > 0:
-			why = append(why, fmt.Sprintf("the writer's task names %s, so the path decides rather than the touches %s", task.Paths[0], t.touches))
+		case task.judged != nil && !task.judged.Applies:
+			return false, task.judged.Why
+		case task.judged != nil:
+			why = append(why, task.judged.Why)
 		case found == "":
-			return false, fmt.Sprintf("the writer's task names no path, so the touches %s decides, and it matches nothing in the task", t.touches)
+			return false, fmt.Sprintf("the touches %s decides, and it matches nothing in the writer's task or paths", t.touches)
 		default:
-			why = append(why, fmt.Sprintf("the writer's task names no path, so the touches %s decides, and it matched %q", t.touches, found))
+			why = append(why, fmt.Sprintf("the touches %s decides, and it matched %q", t.touches, found))
 		}
 	}
 	if t.scope != "" {
@@ -436,7 +445,11 @@ func (t Trigger) onlyPaths() bool {
 func Index(rules []Rule, task Task) []Match {
 	index := make([]Match, len(rules))
 	for i, r := range rules {
-		fires, why := r.Trigger.firesFor(task)
+		ruled := task
+		if judged, asked := task.Judged[r.ID]; asked {
+			ruled.judged = &judged
+		}
+		fires, why := r.Trigger.firesFor(ruled)
 		switch {
 		case !fires && task.Verb == VerbPlan && r.Domain == DomainQA && r.Trigger.onlyPaths():
 			fires, why = true, "the task plans work, and a qa rule scoped to paths reaches the plan before the paths exist"
@@ -450,6 +463,22 @@ func Index(rules []Rule, task Task) []Match {
 		index[i] = Match{RuleID: r.ID, Fires: fires, Why: why}
 	}
 	return index
+}
+
+func AskedOfTheTask(rules []Rule, agentDomain string, task Task) []Rule {
+	task.Judged = map[string]Judged{}
+	for _, r := range rules {
+		if r.Trigger.touches != nil && (task.Role == RoleSubAgent || task.Alone) {
+			task.Judged[r.ID] = Judged{Applies: true}
+		}
+	}
+	var asked []Rule
+	for i, m := range IndexReaching(rules, agentDomain, task) {
+		if _, open := task.Judged[m.RuleID]; open && m.Fires {
+			asked = append(asked, rules[i])
+		}
+	}
+	return asked
 }
 
 func IndexReaching(rules []Rule, agentDomain string, task Task) []Match {

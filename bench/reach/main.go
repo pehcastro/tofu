@@ -29,18 +29,49 @@ type run struct {
 func main() {
 	never := flag.Bool("never", false, "list only the items no shape reached")
 	tree := flag.Bool("tree", false, "build tofu and read the library from the working tree, uncommitted changes included, rather than from a clean clone of HEAD")
+	applies := flag.String("applies", "", "compare the touches keyword against the classifier named here, such as typesafe/jev-latest, on the labelled tasks that name no path, in a mock gpui workspace")
+	passes := flag.Int("passes", 3, "with -applies, how many times the classifier arm runs")
 	flag.Parse()
-	if err := measure(*never, *tree, os.Stdout); err != nil {
+	var err error
+	if *applies != "" {
+		err = measureApplies(*applies, *passes, *tree, os.Stdout)
+	} else {
+		err = measure(*never, *tree, os.Stdout)
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "bench/reach:", err)
 		os.Exit(1)
 	}
 }
 
-func measure(never, tree bool, out io.Writer) error {
+func buildTofu(scratch string, tree bool) (binary, project, built, commit string, err error) {
 	source, err := git(".", "rev-parse", "--show-toplevel")
 	if err != nil {
-		return err
+		return "", "", "", "", err
 	}
+	project, binary = filepath.Join(scratch, "p"), filepath.Join(scratch, "tofu.exe")
+	if _, err := git(".", "clone", "--quiet", "--shared", source, project); err != nil {
+		return "", "", "", "", err
+	}
+	if err := os.RemoveAll(filepath.Join(project, ".tofu")); err != nil {
+		return "", "", "", "", err
+	}
+	if commit, err = git(project, "rev-parse", "--short", "HEAD"); err != nil {
+		return "", "", "", "", err
+	}
+	built = project
+	if tree {
+		built, commit = source, commit+"+tree"
+	}
+	build := exec.Command("go", "build", "-o", binary, "./cmd/tofu")
+	build.Dir = built
+	if said, err := build.CombinedOutput(); err != nil {
+		return "", "", "", "", fmt.Errorf("go build ./cmd/tofu in %s: %w: %s", built, err, said)
+	}
+	return binary, project, built, commit, nil
+}
+
+func measure(never, tree bool, out io.Writer) error {
 	binding, err := boundClassifier()
 	if err != nil {
 		return err
@@ -50,12 +81,13 @@ func measure(never, tree bool, out io.Writer) error {
 		return err
 	}
 	defer func() { _ = os.RemoveAll(scratch) }()
-	project, home, binary := filepath.Join(scratch, "p"), filepath.Join(scratch, "h"), filepath.Join(scratch, "tofu.exe")
-	if _, err := git(".", "clone", "--quiet", "--shared", source, project); err != nil {
+	binary, project, built, commit, err := buildTofu(scratch, tree)
+	if err != nil {
 		return err
 	}
-	if err := os.RemoveAll(filepath.Join(project, ".tofu")); err != nil {
-		return err
+	home, from := filepath.Join(scratch, "h"), "clean clone"
+	if tree {
+		from = "working tree with its uncommitted changes, composed in a clean clone"
 	}
 	kindBy := "the kind by the word list, no classifier bound"
 	roles := filepath.Join(home, ".tofu", "roles")
@@ -67,19 +99,6 @@ func measure(never, tree bool, out io.Writer) error {
 			return err
 		}
 		kindBy = "the kind by the bound classifier " + strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(binding), "model:"))
-	}
-	commit, err := git(project, "rev-parse", "--short", "HEAD")
-	if err != nil {
-		return err
-	}
-	built, from := project, "clean clone"
-	if tree {
-		built, from, commit = source, "working tree with its uncommitted changes, composed in a clean clone", commit+"+tree"
-	}
-	build := exec.Command("go", "build", "-o", binary, "./cmd/tofu")
-	build.Dir = built
-	if said, err := build.CombinedOutput(); err != nil {
-		return fmt.Errorf("go build ./cmd/tofu in %s: %w: %s", built, err, said)
 	}
 	library, err := libraryItems(built)
 	if err != nil {

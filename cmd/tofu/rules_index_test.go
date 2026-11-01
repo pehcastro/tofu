@@ -241,6 +241,9 @@ func TestRulesIndexFiresATouchesRuleForASubAgentOnlyWhenItsTaskOrPathsNameIt(t *
 }
 
 func TestRulesIndexKeepsTheShippedFrontendRulesASubAgentTaskNames(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	vue, react := vueAndReactProjects(t)
 	for _, c := range []struct {
 		task, dir string

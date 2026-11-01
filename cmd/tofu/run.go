@@ -771,7 +771,7 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 	}
 	subAgents := turn.SubAgents{Defined: discovered.Definitions, Root: cmp.Or(opts.dir, "."), Prompt: turn.ComposeSpec{Environment: strings.TrimSpace(environment + "\n\n" + files),
 		ToolGuidance: turn.EveryToolIsRelativeToTheWorkingDirectory + turn.ContractAddendum, Rules: rules, SwitchedOff: switchedOff, Skills: skills, WindowTokens: run.budget.WindowTokens, Frameworks: frameworks,
-		Kinds: turn.NewKindJudge(cmp.Or(opts.dir, "."))}}
+		Kinds: turn.NewKindJudge(cmp.Or(opts.dir, ".")), Applies: turn.NewRuleJudge(cmp.Or(opts.dir, "."))}}
 	spec := subAgents.Prompt
 	spec.Task, spec.ToolGuidance = opts.task, runSystem(opts)
 	if opts.agent != "" {

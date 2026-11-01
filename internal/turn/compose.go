@@ -81,6 +81,7 @@ type ComposeSpec struct {
 	Languages    []string
 	Dropped      []PromptPart
 	Kinds        *KindJudge
+	Applies      *RuleJudge
 }
 
 const (
@@ -287,6 +288,14 @@ func Compose(spec ComposeSpec) (Composed, error) {
 		composed.Parts = append(composed.Parts, builtin)
 	}
 	agentDomain := cmp.Or(spec.Agent.Domain, rule.DomainDev)
+	if asked := rule.AskedOfTheTask(spec.Rules, agentDomain, composed.Task); spec.Applies != nil && len(asked) > 0 {
+		var keywordDecided error
+		text := "Jev read which of the framework's rules reach this task"
+		if composed.Task.Judged, keywordDecided = spec.Applies.Of(composed.Task, asked); keywordDecided != nil {
+			text = "the touches keyword read which of the framework's rules reach this task, since " + keywordDecided.Error()
+		}
+		composed.Parts = append(composed.Parts, PromptPart{Concern: rule.ConcernTaskShaping, Text: text, ByTask: true})
+	}
 	withoutTask := rule.IndexReaching(spec.Rules, agentDomain, rule.Task{Role: composed.Task.Role, Language: composed.Task.Language, Frameworks: composed.Task.Frameworks})
 	var firedByKind []string
 	for i, match := range rule.IndexReaching(spec.Rules, agentDomain, composed.Task) {
@@ -445,7 +454,14 @@ const (
 	taskKindBuilder = "task_kind_state@1"
 )
 
-type KindJudge struct {
+const (
+	ruleAppliesRef     = "rule_applies@1"
+	ruleAppliesPoint   = "rule_applies"
+	ruleAppliesName    = "applies"
+	ruleAppliesBuilder = "rule_applies_state@1"
+)
+
+type pointJudge struct {
 	methods   method.Table
 	asked     question.Question
 	version   int
@@ -455,13 +471,23 @@ type KindJudge struct {
 	unasked   error
 }
 
+type KindJudge struct{ pointJudge }
+
+type RuleJudge struct{ pointJudge }
+
 func NewKindJudge(project string) *KindJudge {
 	judge := &KindJudge{}
-	judge.unasked = judge.open(project)
+	judge.unasked = judge.open(project, taskKindRef, taskKindName, question.KindChoice)
 	return judge
 }
 
-func (j *KindJudge) open(project string) error {
+func NewRuleJudge(project string) *RuleJudge {
+	judge := &RuleJudge{}
+	judge.unasked = judge.open(project, ruleAppliesRef, ruleAppliesName, question.KindNoul)
+	return judge
+}
+
+func (j *pointJudge) open(project, ref, name string, kind question.Kind) error {
 	var err error
 	if j.methods, err = method.Load(shipped.Files()); err != nil {
 		return err
@@ -470,14 +496,14 @@ func (j *KindJudge) open(project string) error {
 	if err != nil {
 		return err
 	}
-	set, fields, err := question.Resolve(taskKindRef, layers)
+	set, fields, err := question.Resolve(ref, layers)
 	if err != nil {
 		return err
 	}
-	asked, found := set.Question(taskKindName)
-	at := slices.IndexFunc(fields, func(f question.Field) bool { return f.Path == "thresholds."+taskKindName+"_at" })
-	if !found || asked.Kind != question.KindChoice || at < 0 {
-		return fmt.Errorf("%s names no choice question %s or no thresholds.%s_at", taskKindRef, taskKindName, taskKindName)
+	asked, found := set.Question(name)
+	at := slices.IndexFunc(fields, func(f question.Field) bool { return f.Path == "thresholds."+name+"_at" })
+	if !found || asked.Kind != kind || at < 0 {
+		return fmt.Errorf("%s names no %s question %s or no thresholds.%s_at", ref, kind, name, name)
 	}
 	if j.threshold, err = strconv.ParseFloat(fields[at].Value, 64); err != nil {
 		return err
@@ -543,6 +569,65 @@ func (j *KindJudge) ask(ctx context.Context, task string) (rule.Verb, error) {
 		return rule.VerbNone, nil
 	}
 	return rule.Verb(answer.Choice), nil
+}
+
+func (j *RuleJudge) Of(task rule.Task, asked []rule.Rule) (map[string]rule.Judged, error) {
+	if strings.TrimSpace(task.Text) == "" {
+		return nil, errors.New("the task is blank, so jev is not asked")
+	}
+	judged, chosen, err := method.Run(context.Background(), j.methods, ruleAppliesPoint, method.Arms[map[string]rule.Judged]{
+		Cheap:  func(context.Context) (map[string]rule.Judged, error) { return nil, nil },
+		Judged: func(ctx context.Context) (map[string]rule.Judged, error) { return j.ask(ctx, task, asked) },
+	})
+	if err == nil && chosen == method.Cheap {
+		err = fmt.Errorf("%s names %s for %s", j.methods.File, chosen, ruleAppliesPoint)
+	}
+	return judged, err
+}
+
+func (j *RuleJudge) ask(ctx context.Context, task rule.Task, asked []rule.Rule) (map[string]rule.Judged, error) {
+	if j.unasked != nil {
+		return nil, fmt.Errorf("jev cannot be asked: %w", j.unasked)
+	}
+	type ruleState struct {
+		ID   string `json:"id"`
+		Text string `json:"text"`
+	}
+	state := struct {
+		Task  string      `json:"task"`
+		Paths []string    `json:"paths"`
+		Rules []ruleState `json:"rules"`
+	}{Task: task.Text, Paths: append([]string{}, task.Paths...)}
+	rubric := j.asked.ToJev()
+	var each []jev.Question
+	for i, r := range asked {
+		state.Rules = append(state.Rules, ruleState{ID: r.ID, Text: cmp.Or(strings.TrimSpace(r.Text), strings.TrimSpace(r.Notes))})
+		each = append(each, jev.Question{ID: ruleAppliesName + "_" + strconv.Itoa(i), Kind: jev.QuestionNoul, Instructions: rubric.Instructions + " The rule is rules[" + strconv.Itoa(i) + "].", True: rubric.True, False: rubric.False})
+	}
+	body, err := json.Marshal(state)
+	if err != nil {
+		return nil, err
+	}
+	row := ledger.Row{Point: ruleAppliesPoint, Questions: ruleAppliesPoint, Version: j.version, StateHash: ledger.HashOf(body), StateBuilder: ruleAppliesBuilder, State: body,
+		Verdict: ledger.VerdictAllow, Reason: &ledger.Reason{Question: ruleAppliesName, Comparison: ">= " + strconv.FormatFloat(j.threshold, 'f', -1, 64), Threshold: j.threshold, Mode: ledger.ModeEnforced}}
+	decision, err := j.client.Ask(ctx, jev.Request{State: json.RawMessage(body), Questions: each})
+	if err != nil {
+		failed := "jev could not answer, so the touches keyword decides which rules reach the task: " + err.Error()
+		row.Verdict, row.Reason.ModeReason = ledger.VerdictAsk, &failed
+		_, unwritten := j.ledger.Append(row)
+		return nil, errors.Join(fmt.Errorf("jev could not answer: %w", err), unwritten)
+	}
+	decision.Record(&row, each, j.version)
+	if row, err = j.ledger.Append(row); err != nil {
+		return nil, fmt.Errorf("the decision did not reach the ledger: %w", err)
+	}
+	judged := map[string]rule.Judged{}
+	for i, r := range asked {
+		applies := row.Answers[i].Noul
+		judged[r.ID] = rule.Judged{Applies: applies >= j.threshold,
+			Why: fmt.Sprintf("Jev decides rather than the touches, and it answered applies %.2f against applies_at %.2f in ledger row %s", applies, j.threshold, row.ID)}
+	}
+	return judged, nil
 }
 
 const ReferenceToolName = "reference"

@@ -33,6 +33,7 @@ type ruleIndexReport struct {
 	Agent      string             `json:"agent,omitempty"`
 	Paths      []string           `json:"paths"`
 	Frameworks []string           `json:"frameworks,omitempty"`
+	DecidedBy  string             `json:"decided_by,omitempty"`
 	Firing     int                `json:"firing"`
 	Rules      []ruleIndexListing `json:"rules"`
 }
@@ -108,7 +109,14 @@ func rulesIndexVerb(args []string, out, errOut io.Writer) int {
 		return o.fail(err)
 	}
 	task.Role, task.Language, task.Frameworks = role, agent.Language, report.Frameworks
-	for i, m := range rule.IndexReaching(rules, cmp.Or(agent.Domain, rule.DomainDev), task) {
+	domain := cmp.Or(agent.Domain, rule.DomainDev)
+	if asked := rule.AskedOfTheTask(rules, domain, task); len(asked) > 0 {
+		report.DecidedBy = "Jev, on " + strconv.Itoa(len(asked)) + " rules that declare touches"
+		if task.Judged, err = turn.NewRuleJudge(opts.dir).Of(task, asked); err != nil {
+			report.DecidedBy = "the touches keyword, since " + err.Error()
+		}
+	}
+	for i, m := range rule.IndexReaching(rules, domain, task) {
 		if m.Fires {
 			report.Firing++
 		}
@@ -159,6 +167,9 @@ func (report ruleIndexReport) lines(page cli.Page) []string {
 	}
 	if len(report.Frameworks) > 0 {
 		facts = append(facts, cli.Fact{Label: "frameworks", Text: strings.Join(report.Frameworks, ", ")})
+	}
+	if report.DecidedBy != "" {
+		facts = append(facts, cli.Fact{Label: "decided by", Text: report.DecidedBy})
 	}
 	lines = append(lines, cli.Indent(page.Facts(facts)...)...)
 	return append(append(lines, ""), page.Rows(rows)...)

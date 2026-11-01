@@ -330,30 +330,49 @@ func TestAQARuleScopedToTestFilesFiresForATestTaskBeforeTheFileIsNamed(t *testin
 	}
 }
 
-func TestAFrameworkRuleFiresOnThePathATaskNamesAndOnItsTouchesOnlyWhenItNamesNone(t *testing.T) {
+func TestThePathPicksTheFrameworkAndJevOrTheTouchesDecidesEachRule(t *testing.T) {
 	r, err := parseRule([]byte("id: motion\ndomain: dev\nkind: human\nconcern: code_rules\nframework: gpui-ce\ntouches: (?i)animat|motion\ntext: x\n"), "motion@1.yaml")
 	if err != nil {
 		t.Fatalf("parseRule: %v", err)
 	}
+	gpui, panel := []string{"gpui-ce"}, []string{"crates/ui/src/panel.rs"}
+	applies := map[string]Judged{"motion": {Applies: true, Why: "jev said 0.9"}}
+	refuses := map[string]Judged{"motion": {Why: "jev said 0.1"}}
 	for _, c := range []struct {
 		task  Task
 		fires bool
 		why   string
 	}{
-		{Task{Role: RoleSubAgent, Text: "make crates/ui/src/panel.rs ease in", Paths: []string{"crates/ui/src/panel.rs"}, Frameworks: []string{"gpui-ce"}}, true,
-			"the writer's task names crates/ui/src/panel.rs, so the path decides rather than the touches (?i)animat|motion and a Cargo.toml lists gpui-ce"},
-		{Task{Role: RoleSubAgent, Text: "make the panel ease in", Frameworks: []string{"gpui-ce"}}, false,
-			"the writer's task names no path, so the touches (?i)animat|motion decides, and it matches nothing in the task"},
-		{Task{Role: RoleSubAgent, Text: "animate the panel", Frameworks: []string{"gpui-ce"}}, true,
-			"the writer's task names no path, so the touches (?i)animat|motion decides, and it matched \"animat\" and a Cargo.toml lists gpui-ce"},
-		{Task{Role: RoleSubAgent, Text: "make crates/ui/src/panel.rs ease in", Paths: []string{"crates/ui/src/panel.rs"}}, false,
+		{Task{Role: RoleSubAgent, Text: "make crates/ui/src/panel.rs ease in", Paths: panel, Frameworks: gpui}, false,
+			"the touches (?i)animat|motion decides, and it matches nothing in the writer's task or paths"},
+		{Task{Role: RoleSubAgent, Text: "make crates/ui/src/panel.rs ease in", Paths: panel, Frameworks: gpui, Judged: applies}, true,
+			"jev said 0.9 and a Cargo.toml lists gpui-ce"},
+		{Task{Role: RoleSubAgent, Text: "make crates/ui/src/panel.rs ease in", Paths: panel, Frameworks: gpui, Judged: refuses}, false, "jev said 0.1"},
+		{Task{Role: RoleSubAgent, Text: "make crates/ui/src/panel.rs ease in", Paths: panel, Judged: applies}, false,
 			"no Cargo.toml the task reaches lists gpui-ce"},
+		{Task{Role: RoleSubAgent, Text: "make the panel ease in", Frameworks: gpui, Judged: applies}, true, "jev said 0.9 and a Cargo.toml lists gpui-ce"},
+		{Task{Role: RoleSubAgent, Text: "animate the panel", Frameworks: gpui}, true,
+			"the touches (?i)animat|motion decides, and it matched \"animat\" and a Cargo.toml lists gpui-ce"},
+		{Task{Role: RoleSubAgent, Text: "tidy the file you hold", Paths: []string{"crates/ui/src/motion.rs"}, Frameworks: gpui}, true,
+			"the touches (?i)animat|motion decides, and it matched \"motion\" and a Cargo.toml lists gpui-ce"},
 		{Task{Role: RoleSubAgent, Alone: true, Text: "animate the panel in docs/notes.md", Paths: []string{"docs/notes.md"}}, false,
 			"no Cargo.toml the task reaches lists gpui-ce"},
 	} {
-		fires, why := r.Trigger.firesFor(c.task)
-		if fires != c.fires || why != c.why {
-			t.Errorf("%q with paths %v: fires = %v, why %q, want %v, %q", c.task.Text, c.task.Paths, fires, why, c.fires, c.why)
+		got := Index([]Rule{r}, c.task)[0]
+		if got.Fires != c.fires || got.Why != c.why {
+			t.Errorf("%q with paths %v: fires = %v, why %q, want %v, %q", c.task.Text, c.task.Paths, got.Fires, got.Why, c.fires, c.why)
+		}
+	}
+	for _, c := range []struct {
+		task  Task
+		asked int
+	}{
+		{Task{Role: RoleSubAgent, Text: "make crates/ui/src/panel.rs ease in", Paths: panel, Frameworks: gpui}, 1},
+		{Task{Role: RoleSubAgent, Text: "make crates/ui/src/panel.rs ease in", Paths: panel}, 0},
+		{Task{Role: RoleOrchestrator, Text: "make the panel ease in", Frameworks: gpui}, 0},
+	} {
+		if asked := AskedOfTheTask([]Rule{r}, DomainDev, c.task); len(asked) != c.asked {
+			t.Errorf("%q as %s in %v asks jev about %d rules, want %d", c.task.Text, c.task.Role, c.task.Frameworks, len(asked), c.asked)
 		}
 	}
 }
