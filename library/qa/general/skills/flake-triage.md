@@ -5,7 +5,6 @@ description: Prove a test disagrees with itself, categorise why, and fix the cau
 references:
   - flakiness
   - failure-triage
-source: library/qa/references/flakiness.md
 ---
 
 # Flake triage

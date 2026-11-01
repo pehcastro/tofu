@@ -6,7 +6,6 @@ references:
   - test-planning
   - metrics
   - failure-triage
-source: library/qa/references/test-planning.md
 ---
 
 # Test plan
