@@ -2,6 +2,7 @@ package skill
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -35,8 +36,18 @@ type Skill struct {
 }
 
 type Found struct {
-	Skills   []Skill
-	Warnings []string
+	Skills    []Skill
+	Unoffered []Unoffered
+	Warnings  []string
+}
+
+type Unoffered struct {
+	Name, File, Why string
+}
+
+func (f *Found) unoffer(name, file, why string) {
+	f.Unoffered = append(f.Unoffered, Unoffered{Name: name, File: file, Why: why})
+	f.Warnings = append(f.Warnings, "the skill "+name+" in "+file+" is not offered: "+why)
 }
 
 type folder struct {
@@ -65,7 +76,11 @@ func Discover(project, home string) Found {
 			}
 			file := filepath.Join(folder.dir, entry.Name(), "SKILL.md")
 			data, err := os.ReadFile(file)
-			if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			if failed := (*fs.PathError)(nil); errors.As(err, &failed) {
+				found.unoffer(entry.Name(), file, "it did not read: "+failed.Err.Error())
 				continue
 			}
 			real, err := filepath.EvalSymlinks(file)
@@ -86,11 +101,11 @@ func Discover(project, home string) Found {
 				Hidden:      strings.Join(fields["hide"], "") == "true" || strings.Join(fields["disable-model-invocation"], "") == "true",
 			}
 			if one.Description == "" {
-				found.Warnings = append(found.Warnings, "the skill "+one.Name+" in "+file+" has no description and is not offered")
+				found.unoffer(one.Name, file, "it has no description")
 				continue
 			}
 			if earlier, taken := fileNamed[one.Name]; taken {
-				found.Warnings = append(found.Warnings, "the skill "+one.Name+" in "+file+" is not offered: "+earlier+" already has that name")
+				found.unoffer(one.Name, file, earlier+" already has that name")
 				continue
 			}
 			fileNamed[one.Name] = file

@@ -67,7 +67,9 @@ func RestoreSubAgents(store *session.Store, id string, roster *subagent.Roster, 
 		if run.undelivered && run.recent {
 			inbox.reportAgain(agentID, run.report)
 		}
-		inbox.adopt(restoredHeld(run.agent, run.depth, readBack(store, id, agentID)))
+		held, ranIn := restoredHeld(run.agent, run.depth, readBack(store, id, agentID)), run.lastIn
+		held.readPrefix = func() (*Prefix, error) { return HeldPrefix(store.ReadOnce(), ranIn, agentID) }
+		inbox.adopt(held)
 	}
 	return stopErr
 }
@@ -269,6 +271,13 @@ func (t *SpawnTool) recompose(held *heldSubAgent) error {
 	}
 	if !held.restored {
 		return nil
+	}
+	if held.readPrefix != nil {
+		read, err := held.readPrefix()
+		if err != nil {
+			return fmt.Errorf("the system prompt and tools %s was sent before the restart did not read back: %w", held.agent.ID, err)
+		}
+		held.prefix, held.readPrefix = *read, nil
 	}
 	definition, err := t.SubAgents.Named(held.agent.Agent)
 	if err != nil {

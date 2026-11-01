@@ -296,17 +296,18 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 	}
 	origin := newID()
-	sentTools := answerable(withLoopTools(config.Tools.tools))
+	headTools := NewRegistry(withLoopTools(source().tools)...).Definitions()
+	held := config.holdPrefix(headTools, artifacts.preview)
+	config.Instructions = held.instructions
+	sentTools := sending(currentTools().Definitions())
 	usedTools := make([]string, len(sentTools))
 	for i, tool := range sentTools {
-		usedTools[i] = tool.Name()
+		usedTools[i] = tool.Name
 	}
-	sentSchemas, err := json.Marshal(NewRegistry(sentTools...).Definitions())
+	sentSchemas, err := json.Marshal(sentTools)
 	if err != nil {
 		return Row{}, err
 	}
-	headTools := NewRegistry(withLoopTools(source().tools)...).Definitions()
-	held := config.holdPrefix(headTools, artifacts.preview)
 	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, Account: account.ID, SpawnedFrom: config.SpawnedFrom, SpawnedBy: config.SpawnedBy, Budget: budget, System: held.head, Tools: usedTools, ToolSchemas: string(sentSchemas), Parts: held.parts}
 
 	upgraded := config.upgradeNote()

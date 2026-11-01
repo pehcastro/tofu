@@ -25,6 +25,7 @@ type heldSubAgent struct {
 	parts       []PromptPart
 	environment string
 	prefix      Prefix
+	readPrefix  func() (*Prefix, error)
 	boundary    *subagent.Boundary
 	scratch     sys.ScratchPlace
 	inbox       *Inbox
@@ -182,7 +183,7 @@ func (h *heldSubAgent) remember(round Row) {
 
 func (h *heldSubAgent) shed(reload func() ([]llm.Message, error)) {
 	h.kept.Lock()
-	h.history, h.reload, h.prefix = nil, reload, Prefix{}
+	h.history, h.reload = nil, reload
 	h.system, h.environment, h.definition, h.restored = "", "", subagent.Definition{}, true
 	h.kept.Unlock()
 	h.forking.Lock()

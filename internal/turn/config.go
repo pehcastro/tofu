@@ -229,14 +229,68 @@ type Prefix struct {
 	tools    []llm.Tool
 	inForce  []keptPart
 	appended []keptPart
+	removed  []keptPart
+	unloaded []keptPart
 	sent     messagesKept
 }
 
 type heldPrefix struct {
-	head, system string
-	parts        []keptPart
-	changed      string
-	composedNow  bool
+	head, instructions, system string
+	parts                      []keptPart
+	changed                    string
+	composedNow                bool
+}
+
+func HeldPrefix(store *session.Store, id, agent string) (*Prefix, error) {
+	events, err := store.Events(id)
+	if err != nil {
+		return nil, err
+	}
+	var prompts []session.PromptBody
+	for _, event := range events {
+		if event.Kind != session.EventPrompt || event.Agent != agent {
+			continue
+		}
+		var prompt session.PromptBody
+		if err := json.Unmarshal(event.Body, &prompt); err != nil {
+			return nil, err
+		}
+		prompts = append(prompts, prompt)
+	}
+	if len(prompts) == 0 {
+		return &Prefix{}, nil
+	}
+	blobs, err := store.Blobs(id)
+	if err != nil {
+		return nil, err
+	}
+	first, last := prompts[0], prompts[len(prompts)-1]
+	var tools []llm.Tool
+	if err := json.Unmarshal([]byte(cmp.Or(last.ToolSchemas, "null")), &tools); err != nil {
+		return nil, err
+	}
+	held := &Prefix{held: true, tools: tools, first: heldPrefix{head: first.System, instructions: first.Instructions, system: Config{System: first.System, Instructions: first.Instructions}.SystemMessage()}}
+	for _, recorded := range last.Parts {
+		part := keptPart{PromptPart: recorded}
+		if part.Sent() {
+			_ = json.Unmarshal(blobs[part.Blob], &part.text)
+		}
+		switch why, appended := strings.CutSuffix(part.Why, PartAppendedWhy); {
+		case part.Why == partRemovedWhy:
+			held.removed = append(held.removed, part)
+			held.inForce = slices.DeleteFunc(held.inForce, part.samePart)
+		case appended:
+			held.appended = append(held.appended, part)
+			part.PerTurn, part.Why = false, strings.TrimSuffix(why, "; ")
+			held.inForce = append(slices.DeleteFunc(held.inForce, part.samePart), part)
+		case inTheSystem(part):
+			held.first.parts = append(held.first.parts, part)
+			held.inForce = append(held.inForce, part)
+		case unloadedSkill(part):
+			held.unloaded = append(held.unloaded, part)
+		}
+	}
+	return held, nil
 }
 
 func (p *Prefix) lastSent() *messagesKept {
@@ -250,9 +304,18 @@ const (
 	thePromptChangedSince = "the system prompt above is kept as this session's first turn sent it, so the provider can reuse its cache. what changed in it since then:"
 	noLongerApplies       = "no longer applies, so disregard it in the system prompt above: "
 	PartAppendedWhy       = "sent in a message after the cached system prompt, because it changed after this session's first turn"
+	aToolIsNew            = "a new tool is offered, and the tool list holds it: "
+	aToolIsGone           = "a tool is no longer offered, so do not call it: "
+	aToolChanged          = "a tool's definition changed, and the tool list holds the current one: "
+	aSkillIsNotLoaded     = "a skill is not loaded, so the skill tool does not offer it: "
+	partRemovedWhy        = "removed after this session's first turn, and a message after the cached system prompt said so"
 )
 
 func inTheSystem(part keptPart) bool { return part.Sent() && !part.PerTurn }
+
+func unloadedSkill(part keptPart) bool {
+	return part.Kind == string(ConcernSkills) && part.State == session.PartDropped && part.Why != partRemovedWhy
+}
 
 func promptChange(message llm.Message) bool {
 	return message.Role == llm.RoleUser && message.Origin.Source == llm.SourceEnvironment && strings.HasPrefix(message.Content, thePromptChangedSince)
@@ -263,14 +326,15 @@ func (part keptPart) samePart(other keptPart) bool {
 }
 
 func (c Config) holdPrefix(tools []llm.Tool, preview recall.Config) heldPrefix {
-	now := heldPrefix{head: c.System, system: c.SystemMessage(), parts: c.promptParts(preview), composedNow: true}
+	now := heldPrefix{head: c.System, instructions: c.Instructions, system: c.SystemMessage(), parts: c.promptParts(preview), composedNow: true}
 	p := c.Prefix
 	if p == nil {
 		return now
 	}
 	head := slices.DeleteFunc(slices.Clone(now.parts), func(part keptPart) bool { return !inTheSystem(part) })
+	unloaded := slices.DeleteFunc(slices.Clone(now.parts), func(part keptPart) bool { return !unloadedSkill(part) })
 	if !p.held {
-		p.held, p.first, p.tools, p.inForce = true, heldPrefix{head: now.head, system: now.system, parts: head}, tools, head
+		p.held, p.first, p.tools, p.inForce, p.unloaded = true, heldPrefix{head: now.head, instructions: now.instructions, system: now.system, parts: head}, tools, head, unloaded
 		return now
 	}
 	var changes []string
@@ -289,15 +353,56 @@ func (c Config) holdPrefix(tools []llm.Tool, preview recall.Config) heldPrefix {
 	for _, was := range p.inForce {
 		if !slices.ContainsFunc(head, was.samePart) {
 			changes = append(changes, strings.TrimSpace(noLongerApplies+cmp.Or(was.Rule, was.Agent, was.Name, was.Kind)+" "+was.File))
+			was.State, was.Why = session.PartDropped, partRemovedWhy
+			p.removed = append(p.removed, was)
 		}
 	}
 	p.inForce = head
+	p.removed = slices.DeleteFunc(p.removed, func(gone keptPart) bool { return slices.ContainsFunc(head, gone.samePart) })
+	for _, part := range unloaded {
+		if !slices.ContainsFunc(p.unloaded, func(was keptPart) bool { return was.samePart(part) && was.Why == part.Why }) {
+			changes = append(changes, aSkillIsNotLoaded+part.Name+" in "+part.File+", because "+part.Why)
+		}
+	}
+	p.unloaded = unloaded
+	changes = append(changes, p.holdTools(tools)...)
 	held := p.first
-	held.parts = slices.Concat(p.first.parts, p.appended, slices.DeleteFunc(now.parts, inTheSystem))
+	held.parts = slices.Concat(p.first.parts, p.appended, p.removed, slices.DeleteFunc(now.parts, inTheSystem))
 	if len(changes) > 0 {
 		held.changed = thePromptChangedSince + "\n\n" + strings.Join(changes, "\n\n")
 	}
 	return held
+}
+
+func (p *Prefix) holdTools(now []llm.Tool) []string {
+	var kept []llm.Tool
+	var changes []string
+	for _, was := range p.tools {
+		at := slices.IndexFunc(now, func(tool llm.Tool) bool { return tool.Name == was.Name })
+		switch {
+		case at < 0:
+			changes = append(changes, aToolIsGone+was.Name)
+		case sameDefinition(was, now[at]):
+			kept = append(kept, was)
+		default:
+			kept = append(kept, now[at])
+			changes = append(changes, aToolChanged+was.Name)
+		}
+	}
+	for _, tool := range now {
+		if !slices.ContainsFunc(p.tools, func(was llm.Tool) bool { return was.Name == tool.Name }) {
+			kept = append(kept, tool)
+			changes = append(changes, aToolIsNew+tool.Name)
+		}
+	}
+	p.tools = kept
+	return changes
+}
+
+func sameDefinition(was, now llm.Tool) bool {
+	before, errBefore := json.Marshal(was)
+	after, errAfter := json.Marshal(now)
+	return errBefore == nil && errAfter == nil && string(before) == string(after)
 }
 
 func (p *Prefix) toolsOr(tools []llm.Tool) []llm.Tool {

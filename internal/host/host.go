@@ -728,6 +728,10 @@ func (h *Host) carry(resumed Carry) error {
 	if err != nil {
 		return fmt.Errorf("the sub-agents of %s were not all read back: %w", resumed.Session, err)
 	}
+	if h.prefix, err = turn.HeldPrefix(store, resumed.Session, ""); err != nil {
+		h.prefix = &turn.Prefix{}
+		return fmt.Errorf("the system prompt and tools %s first sent were not read back, so the next turn sends them anew: %w", resumed.Session, err)
+	}
 	if header, err := store.Header(resumed.Session); err == nil {
 		h.carriedOn = header.Wire
 	}
@@ -858,7 +862,7 @@ func (h *Host) Opening(carry Carry) Opened { return resumedChat(carry, h.dir) }
 func (h *Host) Compacted(into string, messages []llm.Message) error {
 	h.mu.Lock()
 	h.dropCheckIn()
-	h.id, h.carried, h.prefix = into, messages, &turn.Prefix{}
+	h.id, h.carried = into, messages
 	h.mu.Unlock()
 	return h.enter(into)
 }

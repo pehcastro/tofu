@@ -747,11 +747,15 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 		rules = slices.DeleteFunc(rules, func(loaded rule.Rule) bool { return loaded.ID == toolPickRule })
 	}
 	var skills []skill.Skill
+	var unloaded []turn.PromptPart
 	if opts.toolSet != toolSetThree && settingText(cmp.Or(opts.dir, "."), settingspkg.Skills, run.notify) != settingspkg.SkillsOff {
 		home, _ := os.UserHomeDir()
 		offered := skill.Discover(cmp.Or(opts.dir, "."), home)
 		for _, warning := range offered.Warnings {
 			say(warning)
+		}
+		for _, one := range offered.Unoffered {
+			unloaded = append(unloaded, turn.PromptPart{Concern: turn.ConcernSkills, Name: one.Name, File: filepath.ToSlash(one.File), Why: one.Why, State: session.PartDropped})
 		}
 		skills = offered.Skills
 	}
@@ -777,8 +781,8 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 			return slices.Contains([]string{"orchestrate", verifySubAgentsRule, "plan_before_spawn", "spawn_effort", "research_fan_out", "brief_from_references", "announce_spawn"}, loaded.ID)
 		})
 	}
-	subAgents.Prompt.Dropped = slices.Concat(brokenAgents, droppedRules(stack, rules, switchedOff, opts))
-	spec.Dropped = slices.Concat(brokenAgents, droppedRules(stack, spec.Rules, switchedOff, opts))
+	subAgents.Prompt.Dropped = slices.Concat(brokenAgents, unloaded, droppedRules(stack, rules, switchedOff, opts))
+	spec.Dropped = slices.Concat(brokenAgents, unloaded, droppedRules(stack, spec.Rules, switchedOff, opts))
 	composed, err := turn.Compose(spec)
 	run.startup.step("frameworks and prompt")
 	return composedRun{opts: opts, environment: environment, files: files, memory: remembered, instructions: instructions, composed: composed, subAgents: subAgents, skills: skills,

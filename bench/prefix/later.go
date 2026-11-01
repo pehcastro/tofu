@@ -46,15 +46,25 @@ func (l LaterTurns) SystemHeld() bool {
 	return systemOf(l.Bodies[0]) == systemOf(l.Bodies[1]) && systemOf(l.Bodies[1]) == systemOf(l.Bodies[2])
 }
 
-func MeasureLaterTurns(arm LaterArm) (LaterTurns, error) {
-	measured := LaterTurns{LaterArm: arm}
-	var bodies [][]byte
-	var mu sync.Mutex
-	listening := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+type answeringDone struct {
+	*httptest.Server
+	mu     sync.Mutex
+	bodies [][]byte
+}
+
+func (a *answeringDone) sent() [][]byte {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return slices.Clone(a.bodies)
+}
+
+func answerDone() (*answeringDone, *anthropic.Wire, error) {
+	answering := &answeringDone{}
+	answering.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
-		mu.Lock()
-		bodies = append(bodies, body)
-		mu.Unlock()
+		answering.mu.Lock()
+		answering.bodies = append(answering.bodies, body)
+		answering.mu.Unlock()
 		w.Header().Set("Content-Type", "text/event-stream")
 		for _, event := range []string{
 			`{"type":"message_start","message":{"id":"msg_1","model":"claude-test","usage":{"input_tokens":3}}}`,
@@ -67,12 +77,21 @@ func MeasureLaterTurns(arm LaterArm) (LaterTurns, error) {
 			_, _ = fmt.Fprintf(w, "data: %s\n\n", event)
 		}
 	}))
-	defer listening.Close()
-	wire, err := anthropic.New(anthropic.Config{BaseURL: listening.URL, Model: "claude-test", Proxy: true,
+	wire, err := anthropic.New(anthropic.Config{BaseURL: answering.URL, Model: "claude-test", Proxy: true,
 		Token: func(context.Context, string) (string, error) { return "sk-ant-oat01-bench", nil }})
+	if err != nil {
+		answering.Close()
+	}
+	return answering, wire, err
+}
+
+func MeasureLaterTurns(arm LaterArm) (LaterTurns, error) {
+	measured := LaterTurns{LaterArm: arm}
+	answering, wire, err := answerDone()
 	if err != nil {
 		return measured, err
 	}
+	defer answering.Close()
 	scratch, err := os.MkdirTemp("", "bench-prefix-")
 	if err != nil {
 		return measured, err
@@ -111,6 +130,7 @@ func MeasureLaterTurns(arm LaterArm) (LaterTurns, error) {
 		}
 		config.History = turn.Sendable(row.Conversation)
 	}
+	bodies := answering.sent()
 	if len(bodies) != len(laterTasks) {
 		return measured, fmt.Errorf("three turns sent %d requests, want one each", len(bodies))
 	}

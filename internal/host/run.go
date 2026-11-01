@@ -375,9 +375,6 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 			h.carried = turn.Sendable(row.Conversation)
 		}
 		forked := row.Session != "" && row.Session != h.id
-		if forked {
-			h.prefix = &turn.Prefix{}
-		}
 		if row.Session != "" {
 			h.id = row.Session
 		}

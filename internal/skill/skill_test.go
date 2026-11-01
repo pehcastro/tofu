@@ -61,6 +61,37 @@ func TestDiscoverWalksToTheRepositoryRootClosestFirst(t *testing.T) {
 	}
 }
 
+func TestASkillThatFailsToLoadIsNamedWithItsFileAndWhy(t *testing.T) {
+	project := t.TempDir()
+	skills := filepath.Join(project, ".tofu", "skills")
+	write(t, filepath.Join(skills, "fine", "SKILL.md"), "---\ndescription: loads\n---\n")
+	write(t, filepath.Join(skills, "bare", "SKILL.md"), "---\nname: bare\n---\nno description")
+	write(t, filepath.Join(skills, "twin", "SKILL.md"), "---\nname: fine\ndescription: the same name\n---\n")
+	write(t, filepath.Join(skills, "locked", "SKILL.md", "inside"), "a folder where the file should be")
+	write(t, filepath.Join(skills, "empty", "notes.md"), "a folder with no SKILL.md is not a skill")
+	found := Discover(project, "")
+	byFile := map[string]Unoffered{}
+	for _, one := range found.Unoffered {
+		byFile[filepath.Base(filepath.Dir(one.File))] = one
+	}
+	for folder, want := range map[string]Unoffered{
+		"bare":   {Name: "bare", Why: "it has no description"},
+		"twin":   {Name: "fine", Why: filepath.Join(skills, "fine", "SKILL.md") + " already has that name"},
+		"locked": {Name: "locked"},
+	} {
+		got, named := byFile[folder]
+		switch {
+		case !named:
+			t.Errorf("the skill in %s is not named among %+v", folder, found.Unoffered)
+		case got.Name != want.Name || got.File != filepath.Join(skills, folder, "SKILL.md") || want.Why != "" && got.Why != want.Why || got.Why == "":
+			t.Errorf("the skill in %s is named %+v, want name %s, its SKILL.md and why %q", folder, got, want.Name, want.Why)
+		}
+	}
+	if _, named := byFile["empty"]; named || len(found.Unoffered) != 3 || len(found.Warnings) != 3 {
+		t.Errorf("unoffered %+v and warnings %q, want the three failures only, a folder with no SKILL.md not among them", found.Unoffered, found.Warnings)
+	}
+}
+
 func TestDiscoverWithNoRepositoryReadsOnlyTheWorkingFolder(t *testing.T) {
 	root := t.TempDir()
 	project := filepath.Join(root, "project")
