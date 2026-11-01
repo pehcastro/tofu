@@ -297,6 +297,14 @@ func RecordCarried(store *session.Store, from string, compacted Compacted, at ti
 	if _, err := store.Header(from); err != nil {
 		return "", err
 	}
+	events, err := store.Events(from)
+	if err != nil {
+		return "", err
+	}
+	blobs, err := store.Blobs(from)
+	if err != nil {
+		return "", err
+	}
 	ended, err := store.Open(session.Header{ID: from})
 	if err != nil {
 		return "", err
@@ -308,6 +316,20 @@ func RecordCarried(store *session.Store, from string, compacted Compacted, at ti
 		return "", errors.Join(err, ended.Close())
 	}
 	written := &record{store: store, log: log, scope: into, turn: into, said: map[string]string{}}
+	for _, event := range events {
+		var prompt session.PromptBody
+		if event.Kind != session.EventPrompt || event.Agent != "" {
+			continue
+		}
+		written.note(json.Unmarshal(event.Body, &prompt))
+		for i, part := range prompt.Parts {
+			if part.Blob != "" {
+				prompt.Parts[i].Blob, err = log.Keep(blobs[part.Blob])
+				written.note(err)
+			}
+		}
+		written.add(session.Event{Kind: session.EventPrompt}, prompt)
+	}
 	request := ""
 	for _, message := range compacted.Messages {
 		if message.Role == llm.RoleAssistant {
