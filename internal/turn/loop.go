@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"path/filepath"
 	"runtime/debug"
@@ -24,9 +25,11 @@ import (
 	"tofu/internal/safe"
 	"tofu/internal/session"
 	"tofu/internal/shell"
+	"tofu/internal/skill"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
+	shipped "tofu/library"
 )
 
 const theResponseHitTheOutputTokenLimit = "the response hit the output token limit, so its arguments may be truncated. " +
@@ -193,11 +196,22 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	var recorded *record
 	personAnswers := config.Person != nil && config.SpawnedFrom == "" && config.TaskOrigin.Source != llm.SourceCronFire
 	unoffered := func(name string) bool { return !personAnswers && name == AskPersonToolName }
+	referencesOffered := slices.ContainsFunc(config.Parts, func(part PromptPart) bool {
+		return part.Concern == ConcernReferences && part.State == session.PartOffered
+	})
+	references := &loadedReferences{held: map[string]string{}}
+	if referencesOffered {
+		maps.Copy(references.held, config.References)
+	}
 	withLoopTools := func(tools []Tool) []Tool {
 		added := slices.Clone(tools)
-		for _, tool := range tools {
+		holdsSkill := false
+		for at, tool := range tools {
 			if spawner, spawning := tool.(*SpawnTool); spawning {
 				added = append(added, messageTool{orchestrator: spawner}, subAgentsTool{orchestrator: spawner})
+			}
+			if tool.Name() == SkillToolName {
+				added[at], holdsSkill = skillLoading{Tool: tool, references: references}, true
 			}
 		}
 		if handles {
@@ -206,10 +220,8 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		if config.Sessions != nil {
 			added = append(added, lookupTool{sessions: config.Sessions, current: func() string { return recorded.session() }})
 		}
-		if slices.ContainsFunc(config.Parts, func(part PromptPart) bool {
-			return part.Concern == ConcernReferences && part.State == session.PartOffered
-		}) {
-			added = append(added, referenceTool{held: config.References})
+		if referencesOffered || holdsSkill {
+			added = append(added, references)
 		}
 		return added
 	}
@@ -1524,4 +1536,47 @@ func stepFrom(id string, index int, timing requestTiming, decision llm.Decision)
 		CostUSD:          decision.Usage.Cost,
 		Warnings:         decision.Warnings,
 	}
+}
+
+type loadedReferences struct {
+	mutex sync.Mutex
+	held  map[string]string
+}
+
+func (*loadedReferences) Name() string { return ReferenceToolName }
+
+func (*loadedReferences) Definition() llm.Tool { return referenceTool{}.Definition() }
+
+func (r *loadedReferences) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	return referenceTool{held: r.held}.Run(ctx, raw)
+}
+
+type skillLoading struct {
+	Tool
+	references *loadedReferences
+}
+
+func (s skillLoading) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+	result, err := s.Tool.Run(ctx, raw)
+	if err != nil || result.Origin.Source != llm.SourceSkillLoad || result.Origin.ID != "" {
+		return result, err
+	}
+	skills, err := skill.Shipped(shipped.Files(), "")
+	at := slices.IndexFunc(skills, func(one skill.Skill) bool { return one.Name == result.Origin.Name })
+	if err != nil || at < 0 {
+		return result, err
+	}
+	files, err := skill.ReferenceFiles(shipped.Files(), skills[at].Name, skills[at].References)
+	if err != nil {
+		return Result{}, err
+	}
+	read, err := libraryReferences(shipped.Files(), files)
+	s.references.mutex.Lock()
+	defer s.references.mutex.Unlock()
+	for _, reference := range read {
+		s.references.held[reference.Name] = reference.Text
+	}
+	return result, err
 }
