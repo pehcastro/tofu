@@ -34,8 +34,10 @@ var (
 
 type callerItem struct {
 	label  string
+	kind   string
 	word   string
 	file   string
+	home   string
 	near   *regexp.Regexp
 	far    *regexp.Regexp
 	gate   string
@@ -50,6 +52,7 @@ type callerSite struct {
 	line  int
 	text  string
 	extra int
+	by    string
 }
 
 type callerScan struct {
@@ -442,14 +445,15 @@ func goItems(rel string, raw []byte, module string) []callerItem {
 	if err != nil {
 		return nil
 	}
-	gate := ""
+	home, gate := "", ""
 	if module != "" {
-		gate = `"` + strings.TrimSuffix(module+"/"+path.Dir(rel), "/.") + `"`
+		home = strings.TrimSuffix(module+"/"+path.Dir(rel), "/.")
+		gate = strconv.Quote(home)
 	}
 	var items []callerItem
 	add := func(kind, label, word, near, far, gate string) {
 		decl := regexp.MustCompile(`^\s*func\s+(\([^)]*\)\s*)?` + word + `\b`)
-		items = append(items, callerItem{label: kind + " " + label, word: word, file: rel, near: regexp.MustCompile(near), far: regexp.MustCompile(far), gate: gate, pkg: file.Name.Name, decl: decl})
+		items = append(items, callerItem{label: kind + " " + label, kind: kind, word: word, file: rel, home: home, near: regexp.MustCompile(near), far: regexp.MustCompile(far), gate: gate, pkg: file.Name.Name, decl: decl})
 	}
 	for _, decl := range file.Decls {
 		switch decl := decl.(type) {
@@ -548,6 +552,14 @@ func (item callerItem) use(rel string, raw []byte) (callerSite, bool) {
 		}
 	}
 	site := callerSite{item: item.label + " (" + item.file + ")", file: rel}
+	if item.kind == "func" || item.kind == "method" {
+		files := token.NewFileSet()
+		file, err := parser.ParseFile(files, rel, raw, parser.SkipObjectResolution)
+		if err == nil {
+			return item.goCalls(site, files, file, raw)
+		}
+		site.by = "the file does not parse"
+	}
 	for number, line := range strings.Split(string(raw), "\n") {
 		if !strings.Contains(line, item.word) || strings.HasPrefix(strings.TrimSpace(line), "//") || item.decl != nil && item.decl.MatchString(line) || !pattern.MatchString(line) {
 			continue
@@ -559,6 +571,62 @@ func (item callerItem) use(rel string, raw []byte) (callerSite, bool) {
 		}
 	}
 	return site, site.line > 0
+}
+
+func (item callerItem) goCalls(site callerSite, files *token.FileSet, file *ast.File, raw []byte) (callerSite, bool) {
+	imports := map[string]string{}
+	for _, spec := range file.Imports {
+		imported, _ := strconv.Unquote(spec.Path.Value)
+		name := path.Base(imported)
+		if imported == item.home {
+			name = item.pkg
+		}
+		if spec.Name != nil {
+			name = spec.Name.Name
+		}
+		imports[name] = imported
+	}
+	inside := path.Dir(site.file) == path.Dir(item.file) && file.Name.Name == item.pkg || item.home != "" && imports["."] == item.home
+	lines := strings.Split(string(raw), "\n")
+	ast.Inspect(file, func(node ast.Node) bool {
+		call, isCall := node.(*ast.CallExpr)
+		if !isCall {
+			return true
+		}
+		by, calls := item.calledBy(call.Fun, imports, inside)
+		if !calls {
+			return true
+		}
+		if line := files.Position(call.Lparen).Line; site.line == 0 {
+			site.line, site.text = line, clipped(strings.TrimSpace(lines[line-1]))
+		} else {
+			site.extra++
+		}
+		site.by = cmp.Or(site.by, by)
+		return true
+	})
+	return site, site.line > 0
+}
+
+func (item callerItem) calledBy(called ast.Expr, imports map[string]string, inside bool) (string, bool) {
+	switch called := called.(type) {
+	case *ast.Ident:
+		return "", item.kind == "func" && inside && called.Name == item.word
+	case *ast.SelectorExpr:
+		if called.Sel.Name != item.word {
+			return "", false
+		}
+		qualifier, isIdent := called.X.(*ast.Ident)
+		switch {
+		case isIdent && imports[qualifier.Name] != "" && item.home == "":
+			return "the module path is not known", item.kind == "func" && qualifier.Name == item.pkg
+		case isIdent && imports[qualifier.Name] != "":
+			return "", item.kind == "func" && imports[qualifier.Name] == item.home
+		case item.kind == "method":
+			return "the receiver type is not resolved", true
+		}
+	}
+	return "", false
 }
 
 func unregistered(root, glob string, owned func(string) bool) (callerSite, bool) {
@@ -611,6 +679,9 @@ func (scan callerScan) refusal(id string) string {
 		more := ""
 		if site.extra > 0 {
 			more = fmt.Sprintf(" (+%d more)", site.extra)
+		}
+		if site.by != "" {
+			more += ", matched by name: " + site.by
 		}
 		lines = append(lines, fmt.Sprintf("    %s:%d: %s%s", site.file, site.line, site.text, more))
 	}
