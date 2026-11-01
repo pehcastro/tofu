@@ -319,6 +319,12 @@ func learnApply(o verbOutput, opts learnOpts, home learn.Home, finding learn.Fin
 		if code := rulesAddVerb([]string{flag, "--dir", opts.dir, learnRuleID + finding.Key, finding.Rule}, o.out, o.errOut); code != exitOK {
 			return code
 		}
+		if finding.Retire == "" {
+			if err := decide(learn.ActionApply); err != nil {
+				return o.fail(err)
+			}
+			return exitOK
+		}
 		shelves, err := memory.Open(opts.dir)
 		if err == nil {
 			_, err = shelves.Remove(finding.Scope, finding.Retire)
@@ -397,7 +403,7 @@ func scanLines(page cli.Page, run learn.Run, opts learnOpts, file string) []stri
 		lines = append(lines, fmt.Sprintf("  %d %s", i+1, wrong))
 	}
 	if len(run.Summary.Wrong) == 0 {
-		lines = append(lines, "  nothing said again in two or more sessions")
+		lines = append(lines, "  nothing said twice")
 	}
 	lines = append(lines, "  "+page.Label(fmt.Sprintf("it cost you %s, and the lead %s answering them", plural(run.Summary.Repeats, "repeat"), plural(run.Summary.Calls, "call"))))
 	if len(run.Summary.Do) > 0 {
@@ -411,7 +417,7 @@ func scanLines(page cli.Page, run learn.Run, opts learnOpts, file string) []stri
 	sections := []struct {
 		name     string
 		findings []learn.Finding
-	}{{"Held back by the cap", run.Held}, {"Fixed in a later tofu", run.Fixed}, {"Already applied, rejected or drafted, until more sessions say it", run.Decided}, {"Watching, one session so far", run.Watching}, {"About your project, not tofu's business", run.Project}}
+	}{{"Held back by the cap", run.Held}, {"Fixed in a later tofu", run.Fixed}, {"Already applied, rejected or drafted, until more sessions say it", run.Decided}, {"Watching, said once or in one place so far", run.Watching}, {"About your project, not tofu's business", run.Project}}
 	for _, section := range sections {
 		if len(section.findings) == 0 {
 			continue

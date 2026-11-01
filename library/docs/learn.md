@@ -26,7 +26,8 @@ Every finding is one of five classes:
 - `library`: tofu's own behaviour or rules should change for everyone.
   The fix is an upstream library draft.
 - `personal`: how you want the lead to work. The fix is a memory entry,
-  or a rule when the entry was needed again in two later sessions.
+  or a rule when the entry was needed again in two later sessions or
+  you said it twice in one session.
 - `setting`: a tofu setting would fix it, with `tofu settings set`.
 - `project`: about what you are building. Listed, never proposed.
 
@@ -38,7 +39,8 @@ Each session is placed on the tofu that recorded it, from its day and
 the release dates in tofu's changelog. A finding a later version fixed
 is listed under fixed, with the version, and never proposed.
 
-A finding needs two sessions; one session is watched. A finding you
+A finding needs two sessions, or a correction said twice in one; a
+correction said once, or two about different things, is watched. A finding you
 applied, rejected or drafted stays quiet until more sessions say it.
 Confidence is high at three sessions, medium at two, low at one, and one
 step lower with `--local`.

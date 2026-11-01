@@ -249,7 +249,7 @@ func TestALongMessageCarriedCutIsStillFoundInTheRequest(t *testing.T) {
 	}
 }
 
-func TestOneSessionIsOnlyWatchedAndAProjectRemarkIsNeverProposed(t *testing.T) {
+func TestACorrectionSaidTwiceInOneSessionIsProposedAsACheckAndOnceOrUnrelatedIsOnlyWatched(t *testing.T) {
 	store := writeChain(t,
 		recorded{id: "s1", lines: []line{
 			lead(1, "Opened it."),
@@ -261,11 +261,24 @@ func TestOneSessionIsOnlyWatchedAndAProjectRemarkIsNeverProposed(t *testing.T) {
 		recorded{id: "s2", parent: "s1", lines: []line{lead(6, "Done."), said(7, typed, "the tab close button hover still flashes")}},
 	)
 	run := scanOf(t, store, "s2")
-	if len(run.Findings) != 0 {
-		t.Errorf("findings %+v from a correction in one session and a remark about the project, want none", run.Findings)
+	found, ok := personal(run)
+	if !ok || len(run.Findings) != 1 || len(run.Watching) != 0 {
+		t.Fatalf("findings %+v and watching %d, want the correction said twice in s1 proposed and nothing watched", run.Findings, len(run.Watching))
 	}
-	if len(run.Watching) != 1 || len(run.Project) != 1 || run.Project[0].Class != ClassProject {
-		t.Errorf("watching %d and project %+v, want the one-session correction watched and the hover remark about the project", len(run.Watching), run.Project)
+	if found.Target() != TargetRule || found.Retire != "" || len(found.Quotes) != 2 || found.Quotes[0].Session != "s1" || found.Quotes[1].Session != "s1" || found.Quotes[0].At.Equal(found.Quotes[1].At) {
+		t.Errorf("target %q retiring %q with quotes %+v, want a rule citing both messages of s1 and retiring nothing", found.Target(), found.Retire, found.Quotes)
+	}
+	if len(run.Project) != 1 || run.Project[0].Class != ClassProject {
+		t.Errorf("project %+v, want the hover remark about the project", run.Project)
+	}
+	for name, lines := range map[string][]line{
+		"once":      {lead(1, "Opened it."), said(2, typed, "why did you stop again? keep working on the queue lol")},
+		"unrelated": {lead(1, "Opened it."), said(2, typed, "why did you stop again? keep working on the queue lol"), lead(3, "Renamed it."), said(4, typed, "you renamed the export button wrong again, you should ask first")},
+	} {
+		run := scanOf(t, writeChain(t, recorded{id: "s1", lines: lines}), "s1")
+		if len(run.Findings) != 0 || len(run.Held) != 0 || len(run.Watching) != len(lines)/2 {
+			t.Errorf("%s: findings %+v and %d watching, want nothing proposed and each correction watched", name, run.Findings, len(run.Watching))
+		}
 	}
 }
 

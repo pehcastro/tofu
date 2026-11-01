@@ -133,12 +133,23 @@ func (f Finding) Target() Target {
 	case ClassProject:
 		return TargetNone
 	case ClassPersonal:
-		if f.Retire != "" {
+		if f.Retire != "" || f.saidAgainInOneSession() {
 			return TargetRule
 		}
 		return TargetMemory
 	}
 	panic("learn: unknown class " + string(f.Class))
+}
+
+func (f Finding) saidAgainInOneSession() bool {
+	seen := map[string]bool{}
+	for _, q := range f.Quotes {
+		if seen[q.Session] {
+			return true
+		}
+		seen[q.Session] = true
+	}
+	return false
 }
 
 func (f Finding) Command() string {
@@ -195,7 +206,7 @@ func (r *Run) settle(found []Finding, known Known) {
 			if f.Sessions >= CorroboratingPlaces {
 				r.Project = append(r.Project, f)
 			}
-		case f.Sessions < CorroboratingPlaces:
+		case f.Sessions < CorroboratingPlaces && f.Target() != TargetRule:
 			r.Watching = append(r.Watching, f)
 		case quiet(f, known.Decisions):
 			r.Decided = append(r.Decided, f)

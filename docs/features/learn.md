@@ -2,7 +2,7 @@
 title: Learn
 description: tofu reads your own sessions for what keeps going wrong, tells tofu's bugs from your own rules, and proposes the fix with your words behind it.
 order: 15
-updated: 2026-10-13
+updated: 2026-11-01
 ---
 
 `tofu learn` reads your sessions when you run it and finds what you had
@@ -37,8 +37,12 @@ version, not proposed again.
 learn opens the request the model was answering and looks for your
 earlier words in it. Missing means tofu lost them.
 
-**Two sessions or it is not a pattern.** One session is watched, never
-proposed. Confidence rises with the number of sessions.
+**Said twice or it is not a pattern.** A correction said once is watched,
+never proposed. Said again in another session, it is proposed. Said again
+in the same session, it is proposed as a rule rather than a memory entry:
+your first words were already in front of the lead and it did not hold,
+so a check is the fix. Two corrections about different things stay
+watched, each on its own. Confidence rises with the number of sessions.
 
 **It prices the jobs you repeat.** A message you typed or a schedule
 fired, with everything done until your next message, is a job. The same

@@ -35,6 +35,7 @@ func localFindings(said []Said, sent requests) []Finding {
 		}
 	}
 	var found []Finding
+	corrected := map[int]bool{}
 	for _, theme := range words.Themes(units, rare) {
 		if !theme.Corrects {
 			f := findingOf(theme.Units, said, rare, sent)
@@ -43,6 +44,9 @@ func localFindings(said []Said, sent requests) []Finding {
 			f.Reason = "a remark that names no correction of the lead"
 			found = append(found, f)
 			continue
+		}
+		for _, u := range theme.Units {
+			corrected[u.Said] = true
 		}
 		f := findingOf(theme.Units, said, nil, sent)
 		f.Class, f.byWords = ClassPersonal, true
@@ -53,6 +57,16 @@ func localFindings(said []Said, sent requests) []Finding {
 			f.Rule = strings.ToUpper(rule[:1]) + rule[1:] + "."
 		}
 		found = append(found, f)
+	}
+	for _, u := range units {
+		if words.Corrects(u.Text) && !corrected[u.Said] {
+			corrected[u.Said] = true
+			f := findingOf([]words.Unit{u}, said, nil, sent)
+			f.Class, f.byWords = ClassPersonal, true
+			f.Title = "You corrected the lead once about " + strings.Join(u.Stems[:min(len(u.Stems), ShownWords)], ", ")
+			f.Reason = "said once; proposed when you say it again, in this session or another"
+			found = append(found, f)
+		}
 	}
 	if len(asked) > 1 {
 		f := findingOf(asked, said, nil, sent)
