@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	sessionSubcommands = "tofu session <name|id|head>, or tofu session list [--all], or tofu session clean [--dry-run], or tofu session set <name|id|head> --model source/model, or tofu session work <name|id|head> --ticket ID, or tofu session info|trace|transcript|drain|reads|resume|rename|request|find|branch <name|id|head> [--json]"
+	sessionSubcommands = "tofu session <name|id|head>, or tofu session list [--all], or tofu session clean [--dry-run], or tofu session set <name|id|head> --model source/model, or tofu session work <name|id|head> --ticket ID, or tofu session info|trace|transcript|drain|reads|resume|rename|find|branch <name|id|head> [--json], or tofu session request <name|id|head> [<request id>|last] [--json]"
 	sessionSetUsage    = "tofu session set <name|id|head> --model source/model [--json]"
 	sessionFresh       = "no session recorded here"
 	sessionDay         = 24 * time.Hour
@@ -96,7 +96,7 @@ func sessionOperands(subcommand string) (string, int, bool) {
 	case "rename":
 		return "<name|id|head> <new name>", 2, true
 	case "request":
-		return "<name|id|head> <request id>", 2, true
+		return "<name|id|head> [<request id>|last]", 2, true
 	}
 	return "", 0, false
 }
@@ -184,7 +184,8 @@ func sessionVerbRecalling(recent *session.Recent, args []string, in io.Reader, o
 		args[0], operands, wanted = "info", "<name|id|head>", 1
 	}
 	o.verb, o.usageLine = "session "+args[0], strings.TrimSpace("tofu session "+args[0]+" "+operands)+" [--json]"
-	if err == nil && len(handles) != wanted {
+	listsRequests := args[0] == "request" && len(handles) == 1
+	if err == nil && len(handles) != wanted && !listsRequests {
 		err = fmt.Errorf("%d operands, want %s", len(handles), cmp.Or(operands, "none"))
 	}
 	if err != nil {
@@ -228,6 +229,13 @@ func sessionVerbRecalling(recent *session.Recent, args []string, in io.Reader, o
 		}
 		return o.done(true, report, func(page cli.Page) []string { return sessionReadsLines(page, report) })
 	case "request":
+		if listsRequests {
+			report, err := sessionRequestList(store, handles[0])
+			if err != nil {
+				return o.fail(err)
+			}
+			return o.done(true, report, func(page cli.Page) []string { return sessionRequestListLines(page, report) })
+		}
 		report, err := sessionRequest(store, handles[0], handles[1])
 		if err != nil {
 			return o.fail(err)
@@ -1372,6 +1380,16 @@ func sessionRequest(store *session.Store, handle, request string) (sessionReques
 	if err != nil {
 		return sessionRequestReport{}, err
 	}
+	if request == requestLast {
+		rows, err := sessionRequestRows(store, header.ID)
+		if err != nil {
+			return sessionRequestReport{}, err
+		}
+		if len(rows) == 0 {
+			return sessionRequestReport{}, problemError{What: "no requests recorded in this session", Hint: "tofu session trace " + handle}
+		}
+		request = rows[len(rows)-1].Request
+	}
 	view, err := store.Request(header.ID, request)
 	if err != nil {
 		return sessionRequestReport{}, problemError{What: err.Error(), Hint: "tofu session trace " + handle}
@@ -1406,6 +1424,85 @@ func sessionRequest(store *session.Store, handle, request string) (sessionReques
 		err = nil
 	}
 	return report, err
+}
+
+const requestLast = "last"
+
+type sessionRequestRow struct {
+	Request    string    `json:"request"`
+	At         time.Time `json:"at"`
+	Agent      string    `json:"agent,omitempty"`
+	Step       int       `json:"step"`
+	Model      string    `json:"model,omitempty"`
+	Why        string    `json:"why,omitempty"`
+	TokensIn   int       `json:"tokens_in"`
+	TokensOut  int       `json:"tokens_out"`
+	CacheRead  int       `json:"cache_read"`
+	CacheWrite int       `json:"cache_write"`
+	Error      string    `json:"error,omitempty"`
+}
+
+type sessionRequestListReport struct {
+	Session  string              `json:"session"`
+	Handle   string              `json:"handle"`
+	Requests []sessionRequestRow `json:"requests"`
+}
+
+func sessionRequestList(store *session.Store, handle string) (sessionRequestListReport, error) {
+	header, err := sessionHeader(store, handle)
+	if err != nil {
+		return sessionRequestListReport{}, err
+	}
+	rows, err := sessionRequestRows(store, header.ID)
+	return sessionRequestListReport{Session: header.ID, Handle: handleOf(store, header.ID), Requests: rows}, err
+}
+
+func sessionRequestRows(store *session.Store, id string) ([]sessionRequestRow, error) {
+	exchanges, err := store.Exchanges(id)
+	if err != nil {
+		return nil, err
+	}
+	events, err := store.EventsOf(id, session.EventRequest, session.EventMemoryRequest)
+	if err != nil {
+		return nil, err
+	}
+	steps := map[string]session.StepBody{}
+	for _, event := range events {
+		var step session.StepBody
+		_ = json.Unmarshal(event.Body, &step)
+		request := event.ID
+		if event.Kind == session.EventMemoryRequest {
+			request = cmp.Or(event.Request, event.ID)
+		}
+		steps[request] = step
+	}
+	rows := make([]sessionRequestRow, len(exchanges))
+	for i, exchange := range exchanges {
+		step := steps[exchange.Request]
+		rows[i] = sessionRequestRow{Request: exchange.Request, At: exchange.At, Agent: exchange.Agent, Step: step.Index, Model: cmp.Or(step.Model, exchange.Model),
+			Why: exchange.Why, TokensIn: step.PromptTokens, TokensOut: step.CompletionTokens, CacheRead: step.CacheReadTokens, CacheWrite: step.CacheWriteTokens, Error: exchange.Error}
+	}
+	slices.SortStableFunc(rows, func(a, b sessionRequestRow) int { return a.At.Compare(b.At) })
+	return rows, nil
+}
+
+func sessionRequestListLines(page cli.Page, report sessionRequestListReport) []string {
+	lines := append(page.Title("Requests", []string{report.Handle, plural(len(report.Requests), "request")}, cli.Verdict{}), "")
+	if len(report.Requests) == 0 {
+		return append(lines, cli.Indent(page.Label("none recorded in this session"))...)
+	}
+	rows := make([]cli.Row, len(report.Requests))
+	for i, request := range report.Requests {
+		mark := cli.Done
+		if request.Error != "" {
+			mark = cli.Fail
+		}
+		rows[i] = cli.Row{Mark: mark, Cells: []string{turn.ShortID(request.Request), cmp.Or(request.Agent, session.AuthorOrchestrator), "step " + strconv.Itoa(request.Step),
+			"in " + strconv.Itoa(request.TokensIn), "read " + strconv.Itoa(request.CacheRead), "wrote " + strconv.Itoa(request.CacheWrite)},
+			Detail: traced(request.At.Format(time.DateTime), request.Model, request.Why, oneLine(request.Error))}
+	}
+	lines = append(append(lines, cli.Indent(page.Rows(rows)...)...), "")
+	return append(lines, cli.Indent(page.Label("open one with tofu session request "+report.Handle+" <request id>, or last for the newest"))...)
 }
 
 func breakpointBody(view session.RequestView, attempts []requestAttempt) (json.RawMessage, breakpointSource, error) {
