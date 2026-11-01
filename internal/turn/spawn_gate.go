@@ -135,9 +135,13 @@ func gateMissed(project string, recipes map[string]string, definition subagent.D
 			}
 			printed := printedBy(rounds, call.Call)
 			chained := strings.ContainsAny(call.Command, ";|&\n")
-			verdict := goCheckPrinted(check, printed, call.ExitCode)
+			verdict := checkPrinted(check, printed, call.ExitCode)
 			cargo := strings.HasPrefix(check, "cargo ")
 			dead, foreign := cargoFindings(project, lastEdit, owns, printed)
+			quoted := ""
+			if line := errorLine(printed); line != "" {
+				quoted = ": " + line
+			}
 			switch {
 			case checkerMissing(printed):
 				said = check + " could not run: its checker is not installed"
@@ -145,14 +149,14 @@ func gateMissed(project string, recipes map[string]string, definition subagent.D
 				said = check + " warned " + strings.Join(dead, "; ") + ": new code nothing calls is unfinished wiring"
 			case check == "cargo test" && ranNoTests(printed):
 				said = "cargo test ran 0 tests: every target it built printed running 0 tests, so it proved nothing"
-			case chained && verdict == printedFailed:
-				said = check + " failed"
-			case chained && verdict == printedPassed:
-				said = ""
 			case cargo && foreign:
 				said = ""
+			case chained && verdict == printedFailed:
+				said = check + " failed" + quoted
+			case chained && verdict == printedPassed:
+				said = ""
 			case call.ExitCode != nil && *call.ExitCode != 0:
-				said = fmt.Sprintf("%s exited %d", check, *call.ExitCode)
+				said = fmt.Sprintf("%s exited %d%s", check, *call.ExitCode, quoted)
 			case call.Tool == "typecheck" && call.Error != "" && !typecheckNamesOwnFile(project, owns, call, rounds):
 				said = ""
 			case call.Error != "" && !strings.HasPrefix(call.Error, testNoTests):
@@ -187,17 +191,32 @@ var (
 	cargoSummary      = regexp.MustCompile("^(warning|error): (`[^`]+` \\(.+\\) generated|could not compile|build failed|aborting due to|\\d+ warnings? emitted)")
 	cargoLocation     = regexp.MustCompile(`^\s*--> (.+):(\d+):\d+$`)
 	cargoDeadCode     = regexp.MustCompile(`\b(is|are) never (used|read|constructed)\b|^unused\b`)
+	cargoTestFailed   = regexp.MustCompile(`(?m)^(test result: FAILED|error(\[\w+\])?: )`)
+	cargoTestPassed   = regexp.MustCompile(`(?m)^test result: ok\.`)
+
+	errorPrinted = regexp.MustCompile(`^(error(\[\w+\])?: |--- FAIL|FAIL(ED)?\b|\[FAIL\]|panic: |fatal: |\S+\.go:\d+:\d+: |test \S+ \.\.\. FAILED$|test result: FAILED|thread '.+' panicked at |.*\berror TS\d+|Traceback |E {3}|\w+Error: )`)
 )
 
-func goCheckPrinted(check, printed string, exit *int) printedVerdict {
+func checkPrinted(check, printed string, exit *int) printedVerdict {
 	tested := goTestFailed.MatchString(printed) || goTestPassed.MatchString(printed)
 	switch {
-	case check == "go test" && goTestFailed.MatchString(printed), check == "go vet" && goDiagnostic.MatchString(printed):
+	case check == "go test" && goTestFailed.MatchString(printed), check == "go vet" && goDiagnostic.MatchString(printed),
+		check == "cargo test" && cargoTestFailed.MatchString(printed):
 		return printedFailed
-	case check == "go test" && tested, check == "go vet" && (tested || exit != nil && *exit == 0):
+	case check == "go test" && tested, check == "go vet" && (tested || exit != nil && *exit == 0),
+		check == "cargo test" && cargoTestPassed.MatchString(printed):
 		return printedPassed
 	}
 	return printedNothing
+}
+
+func errorLine(printed string) string {
+	for _, line := range strings.Split(printed, "\n") {
+		if line = strings.TrimSpace(line); errorPrinted.MatchString(line) && !cargoSummary.MatchString(line) {
+			return line
+		}
+	}
+	return ""
 }
 
 func printedBy(rounds []Row, call string) string {

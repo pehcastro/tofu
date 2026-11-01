@@ -67,15 +67,18 @@ func TestEachGoCheckInAChainedCommandIsJudgedByWhatItPrinted(t *testing.T) {
 		exit             int
 		want             string
 	}{
-		{"go vet ./...; go test ./...", failed, 0, "go test failed"},
-		{"go vet ./... ; go test ./... ; echo done", failed, 0, "go test failed"},
+		{"go vet ./...; go test ./...", failed, 0, "go test failed: --- FAIL: TestFails (0.00s)"},
+		{"go vet ./... ; go test ./... ; echo done", failed, 0, "go test failed: --- FAIL: TestFails (0.00s)"},
 		{"gofmt -l . ; go vet . && go test . ; grep -rn CalcTotal . --include=*.go", passed, 1, ""},
 		{"gofmt -l .; go vet ./... && go test ./... 2>&1; grep -rn CalcTotal .", passed, 1, ""},
-		{"go test ./... 2>&1 | tail -5", failed, 0, "go vet did not run; go test failed"},
-		{"go vet ./...; go test ./...", vetDiag + "\n" + passed, 0, "go vet failed"},
+		{"go test ./... 2>&1 | tail -5", failed, 0, "go vet did not run; go test failed: --- FAIL: TestFails (0.00s)"},
+		{"go vet ./...; go test ./...", vetDiag + "\n" + passed, 0, "go vet failed: " + vetDiag},
 		{"go vet ./... ; go test ./... ; grep -rn CalcTotal .", rtkPass + "\n" + grepHit, 0, ""},
-		{"go vet . ; go test . | tail -3", rtkFail, 0, "go test failed"},
-		{"go vet ./...; go test ./...", "FAIL\texample.com/shop [build failed]", 1, "go test failed"},
+		{"go vet . ; go test . | tail -3", rtkFail, 0, "go test failed: [FAIL] TestFails"},
+		{"go vet ./...; go test ./...", "FAIL\texample.com/shop [build failed]", 1, "go test failed: FAIL\texample.com/shop [build failed]"},
+		{"go vet ./... && go test ./...", "--- FAIL: TestX (0.00s)\r\nFAIL\r\n", 1, "go test failed: --- FAIL: TestX (0.00s)"},
+		{"go vet ./...", "./x.go:3:1: syntax error\nthe command exited 1\n", 1, "go vet exited 1: ./x.go:3:1: syntax error; go test did not run"},
+		{"go vet ./...", "the command exited 1\n", 1, "go vet exited 1; go test did not run"},
 		{"go vet ./...; go test ./...", "", 1, "go vet exited 1; go test exited 1"},
 		{"make lint && go vet ./... && go test ./...", "", 2, "go vet exited 2; go test exited 2"},
 		{"go vet ./... && go test ./...", "", 0, ""},
@@ -157,6 +160,7 @@ func TestACargoGateReadsWhatClippyAndTestPrinted(t *testing.T) {
 		unplaced  = "error: failed to parse manifest at `Cargo.toml`"
 		deadMine  = "warning: function `orphan` is never used\n --> src\\lib.rs:7:4\n  |\n7 | fn orphan() {}\n  |    ^^^^^^\n  = note: `#[warn(dead_code)]` on by default\nwarning: `shop` (lib) generated 1 warning\n" + clean
 		deadTheir = "warning: unused import: `std::fmt`\n --> crates/other/src/lib.rs:1:5\n" + clean
+		testBroke = "running 1 test\ntest tests::adds ... FAILED\n\nfailures:\n\n---- tests::adds stdout ----\nthread 'tests::adds' panicked at src/lib.rs:5:9:\n\ntest result: FAILED. 0 passed; 1 failed\n\nerror: test failed, to rerun pass `--lib`"
 	)
 	project := tsProjectHolding(t, map[string]string{
 		"Cargo.toml":                    "[workspace]\nmembers = [\"crates/*\"]\n",
@@ -189,8 +193,10 @@ func TestACargoGateReadsWhatClippyAndTestPrinted(t *testing.T) {
 		{"1 test passes", "crates/unit/src/lib.rs", []cargoRun{clippy, tested}, ""},
 		{"0 tests in a crate with none is not a miss", "crates/bare/src/lib.rs", []cargoRun{clippy, {"cargo test", ranNone, 0}}, ""},
 		{"clippy failing only in another crate is excused", "crates/shop/src/lib.rs", []cargoRun{{"cargo clippy", theirs, 101}, tested}, ""},
-		{"clippy failing in an owned file is a miss", "crates/shop/src/lib.rs", []cargoRun{{"cd crates/shop && cargo clippy", mineBroke, 101}, tested}, "cargo clippy exited 101"},
-		{"clippy failing with no file is a miss", "crates/shop/src/lib.rs", []cargoRun{{"cargo clippy", unplaced, 101}, tested}, "cargo clippy exited 101"},
+		{"clippy failing in an owned file is a miss", "crates/shop/src/lib.rs", []cargoRun{{"cd crates/shop && cargo clippy", mineBroke, 101}, tested}, "cargo clippy exited 101: error[E0308]: mismatched types"},
+		{"clippy failing with no file is a miss", "crates/shop/src/lib.rs", []cargoRun{{"cargo clippy", unplaced, 101}, tested}, "cargo clippy exited 101: " + unplaced},
+		{"cargo test piped into tail that printed a failure is a miss", "crates/unit/src/lib.rs", []cargoRun{clippy, {"cargo test 2>&1 | tail -5", testBroke, 0}}, "cargo test failed: test tests::adds ... FAILED"},
+		{"cargo test piped into tail that passed is not a miss", "crates/unit/src/lib.rs", []cargoRun{clippy, {"cargo test 2>&1 | tail -5", ranOne, 0}}, ""},
 		{"dead code in an owned file names the item and its line", "crates/shop/src/lib.rs", []cargoRun{{"cd crates/shop && cargo clippy", deadMine, 0}, tested}, "cargo clippy warned function `orphan` is never used at src\\lib.rs:7"},
 		{"an unused import in another crate is not this agent's", "crates/shop/src/lib.rs", []cargoRun{{"cargo clippy", deadTheir, 0}, tested}, ""},
 	} {

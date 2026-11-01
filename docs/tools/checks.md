@@ -2,7 +2,7 @@
 title: Checks
 description: typecheck wraps tsc and test wraps Vitest, both kept warm for the session.
 order: 4
-updated: 2026-10-04
+updated: 2026-11-01
 ---
 
 Two wrappers for TypeScript projects. `typecheck` runs the project's own
@@ -33,3 +33,25 @@ how the project runs its tests, and those run through `bash`.
 | `test` | `path` | a test file, or a source file whose `<stem>.test.*` and `<stem>.spec.*` run |
 
 Both are tools for the model, with no command of their own.
+
+## In a sub-agent's report
+
+When any check a sub-agent ran failed, its report lists every check it ran,
+in order, each with its exit code and the first error line it printed:
+
+```text
+checks it ran, each with its exit code and first error line:
+  go vet ./... exited 0
+  go test ./... exited 1: --- FAIL: TestAdd (0.00s)
+  cargo test 2>&1 | tail -5 exited 0 at the last stage of its pipe, and printed a failure: test result: FAILED. 0 passed; 1 failed
+  go test ./... exited 0
+noted: sent back once: go test exited 1: --- FAIL: TestAdd (0.00s)
+```
+
+A check is a shell command, `test` or `typecheck`. A report where every check
+passed has no list. A send-back quotes the same line, so the sub-agent reads
+what failed rather than a bare exit code.
+
+A pipe exits with its last stage, so `go test | tail` exits 0 when the test
+failed. For `go test`, `go vet` and `cargo test`, tofu reads what the command
+printed and counts a failure it shows as a failure, whatever the pipe's exit.

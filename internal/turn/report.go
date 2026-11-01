@@ -1,6 +1,7 @@
 package turn
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -15,11 +16,61 @@ import (
 )
 
 type SubAgentCommand struct {
-	Tool     string `json:"tool"`
-	Command  string `json:"command,omitempty"`
-	Asked    string `json:"asked,omitempty"`
-	ExitCode *int   `json:"exit_code,omitempty"`
-	Error    string `json:"error,omitempty"`
+	Tool       string `json:"tool"`
+	Command    string `json:"command,omitempty"`
+	Asked      string `json:"asked,omitempty"`
+	ExitCode   *int   `json:"exit_code,omitempty"`
+	Error      string `json:"error,omitempty"`
+	Failed     bool   `json:"failed,omitempty"`
+	FirstError string `json:"first_error,omitempty"`
+}
+
+func commandOf(call ToolCallRow, printed string) SubAgentCommand {
+	ran := SubAgentCommand{Tool: call.Tool, Command: call.Command, ExitCode: call.ExitCode, Error: call.Error}
+	if call.Proxy != nil {
+		ran.Asked = call.Proxy.Asked
+	}
+	line := errorLine(printed)
+	switch {
+	case call.Error != "":
+		ran.Failed, line = true, cmp.Or(line, call.Error)
+	case call.ExitCode != nil && *call.ExitCode != 0:
+		ran.Failed = true
+	default:
+		ran.Failed = call.ExitCode != nil && slices.ContainsFunc([]string{"go test", "go vet", "cargo test"}, func(check string) bool {
+			return commandRuns(call.Command, check) && checkPrinted(check, printed, call.ExitCode) == printedFailed
+		})
+	}
+	if ran.Failed {
+		ran.FirstError = line
+	}
+	return ran
+}
+
+func (c SubAgentCommand) checked() (string, bool) {
+	name := strings.Join(strings.Fields(c.Command), " ")
+	if c.Tool != bashToolName {
+		name = strings.TrimSpace(c.Tool + " " + name)
+	}
+	switch {
+	case c.ExitCode == nil && !slices.Contains([]string{bashToolName, "test", "typecheck"}, c.Tool):
+		return "", false
+	case c.ExitCode == nil && c.Failed:
+		name += " failed"
+	case c.ExitCode == nil:
+		name += " passed"
+	case c.Failed && *c.ExitCode == 0:
+		name += " exited 0 at the last stage of its pipe, and printed a failure"
+	default:
+		name += " exited " + strconv.Itoa(*c.ExitCode)
+	}
+	switch {
+	case c.FirstError != "":
+		return name + ": " + c.FirstError, true
+	case c.Failed:
+		return name + ", and printed no error line", true
+	}
+	return name, true
 }
 
 type SubAgentReport struct {
@@ -66,11 +117,7 @@ func reportOf(agent subagent.SubAgent, forked, attempts []Row, state subagent.St
 		report.Steps, report.CostUSD = report.Steps+len(segment.Steps), report.CostUSD+segment.TotalCostUSD
 		for _, step := range segment.Steps {
 			for _, call := range step.ToolCalls {
-				ran := SubAgentCommand{Tool: call.Tool, Command: call.Command, ExitCode: call.ExitCode, Error: call.Error}
-				if call.Proxy != nil {
-					ran.Asked = call.Proxy.Asked
-				}
-				report.Ran = append(report.Ran, ran)
+				report.Ran = append(report.Ran, commandOf(call, printedBy([]Row{segment}, call.Call)))
 				if path := writtenPath(call); path != "" {
 					report.Wrote = append(report.Wrote, path)
 				}
@@ -213,6 +260,16 @@ func (r SubAgentReport) Text(store *recall.Store) string {
 	}
 	if len(r.Wrote) > 0 {
 		fmt.Fprintf(body, "wrote %s\n", strings.Join(r.Wrote, ", "))
+	}
+	var checks []string
+	checkFailed := false
+	for _, ran := range r.Ran {
+		if line, check := ran.checked(); check {
+			checks, checkFailed = append(checks, "  "+line), checkFailed || ran.Failed
+		}
+	}
+	if checkFailed {
+		fmt.Fprintf(body, "checks it ran, each with its exit code and first error line:\n%s\n", strings.Join(checks, "\n"))
 	}
 	for _, finding := range r.Findings {
 		fmt.Fprintf(body, "%s: %s\n", finding.Bucket, finding.Text)
