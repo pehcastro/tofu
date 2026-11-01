@@ -115,15 +115,57 @@ func ImpactOf(root string, wrote []string) Impact {
 			impact.Unread = append(impact.Unread, unread)
 		}
 	}
+	module := goModule(root)
 	for _, definition := range changed {
-		impact.Items = append(impact.Items, impactedBy(graph, definition))
+		item := Impacted{Item: string(definition.Kind) + " " + definition.Symbol + " in " + definition.Path}
+		if callee, resolvable := goCallee(root, module, definition); resolvable {
+			item.Callers = callee.impacted(root, sources)
+		} else {
+			item.Callers = impactedBy(graph, definition)
+		}
+		impact.Items = append(impact.Items, item)
 	}
 	return impact
 }
 
-func impactedBy(graph search.Graph, definition search.Definition) Impacted {
+func goCallee(root, module string, definition search.Definition) (callerItem, bool) {
+	if definition.Kind != search.KindFunc && definition.Kind != search.KindMethod || languageOf(definition.Path) != ".go" {
+		return callerItem{}, false
+	}
+	raw, err := os.ReadFile(filepath.Join(root, definition.Path))
+	if err != nil {
+		return callerItem{}, false
+	}
+	items := goItems(definition.Path, raw, module)
+	found := slices.IndexFunc(items, func(item callerItem) bool {
+		return item.kind == string(definition.Kind) && item.word == bareName(definition.Symbol)
+	})
+	if found < 0 {
+		return callerItem{}, false
+	}
+	return items[found], true
+}
+
+func (item callerItem) impacted(root string, sources []string) []string {
+	var callers []string
+	for _, rel := range sources {
+		if rel == item.file {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			continue
+		}
+		if site, found := item.use(rel, raw); found {
+			callers = append(callers, fmt.Sprintf("%s:%d%s", site.file, site.line, site.more()))
+		}
+	}
+	return callers
+}
+
+func impactedBy(graph search.Graph, definition search.Definition) []string {
 	name := bareName(definition.Symbol)
-	item := Impacted{Item: string(definition.Kind) + " " + definition.Symbol + " in " + definition.Path}
+	var callers []string
 	at, more := map[string]int{}, []int{}
 	for _, site := range graph.Callers {
 		if site.Name != name || site.Path == definition.Path || languageOf(site.Path) != languageOf(definition.Path) ||
@@ -134,15 +176,15 @@ func impactedBy(graph search.Graph, definition search.Definition) Impacted {
 			more[seen]++
 			continue
 		}
-		at[site.Path] = len(item.Callers)
-		item.Callers, more = append(item.Callers, fmt.Sprintf("%s:%d", site.Path, site.Line)), append(more, 0)
+		at[site.Path] = len(callers)
+		callers, more = append(callers, fmt.Sprintf("%s:%d", site.Path, site.Line)), append(more, 0)
 	}
 	for i, extra := range more {
 		if extra > 0 {
-			item.Callers[i] += fmt.Sprintf(" (+%d more)", extra)
+			callers[i] += fmt.Sprintf(" (+%d more)", extra)
 		}
 	}
-	return item
+	return callers
 }
 
 func languageOf(rel string) string {
@@ -676,14 +718,7 @@ func (scan callerScan) refusal(id string) string {
 		if site.item != last {
 			lines, last = append(lines, "  "+site.item), site.item
 		}
-		more := ""
-		if site.extra > 0 {
-			more = fmt.Sprintf(" (+%d more)", site.extra)
-		}
-		if site.by != "" {
-			more += ", matched by name: " + site.by
-		}
-		lines = append(lines, fmt.Sprintf("    %s:%d: %s%s", site.file, site.line, site.text, more))
+		lines = append(lines, fmt.Sprintf("    %s:%d: %s%s", site.file, site.line, site.text, site.more()))
 	}
 	tail := fmt.Sprintf("own them with tofu boardy set %s --owns <its owns and these files>, or move it with --reason %s to record them on the ticket", id, notOwnedOnPurpose)
 	if scan.stopped != "" {
@@ -694,6 +729,17 @@ func (scan callerScan) refusal(id string) string {
 		noun = "file"
 	}
 	return fmt.Sprintf("what it names is used in %d %s outside its owns, which a move to %s would leave unowned:\n%s\n%s", len(files), noun, Doing, strings.Join(lines, "\n"), tail)
+}
+
+func (site callerSite) more() string {
+	more := ""
+	if site.extra > 0 {
+		more = fmt.Sprintf(" (+%d more)", site.extra)
+	}
+	if site.by != "" {
+		more += ", matched by name: " + site.by
+	}
+	return more
 }
 
 func (scan callerScan) recorded() string {
