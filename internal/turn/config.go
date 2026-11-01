@@ -120,6 +120,7 @@ type Config struct {
 	Budget          recall.Budget
 	Sessions        *session.Store
 	Session         string
+	Drops           *DropIndex
 	Board           *boardy.Managed
 	TicketGrant     func(board boardy.Managed, id, lead, agent string) ([]string, error)
 	TicketTools     func(board boardy.Managed, actor string) ([]Tool, error)

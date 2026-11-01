@@ -142,6 +142,7 @@ type runtime struct {
 	startup      *startupClock
 	keys         *storedKeys
 	memory       *sessionMemoryModel
+	drops        *turn.DropIndex
 	current      func(subagent.Definition) subagent.Definition
 	composed     *composedRun
 	foreseen     *leadForeseen
@@ -907,6 +908,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		Budget:         run.budget,
 		Sessions:       run.sessions,
 		Session:        sessionID,
+		Drops:          run.drops,
 		Sift:           run.sift,
 		Proxy:          loadProxySetting(opts.dir).proxy,
 		Inbox:          cmp.Or(run.inbox, turn.NewInbox()),
@@ -1347,10 +1349,11 @@ type warmProcesses struct {
 	tabs     *tools.BrowserTabs
 	keys     storedKeys
 	memory   sessionMemoryModel
+	drops    *turn.DropIndex
 }
 
 func newWarmProcesses(tabs *tools.BrowserTabs) *warmProcesses {
-	return &warmProcesses{checkers: turn.NewTypecheckers(), tests: turn.NewTestRunners(), tabs: tabs}
+	return &warmProcesses{checkers: turn.NewTypecheckers(), tests: turn.NewTestRunners(), tabs: tabs, drops: turn.NewDropIndex()}
 }
 
 func (w *warmProcesses) Close() {

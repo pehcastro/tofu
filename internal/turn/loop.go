@@ -182,6 +182,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	artifacts.preview = artifacts.preview.OnWire(config.Wire)
 	artifacts.standing = newStandingJudge(config).orders
 	artifacts.keep = newKeepJudge(config.Project, config.Places.Log, config.Task, config.Notify)
+	artifacts.keep.index = cmp.Or(config.Drops, artifacts.keep.index)
 	sifter := siftOrNothing(config.Sift)
 	thrifter := thriftOrNothing(config.Thrift)
 	if config.Redactor == nil {
@@ -289,7 +290,20 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	row.Session = recorded.session()
 	if config.Sessions != nil {
-		artifacts.keep.earlier = func() ([]session.Event, error) { return config.Sessions.Events(recorded.session()) }
+		artifacts.keep.session = recorded.session
+		artifacts.keep.events = func(id string) ([]session.Event, error) {
+			read, err := config.Sessions.Events(id)
+			if err != nil {
+				recorded.notice("the re-read matcher could not read session " + id + " for earlier drops, so the next miss reads it again: " + err.Error())
+				return nil, err
+			}
+			recorded.notice(fmt.Sprintf("the re-read matcher read %d events of session %s for earlier drops", len(read), id))
+			return read, nil
+		}
+		if len(config.History) == 0 {
+			artifacts.keep.index.carriesNothing(row.Session)
+		}
+		defer func() { artifacts.keep.index.remember(recorded.session(), artifacts.keep.dropped) }()
 	}
 	taskOrigin := config.taskOrigin(start)
 	recorded.begin(row, taskOrigin)

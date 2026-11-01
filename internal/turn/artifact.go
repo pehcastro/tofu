@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -69,7 +70,9 @@ type keepJudge struct {
 	task      string
 	unfound   string
 	project   string
-	earlier   func() ([]session.Event, error)
+	events    func(string) ([]session.Event, error)
+	session   func() string
+	index     *DropIndex
 	mu        sync.Mutex
 	decided   map[string]keepDecision
 	dropped   map[dropKey]*recall.Drop
@@ -89,7 +92,7 @@ type dropCandidate struct {
 }
 
 func newKeepJudge(project, log, task string, notify func(string)) *keepJudge {
-	judge := &keepJudge{project: project, ledger: ledger.NewWriter(log), notify: notify, task: task, decided: map[string]keepDecision{}, dropped: map[dropKey]*recall.Drop{}}
+	judge := &keepJudge{project: project, ledger: ledger.NewWriter(log), notify: notify, task: task, decided: map[string]keepDecision{}, dropped: map[dropKey]*recall.Drop{}, index: NewDropIndex()}
 	judge.unasked = judge.open(project)
 	return judge
 }
@@ -243,8 +246,10 @@ func (j *keepJudge) refetched(called ToolCallRow) string {
 	if key == (dropKey{}) {
 		return ""
 	}
-	if _, known := j.dropped[key]; !known && j.earlier != nil {
-		j.recallEarlier()
+	if _, known := j.dropped[key]; !known && j.events != nil {
+		if logged, found := j.index.lookup(j.session(), key, j.events, j.keyOf); found {
+			j.dropped[key] = logged
+		}
 	}
 	drop := j.dropped[key]
 	if drop == nil {
@@ -262,29 +267,71 @@ func (j *keepJudge) refetched(called ToolCallRow) string {
 	return said + " is labelled " + refetchedOutcome
 }
 
-func (j *keepJudge) recallEarlier() {
-	events, err := j.earlier()
-	if err != nil {
-		return
+type DropIndex struct {
+	mu       sync.Mutex
+	sessions map[string]*loggedDrops
+}
+
+type loggedDrops struct {
+	scanned bool
+	dropped map[dropKey]*recall.Drop
+}
+
+func NewDropIndex() *DropIndex {
+	return &DropIndex{sessions: map[string]*loggedDrops{}}
+}
+
+func (d *DropIndex) held(id string) *loggedDrops {
+	held := d.sessions[id]
+	if held == nil {
+		held = &loggedDrops{dropped: map[dropKey]*recall.Drop{}}
+		d.sessions[id] = held
 	}
-	j.earlier = nil
-	logged := map[dropKey]*recall.Drop{}
-	for _, event := range events {
-		var row compactionRow
-		if event.Kind != session.EventCompaction || json.Unmarshal(event.Body, &row) != nil || row.Compaction == nil {
-			continue
+	return held
+}
+
+func (d *DropIndex) remember(id string, dropped map[dropKey]*recall.Drop) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	maps.Copy(d.held(id).dropped, dropped)
+}
+
+func (d *DropIndex) carriesNothing(id string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.held(id).scanned = true
+}
+
+func (d *DropIndex) lookup(id string, key dropKey, events func(string) ([]session.Event, error), keyOf func(recall.Drop) dropKey) (*recall.Drop, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	held := d.held(id)
+	if !held.scanned {
+		read, err := events(id)
+		if err != nil {
+			return nil, false
 		}
-		for _, drop := range row.Compaction.Drops {
-			if key := j.keyOf(drop); key != (dropKey{}) {
-				logged[key] = &drop
+		logged := map[dropKey]*recall.Drop{}
+		for _, event := range read {
+			var row compactionRow
+			if event.Kind != session.EventCompaction || json.Unmarshal(event.Body, &row) != nil || row.Compaction == nil {
+				continue
+			}
+			for _, drop := range row.Compaction.Drops {
+				if at := keyOf(drop); at != (dropKey{}) {
+					logged[at] = &drop
+				}
 			}
 		}
-	}
-	for key, drop := range logged {
-		if _, held := j.dropped[key]; !held {
-			j.dropped[key] = drop
+		for at, drop := range logged {
+			if _, known := held.dropped[at]; !known {
+				held.dropped[at] = drop
+			}
 		}
+		held.scanned = true
 	}
+	drop, found := held.dropped[key]
+	return drop, found
 }
 
 func NewArtifacts(dir string, handles bool) (Artifacts, error) {
