@@ -17,6 +17,7 @@ import (
 	"tofu/interface/tui/frame"
 	"tofu/interface/tui/shells"
 	"tofu/interface/tui/subagent"
+	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/session"
 	"tofu/internal/shell"
@@ -55,6 +56,11 @@ type recordedStep struct {
 	CacheReadTokens  int            `json:"cache_read_tokens"`
 }
 
+type recordedResult struct {
+	content string
+	outcome string
+}
+
 type recorded struct {
 	store   *session.Store
 	headers []session.Header
@@ -70,6 +76,7 @@ type sitting struct {
 	events      int
 	largestEdit int
 	largestRows int
+	outcomes    map[host.ToolOutcome]int
 }
 
 func readRecorded(b *testing.B) recorded {
@@ -87,7 +94,7 @@ func readRecorded(b *testing.B) recorded {
 	return recorded{store: store, headers: headers}
 }
 
-func (r recorded) read(b *testing.B, id string) ([]recordedStep, []string) {
+func (r recorded) read(b *testing.B, id string) ([]recordedStep, []recordedResult) {
 	b.Helper()
 	events, err := r.store.Body(id)
 	if err != nil {
@@ -95,7 +102,7 @@ func (r recorded) read(b *testing.B, id string) ([]recordedStep, []string) {
 	}
 	var steps []recordedStep
 	var order []string
-	contents := map[string]string{}
+	said := map[string]recordedResult{}
 	for _, event := range events {
 		switch event.Kind {
 		case session.EventStep:
@@ -115,13 +122,13 @@ func (r recorded) read(b *testing.B, id string) ([]recordedStep, []string) {
 				}
 			}
 			if message.Role == session.RoleTool {
-				contents[message.ToolCallID] = message.Content
+				said[message.ToolCallID] = recordedResult{content: message.Content, outcome: message.ToolOutcome}
 			}
 		}
 	}
-	results := make([]string, len(order))
+	results := make([]recordedResult, len(order))
 	for index, id := range order {
-		results[index] = contents[id]
+		results[index] = said[id]
 	}
 	return steps, results
 }
@@ -137,7 +144,7 @@ func (r recorded) sitting(b *testing.B, last int) sitting {
 	if last != everyTurn {
 		top = top[max(0, len(top)-last):]
 	}
-	var replayed sitting
+	replayed := sitting{outcomes: map[host.ToolOutcome]int{}}
 	edits := 0
 	for _, header := range top {
 		steps, results := r.read(b, header.ID)
@@ -161,17 +168,18 @@ func (r recorded) sitting(b *testing.B, last int) sitting {
 				id := session.EventIDFor(header.ID, cmp.Or(recordedCall.ID, strconv.Itoa(call)))
 				events = append(events, app.Event{Kind: app.EventToolCall, ID: id, Tool: recordedCall.Tool, Text: recordedCall.Command,
 					Detail: argText(recordedCall.Args, "command"), Promote: recordedCall.Tool == spawnTool})
-				content := resultAt(results, call)
+				answered := resultAt(results, call)
+				content, outcome := answered.content, outcomeOf(b, answered.outcome, recordedCall)
 				if recordedCall.SubAgentID != "" {
 					subAgents = append(subAgents, r.subAgentRow(b, recordedCall, len(subAgents)))
 					events = append(events, app.Event{Kind: app.EventSubAgent, SubAgents: slices.Clone(subAgents)})
 				}
 				result := app.Event{Kind: app.EventToolResult, ID: id, Text: summary(content, recordedCall.ResultBytes), Bytes: recordedCall.ResultBytes,
-					Failed: recordedCall.Error != "" || recordedCall.ExitCode != nil && *recordedCall.ExitCode != 0}
-				if !result.Failed && strings.HasPrefix(content, diffHeader) {
+					Outcome: outcome}
+				if !outcome.Failed() && strings.HasPrefix(content, diffHeader) {
 					result.Diff = content
 				}
-				if !result.Failed && strings.HasPrefix(content, createdHeader) {
+				if !outcome.Failed() && strings.HasPrefix(content, createdHeader) {
 					result.Created = argText(recordedCall.Args, "content")
 				}
 				if rows := strings.Count(result.Diff+result.Created, "\n"); result.Diff+result.Created != "" {
@@ -181,6 +189,7 @@ func (r recorded) sitting(b *testing.B, last int) sitting {
 					edits++
 				}
 				events = append(events, result)
+				replayed.outcomes[outcome]++
 				call++
 			}
 		}
@@ -220,7 +229,7 @@ func (r recorded) subAgentRow(b *testing.B, spawn recordedCall, index int) subag
 			row.Report = cmp.Or(step.AssistantText, row.Report)
 			for _, recordedCall := range step.ToolCalls {
 				row.Calls = append(row.Calls, subagent.Call{ID: session.EventIDFor(header.ID, recordedCall.ID), Tool: recordedCall.Tool,
-					Text: recordedCall.Command, Result: summary(resultAt(results, call), recordedCall.ResultBytes)})
+					Text: recordedCall.Command, Result: summary(resultAt(results, call).content, recordedCall.ResultBytes)})
 				call++
 			}
 		}
@@ -228,11 +237,23 @@ func (r recorded) subAgentRow(b *testing.B, spawn recordedCall, index int) subag
 	return row
 }
 
-func resultAt(results []string, call int) string {
+func resultAt(results []recordedResult, call int) recordedResult {
 	if call >= len(results) {
-		return ""
+		return recordedResult{}
 	}
 	return results[call]
+}
+
+func outcomeOf(b *testing.B, said string, call recordedCall) host.ToolOutcome {
+	b.Helper()
+	if said == "" && (call.Error != "" || call.ExitCode != nil && *call.ExitCode != 0) {
+		return host.ToolFailed
+	}
+	var outcome host.ToolOutcome
+	if err := outcome.UnmarshalJSON([]byte(strconv.Quote(cmp.Or(said, string(host.ToolRan))))); err != nil {
+		b.Fatal("bench/tui: recorded call " + call.ID + ": " + err.Error())
+	}
+	return outcome
 }
 
 func argText(raw json.RawMessage, key string) string {

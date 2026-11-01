@@ -93,6 +93,9 @@ func onEachScreen(b *testing.B, screens []string, last int, measure func(b *test
 			measure(b, built)
 			b.ReportMetric(float64(len(replayed.turns)), "turns")
 			b.ReportMetric(float64(replayed.events), "events")
+			for outcome, calls := range replayed.outcomes {
+				b.ReportMetric(float64(calls), string(outcome)+"-calls")
+			}
 			b.ReportMetric(float64(replay.Nanoseconds())/float64(replayed.events), "replay-ns/event")
 		})
 	}
