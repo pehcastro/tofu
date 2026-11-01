@@ -271,23 +271,6 @@ func DrawnAs(id, hash string) bool {
 	return strings.HasSuffix(strings.ToLower(id), strings.ToLower(strings.TrimPrefix(hash, "#")))
 }
 
-func FindByHash(events []Event, hash string) (Event, error) {
-	var found []Event
-	for _, event := range events {
-		if DrawnAs(event.ID, hash) {
-			found = append(found, event)
-		}
-	}
-	switch len(found) {
-	case 0:
-		return Event{}, fmt.Errorf("%w: %q", ErrEventHashNotFound, hash)
-	case 1:
-		return found[0], nil
-	default:
-		return Event{}, fmt.Errorf("%w: %q matches %d events", ErrEventHashAmbiguous, hash, len(found))
-	}
-}
-
 type Header struct {
 	ID               string     `json:"id"`
 	Schema           int        `json:"schema"`

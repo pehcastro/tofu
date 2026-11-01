@@ -1,7 +1,6 @@
 package ledger
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,10 +24,6 @@ type Entry struct {
 	Build     string
 	RequestID string
 	Answers   []Answer
-}
-
-type Asker interface {
-	Ask(ctx context.Context, req Request) (Entry, error)
 }
 
 type Cache struct {
@@ -97,26 +92,4 @@ func (c *Cache) Store(key string, req Request, entry Entry) error {
 		return err
 	}
 	return sys.WriteFile(filepath.Join(c.dir, key+cacheSuffix), body, 0o644)
-}
-
-func (c *Cache) Resolve(ctx context.Context, req Request, asker Asker) (Entry, bool, error) {
-	key, err := c.Key(req)
-	if err != nil {
-		return Entry{}, false, err
-	}
-	entry, hit, err := c.Load(key)
-	if err != nil {
-		return Entry{}, false, err
-	}
-	if hit {
-		return entry, true, nil
-	}
-	fresh, err := asker.Ask(ctx, req)
-	if err != nil {
-		return Entry{}, false, err
-	}
-	if err := c.Store(key, req, fresh); err != nil {
-		return Entry{}, false, err
-	}
-	return fresh, false, nil
 }
