@@ -547,6 +547,29 @@ func shrunkHandle(text string) string {
 	return ""
 }
 
+func arrivedTogether(messages []llm.Message, task string) (string, int, int) {
+	for at := len(messages) - 1; at >= 0; at-- {
+		environment := environmentBefore(messages[:at+1])
+		if environment == "" {
+			continue
+		}
+		var texts []string
+		to := at + 1
+		for _, item := range messages[at+1:] {
+			texts = append(texts, item.Content)
+			if item.Role != llm.RoleUser || !strings.HasPrefix(task, strings.Join(texts, "\n\n")) {
+				break
+			}
+			to++
+		}
+		if to == at+1 {
+			return "", 0, 0
+		}
+		return environment, at + 1, to
+	}
+	return "", 0, 0
+}
+
 func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message, messages []llm.Message, forced ForkKind, number, most int) (*Fork, []llm.Message, error) {
 	if err := ShrinkPages(artifacts.store, artifacts.preview, messages, ShrinkWhenPaid); err != nil {
 		return nil, nil, err
@@ -569,7 +592,7 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 		return message.Role == llm.RoleUser && message.Origin.Source != llm.SourceForkCarry && task != "" && strings.Contains(message.Content, task)
 	}
 	var system []llm.Message
-	framed := false
+	foldedFrom, foldedTo := -1, -1
 	for i, message := range messages {
 		switch {
 		case standsAtTheHead(message) || promptChange(message):
@@ -577,25 +600,31 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 		case isTask(message):
 			opening.Images = message.Images
 			if environment := environmentBefore(messages[:i]); environment != "" {
-				opening.Content, framed = environment+TheTaskFollows+task, true
+				opening.Content, foldedFrom, foldedTo = environment+TheTaskFollows+task, i, i+1
 			} else if strings.HasSuffix(message.Content, TheTaskFollows+task) {
 				opening.Content = message.Content
 			}
 		}
 	}
+	if environment, from, to := arrivedTogether(messages, task); !slices.ContainsFunc(messages, isTask) && environment != "" {
+		opening.Content, foldedFrom, foldedTo = environment+TheTaskFollows+task, from, to
+		for _, item := range messages[from:to] {
+			opening.Images = append(opening.Images, item.Images...)
+		}
+	}
 	opening.Origin.TakenAt = started
 	carried := func(tail []llm.Message, fileTokens int) ([]llm.Message, recall.Carry, int, error) {
 		lost := 0
-		for _, message := range messages[:len(messages)-len(tail)] {
-			if message.Role == llm.RoleUser && !isTask(message) {
+		before := len(messages) - len(tail)
+		for i, message := range messages[:before] {
+			if message.Role == llm.RoleUser && !isTask(message) && (i < foldedFrom || i >= foldedTo) {
 				lost += len(message.Images)
 			}
 		}
-		if at := slices.IndexFunc(tail, isTask); at >= 0 {
+		if foldedTo > before {
+			tail = messages[foldedTo:]
+		} else if at := slices.IndexFunc(tail, isTask); at >= 0 {
 			tail = tail[at:]
-			if framed {
-				tail = tail[1:]
-			}
 		}
 		tail = slices.DeleteFunc(slices.Clone(tail), promptChange)
 		for i := range tail {
