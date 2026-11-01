@@ -25,7 +25,7 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 	if err != nil {
 		return runFail(errOut, err)
 	}
-	offered, err := offeredTools(opts, prompt.subAgents, named)
+	offered, err := offeredTools(opts, prompt, named)
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -72,12 +72,12 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 	return exitOK
 }
 
-func offeredTools(opts runOpts, subAgents turn.SubAgents, named []turn.Tool) ([]llm.Tool, error) {
-	config, spawner, err := runConfig(opts, named, runtime{open: openAppWire})
+func offeredTools(opts runOpts, prompt composedRun, named []turn.Tool) ([]llm.Tool, error) {
+	config, spawner, err := runConfig(opts, named, runtime{open: openAppWire, composed: &prompt})
 	if err != nil || opts.agent == "" {
 		return config.Tools.Definitions(), err
 	}
-	agent, err := subAgents.Named(opts.agent)
+	agent, err := prompt.subAgents.Named(opts.agent)
 	if err != nil {
 		return nil, err
 	}

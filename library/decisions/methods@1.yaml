@@ -57,6 +57,10 @@ methods:
   spawn_gate:
     method: unwired
     why: nothing is measured, and it waits on one recorded orchestrator and sub-agent
+  task_kind:
+    method: judged
+    why: jev names the kind of 40 of 40 mocked tasks on two passes against the word list's 11 of 40, which reads a crash, a diff to look over or a question about a fault as no kind and an add a debug flag task as debug. the corpus and the question were written by one author, so 40 of 40 is a ceiling rather than a rate
+    cost: one jev call each time a prompt is composed for a task, the lead's and each spawn's, p50 192 ms, p95 226 ms, worst 302 ms and a mean $0.0000257 list charge over 80 calls
   thrift:
     method: unwired
     why: the point reads library/questions/config/thrift_rule@1.yaml directly, which ships mode off, and nothing is cut until a measurement moves it

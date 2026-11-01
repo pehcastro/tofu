@@ -57,6 +57,7 @@ type Task struct {
 	Text       string
 	Paths      []string
 	Verb       Verb
+	KindBy     string
 	Language   string
 	Role       Role
 	Frameworks []string
@@ -129,6 +130,8 @@ type Trigger struct {
 func (t Trigger) AlwaysOn() bool {
 	return t.event == EventNone && t.condition == nil && t.touches == nil && t.scope == "" && t.languages == nil && t.frameworks == nil && t.verb == VerbNone && t.role == RoleAny
 }
+
+func (t Trigger) Kind() Verb { return t.verb }
 
 func (t Trigger) String() string {
 	if t.AlwaysOn() {
@@ -343,10 +346,14 @@ func (t Trigger) firesFor(task Task) (bool, string) {
 		why = append(why, fmt.Sprintf("a %s lists %s", manifestListing(t.frameworks[listed]), t.frameworks[listed]))
 	}
 	if t.verb != VerbNone {
-		if task.Verb != t.verb {
-			return false, fmt.Sprintf("the task is %s rather than %s", cmp.Or(string(task.Verb), "unnamed"), t.verb)
+		readBy := ""
+		if task.KindBy != "" {
+			readBy = ", as " + task.KindBy + " reads it"
 		}
-		why = append(why, fmt.Sprintf("the task is %s", t.verb))
+		if task.Verb != t.verb {
+			return false, fmt.Sprintf("the task is %s rather than %s%s", cmp.Or(string(task.Verb), "unnamed"), t.verb, readBy)
+		}
+		why = append(why, fmt.Sprintf("the task is %s%s", t.verb, readBy))
 	}
 	return true, strings.Join(why, " and ")
 }

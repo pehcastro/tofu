@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"maps"
@@ -11,9 +12,15 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 
+	"tofu/internal/classifier"
+	"tofu/internal/judge/jev"
+	"tofu/internal/judge/ledger"
+	"tofu/internal/judge/method"
+	"tofu/internal/judge/question"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/prompt"
@@ -21,7 +28,9 @@ import (
 	"tofu/internal/session"
 	"tofu/internal/skill"
 	"tofu/internal/subagent"
+	"tofu/internal/sys"
 	shipped "tofu/library"
+	"tofu/library/questions"
 )
 
 const TheFormatContract = prompt.TheFormatContract
@@ -69,6 +78,7 @@ type ComposeSpec struct {
 	Role         rule.Role
 	Frameworks   []string
 	Dropped      []PromptPart
+	Kinds        *KindJudge
 }
 
 const (
@@ -239,6 +249,14 @@ func composedOrder() []rule.Concern {
 func Compose(spec ComposeSpec) (Composed, error) {
 	composed := Composed{Task: TaskNamed(spec.Task)}
 	composed.Task.Role, composed.Task.Frameworks = spec.Role, spec.Frameworks
+	var wordsDecided error
+	if spec.Kinds != nil {
+		composed.Task.Verb, wordsDecided = spec.Kinds.Of(spec.Task, composed.Task.Verb)
+		composed.Task.KindBy = "Jev"
+		if wordsDecided != nil {
+			composed.Task.KindBy = "the word list"
+		}
+	}
 	for _, owned := range spec.Paths {
 		composed.Task.Paths = append(composed.Task.Paths, filepath.ToSlash(owned))
 	}
@@ -268,6 +286,7 @@ func Compose(spec ComposeSpec) (Composed, error) {
 	}
 	agentDomain := cmp.Or(spec.Agent.Domain, rule.DomainDev)
 	withoutTask := rule.IndexReaching(spec.Rules, agentDomain, rule.Task{Role: composed.Task.Role, Language: composed.Task.Language, Frameworks: composed.Task.Frameworks})
+	var firedByKind []string
 	for i, match := range rule.IndexReaching(spec.Rules, agentDomain, composed.Task) {
 		if !match.Fires {
 			held := spec.Rules[i]
@@ -276,6 +295,9 @@ func Compose(spec ComposeSpec) (Composed, error) {
 			continue
 		}
 		fired := spec.Rules[i]
+		if kind := fired.Trigger.Kind(); kind != rule.VerbNone && kind == composed.Task.Verb {
+			firedByKind = append(firedByKind, fired.ID)
+		}
 		text := cmp.Or(strings.TrimSpace(fired.Text), strings.TrimSpace(fired.Notes))
 		if text == "" {
 			return Composed{}, fmt.Errorf("rule %s fires, %s, and carries no text the prompt can send: %s",
@@ -289,6 +311,16 @@ func Compose(spec ComposeSpec) (Composed, error) {
 			Why:     match.Why,
 			ByTask:  !withoutTask[i].Fires,
 		})
+	}
+	if spec.Kinds != nil {
+		text := "tofu reads this task as " + cmp.Or(string(composed.Task.Verb), "no kind") + ", as " + composed.Task.KindBy + " reads it"
+		if wordsDecided != nil {
+			text += ", since " + wordsDecided.Error()
+		}
+		if len(firedByKind) > 0 {
+			text += ", so the rules for that kind fire: " + strings.Join(firedByKind, ", ")
+		}
+		composed.Parts = append(composed.Parts, PromptPart{Concern: rule.ConcernTaskShaping, Text: text, ByTask: true})
 	}
 	composed.Unsent = append(composed.Unsent, spec.Dropped...)
 	for _, off := range spec.SwitchedOff {
@@ -402,6 +434,113 @@ func verbNamed(word string) rule.Verb {
 		return named
 	}
 	return rule.VerbNone
+}
+
+const (
+	taskKindRef     = "task_kind@1"
+	taskKindPoint   = "task_kind"
+	taskKindName    = "kind"
+	taskKindBuilder = "task_kind_state@1"
+)
+
+type KindJudge struct {
+	methods   method.Table
+	asked     question.Question
+	version   int
+	threshold float64
+	client    *jev.Client
+	ledger    *ledger.Writer
+	unasked   error
+}
+
+func NewKindJudge(project string) *KindJudge {
+	judge := &KindJudge{}
+	judge.unasked = judge.open(project)
+	return judge
+}
+
+func (j *KindJudge) open(project string) error {
+	var err error
+	if j.methods, err = method.Load(shipped.Files()); err != nil {
+		return err
+	}
+	layers, err := question.Layers(questions.Files(), project)
+	if err != nil {
+		return err
+	}
+	set, fields, err := question.Resolve(taskKindRef, layers)
+	if err != nil {
+		return err
+	}
+	asked, found := set.Question(taskKindName)
+	at := slices.IndexFunc(fields, func(f question.Field) bool { return f.Path == "thresholds."+taskKindName+"_at" })
+	if !found || asked.Kind != question.KindChoice || at < 0 {
+		return fmt.Errorf("%s names no choice question %s or no thresholds.%s_at", taskKindRef, taskKindName, taskKindName)
+	}
+	if j.threshold, err = strconv.ParseFloat(fields[at].Value, 64); err != nil {
+		return err
+	}
+	places, err := sys.ResolvePlaces(project)
+	if err != nil {
+		return err
+	}
+	j.asked, j.version, j.ledger = asked, set.QuestionsVersion, ledger.NewWriter(places.Log)
+	j.client, err = classifier.Open(project, jev.ReadKeyring(), 1)
+	return err
+}
+
+func (j *KindJudge) Of(task string, named rule.Verb) (rule.Verb, error) {
+	if strings.TrimSpace(task) == "" {
+		return named, errors.New("the task is blank, so jev is not asked")
+	}
+	kind, chosen, err := method.Run(context.Background(), j.methods, taskKindPoint, method.Arms[rule.Verb]{
+		Cheap:  func(context.Context) (rule.Verb, error) { return named, nil },
+		Judged: func(ctx context.Context) (rule.Verb, error) { return j.ask(ctx, task) },
+	})
+	switch {
+	case err != nil:
+		return named, err
+	case chosen == method.Cheap:
+		return named, fmt.Errorf("%s names %s for %s", j.methods.File, chosen, taskKindPoint)
+	}
+	return kind, nil
+}
+
+func (j *KindJudge) ask(ctx context.Context, task string) (rule.Verb, error) {
+	if j.unasked != nil {
+		return rule.VerbNone, fmt.Errorf("jev cannot be asked: %w", j.unasked)
+	}
+	body, err := json.Marshal(struct {
+		Task string `json:"task"`
+	}{task})
+	if err != nil {
+		return rule.VerbNone, err
+	}
+	asked := []jev.Question{j.asked.ToJev()}
+	row := ledger.Row{Point: taskKindPoint, Questions: taskKindPoint, Version: j.version, StateHash: ledger.HashOf(body), StateBuilder: taskKindBuilder, State: body,
+		Verdict: ledger.VerdictAsk, Reason: &ledger.Reason{Question: taskKindName, Comparison: ">= " + strconv.FormatFloat(j.threshold, 'f', -1, 64), Threshold: j.threshold, Mode: ledger.ModeEnforced}}
+	decision, err := j.client.Ask(ctx, jev.Request{State: json.RawMessage(body), Questions: asked})
+	if err != nil {
+		failed := "jev could not answer, so the word list names the task's kind: " + err.Error()
+		row.Reason.ModeReason = &failed
+		_, unwritten := j.ledger.Append(row)
+		return rule.VerbNone, errors.Join(fmt.Errorf("jev could not answer: %w", err), unwritten)
+	}
+	decision.Record(&row, asked, j.version)
+	answer := decision.Answers[taskKindName]
+	if row.Reason.Value = answer.Probabilities[answer.Choice]; row.Reason.Value >= j.threshold {
+		row.Verdict = ledger.VerdictAllow
+	}
+	if _, err := j.ledger.Append(row); err != nil {
+		return rule.VerbNone, fmt.Errorf("the decision did not reach the ledger: %w", err)
+	}
+	if row.Verdict != ledger.VerdictAllow {
+		return rule.VerbNone, fmt.Errorf("jev chose %s at %.2f, under kind_at %.2f", answer.Choice, row.Reason.Value, j.threshold)
+	}
+	if answer.Choice == j.asked.Escape {
+		return rule.VerbNone, nil
+	}
+	return rule.Verb(answer.Choice), nil
 }
 
 const ReferenceToolName = "reference"

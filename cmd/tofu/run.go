@@ -143,6 +143,7 @@ type runtime struct {
 	keys         *storedKeys
 	memory       *sessionMemoryModel
 	current      func(subagent.Definition) subagent.Definition
+	composed     *composedRun
 
 	omitThinkingSummary bool
 }
@@ -690,6 +691,9 @@ type composedRun struct {
 }
 
 func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, error) {
+	if run.composed != nil {
+		return *run.composed, nil
+	}
 	say := func(notice string) {
 		if notice != "" && run.notify != nil {
 			run.notify(notice)
@@ -765,7 +769,8 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 		say("no framework rule fires this run: " + err.Error())
 	}
 	subAgents := turn.SubAgents{Defined: discovered.Definitions, Root: cmp.Or(opts.dir, "."), Prompt: turn.ComposeSpec{Environment: strings.TrimSpace(environment + "\n\n" + files),
-		ToolGuidance: turn.EveryToolIsRelativeToTheWorkingDirectory + turn.ContractAddendum, Rules: rules, SwitchedOff: switchedOff, Skills: skills, WindowTokens: run.budget.WindowTokens, Frameworks: frameworks}}
+		ToolGuidance: turn.EveryToolIsRelativeToTheWorkingDirectory + turn.ContractAddendum, Rules: rules, SwitchedOff: switchedOff, Skills: skills, WindowTokens: run.budget.WindowTokens, Frameworks: frameworks,
+		Kinds: turn.NewKindJudge(cmp.Or(opts.dir, "."))}}
 	spec := subAgents.Prompt
 	spec.Task, spec.ToolGuidance = opts.task, runSystem(opts)
 	if opts.agent != "" {
