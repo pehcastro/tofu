@@ -31,7 +31,7 @@ const (
 	rulesFromTheProject = "the project"
 	ruleOn              = "on"
 	pointKind           = "point"
-	rulesSubcommands    = "tofu rules list|check|fired|index|overrides|add|off|restore|remove"
+	rulesSubcommands    = "tofu rules list|check|fired|index|overrides|add|off|restore|remove|why"
 	rulesListUsage      = "tofu rules list [--library dir] [--dir project] [--json]"
 	rulesOverridesUsage = "tofu rules overrides [--library dir] [--dir project] [--json]"
 	rulesCheckUsage     = "tofu rules check [path] [--library dir] [--dir project] [--json]"
@@ -245,6 +245,8 @@ func rulesVerb(args []string, out, errOut io.Writer) int {
 		return rulesOverridesVerb(args[1:], out, errOut)
 	case "restore":
 		return rulesRestoreVerb(args[1:], out, errOut)
+	case "why":
+		return rulesWhyVerb(args[1:], out, errOut)
 	default:
 		return bare.usage(fmt.Errorf("unknown subcommand %q", args[0]))
 	}

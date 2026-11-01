@@ -83,6 +83,8 @@ type PromptPart struct {
 	File    string    `json:"file,omitempty"`
 	State   PartState `json:"state,omitempty"`
 	Why     string    `json:"why,omitempty"`
+	Reason  string    `json:"reason_kind,omitempty"`
+	Mode    string    `json:"mode,omitempty"`
 	Tokens  int       `json:"tokens"`
 	Blob    string    `json:"blob,omitempty"`
 	PerTurn bool      `json:"per_turn,omitempty"`

@@ -106,7 +106,12 @@ one `⚠`. `tofu doctor` counts them and names the stale ones.
 prints one JSON document, whose `data` carries every field.
 `tofu rules check` and `tofu rules fired` print a `✗` row per blocked
 finding and a `⚠` row per shadow one. `tofu rules index "<task>" [path...]`
-says which rules fire for a task and why. A structural rule with `checker: pattern` and a `pattern:` regular expression refuses a `write` or `edit` in a turn when the write adds a match: in `enforced` the whole call is refused, naming the rule, file and line, and nothing is written; in `shadow` it writes and the result records the finding. A match the file already held does not count. `paths` and `except_paths`, comma-separated globs, narrow the files it reads, and `tofu rules check src` runs it over every file git lists under `src`.
+says which rules fire for a task and why. `tofu rules why <session> [turn]`
+says what a recorded session did: every rule, once per agent per turn, as
+fired, held, dropped or switched off, with its mode and a reason kind of
+`domain`, `role`, `trigger`, `mode` or `setting` beside the reason; `--json`
+rows carry `reason_kind` and `mode`, and a turn the session does not hold
+exits 2 naming the turns it has. A structural rule with `checker: pattern` and a `pattern:` regular expression refuses a `write` or `edit` in a turn when the write adds a match: in `enforced` the whole call is refused, naming the rule, file and line, and nothing is written; in `shadow` it writes and the result records the finding. A match the file already held does not count. `paths` and `except_paths`, comma-separated globs, narrow the files it reads, and `tofu rules check src` runs it over every file git lists under `src`.
 
     tofu reload
 

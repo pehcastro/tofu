@@ -417,9 +417,20 @@ func ScopeReaches(scope, held string) bool {
 		errors.As(roster.Hold(subagent.SubAgent{ID: "owner", Owns: []string{held}}), &collision)
 }
 
+type ReasonKind string
+
+const (
+	ReasonDomain  ReasonKind = "domain"
+	ReasonRole    ReasonKind = "role"
+	ReasonTrigger ReasonKind = "trigger"
+	ReasonMode    ReasonKind = "mode"
+	ReasonSetting ReasonKind = "setting"
+)
+
 type Match struct {
 	RuleID string
 	Fires  bool
+	Reason ReasonKind
 	Why    string
 }
 
@@ -442,6 +453,10 @@ func (t Trigger) onlyPaths() bool {
 	return t.event == EventNone && t.condition == nil && t.verb == VerbNone && t.role == RoleAny
 }
 
+func (t Trigger) onlyRole() bool {
+	return t.condition == nil && t.touches == nil && t.scope == "" && t.languages == nil && t.frameworks == nil && t.verb == VerbNone
+}
+
 func Index(rules []Rule, task Task) []Match {
 	index := make([]Match, len(rules))
 	for i, r := range rules {
@@ -450,17 +465,21 @@ func Index(rules []Rule, task Task) []Match {
 			ruled.judged = &judged
 		}
 		fires, why := r.Trigger.firesFor(ruled)
+		reason := ReasonTrigger
+		if r.Trigger.role != RoleAny && (task.Role != r.Trigger.role || r.Trigger.onlyRole()) {
+			reason = ReasonRole
+		}
 		switch {
 		case !fires && task.Verb == VerbPlan && r.Domain == DomainQA && r.Trigger.onlyPaths():
 			fires, why = true, "the task plans work, and a qa rule scoped to paths reaches the plan before the paths exist"
 		case !fires && task.touchesTests() && r.Domain == DomainQA && r.Trigger.onlyPaths():
 			fires, why = true, "the task works on tests, and a qa rule scoped to paths reaches the test before its file is named"
 		case fires && task.Role == RoleOrchestrator && task.Verb != VerbPlan && !task.Alone && r.forTheWriterOnly():
-			fires, why = false, "a rule for how code is written reaches the agent that writes it, a lead that plans or a lead that works alone, and the prompt is the orchestrator's on a task that plans nothing and may spawn"
+			fires, reason, why = false, ReasonRole, "a rule for how code is written reaches the agent that writes it, a lead that plans or a lead that works alone, and the prompt is the orchestrator's on a task that plans nothing and may spawn"
 		case fires && task.Alone && r.forTheWriterOnly():
-			why += ", and the lead works alone, so it writes the code itself"
+			reason, why = ReasonRole, why+", and the lead works alone, so it writes the code itself"
 		}
-		index[i] = Match{RuleID: r.ID, Fires: fires, Why: why}
+		index[i] = Match{RuleID: r.ID, Fires: fires, Reason: reason, Why: why}
 	}
 	return index
 }
@@ -487,9 +506,9 @@ func IndexReaching(rules []Rule, agentDomain string, task Task) []Match {
 		reaches, why := r.ReachesDomain(agentDomain, task)
 		switch {
 		case r.Mode == ModeOff:
-			index[i] = Match{RuleID: r.ID, Why: "the rule's mode is off"}
+			index[i] = Match{RuleID: r.ID, Reason: ReasonMode, Why: "the rule's mode is off"}
 		case !reaches:
-			index[i] = Match{RuleID: r.ID, Why: why}
+			index[i] = Match{RuleID: r.ID, Reason: ReasonDomain, Why: why}
 		case why != "" && index[i].Fires:
 			index[i].Why = why + ", and " + index[i].Why
 		}

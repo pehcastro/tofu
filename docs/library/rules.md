@@ -118,6 +118,12 @@ reuse: rules that don't change with the task stay in the cached prefix.
 - **See why a rule fired or didn't**: `tofu rules index "<task>" <path>`.
   Add `--role orchestrator` or `--role sub-agent` for the rules the lead or a
   sub-agent gets.
+- **See what a session's turn got**: `tofu rules why <session> [turn]`.
+  Every rule once per agent per turn, fired, held, dropped or switched off,
+  with its mode and a reason kind: `domain` (the agent's domain), `role` (lead
+  or sub-agent), `trigger` (what the task or its paths matched), `mode` (the
+  rule's own mode is off) or `setting` (a setting or an override turned it
+  off). `--json` rows carry `reason_kind` and `mode`.
 - **Add one**: `tofu rules add no_yaml "never write yaml by hand"`, then add
   triggers to the file.
 - **Turn one off**: `tofu rules off em_dash`; `tofu rules remove` undoes it.

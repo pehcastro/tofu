@@ -43,6 +43,8 @@ type PromptPart struct {
 	File    string
 	Text    string
 	Why     string
+	Reason  rule.ReasonKind
+	Mode    rule.Mode
 	State   session.PartState
 	ByTask  bool
 	Off     bool
@@ -302,7 +304,7 @@ func Compose(spec ComposeSpec) (Composed, error) {
 		if !match.Fires {
 			held := spec.Rules[i]
 			composed.HeldBack = append(composed.HeldBack, match)
-			composed.Unsent = append(composed.Unsent, PromptPart{Concern: held.Concern, RuleID: held.ID, File: filepath.ToSlash(held.File), Why: match.Why, State: session.PartHeld})
+			composed.Unsent = append(composed.Unsent, PromptPart{Concern: held.Concern, RuleID: held.ID, File: filepath.ToSlash(held.File), Why: match.Why, Reason: match.Reason, Mode: held.Mode, State: session.PartHeld})
 			continue
 		}
 		fired := spec.Rules[i]
@@ -320,6 +322,8 @@ func Compose(spec ComposeSpec) (Composed, error) {
 			File:    filepath.ToSlash(fired.File),
 			Text:    text,
 			Why:     match.Why,
+			Reason:  match.Reason,
+			Mode:    fired.Mode,
 			ByTask:  !withoutTask[i].Fires,
 		})
 	}
@@ -339,7 +343,7 @@ func Compose(spec ComposeSpec) (Composed, error) {
 		if off.Rule.Override.Reason != "" {
 			text += ": " + off.Rule.Override.Reason
 		}
-		composed.Parts = append(composed.Parts, PromptPart{Concern: off.Base.Concern, RuleID: off.Base.ID, File: filepath.ToSlash(off.Rule.File), Text: text, Off: true})
+		composed.Parts = append(composed.Parts, PromptPart{Concern: off.Base.Concern, RuleID: off.Base.ID, File: filepath.ToSlash(off.Rule.File), Text: text, Reason: rule.ReasonSetting, Mode: off.Rule.Mode, Off: true})
 	}
 	order := composedOrder()
 	slices.SortStableFunc(composed.Parts, func(a, b PromptPart) int {

@@ -805,14 +805,16 @@ func droppedRules(stack ruleStack, kept []rule.Rule, switchedOff []rule.Overridi
 		if slices.ContainsFunc(kept, func(r rule.Rule) bool { return r.ID == one.ID }) || slices.ContainsFunc(switchedOff, func(off rule.Overriding) bool { return off.Base.ID == one.ID }) {
 			continue
 		}
-		why := "the run's setting --tools three sends no " + one.ID
+		reason, why := rule.ReasonSetting, "the run's setting --tools three sends no "+one.ID
 		switch {
+		case one.Mode == rule.ModeOff && ruleSetting(one.ID) == "":
+			reason, why = rule.ReasonMode, stack.switchOn(one.ID, cmp.Or(opts.dir, "."))
 		case one.Mode == rule.ModeOff:
 			why = stack.switchOn(one.ID, cmp.Or(opts.dir, "."))
 		case opts.leadAlone:
 			why = "the run's lead alone setting: the task names few files in one folder, so the spawn rules are not sent"
 		}
-		dropped = append(dropped, turn.PromptPart{Concern: one.Concern, RuleID: one.ID, File: filepath.ToSlash(one.File), Why: why, State: session.PartDropped})
+		dropped = append(dropped, turn.PromptPart{Concern: one.Concern, RuleID: one.ID, File: filepath.ToSlash(one.File), Why: why, Reason: reason, Mode: one.Mode, State: session.PartDropped})
 	}
 	return dropped
 }

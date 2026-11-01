@@ -454,7 +454,7 @@ func (c Config) promptParts(preview recall.Config) []keptPart {
 			continue
 		}
 		kept := keptPart{PromptPart: session.PromptPart{Kind: string(part.Concern), Rule: part.RuleID, Agent: part.Agent, Name: part.Name, File: part.File, State: part.State, Why: part.Why,
-			PerTurn: part.ByTask, Off: part.Off}}
+			Reason: string(part.Reason), Mode: string(part.Mode), PerTurn: part.ByTask, Off: part.Off}}
 		if kept.Sent() {
 			kept.text = part.rendered()
 		}
