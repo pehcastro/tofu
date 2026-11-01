@@ -21,16 +21,9 @@ A ticket is made with Before (how it works now), Driven path (the steps a person
 
 A move to done is refused while an acceptance line in force has no evidence entry naming it, a line left for the lead included, and the refusal names the line. Jev's `done_reason@1` reads the reason, and one that names a part still open, such as `all done except the dark theme`, is refused, quoting that part. A move with no reason asks nothing. Each Jev answer is a decision ledger row. When Jev cannot answer, an agent's create or move waits for the person, and the person's own goes through with one `nudge` line; with no classifier bound it names `tofu models bind classifier <source/model>`. Every way a ticket is made runs this check: `new`, `ticket_create`, `ticket_request`, a triage accept, a move out of triage, a hand, a hook's `create` effect and `boardy.create` in `tofu serve`; a hook follow up it refuses prints a `nudge` line on the command that fired it. `tofu boardy set <id> --before --driven --still-works --error-case --feasibility` fills the sections of an older ticket or, with `--board KEY`, of a triage request such as `T1`, and its receipt names the sections set. `new --problem` sets the Problem.
 
-Status is a field: triage, backlog, todo, doing, review, done, dropped,
-needs-decision with a question, or
-blocked with a reason. Numbers come from the board's counter under a file
-lock, and every ticket write takes that ticket's lock, so two processes
-never get one number or write one file at the same time.
+Status is a field: triage, backlog, todo, doing, review, done, dropped, needs-decision with a question, or blocked with a reason. Numbers come from the board's counter under a file lock, and every ticket write takes that ticket's lock, so two processes never get one number or write one file at the same time.
 
-The setting `boardFlow` picks the words: `jira` (the default) says ticket,
-board, epic, sprint and points; `linear` says issue, team, project, cycle
-and estimate. Only the words change. The setting `projectManagement` is
-`off` by default; `boardy` turns the board on for the rest of tofu.
+The setting `boardFlow` picks the words: `jira` (the default) says ticket, board, epic, sprint and points; `linear` says issue, team, project, cycle and estimate. Only the words change. The setting `projectManagement` is `off` by default; `boardy` turns the board on for the rest of tofu.
 
 ## Where it lives
 
