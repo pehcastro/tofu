@@ -569,12 +569,18 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 		return message.Role == llm.RoleUser && message.Origin.Source != llm.SourceForkCarry && task != "" && strings.Contains(message.Content, task)
 	}
 	var system []llm.Message
-	for _, message := range messages {
+	framed := false
+	for i, message := range messages {
 		switch {
 		case standsAtTheHead(message) || promptChange(message):
 			system = append(system, message)
 		case isTask(message):
 			opening.Images = message.Images
+			if environment := environmentBefore(messages[:i]); environment != "" {
+				opening.Content, framed = environment+TheTaskFollows+task, true
+			} else if strings.HasSuffix(message.Content, TheTaskFollows+task) {
+				opening.Content = message.Content
+			}
 		}
 	}
 	opening.Origin.TakenAt = started
@@ -587,6 +593,9 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 		}
 		if at := slices.IndexFunc(tail, isTask); at >= 0 {
 			tail = tail[at:]
+			if framed {
+				tail = tail[1:]
+			}
 		}
 		tail = slices.DeleteFunc(slices.Clone(tail), promptChange)
 		for i := range tail {

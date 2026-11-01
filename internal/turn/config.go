@@ -227,6 +227,17 @@ func (c Config) opening(task llm.Origin, notes ...string) []llm.Message {
 	return opened
 }
 
+func environmentBefore(messages []llm.Message) string {
+	if len(messages) == 0 || messages[len(messages)-1].Origin.Source != llm.SourceEnvironment {
+		return ""
+	}
+	environment, _, _ := strings.Cut(messages[len(messages)-1].Content, NotesAfterTheTask)
+	if !strings.HasPrefix(environment, environmentBeforeTheTask) {
+		return ""
+	}
+	return environment
+}
+
 type Prefix struct {
 	held     bool
 	first    heldPrefix
