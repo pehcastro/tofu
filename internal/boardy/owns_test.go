@@ -129,6 +129,7 @@ func TestOwnsHoldingStatusesFromBoardFile(t *testing.T) {
 }
 
 func TestSubTicketsLiveUnderTheirParentsOwns(t *testing.T) {
+	jevSaysNothingOpen(t)
 	m := managedBoard(t, "DEMO", "OPS")
 	parent := ticketIn(t, m, Doing, "internal/a/**", "cmd/a.go")
 	sub := func(parent string, owns ...string) (Ticket, error) {
@@ -192,7 +193,7 @@ func TestSubTicketsLiveUnderTheirParentsOwns(t *testing.T) {
 	}
 	for _, child := range []string{first.ID, second.ID, overlapping.ID} {
 		proved(t, m, child)
-		if _, err := m.Move(child, Done, "", manager); err != nil {
+		if _, err := m.Move(child, Done, closedReason, manager); err != nil {
 			t.Fatal(err)
 		}
 	}

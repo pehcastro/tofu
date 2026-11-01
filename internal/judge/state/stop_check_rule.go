@@ -17,6 +17,8 @@ const (
 	stopCheckApprovalQuestion      = "stalled"
 	stopCheckUserRequestedQuestion = "work_remains"
 	stopCheckFromUntrustedQuestion = "budget_exhausted"
+	stopCheckAskAt                 = stopCheckRiskQuestion + "_ask_at"
+	stopCheckDenyAt                = stopCheckRiskQuestion + "_deny_at"
 )
 
 func StopCheckRule() (gate.Rule, gate.Origin, error) {
@@ -31,6 +33,7 @@ func StopCheckRule() (gate.Rule, gate.Origin, error) {
 	r.ApprovalQuestion = stopCheckApprovalQuestion
 	r.UserRequestedQuestion = stopCheckUserRequestedQuestion
 	r.FromUntrustedQuestion = stopCheckFromUntrustedQuestion
+	r.RiskNames = gate.RiskNames{AskAt: stopCheckAskAt, DenyAt: stopCheckDenyAt}
 	r.Thresholds, err = stopCheckThresholds(r)
 	if err != nil {
 		return gate.Rule{}, "", err
@@ -41,8 +44,8 @@ func StopCheckRule() (gate.Rule, gate.Origin, error) {
 func stopCheckThresholds(r gate.Rule) (gate.Thresholds, error) {
 	var t gate.Thresholds
 	slots := map[string]*float64{
-		"stop_pressure_ask_at":      &t.RiskAskAt,
-		"stop_pressure_deny_at":     &t.RiskDenyAt,
+		stopCheckAskAt:              &t.RiskAskAt,
+		stopCheckDenyAt:             &t.RiskDenyAt,
 		"work_remains_relax_at":     &t.UserRequestedRelaxAt,
 		"stalled_relax_at":          &t.ApprovalRelaxAt,
 		"budget_exhausted_block_at": &t.FromUntrustedBlockAt,

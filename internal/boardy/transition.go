@@ -570,7 +570,7 @@ func (m Managed) drafted(key string, ticket Ticket, actor string) error {
 func (m Managed) closable(ticket Ticket, reason, actor string) error {
 	parts := reasonParts(reason)
 	if len(parts) == 0 {
-		return nil
+		return RefusedError{Ticket: ticket.ID, Why: fmt.Sprintf("its reason is empty, and a ticket reaches done with a reason that says what was verified and that nothing is open: tofu boardy move %s done --reason <what was verified>", ticket.ID)}
 	}
 	options := make([]jev.Option, len(parts))
 	for i, part := range parts {
@@ -660,7 +660,7 @@ func (m Managed) judged(ref, decides string, state any, options []jev.Option) ru
 		set, asked, ruled.threshold, err = m.library(ref, decides, options)
 	}
 	if err == nil {
-		row.Version, row.Reason.Threshold, row.Reason.Comparison = set.QuestionsVersion, ruled.threshold, ">= "+strconv.FormatFloat(ruled.threshold, 'f', -1, 64)
+		row.Version, row.Reason.Threshold, row.Reason.Comparison = set.QuestionsVersion, ruled.threshold, decides+"_at"
 		var client *jev.Client
 		if client, err = classifier.Open(m.Store.Root, jev.ReadKeyring(), 1); err == nil {
 			decision, err = client.Ask(context.Background(), jev.Request{State: json.RawMessage(body), Questions: asked})

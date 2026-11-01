@@ -2,11 +2,18 @@ package boardy
 
 import (
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"tofu/internal/classifier"
+	"tofu/internal/llm/models"
+	"tofu/internal/sys"
 )
 
 const (
@@ -28,6 +35,28 @@ func managedBoard(t *testing.T, keys ...string) Managed {
 		}
 	}
 	return m
+}
+
+const closedReason = "driven and every line passes"
+
+func jevSaysNothingOpen(t *testing.T) {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"model":"jev-1.14.0","answers":{"open":{"type":"noul","noul":0.02},"part":{"type":"choice","choice":"none","probabilities":{"none":1},"confidence":0.9}},"usage":{"input_tokens":10,"output_tokens":2}}`)
+	}))
+	t.Cleanup(server.Close)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv(classifier.EndpointVariable, server.URL)
+	t.Setenv(sys.TypeSafeKeyName, "stub-key-not-a-real-credential")
+	dir, err := sys.HomeConfigDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := models.BindRole(dir, models.RoleClassifier, "typesafe/jev-latest"); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func ticketWith(title string, owns ...string) Ticket {
@@ -86,7 +115,7 @@ func TestTransitionAgentConditions(t *testing.T) {
 
 	_, err := m.Move(theirs.ID, Review, "", agent)
 	refused(t, err, other)
-	_, err = m.Move(mine.ID, Done, "", agent)
+	_, err = m.Move(mine.ID, Done, closedReason, agent)
 	refused(t, err, "done")
 	_, err = m.Move(mine.ID, Review, "", agent)
 	refused(t, err, "Log")
@@ -122,6 +151,7 @@ func TestTransitionTriage(t *testing.T) {
 }
 
 func TestTransitionWidenAndReferences(t *testing.T) {
+	jevSaysNothingOpen(t)
 	m := managedBoard(t, "DEMO", "OPS")
 	doing := ticketWith("doing", "internal/rule/**")
 	doing.Status = Doing
@@ -134,7 +164,7 @@ func TestTransitionWidenAndReferences(t *testing.T) {
 		t.Fatal(err)
 	}
 	proved(t, m, closed.ID)
-	if _, err := m.Move(closed.ID, Done, "", manager); err != nil {
+	if _, err := m.Move(closed.ID, Done, closedReason, manager); err != nil {
 		t.Fatal(err)
 	}
 	ours := ticketWith("mine", "docs/**")
@@ -158,11 +188,12 @@ func TestTransitionWidenAndReferences(t *testing.T) {
 }
 
 func TestTransitionRules(t *testing.T) {
+	jevSaysNothingOpen(t)
 	m := managedBoard(t, "DEMO")
 	boardRule(t, m, "person_closes@1.yaml", "id: person_closes\ndomain: general\nkind: structural\nconcern: process_discipline\nchecker: person_approves\nmode: enforced\non: close\nto: done\n")
 	ticket := assigned(t, m, "close me", agent, Review)
 	proved(t, m, ticket.ID)
-	_, err := m.Move(ticket.ID, Done, "", manager)
+	_, err := m.Move(ticket.ID, Done, closedReason, manager)
 	var waiting WaitingError
 	if !errors.As(err, &waiting) {
 		t.Fatalf("a manager's close waits for the person, got %v", err)
@@ -170,7 +201,7 @@ func TestTransitionRules(t *testing.T) {
 	if still, _ := m.Store.Get(ticket.ID); still.Status != Review {
 		t.Fatalf("a waiting close moved the ticket to %s", still.Status)
 	}
-	if closed, err := m.Move(ticket.ID, Done, "", person); err != nil || closed.Status != Done {
+	if closed, err := m.Move(ticket.ID, Done, closedReason, person); err != nil || closed.Status != Done {
 		t.Fatalf("the person's close passes: %v", err)
 	}
 

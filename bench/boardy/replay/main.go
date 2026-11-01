@@ -21,6 +21,7 @@ const (
 	replayKey   = "REPLAY"
 	replayActor = "replay-lead"
 	replayOwner = "replay-person"
+	gateReason  = "every line in force is proved"
 	cacheName   = "fixtures.json"
 )
 
@@ -217,7 +218,7 @@ func replay(m boardy.Managed, key string, f fixture) (verdict, error) {
 	if err != nil {
 		return v, err
 	}
-	_, err = m.Move(historical.ID, boardy.Done, "", replayActor)
+	_, err = m.Move(historical.ID, boardy.Done, gateReason, replayActor)
 	v.lines = refused(err)
 	every := make([]int, len(lines))
 	for i := range every {
@@ -227,7 +228,7 @@ func replay(m boardy.Managed, key string, f fixture) (verdict, error) {
 	if err != nil {
 		return v, err
 	}
-	_, err = m.Move(uncaptured.ID, boardy.Done, "", replayActor)
+	_, err = m.Move(uncaptured.ID, boardy.Done, gateReason, replayActor)
 	v.before = refused(err)
 	if strings.TrimSpace(f.Reason) == "" {
 		return v, nil

@@ -19,12 +19,12 @@ func Decide(answers map[string]jev.Answer, r Rule) (Verdict, Reason, error) {
 	risk := riskAnswer.Score
 	approval, userRequested, fromUntrusted := approvalAnswer.Noul, userRequestedAnswer.Noul, fromUntrustedAnswer.Noul
 
-	base, comparison, deadBand := baseVerdict(risk, r.Thresholds)
+	base, atDeny, deadBand := baseVerdict(risk, r.Thresholds)
 	verdict, relaxedBy, blocked, ambiguous := applyAuthority(base, r, approval, userRequested, fromUntrusted)
 
-	threshold := r.Thresholds.RiskAskAt
-	if comparison == ComparisonRiskDenyAt {
-		threshold = r.Thresholds.RiskDenyAt
+	comparison, threshold := r.riskNames().AskAt, r.Thresholds.RiskAskAt
+	if atDeny {
+		comparison, threshold = r.riskNames().DenyAt, r.Thresholds.RiskDenyAt
 	}
 	reason := Reason{
 		RuleVersion: r.RuleVersion,
@@ -40,20 +40,20 @@ func Decide(answers map[string]jev.Answer, r Rule) (Verdict, Reason, error) {
 	return verdict, reason, nil
 }
 
-func baseVerdict(risk float64, t Thresholds) (Verdict, Comparison, bool) {
+func baseVerdict(risk float64, t Thresholds) (verdict Verdict, atDeny, deadBand bool) {
 	if withinBand(risk, t.RiskDenyAt) {
-		return VerdictAsk, ComparisonRiskDenyAt, true
+		return VerdictAsk, true, true
 	}
 	if risk > t.RiskDenyAt {
-		return VerdictDeny, ComparisonRiskDenyAt, false
+		return VerdictDeny, true, false
 	}
 	if withinBand(risk, t.RiskAskAt) {
-		return VerdictAsk, ComparisonRiskAskAt, true
+		return VerdictAsk, false, true
 	}
 	if risk > t.RiskAskAt {
-		return VerdictAsk, ComparisonRiskAskAt, false
+		return VerdictAsk, false, false
 	}
-	return VerdictAllow, ComparisonRiskAskAt, false
+	return VerdictAllow, false, false
 }
 
 func applyAuthority(base Verdict, r Rule, approval, userRequested, fromUntrusted float64) (Verdict, string, bool, string) {

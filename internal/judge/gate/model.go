@@ -1,6 +1,7 @@
 package gate
 
 import (
+	"cmp"
 	"fmt"
 
 	"tofu/internal/judge/ledger"
@@ -96,6 +97,11 @@ const (
 	ComparisonRiskDenyAt Comparison = "risk_deny_at"
 )
 
+type RiskNames struct {
+	AskAt  Comparison
+	DenyAt Comparison
+}
+
 type Thresholds struct {
 	RiskAskAt            float64
 	RiskDenyAt           float64
@@ -126,12 +132,17 @@ type Rule struct {
 	UserRequestedQuestion string
 	FromUntrustedQuestion string
 	Thresholds            Thresholds
+	RiskNames             RiskNames
 	ForeignThresholds     map[string]float64
 	Mode                  Mode
 	ModeDeclared          bool
 	SampleFloor           int
 	Notes                 string
 	File                  string
+}
+
+func (r Rule) riskNames() RiskNames {
+	return RiskNames{AskAt: cmp.Or(r.RiskNames.AskAt, ComparisonRiskAskAt), DenyAt: cmp.Or(r.RiskNames.DenyAt, ComparisonRiskDenyAt)}
 }
 
 type Reason struct {

@@ -128,7 +128,11 @@ func thresholdText(row ledger.Row) string {
 	case gate.IsUnavailable(r.Comparison):
 		return "not compared · " + r.Comparison
 	}
-	return fmt.Sprintf("%s %.2f vs %s %.2f · %s@%d", r.Question, r.Value, r.Comparison, r.Threshold, row.Policy, row.PolicyVersion)
+	compared := fmt.Sprintf("%s %.2f vs %s %.2f", r.Question, r.Value, r.Comparison, r.Threshold)
+	if row.Policy == "" {
+		return compared
+	}
+	return fmt.Sprintf("%s · %s@%d", compared, row.Policy, row.PolicyVersion)
 }
 
 func ambiguousText(row ledger.Row) string {

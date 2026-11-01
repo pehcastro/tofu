@@ -28,6 +28,7 @@ func gitIn(t *testing.T, dir string, args ...string) string {
 
 func TestEveryMoveToDoneNeedsTheFlowsStamp(t *testing.T) {
 	t.Setenv("TOFU_STAMP_DIR", "")
+	jevSaysNothingOpen(t)
 	repo := t.TempDir()
 	gitIn(t, repo, "init", "-q")
 	if err := os.WriteFile(filepath.Join(repo, ".gitignore"), []byte(".local/\n"), 0o644); err != nil {
@@ -42,7 +43,7 @@ func TestEveryMoveToDoneNeedsTheFlowsStamp(t *testing.T) {
 		t.Fatal(err)
 	}
 	proved(t, m, turn.ID)
-	_, err = m.Move(turn.ID, Done, "", person)
+	_, err = m.Move(turn.ID, Done, closedReason, person)
 	refused(t, err, "go run ./bench/flows")
 	if _, err := m.Check("move", turn.ID, Done, person); err == nil {
 		t.Fatal("check allowed a move to done that the move refuses")
@@ -53,7 +54,7 @@ func TestEveryMoveToDoneNeedsTheFlowsStamp(t *testing.T) {
 			t.Fatal(err)
 		}
 		proved(t, m, gated.ID)
-		_, err = m.Move(gated.ID, Done, "", person)
+		_, err = m.Move(gated.ID, Done, closedReason, person)
 		refused(t, err, "go run ./bench/flows")
 	}
 	library, err := m.Create("DEMO", ticketWith("library", "library/**"), manager)
@@ -61,7 +62,7 @@ func TestEveryMoveToDoneNeedsTheFlowsStamp(t *testing.T) {
 		t.Fatal(err)
 	}
 	proved(t, m, library.ID)
-	if _, err := m.Move(library.ID, Done, "", person); err != nil {
+	if _, err := m.Move(library.ID, Done, closedReason, person); err != nil {
 		t.Fatalf("a ticket outside the gated areas was refused: %v", err)
 	}
 	unrooted := managedBoard(t, "DEMO")
@@ -69,7 +70,7 @@ func TestEveryMoveToDoneNeedsTheFlowsStamp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = unrooted.Move(desk.ID, Done, "", person)
+	_, err = unrooted.Move(desk.ID, Done, closedReason, person)
 	refused(t, err, "repository")
 	tree := gitIn(t, repo, "rev-parse", "HEAD^{tree}")[:40]
 	stamp := filepath.Join(repo, ".local", "flows", tree)
@@ -79,7 +80,7 @@ func TestEveryMoveToDoneNeedsTheFlowsStamp(t *testing.T) {
 	if err := os.WriteFile(stamp, []byte("tree "+tree+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if moved, err := m.Move(turn.ID, Done, "", person); err != nil || moved.Status != Done {
+	if moved, err := m.Move(turn.ID, Done, closedReason, person); err != nil || moved.Status != Done {
 		t.Fatalf("a stamped tree was refused: %v", err)
 	}
 }
@@ -100,6 +101,7 @@ func TestFlowsAreasReachDeskAndSessions(t *testing.T) {
 }
 
 func TestDoneNeedsEveryAcceptanceLineProved(t *testing.T) {
+	jevSaysNothingOpen(t)
 	m := managedBoard(t, "DEMO")
 	two := ticketWith("two lines", "library/**")
 	two.Acceptance = []string{"- the old line", "- first line\n- second line"}
@@ -110,7 +112,7 @@ func TestDoneNeedsEveryAcceptanceLineProved(t *testing.T) {
 	if _, err := m.Evidence(made.ID, "go test passed", manager, 1); err != nil {
 		t.Fatal(err)
 	}
-	_, err = m.Move(made.ID, Done, "", manager)
+	_, err = m.Move(made.ID, Done, closedReason, manager)
 	refused(t, err, "line 2, second line")
 	if strings.Contains(err.Error(), "old line") || strings.Contains(err.Error(), "first line") {
 		t.Errorf("the refusal names a line that is proved or no longer in force: %v", err)
@@ -142,17 +144,18 @@ func TestDoneNeedsEveryAcceptanceLineProved(t *testing.T) {
 	if _, err := m.MoveLeaving(left.ID, Review, "", agent, []int{2}); err != nil {
 		t.Fatal(err)
 	}
-	_, err = m.Move(left.ID, Done, "", manager)
+	_, err = m.Move(left.ID, Done, closedReason, manager)
 	refused(t, err, "line 2, the lead's")
 	if _, err := m.Evidence(left.ID, "drove it by hand", manager, 2); err != nil {
 		t.Fatal(err)
 	}
-	if moved, err := m.Move(left.ID, Done, "", manager); err != nil || moved.Status != Done {
+	if moved, err := m.Move(left.ID, Done, closedReason, manager); err != nil || moved.Status != Done {
 		t.Fatalf("every line proved and still refused: %v", err)
 	}
 }
 
 func TestDoneNeedsABeforeCapture(t *testing.T) {
+	jevSaysNothingOpen(t)
 	m := managedBoard(t, "DEMO")
 	made, err := m.Create("DEMO", ticketWith("behaviour", "library/**"), manager)
 	if err != nil {
@@ -161,12 +164,12 @@ func TestDoneNeedsABeforeCapture(t *testing.T) {
 	if _, err := m.CaptureBefore(made.ID, "tofu x printed the old row", manager); err != nil {
 		t.Fatal(err)
 	}
-	_, err = m.Move(made.ID, Done, "", manager)
+	_, err = m.Move(made.ID, Done, closedReason, manager)
 	refused(t, err, "line 1")
 	if _, err := m.Evidence(made.ID, "tofu x printed the new row", manager, 1); err != nil {
 		t.Fatal(err)
 	}
-	if moved, err := m.Move(made.ID, Done, "", manager); err != nil || moved.Status != Done {
+	if moved, err := m.Move(made.ID, Done, closedReason, manager); err != nil || moved.Status != Done {
 		t.Fatalf("a ticket with a before capture and every line proved: %v", err)
 	}
 
@@ -186,7 +189,7 @@ func TestDoneNeedsABeforeCapture(t *testing.T) {
 	if _, err := m.Store.Edit(bare.ID, func(t *Ticket) error { t.Status = Review; return nil }); err != nil {
 		t.Fatal(err)
 	}
-	_, err = m.Move(bare.ID, Done, "", manager)
+	_, err = m.Move(bare.ID, Done, closedReason, manager)
 	refused(t, err, "no before capture")
 	refused(t, err, "tofu boardy log "+bare.ID+" --before")
 	refused(t, err, "made before")
@@ -205,7 +208,7 @@ func TestDoneNeedsABeforeCapture(t *testing.T) {
 		t.Fatal(err)
 	}
 	evidenced(marked.ID)
-	if moved, err := m.Move(marked.ID, Done, "", manager); err != nil || !strings.Contains(moved.Reason, DocsOnlyLabel) {
+	if moved, err := m.Move(marked.ID, Done, closedReason, manager); err != nil || !strings.Contains(moved.Reason, DocsOnlyLabel) {
 		t.Fatalf("a docs-only ticket with no before capture: reason %q, %v", moved.Reason, err)
 	}
 
@@ -217,7 +220,7 @@ func TestDoneNeedsABeforeCapture(t *testing.T) {
 		t.Fatal(err)
 	}
 	evidenced(old.ID)
-	if moved, err := m.Move(old.ID, Done, "", manager); err != nil || !strings.Contains(moved.Reason, "made before") {
+	if moved, err := m.Move(old.ID, Done, closedReason, manager); err != nil || !strings.Contains(moved.Reason, "made before") {
 		t.Fatalf("a ticket made before the gate: reason %q, %v", moved.Reason, err)
 	}
 }
@@ -312,11 +315,10 @@ func TestDoneReasonHeldWhenJevCannotJudgeIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	proved(t, m, quiet.ID)
-	if _, err := m.Move(quiet.ID, Done, "  ", manager); err != nil {
-		t.Fatalf("a done with no reason was refused: %v", err)
-	}
+	_, err = m.Move(quiet.ID, Done, "  ", manager)
+	refused(t, err, "its reason is empty")
 	if got := rows(); len(got) != 2 {
-		t.Errorf("the ledger holds %d done_reason rows, want 2: a blank reason asks nothing", len(got))
+		t.Errorf("the ledger holds %d done_reason rows, want 2: a blank reason is refused before Jev is asked", len(got))
 	}
 }
 
