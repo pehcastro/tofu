@@ -186,7 +186,7 @@ func completionOf(state subagent.State, found []subagent.Finding) subagent.Compl
 
 func findings(row Row, state subagent.State) []subagent.Finding {
 	found := []subagent.Finding{}
-	if outcome, carries := outcomeFinding(row.Outcome, state); carries {
+	if outcome, carries := outcomeFinding(row, state); carries {
 		found = append(found, outcome)
 	}
 	var calls []ToolCallRow
@@ -208,11 +208,12 @@ func findings(row Row, state subagent.State) []subagent.Finding {
 	return found
 }
 
-func outcomeFinding(outcome Outcome, state subagent.State) (subagent.Finding, bool) {
+func outcomeFinding(row Row, state subagent.State) (subagent.Finding, bool) {
 	if state == subagent.Parked {
 		return subagent.Finding{Bucket: subagent.ActOn,
 			Text: "the sub-agent was stopped from outside partway through, so its work is unfinished and what it did do stands"}, true
 	}
+	outcome := row.Outcome
 	switch outcome {
 	case OutcomeUnset, OutcomeStopped:
 		return subagent.Finding{}, false
@@ -225,6 +226,8 @@ func outcomeFinding(outcome Outcome, state subagent.State) (subagent.Finding, bo
 		return subagent.Finding{Bucket: subagent.ActOn, Text: "the sub-agent was cancelled partway through, so its work is unfinished and what it did do stands"}, true
 	case OutcomeLoopGuard:
 		return subagent.Finding{Bucket: subagent.ActOn, Text: "the sub-agent repeated one call until the loop guard stopped it"}, true
+	case OutcomeForkStop:
+		return subagent.Finding{Bucket: subagent.ActOn, Text: "the sub-agent was stopped by its forks and its work is unfinished: " + row.ForkStop}, true
 	case OutcomeTruncated:
 		return subagent.Finding{Bucket: subagent.Consider,
 			Text: "output was truncated, so what the sub-agent read may be short of what it asked for"}, true

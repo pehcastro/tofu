@@ -162,10 +162,8 @@ func TestASubAgentWhoseForksCannotShrinkStopsAtTheSecondForkAndItsCarrySaysWhatI
 	if steps := last.Steps; len(steps) == 0 || steps[len(steps)-1].AssistantText != "stopped at the fork cap, the search for Atibaia is filled" {
 		t.Errorf("the sub-agent's last word was not sent or not answered: %v", last.Warnings)
 	}
-	if last.Outcome != OutcomeStepCap || !strings.HasSuffix(last.ID, "-f3") || !slices.ContainsFunc(last.Warnings, func(warning string) bool {
-		return strings.Contains(warning, "no smaller than the fork before it")
-	}) {
-		t.Fatalf("the sub-agent ended as %s in %s after %d acts with %v, want %s after fork 2 saying it cannot shrink", last.Outcome, last.ID, model.acts, last.Warnings, OutcomeStepCap)
+	if last.Outcome != OutcomeForkStop || !strings.HasSuffix(last.ID, "-f3") || !strings.Contains(last.ForkStop, "no smaller than the fork before it") {
+		t.Fatalf("the sub-agent ended as %s in %s after %d acts with %q, want %s after fork 2 saying it cannot shrink", last.Outcome, last.ID, model.acts, last.ForkStop, OutcomeForkStop)
 	}
 	var afterSecondFork string
 	for _, request := range model.requests {

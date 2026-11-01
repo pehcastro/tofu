@@ -151,7 +151,7 @@ func doneState(subAgent turn.Row) state.StopCheckState {
 	built := state.StopCheckState{
 		Task: subAgent.Task,
 		Budget: state.StopCheckBudget{
-			AtStepCap:      subAgent.Outcome == turn.OutcomeStepCap,
+			AtStepCap:      subAgent.Outcome == turn.OutcomeStepCap || subAgent.Outcome == turn.OutcomeForkStop,
 			AtDecisionCap:  subAgent.Outcome == turn.OutcomeDecisionCap,
 			AtWallClockCap: subAgent.Outcome == turn.OutcomeRetiredWallClockCap,
 		},

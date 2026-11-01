@@ -39,6 +39,7 @@ const (
 	OutcomeError               = session.OutcomeError
 	OutcomeTruncated           = session.OutcomeTruncated
 	OutcomeLoopGuard           = session.OutcomeLoopGuard
+	OutcomeForkStop            = session.OutcomeForkStop
 	OutcomeCancelled           = session.OutcomeCancelled
 )
 
@@ -203,8 +204,9 @@ type Row struct {
 	DecisionIDs  []string     `json:"decision_ids,omitempty"`
 	SearchLinks  []SearchLink `json:"search_links,omitempty"`
 
-	Budget recall.Budget  `json:"budget"`
-	Guard  *LoopGuardStop `json:"loop_guard,omitempty"`
+	Budget   recall.Budget  `json:"budget"`
+	Guard    *LoopGuardStop `json:"loop_guard,omitempty"`
+	ForkStop string         `json:"fork_stop,omitempty"`
 
 	Conversation []llm.Message `json:"-"`
 	System       string        `json:"-"`

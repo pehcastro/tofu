@@ -119,7 +119,7 @@ func stoppedEarly(state subagent.State, outcome Outcome) bool {
 
 func outcomeStoppedEarly(outcome Outcome) bool {
 	switch outcome {
-	case OutcomeStepCap, OutcomeRetiredCostCap, OutcomeRetiredWallClockCap, OutcomeDecisionCap, OutcomeCancelled:
+	case OutcomeStepCap, OutcomeRetiredCostCap, OutcomeRetiredWallClockCap, OutcomeDecisionCap, OutcomeCancelled, OutcomeForkStop:
 		return true
 	}
 	return false

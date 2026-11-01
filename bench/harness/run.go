@@ -334,6 +334,8 @@ func endReasonOf(session turn.Row) (EndReason, string) {
 		return EndReasonTurnCap, "end reason: the turn ended on the decision cap, and harness.EndReason has no variant for that, so this row says turn_cap"
 	case turn.OutcomeLoopGuard:
 		return EndReasonTurnCap, "end reason: the turn stopped itself on a repeated tool call, and harness.EndReason has no variant for that, so this row says turn_cap"
+	case turn.OutcomeForkStop:
+		return EndReasonTurnCap, "end reason: the turn stopped on its fork rule, and harness.EndReason has no variant for that, so this row says turn_cap"
 	case turn.OutcomeTruncated:
 		return EndReasonTruncated, ""
 	case turn.OutcomeError:

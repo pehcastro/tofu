@@ -803,8 +803,8 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		forks++
 		fork.Into = origin + "-f" + strconv.Itoa(forks+1)
 		forkInto(fork, when, beforeFork, begun, moved)
-		row.Warnings = append(row.Warnings, why)
-		return endAt(OutcomeStepCap, why, messages)
+		row.ForkStop = why
+		return endAt(OutcomeForkStop, why, messages)
 	}
 	askedAgainAfterBlank, polled, nudged := false, false, false
 	steeredAt := 0

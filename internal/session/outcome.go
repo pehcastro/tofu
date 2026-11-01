@@ -27,6 +27,7 @@ const (
 	OutcomeTruncated
 	OutcomeLoopGuard
 	OutcomeCancelled
+	OutcomeForkStop
 	outcomeCount
 )
 
@@ -54,6 +55,8 @@ func (o Outcome) String() string {
 		return "loop_guard"
 	case OutcomeCancelled:
 		return "cancelled"
+	case OutcomeForkStop:
+		return "fork_stop"
 	}
 	panic(fmt.Sprintf("session: outcome %d has no name", int(o)))
 }

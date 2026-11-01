@@ -884,6 +884,8 @@ func doneWords(outcome turn.Outcome, guard *turn.LoopGuardStop) (string, Status)
 		return "stopped at the wall clock cap after", StatusStopped
 	case turn.OutcomeLoopGuard:
 		return loopGuardWords(guard) + ", after", StatusStopped
+	case turn.OutcomeForkStop:
+		return "stopped forking after", StatusStopped
 	}
 	panic("host: unknown outcome " + outcome.String())
 }
