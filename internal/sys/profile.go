@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"strconv"
+	"strings"
 	"time"
 
 	"tofu/internal/safe"
@@ -15,6 +16,8 @@ import (
 
 const (
 	profileDirEnv      = "TOFU_PPROF"
+	profileTakenEnv    = "TOFU_PPROF_TAKEN_BY"
+	profileRoleApp     = "app"
 	profileMemoryRate  = 4096
 	profileSampleEvery = 200 * time.Millisecond
 	profilePeakStep    = 1 << 20
@@ -52,13 +55,36 @@ func writeProfile(path, name string, debug int) {
 	_ = file.Close()
 }
 
+func profileRole(args []string) string {
+	for _, arg := range args {
+		switch {
+		case strings.HasPrefix(arg, "-"):
+		case arg == "" || strings.Trim(arg, "abcdefghijklmnopqrstuvwxyz") != "":
+			return profileRoleApp
+		default:
+			return arg
+		}
+	}
+	return profileRoleApp
+}
+
 func StartProfile() (stop func()) {
-	dir := os.Getenv(profileDirEnv)
-	if dir == "" || os.MkdirAll(dir, 0o755) != nil {
+	pid := strconv.Itoa(os.Getpid())
+	dir, takenBy := os.Getenv(profileDirEnv), os.Getenv(profileTakenEnv)
+	if dir == "" {
 		return func() {}
 	}
-	cpu, err := os.Create(filepath.Join(dir, "cpu.pprof"))
+	if takenBy != "" && takenBy != pid {
+		dir = filepath.Join(dir, profileRole(os.Args[1:])+"-"+pid)
+	}
+	_ = os.Setenv(profileTakenEnv, pid)
+	err := os.MkdirAll(dir, 0o755)
+	var cpu *os.File
+	if err == nil {
+		cpu, err = os.Create(filepath.Join(dir, "cpu.pprof"))
+	}
 	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "tofu: %s names a folder this process cannot write, so it runs unprofiled: %v\n", profileDirEnv, err)
 		return func() {}
 	}
 	runtime.MemProfileRate = profileMemoryRate
