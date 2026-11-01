@@ -423,12 +423,19 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		return message.Origin.Source == llm.SourceSpawnLine || held.composedNow && promptChange(message)
 	}), []llm.Message(nil)
 	if config.opensGeneration() {
-		carried, view = withoutMemoryViews(carried), config.MemoryMessage()
-	} else if unsent := memoryUnsent(config.Memory, carried, config.Inbox); len(unsent) > 0 {
-		view = []llm.Message{{Role: llm.RoleUser, Content: memoryAddedSince + strings.Join(unsent, "\n"), Origin: llm.Origin{Source: llm.SourceMemorySaved, TakenAt: start}}}
+		fresh, was := config.MemoryMessage(), newestMemoryView(carried)
+		if len(fresh) > 0 && (len(was) == 0 || was[0].Content != fresh[0].Content) {
+			recorded.message(fresh[0], "", nil)
+		}
+		carried = withMemoryViewAtHead(carried, fresh)
+	} else {
+		carried = withMemoryViewAtHead(carried, newestMemoryView(carried))
+		if unsent := memoryUnsent(config.Memory, carried, config.Inbox); len(unsent) > 0 {
+			view = []llm.Message{{Role: llm.RoleUser, Content: memoryAddedSince + strings.Join(unsent, "\n"), Origin: llm.Origin{Source: llm.SourceMemorySaved, TakenAt: start}}}
+		}
 	}
 	if schemas, err := json.Marshal(headTools); err == nil && keeper != nil && len(config.History) == 0 {
-		view = withEpisodes(view, episodesFor(budget.Sending(artifacts.preview, string(schemas)), slices.Concat(messages, view), nil))
+		view = withEpisodes(view, episodesFor(budget.Sending(artifacts.preview, string(schemas)), slices.Concat(messages, carried, view), nil))
 	}
 	messages = slices.Concat(messages, carried, view)
 	if held.changed != "" {
@@ -597,7 +604,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 	}
 	stateCarried := func(fork *Fork, step int, beforeFork, begun []llm.Message, tools []llm.Tool) ([]llm.Message, string) {
-		begun = config.withFreshMemoryView(begun)
+		begun = withMemoryViewAtHead(begun, config.MemoryMessage())
 		if running := runningSubAgents(source().tools); len(running) > 0 {
 			at := slices.IndexFunc(begun, func(message llm.Message) bool {
 				return message.Origin.Source == llm.SourceForkCarry && message.Content == fork.Carry.Text

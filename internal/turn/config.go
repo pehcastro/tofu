@@ -501,13 +501,22 @@ func withoutMemoryViews(messages []llm.Message) []llm.Message {
 	return slices.DeleteFunc(slices.Clone(messages), func(message llm.Message) bool { return message.Origin.Source == llm.SourceMemoryView })
 }
 
-func (c Config) withFreshMemoryView(head []llm.Message) []llm.Message {
+func withMemoryViewAtHead(head, view []llm.Message) []llm.Message {
 	head = withoutMemoryViews(head)
 	at := slices.IndexFunc(head, func(message llm.Message) bool { return !standsAtTheHead(message) })
 	if at < 0 {
 		at = len(head)
 	}
-	return slices.Insert(head, at, c.MemoryMessage()...)
+	return slices.Insert(head, at, view...)
+}
+
+func newestMemoryView(messages []llm.Message) []llm.Message {
+	for _, message := range slices.Backward(messages) {
+		if message.Origin.Source == llm.SourceMemoryView {
+			return []llm.Message{message}
+		}
+	}
+	return nil
 }
 
 func TaskIn(first string) (string, bool) {
