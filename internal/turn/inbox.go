@@ -205,9 +205,9 @@ func (b *Inbox) Open(poll string) *Asked {
 	return asked
 }
 
-func (q *Asked) Answer(said string) {
+func (q *Asked) Answer(said string, from llm.Source, shown string) {
 	q.inbox.mu.Lock()
-	q.inbox.items = append(q.inbox.items, inboxItem{text: said, origin: postedNow(llm.SourceAnswer, "")})
+	q.inbox.items = append(q.inbox.items, inboxItem{text: said, origin: postedNow(from, shown)})
 	q.inbox.mu.Unlock()
 	q.inbox.signal()
 }

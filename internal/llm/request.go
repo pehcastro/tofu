@@ -131,16 +131,17 @@ func (OriginKind) Enum() []string {
 type Source string
 
 const (
-	SourceTask      Source = "task"
-	SourceTyped     Source = "typed"
-	SourceSteer     Source = "steer"
-	SourceAnswer    Source = "answer"
-	SourceForkTask  Source = "fork.task"
-	SourceBrief     Source = "brief"
-	SourceReport    Source = "report"
-	SourceReportFor Source = "report.lead"
-	SourceAsk       Source = "ask"
-	SourceMessage   Source = "message"
+	SourceTask       Source = "task"
+	SourceTyped      Source = "typed"
+	SourceSteer      Source = "steer"
+	SourceAnswer     Source = "answer"
+	SourceLateAnswer Source = "answer.late"
+	SourceForkTask   Source = "fork.task"
+	SourceBrief      Source = "brief"
+	SourceReport     Source = "report"
+	SourceReportFor  Source = "report.lead"
+	SourceAsk        Source = "ask"
+	SourceMessage    Source = "message"
 
 	SourceShellExit   Source = "shell.exit"
 	SourceAnswerFirst Source = "nudge.answer_first"
@@ -185,7 +186,7 @@ type sourceRow struct {
 func sourceRows() []sourceRow {
 	return []sourceRow{
 		{SourceTask, OriginPerson, "task"}, {SourceTyped, OriginPerson, "typed by the person"}, {SourceSteer, OriginPerson, "steer"},
-		{SourceAnswer, OriginPerson, "question answer"}, {SourceForkTask, OriginPerson, "fork task"},
+		{SourceAnswer, OriginTofu, "question answer"}, {SourceLateAnswer, OriginTofu, "late question answer"}, {SourceForkTask, OriginPerson, "fork task"},
 		{SourceBrief, OriginAgent, "sub-agent brief"}, {SourceReport, OriginAgent, "sub-agent report"},
 		{SourceReportFor, OriginAgent, "sub-agent report needing the lead"}, {SourceAsk, OriginAgent, "sub-agent gate ask"},
 		{SourceMessage, OriginAgent, "message to this sub-agent"},
@@ -286,7 +287,11 @@ func (o Origin) Kind() OriginKind {
 
 func (o Origin) Marked() bool {
 	kind := o.Kind()
-	return kind != "" && kind != OriginPerson
+	return kind != "" && kind != OriginPerson && !o.Source.Answer()
+}
+
+func (s Source) Answer() bool {
+	return s == SourceAnswer || s == SourceLateAnswer
 }
 
 func (s Source) AfterTheCachedPrefix() bool {

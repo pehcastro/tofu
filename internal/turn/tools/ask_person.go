@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -225,15 +226,44 @@ func (a AskPerson) answerLater(open *turn.Asked, replied <-chan personReply, rec
 	if stopped {
 		return
 	}
-	shown, _ := json.Marshal(first)
-	open.Answer("the answer to your " + turn.AskPersonToolName + " question: " + string(shown))
+	said, _ := json.Marshal(first)
+	open.Answer("the answer to your "+turn.AskPersonToolName+" question: "+string(said), llm.SourceAnswer, shownToPerson(headOf(first.Outcome), first, questions))
 	if first.Outcome != askTimedOut {
 		return
 	}
 	if later := answered(<-replied, questions); later.Outcome == askSubmitted {
-		shown, _ := json.Marshal(later)
-		open.Answer("the person answered your " + turn.AskPersonToolName + " question after the timeout, so correct course where it differs from the option you took: " + string(shown))
+		said, _ := json.Marshal(later)
+		open.Answer("the person answered your "+turn.AskPersonToolName+" question after the timeout, so correct course where it differs from the option you took: "+string(said),
+			llm.SourceLateAnswer, shownToPerson("you answered after the timeout", later, questions))
 	}
+}
+
+func headOf(outcome askOutcome) string {
+	switch outcome {
+	case askSubmitted:
+		return "you answered"
+	case askTimedOut:
+		return "nobody answered in time, so the recommended option stands"
+	case askCancelled:
+		return "the question was dismissed, so the recommended option stands"
+	case askUndelivered:
+		return "the question could not be asked, so the recommended option stands"
+	case askTakenInAuto:
+	}
+	panic("ask_person: no answer is posted for outcome " + string(outcome))
+}
+
+func shownToPerson(head string, result askResult, questions []turn.PersonQuestion) string {
+	lines := []string{head}
+	for at, q := range questions {
+		given := result.Answers[at]
+		taken := strings.Join(given.Chosen, ", ")
+		if given.Text != "" {
+			taken = strings.TrimPrefix(taken+", "+given.Text, ", ")
+		}
+		lines = append(lines, q.Question+" › "+cmp.Or(taken, string(given.Status)))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (a AskPerson) backfill(ids []string, outcome askOutcome) {
