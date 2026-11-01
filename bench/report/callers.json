@@ -53,5 +53,20 @@
     "point": "standing_order",
     "file": "internal/turn/standing.go",
     "symbol": "newStandingJudge"
+  },
+  {
+    "point": "request_open",
+    "file": "internal/turn/inbox.go",
+    "symbol": "requestOpenRef"
+  },
+  {
+    "point": "done_reason",
+    "file": "internal/boardy/transition.go",
+    "symbol": "doneReasonRef"
+  },
+  {
+    "point": "ticket_feasibility",
+    "file": "internal/boardy/transition.go",
+    "symbol": "feasibilityRef"
   }
 ]

@@ -68,3 +68,15 @@ methods:
   thrift:
     method: unwired
     why: the point reads library/questions/config/thrift_rule@1.yaml directly, which ships mode off, and nothing is cut until a measurement moves it
+  request_open:
+    method: judged
+    why: jev reads 37 and 36 of 40 mocked requests right on two passes, and 36 of 40 on a third, against 20 of 40 for the arm that always restates, which restates all 20 closed requests; jev restates 1 to 2 closed ones and misses 2 open ones a pass. the corpus is 40 requests written by one author, so this is a ceiling rather than a rate
+    cost: one jev call per message the person types to the lead, p50 178 to 198 ms, p99 228 to 261 ms over those passes; the dollar cost is not measured
+  done_reason:
+    method: judged
+    why: not measured against labels. no hand-labelled sample exists and no free arm, such as a phrase list over except, later and follow up, has been run beside it. a replay of the board's past done moves refuses 94 of 1740 reasons, 5.4 percent, against 27 to 41 percent a hand count found admitting an open part, and open_at 0.5 is an uncalibrated prior until a labelled sample moves it
+    cost: one jev request per move to done with a reason that is not blank; latency and cost are not measured
+  ticket_feasibility:
+    method: judged
+    why: not measured. no corpus and no free arm, such as a word list over blur, shader, vibrancy and tray, has been run beside it; one driven ticket asking for a blur behind the desk sidebar scored platform 0.92 and was refused, and platform_at 0.5 is an uncalibrated prior until a labelled sample moves it
+    cost: one jev request per ticket made without a Feasibility section; latency and cost are not measured

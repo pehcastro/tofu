@@ -38,32 +38,73 @@ func armThatRan(t *testing.T, table method.Table, point string) string {
 	return ran
 }
 
-func TestTheTableNamesAMethodForEveryDecisionPointOnDisk(t *testing.T) {
-	table := shipped(t)
-	questions, err := os.ReadDir(path.Join(libraryDir, "questions"))
+var parkedWithNoQuestion = []string{"file_shortlist", "spawn_gate"}
+
+func questionsOnDisk(t *testing.T) map[string]bool {
+	t.Helper()
+	entries, err := os.ReadDir(path.Join(libraryDir, "questions"))
 	if err != nil {
 		t.Fatalf("reading the shipped questions: %v", err)
 	}
-	named := 0
-	for _, entry := range questions {
-		file := entry.Name()
-		if !strings.HasSuffix(file, ".yaml") {
-			continue
+	points := map[string]bool{}
+	for _, entry := range entries {
+		if file := entry.Name(); strings.HasSuffix(file, ".yaml") {
+			point, _, _ := strings.Cut(strings.TrimSuffix(file, ".yaml"), "@")
+			points[point] = true
 		}
-		point, _, _ := strings.Cut(strings.TrimSuffix(file, ".yaml"), "@")
+	}
+	if len(points) == 0 {
+		t.Fatal("no question file was read, so this test proves nothing")
+	}
+	return points
+}
+
+func rowsWithNoQuestion(table method.Table, onDisk map[string]bool) []string {
+	var missing []string
+	for _, chosen := range table.Choices {
+		if !onDisk[chosen.Point] && !slices.Contains(parkedWithNoQuestion, chosen.Point) {
+			missing = append(missing, chosen.Point)
+		}
+	}
+	return missing
+}
+
+func TestTheTableNamesAMethodForEveryDecisionPointOnDisk(t *testing.T) {
+	table := shipped(t)
+	onDisk := questionsOnDisk(t)
+	for point := range onDisk {
 		if _, err := table.Of(point); err != nil {
 			t.Errorf("%v", err)
-			continue
 		}
-		named++
 	}
-	if named == 0 {
-		t.Fatal("no question file was read, so this test proves nothing")
+	for _, point := range rowsWithNoQuestion(table, onDisk) {
+		t.Errorf("%s names %s, which has no question file under library/questions and is not parked by name", table.File, point)
+	}
+	for _, parked := range parkedWithNoQuestion {
+		if onDisk[parked] {
+			t.Errorf("%s is parked as having no question file and library/questions now carries one", parked)
+		}
 	}
 	for _, coming := range []string{"file_shortlist", "instruction_trust", "spawn_gate"} {
 		if _, err := table.Of(coming); err != nil {
 			t.Errorf("%v", err)
 		}
+	}
+}
+
+func TestARowNamingNoQuestionFileIsCaught(t *testing.T) {
+	file := path.Join(libraryDir, method.TableFile)
+	body, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("reading %s: %v", file, err)
+	}
+	planted := string(body) + "  no_such_question:\n    method: unwired\n    why: a planted row naming a question that does not exist\n"
+	table, err := method.Parse([]byte(planted), file)
+	if err != nil {
+		t.Fatalf("parsing the planted table: %v", err)
+	}
+	if got := rowsWithNoQuestion(table, questionsOnDisk(t)); !slices.Equal(got, []string{"no_such_question"}) {
+		t.Fatalf("rows with no question file = %v, want only the planted no_such_question", got)
 	}
 }
 
