@@ -270,12 +270,25 @@ func baseRules(override string) ([]rule.Rule, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	if isDir {
-		rules, err := rule.LoadDir(libraryDir)
-		return rules, rulesFromTheProject, err
-	}
 	rules, err := rule.LoadFS(shipped.Files(), libraryRoot)
-	return rules, rulesFromTheBinary, err
+	if err != nil || !isDir {
+		return rules, rulesFromTheBinary, err
+	}
+	copied, err := rule.LoadDir(libraryDir)
+	if err != nil {
+		return nil, "", err
+	}
+	rules = slices.DeleteFunc(rules, func(r rule.Rule) bool {
+		return slices.ContainsFunc(copied, func(c rule.Rule) bool { return c.ID == r.ID })
+	})
+	return append(rules, copied...), rulesFromTheProject, nil
+}
+
+func listedOrigin(stack ruleStack, r rule.Rule) string {
+	if stack.origin == rulesFromTheBinary || stack.origin == rulesFromTheProject && strings.HasPrefix(r.File, libraryRoot+"/") {
+		return "shipped"
+	}
+	return "library"
 }
 
 func listingMark(mode rule.Mode) cli.Mark {
@@ -309,17 +322,13 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return o.fail(err)
 	}
-	shippedFrom := "shipped"
-	if stack.origin != rulesFromTheBinary {
-		shippedFrom = "library"
-	}
 	listing := make([]ruleListing, len(stack.rules))
 	var checked []string
 	for i, r := range stack.rules {
 		if r.Checker != "" {
 			checked = append(checked, r.ID)
 		}
-		listing[i] = ruleListing{ID: r.ID, Kind: string(r.Kind), Origin: shippedFrom, Mode: r.Mode.String(), Switch: shadowCheck(r), Override: stack.applied(r)}
+		listing[i] = ruleListing{ID: r.ID, Kind: string(r.Kind), Origin: listedOrigin(stack, r), Mode: r.Mode.String(), Switch: shadowCheck(r), Override: stack.applied(r)}
 		if slices.Contains(stack.bySetting, r.ID) {
 			listing[i].Switch = "on by the setting " + ruleSetting(r.ID)
 		}
@@ -331,7 +340,7 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 		listing = append(listing, ruleListing{ID: off.Base.ID, Kind: string(off.Base.Kind), Origin: off.layer, Mode: string(rule.ModeOff), File: off.Rule.File, Override: off.listing()})
 	}
 	for _, off := range stack.shippedOff {
-		listing = append(listing, ruleListing{ID: off.ID, Kind: string(off.Kind), Origin: shippedFrom, Mode: string(rule.ModeOff), Switch: stack.switchOn(off.ID, opts.dir)})
+		listing = append(listing, ruleListing{ID: off.ID, Kind: string(off.Kind), Origin: listedOrigin(stack, off), Mode: string(rule.ModeOff), Switch: stack.switchOn(off.ID, opts.dir)})
 	}
 	if opts.library == "" {
 		library, points := readLibrary()
