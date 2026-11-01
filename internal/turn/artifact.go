@@ -31,9 +31,10 @@ const artifactHandleBytes = 16
 const heldDropLead = "bash: the command printed "
 
 type Artifacts struct {
-	store   *recall.Store
-	preview recall.Config
-	handles bool
+	store    *recall.Store
+	preview  recall.Config
+	handles  bool
+	standing recall.StandingOrders
 }
 
 func NewArtifacts(dir string, handles bool) (Artifacts, error) {
@@ -41,7 +42,7 @@ func NewArtifacts(dir string, handles bool) (Artifacts, error) {
 	if err != nil {
 		return Artifacts{}, err
 	}
-	return Artifacts{store: recall.NewStore(dir), preview: preview, handles: handles}, nil
+	return Artifacts{store: recall.NewStore(dir), preview: preview, handles: handles, standing: recall.WordsAlone}, nil
 }
 
 func (a Artifacts) Render(tool string, args json.RawMessage, content string, bytesCap int) (string, string, error) {

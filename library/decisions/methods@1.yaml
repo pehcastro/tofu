@@ -19,6 +19,10 @@ methods:
     method: judged
     why: jev catches 7 of 14 hand-labelled repeats with 2 false notes over 13 generations of one long session, against 1 of 14 with 3 false for the local stem matcher; the same request also asks whether a kept memory entry already covers the message, so the lead says it is in force rather than promising it again
     cost: about $0.0069 for 42 requests over that corpus, p50 276 ms, worst 412 ms
+  standing_order:
+    method: judged
+    why: jev keeps 19 of 20 standing orders with 0 non-orders kept over two passes, against 9 of 20 with 11 non-orders kept for the word list konst.CarryStandingPhrases, on a 40-sentence corpus
+    cost: one jev call per new sentence the person wrote, at each fork, p50 194 to 196 ms, worst 291 ms, cost reported 0
   browser_step:
     method: judged
     why: jev picks the right next action on 8 of 8 recorded pages, median 316 ms and 1340 input tokens a decision. it runs only under browserDriver goal. the default, browserDriver steps, where the turn's own model calls browser_observe and browser_act, is not measured against it

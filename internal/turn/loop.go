@@ -221,6 +221,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		return Row{}, err
 	}
 	artifacts.preview = artifacts.preview.OnWire(config.Wire)
+	artifacts.standing = newStandingJudge(config).orders
 	sifter := siftOrNothing(config.Sift)
 	thrifter := thriftOrNothing(config.Thrift)
 	if config.Redactor == nil {

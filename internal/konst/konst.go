@@ -60,6 +60,7 @@ const (
 	CarryStandingBytes      = 8000
 	CarryStandingOrderBytes = 600
 	CarryStandingPhrases    = "always|never|from now on|keep|do not|don't|dont"
+	CarryStandingJudged     = 4
 
 	ForkTailTokens      = 20000
 	ForkTailRoomPercent = 50

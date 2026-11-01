@@ -1,0 +1,39 @@
+name: standing_order
+domain: general
+questions_version: 1
+mode: enforced
+notes: >-
+  asked at a fork, once for each sentence the person wrote in the line of
+  sessions, to choose which sentences the carry keeps as standing orders for
+  the next generation. state.sentence is one sentence word for word, without
+  tofu's notes. at or above standing_at the sentence is kept as an order and
+  below it is not. an error or a timeout falls back to the fixed word list
+  konst.CarryStandingPhrases, which the question replaces, so a failed call
+  keeps what the list keeps; with no Jev configured the list decides. both
+  write a ledger row with the reason. standing_at is the middle of the noul
+  range, an uncalibrated prior.
+
+thresholds:
+  standing_at: 0.5
+
+state:
+  - sentence
+
+questions:
+  standing:
+    type: noul
+    instructions: >-
+      A person wrote sentence to a coding agent during a long piece of work.
+      Decide whether sentence gives the agent a lasting instruction about how
+      to work, one the person expects it to obey on every later step and in
+      every later session, not only on the step in front of it.
+    criteria:
+      true: >-
+        sentence sets a habit, a style, a limit, a preference or a check that
+        governs all the work after it, so it would still bind the agent once
+        the current change is finished.
+      false: >-
+        sentence is spent once it is acted on or read: it asks for one
+        change, answers, approves, reassures, reports, describes what
+        happened, or asks a question, even where it uses a word such as
+        always, never or keep in passing.

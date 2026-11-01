@@ -130,15 +130,29 @@ func lastActs(c Conversation) []string {
 	return acts[max(0, len(acts)-konst.CarryActLines):]
 }
 
+type StandingOrders func(sentences []string) []bool
+
+func WordsAlone(sentences []string) []bool {
+	kept := make([]bool, len(sentences))
+	for i, sentence := range sentences {
+		kept[i] = StandingByWords(sentence)
+	}
+	return kept
+}
+
 func HandleCarry(store *Store, cfg Config, c Conversation) (Carry, error) {
-	return buildCarry(store, c, konst.FactSignpostBytes)
+	return buildCarry(store, c, konst.FactSignpostBytes, WordsAlone)
 }
 
 func DistilledCarry(store *Store, cfg Config, c Conversation) (Carry, error) {
-	return buildCarry(store, c, konst.CarrySignpostBytes)
+	return JudgedCarry(store, cfg, c, WordsAlone)
 }
 
-func buildCarry(store *Store, c Conversation, signpostBytes int) (Carry, error) {
+func JudgedCarry(store *Store, cfg Config, c Conversation, standing StandingOrders) (Carry, error) {
+	return buildCarry(store, c, konst.CarrySignpostBytes, standing)
+}
+
+func buildCarry(store *Store, c Conversation, signpostBytes int, standing StandingOrders) (Carry, error) {
 	facts, kept, err := Distil(store, c, signpostBytes)
 	if err != nil {
 		return Carry{}, err
@@ -149,7 +163,7 @@ func buildCarry(store *Store, c Conversation, signpostBytes int) (Carry, error) 
 		text.WriteString(line)
 		text.WriteString("\n")
 	}
-	said, orders, dropped := personsWords(c)
+	said, orders, dropped := personsWords(c, standing)
 	if len(said)+len(orders) > 0 {
 		text.WriteString(SaidCarryHeading)
 		for _, words := range said {
@@ -187,20 +201,26 @@ func buildCarry(store *Store, c Conversation, signpostBytes int) (Carry, error) 
 
 const saidMark = "said: "
 
-func personsWords(c Conversation) (said, orders []string, dropped int) {
+func personsWords(c Conversation, standing StandingOrders) (said, orders []string, dropped int) {
 	var all, given []string
+	var asked []int
 	heard := func(words string) string {
 		if words = beforeCronFire(words); words != "" {
 			all = append(all, words)
 		}
 		return words
 	}
+	judge := func(words string) {
+		for _, sentence := range sentencesIn(words) {
+			asked, given = append(asked, len(given)), append(given, sentence)
+		}
+	}
 	for _, entry := range c.Entries {
 		_, section, carried := strings.Cut(entry.Text, SaidCarryHeading)
 		switch {
 		case entry.Tool != "":
 		case entry.Said != "":
-			given = append(given, ordersIn(heard(entry.Said))...)
+			judge(heard(entry.Said))
 		case carried:
 			ordersKept := strings.Contains(section, standingCarryHeading)
 			for _, line := range strings.Split(section, "\n") {
@@ -211,7 +231,7 @@ func personsWords(c Conversation) (said, orders []string, dropped int) {
 				if quoted, marked := strings.CutPrefix(line, saidMark); marked {
 					if words, err := strconv.Unquote(quoted); err == nil {
 						if words = heard(words); !ordersKept {
-							given = append(given, ordersIn(words)...)
+							judge(words)
 						}
 					}
 				}
@@ -223,6 +243,16 @@ func personsWords(c Conversation) (said, orders []string, dropped int) {
 			}
 		}
 	}
+	sentences := make([]string, len(asked))
+	for i, at := range asked {
+		sentences[i] = given[at]
+	}
+	for i, kept := range standing(sentences) {
+		if !kept {
+			given[asked[i]] = ""
+		}
+	}
+	given = slices.DeleteFunc(given, func(order string) bool { return order == "" })
 	said, _ = newestWithin(all, saidMark, konst.CarrySaidBytes, konst.CarrySaidMessageBytes)
 	orders, over := newestWithin(given, standingMark, konst.CarryStandingBytes, konst.CarryStandingOrderBytes)
 	return said, orders, dropped + over
@@ -236,8 +266,8 @@ func beforeCronFire(said string) string {
 	return strings.TrimSpace(said[:strings.LastIndex(said[:marked], "\n")+1])
 }
 
-func ordersIn(said string) []string {
-	var orders []string
+func sentencesIn(said string) []string {
+	var sentences []string
 	for _, line := range strings.Split(said, "\n") {
 		start := 0
 		for i := 0; i < len(line); i++ {
@@ -245,16 +275,16 @@ func ordersIn(said string) []string {
 			if end < len(line) && (!strings.ContainsRune(".!?", rune(line[i])) || line[end] != ' ') {
 				continue
 			}
-			if sentence := strings.TrimSpace(line[start:end]); standing(sentence) {
-				orders = append(orders, sentence)
+			if sentence := strings.TrimSpace(line[start:end]); sentence != "" {
+				sentences = append(sentences, sentence)
 			}
 			start = end
 		}
 	}
-	return orders
+	return sentences
 }
 
-func standing(sentence string) bool {
+func StandingByWords(sentence string) bool {
 	words := strings.FieldsFunc(strings.ToLower(strings.ReplaceAll(sentence, "’", "'")), func(letter rune) bool {
 		return !unicode.IsLetter(letter) && letter != '\''
 	})

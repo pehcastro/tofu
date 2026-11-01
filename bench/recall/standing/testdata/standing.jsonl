@@ -1,0 +1,40 @@
+{"sentence":"Make every reply short.","standing":true,"shape":"order without a listed word"}
+{"sentence":"Use tabs for indentation in this repo.","standing":true,"shape":"order without a listed word"}
+{"sentence":"Write the failing test before the fix.","standing":true,"shape":"order without a listed word"}
+{"sentence":"Answer me in Portuguese from here on.","standing":true,"shape":"order without a listed word"}
+{"sentence":"Run gofmt on each Go file you touch.","standing":true,"shape":"order without a listed word"}
+{"sentence":"Ask me before you push anything.","standing":true,"shape":"order without a listed word"}
+{"sentence":"Prefer early returns over nested ifs.","standing":true,"shape":"order without a listed word"}
+{"sentence":"Commit messages stay under seventy two characters.","standing":true,"shape":"order without a listed word"}
+{"sentence":"Skip the summaries at the end of your replies.","standing":true,"shape":"order without a listed word"}
+{"sentence":"Every change goes behind a feature flag.","standing":true,"shape":"order without a listed word"}
+{"sentence":"Please name branches after the ticket number.","standing":true,"shape":"order without a listed word"}
+{"sentence":"Always run the linter before you report.","standing":true,"shape":"order with a listed word"}
+{"sentence":"Never use em dashes in this project.","standing":true,"shape":"order with a listed word"}
+{"sentence":"From now on, quote the error verbatim.","standing":true,"shape":"order with a listed word"}
+{"sentence":"Do not add comments to the code.","standing":true,"shape":"order with a listed word"}
+{"sentence":"Don't touch the vendor folder.","standing":true,"shape":"order with a listed word"}
+{"sentence":"Keep the public API backwards compatible.","standing":true,"shape":"order with a listed word"}
+{"sentence":"Never print the API key.","standing":true,"shape":"order with a listed word"}
+{"sentence":"Always use the staging database for tests.","standing":true,"shape":"order with a listed word"}
+{"sentence":"Dont ever force push to develop.","standing":true,"shape":"order with a listed word"}
+{"sentence":"Do not worry about it.","standing":false,"shape":"reassurance with a listed word"}
+{"sentence":"Keep going.","standing":false,"shape":"one step with a listed word"}
+{"sentence":"I never saw that error before today.","standing":false,"shape":"report with a listed word"}
+{"sentence":"It always fails on the second run.","standing":false,"shape":"report with a listed word"}
+{"sentence":"Don't know why the build broke.","standing":false,"shape":"report with a listed word"}
+{"sentence":"Do not merge this one yet, I will check it tonight.","standing":false,"shape":"one step with a listed word"}
+{"sentence":"Keep the old file for now, we can delete it after the review.","standing":false,"shape":"one step with a listed word"}
+{"sentence":"Can you always reproduce it, or only sometimes?","standing":false,"shape":"question with a listed word"}
+{"sentence":"Never mind, I found it.","standing":false,"shape":"report with a listed word"}
+{"sentence":"I don't think the bug is in the parser.","standing":false,"shape":"report with a listed word"}
+{"sentence":"Keep it as it is, the second version was worse.","standing":false,"shape":"one step with a listed word"}
+{"sentence":"Rename the parse function to readConfig.","standing":false,"shape":"one step"}
+{"sentence":"Thanks, that looks right.","standing":false,"shape":"approval"}
+{"sentence":"Why does the cache miss on Windows?","standing":false,"shape":"question"}
+{"sentence":"The tests pass on my machine.","standing":false,"shape":"report"}
+{"sentence":"Yes, go ahead with the second option.","standing":false,"shape":"approval"}
+{"sentence":"Fix the typo in the README.","standing":false,"shape":"one step"}
+{"sentence":"Add a retry to the upload call.","standing":false,"shape":"one step"}
+{"sentence":"That was a good call.","standing":false,"shape":"approval"}
+{"sentence":"Delete the scratch branch when you are done.","standing":false,"shape":"one step"}

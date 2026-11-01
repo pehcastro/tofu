@@ -44,6 +44,34 @@ func TestThePersonsWordsSurviveEveryForkOnceEachAndWordForWord(t *testing.T) {
 	}
 }
 
+func TestTheStandingJudgeChoosesTheOrdersAndACarriedOrderIsNotAskedAgain(t *testing.T) {
+	orders := map[string]bool{"Make every reply short.": true, "Use tabs in this repo.": true}
+	var asked []string
+	judge := func(sentences []string) []bool {
+		asked = append(asked, sentences...)
+		kept := make([]bool, len(sentences))
+		for i, sentence := range sentences {
+			kept[i] = orders[sentence]
+		}
+		return kept
+	}
+	carry, err := recall.JudgedCarry(recall.NewStore(t.TempDir()), recall.Config{}, recall.Conversation{Entries: []recall.Entry{
+		{Text: "an earlier fork\n" + recall.SaidCarryHeading + "the standing orders the person gave in this line of sessions:\norder: \"Never print the key.\"\n"},
+		{Text: "a", Said: "Make every reply short. Do not worry about it."},
+		{Text: "b", Said: "Use tabs in this repo."},
+	}}, judge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"Never print the key.", "Make every reply short.", "Use tabs in this repo."}
+	if strings.Join(carry.Standing, "|") != strings.Join(want, "|") {
+		t.Fatalf("the carry keeps %q as standing orders, want %q", carry.Standing, want)
+	}
+	if wantAsked := []string{"Make every reply short.", "Do not worry about it.", "Use tabs in this repo."}; strings.Join(asked, "|") != strings.Join(wantAsked, "|") {
+		t.Fatalf("the judge was asked %q, want each new sentence once and no carried order, %q", asked, wantAsked)
+	}
+}
+
 func TestThePersonsWordsKeepTheNewestWithinTheCap(t *testing.T) {
 	long := strings.Repeat("a", 40000)
 	carry, err := recall.DistilledCarry(recall.NewStore(t.TempDir()), recall.Config{}, recall.Conversation{Entries: []recall.Entry{

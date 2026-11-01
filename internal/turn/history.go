@@ -525,7 +525,7 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 			tail[i].Thinking = llm.Thinking{}
 		}
 		ended.HeldWhole = len(tail)
-		carry, err := recall.DistilledCarry(artifacts.store, artifacts.preview, ended)
+		carry, err := recall.JudgedCarry(artifacts.store, artifacts.preview, ended, artifacts.standing)
 		carry.Text = counted + ".\n" + carry.Text
 		said := llm.Message{Role: llm.RoleUser, Content: carry.Text, Origin: llm.Origin{Source: llm.SourceForkCarry, TakenAt: started}}
 		if len(tail) > 0 && isTask(tail[0]) {
