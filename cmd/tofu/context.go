@@ -3,8 +3,10 @@ package main
 import (
 	"cmp"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"strconv"
 	"strings"
@@ -57,7 +59,7 @@ func contextVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return o.fail(err)
 	}
-	return o.done(true, report, func(page cli.Page) []string { return contextLines(page, report) })
+	return o.done(true, report, func(page cli.Page) []string { return contextLines(page, report, store) })
 }
 
 func contextOf(store *session.Store, handle string, build recall.Bands, nextCeiling int) (contextReport, error) {
@@ -140,7 +142,7 @@ func contextOf(store *session.Store, handle string, build recall.Bands, nextCeil
 		}
 		if step.Fork != nil {
 			report.Fork = &contextForkReport{
-				Into:   step.Fork.Into,
+				Into:   cmp.Or(header.ForkedInto, step.Fork.Into),
 				Kind:   string(step.Fork.Kind),
 				Counts: &contextForkCounts{TokensBefore: step.Fork.TokensBefore, TokensAfter: step.Fork.TokensAfter},
 			}
@@ -175,7 +177,7 @@ func stepRowsOf(reading session.Reading) ([]turn.StepRow, error) {
 	return steps, nil
 }
 
-func contextLines(page cli.Page, r contextReport) []string {
+func contextLines(page cli.Page, r contextReport, store *session.Store) []string {
 	if r.Session == "" {
 		mark := cli.Idle
 		if len(r.Skipped) > 0 {
@@ -217,11 +219,19 @@ func contextLines(page cli.Page, r contextReport) []string {
 			facts = append(facts, cli.Fact{Label: item.Name, Text: strconv.Itoa(item.Tokens) + " tokens of " + strings.ReplaceAll(string(item.Band), "_", " ")})
 		}
 	}
+	var opens []string
+	if r.Fork != nil {
+		opens = []string{page.Hint("tofu context " + handleOf(store, r.Fork.Into))}
+		if _, err := store.Header(r.Fork.Into); errors.Is(err, fs.ErrNotExist) {
+			opens = []string{page.Label("the fork's session " + r.Fork.Into + " is no longer here")}
+		}
+	}
 	facts = append(facts,
 		cli.Fact{Label: "bytes", Text: strconv.Itoa(r.BytesPerThousandTokens) + " per thousand tokens"},
 		cli.Fact{Label: "fork", Text: forkFact(r.Fork)})
 	lines := append(page.Title("Context", []string{sessionHandle(r.Session, r.Name), plural(r.Steps, "step")}, verdict), "")
 	lines = append(lines, cli.Indent(page.Facts(facts)...)...)
+	lines = append(lines, cli.Indent(opens...)...)
 	return append(lines, skippedLines(page, r.Skipped)...)
 }
 
