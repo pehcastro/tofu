@@ -219,28 +219,24 @@ func contextLines(page cli.Page, r contextReport, store *session.Store) []string
 			facts = append(facts, cli.Fact{Label: item.Name, Text: strconv.Itoa(item.Tokens) + " tokens of " + strings.ReplaceAll(string(item.Band), "_", " ")})
 		}
 	}
-	var opens []string
-	if r.Fork != nil {
-		opens = []string{page.Hint("tofu context " + handleOf(store, r.Fork.Into))}
-		if _, err := store.Header(r.Fork.Into); errors.Is(err, fs.ErrNotExist) {
-			opens = []string{page.Label("the fork's session " + r.Fork.Into + " is no longer here")}
-		}
-	}
 	facts = append(facts,
 		cli.Fact{Label: "bytes", Text: strconv.Itoa(r.BytesPerThousandTokens) + " per thousand tokens"},
-		cli.Fact{Label: "fork", Text: forkFact(r.Fork)})
+		cli.Fact{Label: "fork", Text: forkFact(store, r.Fork)})
 	lines := append(page.Title("Context", []string{sessionHandle(r.Session, r.Name), plural(r.Steps, "step")}, verdict), "")
 	lines = append(lines, cli.Indent(page.Facts(facts)...)...)
-	lines = append(lines, cli.Indent(opens...)...)
 	return append(lines, skippedLines(page, r.Skipped)...)
 }
 
-func forkFact(fork *contextForkReport) string {
-	switch {
-	case fork == nil:
+func forkFact(store *session.Store, fork *contextForkReport) string {
+	if fork == nil {
 		return ""
-	case fork.Counts == nil:
-		return "into " + fork.Into + " · counts not recorded"
 	}
-	return "into " + fork.Into + " · " + fork.Kind + " · " + strconv.Itoa(fork.Counts.TokensBefore) + " → " + strconv.Itoa(fork.Counts.TokensAfter) + " tokens"
+	into := "into " + handleOf(store, fork.Into)
+	if _, err := store.Header(fork.Into); errors.Is(err, fs.ErrNotExist) {
+		into = "into " + fork.Into + ", no longer here"
+	}
+	if fork.Counts == nil {
+		return into + " · counts not recorded"
+	}
+	return into + " · " + fork.Kind + " · " + strconv.Itoa(fork.Counts.TokensBefore) + " → " + strconv.Itoa(fork.Counts.TokensAfter) + " tokens"
 }

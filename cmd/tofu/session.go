@@ -219,7 +219,7 @@ func sessionVerbRecalling(recent *session.Recent, args []string, in io.Reader, o
 			row.Head = head.ID == row.ID
 		}
 		row.Expired = lifetime.Expired(row.lastAt, now)
-		return o.done(true, row, func(page cli.Page) []string { return sessionInfoLines(page, row, now) })
+		return o.done(true, row, func(page cli.Page) []string { return sessionInfoLines(page, row, now, store) })
 	case "reads":
 		report, err := sessionReads(store, handles[0])
 		if err != nil {
@@ -863,7 +863,7 @@ func sessionReadsLines(page cli.Page, report sessionReadsReport) []string {
 	return lines
 }
 
-func sessionInfoLines(page cli.Page, row sessionRow, now time.Time) []string {
+func sessionInfoLines(page cli.Page, row sessionRow, now time.Time, store *session.Store) []string {
 	verdict := cli.Verdict{Mark: cli.Idle, Text: cmp.Or(row.Outcome, "open")}
 	hint := "tofu session resume " + row.Handle
 	switch {
@@ -911,7 +911,7 @@ func sessionInfoLines(page cli.Page, row sessionRow, now time.Time) []string {
 		if row.ForkTokensBefore > 0 {
 			fork.Counts = &contextForkCounts{TokensBefore: row.ForkTokensBefore, TokensAfter: row.ForkTokensAfter}
 		}
-		facts = append(facts, cli.Fact{Label: "fork", Text: forkFact(fork)})
+		facts = append(facts, cli.Fact{Label: "fork", Text: forkFact(store, fork)})
 	}
 	if row.AutoCompaction != "" {
 		facts = append(facts, cli.Fact{Label: "context", Text: strconv.Itoa(row.ContextCeiling) + " ceiling · " +
