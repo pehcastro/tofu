@@ -453,7 +453,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	var hooked []llm.Message
 	if config.SpawnedFrom == "" {
 		if config.SessionSource != "" {
-			hooked = hookMessages(llm.SourceSessionStart, fire(ctx, hook.Input{Event: hook.SessionStart, Source: config.SessionSource}).Context, start)
+			hooked = sessionStartMessages(config.SessionSource, fire(ctx, hook.Input{Event: hook.SessionStart, Source: config.SessionSource}).Context, start)
 		}
 		prompted := fire(ctx, hook.Input{Event: hook.UserPromptSubmit, Prompt: config.Task})
 		promptRefused, hooked = prompted.Block, append(hooked, hookMessages(llm.SourcePromptSubmit, prompted.Context, start)...)
@@ -532,11 +532,11 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 		return append(slices.Clip(messages), inserted(llm.Origin{Source: llm.SourcePlan}, thePlanAsItStands+shown))
 	}
-	compacted := func() {
+	compactContext := func() []llm.Message {
 		if config.SpawnedFrom != "" {
-			return
+			return nil
 		}
-		messages = append(messages, hookMessages(llm.SourceSessionStart, fire(ctx, hook.Input{Event: hook.SessionStart, Source: sessionSourceCompact}).Context, now())...)
+		return sessionStartMessages(sessionSourceCompact, fire(ctx, hook.Input{Event: hook.SessionStart, Source: sessionSourceCompact}).Context, now())
 	}
 	trims := !config.NoCompaction && budget.Automatic
 	trimFrom := func(step int, when string, from int) (*Compaction, error) {
@@ -544,8 +544,11 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		compaction, shrink, err := trimRead(artifacts, budget, step, messages, from)
 		if compaction != nil {
 			flush()
+			added := compactContext()
+			messages = withoutOlderCompactContext(messages, added)
+			sent = len(messages)
 			recorded.listChange("compaction", when+": the conversation crossed its budget, so tofu "+shrink.String(), before, messages)
-			compacted()
+			messages = append(messages, added...)
 		}
 		return compaction, err
 	}
@@ -841,10 +844,12 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		if heldForStep > 0 {
 			held = fmt.Sprintf(", %d of its %d token target held back for the next step and the working state", heldForStep, budget.Bands.Target())
 		}
+		added := compactContext()
+		begun = withoutOlderCompactContext(begun, added)
 		recorded.listChange(session.ListChangeFork, string(fork.Kind)+" fork "+strconv.Itoa(forks)+" "+when+" from "+ended.Session+", "+
 			strconv.Itoa(fork.TokensBefore)+" to "+strconv.Itoa(fork.TokensAfter)+" tokens, "+strconv.Itoa(fork.TailMessages)+" tail messages"+held, beforeFork, begun)
 		messages, sent, answering, budget = begun, 0, "", budget.Reported(0, recall.Occupancy{})
-		compacted()
+		messages = append(messages, added...)
 		flush()
 	}
 	endForked := func(fork *Fork, when string, beforeFork, begun []llm.Message, moved *Account, why string) Row {
@@ -1609,4 +1614,21 @@ func runningSubAgents(tools []Tool) []string {
 		}
 	}
 	return running
+}
+
+func sessionStartMessages(source string, added []hook.Context, at time.Time) []llm.Message {
+	messages := hookMessages(llm.SourceSessionStart, added, at)
+	for i := range messages {
+		messages[i].Origin.ID = source
+	}
+	return messages
+}
+
+func withoutOlderCompactContext(messages, added []llm.Message) []llm.Message {
+	if len(added) == 0 {
+		return messages
+	}
+	return slices.DeleteFunc(slices.Clone(messages), func(message llm.Message) bool {
+		return message.Origin.Source == llm.SourceSessionStart && message.Origin.ID == sessionSourceCompact
+	})
 }
