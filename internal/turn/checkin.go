@@ -120,9 +120,20 @@ const (
 	boardNotifiesOpening = "board hooks notify you: "
 )
 
+func UnreadBoardNotifies(board *boardy.Managed) string {
+	text, _ := readBoardNotifies(board)
+	return text
+}
+
 func boardNotifies(board *boardy.Managed) string {
+	text, markRead := readBoardNotifies(board)
+	markRead()
+	return text
+}
+
+func readBoardNotifies(board *boardy.Managed) (string, func()) {
 	if board == nil {
-		return ""
+		return "", func() {}
 	}
 	path := filepath.Join(filepath.Dir(board.Store.Dir), leadNotifiedFile)
 	var sizes map[string]int64
@@ -130,13 +141,15 @@ func boardNotifies(board *boardy.Managed) string {
 		_ = json.Unmarshal(raw, &sizes)
 	}
 	notes, read := board.Store.NotifiesSince(sizes)
-	if raw, err := json.Marshal(read); err == nil && !maps.Equal(read, sizes) {
-		_ = sys.WriteFile(path, raw, 0o600)
+	markRead := func() {
+		if raw, err := json.Marshal(read); err == nil && !maps.Equal(read, sizes) {
+			_ = sys.WriteFile(path, raw, 0o600)
+		}
 	}
 	if len(notes) == 0 {
-		return ""
+		return "", markRead
 	}
-	return NotesAfterTheTask + boardNotifiesOpening + strings.Join(notes, "; ")
+	return NotesAfterTheTask + boardNotifiesOpening + strings.Join(notes, "; "), markRead
 }
 
 type leadWork struct {

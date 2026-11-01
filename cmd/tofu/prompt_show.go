@@ -27,12 +27,12 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 	if err != nil {
 		return runFail(errOut, err)
 	}
-	offered, attached, err := offeredTools(opts, prompt, named)
+	offered, board, err := offeredTools(opts, prompt, named)
 	if err != nil {
 		return runFail(errOut, err)
 	}
 	opts, instructions, composed := prompt.opts, prompt.instructions, prompt.composed
-	sent := turn.Config{System: composed.Head(), Instructions: prompt.files, Memory: prompt.memory, Environment: composed.WithTaskRules(prompt.environment) + attached, Task: opts.task}
+	sent := turn.Config{System: composed.Head(), Instructions: prompt.files, Memory: prompt.memory, Environment: composed.WithTaskRules(prompt.environment) + board.attached, Task: opts.task + board.notified}
 	system, firstUser := sent.SystemMessage(), sent.FirstUserMessage()
 	uncomposed := len(runSystem(opts))
 
@@ -85,8 +85,11 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 		_, _ = fmt.Fprintf(out, "\nmemory, a user message before the first, %d bytes\n%s\n", len(view.Content), view.Content)
 	}
 	boardText := ""
-	if attached != "" {
-		boardText = fmt.Sprintf(", %d of them the board text lead.attach frames in", len(attached))
+	if board.attached != "" {
+		boardText = fmt.Sprintf(", %d of them the board text lead.attach frames in", len(board.attached))
+	}
+	if board.notified != "" {
+		boardText += fmt.Sprintf(", %d of them the board notifies the lead has not read", len(board.notified))
 	}
 	_, _ = fmt.Fprintf(out, "\nfirst user message, %d bytes%s\n%s\n", len(firstUser), boardText, firstUser)
 	_, _ = fmt.Fprintf(out, "\noffered tools, %d, as the request sends them\n", len(offered))
@@ -98,15 +101,20 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 	return exitOK
 }
 
-func offeredTools(opts runOpts, prompt composedRun, named []turn.Tool) ([]llm.Tool, string, error) {
-	var attached string
-	config, spawner, err := runConfig(opts, named, runtime{open: openAppWire, composed: &prompt, framed: &attached})
+type boardFraming struct {
+	attached, notified string
+}
+
+func offeredTools(opts runOpts, prompt composedRun, named []turn.Tool) ([]llm.Tool, boardFraming, error) {
+	var board boardFraming
+	config, spawner, err := runConfig(opts, named, runtime{open: openAppWire, composed: &prompt, framed: &board.attached})
+	board.notified = turn.UnreadBoardNotifies(config.Board)
 	if err != nil || opts.agent == "" {
-		return config.Tools.Definitions(), attached, err
+		return config.Tools.Definitions(), board, err
 	}
 	agent, err := prompt.subAgents.Named(opts.agent)
 	if err != nil {
-		return nil, "", err
+		return nil, boardFraming{}, err
 	}
-	return spawner.OfferedTo(agent, ""), attached, nil
+	return spawner.OfferedTo(agent, ""), board, nil
 }
