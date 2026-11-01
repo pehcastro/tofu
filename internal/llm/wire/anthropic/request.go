@@ -172,12 +172,12 @@ func (r Request) Encode(oauth bool) ([]byte, error) {
 	if opensOnStandingContext(history) {
 		markPrefixEnd(history[0].Content, headTTL)
 		head++
-		if head == cacheBreakpointsPerRequest && !r.HistoryCacheOff && historyChars(history) >= historyCacheMinPrefixChars {
+	}
+	if !r.HistoryCacheOff {
+		if head+historyBreakpointsWanted(history) > cacheBreakpointsPerRequest && len(tools) > 0 && tools[len(tools)-1].CacheControl != nil {
 			tools[len(tools)-1].CacheControl = nil
 			head--
 		}
-	}
-	if !r.HistoryCacheOff {
 		applyHistoryCaching(history, historyTTL, cacheBreakpointsPerRequest-head)
 	}
 
@@ -316,24 +316,43 @@ func applyHistoryCaching(messages []wireMessage, ttl string, budget int) {
 	if budget < 2 {
 		return
 	}
-	committed := committedPrefixEnd(messages)
-	anchored := committed >= 1 && historyChars(messages[:committed+1]) >= historyCacheCommittedMinChars
-	tipReachesCommitted := !anchored || blocksAfter(messages, committed, len(messages[committed].Content)-1) <= cacheLookbackBlocks
-	if m, b := keptHead(messages); m >= 0 && tipReachesCommitted && blocksAfter(messages, m, b) > cacheLookbackBlocks {
+	if m, b := keptHeadOutOfReach(messages); m >= 0 {
 		messages[m].Content[b].CacheControl = ephemeral(ttl)
 		return
 	}
-	if anchored {
+	if committed, anchored := committedAnchor(messages); anchored {
 		markPrefixEnd(messages[committed].Content, ttl)
 	}
 }
 
-func keptHead(messages []wireMessage) (int, int) {
+func historyBreakpointsWanted(messages []wireMessage) int {
+	if historyChars(messages) < historyCacheMinPrefixChars {
+		return 0
+	}
+	if m, _ := keptHeadOutOfReach(messages); m >= 0 {
+		return 2
+	}
+	return 1
+}
+
+func committedAnchor(messages []wireMessage) (int, bool) {
+	committed := committedPrefixEnd(messages)
+	return committed, committed >= 1 && historyChars(messages[:committed+1]) >= historyCacheCommittedMinChars
+}
+
+func keptHeadOutOfReach(messages []wireMessage) (int, int) {
+	if committed, anchored := committedAnchor(messages); anchored && blocksAfter(messages, committed, len(messages[committed].Content)-1) > cacheLookbackBlocks {
+		return -1, -1
+	}
 	for m := len(messages) - 1; m >= 0; m-- {
 		for b := len(messages[m].Content) - 1; b >= 0; b-- {
-			if messages[m].Content[b].keptHead {
-				return m, b
+			if !messages[m].Content[b].keptHead {
+				continue
 			}
+			if blocksAfter(messages, m, b) <= cacheLookbackBlocks {
+				return -1, -1
+			}
+			return m, b
 		}
 	}
 	return -1, -1

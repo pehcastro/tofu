@@ -68,8 +68,12 @@ func TestAKeptHeadPastTheLookbackTakesTheSecondBreakpoint(t *testing.T) {
 		calls     int
 		lastCalls int
 		markAt    int
+		headed    bool
 		want      []int
 	}{
+		{name: "subscription head with kept head 24 blocks before the tip", exchanges: 15, calls: 1, lastCalls: 1, markAt: 6, headed: true, want: []int{6, 30}},
+		{name: "subscription head with no kept head", exchanges: 15, calls: 1, lastCalls: 1, markAt: -1, headed: true, want: []int{30}},
+		{name: "subscription head with the kept head on the tip", exchanges: 15, calls: 1, lastCalls: 1, markAt: 30, headed: true, want: []int{30}},
 		{name: "kept head 24 blocks before the tip", exchanges: 15, calls: 1, lastCalls: 1, markAt: 6, want: []int{6, 30}},
 		{name: "kept head 18 blocks before the tip", exchanges: 12, calls: 1, lastCalls: 1, markAt: 6, want: []int{22, 24}},
 		{name: "no kept head", exchanges: 15, calls: 1, lastCalls: 1, markAt: -1, want: []int{28, 30}},
@@ -96,9 +100,16 @@ func TestAKeptHeadPastTheLookbackTakesTheSecondBreakpoint(t *testing.T) {
 			if held.markAt >= 0 {
 				request.Messages[held.markAt].KeptHead = true
 			}
+			if held.headed {
+				request.System = []string{"the project instructions"}
+				request.Tools = []llm.Tool{{Name: "read"}, {Name: "write"}}
+			}
 			body, err := request.Encode(true)
 			if err != nil {
 				t.Fatalf("encoding: %v", err)
+			}
+			if count := strings.Count(string(body), `"cache_control"`); held.headed && count != cacheBreakpointsPerRequest {
+				t.Fatalf("the subscription head request carries %d breakpoints, want all %d spent", count, cacheBreakpointsPerRequest)
 			}
 			var decoded struct {
 				Messages []wireMessage `json:"messages"`

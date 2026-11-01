@@ -207,6 +207,7 @@ machine     %s/%s, %d cpu
 wire        anthropic messages to a local stand-in that bills by Anthropic's prompt cache rules; no model, no network
 project     billed as W:\mock\project in every request, so the length of -work moves no count
 credential  mock claude-sub login against the stand-in, so a subscription credential kind
+head        subscription: the stand-in's token carries the oauth marker, so every request sends the billing and identity blocks
 model       %s, build id the stand-in reported: %s
 ceiling     --context-ceiling %d on every tofu run; the compact arm runs under tofu serve --stdio at its own context budget
 weights     input %.2f, cache read %.2f, write 5m %.2f, write 1h %.2f, in base input tokens

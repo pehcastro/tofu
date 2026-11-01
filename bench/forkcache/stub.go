@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+
+	"tofu/internal/llm/wire/anthropic"
 )
 
 const (
@@ -41,14 +43,14 @@ type stand struct {
 	*httptest.Server
 	project       string
 	projectQuoted string
-	played  script
-	held    sync.Mutex
-	cache   promptCache
-	sent    []exchange
-	lookups []lookup
-	steps   int
-	markers int
-	failed  error
+	played        script
+	held          sync.Mutex
+	cache         promptCache
+	sent          []exchange
+	lookups       []lookup
+	steps         int
+	markers       int
+	failed        error
 }
 
 func startStand(project string, played script) *stand {
@@ -72,7 +74,7 @@ func (s *stand) env() []string {
 func (s *stand) serve(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/token"):
-		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "mock-access-token", "refresh_token": "mock-refresh-token", "expires_in": 86400,
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": anthropic.OAuthTokenMarker + "-mock-access-token", "refresh_token": "mock-refresh-token", "expires_in": 86400,
 			"account":      map[string]any{"uuid": "mock-account-1", "email_address": "mock1@example.invalid"},
 			"organization": map[string]any{"uuid": "mock-org", "name": "Mock"}})
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/usage"):
