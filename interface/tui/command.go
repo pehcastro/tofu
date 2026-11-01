@@ -21,7 +21,7 @@ import (
 const (
 	turnRunningNote       = "a turn is running. stop it with ctrl+c first"
 	waitsForSubAgentsNote = "the orchestrator is idle and its turn stays open until its sub-agents report, so this runs when the turn ends. ctrl+c twice stops them now"
-	noRecordYet           = "nothing is recorded under this repository yet"
+	noSessionYet          = "this window has no session yet, so there is nothing to branch or read until its first task"
 	undoWithCount         = "/undo "
 	noSideHere            = "this interface cannot switch sessions, so it opens no side chat. tofu session branch <session> --side makes one"
 	noSideOpened          = "no side chat was opened: "
@@ -126,7 +126,7 @@ func (a *App) runCommand(name string) tea.Cmd {
 	case "side":
 		return a.openSide()
 	case "new":
-		a.carry(a.options.NewSession)
+		a.carry(a.newSession)
 	case "compact":
 		a.carry(a.options.Compact)
 	case "undo":
@@ -152,20 +152,23 @@ func (a *App) runCommand(name string) tea.Cmd {
 	return nil
 }
 
+func (a *App) newSession() string {
+	note := a.options.NewSession()
+	if a.options.Host != nil && a.options.Host.ID() == "" {
+		a.sessionName, a.sessionID, a.sessionRoot, a.started = "", "", "", a.options.Now()
+	}
+	return note
+}
+
 func (a *App) recordedSession() (*isession.Store, string, string) {
+	if a.sessionID == "" {
+		return nil, "", noSessionYet
+	}
 	state, err := sys.ProjectStateDirAt(a.options.Root)
 	if err != nil {
 		return nil, "", err.Error()
 	}
-	store := isession.OpenAt(state)
-	if a.sessionID != "" {
-		return store, a.sessionID, ""
-	}
-	head, err := store.Head()
-	if err != nil {
-		return nil, "", noRecordYet
-	}
-	return store, head.ID, ""
+	return isession.OpenAt(state), a.sessionID, ""
 }
 
 func (a *App) recordedTalk() (isession.Conversation, string) {
