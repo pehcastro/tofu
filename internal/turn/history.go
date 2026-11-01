@@ -666,7 +666,6 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 	if err != nil {
 		return nil, nil, err
 	}
-	stateTokens := konst.ForkStateBytes * 1000 / artifacts.preview.BytesPerThousandTokens
 	unreported := budget.Reported(0, recall.Occupancy{})
 	room := func() int {
 		return (budget.Bands.Target() - unreported.Tokens(artifacts.preview, historyOf(begun))) * konst.ForkTailRoomPercent / 100
@@ -683,7 +682,7 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 		err = take(start, 0, 0)
 	}
 	if last := lastAssistant(messages); err == nil && last >= 0 && last < chosen {
-		err = take(last, 0, stateTokens)
+		err = take(last, 0, forkStateTokens(artifacts.preview))
 	}
 	if fileTokens := min(room(), konst.ForkTailTokens); err == nil && fileTokens > 0 {
 		err = take(chosen, fileTokens, 0)

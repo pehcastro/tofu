@@ -1710,5 +1710,9 @@ func (e *EveryAccountSpent) Error() string {
 }
 
 func stepHold(preview recall.Config, bands recall.Bands, stepTokens int) int {
-	return min(konst.ForkStateBytes*1000/preview.BytesPerThousandTokens+stepTokens, bands.Target()*konst.ForkRoomMostPercent/100)
+	return min(forkStateTokens(preview)+stepTokens, bands.Target()*konst.ForkRoomMostPercent/100)
+}
+
+func forkStateTokens(preview recall.Config) int {
+	return konst.ForkStateBytes * 1000 / preview.BytesPerThousandTokens
 }
