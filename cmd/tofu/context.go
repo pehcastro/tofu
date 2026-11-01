@@ -149,14 +149,8 @@ func contextOf(store *session.Store, handle string, build recall.Bands, nextCeil
 			}
 		}
 	}
-	if report.Fork == nil && header.ForkedInto != "" {
-		report.Fork = &contextForkReport{Into: header.ForkedInto}
-		if into, err := store.Header(header.ForkedInto); err == nil {
-			report.Fork.Kind = into.ForkKind
-		}
-		if header.ForkTokensBefore > 0 {
-			report.Fork.Counts = &contextForkCounts{TokensBefore: header.ForkTokensBefore, TokensAfter: header.ForkTokensAfter}
-		}
+	if report.Fork == nil {
+		report.Fork = headerFork(store, header)
 	}
 	report.Items = recall.Items(cfg, itemBands, conversation)
 	return report, nil
@@ -232,6 +226,20 @@ func contextLines(page cli.Page, r contextReport, store *session.Store) []string
 	lines := append(page.Title("Context", []string{sessionHandle(r.Session, r.Name), plural(r.Steps, "step")}, verdict), "")
 	lines = append(lines, cli.Indent(page.Facts(facts)...)...)
 	return append(lines, skippedLines(page, r.Skipped)...)
+}
+
+func headerFork(store *session.Store, header session.Header) *contextForkReport {
+	if header.ForkedInto == "" {
+		return nil
+	}
+	fork := &contextForkReport{Into: header.ForkedInto}
+	if into, err := store.Header(header.ForkedInto); err == nil {
+		fork.Kind = into.ForkKind
+	}
+	if header.ForkTokensBefore > 0 {
+		fork.Counts = &contextForkCounts{TokensBefore: header.ForkTokensBefore, TokensAfter: header.ForkTokensAfter}
+	}
+	return fork
 }
 
 func forkFact(store *session.Store, fork *contextForkReport) string {

@@ -49,6 +49,7 @@ type sessionRow struct {
 	lastAt time.Time
 	tasks  []string
 	sideOf string
+	fork   *contextForkReport
 }
 
 type sessionListReport struct {
@@ -488,19 +489,17 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, error) {
 		}
 	}
 	row.Carried = len(messages)
-	if row.ForkedInto != "" {
-		if into, err := store.Header(row.ForkedInto); err == nil {
-			row.ForkIntoKind = into.ForkKind
-		}
+	if row.fork != nil {
 		steps, err := stepRowsOf(reading)
 		if err != nil {
 			return sessionRow{}, err
 		}
 		for _, step := range steps {
 			if step.Fork != nil {
-				row.ForkIntoKind = string(step.Fork.Kind)
+				row.fork.Kind = string(step.Fork.Kind)
 			}
 		}
+		row.ForkIntoKind = row.fork.Kind
 	}
 	return row, nil
 }
@@ -518,6 +517,7 @@ func sessionSummary(store *session.Store, handle string) (sessionRow, []session.
 		return sessionRow{}, nil, err
 	}
 	row := sessionHeadRow(store, header)
+	row.fork = headerFork(store, header)
 	for _, event := range events {
 		var outcome struct {
 			Task string `json:"task"`
@@ -912,12 +912,8 @@ func sessionInfoLines(page cli.Page, row sessionRow, now time.Time, store *sessi
 	if row.Root != row.ID && row.Root != row.Parent {
 		facts = append(facts, cli.Fact{Label: "root", Text: row.Root})
 	}
-	if row.ForkedInto != "" {
-		fork := &contextForkReport{Into: row.ForkedInto, Kind: row.ForkIntoKind}
-		if row.ForkTokensBefore > 0 {
-			fork.Counts = &contextForkCounts{TokensBefore: row.ForkTokensBefore, TokensAfter: row.ForkTokensAfter}
-		}
-		facts = append(facts, cli.Fact{Label: "fork", Text: forkFact(store, fork)})
+	if row.fork != nil {
+		facts = append(facts, cli.Fact{Label: "fork", Text: forkFact(store, row.fork)})
 	}
 	if row.AutoCompaction != "" {
 		facts = append(facts, cli.Fact{Label: "context", Text: strconv.Itoa(row.ContextCeiling) + " ceiling · " +
