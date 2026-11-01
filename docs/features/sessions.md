@@ -293,9 +293,16 @@ error body, and a section on what went into it: each prompt part, such as a
 rule, an agent or the system prompt, with its tokens and whether it was
 switched off, the skills loaded, the memory, the tokens by kind, the images,
 and how many messages were new or dropped since the last request. A request
-recorded by an older tofu says `not recorded`. `tofu session reads <name>`
-prints every file it read. Each takes
-`--json`, and `tofu session trace --json` with a filter prints the same rows.
+recorded by an older tofu says `not recorded`. Its `cache` line names each
+cache breakpoint, such as `the last tool, system block 2, message 13`, and in
+the message list a message reads `kept head` when compaction kept everything
+up to it and `breakpoint` when it carries one. The breakpoints are read off
+the body sent; when no body was kept, as on a recorded model, tofu encodes the
+messages through the anthropic wire again and says so, and a wire with no
+cache markers says `none`. In `--json` every message carries `kept_head` and
+`breakpoint`, and `breakpoints` says where they came from.
+`tofu session reads <name>` prints every file it read. Each takes `--json`,
+and `tofu session trace --json` with a filter prints the same rows.
 Over `tofu serve`, `session.info` carries the same history as
 `carried_from`: the session, its handle and how many messages came over.
 

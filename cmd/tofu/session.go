@@ -22,6 +22,7 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/llm"
+	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/safe"
 	"tofu/internal/session"
 	"tofu/internal/sys"
@@ -1307,6 +1308,31 @@ type requestMessage struct {
 	Answers  string                    `json:"answers,omitempty"`
 	Outcome  string                    `json:"tool_outcome,omitempty"`
 	Text     string                    `json:"text,omitempty"`
+
+	KeptHead   bool `json:"kept_head"`
+	Breakpoint bool `json:"breakpoint"`
+}
+
+type breakpointSource string
+
+const (
+	breakpointsSent    breakpointSource = "sent"
+	breakpointsEncoded breakpointSource = "encoded"
+	breakpointsNone    breakpointSource = "none"
+)
+
+type requestBreakpoints struct {
+	Source breakpointSource `json:"source"`
+	Tools  bool             `json:"tools"`
+	System []int            `json:"system,omitempty"`
+	Why    string           `json:"why,omitempty"`
+}
+
+type sentBlock struct {
+	Type         string          `json:"type"`
+	ID           string          `json:"id"`
+	ToolUseID    string          `json:"tool_use_id"`
+	CacheControl json.RawMessage `json:"cache_control"`
 }
 
 type requestAttempt struct {
@@ -1315,22 +1341,23 @@ type requestAttempt struct {
 }
 
 type sessionRequestReport struct {
-	Session    string                `json:"session"`
-	Request    string                `json:"request"`
-	Agent      string                `json:"agent,omitempty"`
-	Turn       string                `json:"turn,omitempty"`
-	At         time.Time             `json:"at"`
-	Why        string                `json:"why,omitempty"`
-	Wire       string                `json:"wire,omitempty"`
-	Model      string                `json:"model,omitempty"`
-	ToolChoice string                `json:"tool_choice,omitempty"`
-	DurationMS int64                 `json:"duration_ms"`
-	Messages   []requestMessage      `json:"messages"`
-	Tools      json.RawMessage       `json:"tools,omitempty"`
-	Attempts   []requestAttempt      `json:"attempts,omitempty"`
-	Response   json.RawMessage       `json:"response,omitempty"`
-	Error      string                `json:"error,omitempty"`
-	Parts      *session.RequestParts `json:"parts,omitempty"`
+	Session     string                `json:"session"`
+	Request     string                `json:"request"`
+	Agent       string                `json:"agent,omitempty"`
+	Turn        string                `json:"turn,omitempty"`
+	At          time.Time             `json:"at"`
+	Why         string                `json:"why,omitempty"`
+	Wire        string                `json:"wire,omitempty"`
+	Model       string                `json:"model,omitempty"`
+	ToolChoice  string                `json:"tool_choice,omitempty"`
+	DurationMS  int64                 `json:"duration_ms"`
+	Messages    []requestMessage      `json:"messages"`
+	Tools       json.RawMessage       `json:"tools,omitempty"`
+	Attempts    []requestAttempt      `json:"attempts,omitempty"`
+	Response    json.RawMessage       `json:"response,omitempty"`
+	Error       string                `json:"error,omitempty"`
+	Parts       *session.RequestParts `json:"parts,omitempty"`
+	Breakpoints requestBreakpoints    `json:"breakpoints"`
 }
 
 func sessionRequest(store *session.Store, handle, request string) (sessionRequestReport, error) {
@@ -1346,7 +1373,7 @@ func sessionRequest(store *session.Store, handle, request string) (sessionReques
 		Model: view.Model, ToolChoice: view.ToolChoice, DurationMS: view.DurationMS, Tools: view.Tools, Response: view.Response, Error: view.Error}
 	for i, message := range view.Messages {
 		shown := requestMessage{Index: i, Role: message.Role, Origin: message.Origin, From: message.From, PostedAt: message.PostedAt, TakenAt: message.TakenAt,
-			Called: message.ToolCalls, Answers: message.ToolCallID, Outcome: message.ToolOutcome, Text: message.Content}
+			Called: message.ToolCalls, Answers: message.ToolCallID, Outcome: message.ToolOutcome, Text: message.Content, KeptHead: message.KeptHead}
 		for _, call := range message.ToolCalls {
 			shown.Calls = append(shown.Calls, call.ID)
 		}
@@ -1358,6 +1385,12 @@ func sessionRequest(store *session.Store, handle, request string) (sessionReques
 		shown.Body = attempt.Body
 		report.Attempts = append(report.Attempts, shown)
 	}
+	body, source, err := breakpointBody(view, report.Attempts)
+	report.Breakpoints.Source = source
+	if err != nil {
+		report.Breakpoints.Why = err.Error()
+	}
+	markBreakpoints(&report, body)
 	parts, err := store.RequestParts(header.ID, view.Request)
 	if err == nil {
 		report.Parts = &parts
@@ -1366,6 +1399,139 @@ func sessionRequest(store *session.Store, handle, request string) (sessionReques
 		err = nil
 	}
 	return report, err
+}
+
+func breakpointBody(view session.RequestView, attempts []requestAttempt) (json.RawMessage, breakpointSource, error) {
+	if len(attempts) > 0 && len(attempts[len(attempts)-1].Body) > 0 {
+		return attempts[len(attempts)-1].Body, breakpointsSent, nil
+	}
+	if view.Wire != wireSubscription {
+		return nil, breakpointsNone, nil
+	}
+	reading := session.Reading{Messages: make([]session.Message, len(view.Messages))}
+	for i, message := range view.Messages {
+		reading.Messages[i].MessageBody = message
+	}
+	conversation, err := turn.ConversationOf(reading)
+	if err != nil {
+		return nil, breakpointsNone, err
+	}
+	var tools []llm.Tool
+	if len(view.Tools) > 0 {
+		if err := json.Unmarshal(view.Tools, &tools); err != nil {
+			return nil, breakpointsNone, err
+		}
+	}
+	var system []string
+	var messages []llm.Message
+	for _, message := range conversation {
+		if message.Role == llm.RoleSystem {
+			system = append(system, message.Content)
+			continue
+		}
+		messages = append(messages, message)
+	}
+	body, err := anthropic.Request{Model: view.Model, System: system, Messages: messages, Tools: tools}.Encode(true)
+	return body, breakpointsEncoded, err
+}
+
+func markBreakpoints(report *sessionRequestReport, body json.RawMessage) {
+	var sent struct {
+		System   []sentBlock `json:"system"`
+		Tools    []sentBlock `json:"tools"`
+		Messages []struct {
+			Role       string          `json:"role"`
+			ToolCallID string          `json:"tool_call_id"`
+			Content    json.RawMessage `json:"content"`
+		} `json:"messages"`
+	}
+	if json.Unmarshal(body, &sent) != nil {
+		return
+	}
+	system, answered, called, spoken := -1, map[string]int{}, map[string]int{}, []int{}
+	for i, message := range report.Messages {
+		switch {
+		case message.Role == session.RoleSystem:
+			system = i
+		case message.Answers != "":
+			answered[message.Answers] = i
+		case message.Role != session.RoleAssistant || len(message.Calls) > 0 || !llm.BlankText(message.Text):
+			spoken = append(spoken, i)
+		}
+		for _, id := range message.Calls {
+			called[id] = i
+		}
+	}
+	lookup := func(index map[string]int, id string) int {
+		if at, ok := index[id]; ok {
+			return at
+		}
+		return -1
+	}
+	mark := func(at int) {
+		if at >= 0 {
+			report.Messages[at].Breakpoint = true
+		}
+	}
+	for i, block := range sent.System {
+		if block.CacheControl != nil {
+			report.Breakpoints.System = append(report.Breakpoints.System, i)
+			mark(system)
+		}
+	}
+	report.Breakpoints.Tools = slices.ContainsFunc(sent.Tools, func(tool sentBlock) bool { return tool.CacheControl != nil })
+	plain := 0
+	for _, message := range sent.Messages {
+		var blocks []sentBlock
+		_ = json.Unmarshal(message.Content, &blocks)
+		owner := -1
+		switch {
+		case message.Role == session.RoleSystem:
+			owner = system
+		case message.ToolCallID != "":
+			owner = lookup(answered, message.ToolCallID)
+		case len(blocks) > 0 && blocks[0].ToolUseID != "":
+		case plain < len(spoken):
+			owner, plain = spoken[plain], plain+1
+		}
+		for _, block := range blocks {
+			switch {
+			case block.CacheControl == nil:
+			case block.ToolUseID != "":
+				mark(lookup(answered, block.ToolUseID))
+			case block.Type == "tool_use":
+				mark(lookup(called, block.ID))
+			default:
+				mark(owner)
+			}
+		}
+	}
+}
+
+func breakpointsText(report sessionRequestReport) string {
+	var at []string
+	if report.Breakpoints.Tools {
+		at = append(at, "the last tool")
+	}
+	for _, block := range report.Breakpoints.System {
+		at = append(at, "system block "+strconv.Itoa(block))
+	}
+	for _, message := range report.Messages {
+		if message.Breakpoint && message.Role != session.RoleSystem {
+			at = append(at, "message "+strconv.Itoa(message.Index))
+		}
+	}
+	switch {
+	case report.Breakpoints.Why != "":
+		return "not worked out: " + report.Breakpoints.Why
+	case len(at) == 0:
+		return "none: the " + cmp.Or(report.Wire, "unnamed") + " wire marked no cache breakpoint on this request"
+	}
+	from := ", read off the body sent"
+	if report.Breakpoints.Source == breakpointsEncoded {
+		from = ", where the anthropic wire places them, encoded again because no body was kept"
+	}
+	return plural(len(at), "breakpoint") + ": " + strings.Join(at, ", ") + from
 }
 
 func requestPartsLines(page cli.Page, parts *session.RequestParts) []string {
@@ -1467,6 +1633,7 @@ func sessionRequestLines(page cli.Page, report sessionRequestReport) []string {
 		{Label: "why", Text: report.Why},
 		{Label: "at", Text: report.At.Format(time.DateTime) + " · " + strconv.FormatInt(report.DurationMS, 10) + " ms"},
 		{Label: "wire", Text: strings.TrimSpace(report.Wire + " " + report.Model + " " + report.ToolChoice)},
+		{Label: "cache", Text: breakpointsText(report)},
 	})...)...)
 	rows := make([]cli.Row, len(report.Messages))
 	for i, message := range report.Messages {
@@ -1479,6 +1646,12 @@ func sessionRequestLines(page cli.Page, report sessionRequestReport) []string {
 		}
 		if origin := turn.OriginOf(session.MessageBody{Role: message.Role, Origin: message.Origin, From: message.From}); message.Origin != "" || message.From != nil {
 			cells = append(cells, "from "+string(origin.Kind())+"/"+string(origin.Source))
+		}
+		if message.KeptHead {
+			cells = append(cells, "kept head")
+		}
+		if message.Breakpoint {
+			cells = append(cells, "breakpoint")
 		}
 		rows[i] = cli.Row{Mark: cli.Idle, Cells: cells, Detail: widget.Fit(oneLine(message.Text), page.Width)}
 		if message.Role == session.RoleSystem {
