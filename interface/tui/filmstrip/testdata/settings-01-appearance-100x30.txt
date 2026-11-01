@@ -9,9 +9,9 @@
     Context       15      Spacing across lists and panels                                           
     Files         03                                                                                
     Shell         04      Animations                                                  subtle  ▾     
-    Turn          17      Motion for conversational states                                          
-    Projects      05                                                                                
-    Browser       08      Status bar                                                 compact  ▾     
+    Turn          18      Motion for conversational states                                          
+    Projects      06                                                                                
+    Browser       09      Status bar                                                 compact  ▾     
                           Context, quotas, and runtime counters                                     
   NAVIGATE                                                                                          
   ↑↓ setting · ←→         Color mode                                                    auto  ▾     

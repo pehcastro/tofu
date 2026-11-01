@@ -9,9 +9,9 @@
     Context         15      Spaci  Theme                                          esc     Solarized Light               
     Files           03             tofu uses Zed Nu Disco; choose a palette                                             
     Shell           04      Anima                                                        HOW IT WORKS                   
-    Turn            17      Motio    tofu                                                Enter opens a focused          
-    Projects        05                                                                   choice. Changes preview        
-    Browser         08      Statu    tofu light                                          immediately; Esc keeps the     
+    Turn            18      Motio    tofu                                                Enter opens a focused          
+    Projects        06                                                                   choice. Changes preview        
+    Browser         09      Statu    tofu light                                          immediately; Esc keeps the     
                             Conte                                                        prior value.                   
   NAVIGATE                           tofu dusk                                                                          
   ↑↓ setting · ←→           Color                                                        SCOPE                          

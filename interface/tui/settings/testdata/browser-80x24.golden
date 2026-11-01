@@ -9,9 +9,9 @@
     Context       15      Who takes the browser steps: subagent hands them …    
     Files         03                                                            
     Shell         04      Browser steps                               30  ▾     
-    Turn          17      how many actions one browser task may take            
-    Projects      05                                                            
-  › Browser       08      Browser model                          default  ▾     
+    Turn          18      how many actions one browser task may take            
+    Projects      06                                                            
+  › Browser       09      Browser model                          default  ▾     
                           The model a browser task writes its text and answ…    
   NAVIGATE                                                                      
   ↑↓ setting · ←→         Browser effort                         default  ▾     

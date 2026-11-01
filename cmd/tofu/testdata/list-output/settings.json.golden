@@ -701,6 +701,15 @@ exit 0
         "unit": "gigabytes one project's scratchpad may hold"
       },
       {
+        "key": "scratchRoots",
+        "category": "Projects",
+        "value": "",
+        "source": "default",
+        "label": "Scratchpad disk",
+        "description": "Folders the scratchpad may move to, as a path list. The first absolute one holds <root>/tofu/<project>/scratchpad. Read from the global file only",
+        "kind": "text"
+      },
+      {
         "key": "sessionStaleDays",
         "category": "Projects",
         "value": 90,

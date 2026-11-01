@@ -9,9 +9,9 @@
     Context       15      a turn may spawn a sub-agent                                              
     Files         03                                                                                
     Shell         04      One working session per project                                   ● on    
-  › Turn          17      While one session in this project works, any other waits. off lets se…    
-    Projects      05                                                                                
-    Browser       08      Plan every step                                                   ● on    
+  › Turn          18      While one session in this project works, any other waits. off lets se…    
+    Projects      06                                                                                
+    Browser       09      Plan every step                                                   ● on    
                           The lead sees its plan and each step's status before every step. off …    
   NAVIGATE                                                                                          
   ↑↓ setting · ←→         Side chat access                                              read  ▾     

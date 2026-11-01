@@ -221,7 +221,11 @@ func (s *Store) SetText(scope Scope, key, value string) error {
 	}
 	value = cmp.Or(spec.Aliases[value], value)
 	switch {
+	case spec.Roots && scope != Global:
+		return fmt.Errorf("settings: %s is read from the global scope only, so a %s value would do nothing", key, scope)
 	case spec.allows(value):
+	case spec.Roots:
+		return fmt.Errorf("settings: %s takes a path list with an absolute entry, got %q", key, value)
 	case spec.ListOf != nil:
 		return fmt.Errorf("settings: %s takes a list of %s, each once, got %q", key, strings.Join(spec.ListOf, ", "), value)
 	default:

@@ -9,9 +9,9 @@
     Context         15      Spacing across lists and panels                               tofu dusk                     
     Files           03                                                                                                  
     Shell           04                                                                        T WORKS                   
-    Turn            17      Search settings                                              esc   opens a focused          
-    Projects        05      Type to filter · ↑↓ select · enter jump                           e. Changes preview        
-    Browser         08                                                                        iately; Esc keeps the     
+    Turn            18      Search settings                                              esc   opens a focused          
+    Projects        06      Type to filter · ↑↓ select · enter jump                           e. Changes preview        
+    Browser         09                                                                        iately; Esc keeps the     
                             › diff█                                                            value.                   
   NAVIGATE                                                                                                              
   ↑↓ setting · ←→           › Files / Diff context                                                                      

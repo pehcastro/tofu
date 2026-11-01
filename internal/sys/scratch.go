@@ -55,6 +55,10 @@ func firstScratchRoot(settings string) string {
 	if json.Unmarshal(raw, &values) != nil || json.Unmarshal(values[ScratchRootsSetting], &roots) != nil {
 		return ""
 	}
+	return FirstAbsoluteRoot(roots)
+}
+
+func FirstAbsoluteRoot(roots string) string {
 	for _, root := range filepath.SplitList(roots) {
 		if filepath.IsAbs(root) {
 			return root

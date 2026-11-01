@@ -26,7 +26,8 @@ What it is
     agentSources, modelTier.genius, modelTier.smart, modelTier.worker,
     modelTier.dumb
   - Projects: projectManagement (boardy, the ticket board), boardFlow (the words
-    boardy uses), scratchCleanupDays and scratchMaxGB (the scratchpad)
+    boardy uses), scratchCleanupDays, scratchMaxGB and scratchRoots (the
+    scratchpad, scratchRoots global only)
   - Browser: browser, browserDriver, browserSteps, browserModel, browserEffort,
     browserCursor, browserProfile, browserHeadless, browserSleepMinutes
 
@@ -443,6 +444,10 @@ Projects
       at least 1 gigabytes one project's scratchpad may hold
       past this many gigabytes in one project's scratchpad, the oldest session
       folders are deleted first
+    scratchRoots                 empty
+      any text
+      Folders the scratchpad may move to, as a path list. The first absolute one
+      holds <root>/tofu/<project>/scratchpad. Read from the global file only
     sessionStaleDays             90
       at least 0 days a session is kept with no activity
       Days a session with no activity is kept before it is deleted. 0 never

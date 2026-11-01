@@ -44,10 +44,11 @@ The agents have four tools for it:
 `<session>` is the readable session handle, so a socket path under `tmp/`
 stays short enough for macOS.
 
-`scratchRoots` in `~/.tofu/settings.json` moves the scratchpad to another
-disk, as `<root>/tofu/<project>/scratchpad/`. It is read from your home
-settings only, never from a project, so a cloned repository cannot send
-writes elsewhere.
+`scratchRoots` moves the scratchpad to another disk, as
+`<root>/tofu/<project>/scratchpad/`. It takes a path list and the first
+absolute entry wins; a value with no absolute entry is refused at set. It
+is read from your global settings only, never from a project, so a cloned
+repository cannot send writes elsewhere.
 
 ## Change it
 
@@ -60,6 +61,7 @@ own.
 ```
 tofu settings set scratchCleanupDays 3
 tofu settings set scratchMaxGB 20
+tofu settings set --scope global scratchRoots E:\scratch
 ```
 
 To clean by hand:
@@ -90,4 +92,5 @@ touches. The defaults come back with:
 ```
 tofu settings set scratchCleanupDays 7
 tofu settings set scratchMaxGB 50
+tofu settings set --scope global scratchRoots ""
 ```

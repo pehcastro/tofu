@@ -2,13 +2,13 @@
 title: Settings and reload
 description: Two settings files, the project over yours, read again at every task, searchable in the app.
 order: 8
-updated: 2026-10-29
+updated: 2026-11-01
 ---
 
 A setting is a named switch with a default, like `gatePrompt` or
 `subAgentsPerTurn`. You write only the ones you change, in
 `~/.tofu/settings.json` for every project or `.tofu/settings.json` for one.
-The project wins over yours, and yours over the default. 68 settings sit in
+The project wins over yours, and yours over the default. 70 settings sit in
 nine groups: Appearance, Models & roles, Interaction, Context, Files, Shell,
 Turn, Projects and Browser. Models & roles holds where work continues when a
 subscription runs out, and Projects holds boardy, the ticket board, and the
@@ -86,6 +86,7 @@ Projects
     boardFlow               jira                             default
     scratchCleanupDays      7                                default
     scratchMaxGB            50                               default
+    scratchRoots            empty                            default
 ```
 
 `oneWorkingSessionPerProject` keeps one working session per project:

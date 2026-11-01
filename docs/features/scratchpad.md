@@ -2,7 +2,7 @@
 title: Scratchpad
 description: Agents put probes, temporary files and build caches in a folder outside your repository, one folder per agent, cleaned on a schedule you set.
 order: 20
-updated: 2026-10-24
+updated: 2026-11-01
 ---
 
 Agents need somewhere to write a probe script, a log, a capture or a build
@@ -64,6 +64,15 @@ a project's scratchpad passes that size. `shared/` is cleaned only by hand.
 `.tofu/scratch` folders left in a repository by older versions are listed by
 `tofu scratch` and removed only by `tofu scratch clean`.
 
-`scratchRoots` in `~/.tofu/settings.json` moves the scratchpad to a bigger
-disk, as `<root>/tofu/<project>/scratchpad/`. A project's own settings
-cannot set it, so a cloned repository never sends writes elsewhere.
+`scratchRoots` moves the scratchpad to a bigger disk, as
+`<root>/tofu/<project>/scratchpad/`. It takes a path list and the first
+absolute entry wins; a value with no absolute entry is refused when you set
+it. It is read from your global settings only, so a cloned repository never
+sends writes elsewhere.
+
+```
+tofu settings set --scope global scratchRoots E:\scratch
+tofu settings set --scope global scratchRoots ""
+```
+
+The second line puts the scratchpad back under `~/.tofu/projects/`.
