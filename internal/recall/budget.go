@@ -38,6 +38,10 @@ func (b Bands) Target() int {
 	return b.Identity + b.Facts + b.WorkingSet + b.Recent
 }
 
+func (b Bands) Less(tokens int) Bands {
+	return bandsOf(max(b.Target()-tokens, 0), bandShareOfWindow)
+}
+
 type Entry struct {
 	Step         int
 	Tool         string

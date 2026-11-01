@@ -722,16 +722,27 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	guard := newLoopGuard(config.Caps)
 	forks, stopContinuations, handbacks := 0, 0, 0
 	overTargetAfter := 0
-	lastForkWhy := func(fork *Fork) string {
-		previous := overTargetAfter
+	var lastFork *Fork
+	lastForkAt := 0
+	lastForkWhy := func(fork *Fork, at int) string {
+		previous, before, beforeAt := overTargetAfter, lastFork, lastForkAt
 		overTargetAfter = 0
+		if fork != nil {
+			lastFork, lastForkAt = fork, at
+		}
 		switch {
 		case fork == nil:
 			return ""
 		case config.Caps.MaxForks > 0 && forks+1 >= config.Caps.MaxForks:
 			return "this turn reached its cap of " + strconv.Itoa(config.Caps.MaxForks) + " forks, and the work is not finished"
-		case fork.Kind != ForkContinuation || fork.TokensAfter <= budget.Bands.Target():
+		case fork.Kind != ForkContinuation:
 			return ""
+		case fork.TokensAfter <= budget.Bands.Target():
+			if before == nil || before.Kind != ForkContinuation || at-beforeAt > 1 {
+				return ""
+			}
+			return fmt.Sprintf("this turn stopped forking: fork %d comes one step after fork %d, which left the conversation %d tokens under its %d token target while that step took %d, so a fork does not buy room for one step",
+				forks+1, forks, budget.Bands.Target()-before.TokensAfter, budget.Bands.Target(), fork.TokensBefore-before.TokensAfter)
 		}
 		overTargetAfter = fork.TokensAfter
 		if previous == 0 || fork.TokensAfter < previous {
@@ -739,6 +750,20 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 		return fmt.Sprintf("this turn stopped forking: fork %d leaves the conversation at %d tokens, over its %d token target and no smaller than the fork before it, so another fork would not help",
 			forks+1, fork.TokensAfter, budget.Bands.Target())
+	}
+	heldForStep := 0
+	forkFrom := func(forced ForkKind) (*Fork, []llm.Message, error) {
+		landing := budget
+		heldForStep = 0
+		if forced == "" && budget.Crossed(artifacts.preview, historyOf(messages)) {
+			heldForStep = konst.ForkStateBytes * 1000 / artifacts.preview.BytesPerThousandTokens
+			if last := lastAssistant(messages); last >= 0 {
+				heldForStep += sentTokens(messages) - sentTokens(messages[:last])
+			}
+			heldForStep = min(heldForStep, budget.Bands.Target()*konst.ForkRoomMostPercent/100)
+			landing.Bands = budget.Bands.Less(heldForStep)
+		}
+		return forkHistory(artifacts, landing, config.forkOpening(taskOrigin), messages, forced, forks+1, config.Caps.MaxForks)
 	}
 	var recordedGrants []subagent.Question
 	if config.Boundary != nil {
@@ -791,8 +816,12 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 		recorded.fork(ended, row, fork, row.At)
 		row.Session = recorded.session()
+		held := ""
+		if heldForStep > 0 {
+			held = fmt.Sprintf(", %d of its %d token target held back for the next step and the working state", heldForStep, budget.Bands.Target())
+		}
 		recorded.listChange(session.ListChangeFork, string(fork.Kind)+" fork "+strconv.Itoa(forks)+" "+when+" from "+ended.Session+", "+
-			strconv.Itoa(fork.TokensBefore)+" to "+strconv.Itoa(fork.TokensAfter)+" tokens, "+strconv.Itoa(fork.TailMessages)+" tail messages", beforeFork, begun)
+			strconv.Itoa(fork.TokensBefore)+" to "+strconv.Itoa(fork.TokensAfter)+" tokens, "+strconv.Itoa(fork.TailMessages)+" tail messages"+held, beforeFork, begun)
 		messages, sent, answering, budget = begun, 0, "", budget.Reported(0, recall.Occupancy{})
 		if fork.Kind == ForkCompact {
 			compacted()
@@ -906,11 +935,11 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			}
 			if !config.NoFork {
 				beforeFork := slices.Clone(messages)
-				fork, begun, err := forkHistory(artifacts, budget, config.forkOpening(taskOrigin), messages, "", forks+1, config.Caps.MaxForks)
+				fork, begun, err := forkFrom("")
 				if err != nil {
 					return fail(err)
 				}
-				if why := lastForkWhy(fork); why != "" {
+				if why := lastForkWhy(fork, step-1); why != "" {
 					return endForked(fork, before, beforeFork, begun, nil, why), nil
 				}
 				if fork != nil {
@@ -1368,7 +1397,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			}
 			if !config.NoFork {
 				beforeFork := slices.Clone(messages)
-				fork, begun, err := forkHistory(artifacts, budget, config.forkOpening(taskOrigin), messages, forced, forks+1, config.Caps.MaxForks)
+				fork, begun, err := forkFrom(forced)
 				if err == nil {
 					err = ctx.Err()
 				}
@@ -1376,7 +1405,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 					keep(stepRow)
 					return fail(err)
 				}
-				if why := lastForkWhy(fork); why != "" {
+				if why := lastForkWhy(fork, step); why != "" {
 					fork.Step, stepRow.Fork = step, fork
 					keep(stepRow)
 					return endForked(fork, "after step "+strconv.Itoa(step), beforeFork, begun, moved, why), nil

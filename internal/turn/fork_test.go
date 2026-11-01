@@ -199,11 +199,17 @@ func TestATrimOfResultsAlreadyReadRunsWhenTheBudgetIsCrossedAndTheForkOnlyIfItIs
 		}
 		return readStep(step)
 	}}
-	bytes := map[string]int{"f1.go": 12000}
-	for i := 2; i <= 8; i++ {
-		bytes["f"+strconv.Itoa(i)+".go"] = 1500
-	}
+	bytes := map[string]int{}
 	config, steps := forkingConfig(t, model, bytes, "12000")
+	shipped, err := recall.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bytesOf := func(tokens int) int { return tokens * shipped.OnWire(config.Wire).BytesPerThousandTokens / 1000 }
+	bytes["f1.go"] = bytesOf(5200)
+	for i := 2; i <= 8; i++ {
+		bytes["f"+strconv.Itoa(i)+".go"] = bytesOf(650)
+	}
 	if _, err := Run(context.Background(), config); err != nil {
 		t.Fatal(err)
 	}

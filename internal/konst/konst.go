@@ -64,6 +64,7 @@ const (
 
 	ForkTailTokens      = 20000
 	ForkTailRoomPercent = 50
+	ForkRoomMostPercent = 20
 	ForkStateBytes      = 12000
 	ForkStateWords      = 1200
 
