@@ -378,13 +378,17 @@ func (s Store) saidSince(sizes map[string]int64, whats ...string) ([]string, map
 func (m Managed) record(s subject, fired []Fired) error {
 	var err error
 	for _, f := range fired {
-		kind := RuleFired
-		if f.waits() {
-			kind = Waiting
-		}
-		err = errors.Join(err, m.Store.Record(s.key, Event{Ticket: s.ticket.ID, Kind: kind, Actor: s.actor, To: s.to, Text: hookText(f.RuleID, string(f.Then), s.event, f.Text())}))
+		err = errors.Join(err, m.Store.Record(s.key, s.firedEvent(f)))
 	}
 	return err
+}
+
+func (s subject) firedEvent(f Fired) Event {
+	kind := RuleFired
+	if f.waits() {
+		kind = Waiting
+	}
+	return Event{Ticket: s.ticket.ID, Kind: kind, Actor: s.actor, To: s.to, Text: hookText(f.RuleID, string(f.Then), s.event, f.Text())}
 }
 
 func (m Managed) note(h rule.Hook, s subject, text string) error {
@@ -483,18 +487,56 @@ func (m Managed) set(h rule.Hook, s *subject) (string, error) {
 }
 
 func (m Managed) Fire(when rule.When, event rule.HookEvent, key, id, actor string) error {
-	s := subject{event: event, key: key, actor: actor}
-	if id != "" {
-		ticket, board, err := m.ticketOnBoard(id)
-		if err != nil {
-			return err
-		}
-		s = m.subjectOf(event, board.Key, ticket, ticket.Status, actor, 0)
+	s, err := m.firedOn(event, key, id, actor)
+	if err != nil {
+		return err
 	}
 	if when == rule.WhenBefore {
 		return m.gate(&s)
 	}
 	return m.after(s)
+}
+
+func (m Managed) firedOn(event rule.HookEvent, key, id, actor string) (subject, error) {
+	if id == "" {
+		return subject{event: event, key: key, actor: actor}, nil
+	}
+	ticket, board, err := m.ticketOnBoard(id)
+	if err != nil {
+		return subject{}, err
+	}
+	return m.subjectOf(event, board.Key, ticket, ticket.Status, actor, 0), nil
+}
+
+type Foreseen struct {
+	Nudges, Notifies, Effects []string
+}
+
+func (m Managed) Foresee(event rule.HookEvent, key, id, actor string) (Foreseen, error) {
+	s, err := m.firedOn(event, key, id, actor)
+	if err != nil {
+		return Foreseen{}, err
+	}
+	hooks, err := m.Store.hooks(s.key)
+	if err != nil {
+		return Foreseen{}, err
+	}
+	fired, effects, err := m.weigh(hooks, rule.WhenAfter, s)
+	var foreseen Foreseen
+	for _, f := range fired {
+		if said, found := s.firedEvent(f).hookSaid(string(rule.ThenNudge)); found {
+			foreseen.Nudges = append(foreseen.Nudges, said)
+		}
+	}
+	for _, h := range effects {
+		arg := s.expand(h.Action.Arg)
+		if h.Action.Do == rule.DoNotify {
+			foreseen.Notifies = append(foreseen.Notifies, h.ID+": "+arg)
+			continue
+		}
+		foreseen.Effects = append(foreseen.Effects, h.ID+" would "+string(h.Action.Do)+" "+arg)
+	}
+	return foreseen, err
 }
 
 func (m Managed) Tick(key string) ([]string, error) {

@@ -71,6 +71,9 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 			_, _ = fmt.Fprintf(out, "shadow %s: %s\n", loaded.ID, why)
 		}
 	}
+	for _, effect := range board.effects {
+		_, _ = fmt.Fprintf(out, "board hook %s after lead.attach; show-prompt ran nothing\n", effect)
+	}
 	library, points := readLibrary()
 	if library.Unreadable != "" {
 		_, _ = fmt.Fprintf(out, "points unreadable: %s\n", library.Unreadable)
@@ -101,20 +104,15 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 	return exitOK
 }
 
-type boardFraming struct {
-	attached, notified string
-}
-
-func offeredTools(opts runOpts, prompt composedRun, named []turn.Tool) ([]llm.Tool, boardFraming, error) {
-	var board boardFraming
-	config, spawner, err := runConfig(opts, named, runtime{open: openAppWire, composed: &prompt, framed: &board.attached})
-	board.notified = turn.UnreadBoardNotifies(config.Board)
+func offeredTools(opts runOpts, prompt composedRun, named []turn.Tool) ([]llm.Tool, leadForeseen, error) {
+	var board leadForeseen
+	config, spawner, err := runConfig(opts, named, runtime{open: openAppWire, composed: &prompt, foreseen: &board})
 	if err != nil || opts.agent == "" {
 		return config.Tools.Definitions(), board, err
 	}
 	agent, err := prompt.subAgents.Named(opts.agent)
 	if err != nil {
-		return nil, boardFraming{}, err
+		return nil, leadForeseen{}, err
 	}
-	return spawner.OfferedTo(agent, ""), board, nil
+	return spawner.OfferedTo(agent, ""), leadForeseen{}, nil
 }

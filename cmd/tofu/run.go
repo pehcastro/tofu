@@ -144,7 +144,7 @@ type runtime struct {
 	memory       *sessionMemoryModel
 	current      func(subagent.Definition) subagent.Definition
 	composed     *composedRun
-	framed       *string
+	foreseen     *leadForeseen
 
 	omitThinkingSummary bool
 }
@@ -958,10 +958,10 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 			return turn.Config{}, nil, err
 		}
 		asking = append(asking, leadTickets...)
-		attached := leadAttached(board, sessionID, run)
-		config.Inbox.FramesFirstRequest(attached)
-		if run.framed != nil {
-			*run.framed = attached
+		if run.foreseen != nil {
+			*run.foreseen = foreseeLead(board, sessionID)
+		} else {
+			config.Inbox.FramesFirstRequest(leadAttached(board, sessionID, run))
 		}
 	}
 	if opts.agent == "" && episodesOn(dir) {
@@ -1045,17 +1045,53 @@ func leadAttached(board boardy.Managed, session string, run runtime) string {
 		}
 	}
 	sizes := board.Store.EventSizes()
+	err := eachLedBoard(board, session, func(key string) error {
+		return board.Fire(rule.WhenAfter, rule.HookLeadAttach, key, "", session)
+	})
+	return turn.BoardNudges(board.Store, sizes) + attachFailed(err)
+}
+
+type leadForeseen struct {
+	attached, notified string
+	effects            []string
+}
+
+func foreseeLead(board boardy.Managed, session string) leadForeseen {
+	var all boardy.Foreseen
+	err := eachLedBoard(board, session, func(key string) error {
+		one, err := board.Foresee(rule.HookLeadAttach, key, "", session)
+		all.Nudges, all.Notifies, all.Effects = append(all.Nudges, one.Nudges...), append(all.Notifies, one.Notifies...), append(all.Effects, one.Effects...)
+		return err
+	})
+	foreseen := leadForeseen{attached: attachFailed(err), notified: turn.UnreadBoardNotifies(&board), effects: all.Effects}
+	if len(all.Nudges) > 0 {
+		foreseen.attached = "\n\na board hook nudges you: " + strings.Join(all.Nudges, "; ") + foreseen.attached
+	}
+	switch notes := strings.Join(all.Notifies, "; "); {
+	case notes == "":
+	case foreseen.notified == "":
+		foreseen.notified = turn.NotesAfterTheTask + "board hooks notify you: " + notes
+	default:
+		foreseen.notified += "; " + notes
+	}
+	return foreseen
+}
+
+func eachLedBoard(board boardy.Managed, session string, do func(key string) error) error {
 	boards, err := board.Store.Boards()
 	for _, managed := range boards {
 		if board.Manages(managed.Key, session, "") == nil {
-			err = errors.Join(err, board.Fire(rule.WhenAfter, rule.HookLeadAttach, managed.Key, "", session))
+			err = errors.Join(err, do(managed.Key))
 		}
 	}
-	said := turn.BoardNudges(board.Store, sizes)
-	if err != nil {
-		said += "\n\na board hook on lead.attach failed: " + err.Error()
+	return err
+}
+
+func attachFailed(err error) string {
+	if err == nil {
+		return ""
 	}
-	return said
+	return "\n\na board hook on lead.attach failed: " + err.Error()
 }
 
 func nodeProject(dir string) bool {
