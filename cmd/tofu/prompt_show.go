@@ -27,12 +27,12 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 	if err != nil {
 		return runFail(errOut, err)
 	}
-	offered, err := offeredTools(opts, prompt, named)
+	offered, attached, err := offeredTools(opts, prompt, named)
 	if err != nil {
 		return runFail(errOut, err)
 	}
 	opts, instructions, composed := prompt.opts, prompt.instructions, prompt.composed
-	sent := turn.Config{System: composed.Head(), Instructions: prompt.files, Memory: prompt.memory, Environment: composed.WithTaskRules(prompt.environment), Task: opts.task}
+	sent := turn.Config{System: composed.Head(), Instructions: prompt.files, Memory: prompt.memory, Environment: composed.WithTaskRules(prompt.environment) + attached, Task: opts.task}
 	system, firstUser := sent.SystemMessage(), sent.FirstUserMessage()
 	uncomposed := len(runSystem(opts))
 
@@ -84,7 +84,11 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 	for _, view := range sent.MemoryMessage() {
 		_, _ = fmt.Fprintf(out, "\nmemory, a user message before the first, %d bytes\n%s\n", len(view.Content), view.Content)
 	}
-	_, _ = fmt.Fprintf(out, "\nfirst user message, %d bytes\n%s\n", len(firstUser), firstUser)
+	boardText := ""
+	if attached != "" {
+		boardText = fmt.Sprintf(", %d of them the board text lead.attach frames in", len(attached))
+	}
+	_, _ = fmt.Fprintf(out, "\nfirst user message, %d bytes%s\n%s\n", len(firstUser), boardText, firstUser)
 	_, _ = fmt.Fprintf(out, "\noffered tools, %d, as the request sends them\n", len(offered))
 	for _, tool := range offered {
 		_, _ = fmt.Fprintf(out, "\ntool %s\n%s\n", tool.Name, tool.Description)
@@ -94,14 +98,15 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 	return exitOK
 }
 
-func offeredTools(opts runOpts, prompt composedRun, named []turn.Tool) ([]llm.Tool, error) {
-	config, spawner, err := runConfig(opts, named, runtime{open: openAppWire, composed: &prompt})
+func offeredTools(opts runOpts, prompt composedRun, named []turn.Tool) ([]llm.Tool, string, error) {
+	var attached string
+	config, spawner, err := runConfig(opts, named, runtime{open: openAppWire, composed: &prompt, framed: &attached})
 	if err != nil || opts.agent == "" {
-		return config.Tools.Definitions(), err
+		return config.Tools.Definitions(), attached, err
 	}
 	agent, err := prompt.subAgents.Named(opts.agent)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return spawner.OfferedTo(agent, ""), nil
+	return spawner.OfferedTo(agent, ""), attached, nil
 }

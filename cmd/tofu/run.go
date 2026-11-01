@@ -144,6 +144,7 @@ type runtime struct {
 	memory       *sessionMemoryModel
 	current      func(subagent.Definition) subagent.Definition
 	composed     *composedRun
+	framed       *string
 
 	omitThinkingSummary bool
 }
@@ -957,7 +958,11 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 			return turn.Config{}, nil, err
 		}
 		asking = append(asking, leadTickets...)
-		config.Inbox.FramesFirstRequest(leadAttached(board, sessionID, run))
+		attached := leadAttached(board, sessionID, run)
+		config.Inbox.FramesFirstRequest(attached)
+		if run.framed != nil {
+			*run.framed = attached
+		}
 	}
 	if opts.agent == "" && episodesOn(dir) {
 		zoom := &tools.Zoom{Project: dir, Compactor: func(ask turn.RecordedAsk) (memtree.Compact, memtree.CompactAll, func()) {
