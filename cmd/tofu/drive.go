@@ -808,7 +808,7 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 	); err != nil {
 		return refuse("", err)
 	}
-	for _, path := range []*string{&plan.script, &plan.home, &plan.cassette} {
+	for _, path := range []*string{&plan.script, &plan.home, &plan.cassette, &plan.quota, &plan.clipboard} {
 		if *path == "" || *path == stdinScript {
 			continue
 		}
