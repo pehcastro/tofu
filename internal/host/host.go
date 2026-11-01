@@ -870,7 +870,17 @@ func (h *Host) Compacted(into string, messages []llm.Message) error {
 	h.dropCheckIn()
 	h.id, h.carried = into, messages
 	h.mu.Unlock()
-	return h.enter(into)
+	if err := h.enter(into); err != nil || h.joins {
+		return err
+	}
+	store, err := session.OpenIn(h.dir)
+	if err != nil {
+		return err
+	}
+	if err := h.cron.Keep(cronFile(store, into)); err != nil {
+		return fmt.Errorf("cron jobs were not written: %w", err)
+	}
+	return nil
 }
 
 func (h *Host) Ran(command, output string, stopped bool) string {
