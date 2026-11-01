@@ -18,6 +18,7 @@ import (
 	"tofu/internal/cron"
 	"tofu/internal/host"
 	"tofu/internal/llm"
+	"tofu/internal/recall"
 	sessionstore "tofu/internal/session"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
@@ -490,9 +491,14 @@ func TestAConversationThatOutgrowsItsBudgetAcrossSendsForks(t *testing.T) {
 	dir := scratchProject(t)
 	model := &sendModel{}
 	send := stubbedTurn(dir, model)
-	bulk := strings.Repeat("carry this sentence forward. ", 1500)
+	cfg, err := recall.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sentence := "carry this sentence forward. "
+	bulk := strings.Repeat(sentence, 18_800*cfg.OnWire(wireSubscription).BytesPerThousandTokens/1000/len(sentence))
 	forkedAt := 0
-	for attempt := 1; attempt <= 5 && forkedAt == 0; attempt++ {
+	for attempt := 1; attempt <= 8 && forkedAt == 0; attempt++ {
 		model.queued = []llm.Decision{
 			{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-" + strconv.Itoa(attempt))}},
 			{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "noted"},
@@ -507,7 +513,7 @@ func TestAConversationThatOutgrowsItsBudgetAcrossSendsForks(t *testing.T) {
 	}
 	t.Logf("the conversation forked on send %d, carrying %d characters per send", forkedAt, len(bulk))
 	if forkedAt == 0 {
-		t.Fatal("five sends of the same bulk never crossed the fork mark, so nothing grew across a send")
+		t.Fatal("eight sends of the same bulk never crossed the fork mark, so nothing grew across a send")
 	}
 	if forkedAt == 1 {
 		t.Fatal("the first send forked on its own, so this proves nothing about growth across sends")
