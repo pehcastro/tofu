@@ -1,4 +1,4 @@
- tofu        chat   agents   edits   shells   0s [settings] 
+ tofu    chat   agents   edits   shells   order  [settings] 
                                                             
                                                            │
                                                            │
@@ -18,7 +18,7 @@
   █ Ask tofu to build, inspect, or delegate                 
                                                             
  ctx 118k/250k  |  claude-sub 5h 62%                        
- tofu        chat   agents   edits   shells   0s [settings] 
+ tofu    chat   agents   edits   shells   order  [settings] 
                                                             
                                                            │
   All activity                    9-10/10 · wheel ↑ older  │
@@ -38,7 +38,7 @@
   │                                                   │    ┃
   ╰───────────────────────────────────────────────────╯     
  ctx 118k/250k  |  claude-sub 5h 62%                        
- tofu        chat   agents   edits   shells   0s [settings] 
+ tofu    chat   agents   edits   shells   order  [settings] 
                                                             
 All changes                       2 edits · oldest → newest 
 Select an edit reference to read every changed line.        
@@ -58,7 +58,7 @@ Select an edit reference to read every changed line.
                                                             
                                                             
  ctx 118k/250k  |  claude-sub 5h 62%                        
- tofu        chat   agents   edits   shells   0s [settings] 
+ tofu    chat   agents   edits   shells   order  [settings] 
                                                             
                                                            │
   Shells            dev-server                   running   │
@@ -86,19 +86,19 @@ Select an edit reference to read every changed line.
   › Appearance    05    › Theme                 tofu  ▾     
     Models & rol… 03      tofu uses Zed Nu Disco; choos…    
     Interaction   09                                        
-    Context       15      Density        comfortable  ▾     
+    Context       17      Density        comfortable  ▾     
     Files         03      Spacing across lists and pane…    
     Shell         04                                        
-    Turn          17      Animations          subtle  ▾     
-    Projects      05      Motion for conversational sta…    
-    Browser       08                                        
+    Turn          18      Animations          subtle  ▾     
+    Projects      06      Motion for conversational sta…    
+    Browser       09                                        
                           Status bar         compact  ▾     
   NAVIGATE                Context, quotas, and runtime …    
   ↑↓ setting · ←→                                           
   section                 Color mode            auto  ▾     
   ctrl+k search ·         Terminal color capability         
   esc chat                                                  
- tofu  ./tofu/         chat   agents   edits   shells (1)         0s [settings] 
+ tofu  ./tofu/    chat   agents   edits   shells (1)   orders     0s [settings] 
                                                                                 
     [&orchestrator]                                  14:32  [message#9d4f11]   │
     three sub-agents run: [&c1] reads the loader, [&c2] waits on review,       │
@@ -122,7 +122,7 @@ Select an edit reference to read every changed line.
   █ Ask tofu to build, inspect, or delegate                                     
                                                                                 
  ctx 118k/250k  |  claude-sub 5h 62%                                            
- tofu  ./tofu/         chat   agents   edits   shells (1)         0s [settings] 
+ tofu  ./tofu/    chat   agents   edits   shells (1)   orders     0s [settings] 
                                                                                 
                                                                                │
   All activity                                        9-10/10 · wheel ↑ older  │
@@ -146,7 +146,7 @@ Select an edit reference to read every changed line.
   │                                                                       │    ┃
   ╰───────────────────────────────────────────────────────────────────────╯     
  ctx 118k/250k  |  claude-sub 5h 62%                                            
- tofu  ./tofu/         chat   agents   edits   shells (1)         0s [settings] 
+ tofu  ./tofu/    chat   agents   edits   shells (1)   orders     0s [settings] 
                                                                                 
 All changes                                           2 edits · oldest → newest 
 Select an edit reference to read every changed line.                            
@@ -170,7 +170,7 @@ Select an edit reference to read every changed line.
                                                                                 
                                                                                 
  ctx 118k/250k  |  claude-sub 5h 62%                                            
- tofu  ./tofu/         chat   agents   edits   shells (1)         0s [settings] 
+ tofu  ./tofu/    chat   agents   edits   shells (1)   orders     0s [settings] 
                                                                                 
                                                                                │
   Shells              dev-server                                     running   │
@@ -202,12 +202,12 @@ Select an edit reference to read every changed line.
   › Appearance    05      tofu uses Zed Nu Disco; choose a palette              
     Models & rol… 03                                                            
     Interaction   09      Density                            comfortable  ▾     
-    Context       15      Spacing across lists and panels                       
+    Context       17      Spacing across lists and panels                       
     Files         03                                                            
     Shell         04      Animations                              subtle  ▾     
-    Turn          17      Motion for conversational states                      
-    Projects      05                                                            
-    Browser       08      Status bar                             compact  ▾     
+    Turn          18      Motion for conversational states                      
+    Projects      06                                                            
+    Browser       09      Status bar                             compact  ▾     
                           Context, quotas, and runtime counters                 
   NAVIGATE                                                                      
   ↑↓ setting · ←→         Color mode                                auto  ▾     
@@ -218,7 +218,7 @@ Select an edit reference to read every changed line.
                                                                                 
                                                                                 
                                                                                 
- tofu  ./tofu/                     chat   agents   edits   shells (1)                     0s [settings] 
+ tofu  ./tofu/                chat   agents   edits   shells (1)   orders                 0s [settings] 
                                                                                                         
     You                                                                                        14:32    
     agents                                                                                              
@@ -250,7 +250,7 @@ Select an edit reference to read every changed line.
   █ Ask tofu to build, inspect, or delegate                                                             
                                                                                                         
  ctx 118k/250k  |  claude-sub 5h 62%  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
- tofu  ./tofu/                     chat   agents   edits   shells (1)                     0s [settings] 
+ tofu  ./tofu/                chat   agents   edits   shells (1)   orders                 0s [settings] 
                                                                                                         
                                                                                                        │
   Sub-agents                All activity                                      8-10/10 · wheel ↑ older  │
@@ -282,7 +282,7 @@ Select an edit reference to read every changed line.
                             │                                                                     │    ┃
                             ╰─────────────────────────────────────────────────────────────────────╯     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                    
- tofu  ./tofu/                     chat   agents   edits   shells (1)                     0s [settings] 
+ tofu  ./tofu/                chat   agents   edits   shells (1)   orders                 0s [settings] 
                                                                                                         
                                                                                                         
   File edits                        All changes                             2 edits · oldest → newest   
@@ -314,7 +314,7 @@ Select an edit reference to read every changed line.
                                                                                                         
                                                                                                         
  ctx 118k/250k  |  claude-sub 5h 62%                                                                    
- tofu  ./tofu/                     chat   agents   edits   shells (1)                     0s [settings] 
+ tofu  ./tofu/                chat   agents   edits   shells (1)   orders                 0s [settings] 
                                                                                                         
                                                                                                        │
   Shells                    dev-server                                                       running   │
@@ -354,12 +354,12 @@ Select an edit reference to read every changed line.
   › Appearance    05      tofu uses Zed Nu Disco; choose a palette                                      
     Models & rol… 03                                                                                    
     Interaction   09      Density                                                    comfortable  ▾     
-    Context       15      Spacing across lists and panels                                               
+    Context       17      Spacing across lists and panels                                               
     Files         03                                                                                    
     Shell         04      Animations                                                      subtle  ▾     
-    Turn          17      Motion for conversational states                                              
-    Projects      05                                                                                    
-    Browser       08      Status bar                                                     compact  ▾     
+    Turn          18      Motion for conversational states                                              
+    Projects      06                                                                                    
+    Browser       09      Status bar                                                     compact  ▾     
                           Context, quotas, and runtime counters                                         
   NAVIGATE                                                                                              
   ↑↓ setting · ←→         Color mode                                                        auto  ▾     
@@ -378,7 +378,7 @@ Select an edit reference to read every changed line.
                                                                                                         
                                                                                                         
                                                                                                         
- tofu   |  ./tofu/ (git:develop)           chat   sub-agents   file edits   shells (1)   amber-cedar-otter [session#3c5f71] | 0s [settings] 
+ tofu   |  ./tofu/                chat   sub-agents   file edits   shells (1)   orders   amber-cedar-otter [session#3c5f71] | 0s [settings] 
                                                                                                                                             
     You                                                                                                                            14:32    
     agents                                                                                                                                  
@@ -418,7 +418,7 @@ Select an edit reference to read every changed line.
   █ Ask tofu to build, inspect, or delegate                                                                                                 
                                                                                                                                             
  ctx 118k/250k  |  claude-sub 5h 62%                                      [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
- tofu   |  ./tofu/ (git:develop)           chat   sub-agents   file edits   shells (1)   amber-cedar-otter [session#3c5f71] | 0s [settings] 
+ tofu   |  ./tofu/                chat   sub-agents   file edits   shells (1)   orders   amber-cedar-otter [session#3c5f71] | 0s [settings] 
                                                                                                                                             
                                                                                                                                            │
   Sub-agents                     All activity                                                                     7-10/10 · wheel ↑ older  │
@@ -458,7 +458,7 @@ Select an edit reference to read every changed line.
                                  │                                                                                                    │    ┃
                                  ╰────────────────────────────────────────────────────────────────────────────────────────────────────╯     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                                                        
- tofu   |  ./tofu/ (git:develop)           chat   sub-agents   file edits   shells (1)   amber-cedar-otter [session#3c5f71] | 0s [settings] 
+ tofu   |  ./tofu/                chat   sub-agents   file edits   shells (1)   orders   amber-cedar-otter [session#3c5f71] | 0s [settings] 
                                                                                                                                             
                                                                                                                                             
   File edits                          All changes                                                               2 edits · oldest → newest   
@@ -498,7 +498,7 @@ Select an edit reference to read every changed line.
                                                                                                                                             
                                                                                                                                             
  ctx 118k/250k  |  claude-sub 5h 62%                                                                                                        
- tofu   |  ./tofu/ (git:develop)           chat   sub-agents   file edits   shells (1)   amber-cedar-otter [session#3c5f71] | 0s [settings] 
+ tofu   |  ./tofu/                chat   sub-agents   file edits   shells (1)   orders   amber-cedar-otter [session#3c5f71] | 0s [settings] 
                                                                                                                                             
                                                                                                                                            │
   Shells                         dev-server                                                                                      running   │
@@ -546,12 +546,12 @@ Select an edit reference to read every changed line.
   › Appearance          05      tofu uses Zed Nu Disco; choose a palette                                     choose a palette               
     Models & roles      03                                                                                                                  
     Interaction         09      Density                                                   comfortable  ▾     CURRENT VALUE                  
-    Context             15      Spacing across lists and panels                                               tofu                          
+    Context             17      Spacing across lists and panels                                               tofu                          
     Files               03                                                                                                                  
     Shell               04      Animations                                                     subtle  ▾     HOW IT WORKS                   
-    Turn                17      Motion for conversational states                                             Enter opens a focused          
-    Projects            05                                                                                   choice. Changes preview        
-    Browser             08      Status bar                                                    compact  ▾     immediately; Esc keeps the     
+    Turn                18      Motion for conversational states                                             Enter opens a focused          
+    Projects            06                                                                                   choice. Changes preview        
+    Browser             09      Status bar                                                    compact  ▾     immediately; Esc keeps the     
                                 Context, quotas, and runtime counters                                        prior value.                   
   NAVIGATE                                                                                                                                  
   ↑↓ setting · ←→ section       Color mode                                                       auto  ▾     SCOPE                          

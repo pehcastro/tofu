@@ -6,12 +6,12 @@
     Appearance    05      the model that plans and hands work to sub-agents                         
   › Models & rol… 03                                                                                
     Interaction   09      Classifier model                                                    ▾     
-    Context       15      the typed model that judges the model's calls, shell results, browser…    
+    Context       17      the typed model that judges the model's calls, shell results, browser…    
     Files         03                                                                                
     Shell         04      Continue on an API model                                        no  ▾     
-    Turn          17      The model, paid by its key, that work continues on when no subscripti…    
-    Projects      05                                                                                
-    Browser       08    enter change  ·  shift+tab scope  ·  esc chat                               
+    Turn          18      The model, paid by its key, that work continues on when no subscripti…    
+    Projects      06                                                                                
+    Browser       09    enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     
   NAVIGATE                                                                                          
   ↑↓ setting · ←→                                                                                   
@@ -96,12 +96,12 @@
     Appearance    05      the model that plans and hands work to sub-agents                         
   › Models & rol… 03                                                                                
     Interaction   09    › Classifier model                               typesafe/jev-latest  ▾     
-    Context       15      the typed model that judges the model's calls, shell results, browser…    
+    Context       17      the typed model that judges the model's calls, shell results, browser…    
     Files         03                                                                                
     Shell         04      Continue on an API model                                        no  ▾     
-    Turn          17      The model, paid by its key, that work continues on when no subscripti…    
-    Projects      05                                                                                
-    Browser       08    enter change  ·  shift+tab scope  ·  esc chat                               
+    Turn          18      The model, paid by its key, that work continues on when no subscripti…    
+    Projects      06                                                                                
+    Browser       09    enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     
   NAVIGATE                                                                                          
   ↑↓ setting · ←→                                                                                   

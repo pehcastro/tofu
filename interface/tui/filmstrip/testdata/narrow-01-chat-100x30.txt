@@ -1,4 +1,4 @@
- tofu        chat   agents   edits   shells   0s [settings] 
+ tofu    chat   agents   edits   shells   order  [settings] 
                                                             
                                                             
     You                                            14:32    

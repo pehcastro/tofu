@@ -45,7 +45,7 @@ const (
 	shimmerStep       = 2
 )
 
-func tabNames() []string { return []string{"chat", "sub-agents", "file edits", "shells"} }
+func tabNames() []string { return []string{"chat", "sub-agents", "file edits", "shells", "orders"} }
 
 func (a *App) tab() screen {
 	if a.current == screenSettings {
@@ -121,7 +121,7 @@ func (a *App) base() string {
 	if a.forking {
 		head.Notice = frame.ForkNotice
 	}
-	counts := []int{0, a.status.Agents, 0, a.runningShells()}
+	counts := []int{0, a.status.Agents, 0, a.runningShells(), 0}
 	tabs := make([]frame.Tab, len(counts))
 	for index, name := range tabNames() {
 		tabs[index] = frame.Tab{Label: name, Count: counts[index]}
@@ -189,6 +189,8 @@ func (a *App) body() string {
 		return a.edits.View()
 	case screenShells:
 		return a.shells.View()
+	case screenOrders:
+		return a.orders.View()
 	case screenSettings:
 	}
 	panic("tui: unknown screen")

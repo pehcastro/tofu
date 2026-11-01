@@ -6,7 +6,7 @@
     Appearance    05      Enter sends; Shift+Enter inserts a line break                             
     Models & rol… 03                                                                                
   › Interaction   09      Keybindings                                                   edit  ▾     
-    Context       15      Change shortcuts handled inside tofu                                      
+    Context       17      Change shortcuts handled inside tofu                                      
     Files         03                                                                                
     Shell         04      Host integration                                       inspect Zed  ▾     
     Turn          18      Detect host shortcut conflicts and available integrations                 

@@ -1,4 +1,4 @@
- tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
+ tofu  ./tofu/              chat   agents   edits   shells (1)   orders               0s [settings] 
 
 
 
@@ -28,7 +28,7 @@
   ▯ Ask tofu to build, inspect, or delegate                                                         
                                                                                                     
  ctx 118k/250k  |  claude 62%     [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
- tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
+ tofu  ./tofu/              chat   agents   edits   shells (1)   orders               0s [settings] 
 
 
 
@@ -58,7 +58,7 @@
   ▯ Ask tofu to build, inspect, or delegate                                                         
                                                                                                     
  ctx 118k/250k  |  claude 62%     [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
- tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
+ tofu  ./tofu/              chat   agents   edits   shells (1)   orders               0s [settings] 
 
 
 
@@ -88,7 +88,7 @@
   ▯ Ask tofu to build, inspect, or delegate                                                         
                                                                                                     
  ctx 118k/250k  |  claude 62%     [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
- tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
+ tofu  ./tofu/              chat   agents   edits   shells (1)   orders               0s [settings] 
                                                                                                     
     · the next turn runs meta/muse-spark-1.2-contributor at effort medium, and a restart starts     
       again on the bound model                                                                      

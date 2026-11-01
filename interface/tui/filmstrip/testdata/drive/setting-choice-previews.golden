@@ -6,12 +6,12 @@
   › Appearance    05      tofu uses Zed Nu Disco; choose a palette                                  
     Models & rol… 03                                                                                
     Interaction   09      Density                                                comfortable  ▾     
-    Context       15      Spacing across lists and panels                                           
+    Context       17      Spacing across lists and panels                                           
     Files         03                                                                                
     Shell         04     Status bar                                     esc           subtle  ▾     
-    Turn          17     Context, quotas, and runtime counters                                      
-    Projects      05                                                                                
-    Browser       08       compact                                                  detailed  ▾     
+    Turn          18     Context, quotas, and runtime counters                                      
+    Projects      06                                                                                
+    Browser       09       compact                                                  detailed  ▾     
                                                                                                     
   NAVIGATE               >  detailed                                                                
   ↑↓ setting · ←→                                                                       auto  ▾     
@@ -36,12 +36,12 @@
   › Appearance    05      tofu uses Zed Nu Disco; choose a palette                                  
     Models & rol… 03                                                                                
     Interaction   09      Density                                                comfortable  ▾     
-    Context       15      Spacing across lists and panels                                           
+    Context       17      Spacing across lists and panels                                           
     Files         03                                                                                
     Shell         04     Status bar                                     esc           subtle  ▾     
-    Turn          17     Context, quotas, and runtime counters                                      
-    Projects      05                                                                                
-    Browser       08       compact                                                    hidden  ▾     
+    Turn          18     Context, quotas, and runtime counters                                      
+    Projects      06                                                                                
+    Browser       09       compact                                                    hidden  ▾     
                                                                                                     
   NAVIGATE                 detailed                                                                 
   ↑↓ setting · ←→                                                                       auto  ▾     
@@ -66,12 +66,12 @@
   › Appearance    05      tofu uses Zed Nu Disco; choose a palette                                  
     Models & rol… 03                                                                                
     Interaction   09      Density                                                comfortable  ▾     
-    Context       15      Spacing across lists and panels                                           
+    Context       17      Spacing across lists and panels                                           
     Files         03                                                                                
     Shell         04      Animations                                                  subtle  ▾     
-    Turn          17      Motion for conversational states                                          
-    Projects      05                                                                                
-    Browser       08    › Status bar                                                 compact  ▾     
+    Turn          18      Motion for conversational states                                          
+    Projects      06                                                                                
+    Browser       09    › Status bar                                                 compact  ▾     
                           Context, quotas, and runtime counters                                     
   NAVIGATE                                                                                          
   ↑↓ setting · ←→         Color mode                                                    auto  ▾     

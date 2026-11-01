@@ -26,6 +26,7 @@ import (
 	"tofu/interface/tui/frame"
 	"tofu/interface/tui/keyfield"
 	"tofu/interface/tui/markdown"
+	orderpane "tofu/interface/tui/orders"
 	"tofu/interface/tui/paste"
 	"tofu/interface/tui/pointer"
 	"tofu/interface/tui/question"
@@ -184,6 +185,7 @@ const (
 	screenAgents
 	screenEdits
 	screenShells
+	screenOrders
 	screenSettings
 )
 
@@ -222,6 +224,9 @@ type App struct {
 	feed           feed.Model
 	edits          edits.Model
 	shells         shells.Model
+	orders         orderpane.Model
+	ordersSeen     map[string]int
+	orderCalls     map[string]orderpane.Order
 	settings       settings.Model
 	store          *isettings.Store
 	defaults       []isettings.Spec
@@ -384,6 +389,8 @@ func New(options Options) *App {
 		happenedIndex: map[string]int{},
 		lengthenedIDs: map[string]string{},
 		serving:       map[string]string{},
+		ordersSeen:    map[string]int{},
+		orderCalls:    map[string]orderpane.Order{},
 		board:         paste.Default(options.Paste),
 	}
 	app.view.FeedID = app.shownID
@@ -566,6 +573,7 @@ func (a *App) resize(width, height int) {
 	a.feed.SetSize(width, body)
 	a.edits.SetSize(width, body)
 	a.shells.SetSize(width, body)
+	a.orders.SetSize(width, body)
 	a.settings.SetSize(width, height)
 	a.selection, a.frozen = pointer.Selection{}, ""
 }

@@ -34,6 +34,7 @@ type resumedLead struct {
 	calls   map[string]*recordedCall
 	reports []recordedReport
 	rows    []SubAgentRow
+	moves   map[string][]roster.Transition
 	said    map[saidKey][]session.Event
 	loose   []session.Attachment
 	images  map[string][]session.Attachment
@@ -93,7 +94,7 @@ func resumedChat(carry Carry, dir string) Opened {
 }
 
 func (e *Earlier) lead(store *session.Store) *resumedLead {
-	lead := &resumedLead{carry: e.carry, store: store, calls: map[string]*recordedCall{}, said: map[saidKey][]session.Event{}, worked: map[string][]session.Event{}, runs: e.runs, images: map[string][]session.Attachment{}}
+	lead := &resumedLead{carry: e.carry, store: store, calls: map[string]*recordedCall{}, moves: map[string][]roster.Transition{}, said: map[saidKey][]session.Event{}, worked: map[string][]session.Event{}, runs: e.runs, images: map[string][]session.Attachment{}}
 	lead.watch = &watcher{emit: func(event Event) {
 		event.Turn, event.At = lead.turn, lead.at
 		lead.chat = append(lead.chat, redacted(event, e.mask))
@@ -261,6 +262,16 @@ func (l *resumedLead) note(event session.Event, generation int) {
 		}
 		return
 	}
+	if event.Kind == session.EventNotice {
+		var notice struct {
+			Transition roster.Transition `json:"transition"`
+		}
+		if json.Unmarshal(event.Body, &notice) == nil && notice.Transition.Agent != "" {
+			moved := notice.Transition.Agent
+			l.moves[moved] = append(l.moves[moved], notice.Transition)
+		}
+		return
+	}
 	if event.Agent != "" {
 		if event.Kind == session.EventToolCall || event.Kind == session.EventToolResult {
 			l.worked[event.Agent] = append(l.worked[event.Agent], event)
@@ -420,6 +431,11 @@ func (l *resumedLead) replaying(logged session.Event) {
 
 func (l *resumedLead) show(spawned ...SubAgentRow) {
 	l.rows = append(l.rows, spawned...)
+	for i := range l.rows {
+		if len(l.rows[i].Moves) == 0 {
+			l.rows[i].Moves = l.moves[l.rows[i].Name]
+		}
+	}
 	l.watch.emit(Event{Kind: EventSubAgent, SubAgents: l.rows})
 }
 

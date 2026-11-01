@@ -1,4 +1,4 @@
- tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
+ tofu  ./tofu/              chat   agents   edits   shells (1)   orders               0s [settings] 
                                                                                                     
                                                                                                     
                                                                                                     
@@ -36,12 +36,12 @@
     Appearance    05      Enter sends; Shift+Enter inserts a line break                             
     Models & rol… 03                                                                                
   › Interaction   09    › Keybindings                                                   edit  ▾     
-    Context       15      Change shortcuts handled inside tofu                                      
+    Context       17      Change shortcuts handled inside tofu                                      
     Files         03                                                                                
     Shell         04      Host integration                                       inspect Zed  ▾     
-    Turn          17      Detect host shortcut conflicts and available integrations                 
-    Projects      05                                                                                
-    Browser       08      Confirmations                                                 auto  ▾     
+    Turn          18      Detect host shortcut conflicts and available integrations                 
+    Projects      06                                                                                
+    Browser       09      Confirmations                                                 auto  ▾     
                           auto lets Jev decide at every gate, so work never stops for you. ask …    
   NAVIGATE                                                                                          
   ↑↓ setting · ←→         Ask wait                                                       180  ▾     
@@ -51,7 +51,7 @@
                           What an ask nobody answered in time does. refuse turns it down and te…    
                                                                                                     
                           Question wait                                                  120  ▾     
-                          Under auto, seconds before a question the lead asks you takes its rec…    
+                          Under auto, seconds before the lead is told a question it asked you h…    
                                                                                                     
                           Read before edit                                                  ● on    
                           an edit or a write to a file this session has not read, or that chang…    

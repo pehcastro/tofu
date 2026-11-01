@@ -6,7 +6,7 @@
   › Appearance    05      tofu uses Zed Nu Disco; choose a palette                                  
     Models & rol… 03                                                                                
     Interaction   09      Density                                                comfortable  ▾     
-    Context       15      Spacing across lists and panels                                           
+    Context       17      Spacing across lists and panels                                           
     Files         03                                                                                
     Shell         04      Animations                                                  subtle  ▾     
     Turn          18      Motion for conversational states                                          

@@ -6,7 +6,7 @@
     Appearance    05      chat shows every tool call                                                
     Models & rol… 03                                                                                
     Interaction   09      Agent feeds                                                   full  ▾     
-  › Context       15      full keeps every sub-agents event, summary the latest 200, off shows …    
+  › Context       17      full keeps every sub-agents event, summary the latest 200, off shows …    
     Files         03                                                                                
     Shell         04      Thinking                                                          ● on    
     Turn          18      thinking shows in each agent's sub-agents feed; t there toggles it        
@@ -23,8 +23,8 @@
                           Context ceiling                                             450000  ▾     
                           The most tokens one request may carry. The conversation forks before …    
                                                                                                     
-                          Instruction files                                     agents-first  ▾     
-                          Which of AGENTS.md and CLAUDE.md a folder with both sends. both sends…    
+                          Fork                                                              ● on    
+                          on starts a fresh conversation carrying the work's state when one nea…    
                                                                                                     
                         enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     
