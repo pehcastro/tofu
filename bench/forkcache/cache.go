@@ -9,14 +9,13 @@ import (
 )
 
 const (
-	bytesPerThousandTokens = 2310
-	lookbackBlocks         = 20
-	inputWeight            = 1.0
-	readWeight             = 0.1
-	write5mWeight          = 1.25
-	write1hWeight          = 2.0
-	ttlOneHour             = "1h"
-	ttlFiveMinutes         = "5m"
+	lookbackBlocks = 20
+	inputWeight    = 1.0
+	readWeight     = 0.1
+	write5mWeight  = 1.25
+	write1hWeight  = 2.0
+	ttlOneHour     = "1h"
+	ttlFiveMinutes = "5m"
 )
 
 var billingCheck = regexp.MustCompile(`cch=[0-9a-f]+`)
@@ -43,7 +42,9 @@ func (u usage) cost() float64 {
 	return inputWeight*float64(u.input) + readWeight*float64(u.read) + write5mWeight*float64(u.write5m) + write1hWeight*float64(u.write1h)
 }
 
-func tokens(bytes int) int { return bytes * 1000 / bytesPerThousandTokens }
+type bytesPerThousandTokens int
+
+func (ratio bytesPerThousandTokens) tokens(bytes int) int { return bytes * 1000 / int(ratio) }
 
 type wireBody struct {
 	Tools    []map[string]any `json:"tools"`
@@ -98,12 +99,12 @@ func blocksOf(body wireBody) []block {
 	return blocks
 }
 
-func sharedTokens(before, after []block) int {
+func (ratio bytesPerThousandTokens) sharedTokens(before, after []block) int {
 	shared, bytes := 0, 0
 	for ; shared < min(len(before), len(after)) && before[shared].prefix == after[shared].prefix; shared++ {
 		bytes += before[shared].bytes
 	}
-	return tokens(bytes)
+	return ratio.tokens(bytes)
 }
 
 type reading struct {
@@ -127,7 +128,7 @@ func (r reading) columns() []string {
 
 type promptCache map[[32]byte]bool
 
-func (c promptCache) bill(blocks []block) (usage, reading) {
+func (c promptCache) bill(blocks []block, ratio bytesPerThousandTokens) (usage, reading) {
 	last, readTo, cachedTo := -1, 0, 0
 	for at, b := range blocks {
 		if c[b.prefix] {
@@ -170,6 +171,7 @@ func (c promptCache) bill(blocks []block) (usage, reading) {
 			inputBytes += b.bytes
 		}
 	}
-	look.cachedTokens = tokens(cachedBytes)
-	return usage{read: tokens(readBytes), input: tokens(inputBytes), write1h: tokens(written[ttlOneHour]), write5m: tokens(written[ttlFiveMinutes])}, look
+	look.cachedTokens = ratio.tokens(cachedBytes)
+	return usage{read: ratio.tokens(readBytes), input: ratio.tokens(inputBytes), write1h: ratio.tokens(written[ttlOneHour]),
+		write5m: ratio.tokens(written[ttlFiveMinutes])}, look
 }

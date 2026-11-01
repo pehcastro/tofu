@@ -12,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"tofu/internal/llm/wire/anthropic"
+	"tofu/internal/recall"
 )
 
 const (
@@ -55,6 +58,11 @@ func run() error {
 		return fmt.Errorf("forkcache reads its corpus from the repository it runs in: %w", err)
 	}
 	repo := strings.TrimSpace(string(root))
+	loaded, err := recall.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("recall config: %w", err)
+	}
+	ratio := bytesPerThousandTokens(loaded.OnWire(anthropic.Name).BytesPerThousandTokens)
 	scripts, err := readCorpus(repo)
 	if err != nil {
 		return err
@@ -67,11 +75,11 @@ func run() error {
 			return err
 		}
 	}
-	header := conditions(*exe, repo, *ceiling)
+	header := conditions(*exe, repo, *ceiling, ratio)
 	var runs []measured
 	for _, a := range arms {
 		for _, played := range scripts {
-			ran, err := replay(*exe, filepath.Join(*work, strconv.Itoa(len(runs)+1)), played, a, *ceiling)
+			ran, err := replay(*exe, filepath.Join(*work, strconv.Itoa(len(runs)+1)), played, a, *ceiling, ratio)
 			if err != nil {
 				return fmt.Errorf("%s on %s: %w", a.name, played.name, err)
 			}
@@ -80,7 +88,7 @@ func run() error {
 	}
 	var compacts []compactRow
 	for _, played := range scripts {
-		row, err := compactOnce(*exe, filepath.Join(*work, strconv.Itoa(len(runs)+len(compacts)+1)), played)
+		row, err := compactOnce(*exe, filepath.Join(*work, strconv.Itoa(len(runs)+len(compacts)+1)), played, ratio)
 		if err != nil {
 			return fmt.Errorf("%s on %s: %w", compactArm, played.name, err)
 		}
@@ -138,7 +146,7 @@ type staged struct {
 	timedFor string
 }
 
-func stage(exe, work string, played script, settings []string) (staged, error) {
+func stage(exe, work string, played script, settings []string, ratio bytesPerThousandTokens) (staged, error) {
 	home, dir := filepath.Join(work, "home"), filepath.Join(work, "project")
 	for _, made := range []string{home, filepath.Join(dir, "mock")} {
 		if err := os.MkdirAll(made, 0o755); err != nil {
@@ -153,7 +161,7 @@ func stage(exe, work string, played script, settings []string) (staged, error) {
 			return staged{}, fmt.Errorf("git %v: %v: %s", git, err, out)
 		}
 	}
-	stood := startStand(dir, played)
+	stood := startStand(dir, played, ratio)
 	env := freshEnv(home, stood.env()...)
 	setup := [][]string{{"login", "llm", "claude-sub", "--paste"}, {"models", "bind", "classifier", "typesafe/jev-latest"}, {"models", "bind", "orchestrator", model}}
 	if settings != nil {
@@ -184,8 +192,8 @@ func (s staged) kept(work, armName string) error {
 	return nil
 }
 
-func replay(exe, work string, played script, a arm, ceiling int) (measured, error) {
-	s, err := stage(exe, work, played, a.settings)
+func replay(exe, work string, played script, a arm, ceiling int, ratio bytesPerThousandTokens) (measured, error) {
+	s, err := stage(exe, work, played, a.settings, ratio)
 	if err != nil {
 		return measured{}, err
 	}
@@ -202,10 +210,10 @@ func replay(exe, work string, played script, a arm, ceiling int) (measured, erro
 	if err := s.kept(work, a.name); err != nil {
 		return measured{}, err
 	}
-	return measure(a.name, played, s.stood.sent, s.stood.lookups, listed), nil
+	return measure(a.name, played, s.stood.sent, s.stood.lookups, listed, ratio), nil
 }
 
-func conditions(exe, repo string, ceiling int) string {
+func conditions(exe, repo string, ceiling int, ratio bytesPerThousandTokens) string {
 	version, _ := exec.Command(exe, "version").Output()
 	commit, _ := exec.Command("git", "-C", repo, "rev-parse", "--short", "HEAD").Output()
 	return fmt.Sprintf(`bench/forkcache, fork cost and quality on mocked recorded sessions
@@ -220,6 +228,7 @@ credential  mock claude-sub login against the stand-in, so a subscription creden
 head        subscription: the stand-in's token carries the oauth marker, so every request sends the billing and identity blocks
 model       %s, build id the stand-in reported: %s
 ceiling     --context-ceiling %d on every tofu run; the compact arm runs under tofu serve --stdio at its own context budget
+tokens      bytes %d per thousand tokens, recall's ratio on the %s wire, the one tofu context prints; every count below divides by it
 weights     input %.2f, cache read %.2f, write 5m %.2f, write 1h %.2f, in base input tokens
 key         tools, system, then messages; tool_choice is not in the key, so a switch to none keeps the message cache
 checked     against a real claude-sub run, claude-haiku-5-5 on 2026-11-01, trace rapid-sable-finch#ub4fl.1: step #640793 read 17098 wrote 1463, then the ask #9e8c41 sent with tool_choice none read 18561
@@ -227,5 +236,5 @@ lookback    %d blocks back from each cache breakpoint; a row whose reach is past
 warm-up     none: no request is discarded
 
 `, strings.TrimSpace(string(commit)), strings.Join(strings.Fields(string(version)), " "), time.Now().Format(time.DateOnly),
-		runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), model, reportedModel, ceiling, inputWeight, readWeight, write5mWeight, write1hWeight, lookbackBlocks)
+		runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), model, reportedModel, ceiling, ratio, anthropic.Name, inputWeight, readWeight, write5mWeight, write1hWeight, lookbackBlocks)
 }

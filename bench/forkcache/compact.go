@@ -155,8 +155,8 @@ func (s *served) close() error {
 	}
 }
 
-func compactOnce(exe, work string, played script) (compactRow, error) {
-	s, err := stage(exe, work, played, nil)
+func compactOnce(exe, work string, played script, ratio bytesPerThousandTokens) (compactRow, error) {
+	s, err := stage(exe, work, played, nil, ratio)
 	if err != nil {
 		return compactRow{}, err
 	}
@@ -173,7 +173,7 @@ func compactOnce(exe, work string, played script) (compactRow, error) {
 	if err := s.kept(work, compactArm); err != nil {
 		return compactRow{}, err
 	}
-	row.flips, row.past = flipsOf(s.stood.sent), pastLookback(s.stood.sent)
+	row.flips, row.past = flipsOf(s.stood.sent, ratio), pastLookback(s.stood.sent)
 	var before []block
 	for at, e := range s.stood.sent {
 		switch {
@@ -183,7 +183,7 @@ func compactOnce(exe, work string, played script) (compactRow, error) {
 		case !e.step:
 			row.asides = row.asides.plus(e.billed)
 		default:
-			row.after, row.shared, row.look = e.billed, sharedTokens(before, e.blocks), e.look
+			row.after, row.shared, row.look = e.billed, ratio.sharedTokens(before, e.blocks), e.look
 			return row, nil
 		}
 	}

@@ -49,6 +49,7 @@ type stand struct {
 	played        script
 	held          sync.Mutex
 	cache         promptCache
+	ratio         bytesPerThousandTokens
 	sent          []exchange
 	lookups       []lookup
 	steps         int
@@ -56,10 +57,10 @@ type stand struct {
 	failed        error
 }
 
-func startStand(project string, played script) *stand {
+func startStand(project string, played script, ratio bytesPerThousandTokens) *stand {
 	absolute, _ := filepath.Abs(project)
 	quoted, _ := json.Marshal(absolute)
-	s := &stand{project: project, projectQuoted: strings.Trim(string(quoted), `"`), played: played, cache: promptCache{}}
+	s := &stand{project: project, projectQuoted: strings.Trim(string(quoted), `"`), played: played, cache: promptCache{}, ratio: ratio}
 	s.Server = httptest.NewServer(http.HandlerFunc(s.serve))
 	return s
 }
@@ -85,7 +86,7 @@ func (s *stand) serve(w http.ResponseWriter, r *http.Request) {
 			"seven_day": map[string]any{"utilization": 20, "resets_at": "2099-01-01T00:00:00Z"}})
 	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/count_tokens"):
 		body, _ := io.ReadAll(r.Body)
-		_ = json.NewEncoder(w).Encode(map[string]any{"input_tokens": tokens(len(body))})
+		_ = json.NewEncoder(w).Encode(map[string]any{"input_tokens": s.ratio.tokens(len(body))})
 	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/judge"):
 		judge(w, r)
 	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/v1/messages"):
@@ -138,11 +139,11 @@ func (s *stand) answer(w http.ResponseWriter, r *http.Request) {
 	s.held.Lock()
 	defer s.held.Unlock()
 	blocks := blocksOf(body)
-	billed, look := s.cache.bill(blocks)
+	billed, look := s.cache.bill(blocks, s.ratio)
 	sent := exchange{step: len(body.Tools) > 0 && body.ToolChoice["type"] != "none", billed: billed, look: look, choice: body.choice(),
 		head: len(body.Tools) + len(body.System), messages: len(body.Messages), body: string(raw), blocks: blocks}
 	s.sent = append(s.sent, sent)
-	reply := sse{w: w, flusher: w.(http.Flusher)}
+	reply := sse{w: w, flusher: w.(http.Flusher), ratio: s.ratio}
 	reply.start(len(s.sent), sent.billed)
 	if !sent.step {
 		reply.text("MOCK state " + strings.Repeat("x", asideReplyBytes))
@@ -221,6 +222,7 @@ type sse struct {
 	index   int
 	open    bool
 	said    int
+	ratio   bytesPerThousandTokens
 }
 
 func (e *sse) event(kind string, payload map[string]any) {
@@ -266,6 +268,6 @@ func (e *sse) tool(name string, args map[string]any) {
 
 func (e *sse) stop(reason string) {
 	e.closeText()
-	e.event("message_delta", map[string]any{"delta": map[string]any{"stop_reason": reason}, "usage": map[string]any{"output_tokens": max(1, tokens(e.said))}})
+	e.event("message_delta", map[string]any{"delta": map[string]any{"stop_reason": reason}, "usage": map[string]any{"output_tokens": max(1, e.ratio.tokens(e.said))}})
 	e.event("message_stop", map[string]any{})
 }

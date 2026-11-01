@@ -1,0 +1,96 @@
+timing, not measured: episode carry on turn-18d6a7961d933ee8: 44 requests in 3s
+timing, not measured: episode carry on turn-18d6a27c7dfb1644: 35 requests in 5s
+timing, not measured: episode carry on turn-18d69bfed2bf52a0: 13 requests in 2s
+timing, not measured: episode carry on turn-18d6a5df2caeac68: 2 requests in 1s
+timing, not measured: working-state ask on turn-18d6a7961d933ee8: 45 requests in 3s
+timing, not measured: working-state ask on turn-18d6a27c7dfb1644: 36 requests in 4s
+timing, not measured: working-state ask on turn-18d69bfed2bf52a0: 13 requests in 2s
+timing, not measured: working-state ask on turn-18d6a5df2caeac68: 2 requests in 1s
+timing, not measured: compact on turn-18d6a7961d933ee8: 45 requests in 3s
+timing, not measured: compact on turn-18d6a27c7dfb1644: 36 requests in 5s
+timing, not measured: compact on turn-18d69bfed2bf52a0: 14 requests in 3s
+timing, not measured: compact on turn-18d6a5df2caeac68: 3 requests in 1s
+bench/forkcache, fork cost and quality on mocked recorded sessions
+
+commit      a568cd57f
+tofu        version 0.5.20+dev commit a568cd57f4fe1b1fa2b5dd832d5d0e1c94e3a951-dirty go go1.27.1
+date        2026-11-01
+machine     windows/amd64, 32 cpu
+wire        anthropic messages to a local stand-in that bills by Anthropic's prompt cache rules; no model, no network
+project     billed as W:\mock\project in every request, so the length of -work moves no count
+credential  mock claude-sub login against the stand-in, so a subscription credential kind
+head        subscription: the stand-in's token carries the oauth marker, so every request sends the billing and identity blocks
+model       claude-sub/claude-sonnet-5, build id the stand-in reported: claude-sonnet-5
+ceiling     --context-ceiling 60000 on every tofu run; the compact arm runs under tofu serve --stdio at its own context budget
+tokens      bytes 2830 per thousand tokens, recall's ratio on the anthropic wire, the one tofu context prints; every count below divides by it
+weights     input 1.00, cache read 0.10, write 5m 1.25, write 1h 2.00, in base input tokens
+key         tools, system, then messages; tool_choice is not in the key, so a switch to none keeps the message cache
+checked     against a real claude-sub run, claude-haiku-5-5 on 2026-11-01, trace rapid-sable-finch#ub4fl.1: step #640793 read 17098 wrote 1463, then the ask #9e8c41 sent with tool_choice none read 18561
+lookback    20 blocks back from each cache breakpoint; a row whose reach is past it reads fail and the run exits nonzero
+warm-up     none: no request is discarded
+
+forks, one row per fork, in tokens and in base input token units
+arm                session                fork step  before   after    read written    extra    saved   even lived  held named  gone  shared  cached reach check
+episode carry      turn-18d6a7961d933ee8     1   29   47920   35338   18478   16860    28712     1361   21.1    15    12     5     0   18478   18478     0    ok
+episode carry      turn-18d6a27c7dfb1644     1   31   47428   34812   18478   16334    29299     1285   22.8     4     9    11     0   18478   18478     0    ok
+episode carry      turn-18d69bfed2bf52a0  none    -       -       -       -       -        -        -      -     -     -     -     -       -       -     -     -
+episode carry      turn-18d6a5df2caeac68  none    -       -       -       -       -        -        -      -     -     -     -     -       -       -     -     -
+working-state ask  turn-18d6a7961d933ee8     1   31   47793   32135   17942   14653    30478     1597   19.1    13     5    13     0   17942   17942     0    ok
+working-state ask  turn-18d6a27c7dfb1644     1   31   46893   31680   17942   15577    32474     1545   21.0     4     8    12     0   17942   17942     0    ok
+working-state ask  turn-18d69bfed2bf52a0  none    -       -       -       -       -        -        -      -     -     -     -     -       -       -     -     -
+working-state ask  turn-18d6a5df2caeac68  none    -       -       -       -       -        -        -      -     -     -     -     -       -       -     -     -
+
+step     the fork came after this step; before and after are the parent's last request and the sub-session's first, in tokens billed
+read     cache read on the first request after the fork; written adds every cache write from the parent's last request to it
+extra    what the fork's first request cost over carrying on: carrying on reads the parent's whole request and writes what its last step added
+saved    what each later request saves: a tenth of the tokens the fork took out
+even     requests after the fork until extra is repaid, extra over saved; lived counts the sub-session's requests
+held     of the parent's last 20 lookups, results still in the first request after the fork; named only by source; gone, neither
+shared   tokens of the longest block prefix the parent's last request and the fork's first have in common
+cached   tokens of the longest prefix of the request the cache already held when it arrived, the most it could read
+reach    blocks from the end of that prefix to the request's next cache breakpoint; past 20 the cache cannot find it and the row reads fail
+
+sessions, repeat-lookup share: of the last 20 lookups, the share whose result the next request no longer holds
+arm                session                steps requests forks listed after fork     inside  past
+episode carry      turn-18d6a7961d933ee8     44       44     1      1      29.4%       0.0%     0
+episode carry      turn-18d6a27c7dfb1644     35       35     1      1      55.0%       0.0%     0
+episode carry      turn-18d69bfed2bf52a0     13       13     0      0          -       0.0%     0
+episode carry      turn-18d6a5df2caeac68      2        2     0      0          -       0.0%     0
+working-state ask  turn-18d6a7961d933ee8     44       45     1      1      72.2%       0.0%     0
+working-state ask  turn-18d6a27c7dfb1644     35       36     1      1      60.0%       0.0%     0
+working-state ask  turn-18d69bfed2bf52a0     13       13     0      0          -       0.0%     0
+working-state ask  turn-18d6a5df2caeac68      2        2     0      0          -       0.0%     0
+past     requests of the run whose reach is past the 20-block lookback; the run exits nonzero when any is
+
+summary per arm, median [least, most] over forks
+arm                forks written               read                  after fork  not named   inside break-even       paid back
+episode carry          2 16860 [16334, 16860]  18478 [18478, 18478]       43.2%       0.0%     0.0% 22.8 [21.1, 22.8]    0 of 2
+working-state ask      2 15577 [14653, 15577]  17942 [17942, 17942]       65.8%       0.0%     0.0% 21.0 [19.1, 21.0]    0 of 2
+
+compact, one row per session: /compact through tofu serve after the recorded turn, then one more turn
+arm                session                first                         results                      before    read written   after    read written  asides  shared  cached reach check  past
+compact            turn-18d6a7961d933ee8  nothing compacted, no history 6                             57796   57563     233   54907   50363    4544       0   50415   50363     0    ok     0
+compact            turn-18d6a27c7dfb1644  nothing compacted, no history 8                             51224   50988     236   47073   41281    5792       0   44329   41281     0    ok     0
+compact            turn-18d69bfed2bf52a0  nothing compacted, no history 3                             27976   27740     236   28715   27014    1701       0   27066   27014    14    ok     0
+compact            turn-18d6a5df2caeac68  nothing compacted, no history 1                             19716   19155     561   19503   19155     348       0   19211   19155     5    ok     0
+
+first    /compact before the session's first turn, which carries nothing; after, the same once the recorded turn has run
+results  old tool results it shrank; tofu's own token estimate counts the real project path, so it is left out
+before   the last request before /compact, in tokens billed, with its cache read and written
+after    the first request of the next turn, with its cache read and written; asides adds what every request between them wrote
+shared   tokens of the longest block prefix the two requests have in common
+cached   tokens of the longest prefix of the after request the cache already held, the most it could read
+reach    blocks from the end of that prefix to the after request's next cache breakpoint; past 20 the cache cannot find it and the row reads fail
+past     requests of the compact run whose reach is past the lookback
+
+tool_choice, one row per request whose tool_choice differs from the request before it
+arm                session                request from             to                 prior    read written  shared  cached reach check messages
+working-state ask  turn-18d6a7961d933ee8       32 {"type":"auto"}  {"type":"none"}    47793   47793     460   47793   47793     4    ok      hit
+working-state ask  turn-18d6a7961d933ee8       33 {"type":"none"}  {"type":"auto"}    48253   17942   14193   17942   17942     0    ok      hit
+working-state ask  turn-18d6a27c7dfb1644       32 {"type":"auto"}  {"type":"none"}    46893   46893    1839   46893   46893     4    ok      hit
+working-state ask  turn-18d6a27c7dfb1644       33 {"type":"none"}  {"type":"auto"}    48732   17942   13738   17942   17942     0    ok      hit
+
+from     the tool_choice of the request before; to, this request's, with an absent tool_choice read as auto
+prior    the request before's cache read plus written, what it left in the cache; a switch to none that reads all of it read every block the step wrote
+shared   tokens of the longest block prefix this request and the one before have in common
+messages hit when the cache read reaches past the tools and system blocks, miss when it stops at them
