@@ -689,6 +689,7 @@ type composedRun struct {
 	memory       string
 	instructions string
 	composed     turn.Composed
+	composeTask  func(task string) (turn.Composed, error)
 	subAgents    turn.SubAgents
 	skills       []skill.Skill
 	shippedOff   []rule.Rule
@@ -776,15 +777,11 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 		slices.SortFunc(skills, func(a, b skill.Skill) int { return strings.Compare(a.Name, b.Name) })
 	}
 	run.startup.step("skills")
-	frameworks, err := rule.Frameworks(cmp.Or(opts.dir, "."), turn.TaskNamed(opts.task).Paths)
-	if err != nil {
-		say("no framework rule fires this run: " + err.Error())
-	}
 	subAgents := turn.SubAgents{Defined: discovered.Definitions, Root: cmp.Or(opts.dir, "."), Prompt: turn.ComposeSpec{Environment: strings.TrimSpace(environment + "\n\n" + files),
-		ToolGuidance: turn.EveryToolIsRelativeToTheWorkingDirectory + turn.ContractAddendum, Rules: rules, SwitchedOff: switchedOff, Skills: skills, WindowTokens: run.budget.WindowTokens, Frameworks: frameworks,
+		ToolGuidance: turn.EveryToolIsRelativeToTheWorkingDirectory + turn.ContractAddendum, Rules: rules, SwitchedOff: switchedOff, Skills: skills, WindowTokens: run.budget.WindowTokens,
 		Kinds: turn.NewKindJudge(cmp.Or(opts.dir, ".")), Applies: turn.NewRuleJudge(cmp.Or(opts.dir, "."))}}
 	spec := subAgents.Prompt
-	spec.Task, spec.ToolGuidance = opts.task, runSystem(opts)
+	spec.ToolGuidance = runSystem(opts)
 	if opts.agent != "" {
 		if spec.Agent, err = subAgents.Named(opts.agent); err != nil {
 			return composedRun{}, err
@@ -798,16 +795,34 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 			return slices.Contains([]string{"orchestrate", verifySubAgentsRule, "plan_before_spawn", "spawn_effort", "research_fan_out", "brief_from_references", "announce_spawn"}, loaded.ID)
 		})
 		spec.Alone = true
-		if spec.Languages, err = rule.Languages(cmp.Or(opts.dir, "."), turn.TaskNamed(opts.task).Paths); err != nil {
-			say("no language rule fires from the folders the task names: " + err.Error())
-		}
 	}
 	subAgents.Prompt.Dropped = slices.Concat(brokenAgents, unloaded, droppedRules(stack, rules, switchedOff, opts))
 	spec.Dropped = slices.Concat(brokenAgents, unloaded, droppedRules(stack, spec.Rules, switchedOff, opts))
-	composed, err := turn.Compose(spec)
+	composeTask := func(task string) (turn.Composed, error) {
+		return turn.Compose(taskSpec(spec, cmp.Or(opts.dir, "."), task, say))
+	}
+	first := taskSpec(spec, cmp.Or(opts.dir, "."), opts.task, say)
+	subAgents.Prompt.Frameworks = first.Frameworks
+	composed, err := turn.Compose(first)
 	run.startup.step("frameworks and prompt")
-	return composedRun{opts: opts, environment: environment, files: files, memory: remembered, instructions: instructions, composed: composed, subAgents: subAgents, skills: skills,
+	return composedRun{opts: opts, environment: environment, files: files, memory: remembered, instructions: instructions, composed: composed, composeTask: composeTask, subAgents: subAgents, skills: skills,
 		shippedOff: stack.shippedOff, checksWork: slices.ContainsFunc(rules, func(loaded rule.Rule) bool { return loaded.ID == verifySubAgentsRule })}, err
+}
+
+func taskSpec(spec turn.ComposeSpec, dir, task string, say func(string)) turn.ComposeSpec {
+	named := turn.TaskNamed(task).Paths
+	var err error
+	spec.Task = task
+	if spec.Frameworks, err = rule.Frameworks(dir, named); err != nil {
+		say("no framework rule fires this run: " + err.Error())
+	}
+	if !spec.Alone {
+		return spec
+	}
+	if spec.Languages, err = rule.Languages(dir, named); err != nil {
+		say("no language rule fires from the folders the task names: " + err.Error())
+	}
+	return spec
 }
 
 func droppedRules(stack ruleStack, kept []rule.Rule, switchedOff []rule.Overriding, opts runOpts) []turn.PromptPart {
@@ -896,6 +911,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		Notify:         run.notify,
 		GatePromptAsks: func() bool { return settingText(dir, settingspkg.GatePrompt, run.notify) == settingspkg.GatePromptAsk },
 	}
+	config.Inbox.ComposesEachTask(environment, prompt.composeTask)
 	if run.plan != nil && opts.planEveryStep {
 		config.Plan = run.plan.Shown
 	}

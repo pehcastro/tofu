@@ -58,6 +58,8 @@ type Inbox struct {
 	project  string
 	watched  map[string]bool
 	typed    <-chan string
+	untasked string
+	composes func(task string) (Composed, error)
 
 	judgesOpened bool
 
@@ -1085,6 +1087,36 @@ func (b *Inbox) releasing(log *session.Log) error {
 	return err
 }
 
+func (b *Inbox) ComposesEachTask(environment string, compose func(task string) (Composed, error)) {
+	b.mu.Lock()
+	b.untasked, b.composes = environment, compose
+	b.mu.Unlock()
+}
+
+func (b *Inbox) retasked(config Config, task string) Config {
+	b.mu.Lock()
+	untasked, compose := b.untasked, b.composes
+	b.mu.Unlock()
+	if compose == nil {
+		return config
+	}
+	composed, err := compose(task)
+	if err != nil {
+		if config.Notify != nil {
+			config.Notify("this follow-up carries no task rules: " + err.Error())
+		}
+		config.Environment, config.Parts = untasked, slices.DeleteFunc(slices.Clone(config.Parts), func(part PromptPart) bool { return part.ByTask })
+		return config
+	}
+	references := map[string]string{}
+	maps.Copy(references, config.References)
+	for _, reference := range composed.References {
+		references[reference.Name] = reference.Text
+	}
+	config.System, config.Parts, config.Environment, config.References = composed.Head(), composed.Recorded(), composed.WithTaskRules(untasked), references
+	return config
+}
+
 func Lead(ctx context.Context, config Config, typed <-chan string, heard func(string), ended func(Row, error)) error {
 	var failed []error
 	ctx = context.WithValue(ctx, leadInboxKey{}, config.Inbox)
@@ -1125,6 +1157,8 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 		config.TaskOrigin, config.Arrived = postedNow(llm.SourceTyped, ""), nil
 		if said == "" {
 			config.TaskOrigin, config.Arrived = next[0].origin, arrived(next)
+		} else {
+			config = config.Inbox.retasked(config, said)
 		}
 		config.Task, config.Images, config.NewID, config.SessionSource = cmp.Or(said, strings.Join(textsOf(next), "\n\n"))+note, nil, nil, ""
 		if said != "" && config.ImagesOf != nil {
