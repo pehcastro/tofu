@@ -1,5 +1,1 @@
-exit 1
---- stdout
---- stderr
-✗ tofu why: no row "2026-09-28-nothing" in the ledger
-  → tofu why --last 5
+exit 1 --- stdout --- stderr ✗ tofu why: no row or tool call has the id "2026-09-28-nothing": the ledger at LEDGER has no row with it, and no tool call in the sessions at SESSIONS has it → tofu why --last 5, or a call id from tofu session trace

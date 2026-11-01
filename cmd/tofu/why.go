@@ -13,6 +13,7 @@ import (
 	"tofu/interface/cli"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
+	sessionstore "tofu/internal/session"
 	"tofu/internal/sys"
 )
 
@@ -107,8 +108,11 @@ func whyFind(opts whyOpts) (whyFound, error) {
 		return found, nil
 	}
 	called, lookedUp, lookupErr := recordedCallByHash(opts.id)
-	if lookupErr != nil || !lookedUp {
+	if lookupErr != nil {
 		return found, err
+	}
+	if !lookedUp {
+		return found, whyMissing(opts.id, dir, err)
 	}
 	found.call, found.rows = &called, nil
 	if opts.id = called.Call.GateDecisionID; opts.id == "" {
@@ -116,6 +120,27 @@ func whyFind(opts whyOpts) (whyFound, error) {
 	}
 	found.rows, err = whyRows(found.reader, opts)
 	return found, err
+}
+
+func whyMissing(id, ledgerDir string, rowErr error) error {
+	var notRowID ledger.NotRowIDError
+	var noRow problemError
+	shapeless := errors.As(rowErr, &notRowID)
+	if !shapeless && !errors.As(rowErr, &noRow) {
+		return rowErr
+	}
+	state, err := sys.ProjectStateDirAt(".")
+	if err != nil {
+		return err
+	}
+	ledgerSide := "the ledger at " + ledgerDir + " has no row with it"
+	if shapeless {
+		ledgerSide = "it is not a row id, which starts with the day it was written, so the ledger at " + ledgerDir + " was not read"
+	}
+	return problemError{
+		What: "no row or tool call has the id " + strconv.Quote(id) + ": " + ledgerSide + ", and no tool call in the sessions at " + sessionstore.SessionsDir(state) + " has it",
+		Hint: "tofu why --last 5, or a call id from tofu session trace",
+	}
 }
 
 func (f whyFound) report() (whyReport, error) {

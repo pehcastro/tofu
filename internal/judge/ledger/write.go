@@ -130,13 +130,21 @@ func newID(at time.Time) (string, error) {
 	return at.UTC().Format(dayLayout) + "-" + hex.EncodeToString(noise), nil
 }
 
+type NotRowIDError struct {
+	ID string
+}
+
+func (e NotRowIDError) Error() string {
+	return fmt.Sprintf("ledger: %q is not a row id, which starts with the day it was written, as %s", e.ID, dayLayout)
+}
+
 func dayOfID(id string) (string, error) {
 	if len(id) < len(dayLayout) {
-		return "", fmt.Errorf("ledger: %q is not a row id", id)
+		return "", NotRowIDError{ID: id}
 	}
 	day := id[:len(dayLayout)]
 	if _, err := time.Parse(dayLayout, day); err != nil {
-		return "", fmt.Errorf("ledger: %q is not a row id: %w", id, err)
+		return "", NotRowIDError{ID: id}
 	}
 	return day, nil
 }

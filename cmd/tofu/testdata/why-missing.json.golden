@@ -1,16 +1,1 @@
-exit 1
---- stdout
-{
-  "tofu": "VERSION",
-  "verb": "why",
-  "ok": false,
-  "at": "AT",
-  "data": null,
-  "problems": [
-    {
-      "what": "no row \"2026-09-28-nothing\" in the ledger",
-      "hint": "tofu why --last 5"
-    }
-  ]
-}
---- stderr
+exit 1 --- stdout { "tofu": "VERSION", "verb": "why", "ok": false, "at": "AT", "data": null, "problems": [ { "what": "no row or tool call has the id \"2026-09-28-nothing\": the ledger at LEDGER has no row with it, and no tool call in the sessions at SESSIONS has it", "hint": "tofu why --last 5, or a call id from tofu session trace" } ] } --- stderr

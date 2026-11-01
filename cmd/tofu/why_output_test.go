@@ -15,6 +15,7 @@ import (
 	"tofu/internal/golden"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
+	sessionstore "tofu/internal/session"
 	"tofu/internal/sys"
 )
 
@@ -122,6 +123,18 @@ func TestWhyReplayAndLabelMatchTheirTextAndJSONGoldens(t *testing.T) {
 	for _, mode := range []string{"text", "json"} {
 		t.Run(mode, func(t *testing.T) {
 			whyLedger(t)
+			ledgerDir, err := sys.LogDir()
+			if err != nil {
+				t.Fatal(err)
+			}
+			state, err := sys.ProjectStateDirAt(".")
+			if err != nil {
+				t.Fatal(err)
+			}
+			unwrapped := func(text string) string { return strings.Join(strings.Fields(text), " ") }
+			escaped := func(path string) string { return unwrapped(strings.ReplaceAll(path, `\`, `\\`)) }
+			sessionsDir := sessionstore.SessionsDir(state)
+			homeless := strings.NewReplacer(escaped(ledgerDir), "LEDGER", escaped(sessionsDir), "SESSIONS", unwrapped(ledgerDir), "LEDGER", unwrapped(sessionsDir), "SESSIONS")
 			for _, c := range whyCases() {
 				asJSON := mode == "json" && c.code != exitUsage
 				args := c.args
@@ -138,7 +151,11 @@ func TestWhyReplayAndLabelMatchTheirTextAndJSONGoldens(t *testing.T) {
 					}
 					out = strings.ReplaceAll(stamp.ReplaceAllString(out, `  "at": "AT"`), konst.Version, "VERSION")
 				}
-				printed[c.name+"."+mode+".golden"] = "exit " + strconv.Itoa(code) + "\n--- stdout\n" + out + "--- stderr\n" + errOut
+				text := "exit " + strconv.Itoa(code) + "\n--- stdout\n" + out + "--- stderr\n" + errOut
+				if pathless := homeless.Replace(unwrapped(text)); pathless != unwrapped(text) {
+					text = pathless
+				}
+				printed[c.name+"."+mode+".golden"] = text
 			}
 		})
 	}
