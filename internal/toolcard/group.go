@@ -50,6 +50,7 @@ type Summary struct {
 const (
 	highlightGap = "   "
 	itemGap      = ", "
+	skippedWord  = "skipped"
 )
 
 type Row struct {
@@ -89,10 +90,10 @@ func (r *Row) Add(card Card) Seat {
 	return Seat{family: card.Family, at: len(r.held[card.Family]) - 1}
 }
 
-func (r *Row) Settle(seat Seat, content string, failed bool, exit int) Card {
+func (r *Row) Settle(seat Seat, content string, ending Ending, exit int) Card {
 	card := &r.held[seat.family][seat.at]
 	r.failed -= failures(*card)
-	*card = card.Settled(content, failed, exit)
+	*card = card.Settled(content, ending, exit)
 	r.failed += failures(*card)
 	delete(r.drawn, seat.family)
 	return *card
@@ -243,7 +244,7 @@ func highlight(family Family, cards []Card) Phrase {
 			return say(text(counted(len(edits), "edit", "edits")))
 		}
 	case Tests:
-		if lastTest != nil && lastTest.Tone != Fail {
+		if lastTest != nil && lastTest.Tone == Ok {
 			return say(text("tests pass"))
 		}
 	case Board:
@@ -420,14 +421,22 @@ func tested(cards []Card) ([]Phrase, []Phrase) {
 	}
 	var items []Phrase
 	var names []string
+	skipped := 0
 	for _, key := range keys {
 		items = append(items, say(append([]Piece{text(key)}, outcome(runs[key])...)...))
-		if last := runs[key][len(runs[key])-1]; last.Tone == Fail {
+		switch last := runs[key][len(runs[key])-1]; last.Tone {
+		case Fail:
 			names = append(names, cmp.Or(why(last), key))
+		case Warn:
+			skipped++
+		case Ok:
 		}
 	}
 	collapsed := []Phrase{say(text(counted(len(cards), "run", "runs")))}
-	if len(names) == 0 {
+	switch {
+	case len(names) == 0 && skipped > 0:
+		return items, append(collapsed, say(text(strconv.Itoa(skipped)+" "+skippedWord)))
+	case len(names) == 0:
 		return items, append(collapsed, say(text("all passed")))
 	}
 	collapsed = append(collapsed, Phrase{text(strconv.Itoa(len(names)) + " "), failure(), text(": " + names[0])})
@@ -450,6 +459,8 @@ func outcome(runs []Card) []Piece {
 	}
 	last := runs[len(runs)-1]
 	switch {
+	case last.Tone == Warn:
+		return []Piece{text(last.Meta)}
 	case failures == 0:
 		return []Piece{text("passed")}
 	case last.Tone != Fail:

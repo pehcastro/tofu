@@ -13,6 +13,7 @@ import (
 	"tofu/interface/tui/feed"
 	"tofu/interface/tui/session"
 	"tofu/internal/golden"
+	"tofu/internal/host"
 )
 
 const (
@@ -29,7 +30,7 @@ type runCall struct {
 	detail   string
 	result   string
 	bytes    int
-	failed   bool
+	outcome  host.ToolOutcome
 	decision *session.Decision
 }
 
@@ -81,7 +82,7 @@ func startCall(app *App, index int, one runCall) {
 }
 
 func endCall(app *App, index int, one runCall) {
-	app.Update(Event{Kind: EventToolResult, ID: "c" + strconv.Itoa(index), Text: one.result, Bytes: one.bytes, Failed: one.failed})
+	app.Update(Event{Kind: EventToolResult, ID: "c" + strconv.Itoa(index), Text: one.result, Bytes: one.bytes, Outcome: one.outcome})
 }
 
 func wholeRun(t *testing.T, at *time.Time, width, height int, calls []runCall) *App {
@@ -280,10 +281,10 @@ func TestAShadowAskDrawsNoRowLikeTheRestOfTheRun(t *testing.T) {
 
 func failedRun() []runCall {
 	return readsAround(runCall{
-		tool:   "bash",
-		text:   "go test ./internal/recall/...",
-		result: "FAIL tofu/internal/recall 0.18s",
-		failed: true,
+		tool:    "bash",
+		text:    "go test ./internal/recall/...",
+		result:  "FAIL tofu/internal/recall 0.18s",
+		outcome: host.ToolFailed,
 	})
 }
 

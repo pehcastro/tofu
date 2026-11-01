@@ -180,10 +180,22 @@ func Of(name string, args json.RawMessage) Card {
 	return card(Ran, kindRan, "running", "ran", strings.ReplaceAll(name, "_", " "))
 }
 
-func (c Card) Settled(content string, failed bool, exit int) Card {
+type Ending int
+
+const (
+	Finished Ending = iota
+	Broken
+	Skipped
+)
+
+func (c Card) Settled(content string, ending Ending, exit int) Card {
 	lines, trimmed := readable(content)
 	c.settled = true
-	if failed || exit != 0 {
+	if ending == Skipped {
+		c.Tone, c.Meta, c.Fold = Warn, skippedWord, false
+		return c
+	}
+	if ending == Broken || exit != 0 {
 		c.Tone = Fail
 	}
 	switch c.kind {

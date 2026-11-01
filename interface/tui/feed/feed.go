@@ -41,9 +41,12 @@ const (
 	StateComplete
 	StateFailed
 	StateStopped
+	StateSkipped
 )
 
-func (s State) String() string { return [...]string{"running", "complete", "failed", "stopped"}[s] }
+func (s State) String() string {
+	return [...]string{"running", "complete", "failed", "stopped", "skipped"}[s]
+}
 
 type Op int
 

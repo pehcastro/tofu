@@ -593,7 +593,11 @@ func (h *Host) heed(f *following) {
 			break
 		}
 		var line followLine
-		_ = json.Unmarshal(raw, &line)
+		var unknown unknownOutcome
+		if err := json.Unmarshal(raw, &line); errors.As(err, &unknown) {
+			h.note("the tofu host, process " + strconv.Itoa(f.hub.PID) + ", sent a tool result this tofu could not read, so it was not shown: " + err.Error())
+			continue
+		}
 		if held := line.Settings; held != nil {
 			h.mu.Lock()
 			h.asking, h.pick = held.Asking, held.Pick

@@ -43,7 +43,11 @@ func main() {
 			fmt.Printf("\n%s\n", c.Group)
 		}
 		started := toolcard.Of(c.Name, c.Args)
-		card := started.Settled(c.Content, c.Failed, c.Exit)
+		ending := toolcard.Finished
+		if c.Failed {
+			ending = toolcard.Broken
+		}
+		card := started.Settled(c.Content, ending, c.Exit)
 		grouped[c.Group] = append(grouped[c.Group], card)
 		placed := "row"
 		if !card.Fold {

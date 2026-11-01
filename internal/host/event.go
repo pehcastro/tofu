@@ -3,6 +3,8 @@ package host
 import (
 	"cmp"
 	"encoding/json"
+	"slices"
+	"strconv"
 	"time"
 
 	"tofu/internal/judge/jev"
@@ -57,7 +59,7 @@ type Event struct {
 	Text         string
 	Detail       string
 	Bytes        int
-	Failed       bool
+	Outcome      ToolOutcome `json:",omitempty"`
 	Model        string
 	TokensIn     int
 	TokensOut    int
@@ -110,6 +112,50 @@ const (
 	StatusStopped  Status = "stopped"
 	StatusFailed   Status = "failed"
 )
+
+type ToolOutcome string
+
+const (
+	ToolRan     ToolOutcome = session.ToolOutcomeRan
+	ToolFailed  ToolOutcome = session.ToolOutcomeFailed
+	ToolAborted ToolOutcome = session.ToolOutcomeAborted
+	ToolSkipped ToolOutcome = session.ToolOutcomeSkipped
+)
+
+func (ToolOutcome) enum() []string {
+	return names([]ToolOutcome{ToolRan, ToolFailed, ToolAborted, ToolSkipped})
+}
+
+func (o ToolOutcome) Failed() bool { return o == ToolFailed || o == ToolSkipped }
+
+type unknownOutcome string
+
+func (u unknownOutcome) Error() string {
+	return "host: a tool result names the outcome " + string(u) + ", which this build does not know"
+}
+
+func (o *ToolOutcome) UnmarshalJSON(raw []byte) error {
+	var said string
+	if json.Unmarshal(raw, &said) != nil || !slices.Contains(o.enum(), said) {
+		return unknownOutcome(raw)
+	}
+	*o = ToolOutcome(said)
+	return nil
+}
+
+func outcomeOf(ran llm.ToolOutcome) ToolOutcome {
+	switch ran {
+	case llm.ToolOutcomeUnset, llm.ToolOutcomeRan:
+		return ToolRan
+	case llm.ToolOutcomeFailed:
+		return ToolFailed
+	case llm.ToolOutcomeAborted:
+		return ToolAborted
+	case llm.ToolOutcomeSkipped:
+		return ToolSkipped
+	}
+	panic("host: unknown tool outcome " + strconv.Itoa(int(ran)))
+}
 
 type Fork struct {
 	From   string

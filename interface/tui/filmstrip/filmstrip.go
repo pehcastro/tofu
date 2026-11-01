@@ -382,7 +382,7 @@ func failedTurn() scenario {
 			r.wait(toolGap)
 		}},
 		beat{"failing", func(r *reel) {
-			r.send(tui.Event{Kind: tui.EventToolResult, ID: "c1", Text: "exit 128", Failed: true})
+			r.send(tui.Event{Kind: tui.EventToolResult, ID: "c1", Text: "exit 128", Outcome: host.ToolFailed})
 			r.wait(beatGap)
 		}},
 		beat{"failed", func(r *reel) {

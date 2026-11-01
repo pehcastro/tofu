@@ -346,6 +346,7 @@ type ToolCompleted struct {
 	Instance     string        `json:"instance,omitempty"`
 	Tool         string        `json:"tool"`
 	Failed       bool          `json:"failed"`
+	Outcome      ToolOutcome   `json:"outcome"`
 	ExitCode     *int          `json:"exitCode,omitempty"`
 	Bytes        int           `json:"bytes"`
 	Lines        int           `json:"lines"`

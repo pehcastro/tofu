@@ -105,7 +105,7 @@ func (r *cardRows) place(asker, id string, card toolcard.Card) (*ToolCard, strin
 	return wireCard(card), row.id
 }
 
-func (r *cardRows) settle(id, content string, failed bool, exit *int) (*ToolCard, string, *GroupSummary) {
+func (r *cardRows) settle(id, content string, outcome ToolOutcome, exit *int) (*ToolCard, string, *GroupSummary) {
 	placed, known := r.placed[id]
 	if !known {
 		return nil, "", nil
@@ -115,8 +115,16 @@ func (r *cardRows) settle(id, content string, failed bool, exit *int) (*ToolCard
 	if exit != nil {
 		code = *exit
 	}
+	ending := toolcard.Finished
+	switch outcome {
+	case ToolFailed:
+		ending = toolcard.Broken
+	case ToolSkipped:
+		ending = toolcard.Skipped
+	case ToolRan, ToolAborted:
+	}
 	row := placed.row
-	settled := row.cards.Settle(placed.seat, content, failed, code)
+	settled := row.cards.Settle(placed.seat, content, ending, code)
 	summary := row.cards.Summary()
 	wired := &GroupSummary{Calls: summary.Calls, Failed: summary.Failed, Head: wirePhrase(summary.Head)}
 	for _, line := range summary.Open {

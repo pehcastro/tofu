@@ -1166,7 +1166,7 @@ func TestTheAppResolvesReadBeforeEditFromSettingsAndRefusesABlindEditByDefault(t
 	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "edit the note", driver.emit)
 
 	results := driver.of(tui.EventToolResult)
-	if len(results) != 1 || !results[0].Failed {
+	if len(results) != 1 || results[0].Outcome != host.ToolFailed {
 		t.Fatalf("the app resolves readBeforeEdit on by default and must refuse a blind edit: %+v", results)
 	}
 }
@@ -1186,7 +1186,7 @@ func TestTheAppResolvesReadBeforeEditOffAndAllowsTheSameBlindEdit(t *testing.T) 
 	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "edit the note", driver.emit)
 
 	results := driver.of(tui.EventToolResult)
-	if len(results) != 1 || results[0].Failed {
+	if len(results) != 1 || results[0].Outcome != host.ToolRan {
 		t.Fatalf("readBeforeEdit off must let the app's blind edit through: %+v", results)
 	}
 }
@@ -1471,10 +1471,10 @@ func TestEveryToolSaysWhetherItFailedAndHowBigItsResultWas(t *testing.T) {
 			if len(results) != 2 {
 				t.Fatalf("the interface saw %d results, want the failed call and the one that ran: %+v", len(results), results)
 			}
-			if !results[0].Failed {
+			if results[0].Outcome != host.ToolFailed {
 				t.Errorf("%s failed and the interface was told %+v", one.tool, results[0])
 			}
-			if results[1].Failed {
+			if results[1].Outcome != host.ToolRan {
 				t.Errorf("%s ran and the interface was told it failed: %+v", one.tool, results[1])
 			}
 			if results[0].Bytes <= 0 || results[1].Bytes <= 0 {
@@ -1676,7 +1676,7 @@ func TestAFailedWriteIsNotAnEdit(t *testing.T) {
 	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "write outside the root", driver.emit)
 
 	results := driver.of(tui.EventToolResult)
-	if len(results) != 1 || !results[0].Failed {
+	if len(results) != 1 || results[0].Outcome != host.ToolFailed {
 		t.Fatalf("the interface saw %d results and the first did not fail: %+v", len(results), results)
 	}
 	if results[0].Created != "" || results[0].Diff != "" {

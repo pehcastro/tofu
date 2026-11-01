@@ -351,7 +351,7 @@ func (a *watcher) result(message llm.Message, asker string) {
 		Bytes:    message.ToolResultBytes,
 		ExitCode: message.ToolExitCode,
 		Hits:     message.ToolHits,
-		Failed:   message.ToolOutcome.Failed(),
+		Outcome:  outcomeOf(message.ToolOutcome),
 		Agent:    asker,
 	}
 	if verdict, spawned := a.verdictOf(result.ID, message.Content); spawned {
@@ -361,10 +361,10 @@ func (a *watcher) result(message llm.Message, asker string) {
 		result.Text = reply
 	}
 	body := turn.WithoutToolRef(message.Content)
-	result.Card, result.Group, result.GroupSummary = a.cards.settle(result.ID, body, result.Failed, message.ToolExitCode)
+	result.Card, result.Group, result.GroupSummary = a.cards.settle(result.ID, body, result.Outcome, message.ToolExitCode)
 	first, appended, appends := turn.AppendedLines(body)
 	switch {
-	case result.Failed:
+	case result.Outcome.Failed():
 	case strings.HasPrefix(body, unifiedDiffHeader):
 		result.Diff = body
 	case strings.HasPrefix(body, createdFilePrefix):
@@ -374,7 +374,7 @@ func (a *watcher) result(message llm.Message, asker string) {
 	}
 	a.marks.Unlock()
 	ended := byteSize(message.ToolResultBytes)
-	if result.Failed {
+	if result.Outcome.Failed() {
 		ended = cmp.Or(result.Text, ended)
 	}
 	a.shows.Lock()

@@ -323,7 +323,10 @@ func drawChat(view *session.Model, event Event, status string) {
 		}
 		view.Append(session.Entry{Kind: session.Tool, ID: event.ID, Head: event.Tool, Body: event.Text, Detail: event.Detail, Card: event.Card, Group: event.Group, Started: event.At})
 	case EventToolResult:
-		view.Finish(event.ID, session.Result{Status: status, Output: event.Detail, Bytes: event.Bytes, Failed: event.Failed, At: event.At, Card: event.Card})
+		if event.Outcome == host.ToolSkipped {
+			status = feed.StateSkipped.String()
+		}
+		view.Finish(event.ID, session.Result{Status: status, Output: event.Detail, Bytes: event.Bytes, Failed: event.Outcome == host.ToolFailed, At: event.At, Card: event.Card})
 	case EventNote:
 		view.Append(session.Entry{Kind: session.Note, Body: event.Text})
 	case EventFailure:
@@ -743,8 +746,12 @@ func (a *App) finished(held *feed.Event, event Event, at time.Time) (feed.Event,
 		done.Elapsed = at.Sub(done.At)
 	}
 	done.State = feed.StateComplete
-	if event.Failed {
+	switch event.Outcome {
+	case host.ToolFailed:
 		done.State = feed.StateFailed
+	case host.ToolSkipped:
+		done.State = feed.StateSkipped
+	case host.ToolRan, host.ToolAborted, "":
 	}
 	done.Detail = append(done.Detail, lines(event.Text)...)
 	edit, changed := edits.Changed(event.Agent, done.Body, event.Diff, event.Created, event.ID, at)
@@ -790,7 +797,7 @@ func (a *App) answered(event Event, at time.Time) {
 	}
 	if order, sent := a.orderCalls[event.ID]; sent {
 		delete(a.orderCalls, event.ID)
-		if !event.Failed {
+		if !event.Outcome.Failed() {
 			order.At = at
 			a.orders.Add(order)
 		}

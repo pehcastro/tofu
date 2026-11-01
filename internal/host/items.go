@@ -310,7 +310,7 @@ func wholeJSON(raw json.RawMessage) json.RawMessage {
 func (s *items) toolCompleted(id Identity, event Event, now time.Time) []outgoing {
 	opened, known := s.tools[event.ID]
 	delete(s.tools, event.ID)
-	completed := &ToolCompleted{Identity: id, Instance: event.Agent, Tool: opened.tool, Failed: event.Failed, ExitCode: event.ExitCode, Bytes: event.Bytes, Lines: lineCount(event.Detail), Output: event.Detail,
+	completed := &ToolCompleted{Identity: id, Instance: event.Agent, Tool: opened.tool, Failed: event.Outcome.Failed(), Outcome: event.Outcome, ExitCode: event.ExitCode, Bytes: event.Bytes, Lines: lineCount(event.Detail), Output: event.Detail,
 		Card: event.Card, Group: event.Group, GroupSummary: event.GroupSummary}
 	if known {
 		completed.DurationMs = now.Sub(opened.at).Milliseconds()
