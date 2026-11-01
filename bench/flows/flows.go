@@ -35,6 +35,7 @@ var flows = []flow{
 	{8, "10,000 kept shells: memory under 300 MB for 3 min, a report reaches the lead, ctrl+c quits within 3 s", false, keptShellsQuit},
 	{9, "a sub-agent resumed by message outlives the lead's turn, a person message, a cancelled ask, esc once and a cron fire", true, resumedSurvives},
 	{10, "under a holder, an image pasted into a message the lead reads mid-turn reaches its next request", false, steeredImage},
+	{11, "a lead forked with two sub-agents running carries both and still steers one", false, forkRoster},
 }
 
 var spinnerOnScreen = regexp.MustCompile(`(?m)^\s*(\S) working · \[&sub-1\]\s*[│┃]?\s*$`)
@@ -230,6 +231,25 @@ func steeredImage(s session) (string, error) {
 		return "", fmt.Errorf("%s ends on %q, which carries no image", lead.name(), steered)
 	}
 	return lead.name() + " ends on " + steered, nil
+}
+
+func forkRoster(s session) (string, error) {
+	out, err := s.drive("11-fork-roster", "", time.Minute)
+	if err != nil {
+		return "", err
+	}
+	sent := leadRequests(out)
+	if len(sent) < 2 {
+		return "", fmt.Errorf("the orchestrator sent %d requests, and the fork needs a second", len(sent))
+	}
+	if err := carries(sent[1], "holds alpha/**, ticket T-1", "holds beta/**, ticket T-2"); err != nil {
+		return "", err
+	}
+	_, after, _ := strings.Cut(out, "\nsub-agent c")
+	if !strings.Contains(after, "\n    STEERMSG") {
+		return "", fmt.Errorf("no sub-agent request after the fork carries the lead's STEERMSG")
+	}
+	return sent[1].name() + ": " + lineWith(sent[1].text(), "sub-1: ") + "; STEERMSG reached a sub-agent after the fork", nil
 }
 
 func crowdCassette(dir string) (string, error) {

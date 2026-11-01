@@ -595,6 +595,13 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	stateCarried := func(fork *Fork, step int, beforeFork, begun []llm.Message, tools []llm.Tool) ([]llm.Message, string) {
 		begun = config.withFreshMemoryView(begun)
+		if running := runningSubAgents(source().tools); len(running) > 0 {
+			at := slices.IndexFunc(begun, func(message llm.Message) bool {
+				return message.Origin.Source == llm.SourceForkCarry && message.Content == fork.Carry.Text
+			})
+			fork.Carry = fork.Carry.WithSubAgents(running)
+			begun[at].Content = fork.Carry.Text
+		}
 		unreported := budget.Reported(0, recall.Occupancy{})
 		if keeper != nil {
 			begun = withoutEpisodes(begun)
@@ -1579,4 +1586,29 @@ func (s skillLoading) Run(ctx context.Context, raw json.RawMessage) (Result, err
 		s.references.held[reference.Name] = reference.Text
 	}
 	return result, err
+}
+
+func runningSubAgents(tools []Tool) []string {
+	var running []string
+	for _, tool := range tools {
+		spawner, spawns := tool.(*SpawnTool)
+		if !spawns {
+			continue
+		}
+		for _, agent := range spawner.roster.SubAgents() {
+			switch agent.State {
+			case subagent.Errored, subagent.Finished:
+				continue
+			case subagent.Working, subagent.WaitingAnswer, subagent.InReview, subagent.Reopened, subagent.Parked:
+			}
+			held := "holds no path"
+			if agent.Holds() && len(agent.Owns) > 0 {
+				held = "holds " + strings.Join(agent.Owns, " ")
+			}
+			mission, _, _ := strings.Cut(agent.Mission, "\n")
+			running = append(running, agent.ID+": "+cmp.Or(agent.Agent, "no definition")+", "+agent.State.String()+", "+held+
+				", ticket "+cmp.Or(agent.Ticket, "none")+": "+runeSafeHead(mission, konst.CarrySignpostBytes))
+		}
+	}
+	return running
 }

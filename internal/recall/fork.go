@@ -32,6 +32,7 @@ type Carry struct {
 	Results         []CarriedResult `json:"results"`
 	Files           []string        `json:"files,omitempty"`
 	Unseen          []string        `json:"unseen,omitempty"`
+	SubAgents       []string        `json:"sub_agents,omitempty"`
 }
 
 const SaidCarryHeading = "what the person said in this line of sessions, oldest first, each message word for word as one quoted line. it stands until the person says otherwise:\n"
@@ -62,6 +63,20 @@ const (
 const carrySnapshots = "the last snapshot of each tab it worked in, as it came back, so the page need not be observed again before acting:\n"
 
 const carryHeldTail = "its last steps follow this message word for word, as they were sent.\n"
+
+const carrySubAgents = "the sub-agents it spawned that were running when this fork began, each with its paths and ticket. message reaches each by its name, and subagents says what each does now:\n"
+
+func (c Carry) WithSubAgents(running []string) Carry {
+	if len(running) == 0 {
+		return c
+	}
+	at := strings.Index(c.Text, carryLastWord)
+	if at < 0 {
+		at = strings.Index(c.Text, carryHeldTail)
+	}
+	c.Text, c.SubAgents = c.Text[:at]+carrySubAgents+strings.Join(running, "\n")+"\n"+c.Text[at:], running
+	return c
+}
 
 func (c Conversation) heldFrom() int {
 	return len(c.Entries) - c.HeldWhole
