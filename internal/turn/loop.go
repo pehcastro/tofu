@@ -436,14 +436,14 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	carried, view := slices.DeleteFunc(slices.Clone(config.History), func(message llm.Message) bool {
 		return message.Origin.Source == llm.SourceSpawnLine || held.composedNow && promptChange(message)
 	}), []llm.Message(nil)
-	if config.opensGeneration() {
-		fresh, was := config.MemoryMessage(), newestMemoryView(carried)
+	fresh, was := config.MemoryMessage(), newestMemoryView(carried)
+	if config.opensGeneration() || len(fresh) == 0 || len(was) == 0 {
 		if len(fresh) > 0 && (len(was) == 0 || was[0].Content != fresh[0].Content) {
 			recorded.message(fresh[0], "", nil)
 		}
 		carried = withMemoryViewAtHead(carried, fresh)
 	} else {
-		carried = withMemoryViewAtHead(carried, newestMemoryView(carried))
+		carried = withMemoryViewAtHead(carried, was)
 		if unsent := memoryUnsent(config.Memory, carried, config.Inbox); len(unsent) > 0 {
 			view = []llm.Message{{Role: llm.RoleUser, Content: memoryAddedSince + strings.Join(unsent, "\n"), Origin: llm.Origin{Source: llm.SourceMemorySaved, TakenAt: start}}}
 		}
