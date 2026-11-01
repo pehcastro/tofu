@@ -13,7 +13,7 @@ const ceiling = konst.ContextCeilingTokens
 func Render(machine, date string, reach CorpusReach) string {
 	var out strings.Builder
 	fmt.Fprintf(&out, "# bench recall: %s\n\n", date)
-	fmt.Fprintf(&out, "Machine: %s. Reads `.tofu/sessions` directly, offline, no live model call. Companion to `report-2026-09-20.md`, which this file does not touch. Run: `go run ./bench/recall/gen`.\n\n", machine)
+	fmt.Fprintf(&out, "Machine: %s. Reads `%s` directly, offline, no live model call. Companion to `report-2026-09-20.md`, which this file does not touch. Run: `go run ./bench/recall/gen [sessions-dir]`, which defaults to this project's own recorded sessions.\n\n", machine, reach.Dir)
 
 	total := len(reach.Measured) + len(reach.Skipped)
 	fmt.Fprintf(&out, "## Peak occupancy against `konst.ContextCeilingTokens`\n\n")
@@ -38,7 +38,7 @@ func Render(machine, date string, reach CorpusReach) string {
 	if len(crossed) == 0 {
 		fmt.Fprintf(&out, "**No recorded session crossed the target recorded for it at the time.** That is stated plainly: compaction of any kind has never had a reason to run on real material outside a test. Today's shipped target, from `konst.ContextCeilingTokens` and the current band shares, is %d tokens.\n\n", shippedTarget)
 	} else {
-		fmt.Fprintf(&out, "%d recorded sessions crossed the target recorded for them at the time: %s. The two ran under different band builds, %d and %d tokens, because the shares in `internal/konst` moved between them; today's shipped target is %d tokens.\n\n",
+		fmt.Fprintf(&out, "%d recorded sessions crossed the target recorded for them at the time: %s. Their recorded targets run from %d to %d tokens, because the shares in `internal/konst` moved between builds; today's shipped target is %d tokens.\n\n",
 			len(crossed), namesOf(crossed), crossed[0].Target, crossed[len(crossed)-1].Target, shippedTarget)
 	}
 
@@ -51,22 +51,28 @@ func Render(machine, date string, reach CorpusReach) string {
 	if len(reach.Forks) == 0 {
 		out.WriteString("No session ever forked either, so the mechanism that actually ships (isolate-and-continue) has not run on real material outside a test.\n\n")
 	} else {
-		fmt.Fprintf(&out, "**The mechanism that did run is the fork, twice, both `continuation` kind:**\n\n")
+		fmt.Fprintf(&out, "**The mechanism that did run is the fork, %d time(s):**\n\n", len(reach.Forks))
 		for _, fork := range reach.Forks {
-			fmt.Fprintf(&out, "- `%s` step %d forked into `%s`: %d tokens down to %d, the carry named %d known sources whole.\n",
-				fork.Session, fork.Step, fork.Into, fork.TokensBefore, fork.TokensAfter, fork.KnownSources)
+			fmt.Fprintf(&out, "- `%s` step %d forked (`%s`) into `%s`: %d tokens down to %d, the carry named %d known sources whole.\n",
+				fork.Session, fork.Step, fork.Kind, fork.Into, fork.TokensBefore, fork.TokensAfter, fork.KnownSources)
 		}
-		out.WriteString("\nNeither fork dropped a result the design calls eviction in the in-place sense: a fork replaces the whole working set with a handle carry rather than deleting anything, so what \"was evicted\" here is the entire pre-fork working set, made reachable again through `artifact_fetch` rather than gone.\n\n")
+		out.WriteString("\nA fork drops no result in the in-place sense: it replaces the whole working set with a handle carry, so what \"was evicted\" is the entire pre-fork working set, made reachable again through `lookup` and `artifact_fetch` rather than gone.\n\n")
 	}
 
 	fmt.Fprintf(&out, "## Re-fetch rate\n\n")
 	if len(reach.Forks) == 0 {
 		out.WriteString("**Undefined, not zero.** No eviction of any kind has ever run on a real session, so there is nothing for a re-fetch to be a rate of.\n\n")
 	} else {
-		total := reach.TotalRefetches()
-		fmt.Fprintf(&out, "**Defined, and it is zero: %d of %d evictions (the two forks above) were followed by a re-fetch of a source the fork had already dropped.** ", total, len(reach.Forks))
-		out.WriteString("Checked directly: every tool call in each continuation session was compared against the `Key` of every result the fork's own carry named, using the exact key the fork itself computed (`tool + \" \" + args`). Neither continuation session repeated a pre-fork tool call; the one place `turn-18d6f8d9e45f8efc-f2` went back for old material it used `artifact_fetch` against the handle the carry had already given it, which is the cheap path the design intends and not a re-fetch by this definition.\n\n")
-		out.WriteString("**The sample is two.** A rate of zero over two events is a real measurement, not a guess, but it is not a claim that wrong evictions cannot happen: it says only that the two forks recorded so far did not produce one.\n\n")
+		fmt.Fprintf(&out, "**%d re-fetch(es) over %d fork(s).** A re-fetch is a tool call in the continuation that names a source the fork's own carry already held, keyed by `rc.Distil`, the function that built the carry, so a call matches on the same source the carry recorded. A call through `lookup` or `artifact_fetch` is the cheap path and not a re-fetch.\n\n", reach.TotalRefetches(), len(reach.Forks))
+		out.WriteString("| session | step | into | carried | re-fetched |\n|---|---|---|---|---|\n")
+		for _, fork := range reach.Forks {
+			refetched := fmt.Sprint(fork.Refetches)
+			if fork.Gone != "" {
+				refetched = "not read: " + fork.Gone
+			}
+			fmt.Fprintf(&out, "| `%s` | %d | `%s` | %d | %s |\n", fork.Session, fork.Step, fork.Into, fork.KnownSources, refetched)
+		}
+		out.WriteString("\n")
 	}
 
 	fmt.Fprintf(&out, "## Sessions that could not be measured\n\n")
@@ -85,13 +91,13 @@ func Render(machine, date string, reach CorpusReach) string {
 	fmt.Fprintf(&out, "## The condition under which this starts to matter\n\n")
 	gapToCeiling := float64(ceiling) / float64(reach.Highest())
 	overShippedTarget := 100 * (float64(reach.Highest())/float64(shippedTarget) - 1)
-	fmt.Fprintf(&out, "**A session several times longer than the longest ever recorded, at the current ceiling, band shares and bytes-per-token estimate.** The largest peak on record here is %d tokens; the %d ceiling is %.1fx that. `context-budget.md` v7 already measured a synthetic extension of a different recorded turn, the 44 step fixture peaking at 44,145 tokens used across BOJI-108, -119 and -138: a fork first appears at 48 steps on that extension, eight steps past its own real length. This report's own two real forks confirm the same shape independently, each firing the moment its session crossed the target recorded for it at the time, both well short of the ceiling and the higher of the two only %.1f%% over today's %d token shipped target. Three things would each pull the condition closer without any session getting longer: a lower `konst.ContextCeilingTokens` (a deliberate test lever already in the code, never shipped to a user), a model whose own window is smaller than the operating ceiling so the model's own wall is hit first, or a task shape that reads much larger results (this project's own source and docs) rather than the many small tool calls the recorded corpus is mostly made of.\n\n",
+	fmt.Fprintf(&out, "**A session several times longer than the longest ever recorded, at the current ceiling, band shares and bytes-per-token estimate.** The largest peak on record here is %d tokens; the %d ceiling is %.1fx that. `context-budget.md` v7 already measured a synthetic extension of a different recorded turn, the 44 step fixture peaking at 44,145 tokens used across BOJI-108, -119 and -138: a fork first appears at 48 steps on that extension, eight steps past its own real length. The highest peak on record is %.1f%% over today's %d token shipped target. Three things would each pull the condition closer without any session getting longer: a lower `konst.ContextCeilingTokens` (a deliberate test lever already in the code, never shipped to a user), a model whose own window is smaller than the operating ceiling so the model's own wall is hit first, or a task shape that reads much larger results (this project's own source and docs) rather than the many small tool calls the recorded corpus is mostly made of.\n\n",
 		reach.Highest(), ceiling, gapToCeiling, overShippedTarget, shippedTarget)
 
 	fmt.Fprintf(&out, "## What this does not answer\n\n")
-	out.WriteString("- Whether a wrong eviction is visible when one happens: the two real forks never produced one to check against, so the re-fetch label is proved to work in code (`bench/recall/session.go`, `report-2026-09-20.md`) but has never caught a real mistake.\n")
-	out.WriteString("- Whether the fork's cost shape (`context-budget.md` v7: handles beat a summary, 110,486 billed units against 153,392 doing nothing on the one turn measured) holds on these two real forks specifically: that would need the provider's own reported input tokens on the requests around each fork, which this report did not read.\n")
-	out.WriteString("- The single-file schema sessions, 55 of the 63 skips: whether any of them would have crossed the ceiling if occupancy had been recorded at the time is not answerable from what is on disk.\n")
+	out.WriteString("- Whether a re-fetch was a wrong eviction or a deliberate second look: the count says the continuation asked again for a source the carry held, not why.\n")
+	out.WriteString("- Whether the fork's cost shape (`context-budget.md` v7: handles beat a summary, 110,486 billed units against 153,392 doing nothing on the one turn measured) holds on these forks: that would need the provider's own reported input tokens on the requests around each fork, which this report did not read.\n")
+	fmt.Fprintf(&out, "- The single-file schema sessions, %d of the %d skips: whether any of them would have crossed the ceiling if occupancy had been recorded at the time is not answerable from what is on disk.\n", byReason[ReasonPreOccupancySchema], len(reach.Skipped))
 
 	return out.String()
 }

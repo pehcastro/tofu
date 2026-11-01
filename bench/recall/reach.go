@@ -27,9 +27,11 @@ type ForkEvent struct {
 	TokensAfter  int
 	KnownSources int
 	Refetches    int
+	Gone         string
 }
 
 type CorpusReach struct {
+	Dir         string
 	Measured    []SessionPeak
 	Skipped     []corpus.SkippedTurn
 	Forks       []ForkEvent
@@ -49,7 +51,7 @@ func WalkCorpusReach(sessionsDir string, recordedBy time.Time) (CorpusReach, err
 	if err != nil {
 		return CorpusReach{}, err
 	}
-	var reach CorpusReach
+	reach := CorpusReach{Dir: sessionsDir}
 	for _, skip := range listing.Skipped {
 		reach.Skipped = append(reach.Skipped, corpus.SkippedTurn{Path: skip.ID, Reason: skip.Reason.Error()})
 	}
@@ -85,8 +87,9 @@ func WalkCorpusReach(sessionsDir string, recordedBy time.Time) (CorpusReach, err
 				continue
 			}
 			refetches, err := refetchesInto(store, step.Fork.Into, step.Fork.Carry.Results)
+			gone := ""
 			if err != nil {
-				return CorpusReach{}, err
+				gone = err.Error()
 			}
 			reach.Forks = append(reach.Forks, ForkEvent{
 				Session:      header.ID,
@@ -97,6 +100,7 @@ func WalkCorpusReach(sessionsDir string, recordedBy time.Time) (CorpusReach, err
 				TokensAfter:  step.Fork.TokensAfter,
 				KnownSources: len(step.Fork.Carry.Results),
 				Refetches:    refetches,
+				Gone:         gone,
 			})
 		}
 	}
@@ -137,9 +141,10 @@ func peakOccupancy(steps []turn.StepRow) (peak, target int, found bool) {
 }
 
 func refetchesInto(store *session.Store, forkID string, known []rc.CarriedResult) (int, error) {
-	knownKeys := make(map[string]bool, len(known))
+	type source struct{ tool, key string }
+	carried := make(map[source]bool, len(known))
 	for _, result := range known {
-		knownKeys[result.Key] = true
+		carried[source{result.Tool, result.Key}] = true
 	}
 	steps, err := readSteps(store, forkID)
 	if err != nil {
@@ -148,7 +153,9 @@ func refetchesInto(store *session.Store, forkID string, known []rc.CarriedResult
 	count := 0
 	for _, step := range steps {
 		for _, call := range step.ToolCalls {
-			if knownKeys[call.Tool+" "+string(call.Args)] {
+			entry := rc.Entry{Tool: call.Tool, Call: call.Call, SupersedeKey: call.Tool + " " + string(call.Args), Text: call.Tool}
+			_, named, _ := rc.Distil(nil, rc.Conversation{Entries: []rc.Entry{entry}}, 0)
+			if len(named) == 1 && carried[source{call.Tool, named[0].Key}] {
 				count++
 			}
 		}

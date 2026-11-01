@@ -11,8 +11,12 @@ import (
 )
 
 func main() {
+	sessions := sys.RecordedStateDir("sessions")
+	if len(os.Args) > 1 {
+		sessions = os.Args[1]
+	}
 	err := report.Generate("recall reach report", func(machine, date string) (string, error) {
-		reach, err := recall.WalkCorpusReach(sys.RecordedStateDir("sessions"), time.Now())
+		reach, err := recall.WalkCorpusReach(sessions, time.Now())
 		if err != nil {
 			return "", err
 		}
