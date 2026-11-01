@@ -728,10 +728,24 @@ func (h *Host) rejoin(f *following, now picture, seq uint64) {
 	f.seq = seq
 	for _, event := range moves {
 		h.mirror(f, event)
+		if event.Kind == EventTurnStarted && !h.carries(event.Text) {
+			h.mirror(f, Event{Kind: EventTask, Text: event.Text, Origin: event.Origin, Images: event.Images})
+		}
 	}
 	h.bus.mu.Lock()
 	h.bus.now = now
 	h.bus.mu.Unlock()
+}
+
+func (h *Host) carries(task string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, said := range h.carried {
+		if said.Role == llm.RoleUser && strings.Contains(said.Content, strings.TrimSpace(task)) {
+			return true
+		}
+	}
+	return false
 }
 
 func (f *following) caughtUp() {
