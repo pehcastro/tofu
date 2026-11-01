@@ -29,6 +29,7 @@ type exchange struct {
 	billed   usage
 	messages int
 	body     string
+	blocks   []block
 }
 
 type lookup struct {
@@ -101,7 +102,13 @@ func judge(w http.ResponseWriter, r *http.Request) {
 	for id, question := range request.Questions {
 		switch question.Type {
 		case "score":
-			answers[id] = map[string]any{"type": "score", "score": 0, "probabilities": map[string]float64{"0": 1}, "confidence": 1}
+			var levels []json.RawMessage
+			_ = json.Unmarshal(question.Criteria, &levels)
+			lowest := map[string]float64{"0": 1}
+			for level := 1; level < len(levels); level++ {
+				lowest[fmt.Sprint(level)] = 0
+			}
+			answers[id] = map[string]any{"type": "score", "score": 0, "probabilities": lowest, "confidence": 1}
 		case "noul":
 			answers[id] = map[string]any{"type": "noul", "noul": 0}
 		case "choice":
@@ -125,8 +132,9 @@ func (s *stand) answer(w http.ResponseWriter, r *http.Request) {
 	_ = json.Unmarshal(raw, &body)
 	s.held.Lock()
 	defer s.held.Unlock()
-	sent := exchange{step: len(body.Tools) > 0 && (body.ToolChoice == nil || body.ToolChoice.Type != "none"), billed: s.cache.bill(blocksOf(body)),
-		messages: len(body.Messages), body: string(raw)}
+	blocks := blocksOf(body)
+	sent := exchange{step: len(body.Tools) > 0 && (body.ToolChoice == nil || body.ToolChoice.Type != "none"), billed: s.cache.bill(blocks),
+		messages: len(body.Messages), body: string(raw), blocks: blocks}
 	s.sent = append(s.sent, sent)
 	reply := sse{w: w, flusher: w.(http.Flusher)}
 	reply.start(len(s.sent), sent.billed)

@@ -67,6 +67,7 @@ func run() error {
 			return err
 		}
 	}
+	header := conditions(*exe, repo, *ceiling)
 	var runs []measured
 	for _, a := range arms {
 		for _, played := range scripts {
@@ -77,7 +78,15 @@ func run() error {
 			runs = append(runs, ran)
 		}
 	}
-	fmt.Print(conditions(*exe, repo, *ceiling) + report(runs))
+	var compacts []compactRow
+	for _, played := range scripts {
+		row, err := compactOnce(*exe, filepath.Join(*work, strconv.Itoa(len(runs)+len(compacts)+1)), played)
+		if err != nil {
+			return fmt.Errorf("%s on %s: %w", compactArm, played.name, err)
+		}
+		compacts = append(compacts, row)
+	}
+	fmt.Print(header + report(runs) + compactReport(compacts))
 	return nil
 }
 
@@ -110,56 +119,80 @@ func tofu(exe, dir string, env []string, stdin string, args ...string) (string, 
 	return string(out), nil
 }
 
-func replay(exe, work string, played script, a arm, ceiling int) (measured, error) {
+type staged struct {
+	stood    *stand
+	env      []string
+	dir      string
+	task     string
+	started  time.Time
+	timedFor string
+}
+
+func stage(exe, work string, played script, settings []string) (staged, error) {
 	home, dir := filepath.Join(work, "home"), filepath.Join(work, "project")
 	for _, made := range []string{home, filepath.Join(dir, "mock")} {
 		if err := os.MkdirAll(made, 0o755); err != nil {
-			return measured{}, err
+			return staged{}, err
 		}
 	}
 	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("mock project\n"), 0o644); err != nil {
-		return measured{}, err
+		return staged{}, err
 	}
 	for _, git := range [][]string{{"init", "-q"}, {"add", "-A"}, {"-c", "user.name=bench", "-c", "user.email=bench@example.invalid", "commit", "-q", "-m", "seed"}} {
 		if out, err := exec.Command("git", append([]string{"-C", dir}, git...)...).CombinedOutput(); err != nil {
-			return measured{}, fmt.Errorf("git %v: %v: %s", git, err, out)
+			return staged{}, fmt.Errorf("git %v: %v: %s", git, err, out)
 		}
 	}
 	stood := startStand(dir, played)
-	defer stood.Close()
 	env := freshEnv(home, stood.env()...)
 	setup := [][]string{{"login", "llm", "claude-sub", "--paste"}, {"models", "bind", "classifier", "typesafe/jev-latest"}, {"models", "bind", "orchestrator", model}}
-	if a.settings != nil {
-		setup = append(setup, a.settings)
+	if settings != nil {
+		setup = append(setup, settings)
 	}
 	for _, args := range setup {
 		if _, err := tofu(exe, dir, env, mockLoginCode+"\n", args...); err != nil {
-			return measured{}, err
+			stood.Close()
+			return staged{}, err
 		}
 	}
 	task := "MOCK task " + strings.Repeat("z", max(0, played.taskBytes-10))
-	started := time.Now()
-	_, err := tofu(exe, dir, env, "", "run", "--dir", dir, "--model", model, "--no-gate", "--sift", "free",
-		"--context-ceiling", strconv.Itoa(ceiling), "--max-steps", strconv.Itoa(len(played.steps)+stepsAfterScript), task)
-	if err != nil {
-		return measured{}, err
+	return staged{stood: stood, env: env, dir: dir, task: task, started: time.Now(), timedFor: played.name}, nil
+}
+
+func (s staged) kept(work, armName string) error {
+	s.stood.held.Lock()
+	defer s.stood.held.Unlock()
+	if s.stood.failed != nil {
+		return fmt.Errorf("the stand-in could not stage a mocked call: %w", s.stood.failed)
 	}
-	listed, err := tofu(exe, dir, env, "", "session", "list", "--json")
-	if err != nil {
-		return measured{}, err
-	}
-	stood.held.Lock()
-	defer stood.held.Unlock()
-	if stood.failed != nil {
-		return measured{}, fmt.Errorf("the stand-in could not stage a mocked call: %w", stood.failed)
-	}
-	for at, e := range stood.sent {
+	for at, e := range s.stood.sent {
 		if err := os.WriteFile(filepath.Join(work, fmt.Sprintf("request-%03d.json", at)), []byte(e.body), 0o644); err != nil {
-			return measured{}, err
+			return err
 		}
 	}
-	fmt.Fprintf(os.Stderr, "timing, not measured: %s on %s: %d requests in %s\n", a.name, played.name, len(stood.sent), time.Since(started).Round(time.Second))
-	return measure(a.name, played, stood.sent, stood.lookups, listed), nil
+	fmt.Fprintf(os.Stderr, "timing, not measured: %s on %s: %d requests in %s\n", armName, s.timedFor, len(s.stood.sent), time.Since(s.started).Round(time.Second))
+	return nil
+}
+
+func replay(exe, work string, played script, a arm, ceiling int) (measured, error) {
+	s, err := stage(exe, work, played, a.settings)
+	if err != nil {
+		return measured{}, err
+	}
+	defer s.stood.Close()
+	_, err = tofu(exe, s.dir, s.env, "", "run", "--dir", s.dir, "--model", model, "--no-gate", "--sift", "free",
+		"--context-ceiling", strconv.Itoa(ceiling), "--max-steps", strconv.Itoa(len(played.steps)+stepsAfterScript), s.task)
+	if err != nil {
+		return measured{}, err
+	}
+	listed, err := tofu(exe, s.dir, s.env, "", "session", "list", "--json")
+	if err != nil {
+		return measured{}, err
+	}
+	if err := s.kept(work, a.name); err != nil {
+		return measured{}, err
+	}
+	return measure(a.name, played, s.stood.sent, s.stood.lookups, listed), nil
 }
 
 func conditions(exe, repo string, ceiling int) string {
@@ -175,7 +208,7 @@ wire        anthropic messages to a local stand-in that bills by Anthropic's pro
 project     billed as W:\mock\project in every request, so the length of -work moves no count
 credential  mock claude-sub login against the stand-in, so a subscription credential kind
 model       %s, build id the stand-in reported: %s
-ceiling     --context-ceiling %d on every run
+ceiling     --context-ceiling %d on every tofu run; the compact arm runs under tofu serve --stdio at its own context budget
 weights     input %.2f, cache read %.2f, write 5m %.2f, write 1h %.2f, in base input tokens
 warm-up     none: no request is discarded
 

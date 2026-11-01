@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"tofu/internal/host"
 )
 
 const (
@@ -100,4 +102,41 @@ func report(runs []measured) string {
 			share(t.insideGone, t.inside), spread(t.even, "%.1f"), fmt.Sprintf("%d of %d", t.paid, t.forks))
 	}
 	return b.String()
+}
+
+const compactHead = "%-18s %-22s %-29s %-27s %7s %7s %7s %7s %7s %7s %7s %7s %5s\n"
+
+const compactLegend = `
+first    /compact before the session's first turn, which carries nothing; after, the same once the recorded turn has run
+results  old tool results it shrank; tofu's own token estimate counts the real project path, so it is left out
+before   the last request before /compact, in tokens billed, with its cache read and written
+after    the first request of the next turn, with its cache read and written; asides adds what every request between them wrote
+shared   tokens of the longest block prefix the two requests have in common, the most the cache could read
+reach    blocks from the end of that prefix to the after request's next cache breakpoint; past %d the cache cannot find it
+`
+
+func compacted(c host.Compaction) string {
+	switch {
+	case c.Into != "":
+		return fmt.Sprint(c.Results)
+	case c.TokensBefore == 0:
+		return "nothing compacted, no history"
+	}
+	return "nothing compacted, none old"
+}
+
+func compactReport(rows []compactRow) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "\ncompact, one row per session: /compact through tofu serve after the recorded turn, then one more turn\n")
+	fmt.Fprintf(&b, compactHead, "arm", "session", "first", "results", "before", "read", "written", "after", "read", "written", "asides", "shared", "reach")
+	for _, r := range rows {
+		after := []string{"-", "-", "-", "-", "-", "-"}
+		if r.compaction.Into != "" {
+			after = []string{fmt.Sprint(r.after.total()), fmt.Sprint(r.after.read), fmt.Sprint(r.after.written()), fmt.Sprint(r.asides.written()),
+				fmt.Sprint(r.shared.tokens), fmt.Sprint(r.shared.reach)}
+		}
+		fmt.Fprintf(&b, compactHead, compactArm, r.session, compacted(r.first), compacted(r.compaction), fmt.Sprint(r.before.total()), fmt.Sprint(r.before.read),
+			fmt.Sprint(r.before.written()), after[0], after[1], after[2], after[3], after[4], after[5])
+	}
+	return b.String() + fmt.Sprintf(compactLegend, lookbackBlocks)
 }

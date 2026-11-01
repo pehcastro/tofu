@@ -91,6 +91,25 @@ func blocksOf(body wireBody) []block {
 	return blocks
 }
 
+type sharedPrefix struct {
+	tokens int
+	reach  int
+}
+
+func sharedWith(before, after []block) sharedPrefix {
+	shared, bytes := 0, 0
+	for ; shared < min(len(before), len(after)) && before[shared].prefix == after[shared].prefix; shared++ {
+		bytes += before[shared].bytes
+	}
+	reach := -1
+	for at := max(shared-1, 0); at < len(after) && reach < 0; at++ {
+		if after[at].breakpoint != "" {
+			reach = at - (shared - 1)
+		}
+	}
+	return sharedPrefix{tokens: tokens(bytes), reach: reach}
+}
+
 type promptCache map[[32]byte]bool
 
 func (c promptCache) bill(blocks []block) usage {
