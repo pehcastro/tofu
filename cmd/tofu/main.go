@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
@@ -387,11 +388,68 @@ func verbNamed(name string) verb {
 		return verb{run: withoutIn(previewVerb)}
 	case "help", "-h", "--help":
 		return verb{run: func(_ []string, _ io.Reader, out, _ io.Writer) int {
-			_, _ = fmt.Fprintf(out, usage, konst.TemporaryProjectIdleHours)
+			_, _ = io.WriteString(out, verbHelp("help", nil))
 			return exitOK
 		}}
 	}
 	return verb{}
+}
+
+func verbHelp(name string, args []string) string {
+	text := verbNamed(name).usage
+	switch name {
+	case "help", "-h", "--help", "--continue":
+		return fmt.Sprintf(usage, konst.TemporaryProjectIdleHours)
+	case "run":
+		return runUsage()
+	case "sift":
+		return siftUsage
+	case "catalog":
+		return verbHelp("library", args)
+	case "boardy":
+		text = cmp.Or(boardyUsageOf(subcommandOf(args)), text)
+	case "shells":
+		text = shellsSubcommands
+	case "hooks":
+		text = hooksSubcommands
+	case "version":
+		text = "tofu version [--json]"
+	case "context":
+		text = "tofu context [<name|id>] [--json]"
+	case "preview":
+		text = "tofu preview [--json]"
+	case "browser":
+		text = "tofu browser [install | uninstall | tabs | build | recipes | open <url> | close <tab id> | bench [--jev] [--n 12] [--rows file] | motion capture <scenario.json>] [--json], " +
+			"tofu browser observe [--all] | click <ref> | fill <ref> <text> | select <ref> <option> | press <key> | scroll [<ref>] [up|down] | back --tab <id> [--json], " +
+			"tofu browser read [--tab <id>] [--json], tofu browser batch [<steps.json> | -] [--tab <id>] [--json], " + profileUsage
+	}
+	if strings.Contains(text, "\n") {
+		return text
+	}
+	prefix, sub := "tofu "+name+" ", subcommandOf(args)
+	var all, picked []string
+	for _, part := range strings.Split(strings.TrimPrefix(text, "usage: "), prefix)[1:] {
+		part = strings.TrimRight(strings.TrimSuffix(strings.TrimSpace(part), " or"), ", |")
+		form := "usage: " + prefix + part
+		all = append(all, form)
+		switch first, _, _ := strings.Cut(part, " "); {
+		case sub != "" && first == sub:
+			picked = slices.Insert(picked, 0, form)
+		case sub != "" && slices.Contains(strings.Split(first, "|"), sub):
+			picked = append(picked, form)
+		}
+	}
+	if len(picked) == 0 {
+		picked = all
+	}
+	return strings.Join(picked, "\n") + "\n"
+}
+
+func subcommandOf(args []string) string {
+	if at := slices.IndexFunc(args, func(arg string) bool { return !strings.HasPrefix(arg, "-") }); at >= 0 {
+		return args[at]
+	}
+	return ""
 }
 
 func dispatch(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
@@ -402,6 +460,10 @@ func dispatch(args []string, in io.Reader, out io.Writer, errOut io.Writer) int 
 		return hostVerb(args[0], in, out, errOut)
 	}
 	if named := verbNamed(args[0]); named.run != nil {
+		if slices.Contains(args[1:], "--help") || slices.Contains(args[1:], "-h") {
+			_, _ = io.WriteString(out, verbHelp(args[0], args[1:]))
+			return exitOK
+		}
 		return named.run(args[1:], in, out, errOut)
 	}
 	page := cli.Detect(errOut, os.Environ())
