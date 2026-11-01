@@ -60,11 +60,13 @@ func factHandle(line string) string {
 }
 
 type toolArgs struct {
-	Path    string `json:"path"`
-	Handle  string `json:"handle"`
-	Pattern string `json:"pattern"`
-	Command string `json:"command"`
-	URL     string `json:"url"`
+	Path      string `json:"path"`
+	Handle    string `json:"handle"`
+	Pattern   string `json:"pattern"`
+	StartLine int    `json:"start_line"`
+	EndLine   int    `json:"end_line"`
+	Command   string `json:"command"`
+	URL       string `json:"url"`
 }
 
 func sourceOf(entry Entry, fetched map[string]string) string {
@@ -74,7 +76,17 @@ func sourceOf(entry Entry, fetched map[string]string) string {
 	if json.Unmarshal([]byte(args), &parsed) != nil {
 		return whole
 	}
-	return cmp.Or(parsed.Path, fetched[parsed.Handle], parsed.Handle, parsed.Pattern, oneLine(parsed.Command, konst.CarrySignpostBytes), stableURL(parsed.URL), shownPage(entry), whole)
+	path := parsed.Path
+	switch {
+	case path == "":
+	case parsed.Pattern != "":
+		path += " matching " + oneLine(parsed.Pattern, konst.CarrySignpostBytes)
+	case parsed.EndLine > 0:
+		path += " lines " + strconv.Itoa(max(parsed.StartLine, 1)) + "-" + strconv.Itoa(parsed.EndLine)
+	case parsed.StartLine > 0:
+		path += " lines " + strconv.Itoa(parsed.StartLine) + "-end"
+	}
+	return cmp.Or(path, fetched[parsed.Handle], parsed.Handle, parsed.Pattern, oneLine(parsed.Command, konst.CarrySignpostBytes), stableURL(parsed.URL), shownPage(entry), whole)
 }
 
 func shownPage(entry Entry) string {
