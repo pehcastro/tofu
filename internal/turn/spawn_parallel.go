@@ -9,6 +9,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/llm/models"
 	"tofu/internal/subagent"
 )
 
@@ -89,9 +90,30 @@ func (m warmingModel) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 	return decision, err
 }
 
-func (w *warmup) stagger(ctx context.Context, call string, subAgent Config) Config {
+type stagger struct {
+	decided string
+	why     string
+}
+
+func cacheSays(cache models.PromptCache) string {
+	switch cache {
+	case models.PromptCachePrefix:
+		return "the model caches a shared prompt prefix"
+	case models.PromptCacheNone:
+		return "the model caches no prompt prefix, so a wait would only delay it"
+	case models.PromptCacheUnknown:
+		return "the model does not declare prompt_cache, so cache support is unknown and it staggers as if the prefix were cached"
+	}
+	panic("turn: no words for prompt cache " + string(cache))
+}
+
+func (w *warmup) stagger(ctx context.Context, call string, subAgent Config) (Config, stagger) {
+	says := cacheSays(subAgent.PromptCache)
 	switch {
 	case w == nil:
+		return subAgent, stagger{}
+	case subAgent.PromptCache == models.PromptCacheNone:
+		return subAgent, stagger{decided: "runs at once", why: says}
 	case w.leader == call:
 		if subAgent.Model != nil {
 			subAgent.Model = warmingModel{model: subAgent.Model, warmup: w}
@@ -105,14 +127,15 @@ func (w *warmup) stagger(ctx context.Context, call string, subAgent Config) Conf
 				return account, err
 			}
 		}
-	default:
-		select {
-		case <-w.ready:
-		case <-time.After(konst.SubAgentWarmMillis * time.Millisecond):
-		case <-ctx.Done():
-		}
+		return subAgent, stagger{decided: "leads", why: says + ", so its siblings wait for its first answer"}
 	}
-	return subAgent
+	began := time.Now()
+	select {
+	case <-w.ready:
+	case <-time.After(konst.SubAgentWarmMillis * time.Millisecond):
+	case <-ctx.Done():
+	}
+	return subAgent, stagger{decided: "waited " + time.Since(began).Round(time.Millisecond).String(), why: says + ", so it waited for " + w.leader + " to answer first"}
 }
 
 func (t *SpawnTool) disjointPrefix(calls []llm.ToolCall) int {

@@ -141,6 +141,22 @@ func (v Vision) valid() bool {
 	return false
 }
 
+type PromptCache string
+
+const (
+	PromptCacheUnknown PromptCache = ""
+	PromptCachePrefix  PromptCache = "prefix"
+	PromptCacheNone    PromptCache = "none"
+)
+
+func (p PromptCache) valid() bool {
+	switch p {
+	case PromptCacheUnknown, PromptCachePrefix, PromptCacheNone:
+		return true
+	}
+	return false
+}
+
 type MemoryWriter string
 
 const (
@@ -222,6 +238,7 @@ type Model struct {
 	Use              Use
 	Kind             Kind
 	Vision           Vision
+	PromptCache      PromptCache
 	Memory           MemoryWriter
 	Plan             PlanTool
 	Verbosity        Verbosity

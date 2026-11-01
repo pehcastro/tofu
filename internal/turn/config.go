@@ -12,6 +12,7 @@ import (
 	"tofu/internal/boardy"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/llm/models"
 	"tofu/internal/recall"
 	"tofu/internal/rule"
 	"tofu/internal/session"
@@ -89,6 +90,7 @@ type Config struct {
 	History         []llm.Message
 	Wire            string
 	Slug            string
+	PromptCache     models.PromptCache
 	SpawnedFrom     string
 	AgentType       string
 	Project         string

@@ -21,6 +21,7 @@ import (
 	"tofu/internal/judge/method"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/llm/models"
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/recall"
 	"tofu/internal/rule"
@@ -77,6 +78,7 @@ type SubAgentModel struct {
 	Slug     string
 	Windows  string
 	Wire     string
+	Cache    models.PromptCache
 	Effort   llm.Effort
 	Spend    Spend
 	Accounts Accounts
@@ -621,7 +623,8 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 	for {
 		subAgent := opened.onto(t.subAgentConfig(held, site, check, limits))
 		subAgent.Task, subAgent.TaskOrigin, subAgent.Arrived, subAgent.NewID = task, taskOrigin, items, func() string { return held.agent.ID }
-		report, completion := t.converse(ctx, held, warm.stagger(ctx, site.call, subAgent), site)
+		subAgent, held.trace.stagger = warm.stagger(ctx, site.call, subAgent)
+		report, completion := t.converse(ctx, held, subAgent, site)
 		next, _ := held.inbox.next(ctx, nil)
 		stopping := ctx.Err() != nil
 		if stopping {
@@ -768,7 +771,7 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 
 func (m SubAgentModel) onto(subAgent Config) Config {
 	if m.Accounts.Pick != nil {
-		subAgent.Model, subAgent.Accounts, subAgent.Spend, subAgent.Wire = nil, m.Accounts, m.Spend, m.Wire
+		subAgent.Model, subAgent.Accounts, subAgent.Spend, subAgent.Wire, subAgent.PromptCache = nil, m.Accounts, m.Spend, m.Wire, m.Cache
 	}
 	return subAgent
 }

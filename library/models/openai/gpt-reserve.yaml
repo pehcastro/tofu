@@ -1,3 +1,4 @@
 subscription: codex-sub
 use: excluded
 reason: nobody has ruled on it, so tofu does not send it until somebody does
+prompt_cache: prefix

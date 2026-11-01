@@ -157,6 +157,8 @@ type SpawnBody struct {
 	Mission    string   `json:"mission,omitempty"`
 	Owns       []string `json:"owns,omitempty"`
 	Depth      int      `json:"depth"`
+	Stagger    string   `json:"stagger,omitempty"`
+	StaggerWhy string   `json:"stagger_why,omitempty"`
 }
 
 type ReportBody struct {

@@ -575,7 +575,7 @@ func driveWire(deck *cassette) func(runOpts) (appWire, error) {
 		}
 		standingIn := models.Model{ID: cassetteBuild, Windows: []string{cassetteBuild}}
 		if chosen, err := chooseModel(opts); err == nil {
-			standingIn.Subscription, standingIn.Vision = chosen.Subscription, chosen.Vision
+			standingIn.Subscription, standingIn.Vision, standingIn.PromptCache = chosen.Subscription, chosen.Vision, chosen.PromptCache
 		}
 		return appWire{
 			held:     &accounts{fixed: deck, now: time.Now},

@@ -37,6 +37,7 @@ type spawnTrace struct {
 	owns       []string
 	ticket     string
 	depth      int
+	stagger    stagger
 }
 
 type subAgentKey struct{}
@@ -55,7 +56,8 @@ func (s spawnTrace) begin(id string) error {
 		return markRun(log, id, subagent.Working, nil)
 	}
 	_, err := log.Append(session.Event{Turn: site.turn, Agent: site.agent, Call: site.call, Kind: session.EventSpawn},
-		session.SpawnBody{Agent: id, Definition: s.definition, Model: s.model, Mission: s.mission, Owns: s.owns, Ticket: s.ticket, Depth: s.depth})
+		session.SpawnBody{Agent: id, Definition: s.definition, Model: s.model, Mission: s.mission, Owns: s.owns, Ticket: s.ticket, Depth: s.depth,
+			Stagger: s.stagger.decided, StaggerWhy: s.stagger.why})
 	return errors.Join(err, log.Edit(func(header *session.Header) {
 		header.Agents = append(header.Agents, session.AgentRun{Agent: id, Definition: s.definition, Model: s.model, ParentAgent: site.agent,
 			SpawnCall: site.call, SpawnTurn: site.turn, Depth: s.depth, Status: subagent.Working.String(), StartedAt: time.Now()})

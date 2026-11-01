@@ -380,7 +380,7 @@ func (r runtime) subAgentOpener(opts runOpts) func(subagent.Definition, llm.Effo
 			return turn.SubAgentModel{}, err
 		}
 		opened.held.wrapping(r.wrapSubAgent, r.budget, subAgent)
-		return turn.SubAgentModel{Slug: asked, Windows: opened.selected.WindowText(), Wire: subAgent.wire, Effort: subAgent.effort, Spend: opened.spend, Accounts: r.applyThinkingSummary(opened.held.forTurn()), Close: opened.held.close}, nil
+		return turn.SubAgentModel{Slug: asked, Windows: opened.selected.WindowText(), Wire: subAgent.wire, Cache: opened.selected.PromptCache, Effort: subAgent.effort, Spend: opened.spend, Accounts: r.applyThinkingSummary(opened.held.forTurn()), Close: opened.held.close}, nil
 	}
 }
 
@@ -859,6 +859,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		Task:          opts.task,
 		Wire:          opts.wire,
 		Slug:          run.orchestrator.Slug(),
+		PromptCache:   run.orchestrator.PromptCache,
 		System:        composed.Head(),
 		Parts:         composed.Recorded(),
 		Environment:   composed.WithTaskRules(environment),

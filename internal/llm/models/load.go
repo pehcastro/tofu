@@ -120,7 +120,7 @@ type Contract struct {
 
 func Contracts() []Contract {
 	return []Contract{
-		{Kind: modelsDir, Required: []string{"use"}, Optional: []string{"subscription", "reason", "notice", "window", "kind", "vision", "memory", "plan", "verbosity", "reasoning_context", "efforts", "served_as", "from", "found"}},
+		{Kind: modelsDir, Required: []string{"use"}, Optional: []string{"subscription", "reason", "notice", "window", "kind", "vision", "prompt_cache", "memory", "plan", "verbosity", "reasoning_context", "efforts", "served_as", "from", "found"}},
 		{Kind: subscriptionsDir, Required: []string{"provider", "wire", "windows"}, Optional: []string{"not_models"}},
 		{Kind: rolesDir, Required: []string{"model"}},
 	}
@@ -328,6 +328,7 @@ func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpe
 		Use:              Use(from.values["use"]),
 		Kind:             Kind(cmp.Or(from.values["kind"], string(KindLLM))),
 		Vision:           Vision(from.values["vision"]),
+		PromptCache:      PromptCache(from.values["prompt_cache"]),
 		Memory:           MemoryWriter(from.values["memory"]),
 		Plan:             PlanTool(from.values["plan"]),
 		Verbosity:        Verbosity(from.values["verbosity"]),
@@ -348,6 +349,9 @@ func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpe
 	}
 	if !model.Vision.valid() {
 		return model, &Broken{File: from.file, Field: "vision", Why: fmt.Sprintf("vision is %s or %s, or left out when nobody has checked, found %q", VisionSees, VisionBlind, model.Vision)}
+	}
+	if !model.PromptCache.valid() {
+		return model, &Broken{File: from.file, Field: "prompt_cache", Why: fmt.Sprintf("prompt_cache is %s when the provider caches a shared prefix or %s when it caches nothing, or left out when nobody has checked, found %q", PromptCachePrefix, PromptCacheNone, model.PromptCache)}
 	}
 	if !model.Memory.valid() {
 		return model, &Broken{File: from.file, Field: "memory", Why: fmt.Sprintf("memory is %s on the model that writes its source's memory summaries, or left out, found %q", MemoryWrites, model.Memory)}

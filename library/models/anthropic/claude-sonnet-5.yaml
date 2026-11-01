@@ -2,3 +2,4 @@ subscription: claude-sub
 use: allowed
 vision: yes
 efforts: low, medium, high, xhigh, max
+prompt_cache: prefix

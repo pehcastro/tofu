@@ -3,3 +3,4 @@ use: allowed
 vision: yes
 memory: yes
 efforts:
+prompt_cache: prefix

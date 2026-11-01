@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"tofu/internal/llm"
+	"tofu/internal/llm/models"
 	"tofu/internal/subagent"
 )
 
@@ -99,6 +100,74 @@ func TestSpawnsWithDisjointOwnsRunTogetherAndEveryReportReachesTheLead(t *testin
 		running, report := "sub-"+strconv.Itoa(n)+" is running", "finished brief-"+strconv.Itoa(n)
 		if !strings.Contains(heard, running) || !strings.Contains(heard, report) {
 			t.Errorf("the lead never heard %q and then %q:\n%s", running, report, heard)
+		}
+	}
+}
+
+type firstAsks struct {
+	mu     sync.Mutex
+	spawns []llm.ToolCall
+	led    int
+	first  map[string]time.Time
+}
+
+func (f *firstAsks) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+	said := request.Messages[len(request.Messages)-1].Content
+	brief, isSubAgent := strings.CutPrefix(said[strings.LastIndex(said, "\n")+1:], "brief-")
+	f.mu.Lock()
+	if !isSubAgent {
+		f.led++
+		defer f.mu.Unlock()
+		if f.led > 1 {
+			return messageDecision(), nil
+		}
+		return toolCallDecision(f.spawns...), nil
+	}
+	_, asked := f.first[brief]
+	if !asked {
+		f.first[brief] = time.Now()
+	}
+	f.mu.Unlock()
+	if brief == "1" && !asked {
+		select {
+		case <-time.After(600 * time.Millisecond):
+		case <-ctx.Done():
+		}
+	}
+	return claimDecision("finished brief-" + brief), nil
+}
+
+func TestASiblingWaitsForTheFirstOnlyWhereTheModelMayCacheAPrefix(t *testing.T) {
+	for _, c := range []struct {
+		cache models.PromptCache
+		waits bool
+	}{
+		{models.PromptCacheNone, false},
+		{models.PromptCachePrefix, true},
+		{models.PromptCacheUnknown, true},
+	} {
+		script := &firstAsks{first: map[string]time.Time{}}
+		for i, held := range []string{"a/**", "b/**"} {
+			n := strconv.Itoa(i + 1)
+			args, err := json.Marshal(spawnArgs{Agent: "ts-dev", Task: "brief-" + n, Owns: []string{held}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			script.spawns = append(script.spawns, llm.ToolCall{ID: "call-" + n, Name: "spawn", Arguments: args})
+		}
+		base := Config{Model: script, Spend: SpendAPIKey, PromptCache: c.cache, Caps: Caps{MaxSteps: 5}, ResultBytesCap: 4096,
+			ArtifactDir: filepath.Join(t.TempDir(), "artifacts"), NewID: func() string { return "turn-orchestrator" }}
+		spawn := NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
+		spawn.SubAgents.Defined = []subagent.Definition{{Name: "ts-dev", Runs: subagent.RunsModel}}
+		lead := base
+		lead.Task, lead.Tools, lead.Inbox = "hand the work to sub-agents", NewRegistry(spawn), spawn.Inbox
+		startLead(context.Background(), lead, nil).wait(t)
+
+		script.mu.Lock()
+		gap := script.first["2"].Sub(script.first["1"])
+		script.mu.Unlock()
+		if waited := gap >= 500*time.Millisecond; waited != c.waits {
+			t.Errorf("prompt cache %q: the second sibling first asked %v after the first, waited %v, want %v", c.cache, gap, waited, c.waits)
 		}
 	}
 }
