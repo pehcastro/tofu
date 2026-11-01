@@ -525,7 +525,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	var lastAnswered time.Time
 	var lastAttempts []llm.Attempt
-	ask := func(ctx context.Context, why string, request llm.Request) (llm.Decision, requestTiming, string, error) {
+	ask := func(ctx context.Context, why string, on Model, request llm.Request) (llm.Decision, requestTiming, string, error) {
 		id, started := session.NewEventID(), time.Now()
 		request.Turn = row.ID
 		if tokens := sentTokens(request.Messages); tokens > budget.Ceiling() {
@@ -535,7 +535,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 		recorded.sent(id, why, request, artifacts.preview)
 		tapped, tap := llm.Tapped(ctx)
-		decision, timing, err := askCountingAttempts(tapped, model, request)
+		decision, timing, err := askCountingAttempts(tapped, on, request)
 		lastAttempts = tap.Attempts()
 		recorded.exchange(id, why, config.Wire, request, started, lastAttempts, decision, err)
 		if err == nil {
@@ -621,7 +621,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			recorded.notice(when + ": the conversation crossed its fork threshold and fork is off, so it carries on unforked this turn")
 		}
 	}
-	stateCarried := func(fork *Fork, step int, beforeFork, begun []llm.Message, tools []llm.Tool) ([]llm.Message, string) {
+	stateCarried := func(fork *Fork, step int, beforeFork, begun []llm.Message, tools []llm.Tool, moved *Account) ([]llm.Message, string) {
 		begun = withMemoryViewAtHead(begun, config.MemoryMessage())
 		if running := runningSubAgents(source().tools); len(running) > 0 {
 			at := slices.IndexFunc(begun, func(message llm.Message) bool {
@@ -646,7 +646,14 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		if len(tools) > 0 {
 			request.ToolChoice = llm.ToolChoiceNone
 		}
-		decision, timing, id, err := ask(context.WithValue(ctx, quietAskKey{}, true), "the working state the fork carries", request)
+		asking, why := model, "the working state the fork carries"
+		if moved != nil {
+			why += ", asked on account #" + strconv.FormatInt(moved.ID, 10) + ", the one this session moves to"
+			if moved.Model != nil {
+				asking = moved.Model
+			}
+		}
+		decision, timing, id, err := ask(context.WithValue(ctx, quietAskKey{}, true), why, asking, request)
 		row.TotalCostUSD += decision.Usage.Cost
 		if err == nil {
 			spent := stepFrom(id, step, timing, decision)
@@ -734,7 +741,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		if len(request.Tools) > 0 {
 			request.ToolChoice = llm.ToolChoiceNone
 		}
-		decision, timing, id, err := ask(ctx, "the last word: "+lead, request)
+		decision, timing, id, err := ask(ctx, "the last word: "+lead, model, request)
 		row.TotalCostUSD += decision.Usage.Cost
 		if err != nil {
 			row.Warnings = append(row.Warnings, lead+", and the last answer was not obtained: "+err.Error())
@@ -1008,7 +1015,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				if fork != nil {
 					forks++
 					fork.Into = origin + "-f" + strconv.Itoa(forks+1)
-					begun, missing := stateCarried(fork, step, beforeFork, begun, definitions)
+					begun, missing := stateCarried(fork, step, beforeFork, begun, definitions, nil)
 					forkInto(fork, before, beforeFork, begun, nil)
 					if missing != "" {
 						row.Warnings = append(row.Warnings, missing)
@@ -1036,7 +1043,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			return recall.Measure(artifacts.preview, budget.Bands, sent)
 		}
 		asSent := measureSent()
-		decision, timing, requestID, err := ask(ctx, "step "+strconv.Itoa(step), llm.Request{Messages: withPlan(messages), Tools: definitions})
+		decision, timing, requestID, err := ask(ctx, "step "+strconv.Itoa(step), model, llm.Request{Messages: withPlan(messages), Tools: definitions})
 		if errors.Is(err, SentNow{}) {
 			step--
 			continue
@@ -1059,7 +1066,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 					config.Notify(told)
 				}
 				asSent = measureSent()
-				decision, timing, requestID, err = ask(ctx, "step "+strconv.Itoa(step)+", asked again after the overflow shrink", llm.Request{Messages: withPlan(messages), Tools: definitions})
+				decision, timing, requestID, err = ask(ctx, "step "+strconv.Itoa(step)+", asked again after the overflow shrink", model, llm.Request{Messages: withPlan(messages), Tools: definitions})
 				if overflowed(err) {
 					err = fmt.Errorf("the context window overflowed again after tofu %s, so the turn ends: %w", shrink, err)
 				}
@@ -1096,7 +1103,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			if next.Model != nil {
 				model = next.Model
 			}
-			decision, timing, requestID, err = ask(ctx, "step "+strconv.Itoa(step)+", asked again on "+on+" after a rate limit",
+			decision, timing, requestID, err = ask(ctx, "step "+strconv.Itoa(step)+", asked again on "+on+" after a rate limit", model,
 				llm.Request{Messages: withPlan(messages), Tools: definitions})
 		}
 		if err != nil {
@@ -1478,7 +1485,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				if fork != nil {
 					forks++
 					fork.Step, fork.Into = step, origin+"-f"+strconv.Itoa(forks+1)
-					begun, missing := stateCarried(fork, step, beforeFork, begun, definitions)
+					begun, missing := stateCarried(fork, step, beforeFork, begun, definitions, moved)
 					stepRow.Fork = fork
 					keep(stepRow)
 					forkInto(fork, "after step "+strconv.Itoa(step), beforeFork, begun, moved)
