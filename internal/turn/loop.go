@@ -222,6 +222,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	artifacts.preview = artifacts.preview.OnWire(config.Wire)
 	artifacts.standing = newStandingJudge(config).orders
+	artifacts.keep = newKeepJudge(config.Project, config.Places.Log, config.Task, config.Notify)
 	sifter := siftOrNothing(config.Sift)
 	thrifter := thriftOrNothing(config.Thrift)
 	if config.Redactor == nil {
@@ -317,6 +318,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		return Row{}, err
 	}
 	row.Session = recorded.session()
+	if config.Sessions != nil {
+		artifacts.keep.earlier = func() ([]session.Event, error) { return config.Sessions.Events(recorded.session()) }
+	}
 	taskOrigin := config.taskOrigin(start)
 	recorded.begin(row, taskOrigin)
 	if len(config.History) > 0 {
@@ -1291,6 +1295,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				stepRow.ToolCalls = append(stepRow.ToolCalls, rows...)
 				for i, gated := range wave {
 					results[gated.call.ID] = rows[i]
+					if label := artifacts.keep.refetched(rows[i]); label != "" {
+						recorded.notice(label)
+					}
 				}
 				messages = append(messages, shown...)
 				flush()

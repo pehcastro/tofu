@@ -2,7 +2,6 @@ package recall_test
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 	"testing"
 
@@ -23,16 +22,6 @@ func TestEachListingReadOnOneTabSurvivesAForkWithItsWholeUrlAndItsContent(t *tes
 	for step, listing := range listings {
 		snapshot := fmt.Sprintf("tab 1 %s %q\n- main\n  - heading %q [level=1]\n  - button \"Reserve\" [ref=e3]", listing.url, listing.heading, listing.heading)
 		entries = append(entries, recall.Entry{Step: step, Tool: "browser_observe", SupersedeKey: `browser_observe {"tab":1}`, Text: web.Untrusted("Chrome tab 1", snapshot)})
-	}
-	window, drops, err := recall.Compact(recall.NewStore(t.TempDir()), recall.Config{BytesPerThousandTokens: 1000, CompactFloorBytes: 1},
-		recall.Bands{Recent: 1}, recall.Conversation{Entries: append(slices.Clone(entries), recall.Entry{Step: len(entries), Text: "the listings are read"})})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, drop := range drops {
-		if drop.Reason == recall.DroppedSuperseded {
-			t.Errorf("the observe at step %d was dropped as superseded by a later observe of another page:\n%s", drop.Step, window.Entries[drop.Step].Text)
-		}
 	}
 	carry, err := recall.DistilledCarry(recall.NewStore(t.TempDir()), recall.Config{}, recall.Conversation{Entries: entries})
 	if err != nil {

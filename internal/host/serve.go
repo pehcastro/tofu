@@ -535,11 +535,11 @@ func (h *Host) Compact() (Compacted, error) {
 	if err != nil {
 		return Compacted{}, err
 	}
-	state, err := sys.ProjectStateDirAt(h.dir)
+	places, err := sys.ResolvePlaces(h.dir)
 	if err != nil {
 		return Compacted{}, err
 	}
-	shrunk, err := turn.CompactCarried(filepath.Join(state, "artifacts"), header.Wire, carried)
+	shrunk, err := turn.CompactCarried(h.dir, places, header.Wire, header.Task, carried)
 	if err != nil {
 		return Compacted{}, err
 	}

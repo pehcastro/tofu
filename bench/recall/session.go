@@ -61,7 +61,6 @@ type ReplayStep struct {
 	RecordedTokens  int
 	CacheReadTokens int
 	FreshTokens     int
-	Drops           []rc.Drop
 }
 
 type ForkRow struct {
@@ -101,14 +100,12 @@ type CarryBuilder func(*rc.Store, rc.Config, rc.Conversation) (rc.Carry, error)
 
 type Arm struct {
 	Name     string
-	Rewrite  bool
 	Carry    CarryBuilder
 	Signpost int
 }
 
 type ReplayResult struct {
 	Steps     []ReplayStep
-	Drops     []rc.Drop
 	Forks     []ForkRow
 	Refetches []Refetch
 	Peak      rc.Occupancy
@@ -265,18 +262,7 @@ func ReplaySession(store *rc.Store, cfg rc.Config, bands rc.Bands, session Sessi
 				SourcesKnown:  len(carried),
 				SourcesNamed:  named,
 			})
-			continue
 		}
-		if !arm.Rewrite {
-			continue
-		}
-		compacted, drops, err := rc.Compact(store, cfg, bands, conversation)
-		if err != nil {
-			return ReplayResult{}, err
-		}
-		conversation = compacted
-		result.Drops = append(result.Drops, drops...)
-		result.Steps[len(result.Steps)-1].Drops = drops
 	}
 	result.Final, result.Carried = rc.Measure(cfg, bands, conversation), conversation
 	return result, nil
@@ -297,12 +283,11 @@ func ArmsTable(target int, measured []Measured) string {
 	var report strings.Builder
 	fmt.Fprintf(&report, "target %d tokens, %d steps\n", target, len(measured[0].Result.Steps))
 	fmt.Fprintf(&report, "%-18s %15s %11s %12s %8s %14s %6s\n",
-		"arm", "context carried", "last step", "cache read", "fresh", "billed at "+strconv.Itoa(CacheReadPricePerHundred)+"%", "events")
+		"arm", "context carried", "last step", "cache read", "fresh", "billed at "+strconv.Itoa(CacheReadPricePerHundred)+"%", "forks")
 	for _, m := range measured {
 		last := m.Result.Steps[len(m.Result.Steps)-1].InputTokens
-		events := len(m.Result.Drops) + len(m.Result.Forks)
 		fmt.Fprintf(&report, "%-18s %15d %11d %12d %8d %14d %6d\n",
-			m.Arm, m.Result.InputTokens(), last, m.Result.CacheReadTokens(), m.Result.FreshTokens(), m.Result.BilledUnits(), events)
+			m.Arm, m.Result.InputTokens(), last, m.Result.CacheReadTokens(), m.Result.FreshTokens(), m.Result.BilledUnits(), len(m.Result.Forks))
 	}
 	return report.String()
 }

@@ -106,10 +106,6 @@ func stableURL(raw string) string {
 	return page + "?" + strings.Join(kept, "&")
 }
 
-func supersedeKey(entry Entry) string {
-	return cmp.Or(shownPage(entry), entry.SupersedeKey)
-}
-
 const (
 	untrustedOpen   = "<<<"
 	untrustedBegins = " begins>>>\n"

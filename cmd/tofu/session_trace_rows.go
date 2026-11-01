@@ -192,7 +192,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			if compacted.Compaction != nil {
 				row.Text += " " + strconv.Itoa(compacted.Compaction.TokensBefore) + " to " + strconv.Itoa(compacted.Compaction.TokensAfter) + " tokens"
 				for _, drop := range compacted.Compaction.Drops {
-					row.Text = traced(row.Text, "cut "+drop.Tool+" handle "+drop.Handle+", "+strconv.Itoa(drop.Bytes)+" bytes")
+					row.Text = traced(row.Text, "cut "+drop.Tool+" handle "+drop.Handle+", "+strconv.Itoa(drop.Bytes)+" bytes, "+string(drop.Reason), drop.Decision)
 				}
 			}
 			if compacted.Fork != nil {

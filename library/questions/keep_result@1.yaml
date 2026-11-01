@@ -1,0 +1,46 @@
+name: keep_result
+domain: general
+questions_version: 1
+mode: enforced
+notes: >-
+  asked when compaction would drop old tool results, once for each result it
+  could drop, to choose which ones stay whole in the conversation. state.call
+  is the tool and its arguments, state.result the start and the end of what
+  came back, state.latest the newest thing the agent wrote. below keep_at the
+  result is dropped before any the age rule would pick. at or above it /compact
+  keeps the result whole, and a trim inside a turn drops it only once every
+  result below keep_at and every one the age rule decides is already
+  dropped, so a trim still reaches its target. an error or a timeout leaves
+  the result to the age rule, the oldest dropped first, which is what
+  compaction did before this question; with no Jev configured the age rule
+  decides every result. both write a ledger row with the reason, and a
+  dropped result read again with artifact_fetch labels its row. keep_at is
+  the middle of the noul range, an uncalibrated prior.
+
+thresholds:
+  keep_at: 0.5
+
+state:
+  - task
+  - call
+  - result
+  - latest
+
+questions:
+  needed:
+    type: noul
+    instructions: >-
+      A coding agent is working on `task`. Earlier it ran `call`, and `result`
+      is what came back. `latest` is the newest thing the agent wrote. Decide
+      whether the agent still needs the content of `result` in front of it to
+      finish `task`, or whether that content is spent.
+    criteria:
+      true: >-
+        `result` holds something the remaining work depends on and that
+        `latest` does not already restate: code the agent is about to change,
+        an error it has not fixed yet, a value, a path or a name it will use
+        again.
+      false: >-
+        `result` is spent: it was a listing, a search or a log the agent has
+        already acted on, it concerns a part of the work that is finished, or
+        everything the agent needs from it is already said in `latest`.

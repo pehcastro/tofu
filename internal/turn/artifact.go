@@ -4,13 +4,23 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
+	"tofu/internal/classifier"
+	"tofu/internal/judge/jev"
+	"tofu/internal/judge/ledger"
+	"tofu/internal/judge/question"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
+	"tofu/internal/session"
+	"tofu/library/questions"
 )
 
 const truncationMarker = "\n...(truncated)...\n"
@@ -35,6 +45,197 @@ type Artifacts struct {
 	preview  recall.Config
 	handles  bool
 	standing recall.StandingOrders
+	keep     *keepJudge
+}
+
+const (
+	keepResultRef     = "keep_result@1"
+	keepResultPoint   = "keep_result"
+	keepResultName    = "needed"
+	keepResultBuilder = "keep_result_state@1"
+	refetchedOutcome  = "refetched"
+)
+
+type keepJudge struct {
+	client    *jev.Client
+	unasked   error
+	set       question.Set
+	asked     jev.Question
+	threshold float64
+	ledger    *ledger.Writer
+	notify    func(string)
+	task      string
+	earlier   func() ([]session.Event, error)
+	mu        sync.Mutex
+	decided   map[string]keepDecision
+	dropped   map[string]string
+}
+
+type keepDecision struct {
+	row     string
+	verdict ledger.Verdict
+}
+
+type dropCandidate struct {
+	at       int
+	step     int
+	call     llm.ToolCall
+	reason   recall.DropReason
+	decision string
+}
+
+func newKeepJudge(project, log, task string, notify func(string)) *keepJudge {
+	judge := &keepJudge{ledger: ledger.NewWriter(log), notify: notify, task: task, decided: map[string]keepDecision{}, dropped: map[string]string{}}
+	judge.unasked = judge.open(project)
+	return judge
+}
+
+func (j *keepJudge) open(project string) error {
+	layers, err := question.Layers(questions.Files(), project)
+	if err != nil {
+		return err
+	}
+	set, fields, err := question.Resolve(keepResultRef, layers)
+	if err != nil {
+		return err
+	}
+	asked, found := set.Question(keepResultName)
+	at := slices.IndexFunc(fields, func(f question.Field) bool { return f.Path == "thresholds.keep_at" })
+	if !found || at < 0 {
+		return errors.New(keepResultRef + " names no " + keepResultName + " question or no thresholds.keep_at")
+	}
+	if j.threshold, err = strconv.ParseFloat(fields[at].Value, 64); err != nil {
+		return err
+	}
+	j.set, j.asked = set, asked.ToJev()
+	j.client, err = classifier.Open(project, jev.ReadKeyring(), konst.CarryStandingJudged)
+	return err
+}
+
+func (j *keepJudge) ordered(preview recall.Config, messages []llm.Message, candidates []dropCandidate, keptYield bool) []dropCandidate {
+	latest := ""
+	for _, message := range messages {
+		if message.Role == llm.RoleAssistant {
+			latest = message.Content
+			for _, call := range message.ToolCalls {
+				latest += "\n" + call.Name + " " + string(call.Arguments)
+			}
+		}
+	}
+	decided := make([]keepDecision, len(candidates))
+	var asking sync.WaitGroup
+	for i, candidate := range candidates {
+		asking.Go(func() {
+			decided[i] = j.decide(candidate.call, shownToJudge(preview, WithoutToolRef(messages[candidate.at].Content)), shownToJudge(preview, strings.TrimSpace(latest)))
+		})
+	}
+	asking.Wait()
+	var judged, aged, kept []dropCandidate
+	for i, candidate := range candidates {
+		candidate.decision = decided[i].row
+		switch decided[i].verdict {
+		case ledger.VerdictDeny:
+			candidate.reason = recall.DroppedJudged
+			judged = append(judged, candidate)
+		case ledger.VerdictAllow:
+			kept = append(kept, candidate)
+		default:
+			aged = append(aged, candidate)
+		}
+	}
+	if !keptYield {
+		kept = nil
+	}
+	return slices.Concat(judged, aged, kept)
+}
+
+func shownToJudge(preview recall.Config, text string) string {
+	if len(text) <= preview.HeadBytes+preview.TailBytes {
+		return text
+	}
+	return runeSafeHead(text, preview.HeadBytes) + truncationMarker + runeSafeTail(text, preview.TailBytes)
+}
+
+func (j *keepJudge) decide(call llm.ToolCall, result, latest string) keepDecision {
+	j.mu.Lock()
+	decided, done := j.decided[call.ID]
+	j.mu.Unlock()
+	if done {
+		return decided
+	}
+	body, _ := json.Marshal(struct {
+		Task   string `json:"task"`
+		Call   string `json:"call"`
+		Result string `json:"result"`
+		Latest string `json:"latest"`
+	}{j.task, call.Name + " " + string(call.Arguments), result, latest})
+	row := ledger.Row{Point: keepResultPoint, Questions: j.set.Name, Version: j.set.QuestionsVersion, StateHash: ledger.HashOf(body), StateBuilder: keepResultBuilder, State: body, Verdict: ledger.VerdictAsk,
+		Reason: &ledger.Reason{Question: keepResultName, Comparison: ">= " + strconv.FormatFloat(j.threshold, 'f', -1, 64), Threshold: j.threshold, Mode: ledger.ModeEnforced}}
+	if j.unasked != nil {
+		why := "jev cannot be asked, so the age rule decides: " + j.unasked.Error()
+		row.Reason.ModeReason = &why
+	} else if decision, err := j.client.Ask(context.Background(), jev.Request{State: body, Questions: []jev.Question{j.asked}}); err != nil {
+		why := "jev could not answer, so the age rule decides: " + err.Error()
+		row.Reason.ModeReason = &why
+	} else {
+		decision.Record(&row, []jev.Question{j.asked}, j.set.QuestionsVersion)
+		row.Reason.Value, row.Verdict = row.Answers[0].Noul, ledger.VerdictDeny
+		if row.Reason.Value >= j.threshold {
+			row.Verdict = ledger.VerdictAllow
+		}
+	}
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	written, err := j.ledger.Append(row)
+	decided = keepDecision{row: written.ID, verdict: row.Verdict}
+	if err != nil {
+		decided = keepDecision{verdict: ledger.VerdictAsk}
+		if j.notify != nil {
+			j.notify("a keep_result decision was not written to the ledger, so the age rule decides that result: " + err.Error())
+		}
+	}
+	j.decided[call.ID] = decided
+	return decided
+}
+
+func (j *keepJudge) refetched(called ToolCallRow) string {
+	var args fetchArgs
+	if called.Tool != (FetchTool{}).Name() || called.Error != "" || json.Unmarshal(called.Args, &args) != nil {
+		return ""
+	}
+	row, known := j.dropped[args.Handle]
+	if !known && j.earlier != nil {
+		row = droppedEarlier(j.earlier, args.Handle)
+	}
+	if row == "" {
+		return ""
+	}
+	j.dropped[args.Handle] = ""
+	said := "artifact " + args.Handle + " was read again after compaction dropped it, so " + keepResultPoint + " row " + row
+	if err := j.ledger.Backfill(row, ledger.Outcome{Kind: refetchedOutcome, Detail: string(ledger.VerdictAllow)}); err != nil {
+		return said + " could not be labelled " + refetchedOutcome + ": " + err.Error()
+	}
+	return said + " is labelled " + refetchedOutcome
+}
+
+func droppedEarlier(earlier func() ([]session.Event, error), handle string) string {
+	events, err := earlier()
+	if err != nil {
+		return ""
+	}
+	decision := ""
+	for _, event := range events {
+		var row compactionRow
+		if event.Kind != session.EventCompaction || json.Unmarshal(event.Body, &row) != nil || row.Compaction == nil {
+			continue
+		}
+		for _, drop := range row.Compaction.Drops {
+			if drop.Handle == handle {
+				decision = drop.Decision
+			}
+		}
+	}
+	return decision
 }
 
 func NewArtifacts(dir string, handles bool) (Artifacts, error) {

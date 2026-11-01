@@ -12,7 +12,6 @@ import (
 
 var (
 	armNothing   = Arm{Name: "nothing"}
-	armRewrite   = Arm{Name: "in place rewrite", Rewrite: true}
 	armHandles   = Arm{Name: "fork, handles", Carry: rc.HandleCarry, Signpost: konst.FactSignpostBytes}
 	armDistilled = Arm{Name: "fork, distilled", Carry: rc.DistilledCarry, Signpost: konst.CarrySignpostBytes}
 )
@@ -139,13 +138,12 @@ func TestTheShippedBandsLeaveTheLargestRecordedTurnAlone(t *testing.T) {
 
 	shipped := rc.ShippedBands()
 	off := replay(t, cfg, shipped, session, armNothing)
-	on := replay(t, cfg, shipped, session, armRewrite)
 	forked := replay(t, cfg, shipped, session, armHandles)
-	t.Logf("shipped bands, target %d: peak %d tokens, nothing %d input tokens over %d steps, rewrite %d with %d drops, fork %d with %d forks",
-		shipped.Target(), off.Peak.Total(), off.InputTokens(), len(off.Steps), on.InputTokens(), len(on.Drops), forked.InputTokens(), len(forked.Forks))
-	if on.InputTokens() != off.InputTokens() || forked.InputTokens() != off.InputTokens() {
-		t.Fatalf("the turn never reaches the %d target, so all three arms must agree: nothing %d, rewrite %d, fork %d",
-			shipped.Target(), off.InputTokens(), on.InputTokens(), forked.InputTokens())
+	t.Logf("shipped bands, target %d: peak %d tokens, nothing %d input tokens over %d steps, fork %d with %d forks",
+		shipped.Target(), off.Peak.Total(), off.InputTokens(), len(off.Steps), forked.InputTokens(), len(forked.Forks))
+	if forked.InputTokens() != off.InputTokens() {
+		t.Fatalf("the turn never reaches the %d target, so both arms must agree: nothing %d, fork %d",
+			shipped.Target(), off.InputTokens(), forked.InputTokens())
 	}
 	if len(forked.Forks) != 0 {
 		t.Fatalf("the largest turn ever recorded here forked %d times at the shipped target", len(forked.Forks))
@@ -161,17 +159,15 @@ func TestEveryArmOnTheRecordedTurnAtATargetItActuallyCrosses(t *testing.T) {
 	bands := measuringBands()
 
 	nothing := replay(t, cfg, bands, session, armNothing)
-	rewrite := replay(t, cfg, bands, session, armRewrite)
 	handles := replay(t, cfg, bands, session, armHandles)
 	distilled := replay(t, cfg, bands, session, armDistilled)
-	if len(rewrite.Drops) == 0 || len(handles.Forks) == 0 {
-		t.Fatalf("at a %d target the recorded turn, peaking at %d tokens, neither dropped nor forked",
+	if len(handles.Forks) == 0 {
+		t.Fatalf("at a %d target the recorded turn, peaking at %d tokens, never forked",
 			bands.Target(), nothing.Peak.Total())
 	}
 
 	t.Logf("\n%s", ArmsTable(bands.Target(), []Measured{
 		{armNothing.Name, nothing},
-		{armRewrite.Name, rewrite},
 		{armHandles.Name, handles},
 		{armDistilled.Name, distilled},
 	}))
@@ -179,21 +175,9 @@ func TestEveryArmOnTheRecordedTurnAtATargetItActuallyCrosses(t *testing.T) {
 		t.Logf("fork at step %d: %d tokens to %d, carry %d tokens, built in %d microseconds",
 			fork.Step, fork.TokensBefore, fork.TokensAfter, fork.CarryTokens, fork.BlockedMicros)
 	}
-
-	if rewrite.BilledUnits() <= nothing.BilledUnits() {
-		t.Fatalf("the in place rewrite now bills less than leaving the prefix cached, %d against %d: the v4 finding has changed",
-			rewrite.BilledUnits(), nothing.BilledUnits())
-	}
 	if handles.InputTokens() >= nothing.InputTokens() {
 		t.Fatalf("the fork did not lower the context carried: %d against %d", handles.InputTokens(), nothing.InputTokens())
 	}
-	if handles.BilledUnits() >= rewrite.BilledUnits() {
-		t.Fatalf("the fork bills %d against the rewrite's %d: the mechanism v5 asks for is no better than the one it replaces",
-			handles.BilledUnits(), rewrite.BilledUnits())
-	}
-	t.Logf("the fork bills %d against the rewrite's %d, %.1f%% less",
-		handles.BilledUnits(), rewrite.BilledUnits(),
-		100*float64(rewrite.BilledUnits()-handles.BilledUnits())/float64(rewrite.BilledUnits()))
 }
 
 func TestWhatTheNextSessionHasToRefetchUnderEachWayOfWritingTheCarry(t *testing.T) {

@@ -133,11 +133,14 @@ its first request, so the whole history is never sent first.
   carry. You don't need to.
 - **Free room before the next turn**: type `/compact` in the app. The system
   prompt, the tools and every message before the newest 8,000 tokens stay
-  byte for byte, so the next request still reads them from cache. Every old
-  tool result after that is shrunk to its handle, with no model call, and
-  the chat says how many, how many messages it kept, and the tokens before
-  and after. `tofu session trace <name> --kind compaction` names each cut
-  result, its handle and its bytes. The shrunk
+  byte for byte, so the next request still reads them from cache. Jev reads
+  each old tool result after that and keeps the ones the work still needs;
+  the rest shrink to their handle. With no classifier bound, the age rule
+  shrinks them all. The chat says how many, how many messages it kept, and
+  the tokens before and after. `tofu session trace <name> --kind compaction`
+  names each cut result, its handle, its bytes, `judged` or `aged`, and the
+  `keep_result` row, which `tofu why` opens. A cut result read back with
+  `artifact_fetch` labels that row `refetched`. The shrunk
   history is a new session, so `tofu --continue` carries it after a restart.
   Typed while the lead waits on its sub-agents, it says so and runs when
   the turn ends.

@@ -43,10 +43,13 @@ in tofu and never reaches the model. `tofu serve` answers the list as
 
 `/compact` keeps the head of the history byte for byte, so the next request
 still reads it from cache: the system prompt, the tools and every message
-before the newest 8,000 tokens. With no model call, each old tool result
-after it becomes a note and a handle `artifact_fetch` reads back; the last
-step's results stay whole. `tofu session trace <name> --kind compaction`
-names each cut, with its handle and bytes.
+before the newest 8,000 tokens. Jev reads each old tool result after it,
+`keep_result`, and keeps the ones the work still needs; each other one
+becomes a note and a handle `artifact_fetch` reads back. With no classifier
+bound, the age rule cuts them all. The last step's results stay whole.
+`tofu session trace <name> --kind compaction` names each cut, with its
+handle, bytes, `judged` or `aged`, and its `keep_result` row; a cut read
+back with `artifact_fetch` labels that row `refetched`.
 
 `/undo` puts back every file the last turn changed, whether by `edit`,
 `write`, `bash` or a sub-agent: a file it created is deleted and a file it

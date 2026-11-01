@@ -1,0 +1,102 @@
+[
+  {
+    "name": "hex-literals",
+    "task": "the tokenizer test TestLexNumbers fails on hex literals, fix it",
+    "latest": "The hex branch in lexNumber never consumes the 0x prefix, so the digits after it are read as decimal. I will change number.go so the prefix is skipped before the digit loop.",
+    "steps": [
+      {"say": "finding where numbers are lexed", "tool": "grep", "args": {"pattern": "lexNumber"}, "bytes": 900, "needed": false,
+       "result": "internal/lex/number.go:12:func lexNumber(l *lexer) stateFn {\ninternal/lex/lexer.go:88:\t\treturn lexNumber\ninternal/lex/number_test.go:9:func TestLexNumbers(t *testing.T) {\n"},
+      {"say": "reading the number lexer", "tool": "read", "args": {"path": "internal/lex/number.go"}, "bytes": 2400, "needed": true,
+       "result": "1\tpackage lex\n2\t\n3\timport \"unicode\"\n4\t\n12\tfunc lexNumber(l *lexer) stateFn {\n13\t\tdigits := \"0123456789\"\n14\t\tif l.accept(\"0\") && l.accept(\"xX\") {\n15\t\t\tdigits = \"0123456789abcdefABCDEF\"\n16\t\t}\n17\t\tl.acceptRun(digits)\n18\t\tif unicode.IsLetter(l.peek()) {\n19\t\t\treturn l.errorf(\"bad number syntax: %q\", l.input[l.start:l.pos+1])\n20\t\t}\n21\t\tl.emit(itemNumber)\n22\t\treturn lexText\n23\t}\n"},
+      {"say": "running the failing test", "tool": "bash", "args": {"command": "go test ./internal/lex -run TestLexNumbers"}, "bytes": 1600, "needed": true,
+       "result": "--- FAIL: TestLexNumbers (0.00s)\n    number_test.go:21: lex(\"0x1F\") = [number \"0\" text \"x1F\"], want [number \"0x1F\"]\n    number_test.go:21: lex(\"0Xff\") = [number \"0\" text \"Xff\"], want [number \"0Xff\"]\nFAIL\nFAIL\texample.test/calc/internal/lex\t0.004s\n"},
+      {"say": "checking the module path", "tool": "read", "args": {"path": "go.mod"}, "bytes": 700, "needed": false,
+       "result": "module example.test/calc\n\ngo 1.25\n\nrequire (\n\tgithub.com/example/termcolor v1.4.0\n)\n"},
+      {"say": "listing the package", "tool": "bash", "args": {"command": "ls internal/lex"}, "bytes": 600, "needed": false,
+       "result": "item.go\nlexer.go\nlexer_test.go\nnumber.go\nnumber_test.go\nstring.go\n"}
+    ]
+  },
+  {
+    "name": "download-url",
+    "task": "update the install page to the new download URL and check nothing else still links to the old one",
+    "latest": "install.md carries the old URL in two places and I am editing those first. After that I will go through the other files that still point at the old host.",
+    "steps": [
+      {"say": "reading the install page", "tool": "read", "args": {"path": "docs/install.md"}, "bytes": 2200, "needed": true,
+       "result": "# Install\n\nDownload the archive for your platform from https://old.example.test/releases/latest and unpack it.\n\n## Checksums\n\nEvery archive has a .sha256 file next to it at https://old.example.test/releases/latest/checksums.txt.\n\n## Building from source\n\nClone the repository and run make.\n"},
+      {"say": "searching for the old host", "tool": "grep", "args": {"pattern": "old.example.test"}, "bytes": 1100, "needed": true,
+       "result": "docs/install.md:3:Download the archive for your platform from https://old.example.test/releases/latest\ndocs/install.md:7:Every archive has a .sha256 file next to it at https://old.example.test/releases/latest/checksums.txt\nREADME.md:14:[download](https://old.example.test/releases/latest)\nscripts/fetch.sh:5:BASE=https://old.example.test/releases\n"},
+      {"say": "checking how the changelog words releases", "tool": "read", "args": {"path": "CHANGELOG.md"}, "bytes": 2000, "needed": false,
+       "result": "# Changelog\n\n## 2.3.0\n\n### Added\n\n- a --quiet flag on sync\n\n### Fixed\n\n- sync no longer drops the last line of a file without a newline\n\n## 2.2.1\n\n### Fixed\n\n- the progress bar on narrow terminals\n"},
+      {"say": "looking at recent history", "tool": "bash", "args": {"command": "git log --oneline -15"}, "bytes": 900, "needed": false,
+       "result": "a1b2c3d docs: fix a typo in usage\n9f8e7d6 feat(sync): add --quiet\n5a4b3c2 fix(sync): keep the last line\n1e2d3c4 chore: bump the go version\n7f6e5d4 test: cover the empty file\n"}
+    ]
+  },
+  {
+    "name": "nightly-timeout",
+    "task": "find out why the nightly build times out and fix it",
+    "latest": "The integration step runs every suite one after another with no limit per suite. I will split it in nightly.yml so each suite is its own step with its own timeout.",
+    "steps": [
+      {"say": "reading the nightly workflow", "tool": "read", "args": {"path": ".ci/nightly.yml"}, "bytes": 2000, "needed": true,
+       "result": "name: nightly\non:\n  schedule:\n    - cron: '0 3 * * *'\njobs:\n  build:\n    runs-on: ubuntu-latest\n    timeout-minutes: 30\n    steps:\n      - uses: actions/checkout@v4\n      - run: make build\n      - name: integration\n        run: scripts/integration.sh\n"},
+      {"say": "reading the end of the last failed run", "tool": "bash", "args": {"command": "tail -40 logs/nightly-latest.txt"}, "bytes": 2200, "needed": true,
+       "result": "[02:58:10] integration: suite storage passed in 9m12s\n[03:07:44] integration: suite network passed in 9m34s\n[03:17:02] integration: suite replay started\nError: The job running on runner worker-3 has exceeded the maximum execution time of 30 minutes.\n"},
+      {"say": "reading the readme for the ci notes", "tool": "read", "args": {"path": "README.md"}, "bytes": 1800, "needed": false,
+       "result": "# relay\n\nA small message relay.\n\n## Usage\n\nrelay serve --port 8080\n\n## Contributing\n\nOpen a pull request against main. CI runs on every push.\n"},
+      {"say": "finding every workflow", "tool": "glob", "args": {"pattern": "**/*.yml"}, "bytes": 700, "needed": false,
+       "result": ".ci/nightly.yml\n.ci/push.yml\n.ci/release.yml\ndeploy/compose.yml\n"},
+      {"say": "reading the integration script", "tool": "read", "args": {"path": "scripts/integration.sh"}, "bytes": 1500, "needed": true,
+       "result": "#!/bin/sh\nset -e\nfor suite in storage network replay restore; do\n  echo \"integration: suite $suite started\"\n  go test -tags integration ./suites/$suite/...\ndone\n"}
+    ]
+  },
+  {
+    "name": "rename-field",
+    "task": "rename the config field retry_ms to retry_after_ms everywhere, and keep old config files readable",
+    "latest": "load.go now reads both names and prefers the new one. Next are the test fixtures and the docs page.",
+    "steps": [
+      {"say": "finding every use of the old name", "tool": "grep", "args": {"pattern": "retry_ms"}, "bytes": 1200, "needed": true,
+       "result": "config/load.go:31:\tRetryMS int `yaml:\"retry_ms\"`\nconfig/testdata/full.yaml:4:retry_ms: 250\nconfig/testdata/minimal.yaml:2:retry_ms: 100\ndocs/config.md:22:| retry_ms | 250 | how long to wait before a retry |\n"},
+      {"say": "reading the loader", "tool": "read", "args": {"path": "config/load.go"}, "bytes": 2400, "needed": false,
+       "result": "28\ttype File struct {\n29\t\tHost    string `yaml:\"host\"`\n30\t\tPort    int    `yaml:\"port\"`\n31\t\tRetryMS int    `yaml:\"retry_ms\"`\n32\t}\n33\t\n34\tfunc Load(path string) (File, error) {\n35\t\tdata, err := os.ReadFile(path)\n36\t\tif err != nil {\n37\t\t\treturn File{}, err\n38\t\t}\n"},
+      {"say": "reading the docs page", "tool": "read", "args": {"path": "docs/config.md"}, "bytes": 1900, "needed": true,
+       "result": "# Configuration\n\n| field | default | meaning |\n|---|---|---|\n| host | localhost | where to connect |\n| port | 7000 | the port |\n| retry_ms | 250 | how long to wait before a retry |\n"},
+      {"say": "reading the license header rules", "tool": "read", "args": {"path": "LICENSE"}, "bytes": 2000, "needed": false,
+       "result": "MIT License\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files, to deal in the Software without restriction.\n"},
+      {"say": "listing the config directory", "tool": "bash", "args": {"command": "ls -la config"}, "bytes": 800, "needed": false,
+       "result": "total 24\n-rw-r--r-- 1 dev dev 1840 load.go\n-rw-r--r-- 1 dev dev 2210 load_test.go\ndrwxr-xr-x 2 dev dev 4096 testdata\n"}
+    ]
+  },
+  {
+    "name": "yaml-bump",
+    "task": "bump the yaml library to v3.0.2 and make the build pass",
+    "latest": "go.mod is bumped. The build now fails in one file, where the decoder API changed in this release.",
+    "steps": [
+      {"say": "building after the bump", "tool": "bash", "args": {"command": "go build ./..."}, "bytes": 1300, "needed": true,
+       "result": "# example.test/feeds/internal/feed\ninternal/feed/parse.go:41:12: node.Decode undefined (type *yaml.Node has no field or method Decode)\ninternal/feed/parse.go:58:9: too many arguments in call to yaml.NewDecoder\n"},
+      {"say": "reading the release notes", "tool": "fetch", "args": {"url": "https://yaml.example.test/releases/v3.0.2"}, "bytes": 2400, "needed": true,
+       "result": "v3.0.2\n\nBreaking: Node.Decode is removed. Call Decoder.DecodeNode(node, &out) instead. NewDecoder takes only the reader; options move to Decoder.SetOptions.\n\nFixed: anchors inside flow sequences.\n"},
+      {"say": "reading the failing file", "tool": "read", "args": {"path": "internal/feed/parse.go"}, "bytes": 2300, "needed": true,
+       "result": "38\tfunc parseEntry(node *yaml.Node) (Entry, error) {\n39\t\tvar entry Entry\n40\t\t// the node is a mapping\n41\t\tif err := node.Decode(&entry); err != nil {\n42\t\t\treturn Entry{}, err\n43\t\t}\n56\tfunc parseAll(r io.Reader) ([]Entry, error) {\n57\t\tvar all []Entry\n58\t\tdec := yaml.NewDecoder(r, yaml.Strict())\n"},
+      {"say": "checking the go environment", "tool": "bash", "args": {"command": "go env GOPATH GOFLAGS GOPROXY"}, "bytes": 500, "needed": false,
+       "result": "/home/dev/go\n-mod=mod\nhttps://proxy.example.test,direct\n"},
+      {"say": "looking for open todo notes", "tool": "grep", "args": {"pattern": "TODO"}, "bytes": 900, "needed": false,
+       "result": "internal/feed/fetch.go:22:// TODO retry on 503\ncmd/feeds/main.go:40:// TODO a --verbose flag\n"}
+    ]
+  },
+  {
+    "name": "status-json",
+    "task": "add a --json flag to the status command",
+    "latest": "TestStatusText passes again after the column fix. Now adding the --json branch to status.go, writing through the shared JSON helper in output.go.",
+    "steps": [
+      {"say": "reading the status command", "tool": "read", "args": {"path": "cmd/status.go"}, "bytes": 2300, "needed": true,
+       "result": "10\tfunc runStatus(args []string, out io.Writer) error {\n11\t\tflags := flag.NewFlagSet(\"status\", flag.ContinueOnError)\n12\t\twide := flags.Bool(\"wide\", false, \"show every column\")\n13\t\tif err := flags.Parse(args); err != nil {\n14\t\t\treturn err\n15\t\t}\n16\t\trows := collect()\n17\t\treturn writeTable(out, rows, *wide)\n18\t}\n"},
+      {"say": "running the text test", "tool": "bash", "args": {"command": "go test ./cmd -run TestStatusText"}, "bytes": 1500, "needed": false,
+       "result": "--- FAIL: TestStatusText (0.00s)\n    status_test.go:30: column 3 is 'ready ', want 'ready'\nFAIL\nFAIL\texample.test/tool/cmd\t0.011s\n"},
+      {"say": "reading the shared output helpers", "tool": "read", "args": {"path": "cmd/output.go"}, "bytes": 1800, "needed": true,
+       "result": "5\tfunc writeJSON(out io.Writer, value any) error {\n6\t\tencoder := json.NewEncoder(out)\n7\t\tencoder.SetIndent(\"\", \"  \")\n8\t\treturn encoder.Encode(value)\n9\t}\n11\tfunc writeTable(out io.Writer, rows []Row, wide bool) error {\n"},
+      {"say": "finding other json writers", "tool": "grep", "args": {"pattern": "json.NewEncoder"}, "bytes": 700, "needed": false,
+       "result": "cmd/output.go:6:\tencoder := json.NewEncoder(out)\ninternal/report/report.go:44:\tenc := json.NewEncoder(w)\n"},
+      {"say": "running the whole command package", "tool": "bash", "args": {"command": "go test ./cmd"}, "bytes": 1200, "needed": false,
+       "result": "ok  \texample.test/tool/cmd\t0.042s\n"}
+    ]
+  }
+]

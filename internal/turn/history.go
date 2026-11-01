@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"tofu/internal/recall"
 	"tofu/internal/rule"
 	"tofu/internal/session"
+	"tofu/internal/sys"
 )
 
 type ForkKind string
@@ -230,7 +232,14 @@ type overflowShrink struct {
 }
 
 func (s overflowShrink) String() string {
-	return fmt.Sprintf("shrank %d old tool result(s) to an artifact handle each, %d bytes of messages to %d", s.results, s.bytesBefore, s.bytesAfter)
+	judged := 0
+	for _, drop := range s.drops {
+		if drop.Reason == recall.DroppedJudged {
+			judged++
+		}
+	}
+	return fmt.Sprintf("shrank %d old tool result(s) to an artifact handle each, %d bytes of messages to %d; %s chose %d of the %d dropped and the age rule the rest",
+		s.results, s.bytesBefore, s.bytesAfter, keepResultPoint, judged, len(s.drops))
 }
 
 type shrinkCause string
@@ -258,12 +267,12 @@ type Compacted struct {
 	Messages     []llm.Message
 }
 
-func CompactCarried(artifactDir, wire string, carried []llm.Message) (Compacted, error) {
-	artifacts, err := NewArtifacts(artifactDir, true)
+func CompactCarried(project string, places sys.Places, wire, task string, carried []llm.Message) (Compacted, error) {
+	artifacts, err := NewArtifacts(filepath.Join(places.State, "artifacts"), true)
 	if err != nil {
 		return Compacted{}, err
 	}
-	artifacts.preview = artifacts.preview.OnWire(wire)
+	artifacts.preview, artifacts.keep = artifacts.preview.OnWire(wire), newKeepJudge(project, places.Log, task, nil)
 	shrunk := slices.Clone(carried)
 	before := HistoryTokens(artifacts.preview, shrunk)
 	kept := warmFrom(artifacts.preview, shrunk)
@@ -340,32 +349,42 @@ func shrinkFrom(artifacts Artifacts, messages []llm.Message, estimate, target, f
 			shrink.results++
 		}
 	}
-	names := make(map[string]string)
+	calls := make(map[string]llm.ToolCall)
+	var candidates []dropCandidate
 	step := 0
 	for i, message := range messages[:max(lastStep, 0)] {
 		if message.Role == llm.RoleAssistant {
 			step++
 		}
 		for _, call := range message.ToolCalls {
-			names[call.ID] = call.Name
+			calls[call.ID] = call
 		}
+		if i >= from && message.Role == llm.RoleTool && len(message.Content) >= artifacts.preview.CompactFloorBytes &&
+			!recall.AlreadyDropped(message.Content) && shrunkHandle(message.Content) == "" {
+			candidates = append(candidates, dropCandidate{at: i, step: step, call: calls[message.ToolCallID], reason: recall.DroppedAged})
+		}
+	}
+	if artifacts.keep != nil && estimate > target {
+		candidates = artifacts.keep.ordered(artifacts.preview, messages, candidates, cause != causeCompact)
+	}
+	for _, candidate := range candidates {
 		if estimate <= target {
 			break
 		}
-		if i < from || message.Role != llm.RoleTool || len(message.Content) < artifacts.preview.CompactFloorBytes ||
-			recall.AlreadyDropped(message.Content) || shrunkHandle(message.Content) != "" {
-			continue
-		}
-		tool := names[message.ToolCallID]
-		note, handle, err := shrunkNote(artifacts, tool, WithoutToolRef(message.Content), cause)
+		message := messages[candidate.at]
+		note, handle, err := shrunkNote(artifacts, candidate.call.Name, WithoutToolRef(message.Content), cause)
 		if err != nil {
 			return overflowShrink{}, err
 		}
 		note = toolRefLine(message.Content) + note
 		freed := artifacts.preview.MessageTokens(message.Content) - artifacts.preview.MessageTokens(note)
 		estimate -= freed
-		shrink.drops = append(shrink.drops, recall.Drop{Step: step, Tool: tool, Handle: handle, Bytes: len(message.Content), TokensFreed: freed, Reason: recall.DroppedAged})
-		messages[i].Content = note
+		shrink.drops = append(shrink.drops, recall.Drop{Step: candidate.step, Tool: candidate.call.Name, Handle: handle, Bytes: len(message.Content), TokensFreed: freed,
+			Reason: candidate.reason, Decision: candidate.decision})
+		if artifacts.keep != nil && handle != "" {
+			artifacts.keep.dropped[handle] = candidate.decision
+		}
+		messages[candidate.at].Content = note
 		shrink.results++
 	}
 	shrink.bytesAfter = messagesBytes(messages)
