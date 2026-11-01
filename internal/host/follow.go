@@ -594,9 +594,12 @@ func (h *Host) heed(f *following) {
 		}
 		var line followLine
 		var unknown unknownOutcome
-		if err := json.Unmarshal(raw, &line); errors.As(err, &unknown) {
+		switch err := json.Unmarshal(raw, &line); {
+		case errors.As(err, &unknown):
 			h.note("the tofu host, process " + strconv.Itoa(f.hub.PID) + ", sent a tool result this tofu could not read, so it was not shown: " + err.Error())
 			continue
+		case err != nil:
+			h.note("the tofu host, process " + strconv.Itoa(f.hub.PID) + ", sent a line this tofu read only in part, so a field may be missing: " + err.Error())
 		}
 		if held := line.Settings; held != nil {
 			h.mu.Lock()

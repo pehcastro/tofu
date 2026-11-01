@@ -235,7 +235,7 @@ type Decision struct {
 	Enforced      bool
 	OverridesRule string
 	Remembers     string
-	MemoryScope   memory.Scope
+	MemoryScope   memory.Scope `json:",omitempty"`
 	MemoryScopes  []memory.Scope
 }
 
