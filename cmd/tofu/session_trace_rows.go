@@ -361,13 +361,23 @@ func carriedFiles(source llm.Source, carry string) string {
 }
 
 func forkWords(fork *turn.Fork) (step, carried string) {
-	switch {
-	case fork == nil:
+	if fork == nil {
 		return "step and files in the segment before, see --kind fork", ""
-	case len(fork.Carry.Files) == 0:
-		return "after step " + strconv.Itoa(fork.Step), "carried no file whole"
 	}
-	return "after step " + strconv.Itoa(fork.Step), "carried " + strings.Join(fork.Carry.Files, ", ")
+	carried = "carried no file whole"
+	if len(fork.Carry.Files) > 0 {
+		carried = "carried " + strings.Join(fork.Carry.Files, ", ")
+	}
+	if len(fork.Carry.Facts) > 0 {
+		facts := make([]string, len(fork.Carry.Facts))
+		for i, fact := range fork.Carry.Facts {
+			source, rest, _ := strings.Cut(strings.TrimPrefix(fact, "fact: "), " :: ")
+			tool, _, _ := strings.Cut(rest, ",")
+			facts[i] = source + " :: " + tool
+		}
+		carried = traced(carried, plural(len(facts), "fact")+": "+strings.Join(facts, ", "))
+	}
+	return "after step " + strconv.Itoa(fork.Step), carried
 }
 
 func ruleWords(found []session.RuleFinding) string {
