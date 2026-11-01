@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
@@ -68,6 +69,95 @@ func claimedDoneWithNothing() turn.Row {
 		Task:    "create hello.txt containing the single word hello, then stop",
 		Outcome: turn.OutcomeStopped,
 		Steps:   []turn.StepRow{{Index: 1, AssistantText: "Done, hello.txt is written."}},
+	}
+}
+
+func openLineSubAgent() turn.Row {
+	row := claimedDoneWithNothing()
+	row.Task = "TOFU-1: create hello.txt containing the single word hello.\n\n## Acceptance\n- hello.txt says hello, pasted\n"
+	return row
+}
+
+func reviewIn(t *testing.T, mode gate.Mode) typedDoneReview {
+	t.Helper()
+	review, err := newTypedDoneReview()
+	if err != nil {
+		t.Fatalf("newTypedDoneReview: %v", err)
+	}
+	review.set.Mode = mode
+	return review
+}
+
+func stopCheckRow(t *testing.T, id string) ledger.Row {
+	t.Helper()
+	dir, err := sys.LogDir()
+	if err != nil {
+		t.Fatalf("sys.LogDir: %v", err)
+	}
+	row, found, err := ledger.NewReader(dir).ByID(id)
+	if err != nil || !found {
+		t.Fatalf("the decision id %q names no ledger row (err %v)", id, err)
+	}
+	if row.Point != "stop_check" || row.TurnID != "turn-sub-agent" {
+		t.Fatalf("row %s is %s for turn %q, want stop_check for the sub-agent", row.ID, row.Point, row.TurnID)
+	}
+	return row
+}
+
+func TestAShadowStopCheckDecidesNothingAndTheScreenStands(t *testing.T) {
+	t.Chdir(t.TempDir())
+	stubJev(t, http.StatusOK, stopCheckWorkRemainsReply)
+
+	decision, err := reviewIn(t, gate.ModeShadow).Review(context.Background(), claimedDoneWithNothing())
+	if err != nil {
+		t.Fatalf("the typed arm failed: %v", err)
+	}
+	if decision.Verdict != turn.DoneAccepted {
+		t.Fatalf("a shadow row reading allow reopened the sub-agent: %s", decision.Reason)
+	}
+	row := stopCheckRow(t, decision.ID)
+	if row.Verdict != ledger.VerdictAllow || row.Reason.Mode != ledger.ModeShadow {
+		t.Fatalf("row %s reads %s in %s, want allow in shadow", row.ID, row.Verdict, row.Reason.Mode)
+	}
+	if !strings.Contains(decision.Reason, "shadow") {
+		t.Fatalf("the accepted reason does not say the row ran in shadow: %s", decision.Reason)
+	}
+	t.Logf("shadow: %s, %s", decision.Verdict, decision.Reason)
+}
+
+func TestAnOpenLineIsAskedToJevAndReopenedInEitherMode(t *testing.T) {
+	for _, mode := range []gate.Mode{gate.ModeShadow, gate.ModeEnforced} {
+		t.Chdir(t.TempDir())
+		stubJev(t, http.StatusOK, stopCheckWorkDoneReply)
+
+		decision, err := reviewIn(t, mode).Review(context.Background(), openLineSubAgent())
+		if err != nil {
+			t.Fatalf("%s: the typed arm failed: %v", mode, err)
+		}
+		if decision.Verdict != turn.DoneReopen || !strings.Contains(decision.Reason, "hello.txt says hello") {
+			t.Fatalf("%s: an unmet acceptance line was not reopened naming the line: %s %s", mode, decision.Verdict, decision.Reason)
+		}
+		row := stopCheckRow(t, decision.ID)
+		if row.Reason.Mode != mode.Ledger() {
+			t.Fatalf("%s: row %s recorded mode %s", mode, row.ID, row.Reason.Mode)
+		}
+		t.Logf("%s: %s, %s", mode, decision.Verdict, decision.Reason)
+	}
+}
+
+func TestAJevErrorStillReopensAnOpenLine(t *testing.T) {
+	t.Chdir(t.TempDir())
+	stubJev(t, http.StatusInternalServerError, `{"error":{"message":"the route is down"}}`)
+
+	decision, err := reviewIn(t, gate.ModeShadow).Review(context.Background(), openLineSubAgent())
+	if err != nil {
+		t.Fatalf("jev being down let an unmet line through as an error, so the claim would stand: %v", err)
+	}
+	if decision.Verdict != turn.DoneReopen {
+		t.Fatalf("jev being down accepted an unmet line: %s", decision.Reason)
+	}
+	if row := stopCheckRow(t, decision.ID); row.Verdict != ledger.VerdictAsk {
+		t.Fatalf("the fallback row %s reads %s, want ask", row.ID, row.Verdict)
 	}
 }
 
@@ -167,9 +257,11 @@ func TestTheTypedDoneReviewArmReopensASubAgentAndLogsTheDecision(t *testing.T) {
 	if opts.doneArm != settingspkg.DoneReviewTyped {
 		t.Fatalf("--done-review typed parsed as %q", opts.doneArm)
 	}
-	review := newDoneReview(opts.doneArm, func(note string) { t.Fatalf("the typed arm fell back with a Jev stub bound: %s", note) })
+	if review := newDoneReview(opts.doneArm, func(note string) { t.Fatalf("the typed arm fell back with a Jev stub bound: %s", note) }); review == nil {
+		t.Fatal("--done-review typed built no review")
+	}
 
-	decision, err := review.Review(context.Background(), claimedDoneWithNothing())
+	decision, err := reviewIn(t, gate.ModeEnforced).Review(context.Background(), claimedDoneWithNothing())
 	if err != nil {
 		t.Fatalf("the typed arm failed: %v", err)
 	}
@@ -271,10 +363,7 @@ func TestTheTypedDoneReviewReopensTheSubAgentInsideARunAndWhyPrintsTheChain(t *t
 	t.Chdir(t.TempDir())
 	stubJev(t, http.StatusOK, stopCheckWorkRemainsReply)
 
-	review, err := newTypedDoneReview()
-	if err != nil {
-		t.Fatalf("newTypedDoneReview: %v", err)
-	}
+	review := reviewIn(t, gate.ModeEnforced)
 	rounds := konst.SubAgentMaxRounds
 	queued := make([]llm.Decision, 0, rounds)
 	for round := 1; round <= rounds; round++ {
@@ -360,10 +449,7 @@ func TestLiveTheTypedDoneReviewReadsTwoRecordedSubAgents(t *testing.T) {
 	}
 	t.Setenv(sys.TypeSafeKeyName, key)
 
-	review, err := newTypedDoneReview()
-	if err != nil {
-		t.Fatalf("newTypedDoneReview: %v", err)
-	}
+	review := reviewIn(t, gate.ModeEnforced)
 	nothing := recordedTurn(t, "turn-18d69b47d7028fec.json")
 	wrote := recordedTurn(t, "turn-18d690dd45903d58.json")
 

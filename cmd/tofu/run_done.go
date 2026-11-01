@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
@@ -82,9 +83,7 @@ func resolveStopCheckPoint() (battery, error) {
 }
 
 func (r typedDoneReview) Review(ctx context.Context, subAgent turn.Row) (turn.DoneDecision, error) {
-	if screened, _ := (turn.ContractDoneReview{}).Review(ctx, subAgent); screened.Verdict == turn.DoneReopen {
-		return screened, nil
-	}
+	screened, _ := (turn.ContractDoneReview{}).Review(ctx, subAgent)
 	built, builder, err := state.BuildStopCheck(doneState(subAgent))
 	if err != nil {
 		return turn.DoneDecision{}, err
@@ -94,8 +93,13 @@ func (r typedDoneReview) Review(ctx context.Context, subAgent turn.Row) (turn.Do
 
 	decision, askErr := r.client.Ask(ctx, jev.Request{State: asked, Questions: r.set.Questions})
 	if askErr != nil {
-		if _, writeErr := appendFallbackRow(asked, r.set, in, askErr); writeErr != nil {
+		row, writeErr := appendFallbackRow(asked, r.set, in, askErr)
+		if writeErr != nil {
 			return turn.DoneDecision{}, fmt.Errorf("%w, and the row saying so did not write either: %w", askErr, writeErr)
+		}
+		if screened.Verdict == turn.DoneReopen {
+			screened.ID = row.ID
+			return screened, nil
 		}
 		return turn.DoneDecision{}, askErr
 	}
@@ -106,7 +110,15 @@ func (r typedDoneReview) Review(ctx context.Context, subAgent turn.Row) (turn.Do
 	if err != nil {
 		return turn.DoneDecision{}, err
 	}
-	return turn.DoneDecision{ID: row.ID, Verdict: doneVerdict(row.Verdict), Reason: doneReason(row)}, nil
+	screened.ID = row.ID
+	switch {
+	case screened.Verdict == turn.DoneReopen:
+		return screened, nil
+	case r.set.Mode == gate.ModeEnforced:
+		return turn.DoneDecision{ID: row.ID, Verdict: doneVerdict(row.Verdict), Reason: doneReason(row)}, nil
+	}
+	screened.Reason += "; stop_check ran in " + r.set.Mode.String() + ", so this decides nothing: " + doneReason(row)
+	return screened, nil
 }
 
 func doneVerdict(verdict ledger.Verdict) turn.DoneVerdict {

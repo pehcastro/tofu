@@ -30,7 +30,7 @@ func Points() []Point {
 		},
 		{
 			Name:     "stop_check",
-			Question: "risk",
+			Question: "stop_pressure",
 			Rule:     "library/general/rules/stop_check@1.yaml",
 			Thresholds: []Threshold{
 				{Name: "stop_pressure_ask_at", Value: 1.5},
