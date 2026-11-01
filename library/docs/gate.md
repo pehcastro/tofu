@@ -102,7 +102,15 @@ keeps to one decision point, and `tofu why <id>` explains one row.
     tofu replay --point tool_gate --set risk_ask_at=1.5 --since 7d
 
 scores the recorded rows again against thresholds you name and shows
-which verdicts would change, with no call to jev. `tofu judge` asks any
+which verdicts would change, with no call to jev. A question set's own
+threshold replays the same way:
+
+    tofu replay --point done_reason --set open_at=0.6
+
+lists each done move's stored `open` reading with its verdict at the
+threshold it ran under and at the one you set. A name that is no
+threshold of the rows' rule or question set is refused, and the refusal
+names the ones it has. `tofu judge` asks any
 question set about a state you pipe in, for testing a question by hand.
 Each of these takes `--json` and prints one JSON document.
 

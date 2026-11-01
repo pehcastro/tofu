@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -14,9 +15,11 @@ import (
 	"tofu/interface/cli"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/judge/question"
 	"tofu/internal/judge/state"
 	"tofu/internal/sys"
 	"tofu/internal/widget"
+	"tofu/library/questions"
 )
 
 const replayUsage = "tofu replay --point name [--set threshold=value]... [--since 7d] [--verbose] [--json]"
@@ -46,6 +49,25 @@ type replayRule struct {
 	err    error
 }
 
+type replayRow struct {
+	ID       string         `json:"id"`
+	Question string         `json:"question"`
+	Value    float64        `json:"value"`
+	Before   ledger.Verdict `json:"before"`
+	BeforeAt float64        `json:"before_at"`
+	After    ledger.Verdict `json:"after"`
+	AfterAt  float64        `json:"after_at"`
+}
+
+type unknownThreshold struct {
+	key, ref string
+	want     []string
+}
+
+func (e unknownThreshold) Error() string {
+	return fmt.Sprintf("%q is not a threshold of %s, want one of %s", e.key, e.ref, strings.Join(e.want, ", "))
+}
+
 type replayChange struct {
 	ID      string          `json:"id"`
 	Before  ledger.Verdict  `json:"before"`
@@ -72,6 +94,7 @@ type replayReport struct {
 	Rules       []replayRule       `json:"rules"`
 	Moves       []replayMove       `json:"moves"`
 	Changes     []replayChange     `json:"changes"`
+	Rows        []replayRow        `json:"rows,omitempty"`
 	verbose     bool
 }
 
@@ -90,6 +113,9 @@ func replayVerb(args []string, out, errOut io.Writer, now func() time.Time) int 
 		filter.Since = now().Add(-opts.since)
 	}
 	report, err := runReplay(ledger.NewReader(dir), filter, opts.sets)
+	if errors.As(err, new(unknownThreshold)) {
+		return o.usage(err)
+	}
 	if err != nil {
 		return o.fail(err)
 	}
@@ -139,9 +165,6 @@ func parseSetArg(arg string, sets map[string]float64) error {
 	if !ok {
 		return fmt.Errorf("--set wants key=value, got %q", arg)
 	}
-	if !slices.Contains(replayThresholdFields, key) {
-		return fmt.Errorf("%q is not a threshold, want one of %s", key, strings.Join(replayThresholdFields, ", "))
-	}
 	value, err := strconv.ParseFloat(raw, 64)
 	if err != nil {
 		return fmt.Errorf("--set %s: %q is not a number", key, raw)
@@ -174,10 +197,10 @@ func runReplay(reader *ledger.Reader, filter ledger.Filter, sets map[string]floa
 			return nil
 		}
 		if row.Policy == "" {
-			report.NoRule++
-			return nil
+			return report.rescoreSet(row, sets)
 		}
-		rule := report.rule(fmt.Sprintf("%s@%d", row.Policy, row.PolicyVersion))
+		ref := fmt.Sprintf("%s@%d", row.Policy, row.PolicyVersion)
+		rule := report.rule(ref, func() replayRule { return gateRule(ref, sets) })
 		rule.Rows++
 		if rule.err != nil || rule.Schema != "" {
 			return rule.err
@@ -218,11 +241,51 @@ func runReplay(reader *ledger.Reader, filter ledger.Filter, sets map[string]floa
 	return report, err
 }
 
-func (r *replayReport) rule(ref string) *replayRule {
-	at := slices.IndexFunc(r.Rules, func(rule replayRule) bool { return rule.Ref == ref })
-	if at >= 0 {
-		return &r.Rules[at]
+func (r *replayReport) rescoreSet(row ledger.Row, sets map[string]float64) error {
+	if row.Reason == nil || !deniesAtOrAbove(row.Questions) {
+		r.NoRule++
+		return nil
 	}
+	if len(row.Answers) == 0 {
+		r.Unavailable++
+		return nil
+	}
+	ref := row.Questions + "@" + strconv.Itoa(row.Version)
+	rule := r.rule(ref, func() replayRule { return setRule(ref, sets) })
+	rule.Rows++
+	if rule.err != nil {
+		return rule.err
+	}
+	at, set := sets[row.Reason.Question+"_at"]
+	if !set {
+		at = row.Reason.Threshold
+	}
+	after := ledger.VerdictAllow
+	if row.Reason.Value >= at {
+		after = ledger.VerdictDeny
+	}
+	r.Rescored++
+	r.Rows = append(r.Rows, replayRow{ID: row.ID, Question: row.Reason.Question, Value: row.Reason.Value, Before: row.Verdict, BeforeAt: row.Reason.Threshold, After: after, AfterAt: at})
+	if after != row.Verdict {
+		r.Changes = append(r.Changes, replayChange{ID: row.ID, Before: row.Verdict, After: after, Outcome: row.Outcome})
+	}
+	return nil
+}
+
+func deniesAtOrAbove(questions string) bool {
+	return questions == "done_reason" || questions == "ticket_feasibility"
+}
+
+func (r *replayReport) rule(ref string, load func() replayRule) *replayRule {
+	at := slices.IndexFunc(r.Rules, func(rule replayRule) bool { return rule.Ref == ref })
+	if at < 0 {
+		at = len(r.Rules)
+		r.Rules = append(r.Rules, load())
+	}
+	return &r.Rules[at]
+}
+
+func gateRule(ref string, sets map[string]float64) replayRule {
 	rule := replayRule{Ref: ref}
 	if ref == state.StopCheckRuleRef {
 		rule.pol, rule.Origin, rule.err = state.StopCheckRule()
@@ -232,9 +295,38 @@ func (r *replayReport) rule(ref string) *replayRule {
 			rule.Schema = rule.pol.Schema
 		}
 	}
+	if rule.err == nil && rule.Schema == "" {
+		rule.err = unknownIn(sets, replayThresholdFields, ref)
+	}
 	rule.File = rule.pol.File
-	r.Rules = append(r.Rules, rule)
-	return &r.Rules[len(r.Rules)-1]
+	return rule
+}
+
+func setRule(ref string, sets map[string]float64) replayRule {
+	layers, err := question.Layers(questions.Files(), "")
+	if err != nil {
+		return replayRule{Ref: ref, err: err}
+	}
+	set, fields, err := question.Resolve(ref, layers)
+	if err != nil {
+		return replayRule{Ref: ref, err: err}
+	}
+	var thresholds []string
+	for _, field := range fields {
+		if name, ok := strings.CutPrefix(field.Path, "thresholds."); ok {
+			thresholds = append(thresholds, name)
+		}
+	}
+	return replayRule{Ref: ref, File: filepath.ToSlash(set.File), err: unknownIn(sets, thresholds, ref)}
+}
+
+func unknownIn(sets map[string]float64, want []string, ref string) error {
+	for _, key := range slices.Sorted(maps.Keys(sets)) {
+		if !slices.Contains(want, key) {
+			return unknownThreshold{key: key, ref: ref, want: want}
+		}
+	}
+	return nil
 }
 
 func withOverrides(t gate.Thresholds, sets map[string]float64) gate.Thresholds {
@@ -284,30 +376,46 @@ func (r replayReport) lines(page cli.Page) []string {
 	}
 	for _, rule := range r.Rules {
 		text := rule.Ref + " · " + string(rule.Origin) + " · " + page.Path(rule.File)
-		if rule.Schema != "" {
+		switch {
+		case rule.Schema != "":
 			text = page.Glyph(cli.Warn) + " " + rule.Ref + " · schema " + rule.Schema + " has no decider · " + count(rule.Rows, "row", "rows") + " skipped"
+		case rule.Origin == "":
+			text = rule.Ref + " · " + page.Path(rule.File)
 		}
 		facts = append(facts, cli.Fact{Label: "rule", Text: text})
 	}
 	lines := append(page.Title("Replay", []string{r.Point, count(r.Read, "row", "rows")}, verdict), "")
 	lines = append(lines, cli.Indent(page.Facts(facts)...)...)
-	if len(r.Moves) == 0 {
-		return lines
-	}
-	header := []string{"change", "rows", "labeled", "agree", "disagree"}
-	rows := []cli.Row{{Cells: make([]string, len(header))}}
-	for i, name := range header {
-		rows[0].Cells[i] = page.Label(name)
-	}
-	for _, move := range r.Moves {
-		cells := []string{verdictLook(move.Before).Text + " → " + verdictLook(move.After).Text}
-		for _, n := range []int{move.Rows, move.Labeled, move.Agree, move.Disagree} {
-			cells = append(cells, widget.Lead(strconv.Itoa(n), len(header[len(cells)])))
+	if len(r.Moves) > 0 {
+		header := []string{"change", "rows", "labeled", "agree", "disagree"}
+		rows := []cli.Row{{Cells: make([]string, len(header))}}
+		for i, name := range header {
+			rows[0].Cells[i] = page.Label(name)
 		}
-		rows = append(rows, cli.Row{Mark: cli.Changed, Cells: cells})
+		for _, move := range r.Moves {
+			cells := []string{verdictLook(move.Before).Text + " → " + verdictLook(move.After).Text}
+			for _, n := range []int{move.Rows, move.Labeled, move.Agree, move.Disagree} {
+				cells = append(cells, widget.Lead(strconv.Itoa(n), len(header[len(cells)])))
+			}
+			rows = append(rows, cli.Row{Mark: cli.Changed, Cells: cells})
+		}
+		lines = append(append(lines, ""), cli.Indent(page.Rows(rows)...)...)
 	}
-	lines = append(append(lines, ""), cli.Indent(page.Rows(rows)...)...)
-	if !r.verbose {
+	if len(r.Rows) > 0 {
+		at := func(v ledger.Verdict, threshold float64) string {
+			return verdictLook(v).Text + " at " + strconv.FormatFloat(threshold, 'g', -1, 64)
+		}
+		var rows []cli.Row
+		for _, row := range r.Rows {
+			mark := cli.None
+			if row.After != row.Before {
+				mark = cli.Changed
+			}
+			rows = append(rows, cli.Row{Mark: mark, Cells: []string{row.ID, row.Question + " " + strconv.FormatFloat(row.Value, 'f', 2, 64), at(row.Before, row.BeforeAt) + " → " + at(row.After, row.AfterAt)}})
+		}
+		lines = append(append(lines, ""), cli.Indent(page.Rows(rows)...)...)
+	}
+	if !r.verbose || len(r.Changes) == 0 {
 		return lines
 	}
 	var changes []cli.Row

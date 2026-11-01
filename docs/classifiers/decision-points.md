@@ -2,7 +2,7 @@
 title: Decision points
 description: Each place tofu can ask a classifier, what it decides, whether it is live or in shadow, and why.
 order: 2
-updated: 2026-10-13
+updated: 2026-11-01
 ---
 
 A decision point is one choice in the loop that a classifier can make. One
@@ -62,7 +62,15 @@ symbol forms of a pattern to tell an absence from a wrong pattern.
 tofu doctor
 tofu run --dir . --no-gate --sift free "<task>"
 tofu replay --point tool_gate --set risk_ask_at=1.5 --since 7d
+tofu replay --point done_reason --set open_at=0.6
 ```
+
+`tofu replay` scores past rows again from their stored readings, with no
+call to the classifier. A gate rule takes the gate thresholds; a question
+set takes its own, such as `open_at` for the done reason, and each row is
+listed with its verdict at the threshold it ran under and at the one set.
+A name that is no threshold of the rows' rule or question set is refused,
+naming the ones it has.
 
 The `rules` section of `tofu doctor` lists the points and the mode each runs
 in:
