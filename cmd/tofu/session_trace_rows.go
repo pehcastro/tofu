@@ -58,11 +58,13 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 		case session.EventTurnStart:
 			var start session.TurnStart
 			_ = json.Unmarshal(event.Body, &start)
-			row.Kind, row.State, row.Text, row.Origin = kindTurn, "began", "began: "+oneLine(start.Task), start.From
+			row.Kind, row.State, row.Text, row.Origin = kindTurn, "began", traced("began: "+oneLine(start.Task), servedOn(start.Wire, start.Account)), start.From
 		case session.EventTurnEnd:
 			var ended struct {
 				Outcome     session.Outcome `json:"outcome"`
 				Error       string          `json:"error"`
+				Wire        string          `json:"wire"`
+				Account     int64           `json:"account"`
 				WallClockMS int64           `json:"wall_clock_ms"`
 				CostUSD     float64         `json:"total_cost_usd"`
 			}
@@ -72,7 +74,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			if !finished {
 				row.Text += " on " + row.State
 			}
-			row.Text = traced(row.Text, took(ended.WallClockMS), spent(ended.CostUSD), oneLine(ended.Error))
+			row.Text = traced(row.Text, servedOn(ended.Wire, ended.Account), took(ended.WallClockMS), spent(ended.CostUSD), oneLine(ended.Error))
 			row.Outcome = traceProblem(!finished && ended.Outcome != session.OutcomeError && ended.Outcome != session.OutcomeForked, ended.Error)
 		case session.EventRequest:
 			var step struct {
@@ -378,6 +380,13 @@ func ruleWords(found []session.RuleFinding) string {
 
 func traced(parts ...string) string {
 	return strings.Join(slices.DeleteFunc(parts, func(part string) bool { return part == "" }), " · ")
+}
+
+func servedOn(wire string, account int64) string {
+	if account == 0 {
+		return ""
+	}
+	return cmp.Or(wireSources()[wire], wire) + " #" + strconv.FormatInt(account, 10)
 }
 
 func took(ms int64) string {
