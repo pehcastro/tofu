@@ -1070,7 +1070,7 @@ func scanSubAgents(dir string, built []turn.Tool) subagent.Found {
 	for _, tool := range built {
 		names = append(names, tool.Name())
 	}
-	known := slices.Clone(names)
+	known := append(slices.Clone(names), "fetch", "web_search")
 	for _, driver := range []string{settingspkg.DriverSteps, settingspkg.DriverGoal} {
 		every, _ := tools.NewBrowser(tools.BrowserSettings{Mode: settingspkg.BrowserDrive, Driver: driver})
 		for _, tool := range every {

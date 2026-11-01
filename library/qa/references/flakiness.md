@@ -12,7 +12,7 @@ A flaky test produces different outcomes on the same code under the same conditi
 
 One failure is not flakiness, it is a candidate bug. A test is flaky when it disagrees with itself across runs of unchanged code. Until that is measured, nothing else in this file applies.
 
-the flakerun tool named in the `flake_disagreement` rule's `measurement` field is the measurement here. It runs one package at a time, parses `go test -json`, and reports every test whose outcomes across runs are not all identical.
+The measurement is the same test command run N times on unchanged code, each run its own process with the cache off, such as `go test -count=1 -v -run '<pattern>' <package>` once per bash call. A test is flaky when its outcomes across those runs are not all identical. The flake-triage skill walks it step by step.
 
 ## Four outcomes, not two
 

@@ -12,14 +12,15 @@ source: library/qa/references/flakiness.md
 
 ## 1. Prove it
 
-Run the package N times with the cache off and compare per test outcomes. Three runs finds the obvious case, ten finds the rest. One failure is not proof.
+Run the package N times with the cache off, each run its own process, and compare per test outcomes. Three runs finds the obvious case, ten finds the rest. One failure is not proof.
+
+In Go, one bash call per run, since bash refuses a loop:
 
 ```
-go build -o flakerun ./path/to/flakerun
-./flakerun 3 <package>
+go test -count=1 -v -run '<pattern>' <package>
 ```
 
-The tool exits non zero when any test disagreed with itself. A test skipped in every run is reported separately, because a skip is a result and not an absence.
+Read each run's `--- PASS`, `--- FAIL` and `--- SKIP` lines. Anything else runs its own test command once per call, and a vitest file reruns with the test tool. A test disagreed with itself when its outcomes are not the same in every run. Count a test skipped in every run separately, because a skip is a result and not an absence.
 
 ## 2. Read what disagreed
 
