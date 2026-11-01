@@ -650,12 +650,14 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 		return nil, nil, err
 	}
 	stateTokens := konst.ForkStateBytes * 1000 / artifacts.preview.BytesPerThousandTokens
-	tokens := func() int { return budget.Tokens(artifacts.preview, historyOf(begun)) }
-	room := func() int { return (budget.Bands.Target() - tokens()) * konst.ForkTailRoomPercent / 100 }
+	unreported := budget.Reported(0, recall.Occupancy{})
+	room := func() int {
+		return (budget.Bands.Target() - unreported.Tokens(artifacts.preview, historyOf(begun))) * konst.ForkTailRoomPercent / 100
+	}
 	chosen := len(messages)
 	take := func(start, fileTokens, spare int) error {
 		kept, keptCarry, keptTail, err := carried(messages[start:], fileTokens)
-		if after := budget.Tokens(artifacts.preview, historyOf(kept)); err == nil && after <= budget.Bands.Target() && after+spare <= budget.Ceiling() {
+		if after := unreported.Tokens(artifacts.preview, historyOf(kept)); err == nil && after <= budget.Bands.Target() && after+spare <= budget.Ceiling() {
 			begun, carry, held, chosen = kept, keptCarry, keptTail, start
 		}
 		return err
@@ -672,7 +674,7 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 	if err != nil {
 		return nil, nil, err
 	}
-	before, after := budget.Tokens(artifacts.preview, ended), budget.Tokens(artifacts.preview, historyOf(begun))
+	before, after := budget.Tokens(artifacts.preview, ended), unreported.Tokens(artifacts.preview, historyOf(begun))
 	if forced == "" && after >= before {
 		return nil, messages, nil
 	}
