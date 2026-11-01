@@ -822,7 +822,7 @@ func partOf(events []Event, part string) []Event {
 
 func parseEvents(raw []byte, id string) ([]Event, error) {
 	var events []Event
-	for {
+	for number := 1; ; number++ {
 		line, rest, terminated := bytes.Cut(raw, []byte{'\n'})
 		if !terminated {
 			return events, nil
@@ -831,7 +831,7 @@ func parseEvents(raw []byte, id string) ([]Event, error) {
 		if len(bytes.TrimSpace(line)) == 0 {
 			continue
 		}
-		event, err := parseLine[Event](line, id, len(events)+1)
+		event, err := parseLine[Event](line, id, number)
 		if err != nil {
 			return nil, err
 		}
@@ -839,10 +839,21 @@ func parseEvents(raw []byte, id string) ([]Event, error) {
 	}
 }
 
-func parseLine[T any](line []byte, id string, number int) (T, error) {
+type kindedLine interface {
+	eventKind() EventKind
+}
+
+func (e Event) eventKind() EventKind { return e.Kind }
+
+func (e EventHead) eventKind() EventKind { return e.Kind }
+
+func parseLine[T kindedLine](line []byte, id string, number int) (T, error) {
 	var parsed T
 	if err := json.Unmarshal(line, &parsed); err != nil {
 		return parsed, fmt.Errorf("session: line %d of the events of %s does not parse: %w", number, id, err)
+	}
+	if parsed.eventKind() == "" {
+		return parsed, fmt.Errorf("session: line %d of the events of %s has no kind", number, id)
 	}
 	return parsed, nil
 }
@@ -869,11 +880,9 @@ func (s *Store) EachEventHead(id string, visit func(EventHead)) error {
 
 func (s *Store) EachEvent(id string, wanted func(agent string) bool, visit func(Event) bool) error {
 	return s.scanEvents(id, func(event Event) bool { return !wanted(event.Agent) || visit(event) }, func(line []byte, number int) (bool, error) {
-		var agent struct {
-			Agent string `json:"agent"`
-		}
-		if json.Unmarshal(line, &agent) == nil && !wanted(agent.Agent) {
-			return true, nil
+		head, err := parseLine[EventHead](line, id, number)
+		if err != nil || !wanted(head.Agent) {
+			return err == nil, err
 		}
 		event, err := parseLine[Event](line, id, number)
 		return err == nil && visit(event), err
@@ -889,8 +898,15 @@ func (s *Store) EventsOf(id string, kinds ...EventKind) ([]Event, error) {
 		return true
 	}
 	err := s.scanEvents(id, keep, func(line []byte, number int) (bool, error) {
-		_, fromKind, _ := bytes.Cut(line, []byte(`"kind":"`))
+		_, fromKind, found := bytes.Cut(line, []byte(`"kind":"`))
 		kind, _, _ := bytes.Cut(fromKind, []byte(`"`))
+		if !found {
+			head, err := parseLine[EventHead](line, id, number)
+			if err != nil {
+				return false, err
+			}
+			kind = []byte(head.Kind)
+		}
 		if !slices.Contains(kinds, EventKind(kind)) {
 			return true, nil
 		}
@@ -924,7 +940,7 @@ func (s *Store) scanEvents(id string, held func(Event) bool, scanned func(line [
 	}
 	defer func() { _ = file.Close() }()
 	reader, line := bufio.NewReaderSize(file, bufio.MaxScanTokenSize), []byte(nil)
-	for number := 0; ; {
+	for number := 1; ; number++ {
 		chunk, err := reader.ReadSlice('\n')
 		line = append(line[:0], chunk...)
 		for errors.Is(err, bufio.ErrBufferFull) {
@@ -939,7 +955,6 @@ func (s *Store) scanEvents(id string, held func(Event) bool, scanned func(line [
 		case len(bytes.TrimSpace(line)) == 0:
 			continue
 		}
-		number++
 		if more, err := scanned(line, number); !more {
 			return err
 		}
