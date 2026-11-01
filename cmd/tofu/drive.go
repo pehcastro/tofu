@@ -169,9 +169,12 @@ replies addressed to it, so the two conversations never take each other's:
   {"agent":"c1","text":"reading it","tools":[{"name":"read","args":{"path":"x"}}]}
 
 c1 is the first sub-agent, c2 the second, counted in the order they first ask,
-which is the order the orchestrator spawns them. A conversation is a sub-agent
-when it carries a spawn brief. Every lead conversation, including the one /new
-or /resume opens, takes the orchestrator's replies.
+which is the order the orchestrator spawns them. The first conversation is the
+orchestrator's, and a later one is a sub-agent when it carries a spawn brief.
+Every other conversation is a lead and takes the orchestrator's replies,
+including one /new or /resume opens and one a cron fire or a hook opens. A
+later conversation whose user messages carry no origin at all, which only a
+hand-built request has, counts as a sub-agent.
 
 A recorded reply is in flight for a moment before its first delta, so a turn
 stopped while it is in flight draws nothing at all, as it would on a live wire.
@@ -407,13 +410,13 @@ func (c *cassette) take(request llm.Request) (recordedReply, error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.last = request
-	system, opening, forked, briefed, typed := "", llm.Message{}, false, false, false
+	system, opening, forked, briefed, marked := "", llm.Message{}, false, false, false
 	for at, message := range request.Messages {
 		if message.Role == llm.RoleSystem && system == "" {
 			system = message.Content
 		}
 		briefed = briefed || message.Origin.Source == llm.SourceBrief
-		typed = typed || message.Role == llm.RoleUser && message.Origin.Kind() == llm.OriginPerson
+		marked = marked || message.Role == llm.RoleUser && message.Origin.Source != ""
 		if message.Role == llm.RoleUser && message.Origin.Source != llm.SourceMemoryView && message.Origin.Source != llm.SourceEpisodes && opening.Role == llm.RoleUnknown {
 			opening, forked = message, at+1 < len(request.Messages) && request.Messages[at+1].Origin.Source == llm.SourceForkCarry
 		}
@@ -425,7 +428,7 @@ func (c *cassette) take(request llm.Request) (recordedReply, error) {
 	name, known := c.callers[conversation]
 	if !known {
 		name = orchestratorCaller
-		if briefed || len(c.callers) > 0 && !typed {
+		if len(c.callers) > 0 && (briefed || !marked) {
 			c.subAgents++
 			name = subAgentCaller + strconv.Itoa(c.subAgents)
 		}
