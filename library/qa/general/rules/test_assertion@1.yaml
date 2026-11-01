@@ -1,5 +1,6 @@
 id: test_assertion
 domain: qa
+also_reaches: work_on_tests
 kind: structural
 concern: code_rules
 checker: test_assertion

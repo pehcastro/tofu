@@ -63,31 +63,37 @@ func TestARuleReachesOnlyTheAgentsOfItsDomain(t *testing.T) {
 	}
 }
 
-func TestATestRuleReachesADevWhoseWorkTouchesTests(t *testing.T) {
-	testRules := []string{rule.DomainQA + "/e2e_first", rule.DomainQA + "/failure_modes_first", rule.DomainQA + "/no_unit_test_after_code"}
+func TestEveryQARuleReachesADevWhoseWorkTouchesTests(t *testing.T) {
+	alwaysOn := []string{"coverage_split", "e2e_first", "failure_modes_first", "no_unit_test_after_code"}
+	every := slices.Concat(alwaysOn, []string{"flake_disagreement", "skipped_test_budget", "test_assertion", "test_boundary_cases", "test_mock_boundary"})
+	slices.Sort(every)
 	for _, c := range []struct {
 		agent, task string
 		paths       []string
-		wants       bool
+		wants       []string
 	}{
-		{"ts-dev", "add tests for the parser", nil, true},
-		{"ts-dev", "rename a field", []string{"src/app.ts"}, false},
-		{"ts-dev", "rename a field", []string{"src/__tests__/app.ts"}, true},
-		{"ts-dev", "rename a field in src/app.spec.ts", nil, true},
-		{"ts-dev", "rename the testing field", nil, false},
-		{"qa", "add tests for the parser", nil, true},
-		{"qa", "rename a field", []string{"src/app.ts"}, true},
-		{"", "add tests for the parser", nil, true},
-		{"", "rename a field", []string{"src/app.ts"}, false},
+		{"go-dev", "add an end to end test for resume", nil, every},
+		{"go-dev", "rename konst.Foo", nil, nil},
+		{"go-dev", "fix the flaky test", []string{"internal/turn/loop_test.go"}, every},
+		{"ts-dev", "add tests for the parser", nil, every},
+		{"ts-dev", "rename a field", []string{"src/app.ts"}, nil},
+		{"ts-dev", "rename a field", []string{"src/__tests__/app.ts"}, every},
+		{"ts-dev", "rename a field in src/app.spec.ts", nil, every},
+		{"ts-dev", "rename the testing field", nil, nil},
+		{"qa", "add tests for the parser", nil, every},
+		{"qa", "rename a field", []string{"src/app.ts"}, alwaysOn},
+		{"", "add tests for the parser", nil, every},
+		{"", "rename a field", []string{"src/app.ts"}, nil},
 	} {
-		got := composedRuleIDs(t, c.agent, c.task, c.paths...)
-		for _, id := range testRules {
-			if slices.Contains(got, id) != c.wants {
-				t.Errorf("%q on %q holding %q: wants %s %v, got %q", c.agent, c.task, c.paths, id, c.wants, got)
+		var got []string
+		for _, id := range composedRuleIDs(t, c.agent, c.task, c.paths...) {
+			if qa, isQA := strings.CutPrefix(id, rule.DomainQA+"/"); isQA {
+				got = append(got, qa)
 			}
 		}
-		if c.agent != "qa" && slices.Contains(got, rule.DomainQA+"/coverage_split") {
-			t.Errorf("%q on %q carries coverage_split, which stays qa only", c.agent, c.task)
+		slices.Sort(got)
+		if !slices.Equal(got, c.wants) {
+			t.Errorf("%q on %q holding %q fires the qa rules %q, want %q", c.agent, c.task, c.paths, got, c.wants)
 		}
 	}
 }

@@ -436,6 +436,8 @@ func Index(rules []Rule, task Task) []Match {
 		switch {
 		case !fires && task.Verb == VerbPlan && r.Domain == DomainQA && r.Trigger.onlyPaths():
 			fires, why = true, "the task plans work, and a qa rule scoped to paths reaches the plan before the paths exist"
+		case !fires && task.touchesTests() && r.Domain == DomainQA && r.Trigger.onlyPaths():
+			fires, why = true, "the task works on tests, and a qa rule scoped to paths reaches the test before its file is named"
 		case fires && task.Role == RoleOrchestrator && task.Verb != VerbPlan && !task.Alone && r.forTheWriterOnly():
 			fires, why = false, "a rule for how code is written reaches the agent that writes it, a lead that plans or a lead that works alone, and the prompt is the orchestrator's on a task that plans nothing and may spawn"
 		case fires && task.Alone && r.forTheWriterOnly():

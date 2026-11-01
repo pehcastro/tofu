@@ -1,5 +1,6 @@
 id: flake_disagreement
 domain: qa
+also_reaches: work_on_tests
 kind: measured
 concern: code_rules
 measurement: bench/testquality/flakerun

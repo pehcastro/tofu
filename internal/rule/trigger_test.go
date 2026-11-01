@@ -294,3 +294,38 @@ func TestTheShippedGoRulesReachGoFilesAndNothingElse(t *testing.T) {
 		}
 	}
 }
+
+func TestAQARuleScopedToTestFilesFiresForATestTaskBeforeTheFileIsNamed(t *testing.T) {
+	var rules []Rule
+	for _, declared := range []string{
+		"id: qa_scoped\ndomain: qa\nalso_reaches: work_on_tests\nkind: human\nconcern: code_rules\nscope: \"**/*_test.go\"\ntext: x\n",
+		"id: dev_scoped\ndomain: dev\nkind: human\nconcern: code_rules\nscope: \"**/*_test.go\"\ntext: x\n",
+		"id: qa_conditioned\ndomain: qa\nalso_reaches: work_on_tests\nkind: human\nconcern: code_rules\ncondition: (?i)flaky\nscope: \"**/*_test.go\"\ntext: x\n",
+	} {
+		r, err := parseRule([]byte(declared), "x@1.yaml")
+		if err != nil {
+			t.Fatalf("parseRule: %v", err)
+		}
+		rules = append(rules, r)
+	}
+	for _, c := range []struct {
+		task  Task
+		fires []string
+	}{
+		{Task{Text: "add an end to end test for resume"}, []string{"qa_scoped"}},
+		{Task{Text: "add a cache and a test that drives it", Paths: []string{"internal/search/symbols.go"}}, []string{"qa_scoped"}},
+		{Task{Text: "rename konst.Foo"}, nil},
+		{Task{Text: "rename the testing field", Paths: []string{"internal/konst/konst.go"}}, nil},
+		{Task{Text: "fix the flaky one", Paths: []string{"internal/turn/loop_test.go"}}, []string{"qa_scoped", "dev_scoped", "qa_conditioned"}},
+	} {
+		var fired []string
+		for _, m := range IndexReaching(rules, DomainDev, c.task) {
+			if m.Fires {
+				fired = append(fired, m.RuleID)
+			}
+		}
+		if !slices.Equal(fired, c.fires) {
+			t.Errorf("%q holding %q fires %q, want %q", c.task.Text, c.task.Paths, fired, c.fires)
+		}
+	}
+}

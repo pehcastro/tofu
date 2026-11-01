@@ -1,5 +1,6 @@
 id: coverage_split
 domain: qa
+also_reaches: work_on_tests
 kind: human
 concern: code_rules
 text: report test coverage per kind: requirements, risks, external behaviours, scenarios and non functional targets, each with its own count and its own list of what is not covered. never collapse them into one percentage, and never mix in code coverage.

@@ -1,5 +1,6 @@
 id: test_mock_boundary
 domain: qa
+also_reaches: work_on_tests
 kind: structural
 concern: code_rules
 checker: test_mock_boundary
