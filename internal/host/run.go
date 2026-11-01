@@ -423,23 +423,34 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 }
 
 func heldAccount(sessions *session.Store, id string, now time.Time) turn.Held {
-	file, err := os.Open(sessions.EventsPath(id))
-	if err != nil {
+	if held, found := heldIn(sessions.EventsPath(id), now); found {
+		return held
+	}
+	header, err := sessions.Header(id)
+	if err != nil || header.CarriedFrom == nil || header.ForkKind != string(turn.ForkCompact) {
 		return turn.Held{}
+	}
+	return heldAccount(sessions, header.CarriedFrom.Session, now)
+}
+
+func heldIn(events string, now time.Time) (turn.Held, bool) {
+	file, err := os.Open(events)
+	if err != nil {
+		return turn.Held{}, false
 	}
 	defer func() { _ = file.Close() }()
 	info, err := file.Stat()
 	if err != nil {
-		return turn.Held{}
+		return turn.Held{}, false
 	}
 	for window := int64(bufio.MaxScanTokenSize); ; window *= 2 {
 		start := max(info.Size()-window, 0)
 		tail := make([]byte, info.Size()-start)
 		if read, _ := file.ReadAt(tail, start); read < len(tail) {
-			return turn.Held{}
+			return turn.Held{}, false
 		}
 		if held, found := lastHeld(tail, start == 0, now); found || start == 0 {
-			return held
+			return held, found
 		}
 	}
 }
