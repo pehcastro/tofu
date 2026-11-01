@@ -232,6 +232,8 @@ const (
 	TestLinesCap          = 20
 	TestErrorLines        = 3
 	TestReplyBytesCap     = 16777216
+	OldestVitestMajor     = 2
+	OldestVitestMinor     = 1
 
 	ShellProbeTimeoutMillis     = 2000
 	ToolchainProbeTimeoutMillis = 2000
