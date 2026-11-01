@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -942,9 +943,14 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		return driveFail(errOut, err)
 	}
 	resumed := sessionResume{}
-	if store, err := sessionstore.Open(); err == nil && plan.resume {
+	store, err := sessionstore.Open()
+	if err != nil {
+		return driveFail(errOut, err)
+	}
+	if plan.resume {
 		resumed = continueCarry(store)
 	}
+	defer printRecorded(out, store, eventSizes(store), dir, plan.home)
 	launch := launchOf(dir, resumed, plan.fresh)
 	defer leaveShells(launch.registry)
 	driver := filmstrip.Drive(drivenApp(dir, deck, clock, plan, launch, held, quotas), plan.width, plan.height, crashDir(dir))
@@ -967,6 +973,49 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		return driveFail(errOut, fmt.Errorf("line %d: %w", step.Line, err))
 	}
 	return exitOK
+}
+
+func eventSizes(store *sessionstore.Store) map[string]int64 {
+	sizes := map[string]int64{}
+	listing, _ := store.Listing()
+	for _, header := range listing.Sessions {
+		if info, err := os.Stat(store.EventsPath(header.ID)); err == nil {
+			sizes[header.ID] = info.Size()
+		}
+	}
+	return sizes
+}
+
+func printRecorded(out io.Writer, store *sessionstore.Store, before map[string]int64, dir, home string) {
+	after := eventSizes(store)
+	listing, _ := store.Listing()
+	at := slices.IndexFunc(listing.Sessions, func(header sessionstore.Header) bool {
+		size, written := after[header.ID]
+		return written && size != before[header.ID]
+	})
+	if at < 0 {
+		_, _ = fmt.Fprintln(out, "drive: no session was recorded")
+		return
+	}
+	handle := listing.Sessions[at].ID
+	if identity, err := store.Identity(handle); err == nil {
+		handle = identity.Handle()
+	}
+	if home == "" {
+		_, _ = fmt.Fprintf(out, "drive: recorded session %s in a home this run made and deletes, so name --home to read it afterwards\n", handle)
+		return
+	}
+	quoted := func(text string) string { return "'" + strings.ReplaceAll(text, "'", `'\''`) + "'" }
+	variable := "HOME"
+	if goruntime.GOOS == "windows" {
+		variable = "USERPROFILE"
+	}
+	absolute, _ := filepath.Abs(home)
+	binary, err := os.Executable()
+	if err != nil {
+		binary = "tofu"
+	}
+	_, _ = fmt.Fprintf(out, "drive: recorded session %s; read it with: cd %s && %s=%s %s session trace %s\n", handle, quoted(dir), variable, quoted(absolute), quoted(binary), quoted(handle))
 }
 
 func playStep(driver *filmstrip.Driver, deck *cassette, step filmstrip.Step, plan drivePlan, out io.Writer) error {
