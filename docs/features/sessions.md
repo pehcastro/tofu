@@ -197,7 +197,12 @@ Sessions · 123 sessions                                 ● head brisk-amber-he
     repository to me
 ```
 
-One row per conversation. `tofu session <name>` prints the family: when it
+One row per conversation. Every session command takes `head` in place of
+a name or an id, for the session `●` marks: `tofu session trace head`,
+`tofu session request head <request id>`. In a project with no session,
+`head` says `no session recorded here` and points at `tofu session list`.
+
+`tofu session <name>` prints the family: when it
 started, how long it was worked on, counting each turn from its first
 event to its last, and every generation with how it began, its steps,
 active time and size, its branches and its sub-agents. On a conversation

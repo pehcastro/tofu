@@ -427,6 +427,9 @@ func sessionSetLines(page cli.Page, report sessionSetReport) []string {
 
 func sessionHeader(store *session.Store, handle string) (session.Header, error) {
 	matched, err := store.Resolve(handle)
+	if errors.Is(err, fs.ErrNotExist) && handle == session.HeadHandle {
+		return session.Header{}, problemError{What: sessionFresh, Hint: "tofu session list"}
+	}
 	if errors.Is(err, fs.ErrNotExist) {
 		return session.Header{}, problemError{What: "no session " + handle + " here", Hint: "tofu session list"}
 	}

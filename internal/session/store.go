@@ -407,9 +407,19 @@ func namesOneSession(handle string) error {
 	return nil
 }
 
+const HeadHandle = "head"
+
 func (s *Store) Resolve(handle string) ([]Header, error) {
 	if handle == "" {
 		return nil, errors.New("session: which session? an id or a name names one")
+	}
+	if handle == HeadHandle {
+		head, err := s.Head()
+		if err != nil {
+			return nil, err
+		}
+		header, err := s.read(head.ID)
+		return []Header{header}, err
 	}
 	if err := namesOneSession(handle); err != nil {
 		return nil, err
@@ -957,7 +967,7 @@ func (s *Store) Head() (Head, error) {
 			return Head{ID: header.ID, Derived: true}, nil
 		}
 	}
-	return Head{}, errors.New("session: nothing under " + s.dir + " is a session to continue")
+	return Head{}, fmt.Errorf("session: nothing under %s is a session to continue: %w", s.dir, fs.ErrNotExist)
 }
 
 func (s *Store) SetHead(id string) error {

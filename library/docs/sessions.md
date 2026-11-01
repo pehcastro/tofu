@@ -82,7 +82,7 @@ prints the host's process, socket, project, version, members and start time; `to
 
     tofu session list
 
-lists this project's conversations, one row per family, newest first, `●` on the head, each with its handle, age, steps, state and task, and counts the sessions idle past `sessionStaleDays`. A session that cannot be read goes under `unreadable` with a `✗`. `--all` adds the side chats.
+lists this project's conversations, one row per family, newest first, `●` on the head, each with its handle, age, steps, state and task, and counts the sessions idle past `sessionStaleDays`. A session that cannot be read goes under `unreadable` with a `✗`. `--all` adds the side chats. Every session command takes `head` in place of a name or an id, for the session `●` marks: `tofu session trace head`, `tofu session request head <request id>`. In a project with no session, `head` says `no session recorded here` and points at `tofu session list`.
 
     tofu session <name|id>
 
