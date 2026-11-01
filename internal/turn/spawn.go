@@ -733,6 +733,7 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 	held.kept.Lock()
 	subAgent.System, subAgent.Parts, subAgent.Environment, subAgent.History, subAgent.Prefix = held.system, held.parts, held.environment, held.history, &held.prefix
 	held.kept.Unlock()
+	subAgent.References = heldReferences(t.base.References, subAgent.Parts)
 	subAgent.Memory = ""
 	if t.Remembered != nil {
 		lines, err := t.Remembered()

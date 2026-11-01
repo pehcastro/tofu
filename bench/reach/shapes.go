@@ -28,5 +28,6 @@ func shapes() []shape {
 		{"ts-dev", "fix the form in src/App.vue so it shows the saved name", "vue"},
 		{"py-dev", "fix the retry in src/app/fetch.py so it closes the session on a timeout", "python"},
 		{"browser", "open example.com and report the page title", ""},
+		{"", "write a PRD for the login flow", ""},
 	}
 }

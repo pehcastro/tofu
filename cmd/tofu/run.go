@@ -852,10 +852,8 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	dir := cmp.Or(opts.dir, ".")
 	run.omitThinkingSummary = thinkingSummaryOff(opts, run.notify)
 	references := map[string]string{}
-	for _, definition := range append(prompt.subAgents.Defined, subagent.Definition{References: composed.References}) {
-		for _, reference := range definition.References {
-			references[reference.Name] = reference.Text
-		}
+	for _, reference := range composed.References {
+		references[reference.Name] = reference.Text
 	}
 	if run.keys == nil {
 		run.keys = &storedKeys{}

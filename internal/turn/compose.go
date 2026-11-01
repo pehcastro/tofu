@@ -128,6 +128,49 @@ func libraryReferences(library fs.FS, files []string) ([]subagent.Reference, err
 	return references, nil
 }
 
+func sourcedReferences(library fs.FS, fired rule.Rule, offered []subagent.Reference) ([]subagent.Reference, error) {
+	file, inLibrary := strings.CutPrefix(fired.Source, "library/")
+	if !inLibrary || path.Base(path.Dir(file)) != "references" {
+		return nil, nil
+	}
+	data, err := fs.ReadFile(library, file)
+	if err != nil {
+		return nil, fmt.Errorf("rule %s names the source %s, which the library does not ship: %w", fired.ID, fired.Source, err)
+	}
+	files := []string{file}
+	header, _, _ := strings.Cut(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n---\n")
+	for line := range strings.Lines(header) {
+		if related, found := strings.CutPrefix(strings.TrimSpace(line), "related:"); found {
+			for _, name := range strings.Split(related, ",") {
+				files = append(files, path.Join(path.Dir(file), strings.TrimSpace(name)+".md"))
+			}
+		}
+	}
+	files = slices.DeleteFunc(files, func(file string) bool {
+		return slices.ContainsFunc(offered, func(reference subagent.Reference) bool { return reference.Path == "library/"+file })
+	})
+	references, err := libraryReferences(library, files)
+	if err != nil {
+		return nil, fmt.Errorf("rule %s names the source %s, whose related references do not read: %w", fired.ID, fired.Source, err)
+	}
+	return references, nil
+}
+
+func heldReferences(inherited map[string]string, parts []PromptPart) map[string]string {
+	held := map[string]string{}
+	maps.Copy(held, inherited)
+	for _, part := range parts {
+		file, inLibrary := strings.CutPrefix(part.File, "library/")
+		if part.Concern != ConcernReferences || part.State != session.PartOffered || !inLibrary {
+			continue
+		}
+		if read, err := libraryReferences(shipped.Files(), []string{file}); err == nil {
+			held[part.Name] = read[0].Text
+		}
+	}
+	return held
+}
+
 func referenceParts(definition subagent.Definition) []PromptPart {
 	var parts []PromptPart
 	for _, reference := range definition.References {
@@ -275,6 +318,7 @@ func Compose(spec ComposeSpec) (Composed, error) {
 		composed.Task.Paths = append(composed.Task.Paths, filepath.ToSlash(owned))
 	}
 	var loaded []PromptPart
+	offered := spec.Agent.References
 	if spec.Agent.Name != "" {
 		text, autoloaded, err := autoloadedSkills(spec.Agent, spec.Skills)
 		if err != nil {
@@ -298,6 +342,7 @@ func Compose(spec ComposeSpec) (Composed, error) {
 		composed.References = references
 		composed.Parts = append(composed.Parts, PromptPart{Concern: rule.ConcernIdentity, Text: referenceIndex(references[:indexed])})
 		composed.Unsent = referenceParts(subagent.Definition{References: references[:indexed]})
+		offered = references[:indexed]
 	}
 	if composed.Task.Language = spec.Agent.Language; composed.Task.Language != "" && !rule.KnownLanguage(composed.Task.Language) {
 		return Composed{}, fmt.Errorf("the sub-agent %s declares the language %q, which no rule knows", spec.Agent.Name, composed.Task.Language)
@@ -338,6 +383,18 @@ func Compose(spec ComposeSpec) (Composed, error) {
 		if text == "" {
 			return Composed{}, fmt.Errorf("rule %s fires, %s, and carries no text the prompt can send: %s",
 				fired.ID, match.Why, filepath.ToSlash(fired.File))
+		}
+		sourced, err := sourcedReferences(shipped.Files(), fired, offered)
+		if err != nil {
+			return Composed{}, err
+		}
+		if len(sourced) > 0 {
+			text += "\n\n" + referenceIndex(sourced)
+		}
+		offered, composed.References = slices.Concat(offered, sourced), slices.Concat(composed.References, sourced)
+		for _, reference := range sourced {
+			composed.Unsent = append(composed.Unsent, PromptPart{Concern: ConcernReferences, Name: reference.Name, File: reference.Path, State: session.PartOffered,
+				Why: "the rule " + fired.ID + " fires and names " + fired.Source + " as its source"})
 		}
 		composed.Parts = append(composed.Parts, PromptPart{
 			Concern: fired.Concern,
