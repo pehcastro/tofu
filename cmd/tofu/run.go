@@ -687,6 +687,7 @@ type composedRun struct {
 	composed     turn.Composed
 	subAgents    turn.SubAgents
 	skills       []skill.Skill
+	shippedOff   []rule.Rule
 	checksWork   bool
 }
 
@@ -795,7 +796,7 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 	composed, err := turn.Compose(spec)
 	run.startup.step("frameworks and prompt")
 	return composedRun{opts: opts, environment: environment, files: files, memory: remembered, instructions: instructions, composed: composed, subAgents: subAgents, skills: skills,
-		checksWork: slices.ContainsFunc(rules, func(loaded rule.Rule) bool { return loaded.ID == verifySubAgentsRule })}, err
+		shippedOff: stack.shippedOff, checksWork: slices.ContainsFunc(rules, func(loaded rule.Rule) bool { return loaded.ID == verifySubAgentsRule })}, err
 }
 
 func droppedRules(stack ruleStack, kept []rule.Rule, switchedOff []rule.Overriding, opts runOpts) []turn.PromptPart {
@@ -805,11 +806,9 @@ func droppedRules(stack ruleStack, kept []rule.Rule, switchedOff []rule.Overridi
 			continue
 		}
 		why := "the run's setting --tools three sends no " + one.ID
-		switch key := ruleSetting(one.ID); {
-		case one.Mode == rule.ModeOff && key != "":
-			why = "the rule's mode is off, and the setting " + key + " does not turn it on here"
+		switch {
 		case one.Mode == rule.ModeOff:
-			why = "the rule's mode is off"
+			why = stack.switchOn(one.ID, cmp.Or(opts.dir, "."))
 		case opts.leadAlone:
 			why = "the run's lead alone setting: the task names few files in one folder, so the spawn rules are not sent"
 		}

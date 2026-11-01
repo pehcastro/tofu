@@ -164,6 +164,26 @@ func stackRules(library, project string) (ruleStack, error) {
 	return stack, nil
 }
 
+func (s ruleStack) switchOn(id, project string) string {
+	key := ruleSetting(id)
+	switch {
+	case slices.Contains(s.bySetting, id):
+		return "off by the setting " + key + ": tofu settings set " + key + " " + ruleSettingOnValue(key)
+	case key == boardy.ManagementSetting && !projectHasBoard(project):
+		return "off until the project has a board: tofu boardy init"
+	case key != "":
+		return "ships off: tofu rules restore " + id + ", or tofu settings set " + key + " " + ruleSettingOnValue(key)
+	}
+	return "ships off: tofu rules restore " + id
+}
+
+func shadowCheck(r rule.Rule) string {
+	if r.Checker == "" || r.Mode != rule.ModeShadow {
+		return ""
+	}
+	return "its check reports and blocks nothing, and calibration is what enforces it"
+}
+
 func (s ruleStack) applied(r rule.Rule) *overrideListing {
 	at := slices.IndexFunc(s.overrides, func(o layerOverride) bool { return o.Rule.File == r.File })
 	if at < 0 {
@@ -290,13 +310,14 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 		shippedFrom = "library"
 	}
 	listing := make([]ruleListing, len(stack.rules))
+	var checked []string
 	for i, r := range stack.rules {
-		listing[i] = ruleListing{ID: r.ID, Kind: string(r.Kind), Origin: shippedFrom, Override: stack.applied(r)}
+		if r.Checker != "" {
+			checked = append(checked, r.ID)
+		}
+		listing[i] = ruleListing{ID: r.ID, Kind: string(r.Kind), Origin: shippedFrom, Mode: r.Mode.String(), Switch: shadowCheck(r), Override: stack.applied(r)}
 		if slices.Contains(stack.bySetting, r.ID) {
 			listing[i].Switch = "on by the setting " + ruleSetting(r.ID)
-		}
-		if r.Checker != "" {
-			listing[i].Mode = r.Mode.String()
 		}
 		if at := slices.IndexFunc(layers, func(layer ruleLayer) bool { return strings.HasPrefix(r.File, layer.dir+string(filepath.Separator)) }); at >= 0 {
 			listing[i].Origin, listing[i].File = layers[at].name, r.File
@@ -306,31 +327,27 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 		listing = append(listing, ruleListing{ID: off.Base.ID, Kind: string(off.Base.Kind), Origin: off.layer, Mode: string(rule.ModeOff), File: off.Rule.File, Override: off.listing()})
 	}
 	for _, off := range stack.shippedOff {
-		switchOn := "ships off: tofu rules restore " + off.ID
-		key := ruleSetting(off.ID)
-		switch {
-		case slices.Contains(stack.bySetting, off.ID):
-			switchOn = "off by the setting " + key + ": tofu settings set " + key + " " + ruleSettingOnValue(key)
-		case key == boardy.ManagementSetting && !projectHasBoard(opts.dir):
-			switchOn = "off until the project has a board: tofu boardy init"
-		case key != "":
-			switchOn += ", or tofu settings set " + key + " " + ruleSettingOnValue(key)
-		}
-		listing = append(listing, ruleListing{ID: off.ID, Kind: string(off.Kind), Origin: shippedFrom, Mode: string(rule.ModeOff), Switch: switchOn})
+		listing = append(listing, ruleListing{ID: off.ID, Kind: string(off.Kind), Origin: shippedFrom, Mode: string(rule.ModeOff), Switch: stack.switchOn(off.ID, opts.dir)})
 	}
 	report := ruleListReport{Origin: stack.origin, Rules: listing}
-	return o.done(true, report, func(page cli.Page) []string { return ruleListLines(page, report) })
+	return o.done(true, report, func(page cli.Page) []string { return ruleListLines(page, report, checked) })
 }
 
-func ruleListLines(page cli.Page, report ruleListReport) []string {
+func ruleListLines(page cli.Page, report ruleListReport, checked []string) []string {
+	checkMode := func(r ruleListing) rule.Mode {
+		if r.Mode == string(rule.ModeOff) || slices.Contains(checked, r.ID) {
+			return rule.Mode(r.Mode)
+		}
+		return ""
+	}
 	var origins []string
-	checks := map[string]int{}
+	checks := map[rule.Mode]int{}
 	running := 0
 	for _, r := range report.Rules {
 		if !slices.Contains(origins, r.Origin) {
 			origins = append(origins, r.Origin)
 		}
-		checks[r.Mode]++
+		checks[checkMode(r)]++
 		if r.Mode != string(rule.ModeOff) {
 			running++
 		}
@@ -338,7 +355,7 @@ func ruleListLines(page cli.Page, report ruleListReport) []string {
 	verdict := cli.Verdict{Mark: cli.Done, Text: "no checks"}
 	var counts []string
 	for _, mode := range []rule.Mode{rule.ModeShadow, rule.ModeEnforced} {
-		if count := checks[mode.String()]; count > 0 {
+		if count := checks[mode]; count > 0 {
 			verdict.Mark = listingMark(mode)
 			counts = append(counts, strconv.Itoa(count)+" "+mode.String())
 		}
@@ -353,7 +370,8 @@ func ruleListLines(page cli.Page, report ruleListReport) []string {
 			if r.Origin != name {
 				continue
 			}
-			row := cli.Row{Mark: listingMark(rule.Mode(r.Mode)), Cells: []string{r.ID, r.Kind, r.Mode}, Detail: cmp.Or(r.Switch, page.Path(r.File))}
+			mode := checkMode(r)
+			row := cli.Row{Mark: listingMark(mode), Cells: []string{r.ID, r.Kind, string(mode)}, Detail: cmp.Or(r.Switch, page.Path(r.File))}
 			if r.Override != nil {
 				row.Detail = overrideWhy(*r.Override)
 			}

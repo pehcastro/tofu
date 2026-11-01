@@ -12,18 +12,21 @@ exit 0
         "id": "comments",
         "kind": "structural",
         "origin": "library",
-        "mode": "shadow"
+        "mode": "shadow",
+        "switch": "its check reports and blocks nothing, and calibration is what enforces it"
       },
       {
         "id": "release",
         "kind": "structural",
         "origin": "library",
-        "mode": "shadow"
+        "mode": "shadow",
+        "switch": "its check reports and blocks nothing, and calibration is what enforces it"
       },
       {
         "id": "brevity",
         "kind": "human",
-        "origin": "library"
+        "origin": "library",
+        "mode": "shadow"
       },
       {
         "id": "em_dash",

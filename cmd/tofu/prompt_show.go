@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"tofu/internal/llm"
+	"tofu/internal/rule"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/turn"
 )
@@ -34,8 +35,12 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 	system, firstUser := sent.SystemMessage(), sent.FirstUserMessage()
 	uncomposed := len(runSystem(opts))
 
-	held := slices.DeleteFunc(slices.Clone(composed.Unsent), func(part turn.PromptPart) bool { return part.RuleID == "" })
-	fired, off, widest := 0, 0, 0
+	shipsOff := func(part turn.PromptPart) bool {
+		return slices.ContainsFunc(prompt.shippedOff, func(off rule.Rule) bool { return off.ID == part.RuleID })
+	}
+	held := slices.DeleteFunc(slices.Clone(composed.Unsent), func(part turn.PromptPart) bool { return part.RuleID == "" || shipsOff(part) })
+	shippedOff := slices.DeleteFunc(slices.Clone(composed.Unsent), func(part turn.PromptPart) bool { return !shipsOff(part) })
+	fired, off, widest := 0, len(shippedOff), 0
 	for _, part := range composed.Parts {
 		switch {
 		case part.Off:
@@ -56,6 +61,14 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 	}
 	for _, part := range held {
 		_, _ = fmt.Fprintf(out, "held %s: %s\n", part.RuleID, part.Why)
+	}
+	for _, part := range shippedOff {
+		_, _ = fmt.Fprintf(out, "off %s: %s\n", part.RuleID, part.Why)
+	}
+	for _, loaded := range prompt.subAgents.Prompt.Rules {
+		if why := shadowCheck(loaded); why != "" {
+			_, _ = fmt.Fprintf(out, "shadow %s: %s\n", loaded.ID, why)
+		}
 	}
 
 	_, _ = fmt.Fprintf(out, "\nsystem message, %d bytes\n%s\n", len(system), system)
