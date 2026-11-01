@@ -381,15 +381,6 @@ func lastAssistant(messages []llm.Message) int {
 func shrinkFrom(artifacts Artifacts, messages []llm.Message, estimate, target, from int, cause shrinkCause) (overflowShrink, error) {
 	lastStep := lastAssistant(messages)
 	shrink := overflowShrink{bytesBefore: messagesBytes(messages)}
-	for i, message := range messages[:max(lastStep, 0)] {
-		if estimate <= target {
-			break
-		}
-		if i >= from && message.Role == llm.RoleTool && len(message.Images) > 0 {
-			estimate -= dropPicture(&messages[i]) - artifacts.preview.Tokens("\n"+pictureDropped)
-			shrink.results++
-		}
-	}
 	calls := make(map[string]llm.ToolCall)
 	var candidates []dropCandidate
 	step := 0
@@ -400,8 +391,23 @@ func shrinkFrom(artifacts Artifacts, messages []llm.Message, estimate, target, f
 		for _, call := range message.ToolCalls {
 			calls[call.ID] = call
 		}
-		if i >= from && message.Role == llm.RoleTool && len(message.Content) >= artifacts.preview.CompactFloorBytes &&
-			!recall.AlreadyDropped(message.Content) && shrunkHandle(message.Content) == "" {
+		if i < from || message.Role != llm.RoleTool {
+			continue
+		}
+		if len(message.Images) > 0 && estimate > target {
+			pictureBytes := 0
+			for _, image := range message.Images {
+				pictureBytes += len(image.Data)
+			}
+			call := calls[message.ToolCallID]
+			var read readArgs
+			_ = json.Unmarshal(call.Arguments, &read)
+			freed := dropPicture(&messages[i]) - artifacts.preview.Tokens("\n"+pictureDropped)
+			estimate -= freed
+			shrink.drops = append(shrink.drops, recall.Drop{Step: step, Tool: call.Name, Path: read.Path, Bytes: pictureBytes, TokensFreed: freed, Reason: recall.DroppedAged})
+			shrink.results++
+		}
+		if content := messages[i].Content; len(content) >= artifacts.preview.CompactFloorBytes && !recall.AlreadyDropped(content) && shrunkHandle(content) == "" {
 			candidates = append(candidates, dropCandidate{at: i, step: step, call: calls[message.ToolCallID], reason: recall.DroppedAged})
 		}
 	}
@@ -422,11 +428,13 @@ func shrinkFrom(artifacts Artifacts, messages []llm.Message, estimate, target, f
 		estimate -= freed
 		shrink.drops = append(shrink.drops, recall.Drop{Step: candidate.step, Tool: candidate.call.Name, Handle: handle, Bytes: len(message.Content), TokensFreed: freed,
 			Reason: candidate.reason, Decision: candidate.decision})
-		if artifacts.keep != nil && handle != "" {
-			artifacts.keep.dropped[handle] = candidate.decision
-		}
 		messages[candidate.at].Content = note
 		shrink.results++
+	}
+	for _, drop := range shrink.drops {
+		if artifacts.keep != nil && keyOf(drop) != (dropKey{}) {
+			artifacts.keep.dropped[keyOf(drop)] = &drop
+		}
 	}
 	shrink.bytesAfter = messagesBytes(messages)
 	return shrink, nil

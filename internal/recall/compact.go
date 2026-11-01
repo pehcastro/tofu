@@ -13,6 +13,7 @@ type Drop struct {
 	Step        int        `json:"step"`
 	Tool        string     `json:"tool"`
 	Handle      string     `json:"handle"`
+	Path        string     `json:"path,omitempty"`
 	Bytes       int        `json:"bytes"`
 	TokensFreed int        `json:"tokens_freed"`
 	Reason      DropReason `json:"reason"`
