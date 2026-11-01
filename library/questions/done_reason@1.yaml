@@ -10,10 +10,11 @@ notes: >-
   on, after none. the move is refused when open is at or above open_at, and
   the refusal quotes the part Jev chose, or the whole reason when it chose
   none. an error or a timeout holds the move for the person, whose own move
-  passes. open_at is the middle of the noul range, an uncalibrated prior.
+  passes. open_at is calibrated over hand-labelled done reasons: 0.4 misses
+  fewer open parts than 0.5 at the same false refusal rate.
 
 thresholds:
-  open_at: 0.5
+  open_at: 0.4
 
 state:
   - ticket

@@ -1,0 +1,97 @@
+bench boardy replay -sample bench/boardy/replay/sample.json, 2026-11-01 04:24:45
+
+  machine     DESKTOP-AHUN9RO, windows/amd64, 32 cpus
+  tofu        version 0.5.20+dev commit 88350a64f74adcbdf34fb3f525047312d804c47e-dirty go go1.27.1
+  classifier  model jev-latest build jev-1.14.0 over typesafe with an API key, open_at in force 0.40; latency p50 186 ms, p95 237 ms, max 290 ms; 0.0089 USD for 250 calls
+  calls       5 rounds, each in a home made fresh for it, one done move per reason, 4 at once, 17s wall clock; no call discarded and no warm-up
+  sample      50 reasons: 24 name open work, 26 do not, labelled by hand against the question's own criteria; stratified, so the open share is not the board's
+
+| arm | refused | false refusals | missed open parts | right | verdict differs between rounds |
+|---|---|---|---|---|---|
+| Jev done_reason@1, open_at 0.40 | 18 (18 to 19) of 50 | 0 (0 to 1) of 26 | 6 (6 to 7) of 24 | 44 (42 to 44) of 50 | 3 of 50 |
+| Jev done_reason@1, open_at 0.50 | 15 (15 to 17) of 50 | 0 (0 to 1) of 26 | 9 (8 to 9) of 24 | 41 of 50 | 2 of 50 |
+| Jev done_reason@1, open_at 0.60 | 13 (13 to 15) of 50 | 0 of 26 | 11 (9 to 11) of 24 | 39 (39 to 41) of 50 | 2 of 50 |
+| no model: the question's own words as a regular expression | 24 of 50 | 6 of 26 | 6 of 24 | 38 of 50 | 0 of 50 |
+
+cells are the median over rounds, then the lowest and highest round; held for the person because Jev did not answer: 0 of 250 calls
+
+| kind | n | open, min | open, median | open, max | refused at 0.40 | refused at 0.50 | refused at 0.60 |
+|---|---|---|---|---|---|---|---|
+| open, not verified | 7 | 0.03 | 0.86 | 0.96 | 25 of 35 calls | 25 of 35 calls | 25 of 35 calls |
+| open, a remaining part | 6 | 0.50 | 0.77 | 0.98 | 30 of 30 calls | 30 of 30 calls | 26 of 30 calls |
+| open, a follow-up ticket | 11 | 0.02 | 0.42 | 0.95 | 34 of 55 calls | 21 of 55 calls | 17 of 55 calls |
+| finished | 18 | 0.01 | 0.02 | 0.50 | 1 of 90 calls | 1 of 90 calls | 0 of 90 calls |
+| finished, open used as a verb or adjective | 4 | 0.01 | 0.05 | 0.14 | 0 of 20 calls | 0 of 20 calls | 0 of 20 calls |
+| finished, a failure outside the ticket | 1 | 0.32 | 0.36 | 0.42 | 1 of 5 calls | 0 of 5 calls | 0 of 5 calls |
+| finished, ships later | 1 | 0.02 | 0.02 | 0.03 | 0 of 5 calls | 0 of 5 calls | 0 of 5 calls |
+| finished, another ticket fixed a part | 2 | 0.01 | 0.02 | 0.02 | 0 of 10 calls | 0 of 10 calls | 0 of 10 calls |
+
+| # | labelled open | Jev open, each round | regex |
+|---|---|---|---|
+| 1 | true | 0.92 0.90 0.91 0.88 0.90 | false |
+| 2 | true | 0.53 0.55 0.60 0.57 0.50 | true |
+| 3 | true | 0.96 0.96 0.96 0.96 0.96 | true |
+| 4 | true | 0.86 0.87 0.87 0.84 0.87 | true |
+| 5 | true | 0.77 0.89 0.81 0.66 0.81 | true |
+| 6 | true | 0.97 0.98 0.98 0.98 0.97 | true |
+| 7 | true | 0.94 0.91 0.94 0.94 0.95 | true |
+| 8 | true | 0.87 0.88 0.88 0.88 0.86 | true |
+| 9 | true | 0.81 0.86 0.82 0.85 0.83 | true |
+| 10 | true | 0.75 0.73 0.75 0.74 0.71 | true |
+| 11 | true | 0.93 0.94 0.94 0.94 0.94 | true |
+| 12 | true | 0.45 0.44 0.45 0.44 0.45 | true |
+| 13 | true | 0.40 0.42 0.42 0.41 0.39 | true |
+| 14 | true | 0.56 0.53 0.61 0.68 0.56 | true |
+| 15 | true | 0.25 0.23 0.24 0.27 0.26 | true |
+| 16 | true | 0.41 0.49 0.40 0.42 0.52 | true |
+| 17 | true | 0.71 0.74 0.80 0.72 0.75 | true |
+| 18 | true | 0.81 0.82 0.83 0.81 0.82 | true |
+| 19 | true | 0.05 0.03 0.05 0.03 0.03 | false |
+| 20 | true | 0.90 0.88 0.87 0.90 0.86 | false |
+| 21 | true | 0.29 0.30 0.33 0.25 0.31 | false |
+| 22 | true | 0.22 0.18 0.14 0.22 0.15 | false |
+| 23 | true | 0.16 0.14 0.15 0.14 0.14 | true |
+| 24 | true | 0.02 0.02 0.03 0.02 0.02 | false |
+| 25 | false | 0.01 0.01 0.01 0.01 0.02 | false |
+| 26 | false | 0.01 0.01 0.01 0.01 0.02 | false |
+| 27 | false | 0.02 0.01 0.01 0.01 0.02 | false |
+| 28 | false | 0.02 0.02 0.01 0.01 0.01 | false |
+| 29 | false | 0.22 0.22 0.31 0.20 0.23 | false |
+| 30 | false | 0.14 0.08 0.14 0.11 0.14 | true |
+| 31 | false | 0.02 0.02 0.02 0.02 0.02 | false |
+| 32 | false | 0.02 0.02 0.02 0.02 0.02 | true |
+| 33 | false | 0.42 0.36 0.32 0.36 0.32 | false |
+| 34 | false | 0.03 0.02 0.02 0.02 0.02 | false |
+| 35 | false | 0.01 0.01 0.01 0.01 0.01 | false |
+| 36 | false | 0.01 0.01 0.01 0.01 0.01 | false |
+| 37 | false | 0.03 0.03 0.03 0.03 0.03 | false |
+| 38 | false | 0.03 0.03 0.03 0.03 0.03 | false |
+| 39 | false | 0.02 0.02 0.02 0.02 0.02 | false |
+| 40 | false | 0.01 0.01 0.01 0.01 0.02 | false |
+| 41 | false | 0.02 0.01 0.02 0.02 0.02 | false |
+| 42 | false | 0.02 0.02 0.02 0.02 0.02 | false |
+| 43 | false | 0.05 0.06 0.05 0.05 0.05 | true |
+| 44 | false | 0.21 0.39 0.23 0.35 0.50 | true |
+| 45 | false | 0.05 0.11 0.08 0.09 0.04 | false |
+| 46 | false | 0.02 0.01 0.02 0.02 0.02 | false |
+| 47 | false | 0.01 0.01 0.01 0.01 0.01 | true |
+| 48 | false | 0.03 0.03 0.03 0.02 0.03 | false |
+| 49 | false | 0.02 0.03 0.02 0.03 0.03 | false |
+| 50 | false | 0.02 0.02 0.02 0.02 0.02 | true |
+
+the same labels over the original TOFU reasons, which stay out of the repository; the scores per reason are omitted:
+
+
+  machine     DESKTOP-AHUN9RO, windows/amd64, 32 cpus
+  tofu        version 0.5.20+dev commit 88350a64f74adcbdf34fb3f525047312d804c47e-dirty go go1.27.1
+  classifier  model jev-latest build jev-1.14.0 over typesafe with an API key, open_at in force 0.40; latency p50 184 ms, p95 234 ms, max 269 ms; 0.0104 USD for 250 calls
+  calls       5 rounds, each in a home made fresh for it, one done move per reason, 4 at once, 16s wall clock; no call discarded and no warm-up
+  sample      50 reasons: 24 name open work, 26 do not, labelled by hand against the question's own criteria; stratified, so the open share is not the board's
+
+| arm | refused | false refusals | missed open parts | right | verdict differs between rounds |
+|---|---|---|---|---|---|
+| Jev done_reason@1, open_at 0.40 | 19 (18 to 19) of 50 | 1 of 26 | 6 (6 to 7) of 24 | 43 (42 to 43) of 50 | 3 of 50 |
+| Jev done_reason@1, open_at 0.50 | 18 (17 to 18) of 50 | 1 of 26 | 7 (7 to 8) of 24 | 42 (41 to 42) of 50 | 1 of 50 |
+| Jev done_reason@1, open_at 0.60 | 16 (14 to 16) of 50 | 1 (0 to 1) of 26 | 9 (9 to 10) of 24 | 40 (39 to 40) of 50 | 2 of 50 |
+| no model: the question's own words as a regular expression | 21 of 50 | 5 of 26 | 8 of 24 | 37 of 50 | 0 of 50 |
+

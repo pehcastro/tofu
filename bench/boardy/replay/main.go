@@ -40,14 +40,21 @@ func main() {
 	board := flag.String("board", "TOFU", "the board whose done moves are replayed")
 	scratch := flag.String("scratch", filepath.Join(os.TempDir(), "boardy-replay"), "a folder for the fixtures, the fresh home and the replay board")
 	workers := flag.Int("workers", 4, "moves replayed at once")
+	sample := flag.String("sample", "", "a hand-labelled sample of done reasons, such as bench/boardy/replay/sample.json; when given, the done_reason threshold is calibrated over it instead of replaying the board")
+	thresholds := flag.String("at", "0.4,0.5,0.6", "the open_at thresholds the sample is scored at, comma separated")
+	rounds := flag.Int("rounds", 5, "times the sample is judged, each in a fresh home, so the spread between calls shows")
 	flag.Parse()
-	if err := run(*tofu, *board, *scratch, *workers); err != nil {
+	run := func() error { return replayBoard(*tofu, *board, *scratch, *workers) }
+	if *sample != "" {
+		run = func() error { return calibrate(*tofu, *sample, *scratch, *thresholds, *workers, *rounds) }
+	}
+	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "bench boardy replay:", err)
 		os.Exit(1)
 	}
 }
 
-func run(tofu, board, scratch string, workers int) error {
+func replayBoard(tofu, board, scratch string, workers int) error {
 	if err := os.MkdirAll(scratch, 0o755); err != nil {
 		return err
 	}
@@ -60,37 +67,45 @@ func run(tofu, board, scratch string, workers int) error {
 		return err
 	}
 	verdicts := make([]verdict, len(fixtures))
+	err = spread(managed, workers, len(fixtures), func(key string, at int) (err error) {
+		verdicts[at], err = replay(managed, key, fixtures[at])
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	report(board, fixtures, verdicts)
+	return nil
+}
+
+func spread(m boardy.Managed, workers, n int, each func(key string, at int) error) error {
 	work := make(chan int)
 	var wg sync.WaitGroup
 	var failed error
 	var mu sync.Mutex
 	for worker := range workers {
 		key := fmt.Sprintf("%s%d", replayKey, worker)
-		if _, err := managed.Store.Init(key, key); err != nil {
+		if _, err := m.Store.Init(key, key); err != nil {
 			return err
 		}
-		if _, err := managed.AddManager(key, replayActor, replayOwner); err != nil {
+		if _, err := m.AddManager(key, replayActor, replayOwner); err != nil {
 			return err
 		}
 		wg.Go(func() {
 			for at := range work {
-				v, err := replay(managed, key, fixtures[at])
+				err := each(key, at)
 				mu.Lock()
-				verdicts[at], failed = v, errors.Join(failed, err)
+				failed = errors.Join(failed, err)
 				mu.Unlock()
 			}
 		})
 	}
-	for at := range fixtures {
+	for at := range n {
 		work <- at
 	}
 	close(work)
 	wg.Wait()
-	if failed != nil {
-		return failed
-	}
-	report(board, fixtures, verdicts)
-	return nil
+	return failed
 }
 
 func cached(path string, read func() ([]fixture, error)) ([]fixture, error) {
@@ -195,17 +210,7 @@ func replay(m boardy.Managed, key string, f fixture) (verdict, error) {
 		lines = []string{"no acceptance line was written"}
 	}
 	evidenced := func(evidence []int, captured bool) (boardy.Ticket, error) {
-		made, err := m.Create(key, boardy.Ticket{Front: boardy.Front{Title: "replayed done move"}, Problem: "replayed", Scope: "replayed",
-			Before: "replayed", Driven: "replayed", StillWorks: "replayed", ErrorCase: "replayed", Feasibility: "replayed", Acceptance: []string{"- " + strings.Join(lines, "\n- ")}}, replayActor)
-		if err == nil && captured {
-			_, err = m.CaptureBefore(made.ID, "replayed before capture", replayActor)
-		}
-		for _, line := range evidence {
-			if err == nil && line <= len(lines) {
-				_, err = m.Evidence(made.ID, "replayed evidence", replayActor, line)
-			}
-		}
-		return made, err
+		return proved(m, key, "replayed done move", lines, evidence, captured)
 	}
 	var v verdict
 	historical, err := evidenced(f.Evidence, true)
@@ -235,6 +240,20 @@ func replay(m boardy.Managed, key string, f fixture) (verdict, error) {
 	var waiting boardy.WaitingError
 	v.open, v.unread = refused(err), errors.As(err, &waiting)
 	return v, nil
+}
+
+func proved(m boardy.Managed, key, title string, lines []string, evidence []int, captured bool) (boardy.Ticket, error) {
+	made, err := m.Create(key, boardy.Ticket{Front: boardy.Front{Title: title}, Problem: "replayed", Scope: "replayed",
+		Before: "replayed", Driven: "replayed", StillWorks: "replayed", ErrorCase: "replayed", Feasibility: "replayed", Acceptance: []string{"- " + strings.Join(lines, "\n- ")}}, replayActor)
+	if err == nil && captured {
+		_, err = m.CaptureBefore(made.ID, "replayed before capture", replayActor)
+	}
+	for _, line := range evidence {
+		if err == nil && line <= len(lines) {
+			_, err = m.Evidence(made.ID, "replayed evidence", replayActor, line)
+		}
+	}
+	return made, err
 }
 
 func refused(err error) bool {
