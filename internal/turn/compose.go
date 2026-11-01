@@ -76,6 +76,7 @@ type ComposeSpec struct {
 	SwitchedOff  []rule.Overriding
 	Agent        subagent.Definition
 	Skills       []skill.Skill
+	SkillsOff    bool
 	WindowTokens int
 	Role         rule.Role
 	Frameworks   []string
@@ -187,7 +188,13 @@ func referenceParts(definition subagent.Definition) []PromptPart {
 	return parts
 }
 
-func autoloadedSkills(definition subagent.Definition, skills []skill.Skill) (string, []PromptPart, error) {
+func autoloadedSkills(definition subagent.Definition, skills []skill.Skill, skillsOff bool) (string, []PromptPart, error) {
+	if skillsOff && len(definition.Skills) > 0 {
+		return "\n\nthe skills setting is off, so the skills your definition names are not loaded: " + strings.Join(definition.Skills, ", ") + ". work without them and say so in your report", nil, nil
+	}
+	if skillsOff {
+		return "", nil, nil
+	}
 	var loaded []PromptPart
 	if definition.Origin == "library" {
 		text, err := librarySkills(shipped.Files(), definition)
@@ -355,7 +362,7 @@ func Compose(spec ComposeSpec) (Composed, error) {
 	var loaded []PromptPart
 	offered := spec.Agent.References
 	if spec.Agent.Name != "" {
-		text, autoloaded, err := autoloadedSkills(spec.Agent, spec.Skills)
+		text, autoloaded, err := autoloadedSkills(spec.Agent, spec.Skills, spec.SkillsOff)
 		if err != nil {
 			return Composed{}, err
 		}

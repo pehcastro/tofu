@@ -758,7 +758,8 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 	}
 	var skills []skill.Skill
 	var unloaded []turn.PromptPart
-	if opts.toolSet != toolSetThree && settingText(cmp.Or(opts.dir, "."), settingspkg.Skills, run.notify) != settingspkg.SkillsOff {
+	skillsOff := settingText(cmp.Or(opts.dir, "."), settingspkg.Skills, run.notify) == settingspkg.SkillsOff
+	if opts.toolSet != toolSetThree && !skillsOff {
 		home, _ := os.UserHomeDir()
 		offered := skill.Discover(cmp.Or(opts.dir, "."), home)
 		for _, warning := range offered.Warnings {
@@ -778,7 +779,7 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 	}
 	run.startup.step("skills")
 	subAgents := turn.SubAgents{Defined: discovered.Definitions, Root: cmp.Or(opts.dir, "."), Prompt: turn.ComposeSpec{Environment: strings.TrimSpace(environment + "\n\n" + files),
-		ToolGuidance: turn.EveryToolIsRelativeToTheWorkingDirectory + turn.ContractAddendum, Rules: rules, SwitchedOff: switchedOff, Skills: skills, WindowTokens: run.budget.WindowTokens,
+		ToolGuidance: turn.EveryToolIsRelativeToTheWorkingDirectory + turn.ContractAddendum, Rules: rules, SwitchedOff: switchedOff, Skills: skills, SkillsOff: skillsOff, WindowTokens: run.budget.WindowTokens,
 		Kinds: turn.NewKindJudge(cmp.Or(opts.dir, ".")), Applies: turn.NewRuleJudge(cmp.Or(opts.dir, "."))}}
 	spec := subAgents.Prompt
 	spec.ToolGuidance = runSystem(opts)
