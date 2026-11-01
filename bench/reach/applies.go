@@ -57,6 +57,10 @@ func workspaceFiles() map[string]map[string]string {
 			"package.json": "{\"name\":\"fe\",\"dependencies\":{\"vue\":\"3.5.0\"}}\n",
 			"src/App.vue":  "<script setup>\n</script>\n",
 		},
+		"board": {
+			"go.mod":  "module demo\n\ngo 1.24\n",
+			"main.go": "package main\n\nfunc main() {}\n",
+		},
 		"python": {
 			"pyproject.toml":   "[project]\nname = \"app\"\nversion = \"0.1.0\"\nrequires-python = \">=3.12\"\ndependencies = [\"httpx\"]\n",
 			"src/app/fetch.py": "import httpx\n\n\nasync def fetch(url: str) -> str:\n    async with httpx.AsyncClient() as client:\n        return (await client.get(url)).text\n",

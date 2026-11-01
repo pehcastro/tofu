@@ -3,6 +3,6 @@ domain: dev
 kind: human
 concern: code_rules
 framework: gpui-ce
-touches: (?i)animat|motion|transition|spring|hover|glide|slide|rise|offset|presence|expand|collapse|reveal
+touches: (?i)\beas(e|es|ed|ing)\b|animat|motion|transition|spring|hover|glide|slide|rise|offset|presence|expand|collapse|reveal
 text: animate opacity, colour and position by offset, never margin, padding, width, height, top or left inside a moving frame: each re-runs layout of the parent every frame, and quads snap to whole device pixels (`Window::snap_bounds`), so a 6 px rise has six positions whatever the curve. move a subtree without layout with `Window::with_element_offset` in a custom element's prepaint, or animate only opacity for travel of a few pixels. there is no scale or rotate on a `div`; `svg().with_transformation(..)` rotates or scales one sprite on the GPU. opacity multiplies into each primitive, with no group layer, so fade one surface rather than a parent with overlapping children. text moves in whole pixels vertically and quarter pixels across.
 notes: layout properties animated in gpui-ce cost a layout pass per frame and still step in whole pixels, which reads as shimmer. it guards against margin and size animation, seams on faded groups, and scale written for a div that has none.

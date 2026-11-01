@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -108,6 +109,11 @@ func measure(never, tree bool, out io.Writer) error {
 	}
 	if err := writeWorkspaces(scratch); err != nil {
 		return err
+	}
+	board := exec.Command(binary, "boardy", "init", "--key", "DEMO")
+	board.Dir, board.Env = filepath.Join(scratch, "board"), freshHome(home, false)
+	if said, err := board.CombinedOutput(); err != nil {
+		return fmt.Errorf("tofu boardy init in the board workspace: %w: %s", err, said)
 	}
 	var runs []run
 	for i, each := range shapes() {
@@ -243,6 +249,9 @@ func report(out io.Writer, never bool, conditions string, runs []run, items []it
 		}
 		return numbers
 	}
+	dropped := func(one item) bool {
+		return slices.ContainsFunc(dropList(), func(each drop) bool { return each.key == one.key })
+	}
 	for _, k := range kindOrder() {
 		total, lines, missed, missedLines := 0, 0, 0, 0
 		for _, one := range items {
@@ -250,19 +259,25 @@ func report(out io.Writer, never bool, conditions string, runs []run, items []it
 				continue
 			}
 			total, lines = total+1, lines+one.lines
-			if len(shapesOf(one)) == 0 {
+			if k != kindThreshold && !dropped(one) && len(shapesOf(one)) == 0 {
 				missed, missedLines = missed+1, missedLines+one.lines
 			}
+		}
+		if k == kindThreshold {
+			_, _ = fmt.Fprintf(table, "%s\t%d\t%d\tread by code, not a prompt\t-\n", k, total, lines)
+			continue
 		}
 		_, _ = fmt.Fprintf(table, "%s\t%d\t%d\t%d\t%d\n", k, total, lines, missed, missedLines)
 	}
 	_, _ = fmt.Fprintf(table, "\nkind\titem\tlines\tshapes\n")
 	for _, one := range items {
 		reach := strings.Join(shapesOf(one), ",")
-		if reach != "" && never {
+		switch {
+		case dropped(one), one.kind == kindThreshold && never, reach != "" && never:
 			continue
-		}
-		if reach == "" {
+		case one.kind == kindThreshold:
+			reach = "read by code"
+		case reach == "":
 			reach = "never"
 		}
 		lines := strconv.Itoa(one.lines)
@@ -270,5 +285,9 @@ func report(out io.Writer, never bool, conditions string, runs []run, items []it
 			lines = "-"
 		}
 		_, _ = fmt.Fprintf(table, "%s\t%s\t%s\t%s\n", one.kind, one.key, lines, reach)
+	}
+	_, _ = fmt.Fprintf(table, "\ndrop list for the owner, nothing deleted\nitem\treason\n")
+	for _, each := range dropList() {
+		_, _ = fmt.Fprintf(table, "%s\t%s\n", each.key, each.reason)
 	}
 }

@@ -17,9 +17,26 @@ const (
 	kindReference kind = "reference"
 	kindSkill     kind = "skill"
 	kindTool      kind = "tool"
+	kindThreshold kind = "threshold"
 )
 
-func kindOrder() []kind { return []kind{kindRule, kindReference, kindSkill, kindTool} }
+func kindOrder() []kind {
+	return []kind{kindRule, kindReference, kindSkill, kindTool, kindThreshold}
+}
+
+type drop struct {
+	key    string
+	reason string
+}
+
+func dropList() []drop {
+	return []drop{
+		{"library/general/rules/tool_gate@1.yaml", "superseded by tool_gate@3, kept so rows recorded under it still replay"},
+		{"library/general/rules/tool_gate@4.yaml", "nothing loads it: cmd/tofu/run_gate.go pins tool_gate@3"},
+		{"library/general/rules/tool_gate@5.yaml", "nothing loads it: cmd/tofu/run_gate.go pins tool_gate@3"},
+		{"library/general/rules/tool_gate@6.yaml", "nothing loads it: cmd/tofu/run_gate.go pins tool_gate@3"},
+	}
+}
 
 type item struct {
 	kind  kind
@@ -51,6 +68,8 @@ func libraryItems(root string) ([]item, error) {
 		}
 		lines := strings.Count(string(body), "\n")
 		switch {
+		case folder == "rules" && path.Ext(name) == ".yaml" && regexp.MustCompile(`(?m)^kind:\s*threshold\s*$`).Match(body):
+			items = append(items, item{kindThreshold, rel, lines})
 		case folder == "rules" && path.Ext(name) == ".yaml":
 			items = append(items, item{kindRule, rel, lines})
 		case folder == "references" && path.Ext(name) == ".md":

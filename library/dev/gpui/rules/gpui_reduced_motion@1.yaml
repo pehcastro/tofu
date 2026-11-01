@@ -3,6 +3,6 @@ domain: dev
 kind: human
 concern: code_rules
 framework: gpui-ce
-touches: (?i)animat|motion|spring|transition|spinner|presence|glide|slide|reduc|accessib
+touches: (?i)\beas(e|es|ed|ing)\b|animat|motion|spring|transition|spinner|presence|glide|slide|reduc|accessib
 text: gpui-ce does not read the operating system's reduced motion setting; the application reads it and calls `cx.set_reduce_motion(on)` once at start and when it changes, and code reads it with `cx.reduce_motion()`. with it on, `with_animation` renders its resting state, `with_spring` jumps to its target and style transitions jump to their endpoint, opacity included. in springs you step yourself, apply the finer rule: position, size, offset and scale go to their target at once, opacity and colour that say something changed may still fade, decorative loops stop, and nothing is left in a half-state. never pass a reduced flag by hand to one component while the rest of the app ignores it.
 notes: an app that never sets the flag moves things for people who asked it not to, and one that collapses motion to a jump can leave a half-open panel. it guards against ignored preferences, per-component flags and lost state.

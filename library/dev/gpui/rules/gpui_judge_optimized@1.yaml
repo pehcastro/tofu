@@ -3,6 +3,6 @@ domain: dev
 kind: human
 concern: code_rules
 framework: gpui-ce
-touches: (?i)animat|motion|spring|transition|hover|glide|spinner|frame|stutter|jank|lag|smooth|perf
+touches: (?i)\beas(e|es|ed|ing)\b|animat|motion|spring|transition|hover|glide|spinner|frame|stutter|jank|lag|smooth|perf
 text: judge motion only on an optimized build in a focused window. the dev profile runs gpui-ce with debug assertions on its paint path, so use the project's judging profile, or one that inherits release with `incremental = true` and `codegen-units = 16`, and say which in the report. an unfocused window with something animating is capped at 30 fps by `WindowOptions::inactive_frame_interval`, so an automated run that opens its window unfocused measures the cap. measure, do not eyeball alone: the gpui-ce `profiler` feature gives `Window::frame_duration_snapshot()`, whose `present_interval_histogram` shows judder; report count, p50, p95, max and the intervals over 1.5 times the measured refresh interval, opened by a line naming the GPU from `Window::gpu_specs()`, backend, scale factor, refresh interval, profile and focus. report each motion as property, from and to, and spring or duration and curve.
 notes: motion judged on a debug build or an unfocused window measures the build or the cap, not the motion. it guards against stutter blamed on the code, smoothness claimed from a dev run, and numbers compared across machines.

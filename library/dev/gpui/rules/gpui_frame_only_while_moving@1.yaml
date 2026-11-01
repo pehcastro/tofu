@@ -3,6 +3,6 @@ domain: dev
 kind: human
 concern: code_rules
 framework: gpui-ce
-touches: (?i)animat|motion|spring|glide|hover|transition|spinner|spin|frame|tick|loop|pulse|progress|request_animation_frame|max_fps
+touches: (?i)\beas(e|es|ed|ing)\b|animat|motion|spring|glide|hover|transition|spinner|spin|frame|tick|loop|pulse|progress|request_animation_frame|max_fps
 text: ask for the next frame only while something is moving, and let an idle window draw nothing. in state you step yourself, call `window.request_animation_frame()` while a spring is unsettled (`SpringConfig::is_settled`) and stop when it settles; the built-in `with_animation`, `with_spring` and `.transitions(..)` already stop. never `window.refresh()` or `cx.refresh_windows()` for motion: both disable every cached view for that frame. never `Animation::with_max_fps`: it spawns a timer task per tick that is not tied to vsync, so a 30 fps cap moves a large spinner's rim several pixels per update and many spinners drift apart. a spinner loops with `Animation::new(period).repeat_synced()`, which takes the vsync path and shares one phase across the app.
 notes: a frame requested when nothing moves costs a full render forever, and a timer-paced animation stutters against a 144 Hz display. it guards against idle windows that keep drawing, refreshes that defeat caching, and throttled spinners.

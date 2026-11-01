@@ -3,6 +3,6 @@ domain: dev
 kind: human
 concern: code_rules
 framework: gpui-ce
-touches: (?i)animat|motion|spring|glide|hover|transition|spinner|shadow|blur|path|render|notify|cached|frame|perf|list|scroll
+touches: (?i)\beas(e|es|ed|ing)\b|animat|motion|spring|glide|hover|transition|spinner|shadow|blur|path|render|notify|cached|frame|perf|list|scroll
 text: `window.request_animation_frame()` notifies the view that is rendering when it is called, and gpui-ce re-renders that view's whole subtree each frame. put what moves in its own `Entity`, rendered with `.cached(style)`, so a frame re-renders the moving part and replays the rest; never animate inside the view that holds a long list or a whole screen. inside a moving frame keep cost low: a blurred shadow fills its bounds plus three blur radii on each side, so 50 px of blur paints 300 px past the element every frame; `blur` and `backdrop_blur` render offscreen and on Windows send the whole frame through an offscreen target; `PathBuilder::build` tessellates on the CPU every call, so build a path once; text that changes every frame reshapes every frame. many spinners belong in one small view, not one animation each.
 notes: notifying a large view for a small motion turns every animation into a full-screen render, and blur, big shadows and paths multiply it. it guards against whole-screen re-renders, per-frame tessellation and fill-rate bound frames on integrated graphics.

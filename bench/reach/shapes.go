@@ -29,5 +29,14 @@ func shapes() []shape {
 		{"py-dev", "fix the retry in src/app/fetch.py so it closes the session on a timeout", "python"},
 		{"browser", "open example.com and report the page title", ""},
 		{"", "write a PRD for the login flow", ""},
+		{"rust-dev", "add a dropdown menu to crates/ui/src/panel.rs that closes when I click outside it", "gpui"},
+		{"rust-dev", "crates/ui/src/panel.rs shows a stale count after the list reloads", "gpui"},
+		{"", "pick up the next ticket on the board and get it done", "board"},
+		{"go-dev", "fix the ticket DEMO-1: the save button in main.go does nothing", "board"},
+		{"", "go to example.com and tell me what the page title is", ""},
+		{"", "write an AGENTS.md for this repo from the conventions it already follows", ""},
+		{"", "what did you mean by [quote#ab12]", ""},
+		{"", "debug why the chat scroll in interface/tui/chat.go jumps to the top after a resize", ""},
+		{"", "review my last change to internal/turn/inbox.go before I merge", ""},
 	}
 }

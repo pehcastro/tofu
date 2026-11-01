@@ -3,6 +3,6 @@ domain: dev
 kind: human
 concern: code_rules
 framework: gpui-ce
-touches: (?i)animat|motion|transition|hover|fade|ease|easing|duration|millis|colou?r|opacity
+touches: (?i)\beas(e|es|ed|ing)\b|animat|motion|transition|spring|slide|hover|fade|duration|millis|colou?r|opacity
 text: a bare `Duration` given to `.transitions(..)`, `Animation::new` or `Animated` is linear, because `Easing::default()` is `linear` in gpui-ce's `motion.rs`, and a linear colour fade reads as a cheap crossfade. give every tween a curve, `d.with_easing(curve)` from `MotionDurationExt` or `Motion::new(d).with_easing(curve)`, using one ease-out across the project such as `cubic-bezier(0.23, 1, 0.32, 1)` written as a small function, or put it on a spring. durations: hover and press 100 to 150 ms, a toggle about 200 ms, a panel 200 to 300 ms, exit about 0.6 to 0.7 of enter. linear only for constant motion such as a spinner.
 notes: gpui-ce's default easing is linear, so every transition written with a plain duration moves at constant speed and starts and stops abruptly. it guards against linear fades, one-off curves, and exits slower than entrances.

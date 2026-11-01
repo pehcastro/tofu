@@ -3,6 +3,6 @@ domain: dev
 kind: human
 concern: code_rules
 framework: gpui-ce
-touches: (?i)animat|motion|transition|spring|hover|glide|press|drag|presence|toggle|slide|highlight|indicator
+touches: (?i)\beas(e|es|ed|ing)\b|animat|motion|transition|spring|hover|glide|press|drag|presence|toggle|slide|highlight|indicator
 text: motion a person can trigger again before it ends, a hover, a press, a toggle, a highlight moving between items, turns around from where it is with the velocity it has. in gpui-ce only two primitives keep velocity: `SpringConfig::step(state, target, dt)` on a `SpringState` you hold, and `with_spring(id, SpringAnimation::new(config).to(target), ..)` keyed by an id that is the same every render, never one carrying an index or a version. a spring given to `.transitions(..)` or to `Animated::set` keeps the position and drops the velocity, and `with_animation` restarts from zero, so keep it for motion that runs once or loops. to animate an exit, keep the leaving entry rendered until its spring settles; gpui unmounts the frame it leaves the tree. state the spring as stiffness, damping and mass, for example 500, 25, 1 for position, or damping `2 * sqrt(stiffness * mass)` when it must not overshoot.
 notes: a reversal that restarts or loses its velocity jumps under the hand, and a keyed id that changes every render makes a new spring each time. it guards against motion that snaps when retriggered, exits that vanish, and springs that never carry.
