@@ -808,6 +808,16 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 	); err != nil {
 		return refuse("", err)
 	}
+	for _, path := range []*string{&plan.script, &plan.home, &plan.cassette} {
+		if *path == "" || *path == stdinScript {
+			continue
+		}
+		absolute, err := filepath.Abs(*path)
+		if err != nil {
+			return refuse(*path+": ", err)
+		}
+		*path = absolute
+	}
 	return plan, true
 }
 
@@ -923,11 +933,7 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		return driveFail(errOut, err)
 	}
 	if plan.host && deck != nil {
-		held, err := filepath.Abs(plan.cassette)
-		if err != nil {
-			return driveFail(errOut, err)
-		}
-		_ = os.Setenv(cassetteVariable, held)
+		_ = os.Setenv(cassetteVariable, plan.cassette)
 	}
 	if plan.host {
 		_ = os.Setenv(doneReviewVariable, plan.arms.doneArm)
@@ -1010,12 +1016,11 @@ func printRecorded(out io.Writer, store *sessionstore.Store, before map[string]i
 	if goruntime.GOOS == "windows" {
 		variable = "USERPROFILE"
 	}
-	absolute, _ := filepath.Abs(home)
 	binary, err := os.Executable()
 	if err != nil {
 		binary = "tofu"
 	}
-	_, _ = fmt.Fprintf(out, "drive: recorded session %s; read it with: cd %s && %s=%s %s session trace %s\n", handle, quoted(dir), variable, quoted(absolute), quoted(binary), quoted(handle))
+	_, _ = fmt.Fprintf(out, "drive: recorded session %s; read it with: cd %s && %s=%s %s session trace %s\n", handle, quoted(dir), variable, quoted(home), quoted(binary), quoted(handle))
 }
 
 func playStep(driver *filmstrip.Driver, deck *cassette, step filmstrip.Step, plan drivePlan, out io.Writer) error {
