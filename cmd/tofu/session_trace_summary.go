@@ -37,7 +37,11 @@ func traceRowLines(page cli.Page, timeline traceTimeline, wide bool) []string {
 	for i, row := range timeline.Rows {
 		rows[i] = cli.Row{Mark: traceMark(row), Cells: []string{row.At.Format(time.TimeOnly), string(row.Kind), row.who()}, Detail: recordedIn(row.RecordedIn) + row.Text}
 		if wide {
-			rows[i].Detail = traced(rows[i].Detail, row.Turn, row.ID)
+			var origin string
+			if row.Origin != nil {
+				origin = "from " + row.Origin.Kind + "/" + row.Origin.Sub
+			}
+			rows[i].Detail = traced(rows[i].Detail, origin, row.Turn, row.ID)
 		}
 	}
 	if wide {

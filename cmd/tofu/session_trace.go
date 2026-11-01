@@ -12,12 +12,13 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/llm"
 	"tofu/internal/session"
 	"tofu/internal/sys"
 	"tofu/library/questions"
 )
 
-const sessionTraceUsage = "tofu session trace <name|id> [--since 1h] [--from T] [--to T] [--agent NAME|lead] [--turn ID] [--kind K,K] [--grep TEXT] [--last N] [--wide] [--full] [--json]"
+const sessionTraceUsage = "tofu session trace <name|id> [--since 1h] [--from ORIGIN|T] [--to T] [--agent NAME|lead] [--turn ID] [--kind K,K] [--grep TEXT] [--last N] [--wide] [--full] [--json]"
 
 type traceKind string
 
@@ -61,16 +62,17 @@ const (
 const traceLead = "lead"
 
 type traceRow struct {
-	At         time.Time    `json:"at"`
-	Kind       traceKind    `json:"kind"`
-	Agent      string       `json:"agent,omitempty"`
-	Turn       string       `json:"turn,omitempty"`
-	ID         string       `json:"id,omitempty"`
-	State      string       `json:"state,omitempty"`
-	Outcome    traceOutcome `json:"outcome,omitempty"`
-	Asked      string       `json:"asked_by,omitempty"`
-	Text       string       `json:"text"`
-	RecordedIn string       `json:"recorded_in,omitempty"`
+	At         time.Time       `json:"at"`
+	Kind       traceKind       `json:"kind"`
+	Agent      string          `json:"agent,omitempty"`
+	Turn       string          `json:"turn,omitempty"`
+	ID         string          `json:"id,omitempty"`
+	State      string          `json:"state,omitempty"`
+	Outcome    traceOutcome    `json:"outcome,omitempty"`
+	Asked      string          `json:"asked_by,omitempty"`
+	Text       string          `json:"text"`
+	Origin     *session.Origin `json:"origin,omitempty"`
+	RecordedIn string          `json:"recorded_in,omitempty"`
 }
 
 func (row traceRow) is(kind traceKind) bool {
@@ -79,24 +81,30 @@ func (row traceRow) is(kind traceKind) bool {
 
 func (row traceRow) who() string { return cmp.Or(row.Agent, traceLead) }
 
+func (row traceRow) wroteBy(kind llm.OriginKind) bool {
+	return row.Origin != nil && (llm.OriginKind(row.Origin.Kind) == kind || kind == llm.OriginPerson && llm.Source(row.Origin.Sub).Answer())
+}
+
 type traceFilter struct {
-	From   time.Time   `json:"from,omitzero"`
-	To     time.Time   `json:"to,omitzero"`
-	Agents []string    `json:"agents,omitempty"`
-	Turn   string      `json:"turn,omitempty"`
-	Kinds  []traceKind `json:"kinds,omitempty"`
-	Grep   string      `json:"grep,omitempty"`
-	Last   int         `json:"last,omitempty"`
+	From   time.Time      `json:"from,omitzero"`
+	Origin llm.OriginKind `json:"origin,omitempty"`
+	To     time.Time      `json:"to,omitzero"`
+	Agents []string       `json:"agents,omitempty"`
+	Turn   string         `json:"turn,omitempty"`
+	Kinds  []traceKind    `json:"kinds,omitempty"`
+	Grep   string         `json:"grep,omitempty"`
+	Last   int            `json:"last,omitempty"`
 }
 
 func (f traceFilter) empty() bool {
-	return f.From.IsZero() && f.To.IsZero() && len(f.Agents) == 0 && f.Turn == "" && len(f.Kinds) == 0 && f.Grep == "" && f.Last == 0
+	return f.From.IsZero() && f.Origin == "" && f.To.IsZero() && len(f.Agents) == 0 && f.Turn == "" && len(f.Kinds) == 0 && f.Grep == "" && f.Last == 0
 }
 
 func (f traceFilter) keeps(row traceRow) bool {
 	return (f.From.IsZero() || !row.At.Before(f.From)) && (f.To.IsZero() || row.At.Before(f.To)) &&
 		(len(f.Agents) == 0 || slices.Contains(f.Agents, row.who())) && (f.Turn == "" || strings.Contains(row.Turn, f.Turn)) &&
 		(len(f.Kinds) == 0 || slices.ContainsFunc(f.Kinds, row.is)) &&
+		(f.Origin == "" || row.wroteBy(f.Origin) && (row.Kind != kindTurn || slices.Contains(f.Kinds, kindTurn))) &&
 		(f.Grep == "" || strings.Contains(strings.ToLower(row.Text+" "+row.ID+" "+row.Agent+" "+row.Turn), f.Grep))
 }
 
@@ -174,8 +182,15 @@ func sessionTraceArgs(args []string, now time.Time) (traceAsk, error) {
 		value := args[i]
 		var err error
 		switch arg {
-		case "--since", "--from":
+		case "--since":
 			ask.filter.From, err = traceTime(value, now)
+		case "--from":
+			origins := llm.OriginKind("").Enum()
+			if slices.Contains(origins, value) {
+				ask.filter.Origin = llm.OriginKind(value)
+			} else if ask.filter.From, err = traceTime(value, now); err != nil {
+				err = fmt.Errorf("--from %q is neither an origin, one of %s, nor a time such as 1h or 04:10", value, strings.Join(origins, ", "))
+			}
 		case "--to", "--until":
 			ask.filter.To, err = traceTime(value, now)
 		case "--agent":

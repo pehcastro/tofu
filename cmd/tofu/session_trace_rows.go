@@ -55,7 +55,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 		case session.EventTurnStart:
 			var start session.TurnStart
 			_ = json.Unmarshal(event.Body, &start)
-			row.Kind, row.State, row.Text = kindTurn, "began", "began: "+oneLine(start.Task)
+			row.Kind, row.State, row.Text, row.Origin = kindTurn, "began", "began: "+oneLine(start.Task), start.From
 		case session.EventTurnEnd:
 			var ended struct {
 				Outcome     session.Outcome `json:"outcome"`
@@ -145,6 +145,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			}
 			row.Kind, row.State, row.Text = kindMessage, said.Role, said.Role+": "+oneLine(text)
 			origin := turn.OriginOf(said)
+			row.Origin = turn.RecordedOrigin(origin)
 			if said.Origin != "" || said.From != nil {
 				from := string(origin.Kind()) + "/" + string(origin.Source)
 				row.Kind, row.State, row.Text = kindInsert, from, from+": "+oneLine(text)
@@ -193,7 +194,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 		case session.EventNotice:
 			var notice session.StopBody
 			_ = json.Unmarshal(event.Body, &notice)
-			row.Kind, row.Text = kindNotice, oneLine(notice.Text)
+			row.Kind, row.Text, row.Origin = kindNotice, oneLine(notice.Text), notice.From
 			spawnOf, timed := strings.CutPrefix(notice.Text, "spawn of ")
 			switch {
 			case notice.Stop != nil:

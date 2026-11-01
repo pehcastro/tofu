@@ -204,6 +204,7 @@ reading as `bash refused`.
 tofu session trace brisk-amber-heron
 tofu session trace brisk-amber-heron --since 1h --agent research-2
 tofu session trace brisk-amber-heron --from 04:10 --to 04:12 --kind stop,error
+tofu session trace brisk-amber-heron --from person
 ```
 
 The first prints a summary: lead turns and how they ended, each sub-agent
@@ -216,7 +217,16 @@ one line each, and filters combine: `--since`, `--from` and `--to` (`1h`,
 `--grep`, `--last N`, and `--kind` with any of `turn`, `stop`, `error`,
 `spawn`, `report`, `message`, `insert`, `cron`, `request`, `memory`, `call`,
 `shell`, `gate`, `hook`, `cache`, `compaction`, `list`, `read`, `startup`,
-`notice`, `attachment` and `library`. `--wide` prints each row whole, and `--full`
+`notice`, `attachment` and `library`. `--from` also takes an origin, one of
+`person`, `agent`, `tofu`, `cron`, `hook`, `memory`, `skill`, `library` and
+`plugin`, and lists the messages that origin wrote: `--from person` lists the
+task you typed, every message you sent mid-turn, and your answers to
+`ask_person`, which tofu records as `tofu/answer` because it words them.
+A turn's first row repeats its first message, so `--from` lists turn rows
+only beside `--kind turn`, where `--kind turn --from cron` lists the turns a
+cron fire began. An unknown origin names the known ones and exits 2. With
+`--json` every turn, message and notice row that recorded an origin has
+`origin`, with its `kind` and `sub`. `--wide` prints each row whole with its origin, and `--full`
 prints every request, call, hook and message section. `--kind notice` lists
 each sub-agent move, spawned, reviewed, reopened or accepted, with its round
 and reason, such as `go-dev reopened, round 2: acceptance line 3 fails`.
