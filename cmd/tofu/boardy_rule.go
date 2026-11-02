@@ -11,6 +11,7 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/boardy"
+	"tofu/internal/konst"
 )
 
 const boardyRuleUsage = "tofu boardy rule list | show|remove <id> | add|edit <id> [--file hook.yaml] [--when before|after] [--on event] [--every 1h|--daily 09:00] [--do \"verb arg\"] [--then refuse|nudge|ask|record] [--text t] [--from s] [--to s] [--type t] [--priority p] [--labels a,b] [--actor a] [--epic E|set|empty] [--sprint S|set|empty] [--owns glob] [--in-status-for 2h] | test <id> [ticket] [--to status] [--board KEY] [--scope board|project|user] [--as name] [--json]"
@@ -85,6 +86,9 @@ func (c boardyCall) ruleList() int {
 			}
 			if hook.ShadowedBy != "" {
 				lines = append(lines, cli.Indent(page.Label("shadowed by the "+string(hook.ShadowedBy)+" hook "+hook.ID+", so it does not run"))...)
+			}
+			if hook.Bypassed > 0 {
+				lines = append(lines, cli.Indent(page.Receipt(cli.Warn, fmt.Sprintf("flagged: bypassed %d times in %d days, so fix the hook or the work", hook.Bypassed, konst.BoardBypassFlagDays), ""))...)
 			}
 		}
 		return lines

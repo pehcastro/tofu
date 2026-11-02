@@ -20,7 +20,7 @@ import (
 	"tofu/internal/rule"
 )
 
-const boardyUsage = "tofu boardy init|new|list|show|move|log|set|lint|boards|held|manager|triage|assign|hand|widen|check|tick|fire|rule|view|audit|report|attention|epic|sprint|ask|catchup [--json]"
+const boardyUsage = "tofu boardy init|new|list|show|move|log|set|lint|boards|held|manager|triage|assign|hand|widen|check|tick|fire|rule|bypass|view|audit|report|attention|epic|sprint|ask|catchup [--json]"
 
 func boardyUsageOf(subcommand string) string {
 	switch subcommand {
@@ -50,6 +50,8 @@ func boardyUsageOf(subcommand string) string {
 		return "tofu boardy fire agent.spawn|agent.report|lead.attach [ticket] [--board KEY] [--when before|after] [--as name] [--json]"
 	case "rule":
 		return boardyRuleUsage
+	case "bypass":
+		return boardyBypassUsage
 	}
 	return cmp.Or(boardyManageUsage(subcommand), boardyViewUsageOf(subcommand), boardyDecideUsage(subcommand))
 }
@@ -97,8 +99,8 @@ func boardyVerb(args []string, out, errOut io.Writer) int {
 	if err = errors.Join(err, flowErr); err != nil {
 		return o.fail(err)
 	}
-	actor, person, lead := boardyIdentity(flags["as"])
-	call := boardyCall{o: o, dir: dir, managed: boardy.Managed{Local: boardy.Local{Store: store}, Person: person, Lead: lead}, actor: actor, store: store, words: flow.Words(), flags: flags, args: rest}
+	actor, lead := boardyIdentity(flags["as"])
+	call := boardyCall{o: o, dir: dir, managed: boardy.Managed{Local: boardy.Local{Store: store}, Person: string(boardy.RolePerson), Lead: lead}, actor: actor, store: store, words: flow.Words(), flags: flags, args: rest}
 	sizes := store.EventSizes()
 	written := host.BoardyWriting(dir, actor)
 	code := call.run(args[0])
@@ -121,6 +123,8 @@ func (call boardyCall) run(subcommand string) int {
 		return call.fire()
 	case "rule":
 		return call.rule()
+	case "bypass":
+		return call.bypass()
 	case "view":
 		return call.view()
 	case "audit":

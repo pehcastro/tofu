@@ -14,7 +14,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"tofu/internal/konst"
 	"tofu/internal/rule"
@@ -366,78 +365,6 @@ func (m Managed) weigh(hooks []rule.Hook, when rule.When, s subject) ([]Fired, [
 	return append(fired, bypassed...), effects, waits
 }
 
-const (
-	thenBypassed     rule.Then = "bypassed"
-	thenBypassReview rule.Then = "bypass-review"
-	thenBypassAsked  rule.Then = "bypass-asked"
-)
-
-type bypassRefused struct{ why string }
-
-func (e bypassRefused) Error() string { return "bypass refused: " + e.why }
-
-func (m Managed) bypassable(s subject) bool {
-	return m.Bypass.Hook != "" && s.depth == 0 && (s.event == rule.HookTicketMove || s.event == rule.HookTicketClose)
-}
-
-func (m Managed) vetBypass(hooks []rule.Hook, s subject) error {
-	if !m.bypassable(s) {
-		return nil
-	}
-	held, _ := m.holding(hooks, rule.WhenBefore, s)
-	at := slices.IndexFunc(held, func(h rule.Hook) bool { return h.ID == m.Bypass.Hook && h.Action.Do != doBroken })
-	var why string
-	switch {
-	case at < 0:
-		why = fmt.Sprintf("no hook %s runs before this %s of %s", m.Bypass.Hook, s.event, s.ticket.ID)
-	case !held[at].Action.Do.Check() || held[at].Then != rule.ThenRefuse && held[at].Then != rule.ThenAsk:
-		why = fmt.Sprintf("hook %s does not refuse or ask, so there is nothing to bypass", m.Bypass.Hook)
-	case held[at].Bypass == nil || !slices.Contains(held[at].Bypass.Who, m.actorKind(s.actor)):
-		why = "hook " + m.Bypass.Hook + " is " + m.bypassHint(held[at], s)
-	case strings.TrimSpace(m.Bypass.Why) == "":
-		why = "a bypass says why: --why <reason>"
-	case utf8.RuneCountInString(m.Bypass.Why) > konst.BoardBypassWhyRunesMost:
-		why = fmt.Sprintf("--why runs to %d characters, over the %d a reason holds", utf8.RuneCountInString(m.Bypass.Why), konst.BoardBypassWhyRunesMost)
-	default:
-		return nil
-	}
-	return bypassRefused{why}
-}
-
-func (m Managed) bypass(h rule.Hook, s subject) ([]Fired, error) {
-	b, why := h.Bypass, m.Bypass.Why
-	switch {
-	case b.Accept == rule.AcceptNone:
-		return []Fired{firing(h, s, rule.ModeShadow, false, thenBypassed, "accept none, so it passes: "+why)}, nil
-	case b.Wait == rule.WaitAfter:
-		return []Fired{firing(h, s, rule.ModeShadow, false, thenBypassReview, fmt.Sprintf("it passes, and the %s reviews it after: %s", b.Accept, why))}, nil
-	}
-	detail := fmt.Sprintf("the bypass waits for the %s to accept it: %s", b.Accept, why)
-	waiting := WaitingError{Ticket: s.ticket.ID, Rule: h.ID, Detail: detail, For: string(b.Accept)}
-	thread, _ := m.Store.Thread(s.ticket.ID)
-	asked := slices.IndexFunc(thread, func(e Event) bool {
-		return strings.HasPrefix(e.Text, hookText(h.ID, string(thenBypassAsked), s.event, ""))
-	})
-	if asked >= 0 {
-		waiting.Detail = fmt.Sprintf("the bypass was asked at %s and still waits for the %s to accept it", thread[asked].At.Local().Format(time.DateTime), b.Accept)
-		return nil, waiting
-	}
-	return []Fired{firing(h, s, rule.ModeShadow, false, thenBypassAsked, detail)}, waiting
-}
-
-func (m Managed) bypassHint(h rule.Hook, s subject) string {
-	b := h.Bypass
-	switch {
-	case b == nil:
-		return "not bypassable"
-	case s.event != rule.HookTicketMove && s.event != rule.HookTicketClose:
-		return "a bypass is asked on a move, and this is " + string(s.event)
-	case !slices.Contains(b.Who, m.actorKind(s.actor)):
-		return fmt.Sprintf("bypassable by %s; you act as %s, so it is not yours to bypass", strings.Join(actorNames(b.Who), ", "), m.actorKind(s.actor))
-	}
-	return fmt.Sprintf("bypass: tofu boardy move %s %s --bypass %s --why <reason>", s.ticket.ID, s.to, h.ID)
-}
-
 func firing(h rule.Hook, s subject, mode rule.Mode, blocked bool, then rule.Then, detail string) Fired {
 	finding := rule.Finding{RuleID: h.ID, Target: s.ticket.ID, Detail: detail}
 	return Fired{Fire: rule.Fire{RuleID: h.ID, Mode: mode, Target: s.ticket.ID, Findings: []rule.Finding{finding}, Blocked: blocked, At: time.Now()}, Checker: string(h.Action.Do), Then: then}
@@ -545,12 +472,10 @@ func (m Managed) gate(s *subject) error {
 		}
 	}
 	fired, _, err := m.weigh(hooks, rule.WhenBefore, *s)
-	var waiting WaitingError
-	used := errors.As(err, &waiting) && waiting.Rule == m.Bypass.Hook || slices.ContainsFunc(fired, func(f Fired) bool {
-		return f.RuleID == m.Bypass.Hook && slices.Contains([]rule.Then{thenBypassed, thenBypassReview, thenBypassAsked}, f.Then)
-	})
-	if m.bypassable(*s) && !used && !errors.As(err, new(RefusedError)) {
-		return bypassRefused{fmt.Sprintf("hook %s passes this %s, so there is nothing to bypass", m.Bypass.Hook, s.event)}
+	if m.bypassable(*s) {
+		if err = m.settleBypass(hooks, *s, fired, err); errors.As(err, new(bypassRefused)) {
+			return err
+		}
 	}
 	for _, persist := range heldWrites {
 		if err := persist(); err != nil {
@@ -705,6 +630,9 @@ func (m Managed) Foresee(event rule.HookEvent, key, id, actor string) (Foreseen,
 
 func (m Managed) Tick(key string) ([]string, error) {
 	hooks, loadErr := m.Store.hooks(key)
+	if _, err := m.Bypasses(key); err != nil {
+		loadErr = errors.Join(loadErr, err)
+	}
 	state := filepath.Join(m.Store.BoardDir(key), tickedFileName)
 	var ran []string
 	err := m.Store.locked(key, "hooks-ticked", func() error {

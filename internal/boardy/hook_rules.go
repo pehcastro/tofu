@@ -46,6 +46,7 @@ type HookRow struct {
 	Description string         `json:"description,omitempty"`
 	Bypass      string         `json:"bypass,omitempty"`
 	ShadowedBy  HookScope      `json:"shadowed_by,omitempty"`
+	Bypassed    int            `json:"bypassed,omitempty"`
 	LastFired   time.Time      `json:"last_fired,omitzero"`
 	hook        rule.Hook
 }
@@ -154,6 +155,10 @@ func (a API) Rules(request RulesRequest) (RulesAnswer, error) {
 	}
 	answer := RulesAnswer{Board: key, Hooks: []HookRow{}, Invalid: []string{}, Words: a.Words}
 	won := map[string]HookScope{}
+	flagged, err := a.Board.flaggedHooks(key, time.Now())
+	if err != nil {
+		return answer, err
+	}
 	for _, scope := range hookScopes() {
 		hooks, broken, err := store.scopeHooks(key, scope)
 		if err != nil {
@@ -177,6 +182,9 @@ func (a API) Rules(request RulesRequest) (RulesAnswer, error) {
 				row.ShadowedBy = first
 			} else {
 				won[h.ID] = scope
+				if at := slices.IndexFunc(flagged, func(f FlaggedHook) bool { return f.Hook == h.ID }); at >= 0 {
+					row.Bypassed = flagged[at].Times
+				}
 			}
 			row.LastFired = fired[h.ID]
 			if ran[h.File].After(row.LastFired) {

@@ -241,7 +241,7 @@ func settingsSetVerb(o verbOutput, args []string, store *settingspkg.Store, dir 
 	if before == "" || strings.ContainsAny(before, " \t") {
 		before = strconv.Quote(before)
 	}
-	actor, _, _ := boardyIdentity("")
+	actor, _ := boardyIdentity("")
 	written := host.Writing(dir, host.TopicSettings, actor)
 	err := writeSetting(store, scope, spec, rest[1])
 	written()

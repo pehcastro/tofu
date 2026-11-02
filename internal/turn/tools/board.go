@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"tofu/internal/boardy"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/rule"
 	"tofu/internal/turn"
@@ -127,6 +128,9 @@ func hookLine(row boardy.HookRow) string {
 	}
 	if row.ShadowedBy != "" {
 		line += ", shadowed by the " + string(row.ShadowedBy) + " hook of the same id, so it does not run"
+	}
+	if row.Bypassed > 0 {
+		line += fmt.Sprintf(", flagged: bypassed %d times in %d days", row.Bypassed, konst.BoardBypassFlagDays)
 	}
 	return line
 }

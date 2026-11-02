@@ -39,11 +39,13 @@ func boardyManageUsage(subcommand string) string {
 	return ""
 }
 
-func boardyIdentity(as string) (actor, person, lead string) {
+func boardyIdentity(as string) (actor, lead string) {
 	if session := os.Getenv(subagent.SessionEnv); session != "" {
-		return session, "", ""
+		if boardy.SubAgentActor(session) {
+			return session, ""
+		}
+		return session, session
 	}
-	person = string(boardy.RolePerson)
 	harness, session := boardy.HarnessClaudeCode, os.Getenv(claudeCodeSessionEnv)
 	inHarness := session != "" || os.Getenv(claudeCodeEnv) != ""
 	if thread := os.Getenv(codexThreadEnv); thread != "" {
@@ -51,14 +53,14 @@ func boardyIdentity(as string) (actor, person, lead string) {
 	}
 	switch {
 	case !inHarness && as == boardy.OrchestratorName:
-		return as, person, as
+		return as, as
 	case !inHarness:
-		return cmp.Or(as, person), person, ""
+		return cmp.Or(as, string(boardy.RolePerson)), ""
 	case as == "" || as == boardy.OrchestratorName:
 		actor = boardy.HarnessActor(harness, session, "")
-		return actor, person, actor
+		return actor, actor
 	}
-	return boardy.HarnessActor(harness, session, as), person, ""
+	return boardy.HarnessActor(harness, session, as), ""
 }
 
 func (c boardyCall) manage(subcommand string) int {

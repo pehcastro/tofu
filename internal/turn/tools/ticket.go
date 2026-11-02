@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -185,6 +186,8 @@ func (t ticketTool) Definition() llm.Tool {
 		properties["to"], properties["reason"], required = map[string]any{"type": "string", "enum": statuses}, stringParam("why, required for blocked"), append(required, "to")
 		describe += ". a reason is one sentence on one line, and anything longer goes in ticket_log"
 		properties["leave"] = map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "on a move to review, the acceptance lines, counted from 1, that are not yours to prove and that the lead proves"}
+		properties["bypass"] = stringParam("the id of a board hook refusing this move whose refusal names a bypass you may ask; the hook's accept decides whether it passes now, waits for an answer, or is reviewed after")
+		properties["why"] = stringParam(fmt.Sprintf("with bypass, one line of at most %d characters saying why the hook does not fit this move", konst.BoardBypassWhyRunesMost))
 	case ticketNotPossible:
 		describe = "reports that your own ticket cannot be done as asked, which is your status for this work beside done: the reason and the options go to the person as a question, the ticket moves to needs-decision, and nobody but the person moves it on, the lead included. use it when the platform, the library or the code does not give what the ticket asks, never for work that is only hard, and then end your work"
 		properties["reason"] = stringParam(fmt.Sprintf("one to %d plain lines: what cannot be done as asked and how you know, such as a vendor doc, an upstream issue or a probe you ran", konst.BoardELI5LinesMost))
@@ -205,7 +208,7 @@ func (t ticketTool) Definition() llm.Tool {
 func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 	var args struct {
 		ID, Text, Question, ELI5, Why, Board, Title, Problem, Scope, Acceptance, To, Reason, Parent, Epic, Sprint, Status string
-		Before, Driven, Feasibility                                                                                       string
+		Before, Driven, Feasibility, Bypass                                                                               string
 		StillWorks                                                                                                        string `json:"still_works"`
 		ErrorCase                                                                                                         string `json:"error_case"`
 		Kind                                                                                                              logKind
@@ -271,8 +274,12 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 			case err != nil:
 			case strings.Contains(reason, "\n") || sentencesIn(strings.Fields(reason)) > 1:
 				err = fmt.Errorf("a move reason is one sentence on one line: say the rest with ticket_log kind %s, and put what you ran and what it printed in an entry of kind %s", logSay, logEvidence)
+			case args.Why != "" && args.Bypass == "":
+				err = errors.New("why goes with bypass, naming the hook it bypasses")
 			default:
-				ticket, err = t.board.MoveLeaving(args.ID, to, args.Reason, t.actor, args.Leave)
+				moving := t.board
+				moving.Bypass = boardy.Bypassing{Hook: args.Bypass, Why: args.Why}
+				ticket, err = moving.MoveLeaving(args.ID, to, args.Reason, t.actor, args.Leave)
 			}
 			said = ticket.ID + " is " + string(ticket.Status)
 			if before.Status != ticket.Status {

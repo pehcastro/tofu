@@ -9,8 +9,10 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
+	"tofu/internal/konst"
 	"tofu/internal/rule"
 	"tofu/internal/sys"
 )
@@ -39,11 +41,13 @@ type Applied struct {
 }
 
 type Catchup struct {
-	Board   string         `json:"board"`
-	File    string         `json:"file"`
-	Open    []OpenQuestion `json:"open"`
-	Applied []Applied      `json:"applied"`
-	Stale   []TypedAnswer  `json:"stale"`
+	Board    string          `json:"board"`
+	File     string          `json:"file"`
+	Open     []OpenQuestion  `json:"open"`
+	Applied  []Applied       `json:"applied"`
+	Stale    []TypedAnswer   `json:"stale"`
+	Bypasses []BypassRequest `json:"bypasses"`
+	Flagged  []FlaggedHook   `json:"flagged"`
 }
 
 var catchupHeading = sys.LazyRegexp(`^## ([A-Z][A-Z0-9]*-[1-9][0-9]*(?:-[1-9][0-9]*)?) Q([1-9][0-9]*): (.*)$`)
@@ -83,7 +87,15 @@ func (m Managed) OpenQuestions(key string) (Catchup, error) {
 		}
 	}
 	c.Stale = append(c.Stale, typed...)
-	return c, nil
+	bypasses, err := m.Bypasses(key)
+	c.Bypasses = slices.DeleteFunc(bypasses, func(r BypassRequest) bool {
+		return r.State != BypassReview && (r.State != BypassOpen || r.Accept != rule.AcceptPerson)
+	})
+	if err != nil {
+		return c, err
+	}
+	c.Flagged, err = m.flaggedHooks(key, time.Now())
+	return c, err
 }
 
 func (m Managed) Answer(id string, question int, answer, actor string) (Ticket, error) {
@@ -228,6 +240,18 @@ func (c Catchup) markdown() []byte {
 			b.WriteString(" " + open.Answer)
 		}
 		b.WriteString("\n")
+	}
+	if len(c.Bypasses) > 0 {
+		b.WriteString("\n# Bypasses for you\n\n")
+	}
+	for _, r := range c.Bypasses {
+		fmt.Fprintf(&b, "- %s\n", r.Line())
+	}
+	if len(c.Flagged) > 0 {
+		fmt.Fprintf(&b, "\n# Hooks bypassed %d times or more in %d days\n\n", konst.BoardBypassFlagCount, konst.BoardBypassFlagDays)
+	}
+	for _, f := range c.Flagged {
+		fmt.Fprintf(&b, "- %s, bypassed %d times: fix the hook or the work\n", f.Hook, f.Times)
 	}
 	return []byte(b.String())
 }

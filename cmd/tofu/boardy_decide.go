@@ -2,11 +2,13 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
 	"tofu/interface/cli"
 	"tofu/internal/boardy"
+	"tofu/internal/konst"
 )
 
 func boardyDecideUsage(subcommand string) string {
@@ -48,6 +50,9 @@ func (c boardyCall) catchup() int {
 	}
 	return c.o.done(true, caught, func(page cli.Page) []string {
 		facts := []string{plural(len(caught.Open), "open question")}
+		if len(caught.Bypasses) > 0 {
+			facts = append(facts, bypassCount(len(caught.Bypasses)))
+		}
 		if c.flags["answers"] != "" {
 			facts = append(facts, plural(len(caught.Applied), "answer")+" read")
 		}
@@ -79,8 +84,19 @@ func (c boardyCall) catchup() int {
 				lines = append(lines, cli.Indent(page.Label("answer: "+open.Answer))...)
 			}
 		}
+		if len(caught.Bypasses) > 0 {
+			lines = append(lines, "", page.Subject("Bypasses for you"))
+		}
+		for _, r := range caught.Bypasses {
+			lines = append(lines, cli.Indent(page.Rows([]cli.Row{{Mark: cli.Active, Cells: []string{r.Line()}}})...)...)
+		}
+		for _, f := range caught.Flagged {
+			lines = append(lines, page.Receipt(cli.Warn, fmt.Sprintf("%s is bypassed %d times in %d days: fix the hook or the work", f.Hook, f.Times, konst.BoardBypassFlagDays), ""))
+		}
 		hint := "answer in the file, then tofu boardy catchup --answers"
-		if len(caught.Open) == 0 {
+		if len(caught.Open) == 0 && len(caught.Bypasses) > 0 {
+			hint = "answer a bypass with tofu boardy bypass answer <B> yes|no"
+		} else if len(caught.Open) == 0 {
 			hint = "nothing waits on a decision"
 		}
 		return append(lines, "", page.Receipt(cli.Idle, hint, caught.File))

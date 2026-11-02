@@ -19,6 +19,8 @@ func boardyRuleRequests() []method {
 		{name: boardyPrefix + "rule.put", params: boardy.RulePutRequest{}, result: boardy.RuleAnswer{}},
 		{name: boardyPrefix + "rule.remove", params: boardy.RuleRequest{}, result: boardy.RuleAnswer{}},
 		{name: boardyPrefix + "rule.test", params: boardy.RuleTestRequest{}, result: boardy.RuleTestAnswer{}},
+		{name: boardyPrefix + "bypass.list", params: boardy.BypassListRequest{}, result: boardy.BypassListAnswer{}},
+		{name: boardyPrefix + "bypass.answer", params: boardy.BypassAnswerRequest{}, result: boardy.BypassAnswerAnswer{}},
 	}
 }
 
@@ -34,6 +36,10 @@ func boardyRule(api boardy.API, method string, raw json.RawMessage) (any, error)
 		return handle(raw, answered(api.RuleRemove))
 	case boardyPrefix + "rule.test":
 		return handle(raw, answered(api.RuleTest))
+	case boardyPrefix + "bypass.list":
+		return handle(raw, answered(api.BypassList))
+	case boardyPrefix + "bypass.answer":
+		return handle(raw, answered(api.BypassAnswer))
 	}
 	return nil, &Refusal{Code: CodeNoMethod, Message: "no method " + method}
 }
