@@ -366,14 +366,15 @@ func enteredStatus(events []Event) map[string]time.Time {
 }
 
 func (m Managed) check(h rule.Hook, s subject) (checked, error) {
+	text := s.expand(h.Text)
 	switch h.Action.Do {
 	case rule.DoField:
-		return checked{detail: cmp.Or(h.Text, "it has no "+h.Action.Arg), failed: !slices.Contains(filled(s.ticket), h.Action.Arg)}, nil
+		return checked{detail: cmp.Or(text, "it has no "+h.Action.Arg), failed: !slices.Contains(filled(s.ticket), h.Action.Arg)}, nil
 	case rule.DoPerson:
-		return checked{detail: cmp.Or(h.Text, "this waits for the person to approve it"), failed: m.actorKind(s.actor) != rule.ActorPerson}, nil
+		return checked{detail: cmp.Or(text, "this waits for the person to approve it"), failed: m.actorKind(s.actor) != rule.ActorPerson}, nil
 	case rule.DoJev:
 		answer, said := m.askJev(h.Action.Arg, s)
-		return checked{detail: strings.TrimSpace(h.Text + "\n" + said), failed: answer == ""}, nil
+		return checked{detail: strings.TrimSpace(text + "\n" + said), failed: answer == ""}, nil
 	case rule.DoContract, rule.DoCheck:
 		run, arg, err := resolveCheck(h)
 		if err != nil {
@@ -386,7 +387,7 @@ func (m Managed) check(h rule.Hook, s subject) (checked, error) {
 		if err != nil {
 			return checked{}, fmt.Errorf("hook %q %w", h.ID, err)
 		}
-		return checked{detail: strings.TrimSpace(h.Text + "\n" + output), failed: failed}, nil
+		return checked{detail: strings.TrimSpace(text + "\n" + output), failed: failed}, nil
 	}
 	panic("boardy: unknown check " + string(h.Action.Do))
 }

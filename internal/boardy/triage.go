@@ -201,7 +201,6 @@ func (m Managed) AcceptPlanned(key, id, epic, sprint, actor string) (Ticket, err
 		return moved, errors.Join(err, m.afterPlanned(set, moved))
 	}
 	var accepted Ticket
-	var set *subject
 	err := m.Store.locked(key, "triage-"+id, func() error {
 		req, err := m.Store.readRequest(key, id)
 		if err != nil {
@@ -212,9 +211,6 @@ func (m Managed) AcceptPlanned(key, id, epic, sprint, actor string) (Ticket, err
 		ticket.Log = strings.TrimSpace(ticket.Log + "\n" + m.Store.logLine(actor, fmt.Sprintf("accepted triage request %s from %s", id, cmp.Or(req.By.ID, "an unknown actor"))))
 		accepting := subject{event: rule.HookTriageAccept, key: key, ticket: ticket, from: Triage, to: Backlog, actor: actor}
 		if err := m.gate(&accepting); err != nil {
-			return err
-		}
-		if set, err = m.gatePlanned(key, accepting.ticket, actor); err != nil {
 			return err
 		}
 		if accepted, err = m.create(key, accepting.ticket, actor, ""); err != nil {
@@ -228,7 +224,11 @@ func (m Managed) AcceptPlanned(key, id, epic, sprint, actor string) (Ticket, err
 	err = m.Store.Record(key, Event{Ticket: accepted.ID, Kind: Accepted, Actor: actor, From: Triage, To: accepted.Status, Text: id})
 	done := m.subjectOf(rule.HookTriageAccept, key, accepted, accepted.Status, actor, 0)
 	done.from = Triage
-	return accepted, errors.Join(err, m.after(done), m.afterPlanned(set, accepted))
+	set, setErr := m.gatePlanned(key, accepted, actor)
+	if setErr == nil {
+		setErr = m.afterPlanned(set, accepted)
+	}
+	return accepted, errors.Join(err, m.after(done), setErr)
 }
 
 func (m Managed) gatePlanned(key string, ticket Ticket, actor string) (*subject, error) {

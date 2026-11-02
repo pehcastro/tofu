@@ -178,8 +178,8 @@ func fired(at time.Time) string {
 }
 
 func hookSource(base, id string, flags map[string]string) string {
-	top := []string{"id", "when", "on", "every", "daily", "do", "then", "text"}
-	under := []string{"from", "to", "type", "priority", "labels", "not_labels", "actor", "epic", "sprint", "owns", "in_status_for", "created_before", "created_after"}
+	top := []string{"id", "name", "description", "when", "on", "every", "daily", "do", "then", "text"}
+	under := []string{"from", "to", "type", "priority", "labels", "not_labels", "actor", "field", "epic", "sprint", "owns", "in_status_for", "created_before", "created_after"}
 	values := map[string]string{}
 	var unknown, bypass []string
 	inBypass := false
