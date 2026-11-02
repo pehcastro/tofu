@@ -11,6 +11,7 @@ import (
 
 	"tofu/internal/hook"
 	"tofu/internal/llm"
+	"tofu/internal/memory"
 	"tofu/internal/recall"
 	"tofu/internal/session"
 	"tofu/internal/subagent"
@@ -112,10 +113,29 @@ func TestTheMemoryViewIsOnceInEveryRequestHeldWithinAGenerationAndFreshAtEachFor
 }
 
 func TestASubAgentOpensOnEveryMemoryEntryOnceAndItsBriefCarriesOnlyTheCitedLines(t *testing.T) {
-	lines := map[string]string{
-		"m1":      "[memory#m1] Replies stay short and plain",
-		"m2":      "[memory#m2] The commit hook refuses attribution",
-		"m3-0a1f": "[memory#m3-0a1f] Tickets come before code here",
+	home, project := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	shelves, err := memory.Open(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := map[string]string{}
+	var local string
+	for _, entry := range []memory.Entry{
+		{Scope: memory.Global, Kind: memory.KindPerson, Text: "Replies stay short and plain"},
+		{Scope: memory.Project, Kind: memory.KindProject, Text: "The commit hook refuses attribution"},
+		{Scope: memory.ProjectLocal, Kind: memory.KindProject, Text: "Tickets come before code here"},
+	} {
+		added, err := shelves.Add(entry, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines[added.ID], local = added.Line(), added.ID
+	}
+	leadBlock, err := memory.Block(project)
+	if err != nil {
+		t.Fatal(err)
 	}
 	unreadable := errors.New("entries.jsonl line 3: unexpected end of JSON input")
 	for _, row := range []struct {
@@ -126,7 +146,7 @@ func TestASubAgentOpensOnEveryMemoryEntryOnceAndItsBriefCarriesOnlyTheCitedLines
 	}{
 		{name: "one cited", brief: "fix the hook, as [memory#m2] says", cited: []string{lines["m2"]}},
 		{name: "cited twice", brief: "[memory#m2] and again [memory#m2], fix the hook", cited: []string{lines["m2"]}},
-		{name: "local id", brief: "fix the hook: split the ticket per [memory#m3-0a1f] then [memory#m1]", cited: []string{lines["m3-0a1f"], lines["m1"]}},
+		{name: "local id", brief: "fix the hook: split the ticket per [memory#" + local + "] then [memory#m1]", cited: []string{lines[local], lines["m1"]}},
 		{name: "none cited", brief: "fix the hook"},
 		{name: "unknown id", brief: "fix the hook per [memory#m9]", refused: "[memory#m9]"},
 		{name: "memory off", brief: "fix the hook per [memory#m2]", memory: func() (map[string]string, error) { return nil, nil }, refused: "[memory#m2]"},
@@ -144,7 +164,7 @@ func TestASubAgentOpensOnEveryMemoryEntryOnceAndItsBriefCarriesOnlyTheCitedLines
 				NewID:          func() string { return "turn-orchestrator" },
 			}
 			spawner := turn.NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
-			spawner.Remembered = row.memory
+			spawner.Project, spawner.Remembered = project, row.memory
 			if spawner.Remembered == nil {
 				spawner.Remembered = func() (map[string]string, error) { return lines, nil }
 			}
@@ -174,6 +194,9 @@ func TestASubAgentOpensOnEveryMemoryEntryOnceAndItsBriefCarriesOnlyTheCitedLines
 			views := slices.DeleteFunc(slices.Clone(opened), func(message llm.Message) bool { return message.Origin.Source != llm.SourceMemoryView })
 			if len(opened) < 2 || len(views) != 1 || opened[0].Origin.Source != llm.SourceMemoryView {
 				t.Fatalf("the sub-agent's first request holds %d memory views in %d messages, want one before the brief", len(views), len(opened))
+			}
+			if opened[0].Content != leadBlock {
+				t.Errorf("the sub-agent's memory view is\n%s\nwant the lead's block\n%s", opened[0].Content, leadBlock)
 			}
 			for id, line := range lines {
 				if got := strings.Count(opened[0].Content, line); got != 1 {

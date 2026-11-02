@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -23,6 +22,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/wire/anthropic"
+	"tofu/internal/memory"
 	"tofu/internal/recall"
 	"tofu/internal/rule"
 	"tofu/internal/safe"
@@ -757,13 +757,11 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 	subAgent.References = heldReferences(t.base.References, subAgent.Parts)
 	subAgent.Memory = ""
 	if t.Remembered != nil {
-		lines, err := t.Remembered()
+		block, err := memory.Block(t.Project)
 		if err != nil && t.base.Notify != nil {
 			t.base.Notify("sub-agent " + held.agent.ID + " starts without your memory: " + err.Error())
 		}
-		if len(lines) > 0 {
-			subAgent.Memory = "remembered for you and the lead, each entry as it is saved:\n" + strings.Join(slices.Sorted(maps.Values(lines)), "\n")
-		}
+		subAgent.Memory = block
 	}
 	subAgent.SpawnedFrom, subAgent.Boundary, subAgent.Inbox, subAgent.Steering = t.orchestratorID, held.boundary, held.inbox, nil
 	subAgent.Person = t.orchestratorAnswers(held, site)
