@@ -1,0 +1,9 @@
+id: decidable
+name: A decision carries its question
+description: A ticket reaches needs-decision only with an open question that has a tldr, an eli5, options and a recommendation.
+when: before
+on: ticket.move
+if:
+  to: needs-decision
+do: check decidable
+then: refuse

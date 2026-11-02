@@ -1,0 +1,9 @@
+id: may_move
+name: Who moves a ticket
+description: A manager moves any ticket, the person only closes one, and an agent moves only its own ticket from doing to review.
+when: before
+on: ticket.move, ticket.close
+if:
+  actor: person, lead, sub-agent
+do: check may_move
+then: refuse

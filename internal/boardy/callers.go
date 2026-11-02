@@ -19,6 +19,7 @@ import (
 	"unicode"
 
 	"tofu/internal/konst"
+	"tofu/internal/rule"
 	"tofu/internal/search"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
@@ -282,21 +283,30 @@ func (s sourceLines) head(definition search.Definition) string {
 	return s.line(definition.Path, head)
 }
 
-func (m Managed) ownedCallers(ticket Ticket, reason string) (string, error) {
+func (m Managed) callersOutside(ticket Ticket) (callerScan, error) {
 	if m.Store.Root == "" || len(ticket.Owns) == 0 {
-		return reason, nil
+		return callerScan{}, nil
 	}
-	scan, err := scanCallers(m.Store.Root, ticket)
+	return scanCallers(m.Store.Root, ticket)
+}
+
+func (m Managed) waive(hooks []rule.Hook, s subject, reason string) (string, string, error) {
+	held, s := m.holding(hooks, rule.WhenBefore, s)
+	at := slices.IndexFunc(held, func(h rule.Hook) bool {
+		return runsCheck(h, checkCallersOwned) && h.Bypass != nil && slices.Contains(h.Bypass.Who, m.actorKind(s.actor))
+	})
+	if at < 0 {
+		return reason, "", nil
+	}
+	scan, err := m.callersOutside(s.ticket)
 	if err != nil || len(scan.sites) == 0 && scan.stopped == "" {
-		return reason, err
+		return reason, "", err
 	}
-	switch {
-	case strings.HasPrefix(reason, notOwnedOnPurpose):
-		return reason + " (" + scan.recorded() + ")", nil
-	case len(scan.sites) > 0:
-		return reason, RefusedError{Ticket: ticket.ID, Why: scan.refusal(ticket.ID)}
+	waived := ""
+	if len(scan.sites) > 0 {
+		waived = held[at].ID
 	}
-	return strings.TrimSpace(reason + " (" + scan.stopped + ")"), nil
+	return reason + " (" + scan.recorded() + ")", waived, nil
 }
 
 func callerSources(root string) ([]string, string) {

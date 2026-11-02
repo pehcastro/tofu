@@ -19,6 +19,7 @@ import (
 //go:embed qa/agents/*.md qa/references/*.md qa/general/skills/*.md
 //go:embed general/references/*.md general/agents/*.md decisions/*.yaml
 //go:embed web/*.yaml web/search/*.yaml
+//go:embed boardy/hooks/*/*.yaml
 var shipped embed.FS
 
 func Files() fs.FS { return shipped }

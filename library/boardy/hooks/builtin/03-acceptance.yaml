@@ -1,0 +1,9 @@
+id: acceptance
+name: Work starts with an Acceptance
+description: A ticket reaches doing, review or done only with an Acceptance section.
+when: before
+on: ticket.move, ticket.close
+if:
+  to: doing, review, done
+do: check acceptance
+then: refuse

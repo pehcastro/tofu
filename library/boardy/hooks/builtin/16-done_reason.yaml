@@ -1,0 +1,9 @@
+id: done_reason
+name: Done says nothing is open
+description: A ticket reaches done with a reason saying what was verified, and Jev refuses one that names an open part.
+when: before
+on: ticket.close
+if:
+  to: done
+do: check done_reason
+then: refuse

@@ -2,37 +2,294 @@ package boardy
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"maps"
+	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
+	"tofu/internal/judge/jev"
 	"tofu/internal/rule"
 )
 
-type namedCheck func(h rule.Hook, s subject, arg string) (detail string, failed bool, err error)
+type checked struct {
+	detail string
+	failed bool
+	done   *DoneGate
+}
 
-const checkEvidenced = "evidenced"
+type namedCheck func(m Managed, h rule.Hook, s subject, arg string) (checked, error)
 
-func (m Managed) checks() map[string]namedCheck {
+const (
+	checkEvidenced     = "evidenced"
+	checkCallersOwned  = "callers_owned"
+	checkEpicReady     = "epic_ready"
+	checkDoneStamp     = "done_stamp"
+	everyLine          = "all"
+	missingPlaceholder = "{missing}"
+)
+
+func checks() map[string]namedCheck {
 	return map[string]namedCheck{
-		checkEvidenced: func(h rule.Hook, s subject, _ string) (string, bool, error) {
-			missing := m.unevidenced(s.ticket, s.leave)
-			return cmp.Or(h.Text, "a ticket moves on with evidence for each acceptance line") + ": " + missing, missing != "", nil
-		},
+		"may_move":          Managed.mayMoveCheck,
+		"not_possible_hold": Managed.notPossibleHold,
+		"acceptance":        Managed.hasAcceptance,
+		"log_entry":         Managed.hasLogEntry,
+		"evidence_chars":    Managed.evidenceChars,
+		"decidable":         Managed.decidableCheck,
+		checkDoneStamp:      Managed.doneStamp,
+		checkEvidenced:      Managed.evidenced,
+		"before_captured":   Managed.beforeCaptured,
+		"before_on_time":    Managed.beforeOnTime,
+		"sub_tickets_done":  Managed.subTicketsDone,
+		"scope_cites":       Managed.scopeCites,
+		checkEpicReady:      Managed.epicReadyCheck,
+		"owns_free":         Managed.ownsFreeCheck,
+		"drafted":           Managed.draftedCheck,
+		"feasibility":       Managed.feasibility,
+		"done_reason":       Managed.doneReason,
+		checkCallersOwned:   Managed.callersOwned,
 	}
 }
 
-func (m Managed) namedCheck(h rule.Hook) (namedCheck, string, error) {
-	name, arg := checkEvidenced, ""
-	if h.Action.Do == rule.DoCheck {
-		name, arg, _ = strings.Cut(h.Action.Arg, " ")
+func checkOf(h rule.Hook) (string, string) {
+	if h.Action.Do != rule.DoCheck {
+		return checkEvidenced, ""
 	}
-	checks := m.checks()
-	if run, known := checks[name]; known {
-		return run, strings.TrimSpace(arg), nil
+	name, arg, _ := strings.Cut(h.Action.Arg, " ")
+	return name, strings.TrimSpace(arg)
+}
+
+func runsCheck(h rule.Hook, name string) bool {
+	called, _ := checkOf(h)
+	return (h.Action.Do == rule.DoCheck || h.Action.Do == rule.DoContract) && called == name
+}
+
+func resolveCheck(h rule.Hook) (namedCheck, string, error) {
+	name, arg := checkOf(h)
+	known := checks()
+	if run, found := known[name]; found {
+		return run, arg, nil
 	}
-	return nil, "", fmt.Errorf("hook %q: no check named %q, and the named checks are: %s", h.ID, name, strings.Join(slices.Sorted(maps.Keys(checks)), ", "))
+	return nil, "", fmt.Errorf("no check named %q, and the named checks are: %s", name, strings.Join(slices.Sorted(maps.Keys(known)), ", "))
+}
+
+func refusal(err error) (checked, error) {
+	var refused RefusedError
+	if errors.As(err, &refused) {
+		return checked{detail: refused.Why, failed: true, done: refused.Done}, nil
+	}
+	return checked{}, err
+}
+
+func (m Managed) mayMoveCheck(_ rule.Hook, s subject, _ string) (checked, error) {
+	board, err := m.Store.Board(s.key)
+	if err != nil {
+		return checked{}, err
+	}
+	return refusal(m.mayMove(m.role(board, s.actor), s.ticket, s.to, s.actor))
+}
+
+func (m Managed) notPossibleHold(_ rule.Hook, s subject, _ string) (checked, error) {
+	board, err := m.Store.Board(s.key)
+	if err != nil || m.role(board, s.actor) != RoleManager {
+		return checked{}, err
+	}
+	return refusal(m.heldForThePerson(s.ticket, s.actor, "moves it"))
+}
+
+func (Managed) hasAcceptance(_ rule.Hook, s subject, _ string) (checked, error) {
+	return checked{
+		detail: fmt.Sprintf("it has no Acceptance, and a ticket reaches %s only with one", s.to),
+		failed: !slices.ContainsFunc(s.ticket.Acceptance, func(lines string) bool { return strings.TrimSpace(lines) != "" }),
+	}, nil
+}
+
+func (Managed) hasLogEntry(_ rule.Hook, s subject, _ string) (checked, error) {
+	return checked{detail: fmt.Sprintf("its Log is empty, and a ticket reaches %s with at least one entry", s.to), failed: strings.TrimSpace(s.ticket.Log) == ""}, nil
+}
+
+func (m Managed) evidenceChars(_ rule.Hook, s subject, arg string) (checked, error) {
+	board, err := m.Store.Board(s.key)
+	least := board.LogToReview
+	if least == 0 {
+		least, _ = strconv.Atoi(arg)
+	}
+	if err != nil || least <= 0 {
+		return checked{}, err
+	}
+	runes, err := m.evidenceRunes(s.ticket.ID)
+	return checked{
+		detail: fmt.Sprintf("its evidence entries have %d characters, and a ticket reaches %s on %s with at least %d: log them with ticket_log kind evidence or tofu boardy log --evidence", runes, s.to, s.key, least),
+		failed: runes < least,
+	}, err
+}
+
+func (Managed) decidableCheck(_ rule.Hook, s subject, _ string) (checked, error) {
+	return refusal(decidable(s.ticket))
+}
+
+func (m Managed) doneStamp(_ rule.Hook, s subject, _ string) (checked, error) {
+	gate := m.doneGate(s.ticket.Owns)
+	return checked{detail: gate.Refusal(), failed: gate.Refusal() != "", done: &gate}, nil
+}
+
+func (m Managed) evidenced(h rule.Hook, s subject, arg string) (checked, error) {
+	leave := s.leave
+	if arg == everyLine {
+		leave = []int{}
+	}
+	missing := m.unevidenced(s.ticket, leave)
+	said := s.expand(cmp.Or(h.Text, "a ticket moves on with evidence for each acceptance line"))
+	if !strings.Contains(said, missingPlaceholder) {
+		said += ": " + missingPlaceholder
+	}
+	return checked{detail: strings.ReplaceAll(said, missingPlaceholder, missing), failed: missing != ""}, nil
+}
+
+func (m Managed) beforeCaptured(h rule.Hook, s subject, _ string) (checked, error) {
+	events, err := m.Store.ticketEvents(s.ticket.ID)
+	if err != nil || slices.ContainsFunc(events, func(e Event) bool { return e.Kind == Captured }) {
+		return checked{}, err
+	}
+	detail := fmt.Sprintf("it has no before capture, and a ticket reaches %s only with one, logged before its first evidence entry and its first commit: tofu boardy log %s --before \"what you ran and what it printed\", or ticket_log kind before", s.to, s.ticket.ID)
+	if h.If.NotLabels != nil {
+		detail += fmt.Sprintf(". A ticket labelled %s is not asked for one", strings.Join(h.If.NotLabels, " or "))
+	}
+	if !h.If.CreatedAfter.IsZero() {
+		detail += fmt.Sprintf(", and a ticket made before %s closes without one and its done reason says so", utcStamp(h.If.CreatedAfter))
+	}
+	return checked{detail: detail, failed: true}, nil
+}
+
+func utcStamp(at time.Time) string { return at.UTC().Format(time.DateTime) + " UTC" }
+
+func (m Managed) beforeOnTime(_ rule.Hook, s subject, _ string) (checked, error) {
+	if s.entry != Captured {
+		return checked{}, nil
+	}
+	events, err := m.Store.ticketEvents(s.ticket.ID)
+	if err != nil {
+		return checked{}, err
+	}
+	if slices.ContainsFunc(events, func(e Event) bool { return e.Kind == Evidence }) {
+		return checked{detail: "its before is late: an evidence entry is already logged, so the change was proved before anything showed how things worked without it, and a before is captured before the first evidence entry and the ticket's first commit", failed: true}, nil
+	}
+	entered, first, err := m.firstCommit(s.ticket)
+	return checked{
+		detail: fmt.Sprintf("its before is late: commit %s touched its owns after it entered %s at %s, and a before is captured before the ticket's first commit, while it still shows how things work without the change", first, Doing, entered.UTC().Format(time.DateTime)),
+		failed: first != "",
+	}, err
+}
+
+func (m Managed) subTicketsDone(_ rule.Hook, s subject, _ string) (checked, error) {
+	children, _ := filepath.Glob(filepath.Join(m.Store.BoardDir(s.key), TicketsDirName, s.ticket.ID, "*.md"))
+	var live []string
+	for _, path := range children {
+		child, err := frontOf(path)
+		if err != nil {
+			return checked{}, err
+		}
+		if child.Status.Live() {
+			live = append(live, child.ID)
+		}
+	}
+	return checked{
+		detail: fmt.Sprintf("its sub-tickets %s are still live, and a parent reaches %s only once they are done or dropped", strings.Join(live, ", "), s.to),
+		failed: len(live) > 0,
+	}, nil
+}
+
+func (m Managed) scopeCites(_ rule.Hook, s subject, arg string) (checked, error) {
+	board, err := m.Store.Board(s.key)
+	cites := board.ScopeCites
+	if len(cites) == 0 {
+		cites = slices.DeleteFunc(strings.Split(arg, ","), func(cite string) bool { return strings.TrimSpace(cite) == "" })
+	}
+	return checked{
+		detail: fmt.Sprintf("its Scope names no source, and %s wants one of: %s", s.key, strings.Join(cites, ", ")),
+		failed: len(cites) > 0 && !slices.ContainsFunc(cites, func(cite string) bool { return strings.Contains(s.ticket.Scope, strings.TrimSpace(cite)) }),
+	}, err
+}
+
+func (m Managed) epicReadyCheck(_ rule.Hook, s subject, _ string) (checked, error) {
+	return refusal(m.Store.epicReady(s.key, s.ticket.Front))
+}
+
+func (m Managed) ownsFreeCheck(_ rule.Hook, s subject, _ string) (checked, error) {
+	board, err := m.Store.Board(s.key)
+	if err != nil || (s.event == rule.HookTicketMove || s.event == rule.HookTicketClose) && board.Holding(s.from) {
+		return checked{}, err
+	}
+	return refusal(m.ownsFree(s.key, s.ticket.Front, s.owns, s.to, s.replaces))
+}
+
+func (s subject) entering() bool {
+	return s.from == "" || s.from == Triage && s.to != Dropped
+}
+
+func (Managed) draftedCheck(_ rule.Hook, s subject, _ string) (checked, error) {
+	missing := s.ticket.undrafted()
+	if !s.entering() || len(missing) == 0 {
+		return checked{}, nil
+	}
+	names, says := make([]string, len(missing)), make([]string, len(missing))
+	for i, drafted := range missing {
+		names[i], says[i] = drafted.Heading, drafted.Heading+": "+drafted.Says
+	}
+	return checked{detail: fmt.Sprintf("%q has no %s, and a ticket is made with each of them. %s", s.ticket.Title, strings.Join(names, ", "), strings.Join(says, "; ")), failed: true}, nil
+}
+
+func (m Managed) feasibility(_ rule.Hook, s subject, _ string) (checked, error) {
+	if !s.entering() || s.dry || strings.TrimSpace(s.ticket.Feasibility) != "" {
+		return checked{}, nil
+	}
+	ruled := m.judged(feasibilityRef, feasibilityDecides, struct {
+		Ticket jevTicket `json:"ticket"`
+	}{jevTicketOf(s.ticket)}, nil)
+	if ruled.unread != "" {
+		return checked{}, m.heldForPerson(s, feasibilityRef, ruled.unread)
+	}
+	platform := ruled.answers[feasibilityDecides].Noul
+	return checked{
+		detail: fmt.Sprintf("Jev judged that %q asks for a platform or visual effect (%s, %s at %.2f against %.2f), and such a ticket is made with a %s section: %s", s.ticket.Title, feasibilityRef, feasibilityDecides, platform, ruled.threshold, FeasibilityHeading, feasibilitySays),
+		failed: platform >= ruled.threshold,
+	}, nil
+}
+
+func (m Managed) doneReason(_ rule.Hook, s subject, _ string) (checked, error) {
+	parts := reasonParts(s.reason)
+	switch {
+	case s.dry:
+		return checked{}, nil
+	case len(parts) == 0:
+		return checked{detail: fmt.Sprintf("its reason is empty, and a ticket reaches %s with a reason that says what was verified and that nothing is open: tofu boardy move %s %s --reason <what was verified>", s.to, s.ticket.ID, s.to), failed: true}, nil
+	}
+	options := make([]jev.Option, len(parts))
+	for i, part := range parts {
+		options[i] = jev.Option{Name: reasonPartPrefix + strconv.Itoa(i+1), Criteria: part}
+	}
+	ruled := m.judged(doneReasonRef, doneReasonDecides, struct {
+		Ticket jevTicket `json:"ticket"`
+		Reason string    `json:"reason"`
+		Parts  []string  `json:"parts"`
+	}{jevTicketOf(s.ticket), s.reason, parts}, options)
+	if ruled.unread != "" {
+		return checked{}, m.heldForPerson(s, doneReasonRef, ruled.unread)
+	}
+	quoted, open := openPart(ruled.answers, s.reason, parts, ruled.threshold)
+	return checked{
+		detail: fmt.Sprintf("its reason says %q is still open (Jev, %s, %s at %.2f against %.2f), and a ticket reaches %s only when nothing it asked for is open: make the open part its own ticket and keep %s open, or close it with a reason that names nothing open", quoted, doneReasonRef, doneReasonDecides, ruled.answers[doneReasonDecides].Noul, ruled.threshold, s.to, s.ticket.ID),
+		failed: open,
+	}, nil
+}
+
+func (m Managed) callersOwned(_ rule.Hook, s subject, _ string) (checked, error) {
+	scan, err := m.callersOutside(s.ticket)
+	return checked{detail: scan.refusal(s.ticket.ID), failed: len(scan.sites) > 0}, err
 }
 
 func (m Managed) unevidenced(ticket Ticket, leave []int) string {

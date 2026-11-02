@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	"tofu/internal/rule"
 )
 
 type Need struct {
@@ -30,7 +32,7 @@ type Attention struct {
 }
 
 func (m Managed) Attention(key string, now time.Time) (Attention, error) {
-	board, err := m.Store.Board(key)
+	hooks, err := m.Store.hooks(key)
 	if err != nil {
 		return Attention{}, err
 	}
@@ -56,7 +58,10 @@ func (m Managed) Attention(key string, now time.Time) (Attention, error) {
 			one.Since = cmp.Or(started[ticket.ID], ticket.Updated)
 			a.Doing = append(a.Doing, one)
 		case Review:
-			a.review(one, m.validMove(board, ticket, Done))
+			closing := m.subjectOf(rule.HookTicketClose, key, ticket, Done, cmp.Or(m.Person, string(RolePerson)), 0)
+			closing.dry = true
+			_, _, refusal := m.weigh(hooks, rule.WhenBefore, closing)
+			a.review(one, refusal)
 		case NeedsDecision:
 			var asked []string
 			for _, q := range ticket.OpenQuestions() {

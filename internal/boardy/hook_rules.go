@@ -25,9 +25,12 @@ const (
 	ScopeBoard   HookScope = "board"
 	ScopeProject HookScope = "project"
 	ScopeUser    HookScope = "user"
+	ScopeLibrary HookScope = "library"
 )
 
 func hookScopes() []HookScope { return []HookScope{ScopeBoard, ScopeProject, ScopeUser} }
+
+func listedScopes() []HookScope { return append(hookScopes(), ScopeLibrary) }
 
 func (HookScope) Enum() []string { return enum(hookScopes()...) }
 
@@ -60,7 +63,11 @@ func actorNames(actors []rule.HookActor) []string {
 }
 
 func hookRow(h rule.Hook, scope HookScope) HookRow {
-	words := []string{string(h.When), string(h.On)}
+	on := make([]string, len(h.Events()))
+	for i, event := range h.Events() {
+		on[i] = string(event)
+	}
+	words := []string{string(h.When), strings.Join(on, ", ")}
 	switch {
 	case h.Every > 0:
 		words = append(words, "every "+shortDuration(h.Every))
@@ -81,6 +88,7 @@ func hookRow(h rule.Hook, scope HookScope) HookRow {
 	add("labels", c.Labels...)
 	add("not_labels", c.NotLabels...)
 	add("actor", actorNames(c.Actor)...)
+	add("field", c.Field...)
 	add("epic", c.Epic)
 	add("sprint", c.Sprint)
 	add("owns", c.Owns)
@@ -159,7 +167,7 @@ func (a API) Rules(request RulesRequest) (RulesAnswer, error) {
 	if err != nil {
 		return answer, err
 	}
-	for _, scope := range hookScopes() {
+	for _, scope := range listedScopes() {
 		hooks, broken, err := store.scopeHooks(key, scope)
 		if err != nil {
 			answer.Invalid = append(answer.Invalid, strings.Split(err.Error(), "\n")...)
@@ -217,7 +225,7 @@ func (a API) RuleGet(request RuleRequest) (RuleAnswer, error) {
 	}
 	for _, row := range listed.Hooks {
 		if row.ID == request.ID && (request.Scope == "" || request.Scope == row.Scope) {
-			source, err := os.ReadFile(row.File)
+			source, err := a.Board.Store.hookSource(row)
 			return RuleAnswer{Board: listed.Board, Hook: row, Source: string(source), Words: a.Words}, err
 		}
 	}
@@ -247,13 +255,8 @@ func (a API) parseHook(board string, scope HookScope, source string) (string, ru
 		}
 	}
 	h, err := rule.ParseHook([]byte(source), file)
-	switch {
-	case err == nil && file == dir:
+	if err == nil && file == dir {
 		err = fmt.Errorf("%s: hook id %q names its file, so it is one plain name", dir, h.ID)
-	case err == nil && h.Action.Do == rule.DoCheck:
-		if _, _, unknown := a.Board.namedCheck(h); unknown != nil {
-			err = fmt.Errorf("%s: %w", file, unknown)
-		}
 	}
 	if err != nil {
 		return "", rule.Hook{}, err
@@ -306,7 +309,7 @@ func (a API) weakens(key string, scope HookScope, h rule.Hook) error {
 		if row.Scope == scope {
 			how = "weakens"
 		}
-		shadows := slices.Index(hookScopes(), scope) < slices.Index(hookScopes(), row.Scope)
+		shadows := slices.Index(listedScopes(), scope) < slices.Index(listedScopes(), row.Scope)
 		weaker := row.Scope == scope && (strictness(h.Then) < strictness(was.Then) || was.Bypass == nil && h.Bypass != nil)
 		if shadows || weaker {
 			return WaitingError{Ticket: "hook " + h.ID, Rule: h.ID, Detail: fmt.Sprintf("%s acts as %s, and this %s hook %s the %s hook that would %s, so the person writes it", a.Actor, kind, scope, how, row.Scope, was.Then)}
@@ -321,7 +324,7 @@ func (a API) RuleRemove(request RuleRequest) (RuleAnswer, error) {
 		err = a.Board.Manages(answer.Board, a.Actor, "remove a board hook")
 	}
 	if err == nil {
-		err = errors.Join(os.Remove(answer.Hook.File), a.hookChanged(answer.Board, "removed", answer.Hook))
+		err = errors.Join(a.Board.Store.removeHook(answer.Board, answer.Hook), a.hookChanged(answer.Board, "removed", answer.Hook))
 	}
 	if next, missing := a.RuleGet(RuleRequest{Board: answer.Board, ID: request.ID}); err == nil && missing == nil {
 		answer.TakesOver = &next.Hook

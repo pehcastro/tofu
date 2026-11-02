@@ -1,0 +1,9 @@
+id: done_stamp
+name: Done needs a stamped tree
+description: A ticket whose owns touch a flows area reaches done only with its owned paths committed and HEAD's tree stamped by the flows bench.
+when: before
+on: ticket.close
+if:
+  to: done
+do: check done_stamp
+then: refuse

@@ -1,0 +1,9 @@
+id: log_entry
+name: Review starts with a Log entry
+description: A ticket reaches review with at least one Log entry.
+when: before
+on: ticket.move
+if:
+  to: review
+do: check log_entry
+then: refuse

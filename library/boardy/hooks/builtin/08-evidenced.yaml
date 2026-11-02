@@ -1,0 +1,10 @@
+id: evidenced
+name: Every line has evidence
+description: A ticket reaches done only when every acceptance line in force has an evidence entry naming it, a line left for the lead included.
+when: before
+on: ticket.close
+if:
+  to: done
+do: check evidenced all
+then: refuse
+text: "{missing}, and a ticket reaches done only when every line in force has evidence, a line left for the lead included: tofu boardy log {ticket} --evidence --line <n>"

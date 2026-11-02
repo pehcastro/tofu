@@ -1,0 +1,7 @@
+id: feasibility
+name: A platform effect states its feasibility
+description: Jev reads a new ticket, and one that asks for a platform or visual effect is made with a Feasibility section.
+when: before
+on: ticket.create, triage.request, ticket.move, ticket.close
+do: check feasibility
+then: refuse

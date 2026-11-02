@@ -1,0 +1,9 @@
+id: not_possible_hold
+name: A not-possible question is the person's
+description: A ticket an agent reported not possible waits in needs-decision for the person, and a manager does not move it until the person answers.
+when: before
+on: ticket.move, ticket.close
+if:
+  actor: person, lead, sub-agent
+do: check not_possible_hold
+then: refuse

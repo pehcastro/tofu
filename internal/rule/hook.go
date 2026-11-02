@@ -33,6 +33,7 @@ const (
 	HookTicketClose    HookEvent = "ticket.close"
 	HookTicketEvidence HookEvent = "ticket.evidence"
 	HookTicketComment  HookEvent = "ticket.comment"
+	HookTicketSet      HookEvent = "ticket.set"
 	HookEpicCreate     HookEvent = "epic.create"
 	HookSprintOpen     HookEvent = "sprint.open"
 	HookSprintClose    HookEvent = "sprint.close"
@@ -49,7 +50,7 @@ const (
 
 func HookEvents() []HookEvent {
 	return []HookEvent{HookTicketCreate, HookTicketMove, HookTicketAssign, HookTicketLog, HookTicketWiden, HookTicketClose,
-		HookTicketEvidence, HookTicketComment, HookEpicCreate, HookSprintOpen, HookSprintClose, HookMilestoneReach, HookTriageRequest, HookTriageAccept,
+		HookTicketEvidence, HookTicketComment, HookTicketSet, HookEpicCreate, HookSprintOpen, HookSprintClose, HookMilestoneReach, HookTriageRequest, HookTriageAccept,
 		HookQuestionAsk, HookQuestionAnswer, HookAgentSpawn, HookAgentReport, HookLeadAttach, HookSchedule}
 }
 
@@ -164,6 +165,7 @@ func (b *Bypass) set(key, value, at string) error {
 type Conditions struct {
 	From, To, Type, Priority, Labels, NotLabels []string
 	Actor                                       []HookActor
+	Field                                       []string
 	Epic, Sprint, Owns                          string
 	InStatusFor                                 time.Duration
 	CreatedBefore, CreatedAfter                 time.Time
@@ -189,6 +191,7 @@ type Hook struct {
 	Bypass            *Bypass
 	When              When
 	On                HookEvent
+	Also              []HookEvent
 	Every             time.Duration
 	Daily             string
 	If                Conditions
@@ -288,7 +291,14 @@ func ParseHook(data []byte, file string) (Hook, error) {
 		case "when":
 			h.When = When(value)
 		case "on":
+			events := commaList(value)
 			h.On = HookEvent(value)
+			if len(events) > 1 {
+				h.On = HookEvent(events[0])
+				for _, event := range events[1:] {
+					h.Also = append(h.Also, HookEvent(event))
+				}
+			}
 		case "every":
 			h.Every, err = time.ParseDuration(value)
 		case "daily":
@@ -341,6 +351,8 @@ func (c *Conditions) set(key, value, at string) (bool, error) {
 		c.Labels = list
 	case "not_labels":
 		c.NotLabels = list
+	case "field":
+		c.Field = list
 	case "epic":
 		c.Epic, err = value, planValue(value)
 	case "sprint":
@@ -420,8 +432,10 @@ func (h Hook) valid() error {
 		why = "declares no id"
 	case h.When != WhenBefore && h.When != WhenAfter:
 		why = fmt.Sprintf("declares when %q, and when is %s or %s", h.When, WhenBefore, WhenAfter)
-	case !slices.Contains(HookEvents(), h.On):
-		why = fmt.Sprintf("declares on %q, and an event is one of %v", h.On, HookEvents())
+	case slices.ContainsFunc(h.Events(), func(event HookEvent) bool { return !slices.Contains(HookEvents(), event) }):
+		why = fmt.Sprintf("declares on %v, and an event is one of %v", h.Events(), HookEvents())
+	case h.Also != nil && h.Fires(HookSchedule):
+		why = "is on schedule beside another event, and a schedule hook is on schedule alone"
 	case (h.On == HookSchedule) != (h.Every > 0 || h.Daily != ""):
 		why = "declares every or daily exactly when it is on schedule"
 	case h.Every > 0 && h.Daily != "":
@@ -442,12 +456,12 @@ func (h Hook) valid() error {
 		why = fmt.Sprintf("runs before and does %s, and before a hook runs a check or a set", do)
 	case (do == DoPerson || do == DoContract) != (h.Action.Arg == ""):
 		why = fmt.Sprintf("does %s, and every do but person and contract names what it works on", do)
-	case !h.On.ticketed() && slices.Contains([]Do{DoMove, DoAssign, DoLog, DoSet, DoContract}, do):
-		why = fmt.Sprintf("is on %s, which has no ticket to %s", h.On, do)
+	case slices.ContainsFunc(h.Events(), func(event HookEvent) bool { return !event.ticketed() }) && slices.Contains([]Do{DoMove, DoAssign, DoLog, DoSet, DoContract}, do):
+		why = fmt.Sprintf("is on %v, and one of them has no ticket to %s", h.Events(), do)
 	case do == DoSet && len(strings.Fields(h.Action.Arg)) < 2:
 		why = "does set, which names a field and its value"
-	case h.On == HookTicketMove && do == DoMove && (h.If.To == nil || slices.Contains(h.If.To, h.Action.Arg)):
-		why = fmt.Sprintf("is on %s and does move %s, which fires it again: name the statuses it runs on in if: to, without %s", h.On, h.Action.Arg, h.Action.Arg)
+	case h.Fires(HookTicketMove) && do == DoMove && (h.If.To == nil || slices.Contains(h.If.To, h.Action.Arg)):
+		why = fmt.Sprintf("is on %s and does move %s, which fires it again: name the statuses it runs on in if: to, without %s", HookTicketMove, h.Action.Arg, h.Action.Arg)
 	case !h.If.CreatedBefore.IsZero() && !h.If.CreatedAfter.IsZero() && !h.If.CreatedBefore.After(h.If.CreatedAfter):
 		why = "declares created_before no later than created_after, so no ticket holds it"
 	case h.Bypass == nil:
@@ -463,6 +477,10 @@ func (h Hook) valid() error {
 	}
 	return fmt.Errorf("%s: hook %q %s", h.File, h.ID, why)
 }
+
+func (h Hook) Events() []HookEvent { return append([]HookEvent{h.On}, h.Also...) }
+
+func (h Hook) Fires(event HookEvent) bool { return slices.Contains(h.Events(), event) }
 
 func (h Hook) Due(last, now time.Time) bool {
 	if h.Every > 0 {

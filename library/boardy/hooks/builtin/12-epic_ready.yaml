@@ -1,0 +1,9 @@
+id: epic_ready
+name: An epic is researched and designed first
+description: A gated epic takes its first ticket only with a research note and a design, and its next ticket only once one is done with a driven path.
+when: before
+on: ticket.create, ticket.set
+if:
+  field: epic
+do: check epic_ready
+then: refuse

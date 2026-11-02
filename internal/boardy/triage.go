@@ -60,9 +60,6 @@ func (m Managed) request(key string, ticket Ticket, actor string) (Ticket, error
 	if err := m.gate(&s); err != nil {
 		return Ticket{}, err
 	}
-	if err := m.drafted(key, s.ticket, actor); err != nil {
-		return Ticket{}, err
-	}
 	req := Request{By: *m.Store.authorOf(actor), At: time.Now().UTC().Truncate(time.Second), Ticket: ticket}
 	err := m.Store.locked(key, triageCounterName, func() error {
 		dir := filepath.Join(m.Store.BoardDir(key), TriageDirName)
@@ -178,19 +175,33 @@ func (m Managed) AcceptPlanned(key, id, epic, sprint, actor string) (Ticket, err
 	if err := m.Store.planned(key, Front{Epic: epic, Sprint: sprint}); err != nil {
 		return Ticket{}, err
 	}
+	plan := func(t *Ticket) error {
+		t.Epic, t.Sprint = cmp.Or(epic, t.Epic), cmp.Or(sprint, t.Sprint)
+		return nil
+	}
 	if isTicket, err := m.namesTriagedTicket(key, id); isTicket {
 		if err != nil {
 			return Ticket{}, err
 		}
-		if _, err := m.Store.Edit(id, func(t *Ticket) error {
-			t.Epic, t.Sprint = cmp.Or(epic, t.Epic), cmp.Or(sprint, t.Sprint)
-			return nil
-		}); err != nil {
-			return Ticket{}, err
+		ticket, err := m.Store.Get(id)
+		if err == nil {
+			err = plan(&ticket)
 		}
-		return m.Move(id, Backlog, "accepted from triage", actor)
+		var set *subject
+		if err == nil {
+			set, err = m.gatePlanned(key, ticket, actor)
+		}
+		if err == nil {
+			_, err = m.Store.Edit(id, plan)
+		}
+		if err != nil {
+			return ticket, err
+		}
+		moved, err := m.Move(id, Backlog, "accepted from triage", actor)
+		return moved, errors.Join(err, m.afterPlanned(set, moved))
 	}
 	var accepted Ticket
+	var set *subject
 	err := m.Store.locked(key, "triage-"+id, func() error {
 		req, err := m.Store.readRequest(key, id)
 		if err != nil {
@@ -201,6 +212,9 @@ func (m Managed) AcceptPlanned(key, id, epic, sprint, actor string) (Ticket, err
 		ticket.Log = strings.TrimSpace(ticket.Log + "\n" + m.Store.logLine(actor, fmt.Sprintf("accepted triage request %s from %s", id, cmp.Or(req.By.ID, "an unknown actor"))))
 		accepting := subject{event: rule.HookTriageAccept, key: key, ticket: ticket, from: Triage, to: Backlog, actor: actor}
 		if err := m.gate(&accepting); err != nil {
+			return err
+		}
+		if set, err = m.gatePlanned(key, accepting.ticket, actor); err != nil {
 			return err
 		}
 		if accepted, err = m.create(key, accepting.ticket, actor, ""); err != nil {
@@ -214,7 +228,24 @@ func (m Managed) AcceptPlanned(key, id, epic, sprint, actor string) (Ticket, err
 	err = m.Store.Record(key, Event{Ticket: accepted.ID, Kind: Accepted, Actor: actor, From: Triage, To: accepted.Status, Text: id})
 	done := m.subjectOf(rule.HookTriageAccept, key, accepted, accepted.Status, actor, 0)
 	done.from = Triage
-	return accepted, errors.Join(err, m.after(done))
+	return accepted, errors.Join(err, m.after(done), m.afterPlanned(set, accepted))
+}
+
+func (m Managed) gatePlanned(key string, ticket Ticket, actor string) (*subject, error) {
+	fields := slices.DeleteFunc([]string{"epic", "sprint"}, func(field string) bool { return !slices.Contains(filled(ticket), field) })
+	if len(fields) == 0 {
+		return nil, nil
+	}
+	s, err := m.gateSet(key, ticket, fields, actor)
+	return &s, err
+}
+
+func (m Managed) afterPlanned(set *subject, ticket Ticket) error {
+	if set == nil {
+		return nil
+	}
+	set.ticket = ticket
+	return m.after(*set)
 }
 
 func (m Managed) Drop(key, id, reason, actor string) error {

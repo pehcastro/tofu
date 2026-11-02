@@ -67,19 +67,17 @@ func (m Managed) assign(board Board, ticket Ticket, assignee, actor string, dept
 }
 
 func (m Managed) Plan(id, epic, sprint, actor string) (Ticket, error) {
-	var said []string
+	var said, fields []string
 	for _, field := range [][2]string{{"epic", epic}, {"sprint", sprint}} {
 		if field[1] != "" {
-			said = append(said, field[0]+" "+field[1])
+			said, fields = append(said, field[0]+" "+field[1]), append(fields, field[0])
 		}
 	}
 	if said == nil {
 		return Ticket{}, fmt.Errorf("name an epic, a sprint, or both")
 	}
-	return m.revise(id, "set "+strings.Join(said, ", "), actor, func(t *Ticket) error {
-		joined := t.Front
-		joined.Epic = epic
-		if err := errors.Join(m.Store.planned(t.Board(), Front{Epic: epic, Sprint: sprint}), m.Store.epicReady(t.Board(), joined)); err != nil {
+	return m.setFields(id, "set "+strings.Join(said, ", "), actor, fields, func(t *Ticket) error {
+		if err := m.Store.planned(t.Board(), Front{Epic: epic, Sprint: sprint}); err != nil {
 			return err
 		}
 		t.Epic, t.Sprint = cmp.Or(epic, t.Epic), cmp.Or(sprint, t.Sprint)
@@ -98,13 +96,39 @@ func (m Managed) Retitle(id, title, actor string) (Ticket, error) {
 }
 
 func (m Managed) Reown(id string, owns []string, actor string) (Ticket, error) {
-	return m.revise(id, "set owns "+cmp.Or(strings.Join(owns, ", "), "to nothing"), actor, func(t *Ticket) error {
-		if err := m.ownsFree(t.Board(), t.Front, owns, t.Status, ""); err != nil {
-			return err
-		}
+	return m.setFields(id, "set owns "+cmp.Or(strings.Join(owns, ", "), "to nothing"), actor, []string{"owns"}, func(t *Ticket) error {
 		t.Owns = owns
 		return nil
 	})
+}
+
+func (m Managed) setFields(id, text, actor string, fields []string, change func(*Ticket) error) (Ticket, error) {
+	ticket, board, err := m.ticketOnBoard(id)
+	if err != nil {
+		return ticket, err
+	}
+	if err := m.Manages(board.Key, actor, text+" on a ticket"); err != nil {
+		return ticket, err
+	}
+	if err := change(&ticket); err != nil {
+		return ticket, err
+	}
+	s, err := m.gateSet(board.Key, ticket, fields, actor)
+	if err != nil {
+		return ticket, err
+	}
+	revised, err := m.revise(id, text, actor, change)
+	if err != nil {
+		return revised, err
+	}
+	s.ticket = revised
+	return revised, m.after(s)
+}
+
+func (m Managed) gateSet(key string, ticket Ticket, fields []string, actor string) (subject, error) {
+	s := m.subjectOf(rule.HookTicketSet, key, ticket, ticket.Status, actor, 0)
+	s.fields = fields
+	return s, m.gate(&s)
 }
 
 func (m Managed) revise(id, text, actor string, change func(*Ticket) error) (Ticket, error) {

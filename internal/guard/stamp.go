@@ -32,7 +32,7 @@ func flowsRefusal(env Env, command string) string {
 		if err != nil {
 			return "The flows gate could not read " + id + ": " + err.Error()
 		}
-		if why := boardy.DoneRefusal(env.Root, moved.Owns); why != "" {
+		if why := boardy.DoneRefusal(env.Root, id, moved.Owns); why != "" {
 			return boardy.RefusedError{Ticket: id, Why: why}.Error()
 		}
 	}

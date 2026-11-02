@@ -7,7 +7,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
+
+	"tofu/internal/rule"
 )
 
 const (
@@ -131,7 +134,16 @@ func (g DoneGate) Refusal() string {
 	return why + "\nOn 2026-10-15 two regressions in turn and sub-agent work reached 0.5.15-rc2 with every ticket accepted on its tests, and the owner's nine-day session waited 55 minutes on two finished agents."
 }
 
-func DoneRefusal(repo string, owns []string) string {
+func DoneRefusal(repo, id string, owns []string) string {
+	ref, err := SplitID(id)
+	store, openErr := OpenStore(repo)
+	var hooks []rule.Hook
+	if err = errors.Join(err, openErr); err == nil {
+		hooks, err = store.hooks(ref.Key)
+	}
+	if err == nil && !slices.ContainsFunc(hooks, func(h rule.Hook) bool { return runsCheck(h, checkDoneStamp) }) {
+		return ""
+	}
 	return checkDone(repo, owns).Refusal()
 }
 

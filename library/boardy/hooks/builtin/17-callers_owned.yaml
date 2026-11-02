@@ -1,0 +1,13 @@
+id: callers_owned
+name: Callers are owned
+description: A ticket reaches doing only when every file outside its owns that uses what it names is owned too.
+when: before
+on: ticket.move
+if:
+  to: doing
+do: check callers_owned
+then: refuse
+bypass:
+  who: person, lead
+  accept: none
+  wait: after

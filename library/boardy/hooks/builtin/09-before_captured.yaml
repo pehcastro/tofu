@@ -1,0 +1,11 @@
+id: before_captured
+name: Done needs a before capture
+description: A ticket reaches done only with a before capture logged ahead of its first evidence entry and its first commit; a docs-only ticket and a ticket made before the gate are not asked.
+when: before
+on: ticket.close
+if:
+  to: done
+  not_labels: docs-only
+  created_after: 2026-11-01T05:00:00Z
+do: check before_captured
+then: refuse

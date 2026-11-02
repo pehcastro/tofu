@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -70,12 +69,10 @@ func (m Managed) create(key string, ticket Ticket, actor, replaces string) (Tick
 }
 
 func (m Managed) created(key string, ticket Ticket, actor, replaces string, depth int) (Ticket, error) {
-	board, err := m.Store.Board(key)
-	if err != nil {
+	if _, err := m.Store.Board(key); err != nil {
 		return Ticket{}, err
 	}
-	status := cmp.Or(ticket.Status, Backlog)
-	if err := m.vetCreate(board, ticket, status, replaces); err != nil {
+	if err := m.referencesResolve(ticket); err != nil {
 		return Ticket{}, err
 	}
 	preview, err := os.CreateTemp(m.Store.BoardDir(key), ".tofu-create-*.md")
@@ -84,12 +81,10 @@ func (m Managed) created(key string, ticket Ticket, actor, replaces string, dept
 	}
 	_, err = preview.Write(ticket.Markdown())
 	err = errors.Join(err, preview.Close())
-	s := subject{event: rule.HookTicketCreate, key: key, ticket: ticket, path: preview.Name(), to: status, actor: actor, depth: depth}
+	s := subject{event: rule.HookTicketCreate, key: key, ticket: ticket, path: preview.Name(), to: cmp.Or(ticket.Status, Backlog), actor: actor, depth: depth,
+		owns: ticket.Owns, fields: filled(ticket), replaces: replaces}
 	if err == nil {
 		err = m.gate(&s)
-	}
-	if err == nil {
-		err = m.drafted(key, s.ticket, actor)
 	}
 	if err = errors.Join(err, os.Remove(preview.Name())); err != nil {
 		return Ticket{}, err
@@ -109,40 +104,30 @@ func (m Managed) Move(id string, to Status, reason, actor string) (Ticket, error
 
 func (m Managed) MoveLeaving(id string, to Status, reason, actor string, leave []int) (Ticket, error) {
 	ticket, board, err := m.ticketOnBoard(id)
-	if err != nil {
-		return ticket, err
-	}
-	if err := m.mayMove(m.role(board, actor), ticket, to, actor); err != nil || ticket.Status == to {
+	if err != nil || ticket.Status == to {
 		return ticket, err
 	}
 	return m.move(board, ticket, to, reason, actor, 0, leave)
 }
 
 func (m Managed) move(board Board, ticket Ticket, to Status, reason, actor string, depth int, leave []int) (Ticket, error) {
-	if err := m.validMove(board, ticket, to); err != nil {
+	if err := m.validMove(ticket, to); err != nil {
 		return ticket, err
 	}
-	if ticket.Status == Triage && to != Dropped {
-		if err := m.drafted(board.Key, ticket, actor); err != nil {
-			return ticket, err
-		}
-	}
-	if to == Done {
-		if err := m.closable(ticket, reason, actor); err != nil {
-			return ticket, err
-		}
-		if excused, _ := m.unbefored(ticket); excused != "" {
-			reason = strings.TrimSpace(reason + " (" + excused + ")")
-		}
-	}
-	if to == Doing {
-		var err error
-		if reason, err = m.ownedCallers(ticket, reason); err != nil {
-			return ticket, err
-		}
-	}
 	s := m.subjectOf(moveEvent(to), board.Key, ticket, to, actor, depth)
-	s.leave = leave
+	s.leave, s.reason = leave, reason
+	hooks, err := m.Store.hooks(board.Key)
+	if err != nil {
+		return ticket, err
+	}
+	if excused := m.excused(hooks, s); excused != "" {
+		reason = strings.TrimSpace(reason + " (" + excused + ")")
+	}
+	if strings.HasPrefix(reason, notOwnedOnPurpose) {
+		if reason, s.waived, err = m.waive(hooks, s, reason); err != nil {
+			return ticket, err
+		}
+	}
 	if err := m.gate(&s); err != nil {
 		return ticket, err
 	}
@@ -160,17 +145,15 @@ func (m Managed) Check(event rule.Event, id string, to Status, actor string) ([]
 		return nil, err
 	}
 	to = cmp.Or(to, ticket.Status)
-	hook := event.Hook()
+	s := m.subjectOf(event.Hook(), board.Key, ticket, to, actor, 0)
+	s.dry = true
 	switch event {
 	case rule.EventMove, rule.EventClose:
-		hook = moveEvent(to)
-		if err = m.mayMove(m.role(board, actor), ticket, to, actor); err == nil {
-			err = m.validMove(board, ticket, to)
-		}
+		s.event, err = moveEvent(to), m.validMove(ticket, to)
 	case rule.EventCreate:
-		err = m.vetCreate(board, ticket, to, "")
+		s.from, s.fields, err = "", filled(ticket), m.referencesResolve(ticket)
 	case rule.EventWiden:
-		err = m.mayWiden(board, ticket, actor)
+		err = m.Manages(board.Key, actor, "widen owns")
 	default:
 		return nil, fmt.Errorf("%q is not a board event", event)
 	}
@@ -181,7 +164,7 @@ func (m Managed) Check(event rule.Event, id string, to Status, actor string) ([]
 	if err != nil {
 		return nil, err
 	}
-	fired, _, err := m.weigh(hooks, rule.WhenBefore, m.subjectOf(hook, board.Key, ticket, to, actor, 0))
+	fired, _, err := m.weigh(hooks, rule.WhenBefore, s)
 	return fired, err
 }
 
@@ -190,26 +173,6 @@ func moveEvent(to Status) rule.HookEvent {
 		return rule.HookTicketClose
 	}
 	return rule.HookTicketMove
-}
-
-func (m Managed) vetCreate(board Board, ticket Ticket, status Status, replaces string) error {
-	if err := m.referencesResolve(ticket); err != nil {
-		return err
-	}
-	if err := board.cited(ticket); err != nil {
-		return err
-	}
-	if err := m.Store.epicReady(board.Key, ticket.Front); err != nil {
-		return err
-	}
-	return m.ownsFree(board.Key, ticket.Front, ticket.Owns, status, replaces)
-}
-
-func (m Managed) mayWiden(board Board, ticket Ticket, actor string) error {
-	if err := m.Manages(board.Key, actor, "widen owns"); err != nil {
-		return err
-	}
-	return board.cited(ticket)
 }
 
 func (m Managed) Comment(id, text, actor string) (Ticket, error) {
@@ -228,25 +191,7 @@ func (m Managed) Evidence(id, text, actor string, line int) (Ticket, error) {
 }
 
 func (m Managed) CaptureBefore(id, text, actor string) (Ticket, error) {
-	ticket, board, err := m.mayAppend(id, actor)
-	if err != nil {
-		return ticket, err
-	}
-	events, err := m.Store.ticketEvents(id)
-	if err != nil {
-		return ticket, err
-	}
-	if slices.ContainsFunc(events, func(e Event) bool { return e.Kind == Evidence }) {
-		return ticket, RefusedError{Ticket: id, Why: "its before is late: an evidence entry is already logged, so the change was proved before anything showed how things worked without it, and a before is captured before the first evidence entry and the ticket's first commit"}
-	}
-	entered, first, err := m.firstCommit(ticket)
-	if err != nil {
-		return ticket, err
-	}
-	if first != "" {
-		return ticket, RefusedError{Ticket: id, Why: fmt.Sprintf("its before is late: commit %s touched its owns after it entered %s at %s, and a before is captured before the ticket's first commit, while it still shows how things work without the change", first, Doing, entered.UTC().Format(time.DateTime))}
-	}
-	return m.entry(board, ticket, Event{Kind: Captured, Text: text}, actor, 0)
+	return m.appended(id, Captured, text, actor)
 }
 
 func (m Managed) firstCommit(ticket Ticket) (time.Time, string, error) {
@@ -276,24 +221,6 @@ func (m Managed) firstCommit(ticket Ticket) (time.Time, string, error) {
 	return entered, first, err
 }
 
-func beforeGateFrom() time.Time { return time.Date(2026, 11, 1, 5, 0, 0, 0, time.UTC) }
-
-func (m Managed) unbefored(ticket Ticket) (excused, missing string) {
-	events, err := m.Store.ticketEvents(ticket.ID)
-	from := beforeGateFrom().Format(time.DateTime) + " UTC"
-	switch {
-	case err != nil:
-		return "", "its before capture could not be read: " + err.Error()
-	case slices.ContainsFunc(events, func(e Event) bool { return e.Kind == Captured }):
-		return "", ""
-	case slices.Contains(ticket.Labels, DocsOnlyLabel):
-		return "labelled " + DocsOnlyLabel + ", so no before capture was asked", ""
-	case ticket.Created.Before(beforeGateFrom()):
-		return "made before " + from + ", so no before capture was asked", ""
-	}
-	return "", fmt.Sprintf("it has no before capture, and a ticket made from %s on reaches done only with one, logged before its first evidence entry and its first commit: tofu boardy log %s --before \"what you ran and what it printed\", or ticket_log kind before. A ticket labelled %s is not asked for one, and a ticket made before %s closes without one and its done reason says so", from, ticket.ID, DocsOnlyLabel, from)
-}
-
 func (m Managed) appended(id string, kind EventKind, text, actor string) (Ticket, error) {
 	ticket, board, err := m.mayAppend(id, actor)
 	if err != nil {
@@ -318,20 +245,34 @@ func (m Managed) comment(board Board, ticket Ticket, text, actor string, depth i
 }
 
 func (m Managed) entry(board Board, ticket Ticket, event Event, actor string, depth int) (Ticket, error) {
-	s := m.subjectOf(rule.HookTicketLog, board.Key, ticket, ticket.Status, actor, depth)
-	if err := m.gate(&s); err != nil {
-		return ticket, err
+	events := []rule.HookEvent{rule.HookTicketLog}
+	switch event.Kind {
+	case Evidence:
+		events = []rule.HookEvent{rule.HookTicketEvidence, rule.HookTicketLog}
+	case Commented:
+		events = []rule.HookEvent{rule.HookTicketComment, rule.HookTicketLog}
+	}
+	subjects := make([]subject, len(events))
+	for i, on := range events {
+		subjects[i] = m.subjectOf(on, board.Key, ticket, ticket.Status, actor, depth)
+		subjects[i].entry = event.Kind
+		if err := m.gate(&subjects[i]); err != nil {
+			return ticket, err
+		}
 	}
 	text := event.Text
 	if event.Kind == Captured {
 		text = "before capture: " + text
 	}
 	logged, err := m.appendLog(ticket.ID, text, actor, event)
-	if err != nil {
-		return logged, err
+	for _, s := range subjects {
+		if err != nil {
+			break
+		}
+		s.ticket = logged
+		err = m.after(s)
 	}
-	s.ticket = logged
-	return logged, m.after(s)
+	return logged, err
 }
 
 func (m Managed) AskInLog(id, question, actor string) (Ticket, error) {
@@ -354,17 +295,15 @@ func (m Managed) Widen(id string, owns []string, actor string) (Ticket, error) {
 	if err != nil {
 		return ticket, err
 	}
-	if err := m.mayWiden(board, ticket, actor); err != nil {
+	if err := m.Manages(board.Key, actor, "widen owns"); err != nil {
 		return ticket, err
 	}
 	added := slices.DeleteFunc(slices.Clone(owns), func(glob string) bool { return slices.Contains(ticket.Owns, glob) })
 	if len(added) == 0 {
 		return ticket, fmt.Errorf("%s already owns %s", id, strings.Join(owns, ", "))
 	}
-	if err := m.ownsFree(board.Key, ticket.Front, added, ticket.Status, ""); err != nil {
-		return ticket, err
-	}
 	s := m.subjectOf(rule.HookTicketWiden, board.Key, ticket, ticket.Status, actor, 0)
+	s.owns = added
 	if err := m.gate(&s); err != nil {
 		return ticket, err
 	}
@@ -397,7 +336,7 @@ func (m Managed) mayMove(role Role, ticket Ticket, to Status, actor string) erro
 	}
 	switch role {
 	case RoleManager:
-		return m.heldForThePerson(ticket, actor, "moves it")
+		return nil
 	case RolePerson:
 		if !to.Live() {
 			return nil
@@ -415,63 +354,11 @@ func (m Managed) mayMove(role Role, ticket Ticket, to Status, actor string) erro
 	panic("boardy: unknown role " + string(role))
 }
 
-func (m Managed) validMove(board Board, ticket Ticket, to Status) error {
-	if slices.Contains([]Status{Doing, Review, Done}, to) && !slices.ContainsFunc(ticket.Acceptance, func(lines string) bool { return strings.TrimSpace(lines) != "" }) {
-		return RefusedError{Ticket: ticket.ID, Why: fmt.Sprintf("it has no Acceptance, and a ticket reaches %s only with one", to)}
-	}
-	if to == Review && strings.TrimSpace(ticket.Log) == "" {
-		return RefusedError{Ticket: ticket.ID, Why: "its Log is empty, and a ticket reaches review with at least one entry"}
-	}
-	if to == Review && board.LogToReview > 0 {
-		runes, err := m.evidenceRunes(ticket.ID)
-		if err != nil {
-			return err
-		}
-		if runes < board.LogToReview {
-			return RefusedError{Ticket: ticket.ID, Why: fmt.Sprintf("its evidence entries have %d characters, and a ticket reaches review on %s with at least %d: log them with ticket_log kind evidence or tofu boardy log --evidence", runes, board.Key, board.LogToReview)}
-		}
-	}
-	if to == NeedsDecision {
-		if err := decidable(ticket); err != nil {
-			return err
-		}
-	}
-	if to == Done {
-		if gate := m.doneGate(ticket.Owns); gate.Refusal() != "" {
-			return RefusedError{Ticket: ticket.ID, Why: gate.Refusal(), Done: &gate}
-		}
-		leftForNobody := []int{}
-		if unproved := m.unevidenced(ticket, leftForNobody); unproved != "" {
-			return RefusedError{Ticket: ticket.ID, Why: unproved + ", and a ticket reaches done only when every line in force has evidence, a line left for the lead included: tofu boardy log " + ticket.ID + " --evidence --line <n>"}
-		}
-		if _, missing := m.unbefored(ticket); missing != "" {
-			return RefusedError{Ticket: ticket.ID, Why: missing}
-		}
-	}
-	if to == Review || to == Done {
-		children, _ := filepath.Glob(filepath.Join(board.Dir, TicketsDirName, ticket.ID, "*.md"))
-		var live []string
-		for _, path := range children {
-			child, err := frontOf(path)
-			if err != nil {
-				return err
-			}
-			if child.Status.Live() {
-				live = append(live, child.ID)
-			}
-		}
-		if len(live) > 0 {
-			return RefusedError{Ticket: ticket.ID, Why: fmt.Sprintf("its sub-tickets %s are still live, and a parent reaches %s only once they are done or dropped", strings.Join(live, ", "), to)}
-		}
-	}
-	var err error
+func (m Managed) validMove(ticket Ticket, to Status) error {
 	if to == Doing || (!ticket.Status.Live() && to.Live()) {
-		err = m.referencesResolve(ticket)
+		return m.referencesResolve(ticket)
 	}
-	if !board.Holding(ticket.Status) {
-		err = errors.Join(err, m.ownsFree(board.Key, ticket.Front, ticket.Owns, to, ""))
-	}
-	return err
+	return nil
 }
 
 func (m Managed) doneGate(owns []string) DoneGate {
@@ -543,52 +430,6 @@ const (
 )
 
 var reasonBreak = sys.LazyRegexp(`[,;!?\n]|\.(?:\s|$)`)
-
-func (m Managed) drafted(key string, ticket Ticket, actor string) error {
-	if missing := ticket.undrafted(); len(missing) > 0 {
-		names, says := make([]string, len(missing)), make([]string, len(missing))
-		for i, drafted := range missing {
-			names[i], says[i] = drafted.Heading, drafted.Heading+": "+drafted.Says
-		}
-		return RefusedError{Why: fmt.Sprintf("%q has no %s, and a ticket is made with each of them. %s", ticket.Title, strings.Join(names, ", "), strings.Join(says, "; "))}
-	}
-	if strings.TrimSpace(ticket.Feasibility) != "" {
-		return nil
-	}
-	ruled := m.judged(feasibilityRef, feasibilityDecides, struct {
-		Ticket jevTicket `json:"ticket"`
-	}{jevTicketOf(ticket)}, nil)
-	switch {
-	case ruled.unread != "":
-		return m.heldForPerson(subject{event: rule.HookTicketCreate, key: key, ticket: ticket, actor: actor}, feasibilityRef, ruled.unread)
-	case ruled.answers[feasibilityDecides].Noul >= ruled.threshold:
-		return RefusedError{Why: fmt.Sprintf("Jev judged that %q asks for a platform or visual effect (%s, %s at %.2f against %.2f), and such a ticket is made with a %s section: %s", ticket.Title, feasibilityRef, feasibilityDecides, ruled.answers[feasibilityDecides].Noul, ruled.threshold, FeasibilityHeading, feasibilitySays)}
-	}
-	return nil
-}
-
-func (m Managed) closable(ticket Ticket, reason, actor string) error {
-	parts := reasonParts(reason)
-	if len(parts) == 0 {
-		return RefusedError{Ticket: ticket.ID, Why: fmt.Sprintf("its reason is empty, and a ticket reaches done with a reason that says what was verified and that nothing is open: tofu boardy move %s done --reason <what was verified>", ticket.ID)}
-	}
-	options := make([]jev.Option, len(parts))
-	for i, part := range parts {
-		options[i] = jev.Option{Name: reasonPartPrefix + strconv.Itoa(i+1), Criteria: part}
-	}
-	ruled := m.judged(doneReasonRef, doneReasonDecides, struct {
-		Ticket jevTicket `json:"ticket"`
-		Reason string    `json:"reason"`
-		Parts  []string  `json:"parts"`
-	}{jevTicketOf(ticket), reason, parts}, options)
-	if ruled.unread != "" {
-		return m.heldForPerson(subject{event: rule.HookTicketMove, key: ticket.Board(), ticket: ticket, to: Done, actor: actor}, doneReasonRef, ruled.unread)
-	}
-	if quoted, open := openPart(ruled.answers, reason, parts, ruled.threshold); open {
-		return RefusedError{Ticket: ticket.ID, Why: fmt.Sprintf("its reason says %q is still open (Jev, %s, %s at %.2f against %.2f), and a ticket reaches done only when nothing it asked for is open: make the open part its own ticket and keep %s open, or close it with a reason that names nothing open", quoted, doneReasonRef, doneReasonDecides, ruled.answers[doneReasonDecides].Noul, ruled.threshold, ticket.ID)}
-	}
-	return nil
-}
 
 func openPart(answers map[string]jev.Answer, reason string, parts []string, threshold float64) (string, bool) {
 	if answers[doneReasonDecides].Noul < threshold {

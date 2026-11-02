@@ -77,7 +77,11 @@ func (s Store) SaveEpic(key string, epic Epic) error {
 		if err := m.gate(&planned); err != nil {
 			return err
 		}
-		epic.Gated = true
+		hooks, err := s.hooks(key)
+		if err != nil {
+			return err
+		}
+		epic.Gated = slices.ContainsFunc(hooks, func(h rule.Hook) bool { return runsCheck(h, checkEpicReady) })
 	}
 	if err := s.savePlan(key, "epics", epic.ID, epic.Text, "title", epic.Title, "done", fmt.Sprint(epic.Done), "milestone", epic.Milestone,
 		"gated", fmt.Sprint(epic.Gated), "research", epic.Research, "design", epic.Design, "first", epic.First); err != nil {

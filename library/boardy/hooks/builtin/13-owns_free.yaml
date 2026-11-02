@@ -1,0 +1,7 @@
+id: owns_free
+name: Owns do not overlap
+description: A ticket in a holding status owns no path another held ticket owns, and a sub-ticket owns only what its parent owns.
+when: before
+on: ticket.create, ticket.move, ticket.close, ticket.widen, ticket.set
+do: check owns_free
+then: refuse

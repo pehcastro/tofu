@@ -1,0 +1,7 @@
+id: drafted
+name: A ticket is drafted
+description: A ticket is made, requested or taken out of triage only with every drafted section filled.
+when: before
+on: ticket.create, triage.request, ticket.move, ticket.close
+do: check drafted
+then: refuse

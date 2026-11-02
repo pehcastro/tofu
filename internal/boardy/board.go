@@ -132,13 +132,6 @@ func (b Board) toml() []byte {
 	return raw
 }
 
-func (b Board) cited(ticket Ticket) error {
-	if len(b.ScopeCites) == 0 || slices.ContainsFunc(b.ScopeCites, func(cite string) bool { return strings.Contains(ticket.Scope, cite) }) {
-		return nil
-	}
-	return RefusedError{Ticket: ticket.ID, Why: fmt.Sprintf("its Scope names no source, and %s wants one of: %s", b.Key, strings.Join(b.ScopeCites, ", "))}
-}
-
 func parseBoard(raw []byte) (Board, error) {
 	var board Board
 	var created string

@@ -1,0 +1,7 @@
+id: scope_cites
+name: Scope names a source
+description: A ticket's Scope names one of the sources scope_cites in board.toml lists, or the comma list after the check name; with neither, it asks for none.
+when: before
+on: ticket.create, ticket.widen
+do: check scope_cites
+then: refuse

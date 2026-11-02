@@ -1,0 +1,9 @@
+id: sub_tickets_done
+name: A parent waits for its sub-tickets
+description: A parent reaches review or done only once every sub-ticket is done or dropped.
+when: before
+on: ticket.move, ticket.close
+if:
+  to: review, done
+do: check sub_tickets_done
+then: refuse
