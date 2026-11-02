@@ -39,7 +39,7 @@ A hook is one YAML file:
 
 ## Where it lives
 
-- Hooks, in the order they fire and by file name within each: the board `boards/<KEY>/rules/`, the project `boards/rules/`, the user `~/.tofu/boardy/rules/`. `tofu boardy init` writes four starter hooks into the board's folder.
+- Hooks, in the order they fire and by file name within each: the board `boards/<KEY>/rules/`, the project `boards/rules/`, the user `~/.tofu/boardy/rules/`. `tofu boardy init` copies the five starter hooks into the board's folder, and the eighteen library hooks run from the binary below all three scopes.
 - A rule file in the library shape with `on:` and the `command` or `person_approves` checker loads as a before hook; in shadow mode it records.
 - `boards/<KEY>/board.toml`: the managers, `holds`, `log_to_review` and `scope_cites`.
 - `boards/<KEY>/triage/T<n>.json`: one waiting request each.
@@ -47,6 +47,41 @@ A hook is one YAML file:
 - `boards/<KEY>/hooks-ticked.json`: each schedule hook's last run.
 
 The `boards` folder is under the project's folder in the tofu home.
+
+## The hooks a board starts with
+
+`tofu boardy init` with no `--mode` gives a board these 23 hooks. Each runs before its events and refuses unless it says otherwise. Only `callers_owned` takes a bypass; every other hook is not bypassable.
+
+Starter hooks, copied into `boards/<KEY>/rules/`, scope `board`:
+
+- `epic_suggest`, on `ticket.create` with no epic: Jev's `board_epic@1` picks an epic for the new ticket. Not bypassable.
+- `epic_at_create`, on `ticket.create`: refuses a ticket with no epic. Not bypassable.
+- `evidence_at_review`, on `ticket.move` to review by the lead, a sub-agent or a hook: refuses until every acceptance line has an evidence entry or is left for the lead. Not bypassable.
+- `report_to_review`, after `agent.report` from doing: moves the ticket to review. Not bypassable.
+- `review_waits`, a schedule every hour: notifies about a ticket that has waited in review over two hours. Not bypassable.
+
+Library hooks, read from the binary, scope `library`:
+
+- `may_move`, Who moves a ticket, on `ticket.move` and `ticket.close`. Not bypassable.
+- `not_possible_hold`, A not-possible question is the person's, on `ticket.move` and `ticket.close`. Not bypassable.
+- `acceptance`, Work starts with an Acceptance, on a move to doing, review or done. Not bypassable.
+- `log_entry`, Review starts with a Log entry, on a move to review. Not bypassable.
+- `evidence_chars`, Enough evidence for review, on a move to review. Not bypassable.
+- `decidable`, A decision carries its question, on a move to needs-decision. Not bypassable.
+- `done_stamp`, Done needs a stamped tree, on a close to done. Not bypassable.
+- `evidenced`, Every line has evidence, on a close to done. Not bypassable.
+- `before_captured`, Done needs a before capture, on a close to done, except a docs-only ticket or one made before the gate. Not bypassable.
+- `sub_tickets_done`, A parent waits for its sub-tickets, on a move to review or done. Not bypassable.
+- `scope_cites`, Scope names a source, on `ticket.create` and `ticket.widen`. Not bypassable.
+- `epic_ready`, An epic is researched and designed first, on `ticket.create` and on `ticket.set` of an epic. Not bypassable.
+- `owns_free`, Owns do not overlap, on `ticket.create`, `ticket.move`, `ticket.close`, `ticket.widen` and `ticket.set`. Not bypassable.
+- `drafted`, A ticket is drafted, on `ticket.create`, `triage.request`, `ticket.move` and `ticket.close`. Not bypassable.
+- `feasibility`, A platform effect states its feasibility, on `ticket.create`, `triage.request`, `ticket.move` and `ticket.close`. Not bypassable.
+- `done_reason`, Done says nothing is open, on a close to done. Not bypassable.
+- `callers_owned`, Callers are owned, on a move to doing. Bypassable by the person or the lead with `tofu boardy move <ticket> doing --bypass callers_owned --why <reason>`; nobody has to accept it, so the move passes and the bypass is a `rule` line in the board's `events.jsonl`.
+- `before_on_time`, A before is captured on time, on `ticket.log`. Not bypassable.
+
+`tofu boardy rule show <id>` prints the hook's file. `tofu boardy init --mode empty` starts a board with none of the 23, and `--mode custom --hooks may_move,drafted` with only the named ones. `tofu boardy rule remove <id>` deletes a starter hook's file, and for a library hook writes `boards/<KEY>/rules/<id>.removed`, which turns it off on that board alone. A board started with `--mode empty` or `--mode custom` keeps a `rules/.mode` file, so `tofu doctor` does not offer it the starter hooks again.
 
 ## Change it
 

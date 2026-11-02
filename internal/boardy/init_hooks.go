@@ -18,10 +18,11 @@ import (
 type InitMode string
 
 const (
-	InitDefault   InitMode = "default"
-	InitEmpty     InitMode = "empty"
-	InitCustom    InitMode = "custom"
-	starterPreset          = "starter"
+	InitDefault      InitMode = "default"
+	InitEmpty        InitMode = "empty"
+	InitCustom       InitMode = "custom"
+	starterPreset             = "starter"
+	initModeFileName          = ".mode"
 )
 
 type shippedHook struct {
@@ -32,6 +33,7 @@ type shippedHook struct {
 type hookPlan struct {
 	starters, builtin []shippedHook
 	keep              func(id string) bool
+	mode              InitMode
 }
 
 func shippedHooks(preset string) ([]shippedHook, error) {
@@ -60,7 +62,7 @@ func planHooks(mode InitMode, named []string) (hookPlan, error) {
 	for _, h := range slices.Concat(starters, builtin) {
 		valid = append(valid, h.id)
 	}
-	plan := hookPlan{starters: starters, builtin: builtin, keep: func(id string) bool { return slices.Contains(named, id) }}
+	plan := hookPlan{starters: starters, builtin: builtin, mode: mode, keep: func(id string) bool { return slices.Contains(named, id) }}
 	switch mode {
 	case "", InitDefault, InitEmpty:
 		if len(named) > 0 {
@@ -129,7 +131,10 @@ func (s Store) writeHooks(key string, plan hookPlan) error {
 			return err
 		}
 	}
-	return nil
+	if plan.mode != InitEmpty && plan.mode != InitCustom {
+		return nil
+	}
+	return writeAtomic(filepath.Join(dir, initModeFileName), []byte(string(plan.mode)+"\n"))
 }
 
 func StarterHookIDs() ([]string, error) {
@@ -145,6 +150,7 @@ func Unruled(boards []Board) []Board {
 	return slices.DeleteFunc(slices.Clone(boards), func(board Board) bool {
 		rules, _ := filepath.Glob(filepath.Join(board.Dir, RulesDirName, "*.yaml"))
 		removed, _ := filepath.Glob(filepath.Join(board.Dir, RulesDirName, "*"+removedSuffix))
-		return len(rules)+len(removed) > 0
+		chosen, _ := sys.Exists(filepath.Join(board.Dir, RulesDirName, initModeFileName))
+		return chosen || len(rules)+len(removed) > 0
 	})
 }

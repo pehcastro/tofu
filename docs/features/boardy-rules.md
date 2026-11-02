@@ -2,7 +2,7 @@
 title: Boardy managers and hooks
 description: Who may change a ticket on a boardy board, how other sessions ask through triage, and board hooks that check, nudge or act before and after any board event.
 order: 19
-updated: 2026-10-31
+updated: 2026-11-02
 ---
 
 A boardy board has managers. A manager creates, assigns, accepts and closes
@@ -56,6 +56,52 @@ check fails closed: before an event it asks. A hook file that does not
 load refuses every before gate and is listed as not loaded; the other
 schedule hooks keep running, and `tofu serve` writes a `hook-failed` line
 naming the file.
+
+## The hooks a board starts with
+
+`tofu boardy init` with no `--mode` gives a board 23 hooks. The five
+starter hooks are copied into the board's `rules/` folder, so each is a
+file you can edit. The eighteen library hooks ship in the binary, run
+below the three scopes, and show as scope `library` in
+`tofu boardy rule list`. Only `callers_owned` takes a bypass.
+
+| Hook | Scope | Fires | Does | Bypass |
+|---|---|---|---|---|
+| `epic_suggest` | board | before `ticket.create` with no epic | Jev's `board_epic@1` picks an epic | none |
+| `epic_at_create` | board | before `ticket.create` | refuses a ticket with no epic | none |
+| `evidence_at_review` | board | before a move to review by the lead, a sub-agent or a hook | refuses until every acceptance line has evidence or is left for the lead | none |
+| `report_to_review` | board | after `agent.report` from doing | moves the ticket to review | none |
+| `review_waits` | board | every hour | notifies about a ticket in review over two hours | none |
+| `may_move` | library | before `ticket.move`, `ticket.close` | refuses a move the actor may not make | none |
+| `not_possible_hold` | library | before `ticket.move`, `ticket.close` | holds a not-possible ticket for the person | none |
+| `acceptance` | library | before a move to doing, review or done | refuses a ticket with no Acceptance | none |
+| `log_entry` | library | before a move to review | refuses an empty Log | none |
+| `evidence_chars` | library | before a move to review | refuses less evidence than `log_to_review` | none |
+| `decidable` | library | before a move to needs-decision | refuses a question without tldr, eli5, options and a pick | none |
+| `done_stamp` | library | before a close to done | refuses a flows-area ticket without a stamped tree | none |
+| `evidenced` | library | before a close to done | refuses while an acceptance line has no evidence | none |
+| `before_captured` | library | before a close to done | refuses a ticket with no before capture, except docs-only | none |
+| `sub_tickets_done` | library | before a move to review or done | refuses while a sub-ticket is open | none |
+| `scope_cites` | library | before `ticket.create`, `ticket.widen` | refuses a Scope that names none of `scope_cites` | none |
+| `epic_ready` | library | before `ticket.create`, `ticket.set` of an epic | refuses a gated epic that is not researched and designed | none |
+| `owns_free` | library | before `ticket.create`, `ticket.move`, `ticket.close`, `ticket.widen`, `ticket.set` | refuses owns another held ticket holds | none |
+| `drafted` | library | before `ticket.create`, `triage.request`, `ticket.move`, `ticket.close` | refuses a ticket missing a drafted section | none |
+| `feasibility` | library | before `ticket.create`, `triage.request`, `ticket.move`, `ticket.close` | refuses a platform effect with no Feasibility | none |
+| `done_reason` | library | before a close to done | refuses a reason Jev reads as naming an open part | none |
+| `callers_owned` | library | before a move to doing | refuses while a caller outside the owns is not owned | the person or the lead, accepted by nobody |
+| `before_on_time` | library | before `ticket.log` | refuses evidence logged ahead of the before capture | none |
+
+A bypass of `callers_owned` is
+`tofu boardy move DEMO-7 doing --bypass callers_owned --why "the caller is generated"`:
+the move passes, and the bypass is a line in the board's `events.jsonl`
+that `tofu boardy catchup` counts.
+
+`tofu boardy init --mode empty` starts a board with none of them, and
+`--mode custom --hooks may_move,drafted` with only the named ones.
+`tofu boardy rule remove <id>` deletes a starter hook's file; for a library
+hook it turns the hook off on that board alone. A board started with
+`--mode empty` or `--mode custom` remembers the choice, so `tofu doctor`
+does not offer it the starter hooks again.
 
 ## How to
 
