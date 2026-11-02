@@ -820,6 +820,9 @@ func taskSpec(spec turn.ComposeSpec, dir, task string, say func(string)) turn.Co
 	if spec.Frameworks, err = rule.Frameworks(dir, named); err != nil {
 		say("no framework rule fires this run: " + err.Error())
 	}
+	if project, err := rule.Frameworks(dir, nil); err == nil && len(named) > 0 {
+		spec.PathFrameworks = slices.DeleteFunc(slices.Clone(spec.Frameworks), func(framework string) bool { return slices.Contains(project, framework) })
+	}
 	if !spec.Alone {
 		return spec
 	}

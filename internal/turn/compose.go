@@ -68,23 +68,24 @@ func (p PromptPart) From() string {
 }
 
 type ComposeSpec struct {
-	Task         string
-	Paths        []string
-	Environment  string
-	ToolGuidance string
-	Rules        []rule.Rule
-	SwitchedOff  []rule.Overriding
-	Agent        subagent.Definition
-	Skills       []skill.Skill
-	SkillsOff    bool
-	WindowTokens int
-	Role         rule.Role
-	Frameworks   []string
-	Alone        bool
-	Languages    []string
-	Dropped      []PromptPart
-	Kinds        *KindJudge
-	Applies      *RuleJudge
+	Task           string
+	Paths          []string
+	Environment    string
+	ToolGuidance   string
+	Rules          []rule.Rule
+	SwitchedOff    []rule.Overriding
+	Agent          subagent.Definition
+	Skills         []skill.Skill
+	SkillsOff      bool
+	WindowTokens   int
+	Role           rule.Role
+	Frameworks     []string
+	PathFrameworks []string
+	Alone          bool
+	Languages      []string
+	Dropped        []PromptPart
+	Kinds          *KindJudge
+	Applies        *RuleJudge
 }
 
 const (
@@ -418,7 +419,8 @@ func Compose(spec ComposeSpec) (Composed, error) {
 		}
 		composed.Parts = append(composed.Parts, PromptPart{Concern: rule.ConcernTaskShaping, Text: text, ByTask: true})
 	}
-	withoutTask := rule.IndexReaching(spec.Rules, agentDomain, rule.Task{Role: composed.Task.Role, Language: composed.Task.Language, Frameworks: composed.Task.Frameworks})
+	withoutTask := rule.IndexReaching(spec.Rules, agentDomain, rule.Task{Role: composed.Task.Role, Language: composed.Task.Language,
+		Frameworks: slices.DeleteFunc(slices.Clone(composed.Task.Frameworks), func(framework string) bool { return slices.Contains(spec.PathFrameworks, framework) })})
 	var firedByKind []string
 	for i, match := range rule.IndexReaching(spec.Rules, agentDomain, composed.Task) {
 		if !match.Fires {
