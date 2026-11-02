@@ -806,7 +806,9 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 		return turn.Compose(taskSpec(spec, cmp.Or(opts.dir, "."), task, say))
 	}
 	first := taskSpec(spec, cmp.Or(opts.dir, "."), opts.task, say)
-	subAgents.Prompt.Frameworks = first.Frameworks
+	if subAgents.Prompt.Frameworks, err = rule.Frameworks(cmp.Or(opts.dir, "."), nil); err != nil {
+		say("no framework rule fires for a sub-agent from the project's own manifests: " + err.Error())
+	}
 	composed, err := turn.Compose(first)
 	run.startup.step("frameworks and prompt")
 	return composedRun{opts: opts, environment: environment, files: files, memory: remembered, instructions: instructions, composed: composed, composeTask: composeTask, subAgents: subAgents, skills: skills,

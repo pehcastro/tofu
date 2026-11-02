@@ -23,11 +23,11 @@ func (s SubAgents) prompt(inherited Config, definition subagent.Definition, task
 	case s.Prompt.Environment != "":
 		spec := s.Prompt
 		spec.Task, spec.Paths, spec.Agent, spec.Role = task, owns, definition, rule.RoleSubAgent
-		owned, err := rule.Frameworks(s.Root, owns)
+		reached, err := rule.Frameworks(s.Root, slices.Concat(owns, TaskNamed(task).Paths))
 		if err != nil {
 			return "", nil, "", err
 		}
-		spec.Frameworks = append(slices.Clone(spec.Frameworks), owned...)
+		spec.Frameworks = append(slices.Clone(spec.Frameworks), reached...)
 		slices.Sort(spec.Frameworks)
 		spec.Frameworks = slices.Compact(spec.Frameworks)
 		composed, err := Compose(spec)
