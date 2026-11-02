@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"tofu/internal/konst"
 	"tofu/internal/rule"
@@ -47,14 +48,62 @@ func (s subject) expand(text string) string {
 	return strings.NewReplacer("{ticket}", s.ticket.ID, "{title}", s.ticket.Title).Replace(text)
 }
 
+const doBroken rule.Do = "broken"
+
 func (s Store) hooks(key string) ([]rule.Hook, error) {
 	var hooks []rule.Hook
 	var err error
 	for _, scope := range hookScopes() {
-		scoped, scopeErr := s.scopeHooks(key, scope)
-		hooks, err = append(hooks, scoped...), errors.Join(err, scopeErr)
+		scoped, broken, scopeErr := s.scopeHooks(key, scope)
+		err = errors.Join(err, scopeErr)
+		for _, h := range scoped {
+			if !slices.ContainsFunc(hooks, func(won rule.Hook) bool { return won.ID == h.ID && won.Action.Do != doBroken }) {
+				hooks = append(hooks, h)
+			}
+		}
+		hooks = append(hooks, broken...)
 	}
 	return hooks, err
+}
+
+func brokenHooks(file string, on []rule.HookEvent, err error) []rule.Hook {
+	hooks := make([]rule.Hook, len(on))
+	for i, event := range on {
+		hooks[i] = rule.Hook{ID: strings.TrimSuffix(filepath.Base(file), filepath.Ext(file)), File: file, Text: err.Error(), When: rule.WhenBefore, On: event, Action: rule.Action{Do: doBroken}}
+	}
+	return hooks
+}
+
+func declaredEvents(file string) []rule.HookEvent {
+	data, _ := os.ReadFile(file)
+	for line := range strings.Lines(string(data)) {
+		value, found := strings.CutPrefix(line, "on:")
+		if !found {
+			continue
+		}
+		value = strings.Trim(strings.TrimSpace(value), `"`)
+		for _, event := range []rule.HookEvent{rule.HookEvent(value), rule.Event(value).Hook()} {
+			if slices.Contains(rule.HookEvents(), event) {
+				return []rule.HookEvent{event}
+			}
+		}
+	}
+	return rule.HookEvents()
+}
+
+func leafErrors(err error) []error {
+	if err == nil {
+		return nil
+	}
+	joined, many := err.(interface{ Unwrap() []error })
+	if !many {
+		return []error{err}
+	}
+	var leaves []error
+	for _, one := range joined.Unwrap() {
+		leaves = append(leaves, leafErrors(one)...)
+	}
+	return leaves
 }
 
 func userHooksDir() (string, error) {
@@ -74,18 +123,30 @@ func (s Store) hookDir(key string, scope HookScope) (string, error) {
 	return "", fmt.Errorf("scope %q is one of %s", scope, strings.Join(scope.Enum(), ", "))
 }
 
-func (s Store) scopeHooks(key string, scope HookScope) ([]rule.Hook, error) {
+func (s Store) scopeHooks(key string, scope HookScope) ([]rule.Hook, []rule.Hook, error) {
 	dir, err := s.hookDir(key, scope)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	hooks, err := rule.LoadHooks(dir)
+	hooks, loadErr := rule.LoadHooks(dir)
+	var broken []rule.Hook
 	hooks = slices.DeleteFunc(hooks, func(h rule.Hook) bool {
 		invalid := validHook(h)
-		err = errors.Join(err, invalid)
+		if invalid != nil {
+			broken = append(broken, brokenHooks(h.File, []rule.HookEvent{h.On}, invalid)...)
+		}
 		return invalid != nil
 	})
-	return hooks, err
+	files, _ := filepath.Glob(filepath.Join(dir, "*.yaml"))
+	for _, one := range leafErrors(loadErr) {
+		at := slices.IndexFunc(files, func(file string) bool { return strings.Contains(one.Error(), file) })
+		if at < 0 {
+			err = errors.Join(err, one)
+			continue
+		}
+		broken = append(broken, brokenHooks(files[at], declaredEvents(files[at]), one)...)
+	}
+	return hooks, broken, err
 }
 
 func validHook(h rule.Hook) error {
@@ -212,9 +273,12 @@ func (m Managed) check(h rule.Hook, s subject) (string, bool, error) {
 	case rule.DoJev:
 		answer, said := m.askJev(h.Action.Arg, s)
 		return strings.TrimSpace(h.Text + "\n" + said), answer == "", nil
-	case rule.DoContract:
-		missing := m.unevidenced(s.ticket, s.leave)
-		return cmp.Or(h.Text, "a ticket moves on with evidence for each acceptance line") + ": " + missing, missing != "", nil
+	case rule.DoContract, rule.DoCheck:
+		run, arg, err := m.namedCheck(h)
+		if err != nil {
+			return "", false, err
+		}
+		return run(h, s, arg)
 	case rule.DoCommand:
 		output, failed, err := rule.RunCommand(h.Action.Arg, s.path, []string{"TOFU_BOARD_EVENT=" + string(s.event), "TOFU_TICKET=" + s.path,
 			"TOFU_TICKET_ID=" + s.ticket.ID, "TOFU_FROM=" + string(s.from), "TOFU_TO=" + string(s.to), "TOFU_ACTOR=" + s.actor})
@@ -222,39 +286,8 @@ func (m Managed) check(h rule.Hook, s subject) (string, bool, error) {
 			return "", false, fmt.Errorf("hook %q %w", h.ID, err)
 		}
 		return strings.TrimSpace(h.Text + "\n" + output), failed, nil
-	case rule.DoCheck:
-		return "", false, unknownCheck(h)
 	}
 	panic("boardy: unknown check " + string(h.Action.Do))
-}
-
-func unknownCheck(h rule.Hook) error {
-	name, _, _ := strings.Cut(h.Action.Arg, " ")
-	return fmt.Errorf("hook %q: no check named %q, and the named checks are: none", h.ID, name)
-}
-
-func (m Managed) unevidenced(ticket Ticket, leave []int) string {
-	lines, err := m.Store.Acceptance(ticket, leave)
-	switch {
-	case err != nil:
-		return "its evidence could not be read: " + err.Error()
-	case len(lines) == 0:
-		return ticket.ID + " has no acceptance lines to evidence"
-	}
-	return UnmetLines(lines)
-}
-
-func UnmetLines(lines []AcceptanceLine) string {
-	var unmet []string
-	for i, line := range lines {
-		if line.State == LineUnmet {
-			unmet = append(unmet, fmt.Sprintf("line %d, %s", i+1, line.Line))
-		}
-	}
-	if len(unmet) == 0 {
-		return ""
-	}
-	return fmt.Sprintf("%d of %d acceptance lines in force have no evidence entry naming them: %s", len(unmet), len(lines), strings.Join(unmet, "; "))
 }
 
 type trial struct {
@@ -278,7 +311,9 @@ func (m Managed) entered(key string, ticket Ticket) time.Time {
 }
 
 func (m Managed) holding(hooks []rule.Hook, when rule.When, s subject) ([]rule.Hook, subject) {
-	hooks = slices.DeleteFunc(slices.Clone(hooks), func(h rule.Hook) bool { return h.When != when || h.On != s.event })
+	hooks = slices.DeleteFunc(slices.Clone(hooks), func(h rule.Hook) bool {
+		return h.When != when || h.On != s.event || s.actor == hookActorPrefix+h.ID
+	})
 	if s.entered.IsZero() {
 		s.entered = time.Now()
 		if s.ticket.ID != "" && slices.ContainsFunc(hooks, func(h rule.Hook) bool { return h.If.InStatusFor > 0 }) {
@@ -290,11 +325,13 @@ func (m Managed) holding(hooks []rule.Hook, when rule.When, s subject) ([]rule.H
 
 func (m Managed) weigh(hooks []rule.Hook, when rule.When, s subject) ([]Fired, []rule.Hook, error) {
 	hooks, s = m.holding(hooks, when, s)
-	var fired []Fired
+	var fired, bypassed []Fired
 	var effects []rule.Hook
-	var refusals []string
 	var waits error
 	for _, h := range hooks {
+		if h.Action.Do == doBroken {
+			return fired, effects, RefusedError{Ticket: s.ticket.ID, Why: h.ID + ": " + h.Text + " (not bypassable: fix or remove " + h.File + ")"}
+		}
 		if !h.Action.Do.Check() {
 			effects = append(effects, h)
 			continue
@@ -306,23 +343,104 @@ func (m Managed) weigh(hooks []rule.Hook, when rule.When, s subject) ([]Fired, [
 		if !t.failed {
 			continue
 		}
+		if t.blocked && when == rule.WhenBefore && m.bypassable(s) && h.ID == m.Bypass.Hook {
+			f, waiting := m.bypass(h, s)
+			bypassed = append(bypassed, f...)
+			if waiting != nil {
+				waits = waiting
+			}
+			continue
+		}
 		mode := rule.ModeShadow
 		if t.blocked {
 			mode = rule.ModeEnforced
 		}
-		finding := rule.Finding{RuleID: h.ID, Target: s.ticket.ID, Detail: t.detail}
-		fired = append(fired, Fired{Fire: rule.Fire{RuleID: h.ID, Mode: mode, Target: s.ticket.ID, Findings: []rule.Finding{finding}, Blocked: t.blocked, At: time.Now()}, Checker: string(h.Action.Do), Then: t.then})
+		fired = append(fired, firing(h, s, mode, t.blocked, t.then, t.detail))
 		switch {
 		case t.blocked && t.then == rule.ThenRefuse:
-			refusals = append(refusals, h.ID+": "+t.detail)
+			return fired, effects, RefusedError{Ticket: s.ticket.ID, Why: h.ID + ": " + t.detail + " (" + m.bypassHint(h, s) + ")"}
 		case t.blocked:
-			waits = WaitingError{Ticket: s.ticket.ID, Rule: h.ID, Detail: t.detail}
+			waits = WaitingError{Ticket: s.ticket.ID, Rule: h.ID, Detail: t.detail + " (" + m.bypassHint(h, s) + ")"}
 		}
 	}
-	if refusals != nil {
-		return fired, effects, RefusedError{Ticket: s.ticket.ID, Why: strings.Join(refusals, "; ")}
+	return append(fired, bypassed...), effects, waits
+}
+
+const (
+	thenBypassed     rule.Then = "bypassed"
+	thenBypassReview rule.Then = "bypass-review"
+	thenBypassAsked  rule.Then = "bypass-asked"
+)
+
+type bypassRefused struct{ why string }
+
+func (e bypassRefused) Error() string { return "bypass refused: " + e.why }
+
+func (m Managed) bypassable(s subject) bool {
+	return m.Bypass.Hook != "" && s.depth == 0 && (s.event == rule.HookTicketMove || s.event == rule.HookTicketClose)
+}
+
+func (m Managed) vetBypass(hooks []rule.Hook, s subject) error {
+	if !m.bypassable(s) {
+		return nil
 	}
-	return fired, effects, waits
+	held, _ := m.holding(hooks, rule.WhenBefore, s)
+	at := slices.IndexFunc(held, func(h rule.Hook) bool { return h.ID == m.Bypass.Hook && h.Action.Do != doBroken })
+	var why string
+	switch {
+	case at < 0:
+		why = fmt.Sprintf("no hook %s runs before this %s of %s", m.Bypass.Hook, s.event, s.ticket.ID)
+	case !held[at].Action.Do.Check() || held[at].Then != rule.ThenRefuse && held[at].Then != rule.ThenAsk:
+		why = fmt.Sprintf("hook %s does not refuse or ask, so there is nothing to bypass", m.Bypass.Hook)
+	case held[at].Bypass == nil || !slices.Contains(held[at].Bypass.Who, m.actorKind(s.actor)):
+		why = "hook " + m.Bypass.Hook + " is " + m.bypassHint(held[at], s)
+	case strings.TrimSpace(m.Bypass.Why) == "":
+		why = "a bypass says why: --why <reason>"
+	case utf8.RuneCountInString(m.Bypass.Why) > konst.BoardBypassWhyRunesMost:
+		why = fmt.Sprintf("--why runs to %d characters, over the %d a reason holds", utf8.RuneCountInString(m.Bypass.Why), konst.BoardBypassWhyRunesMost)
+	default:
+		return nil
+	}
+	return bypassRefused{why}
+}
+
+func (m Managed) bypass(h rule.Hook, s subject) ([]Fired, error) {
+	b, why := h.Bypass, m.Bypass.Why
+	switch {
+	case b.Accept == rule.AcceptNone:
+		return []Fired{firing(h, s, rule.ModeShadow, false, thenBypassed, "accept none, so it passes: "+why)}, nil
+	case b.Wait == rule.WaitAfter:
+		return []Fired{firing(h, s, rule.ModeShadow, false, thenBypassReview, fmt.Sprintf("it passes, and the %s reviews it after: %s", b.Accept, why))}, nil
+	}
+	detail := fmt.Sprintf("the bypass waits for the %s to accept it: %s", b.Accept, why)
+	waiting := WaitingError{Ticket: s.ticket.ID, Rule: h.ID, Detail: detail, For: string(b.Accept)}
+	thread, _ := m.Store.Thread(s.ticket.ID)
+	asked := slices.IndexFunc(thread, func(e Event) bool {
+		return strings.HasPrefix(e.Text, hookText(h.ID, string(thenBypassAsked), s.event, ""))
+	})
+	if asked >= 0 {
+		waiting.Detail = fmt.Sprintf("the bypass was asked at %s and still waits for the %s to accept it", thread[asked].At.Local().Format(time.DateTime), b.Accept)
+		return nil, waiting
+	}
+	return []Fired{firing(h, s, rule.ModeShadow, false, thenBypassAsked, detail)}, waiting
+}
+
+func (m Managed) bypassHint(h rule.Hook, s subject) string {
+	b := h.Bypass
+	switch {
+	case b == nil:
+		return "not bypassable"
+	case s.event != rule.HookTicketMove && s.event != rule.HookTicketClose:
+		return "a bypass is asked on a move, and this is " + string(s.event)
+	case !slices.Contains(b.Who, m.actorKind(s.actor)):
+		return fmt.Sprintf("bypassable by %s; you act as %s, so it is not yours to bypass", strings.Join(actorNames(b.Who), ", "), m.actorKind(s.actor))
+	}
+	return fmt.Sprintf("bypass: tofu boardy move %s %s --bypass %s --why <reason>", s.ticket.ID, s.to, h.ID)
+}
+
+func firing(h rule.Hook, s subject, mode rule.Mode, blocked bool, then rule.Then, detail string) Fired {
+	finding := rule.Finding{RuleID: h.ID, Target: s.ticket.ID, Detail: detail}
+	return Fired{Fire: rule.Fire{RuleID: h.ID, Mode: mode, Target: s.ticket.ID, Findings: []rule.Finding{finding}, Blocked: blocked, At: time.Now()}, Checker: string(h.Action.Do), Then: then}
 }
 
 func hookText(id, what string, event rule.HookEvent, detail string) string {
@@ -409,14 +527,36 @@ func (m Managed) gate(s *subject) error {
 	if err != nil {
 		return err
 	}
+	if err := m.vetBypass(hooks, *s); err != nil {
+		return err
+	}
 	_, sets, _ := m.weigh(slices.DeleteFunc(slices.Clone(hooks), func(h rule.Hook) bool { return h.Action.Do != rule.DoSet }), rule.WhenBefore, *s)
+	var heldWrites []func() error
 	for _, h := range sets {
-		said, err := m.set(h, s)
-		if err = errors.Join(err, m.note(h, *s, said)); err != nil {
+		said, write, err := m.set(h, s)
+		if err != nil {
+			return errors.Join(err, m.note(h, *s, said))
+		}
+		persist := func() error { return errors.Join(write(), m.note(h, *s, said)) }
+		if m.bypassable(*s) {
+			heldWrites = append(heldWrites, persist)
+		} else if err := persist(); err != nil {
 			return err
 		}
 	}
 	fired, _, err := m.weigh(hooks, rule.WhenBefore, *s)
+	var waiting WaitingError
+	used := errors.As(err, &waiting) && waiting.Rule == m.Bypass.Hook || slices.ContainsFunc(fired, func(f Fired) bool {
+		return f.RuleID == m.Bypass.Hook && slices.Contains([]rule.Then{thenBypassed, thenBypassReview, thenBypassAsked}, f.Then)
+	})
+	if m.bypassable(*s) && !used && !errors.As(err, new(RefusedError)) {
+		return bypassRefused{fmt.Sprintf("hook %s passes this %s, so there is nothing to bypass", m.Bypass.Hook, s.event)}
+	}
+	for _, persist := range heldWrites {
+		if err := persist(); err != nil {
+			return err
+		}
+	}
 	return errors.Join(m.record(*s, fired), err)
 }
 
@@ -468,7 +608,9 @@ func (m Managed) effect(h rule.Hook, s subject) error {
 			_, err = m.comment(board, ticket, arg, actor, depth)
 		}
 	case rule.DoSet:
-		arg, err = m.set(h, &s)
+		var write func() error
+		arg, write, err = m.set(h, &s)
+		err = errors.Join(err, write())
 	case rule.DoNotify:
 	}
 	if err != nil {
@@ -477,22 +619,26 @@ func (m Managed) effect(h rule.Hook, s subject) error {
 	return m.note(h, s, arg)
 }
 
-func (m Managed) set(h rule.Hook, s *subject) (string, error) {
+func (m Managed) set(h rule.Hook, s *subject) (string, func() error, error) {
+	unwritten := func() error { return nil }
 	field, value, asks := h.Action.Setting()
 	value = s.expand(value)
 	said := field + " " + value
 	if asks != "" {
 		var why string
 		if value, why = m.askJev(asks, *s); value == "" {
-			return field + " left as it was: " + why, nil
+			return field + " left as it was: " + why, unwritten, nil
 		}
 		said = field + " " + value + ": " + why
 	}
 	if err := s.ticket.set(field, value); err != nil || s.ticket.ID == "" {
-		return said, err
+		return said, unwritten, err
 	}
-	_, err := m.Store.Edit(s.ticket.ID, func(t *Ticket) error { return t.set(field, value) })
-	return said, err
+	id := s.ticket.ID
+	return said, func() error {
+		_, err := m.Store.Edit(id, func(t *Ticket) error { return t.set(field, value) })
+		return err
+	}, nil
 }
 
 func (m Managed) Fire(when rule.When, event rule.HookEvent, key, id, actor string) error {
@@ -567,7 +713,9 @@ func (m Managed) Tick(key string) ([]string, error) {
 			return err
 		}
 		now := time.Now()
-		due := slices.DeleteFunc(hooks, func(h rule.Hook) bool { return h.On != rule.HookSchedule || !h.Due(last[h.File], now) })
+		due := slices.DeleteFunc(hooks, func(h rule.Hook) bool {
+			return h.On != rule.HookSchedule || h.Action.Do == doBroken || !h.Due(last[h.File], now)
+		})
 		if len(due) == 0 {
 			return nil
 		}

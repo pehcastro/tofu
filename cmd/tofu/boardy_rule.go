@@ -37,7 +37,11 @@ func (c boardyCall) rule() int {
 			return c.o.fail(err)
 		}
 		return c.o.done(true, answer, func(page cli.Page) []string {
-			return []string{page.Receipt(cli.Removed, "removed "+answer.Hook.ID+" from "+string(answer.Hook.Scope)+" scope", answer.Hook.File)}
+			lines := []string{page.Receipt(cli.Removed, "removed "+answer.Hook.ID+" from "+string(answer.Hook.Scope)+" scope", answer.Hook.File)}
+			if next := answer.TakesOver; next != nil {
+				lines = append(lines, page.Receipt(cli.Warn, "the "+string(next.Scope)+" hook "+next.ID+" takes over: "+next.Trigger+" · "+does(*next), next.File))
+			}
+			return lines
 		})
 	case "test":
 		return c.ruleTest(request)
@@ -78,6 +82,9 @@ func (c boardyCall) ruleList() int {
 			}
 			if hook.Bypass != "" {
 				lines = append(lines, cli.Indent(page.Label("bypass "+hook.Bypass))...)
+			}
+			if hook.ShadowedBy != "" {
+				lines = append(lines, cli.Indent(page.Label("shadowed by the "+string(hook.ShadowedBy)+" hook "+hook.ID+", so it does not run"))...)
 			}
 		}
 		return lines

@@ -22,7 +22,12 @@ type Managed struct {
 	Local
 	Person string
 	Lead   string
+	Bypass Bypassing
 	head   *DoneGate
+}
+
+type Bypassing struct {
+	Hook, Why string
 }
 
 type RefusedError struct {
@@ -42,10 +47,11 @@ type WaitingError struct {
 	Ticket string
 	Rule   string
 	Detail string
+	For    string
 }
 
 func (e WaitingError) Error() string {
-	return fmt.Sprintf("%s waits for %s: %s (rule %s)", e.Ticket, RolePerson, e.Detail, e.Rule)
+	return fmt.Sprintf("%s waits for %s: %s (rule %s)", e.Ticket, cmp.Or(e.For, string(RolePerson)), e.Detail, e.Rule)
 }
 
 const subAgentOfSession = "/"

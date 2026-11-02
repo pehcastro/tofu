@@ -35,7 +35,7 @@ func boardyUsageOf(subcommand string) string {
 	case "show":
 		return "tofu boardy show <ticket> [--thread] [--json]"
 	case "move":
-		return "tofu boardy move <ticket> <status> [--reason text] [--as name] [--json]"
+		return "tofu boardy move <ticket> <status> [--reason text] [--bypass <hook> --why text] [--as name] [--json]"
 	case "log":
 		return "tofu boardy log <ticket> [<text>] [--evidence [--line n] | --before <what you ran and what it printed>] [--as name] [--json]"
 	case "lint":
@@ -535,6 +535,10 @@ func (c boardyCall) move() int {
 	if err != nil {
 		return c.o.usage(err)
 	}
+	if c.flags["why"] != "" && c.flags["bypass"] == "" {
+		return c.o.usage(errors.New("--why says why a --bypass <hook> is asked"))
+	}
+	c.managed.Bypass = boardy.Bypassing{Hook: c.flags["bypass"], Why: c.flags["why"]}
 	before, _ := c.store.Get(c.args[0])
 	ticket, err := c.managed.Move(c.args[0], to, c.flags["reason"], c.actor)
 	said := ticket.ID + " is " + string(ticket.Status) + ", was " + string(before.Status)

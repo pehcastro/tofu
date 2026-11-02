@@ -4,8 +4,10 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -43,6 +45,7 @@ type HookRow struct {
 	Name        string         `json:"name,omitempty"`
 	Description string         `json:"description,omitempty"`
 	Bypass      string         `json:"bypass,omitempty"`
+	ShadowedBy  HookScope      `json:"shadowed_by,omitempty"`
 	LastFired   time.Time      `json:"last_fired,omitzero"`
 	hook        rule.Hook
 }
@@ -75,6 +78,7 @@ func hookRow(h rule.Hook, scope HookScope) HookRow {
 	add("type", c.Type...)
 	add("priority", c.Priority...)
 	add("labels", c.Labels...)
+	add("not_labels", c.NotLabels...)
 	add("actor", actorNames(c.Actor)...)
 	add("epic", c.Epic)
 	add("sprint", c.Sprint)
@@ -82,6 +86,8 @@ func hookRow(h rule.Hook, scope HookScope) HookRow {
 	if c.InStatusFor > 0 {
 		add("in_status_for", shortDuration(c.InStatusFor))
 	}
+	add("created_before", shortMoment(c.CreatedBefore))
+	add("created_after", shortMoment(c.CreatedAfter))
 	if said != nil {
 		words = append(words, "if "+strings.Join(said, ", "))
 	}
@@ -104,6 +110,16 @@ func shortDuration(d time.Duration) string {
 	return text
 }
 
+func shortMoment(at time.Time) string {
+	switch {
+	case at.IsZero():
+		return ""
+	case at.Equal(at.Truncate(24 * time.Hour)):
+		return at.Format(time.DateOnly)
+	}
+	return at.Format(time.RFC3339)
+}
+
 type RulesRequest struct {
 	Board string `json:"board,omitempty"`
 }
@@ -121,6 +137,12 @@ func (a API) Rules(request RulesRequest) (RulesAnswer, error) {
 		return RulesAnswer{}, err
 	}
 	store := a.Board.Store
+	switch _, err := store.Board(key); {
+	case errors.Is(err, fs.ErrNotExist):
+		return RulesAnswer{}, fmt.Errorf("no board %s in this project: tofu boardy boards lists them", key)
+	case err != nil:
+		return RulesAnswer{}, err
+	}
 	events, eventsErr := store.Events(key, 0)
 	ran, tickedErr := ticked(filepath.Join(store.BoardDir(key), tickedFileName))
 	fired := map[string]time.Time{}
@@ -131,13 +153,31 @@ func (a API) Rules(request RulesRequest) (RulesAnswer, error) {
 		}
 	}
 	answer := RulesAnswer{Board: key, Hooks: []HookRow{}, Invalid: []string{}, Words: a.Words}
+	won := map[string]HookScope{}
 	for _, scope := range hookScopes() {
-		hooks, err := store.scopeHooks(key, scope)
+		hooks, broken, err := store.scopeHooks(key, scope)
 		if err != nil {
 			answer.Invalid = append(answer.Invalid, strings.Split(err.Error(), "\n")...)
 		}
+		var on []string
+		for i, h := range broken {
+			on = append(on, string(h.On))
+			if i+1 < len(broken) && broken[i+1].File == h.File {
+				continue
+			}
+			if len(on) == len(rule.HookEvents()) {
+				on = []string{"every event"}
+			}
+			answer.Invalid = append(answer.Invalid, strings.ReplaceAll(h.Text, "\n", "; ")+" (refuses "+strings.Join(on, ", ")+" until it is fixed)")
+			on = nil
+		}
 		for _, h := range hooks {
 			row := hookRow(h, scope)
+			if first, shadowed := won[h.ID]; shadowed {
+				row.ShadowedBy = first
+			} else {
+				won[h.ID] = scope
+			}
 			row.LastFired = fired[h.ID]
 			if ran[h.File].After(row.LastFired) {
 				row.LastFired = ran[h.File].UTC().Truncate(time.Second)
@@ -155,10 +195,11 @@ type RuleRequest struct {
 }
 
 type RuleAnswer struct {
-	Board  string  `json:"board"`
-	Hook   HookRow `json:"hook"`
-	Source string  `json:"source"`
-	Words  Words   `json:"words"`
+	Board     string   `json:"board"`
+	Hook      HookRow  `json:"hook"`
+	Source    string   `json:"source"`
+	TakesOver *HookRow `json:"takes_over,omitempty"`
+	Words     Words    `json:"words"`
 }
 
 func (a API) RuleGet(request RuleRequest) (RuleAnswer, error) {
@@ -202,7 +243,9 @@ func (a API) parseHook(board string, scope HookScope, source string) (string, ru
 	case err == nil && file == dir:
 		err = fmt.Errorf("%s: hook id %q names its file, so it is one plain name", dir, h.ID)
 	case err == nil && h.Action.Do == rule.DoCheck:
-		err = fmt.Errorf("%s: %w", file, unknownCheck(h))
+		if _, _, unknown := a.Board.namedCheck(h); unknown != nil {
+			err = fmt.Errorf("%s: %w", file, unknown)
+		}
 	}
 	if err != nil {
 		return "", rule.Hook{}, err
@@ -215,6 +258,9 @@ func (a API) RulePut(request RulePutRequest) (RuleAnswer, error) {
 	key, h, err := a.parseHook(request.Board, scope, request.Source)
 	if err == nil {
 		err = a.Board.Manages(key, a.Actor, "change a board hook")
+	}
+	if err == nil {
+		err = a.weakens(key, scope, h)
 	}
 	if err != nil {
 		return RuleAnswer{}, err
@@ -233,6 +279,34 @@ func (a API) RulePut(request RulePutRequest) (RuleAnswer, error) {
 	return answer, errors.Join(err, a.hookChanged(key, verb, answer.Hook))
 }
 
+func (a API) weakens(key string, scope HookScope, h rule.Hook) error {
+	kind := a.Board.actorKind(a.Actor)
+	if kind == rule.ActorPerson {
+		return nil
+	}
+	listed, err := a.Rules(RulesRequest{Board: key})
+	if err != nil {
+		return err
+	}
+	strictness := func(then rule.Then) int { return slices.Index([]rule.Then{rule.ThenAsk, rule.ThenRefuse}, then) }
+	for _, row := range listed.Hooks {
+		was := row.hook
+		if row.ID != h.ID || strictness(was.Then) < 0 {
+			continue
+		}
+		how := "shadows"
+		if row.Scope == scope {
+			how = "weakens"
+		}
+		shadows := slices.Index(hookScopes(), scope) < slices.Index(hookScopes(), row.Scope)
+		weaker := row.Scope == scope && (strictness(h.Then) < strictness(was.Then) || was.Bypass == nil && h.Bypass != nil)
+		if shadows || weaker {
+			return WaitingError{Ticket: "hook " + h.ID, Rule: h.ID, Detail: fmt.Sprintf("%s acts as %s, and this %s hook %s the %s hook that would %s, so the person writes it", a.Actor, kind, scope, how, row.Scope, was.Then)}
+		}
+	}
+	return nil
+}
+
 func (a API) RuleRemove(request RuleRequest) (RuleAnswer, error) {
 	answer, err := a.RuleGet(request)
 	if err == nil {
@@ -240,6 +314,9 @@ func (a API) RuleRemove(request RuleRequest) (RuleAnswer, error) {
 	}
 	if err == nil {
 		err = errors.Join(os.Remove(answer.Hook.File), a.hookChanged(answer.Board, "removed", answer.Hook))
+	}
+	if next, missing := a.RuleGet(RuleRequest{Board: answer.Board, ID: request.ID}); err == nil && missing == nil {
+		answer.TakesOver = &next.Hook
 	}
 	return answer, err
 }

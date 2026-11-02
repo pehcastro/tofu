@@ -58,7 +58,7 @@ func (t boardTool) Definition() llm.Tool {
 	var actions []string
 	switch t.verb {
 	case boardRule:
-		describe = "reads and writes the board hooks that run on every board event, so a check you would run by hand on every ticket runs itself. list shows each hook with its scope, trigger and last fire; show prints one hook's YAML; add writes a new hook from source; edit replaces the hook source names; remove deletes one; test runs one against a ticket and writes nothing. a hook is YAML lines: id, when (before or after), on (ticket.create, ticket.move, ticket.assign, ticket.log, ticket.widen, ticket.close, epic.create, sprint.open, sprint.close, milestone.reach, triage.request, triage.accept, question.ask, question.answer, agent.spawn, agent.report, lead.attach, schedule with every 1h or daily 09:00), if: with indented conditions (from, to, type, priority, labels, actor, epic set or empty, sprint, owns, in_status_for 2h), do (a check: command, field, person, then refuse, nudge, ask or record; or after an event an effect: create, move, assign, log, notify, set) and text, the words the actor reads"
+		describe = "reads and writes the board hooks that run on every board event, so a check you would run by hand on every ticket runs itself. list shows each hook with its scope, trigger and last fire; show prints one hook's YAML; add writes a new hook from source; edit replaces the hook source names; remove deletes one; test runs one against a ticket and writes nothing. a hook is YAML lines: id, when (before or after), on (ticket.create, ticket.move, ticket.assign, ticket.log, ticket.widen, ticket.close, epic.create, sprint.open, sprint.close, milestone.reach, triage.request, triage.accept, question.ask, question.answer, agent.spawn, agent.report, lead.attach, schedule with every 1h or daily 09:00), if: with indented conditions (from, to, type, priority, labels, actor, epic set or empty, sprint, owns, in_status_for 2h), do (a check: command, field, person or check evidenced, then refuse, nudge, ask or record; or after an event an effect: create, move, assign, log, notify, set), text, the words the actor reads, and for a refuse or ask an optional bypass: block with indented who, accept and wait. one hook runs per id, board over project over user"
 		actions = []string{"list", "show", "add", "edit", "remove", "test"}
 		properties["id"] = stringParam("the hook id, for show, remove and test")
 		properties["source"] = stringParam("the hook's whole YAML, for add and edit, or for test of a hook not yet written")
@@ -125,6 +125,9 @@ func hookLine(row boardy.HookRow) string {
 	if !row.LastFired.IsZero() {
 		line += ", last fired " + row.LastFired.Format(time.DateTime)
 	}
+	if row.ShadowedBy != "" {
+		line += ", shadowed by the " + string(row.ShadowedBy) + " hook of the same id, so it does not run"
+	}
 	return line
 }
 
@@ -158,7 +161,11 @@ func (t boardTool) rule(a boardArgs) (string, error) {
 		return "wrote " + hookLine(put.Hook) + "; board_rule remove " + put.Hook.ID + " takes it out", err
 	case "remove":
 		removed, err := api.RuleRemove(boardy.RuleRequest{Board: a.Board, Scope: scope, ID: a.ID})
-		return "removed " + removed.Hook.ID + " from " + removed.Hook.File, err
+		said := "removed " + removed.Hook.ID + " from " + removed.Hook.File
+		if next := removed.TakesOver; next != nil {
+			said += "; the " + string(next.Scope) + " hook " + hookLine(*next) + " takes over"
+		}
+		return said, err
 	case "test":
 		tested, err := api.RuleTest(boardy.RuleTestRequest{Board: a.Board, Scope: scope, ID: a.ID, Source: a.Source, Ticket: a.Ticket, To: boardy.Status(a.To)})
 		return strings.TrimSpace(tested.Hook.ID + " on " + cmp.Or(tested.Ticket, a.Board) + ": " + tested.Verdict + "\n" + tested.Detail), err
