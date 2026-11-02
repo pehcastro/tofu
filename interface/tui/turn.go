@@ -322,7 +322,9 @@ func drawChat(view *session.Model, event Event, status string) {
 			view.Append(session.Entry{Kind: session.Note, Body: event.Origin.Name})
 		case event.Origin.Kind == host.OriginPerson || event.Origin.Sub.Answer():
 			view.Append(session.Entry{Kind: session.User, Body: event.Text})
-		case event.Origin.Sub == llm.SourceReplyCut:
+		case event.Origin.Kind == host.OriginCron:
+			view.Append(session.Entry{Kind: session.Note, Head: session.FiredHead, Body: firedTitle(event.Text)})
+		case event.Origin.Sub == llm.SourceReplyCut || event.Origin.Sub == llm.SourceShellHolder:
 			view.Append(session.Entry{Kind: session.Note, Body: event.Text})
 		}
 	case EventText:
@@ -347,8 +349,13 @@ func drawChat(view *session.Model, event Event, status string) {
 	}
 }
 
-func (a *App) cronFired(prompt string) {
+func firedTitle(prompt string) string {
 	title, _, _ := strings.Cut(prompt, " (")
+	return title
+}
+
+func (a *App) cronFired(prompt string) {
+	title := firedTitle(prompt)
 	full := a.mintID()
 	id := a.shortOf(full)
 	a.record(feed.Event{ID: id, FullID: full, Actor: orchestrator, Kind: feed.KindNote, State: feed.StateComplete, Title: title, Body: prompt, At: a.options.Now()})

@@ -51,6 +51,7 @@ const (
 	followAttach    followOp = "attach"
 	followRan       followOp = "ran"
 	followRemember  followOp = "remember"
+	followShellNote followOp = "shellNotice"
 	followCron      followOp = "cron"
 	followRoster    followOp = "roster"
 	followSettings  followOp = "settings"
@@ -409,6 +410,8 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 		h.Ran(ask.Command, ask.Text, ask.Stopped)
 	case followRemember:
 		h.Remembered(ask.Text)
+	case followShellNote:
+		h.shellNotice(ask.Shell, ask.Text)
 	case followCron:
 		var err error
 		if reply.Cron, err = h.CronCommand(ask.Text); err != nil {

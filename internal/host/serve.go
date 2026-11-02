@@ -774,7 +774,7 @@ func (s *server) changeHolder(owner string, held ShellHeld, note, notice string)
 	s.watched(held.Shell).holder = shell.Holder(held.Holder)
 	focus := s.focus()
 	s.box.push(kept("shell.holder", &ShellHolderChanged{Identity: focus.items.identity(owner, held.Shell), ShellHeld: held, Note: note}))
-	focus.host.Steer(notice)
+	focus.host.shellNotice(held.Shell, notice)
 	s.reportStatus(focus)
 }
 

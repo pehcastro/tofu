@@ -166,6 +166,7 @@ const (
 	SourceFailure     Source = "failure"
 	SourceGate        Source = "gate"
 	SourceSpawnLine   Source = "spawn.line"
+	SourceShellHolder Source = "shell.holder"
 
 	SourceCronFire     Source = "fire"
 	SourceSessionStart Source = "session_start"
@@ -203,7 +204,7 @@ func sourceRows() []sourceRow {
 		{SourceContinue, OriginTofu, "continue"}, {SourceForkCarry, OriginTofu, "fork carry"}, {SourceForkState, OriginTofu, "fork state"},
 		{SourcePlan, OriginTofu, string(SourceAfterTheCachedPrefix)}, {SourceReplyCut, OriginTofu, "reply cut"},
 		{SourceEnvironment, OriginTofu, "environment"}, {SourceNotice, OriginTofu, "notice"}, {SourceFailure, OriginTofu, "failure"},
-		{SourceGate, OriginTofu, "gate"}, {SourceSpawnLine, OriginTofu, "spawn line"},
+		{SourceGate, OriginTofu, "gate"}, {SourceSpawnLine, OriginTofu, "spawn line"}, {SourceShellHolder, OriginTofu, "shell holder"},
 		{SourceCronFire, OriginCron, legacyCron},
 		{SourceSessionStart, OriginHook, "session start hook"}, {SourcePromptSubmit, OriginHook, "prompt submit hook"},
 		{SourcePreTool, OriginHook, "pre tool hook"}, {SourcePostTool, OriginHook, "post tool hook"}, {SourceStopHook, OriginHook, "stop hook"},
@@ -295,7 +296,7 @@ func (o Origin) Kind() OriginKind {
 
 func (o Origin) Marked() bool {
 	kind := o.Kind()
-	return kind != "" && kind != OriginPerson && !o.Source.Answer()
+	return kind != "" && kind != OriginPerson && !o.Source.Answer() && o.Source != SourceShellHolder
 }
 
 func (s Source) Answer() bool {

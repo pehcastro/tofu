@@ -117,9 +117,9 @@ func historyOf(messages []llm.Message) recall.Conversation {
 	return conversation
 }
 
-func (b *Inbox) PostFired(prompt string, fired llm.Origin) {
-	fired.PostedAt = time.Now()
-	b.post(inboxItem{text: prompt, origin: fired})
+func (b *Inbox) Deliver(text string, origin llm.Origin) {
+	origin.PostedAt = time.Now()
+	b.post(inboxItem{text: text, origin: origin})
 }
 
 func (b *Inbox) Holds(text string) bool {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 
+	"tofu/internal/llm"
 	"tofu/internal/safe"
 	"tofu/internal/shell"
 )
@@ -114,9 +115,30 @@ func (h *Host) handBackHeld(s *seat) {
 	h.held.mu.Unlock()
 	for _, name := range gone {
 		if _, err := h.shells.HandBack(name); err == nil {
-			h.Steer("The person's client went away, so " + name + " is handed back to you. It is running. Its output while they held it is in shell logs.")
+			h.shellNotice(name, "The person's client went away, so "+name+" is handed back to you. It is running. Its output while they held it is in shell logs.")
 		}
 	}
+}
+
+func (h *Host) shellNotice(name, text string) {
+	if err := h.reachHost(); err != nil {
+		h.note(err.Error())
+		return
+	}
+	if f := h.following.Load(); f != nil {
+		f.ask(followAsk{Op: followShellNote, Shell: name, Text: text})
+		return
+	}
+	origin := llm.Origin{Source: llm.SourceShellHolder, Name: name}
+	h.mu.Lock()
+	if !h.running && !h.closed {
+		h.begin(Pick{Wire: h.pick.Wire, Model: h.pick.Model, Effort: h.pick.Effort}, text, origin)
+		h.mu.Unlock()
+		return
+	}
+	inbox := h.inbox
+	h.mu.Unlock()
+	inbox.Deliver(text, origin)
 }
 
 func (h *Host) heldShell(ask followAsk) (shell.Hold, error) {

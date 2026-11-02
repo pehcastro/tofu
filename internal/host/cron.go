@@ -123,7 +123,7 @@ func (h *Host) fire(fires []cron.Fire) {
 		inbox := h.inbox
 		h.mu.Unlock()
 		h.emitter().emit(Event{Kind: EventNote, Text: fired.Line, Detail: fired.Prompt, Origin: wireOrigin(origin)})
-		inbox.PostFired(fired.Prompt, origin)
+		inbox.Deliver(fired.Prompt, origin)
 		h.answerNobody()
 	}
 }
