@@ -1,0 +1,6 @@
+id: epic_suggest
+when: before
+on: ticket.create
+do: set epic jev board_epic@1
+if:
+  epic: empty

@@ -51,6 +51,21 @@ tofu boardy new --type bug --before "the list shows 9 of 10 rows" --driven "tofu
 tofu boardy new --owns docs/x.md --before "no page" --driven "open docs/x.md" --still-works "the index links it" --error-case "a missing image is named" write the page
 ```
 
+`init` writes the starter hooks shipped in `library/boardy/hooks/starter/`
+into the board's `rules/` folder and keeps every library hook on. Pick
+another start with `--mode`:
+
+```
+tofu boardy init --key DEMO --mode empty
+tofu boardy init --key DEMO --mode custom --hooks may_move,drafted
+```
+
+`empty` writes no starter hook and turns every library hook off, so
+`tofu boardy rule list` prints `0 hooks`. `custom` keeps only the hooks
+`--hooks` names, starter or library. A custom start with no `--hooks`, or
+with an id the library does not ship, is refused and names every id it
+takes.
+
 A ticket is made with four sections a person drives: **Before**, how it
 works now; **Driven path**, the steps that show the change; **Still works**,
 a line for each neighbour the change touches (repeat `--still-works`); and
@@ -382,7 +397,7 @@ the lead gives it.
 
 | Command | Does |
 |---|---|
-| `tofu boardy init --key KEY [--name text]` | makes a board |
+| `tofu boardy init --key KEY [--name text] [--mode default\|empty\|custom] [--hooks id,id]` | makes a board with the starter and library hooks, none of them, or only the named ones |
 | `tofu boardy new [--board KEY \| --parent ID] [--type t] [--priority P0..P4] [--status s] [--points n] [--size S\|M\|L] [--spec path] [--owns a,b] [--problem text] [--scope text] --before text --driven text --still-works line... --error-case text [--feasibility text] [--acceptance text] [--as name] <title>` | makes a ticket with the next number |
 | `tofu boardy list [--board KEY] [--status s] [--all] [--fields id,status,assignee,owns]` | lists live tickets, or only the named front matter fields |
 | `tofu boardy held <path>` | names the ticket holding a path on any board, and the glob, or says it is not held |

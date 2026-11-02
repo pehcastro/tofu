@@ -25,7 +25,7 @@ const boardyUsage = "tofu boardy init|new|list|show|move|log|set|lint|boards|hel
 func boardyUsageOf(subcommand string) string {
 	switch subcommand {
 	case "init":
-		return "tofu boardy init --key KEY [--name text] [--json]"
+		return "tofu boardy init --key KEY [--name text] [--mode default|empty|custom] [--hooks id,id] [--json]"
 	case "new":
 		return "tofu boardy new [--board KEY | --parent ID] [--type story|task|bug|subtask] [--priority P0..P4] [--status s] [--points n] [--size S|M|L] [--spec path] [--owns a,b]... [--labels docs-only,...]... [--epic E] [--sprint S] [--problem text] [--scope text] --before text --driven text --still-works line... --error-case text [--feasibility text] [--acceptance line]... [--as name] <title> [--json]"
 	case "list":
@@ -208,11 +208,8 @@ func (c boardyCall) init() int {
 	if len(c.args) > 0 {
 		return c.o.usage(fmt.Errorf("unexpected %q", c.args[0]))
 	}
-	board, err := c.store.Init(c.flags["key"], c.flags["name"])
+	board, err := c.store.InitBoard(c.flags["key"], c.flags["name"], boardy.InitMode(c.flags["mode"]), splitList(c.flags["hooks"]))
 	if err != nil {
-		return c.o.fail(err)
-	}
-	if err := c.store.WriteStarterHooks(board.Key); err != nil {
 		return c.o.fail(err)
 	}
 	return c.o.done(true, board, func(page cli.Page) []string {

@@ -44,15 +44,14 @@ func (a API) Boards() (BoardsAnswer, error) {
 }
 
 type InitRequest struct {
-	Key  string `json:"key"`
-	Name string `json:"name"`
+	Key   string   `json:"key"`
+	Name  string   `json:"name"`
+	Mode  InitMode `json:"mode,omitempty"`
+	Hooks []string `json:"hooks,omitempty"`
 }
 
 func (a API) Init(request InitRequest) (BoardsAnswer, error) {
-	if _, err := a.Board.Store.Init(request.Key, request.Name); err != nil {
-		return BoardsAnswer{}, err
-	}
-	if err := a.Board.Store.WriteStarterHooks(request.Key); err != nil {
+	if _, err := a.Board.Store.InitBoard(request.Key, request.Name, request.Mode, request.Hooks); err != nil {
 		return BoardsAnswer{}, err
 	}
 	return a.Boards()

@@ -1,0 +1,8 @@
+id: review_waits
+when: after
+on: schedule
+every: 1h
+do: notify {ticket} has waited in review over 2h: read its Log, run its checks yourself and move it
+if:
+  to: review
+  in_status_for: 2h

@@ -1,0 +1,6 @@
+id: epic_at_create
+when: before
+on: ticket.create
+do: field epic
+then: refuse
+text: every ticket belongs to an epic: name one from epic list, or make it first with epic new

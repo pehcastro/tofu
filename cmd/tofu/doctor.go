@@ -176,7 +176,11 @@ func doctorBoards(root string, fix bool) (unruled []cli.Problem, fixed []string)
 	if err = errors.Join(err, listed); err != nil {
 		unruled = append(unruled, cli.Problem{What: "boards: " + err.Error()})
 	}
-	hooks := strings.Join(boardy.StarterHookIDs(), ", ")
+	ids, err := boardy.StarterHookIDs()
+	if err != nil {
+		unruled = append(unruled, cli.Problem{What: "starter hooks: " + err.Error()})
+	}
+	hooks := strings.Join(ids, ", ")
 	for _, board := range boardy.Unruled(boards) {
 		rules := filepath.Join(board.Dir, boardy.RulesDirName)
 		if !fix {

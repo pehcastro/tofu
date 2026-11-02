@@ -51,6 +51,8 @@ The board folder counts as the project's own tickets when a tool writes there, n
     tofu settings set boardFlow linear
     tofu boardy set DEMO-2 --acceptance "the list shows every row" --reason "the bug had no acceptance"
 
+`init` writes the starter hooks shipped in `library/boardy/hooks/starter/` into the board's `rules/` folder and keeps every library hook on. `init --mode empty` writes none and turns every library hook off, so `rule list` prints `0 hooks`; `init --mode custom --hooks may_move,drafted` keeps only the named hooks, starter or library. A custom start with no `--hooks`, or an id the library does not ship, is refused and names every id it takes.
+
 `set --acceptance` adds an `## Acceptance` section to a ticket with none, or a line to the one it has; `--reason` is required and is logged with the change. With more than one board, `new` and `list` take `--board KEY`. Every subcommand takes `--json`. Sub-tickets, `new --parent DEMO-1`, are in `tofu docs boardy-views`.
 
 ## Agents on the board

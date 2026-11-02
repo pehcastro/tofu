@@ -1,0 +1,6 @@
+id: report_to_review
+when: after
+on: agent.report
+do: move review
+if:
+  from: doing
