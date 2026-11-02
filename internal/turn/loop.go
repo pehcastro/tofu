@@ -270,6 +270,8 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	origin := newID()
 	headTools := NewRegistry(withLoopTools(source().tools)...).Definitions()
+	keptPrefix := config.Prefix
+	config.Prefix = keptPrefix.pending()
 	held := config.holdPrefix(headTools, artifacts.preview)
 	config.Instructions = held.instructions
 	sentTools := sending(currentTools().Definitions())
@@ -534,6 +536,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			return llm.Decision{}, requestTiming{}, id, err
 		}
 		recorded.sent(id, why, request, artifacts.preview)
+		if keptPrefix != nil {
+			*keptPrefix = *config.Prefix
+		}
 		tapped, tap := llm.Tapped(ctx)
 		decision, timing, err := askCountingAttempts(tapped, on, request)
 		lastAttempts = tap.Attempts()

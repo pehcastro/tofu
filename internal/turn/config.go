@@ -392,6 +392,15 @@ func toldTools(events []session.Event, agent string, held []llm.Tool) ([]llm.Too
 	return told, nil
 }
 
+func (p *Prefix) pending() *Prefix {
+	if p == nil {
+		return nil
+	}
+	next := *p
+	next.appended, next.removed = slices.Clone(p.appended), slices.Clone(p.removed)
+	return &next
+}
+
 func (p *Prefix) lastSent() *messagesKept {
 	if p == nil {
 		return &messagesKept{}
