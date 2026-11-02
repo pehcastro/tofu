@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"tofu/internal/konst"
+	"tofu/internal/skill"
 	"tofu/library"
 )
 
@@ -28,8 +29,8 @@ func Expand(typed, root string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_, skill, _ := strings.Cut(strings.TrimPrefix(strings.ReplaceAll(string(data), "\r\n", "\n"), "---\n"), "\n---\n")
-	prompt := "The person typed " + typed + ". Follow this skill for it.\n\n" + strings.TrimSpace(skill)
+	_, body := skill.FrontMatter(string(data))
+	prompt := "The person typed " + typed + ". Follow this skill for it.\n\n" + strings.TrimSpace(body)
 	switch one.Needs {
 	case Turn:
 		return prompt, nil

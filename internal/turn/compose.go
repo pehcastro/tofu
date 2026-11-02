@@ -123,8 +123,8 @@ func libraryReferences(library fs.FS, files []string) ([]subagent.Reference, err
 		if err != nil {
 			return nil, err
 		}
-		_, body, _ := strings.Cut(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n---\n")
-		references = append(references, subagent.Reference{Name: strings.TrimSuffix(path.Base(file), ".md"), Path: "library/" + file, Text: strings.TrimLeft(body, "\n")})
+		_, body := skill.FrontMatter(string(data))
+		references = append(references, subagent.Reference{Name: strings.TrimSuffix(path.Base(file), ".md"), Path: "library/" + file, Text: body})
 	}
 	return references, nil
 }
@@ -139,12 +139,10 @@ func sourcedReferences(library fs.FS, fired rule.Rule, offered []subagent.Refere
 		return nil, fmt.Errorf("rule %s names the source %s, which the library does not ship: %w", fired.ID, fired.Source, err)
 	}
 	files := []string{file}
-	header, _, _ := strings.Cut(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n---\n")
-	for line := range strings.Lines(header) {
-		if related, found := strings.CutPrefix(strings.TrimSpace(line), "related:"); found {
-			for _, name := range strings.Split(related, ",") {
-				files = append(files, path.Join(path.Dir(file), strings.TrimSpace(name)+".md"))
-			}
+	fields, _ := skill.FrontMatter(string(data))
+	for _, related := range fields["related"] {
+		for name := range strings.SplitSeq(related, ",") {
+			files = append(files, path.Join(path.Dir(file), strings.TrimSpace(name)+".md"))
 		}
 	}
 	files = slices.DeleteFunc(files, func(file string) bool {
@@ -202,22 +200,29 @@ func autoloadedSkills(definition subagent.Definition, skills []skill.Skill, skil
 			return "", nil, err
 		}
 		for _, name := range definition.Skills {
-			loaded = append(loaded, PromptPart{Concern: ConcernSkills, Agent: definition.Name, Name: name, File: "library/" + librarySkillFiles(shipped.Files(), name)[0], State: session.PartLoaded,
+			loaded = append(loaded, PromptPart{Concern: ConcernSkills, Agent: definition.Name, Name: name, File: "library/" + skill.LibraryFiles(shipped.Files(), "skills", name)[0], State: session.PartLoaded,
 				Why: "the library sub-agent's definition names it"})
 		}
 		return text, loaded, nil
 	}
 	var text strings.Builder
 	for _, name := range definition.Skills {
-		body, err := skill.Load(skills, shipped.Files(), name, "")
+		one, err := skill.Find(skills, name)
+		var body string
+		if err == nil {
+			body, err = skill.Body(shipped.Files(), one)
+		}
 		switch {
 		case err == nil:
 			text.WriteString("\n\nthe skill " + name + ", loaded before your task:\n" + body)
-			at := slices.IndexFunc(skills, func(one skill.Skill) bool { return one.Name == name })
-			loaded = append(loaded, PromptPart{Concern: ConcernSkills, Agent: definition.Name, Name: name, File: filepath.ToSlash(skills[at].File), State: session.PartLoaded,
+			loaded = append(loaded, PromptPart{Concern: ConcernSkills, Agent: definition.Name, Name: name, File: filepath.ToSlash(one.File), State: session.PartLoaded,
 				Why: "the sub-agent's definition names it"})
 		case definition.Origin == ".tofu" || definition.Origin == "~/.tofu":
 			return "", nil, fmt.Errorf("the sub-agent %s names the skill %s: %w", definition.Name, name, err)
+		default:
+			text.WriteString("\n\nthe skill " + name + ", which your definition names, did not load: " + err.Error() + ". work without it and say so in your report")
+			loaded = append(loaded, PromptPart{Concern: ConcernSkills, Agent: definition.Name, Name: name, File: filepath.ToSlash(one.File), State: session.PartDropped,
+				Why: "the sub-agent's definition names it and it did not load: " + err.Error()})
 		}
 	}
 	return text.String(), loaded, nil
@@ -233,6 +238,9 @@ func autoloadedReferences(definition subagent.Definition, skills []skill.Skill, 
 	var references []subagent.Reference
 	var parts []PromptPart
 	for _, part := range loaded {
+		if part.State != session.PartLoaded {
+			continue
+		}
 		at := slices.IndexFunc(skills, func(one skill.Skill) bool { return one.Name == part.Name })
 		if at < 0 {
 			return nil, nil, fmt.Errorf("the sub-agent %s loads the skill %s from %s, which declares another name", definition.Name, part.Name, part.File)
@@ -258,16 +266,10 @@ func autoloadedReferences(definition subagent.Definition, skills []skill.Skill, 
 	return references, parts, nil
 }
 
-func librarySkillFiles(library fs.FS, name string) []string {
-	found, _ := fs.Glob(library, "*/skills/"+name+".md")
-	deeper, _ := fs.Glob(library, "*/*/skills/"+name+".md")
-	return append(found, deeper...)
-}
-
 func librarySkills(library fs.FS, definition subagent.Definition) (string, error) {
 	var text strings.Builder
 	for _, name := range definition.Skills {
-		found := librarySkillFiles(library, name)
+		found := skill.LibraryFiles(library, "skills", name)
 		if len(found) != 1 {
 			return "", fmt.Errorf("the library sub-agent %s names the skill %s, which the library ships %d times: %s", definition.Name, name, len(found), strings.Join(found, ", "))
 		}
@@ -275,8 +277,8 @@ func librarySkills(library fs.FS, definition subagent.Definition) (string, error
 		if err != nil {
 			return "", err
 		}
-		_, body, _ := strings.Cut(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n---\n")
-		text.WriteString("\n\nthe skill " + name + ", loaded before your task:\n" + strings.TrimLeft(body, "\n"))
+		_, body := skill.FrontMatter(string(data))
+		text.WriteString("\n\nthe skill " + name + ", loaded before your task:\n" + body)
 	}
 	if text.Len() > konst.SubAgentReferenceBytes {
 		return "", fmt.Errorf("the library sub-agent %s loads %d bytes of skills, past the %d a sub-agent is given", definition.Name, text.Len(), konst.SubAgentReferenceBytes)
@@ -303,7 +305,7 @@ func skillParts(skills []skill.Skill, skillTool bool, loaded []PromptPart) []Pro
 
 func unofferedLibrarySkills(library fs.FS, listed []skill.Skill, loaded []PromptPart) []PromptPart {
 	var dropped []PromptPart
-	for _, file := range librarySkillFiles(library, "*") {
+	for _, file := range skill.LibraryFiles(library, "skills", "*") {
 		name := strings.TrimSuffix(path.Base(file), ".md")
 		if slices.ContainsFunc(listed, func(one skill.Skill) bool { return one.Name == name }) || slices.ContainsFunc(loaded, func(part PromptPart) bool { return part.Name == name }) {
 			continue

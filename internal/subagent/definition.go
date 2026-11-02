@@ -16,6 +16,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/llm/models"
 	"tofu/internal/safe"
+	"tofu/internal/skill"
 	"tofu/internal/sys"
 )
 
@@ -194,15 +195,11 @@ func (s Scan) assignments() (map[string]assignment, []Broken) {
 }
 
 func frontMatter(data []byte) (header, body string, err error) {
-	rest, opened := strings.CutPrefix(strings.ReplaceAll(string(data), "\r\n", "\n"), "---\n")
-	if !opened {
-		return "", "", errors.New("the file opens with no front matter")
+	header, body, found := skill.SplitFrontMatter(string(data))
+	if !found {
+		return "", "", errors.New("the file opens with no front matter, or never closes it")
 	}
-	header, body, closed := strings.Cut("\n"+rest, "\n---")
-	if !closed {
-		return "", "", errors.New("the front matter is never closed")
-	}
-	return header, strings.TrimSpace(strings.TrimLeft(body, "-")), nil
+	return header, strings.TrimSpace(body), nil
 }
 
 func read(fsys fs.FS, name string) (Definition, error) {
@@ -275,14 +272,14 @@ func fieldsOf(text string) (map[string][]string, error) {
 		case trimmed == "" || strings.HasPrefix(trimmed, "#"):
 		case line[0] == ' ' || line[0] == '\t':
 			if key == "" {
-				return nil, fmt.Errorf("line %d is indented under no field", number+1)
+				return nil, fmt.Errorf("front matter line %d is indented under no field", number+1)
 			}
 			item, _ := strings.CutPrefix(trimmed, "- ")
 			fields[key] = append(fields[key], unquote(item))
 		default:
 			name, value, found := strings.Cut(line, ":")
 			if !found {
-				return nil, fmt.Errorf("line %d is not a field: %q", number+1, line)
+				return nil, fmt.Errorf("front matter line %d is not a field: %q", number+1, line)
 			}
 			key = strings.TrimSpace(name)
 			fields[key] = valuesOf(strings.TrimSpace(value))
@@ -427,9 +424,7 @@ func (s Scan) place(definition *Definition, tofuWrote bool) {
 	}
 	var read []Reference
 	for _, reference := range named {
-		found, _ := fs.Glob(s.Library, "*/references/"+reference.Name+".md")
-		deep, _ := fs.Glob(s.Library, "*/*/references/"+reference.Name+".md")
-		found = append(found, deep...)
+		found := skill.LibraryFiles(s.Library, "references", reference.Name)
 		if len(found) == 0 {
 			definition.Refused = append(definition.Refused, fmt.Sprintf("names the reference %q, which the library does not ship", reference.Name))
 			continue

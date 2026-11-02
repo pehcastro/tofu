@@ -6,6 +6,8 @@ import (
 	"path"
 	"slices"
 	"strings"
+
+	"tofu/internal/skill"
 )
 
 type Document struct {
@@ -158,17 +160,13 @@ func placeOf(name string) (domain, kind string, ok bool) {
 }
 
 func parseDocument(data []byte, reported string) (Document, error) {
-	text := strings.ReplaceAll(string(data), "\r\n", "\n")
-	if !strings.HasPrefix(text, "---\n") {
-		return Document{}, fmt.Errorf("%s: the file opens with no front matter", reported)
-	}
-	end := strings.Index(text[4:], "\n---")
-	if end < 0 {
-		return Document{}, fmt.Errorf("%s: the front matter is never closed", reported)
+	header, _, found := skill.SplitFrontMatter(string(data))
+	if !found {
+		return Document{}, fmt.Errorf("%s: the file opens with no front matter, or never closes it", reported)
 	}
 	doc := Document{File: reported}
 	field := ""
-	for _, line := range strings.Split(text[4:4+end], "\n") {
+	for _, line := range strings.Split(header, "\n") {
 		if item, isItem := strings.CutPrefix(line, "  - "); isItem {
 			if field == "references" {
 				doc.References = append(doc.References, strings.TrimSpace(item))

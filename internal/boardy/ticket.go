@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/skill"
 	"tofu/internal/sys"
 )
 
@@ -258,9 +259,8 @@ func RevisionHeading(index int) string {
 }
 
 func ParseTicket(raw []byte) (Ticket, error) {
-	text := strings.ReplaceAll(string(raw), "\r\n", "\n")
-	front, body, found := strings.Cut(strings.TrimPrefix(text, "---\n"), "\n---\n")
-	if !strings.HasPrefix(text, "---\n") || !found {
+	front, body, found := skill.SplitFrontMatter(string(raw))
+	if !found {
 		return Ticket{}, errors.New("no front matter between two --- lines")
 	}
 	var t Ticket

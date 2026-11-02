@@ -92,7 +92,7 @@ func Discover(project, home string) Found {
 				continue
 			}
 			seen[real] = true
-			fields, _ := frontMatter(string(data))
+			fields, _ := FrontMatter(string(data))
 			one := Skill{
 				Name:        cmp.Or(strings.Join(fields["name"], " "), entry.Name()),
 				Description: strings.Join(fields["description"], " "),
@@ -127,7 +127,7 @@ func Shipped(library fs.FS, root string) ([]Skill, error) {
 		if err != nil {
 			return err
 		}
-		fields, _ := frontMatter(string(data))
+		fields, _ := FrontMatter(string(data))
 		file := path.Join(root, name)
 		shipped = append(shipped, Skill{Name: cmp.Or(strings.Join(fields["name"], " "), strings.TrimSuffix(path.Base(name), ".md")),
 			Description: strings.Join(fields["description"], " "), Domain: strings.Join(fields["domain"], " "), Origin: OriginLibrary, File: file, Dir: path.Dir(file), References: fields["references"]})
@@ -140,14 +140,19 @@ func Shipped(library fs.FS, root string) ([]Skill, error) {
 func ReferenceFiles(library fs.FS, owner string, names []string) ([]string, error) {
 	var files []string
 	for _, name := range names {
-		found, _ := fs.Glob(library, "*/references/"+name+".md")
-		deeper, _ := fs.Glob(library, "*/*/references/"+name+".md")
-		if found = append(found, deeper...); len(found) != 1 {
+		found := LibraryFiles(library, "references", name)
+		if len(found) != 1 {
 			return nil, fmt.Errorf("the skill %s names the reference %s, which the library ships %d times", owner, name, len(found))
 		}
 		files = append(files, found[0])
 	}
 	return files, nil
+}
+
+func LibraryFiles(library fs.FS, folder, name string) []string {
+	found, _ := fs.Glob(library, "*/"+folder+"/"+name+".md")
+	deeper, _ := fs.Glob(library, "*/*/"+folder+"/"+name+".md")
+	return append(found, deeper...)
 }
 
 func ProjectFolders(project, home string) []string {
@@ -168,13 +173,18 @@ func ProjectFolders(project, home string) []string {
 	}
 }
 
-func frontMatter(text string) (map[string][]string, string) {
+func SplitFrontMatter(text string) (header, body string, found bool) {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	rest, opened := strings.CutPrefix(text, "---\n")
 	header, body, closed := strings.Cut("\n"+rest, "\n---")
 	if !opened || !closed {
-		return map[string][]string{}, text
+		return "", text, false
 	}
+	return strings.TrimPrefix(header, "\n"), strings.TrimLeft(strings.TrimLeft(body, "-"), "\n"), true
+}
+
+func FrontMatter(text string) (map[string][]string, string) {
+	header, body, _ := SplitFrontMatter(text)
 	fields, key, folding := map[string][]string{}, "", false
 	for _, line := range strings.Split(header, "\n") {
 		trimmed := strings.TrimSpace(line)
@@ -194,7 +204,7 @@ func frontMatter(text string) (map[string][]string, string) {
 			}
 		}
 	}
-	return fields, strings.TrimLeft(strings.TrimLeft(body, "-"), "\n")
+	return fields, body
 }
 
 func unquote(value string) string {
@@ -245,16 +255,36 @@ func Listing(skills []Skill, windowTokens int) string {
 	return heading + kept.String() + note
 }
 
-func Load(skills []Skill, library fs.FS, name, path string) (string, error) {
+func Find(skills []Skill, name string) (Skill, error) {
 	at := slices.IndexFunc(skills, func(one Skill) bool { return one.Name == name })
 	if at < 0 {
 		var names []string
 		for _, one := range skills {
 			names = append(names, one.Name)
 		}
-		return "", fmt.Errorf("no skill is named %q; the skills are: %s", name, cmp.Or(strings.Join(names, ", "), "none"))
+		return Skill{}, fmt.Errorf("no skill is named %q; the skills are: %s", name, cmp.Or(strings.Join(names, ", "), "none"))
 	}
-	one := skills[at]
+	return skills[at], nil
+}
+
+func Body(library fs.FS, one Skill) (string, error) {
+	var data []byte
+	var err error
+	if one.Origin == OriginLibrary {
+		_, inLibrary, _ := strings.Cut(one.File, "/")
+		data, err = fs.ReadFile(library, inLibrary)
+	} else {
+		data, err = os.ReadFile(one.File)
+	}
+	_, body := FrontMatter(string(data))
+	return body, err
+}
+
+func Load(skills []Skill, library fs.FS, name, path string) (string, error) {
+	one, err := Find(skills, name)
+	if err != nil {
+		return "", err
+	}
 	if one.Origin == OriginLibrary {
 		if path != "" {
 			return "", fmt.Errorf("the library skill %s is one file, so it has no %s to read", name, path)
@@ -262,18 +292,14 @@ func Load(skills []Skill, library fs.FS, name, path string) (string, error) {
 		if _, err := ReferenceFiles(library, name, one.References); err != nil {
 			return "", err
 		}
-		_, inLibrary, _ := strings.Cut(one.File, "/")
-		data, err := fs.ReadFile(library, inLibrary)
-		_, body := frontMatter(string(data))
+		body, err := Body(library, one)
 		if len(one.References) > 0 {
 			body += "\n\nthis skill names the references " + strings.Join(one.References, ", ") + "; read one whole with the reference tool."
 		}
 		return body, err
 	}
 	if path == "" {
-		data, err := os.ReadFile(one.File)
-		_, body := frontMatter(string(data))
-		return body, err
+		return Body(library, one)
 	}
 	climbs := slices.Contains(strings.FieldsFunc(path, func(r rune) bool { return r == '/' || r == '\\' }), "..")
 	if climbs || filepath.IsAbs(path) || strings.HasPrefix(path, "/") || strings.HasPrefix(path, `\`) || filepath.VolumeName(path) != "" {

@@ -16,6 +16,7 @@ import (
 	"tofu/interface/cli"
 	"tofu/internal/host"
 	settingspkg "tofu/internal/settings"
+	"tofu/internal/skill"
 	"tofu/internal/widget"
 	"tofu/library/docs"
 )
@@ -115,10 +116,8 @@ func loadDocs() (docsCorpus, error) {
 }
 
 func parseDocsPage(text string) (docsPage, error) {
-	text = strings.ReplaceAll(text, "\r\n", "\n")
-	rest, opened := strings.CutPrefix(text, "---\n")
-	header, body, closed := strings.Cut(rest, "\n---\n")
-	if !opened || !closed {
+	header, body, found := skill.SplitFrontMatter(text)
+	if !found {
 		return docsPage{}, errors.New("a page opens with front matter between two --- lines")
 	}
 	fields := map[string]string{}
@@ -126,7 +125,7 @@ func parseDocsPage(text string) (docsPage, error) {
 		key, value, _ := strings.Cut(line, ":")
 		fields[strings.TrimSpace(key)] = strings.TrimSpace(value)
 	}
-	page := docsPage{Topic: fields["topic"], Title: fields["title"], Summary: fields["summary"], Body: strings.TrimLeft(body, "\n")}
+	page := docsPage{Topic: fields["topic"], Title: fields["title"], Summary: fields["summary"], Body: body}
 	if page.Topic == "" || page.Title == "" || page.Summary == "" {
 		return docsPage{}, errors.New("the front matter names a topic, a title and a summary")
 	}

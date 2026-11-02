@@ -12,6 +12,7 @@ import (
 	"unicode"
 
 	"tofu/internal/rule"
+	"tofu/internal/skill"
 )
 
 type Epic struct {
@@ -167,9 +168,8 @@ func (s Store) planFiles(key, collection string) ([]planFile, error) {
 }
 
 func parsePlan(raw []byte) (planFile, error) {
-	text := strings.ReplaceAll(string(raw), "\r\n", "\n")
-	front, body, found := strings.Cut(strings.TrimPrefix(text, "---\n"), "\n---\n")
-	if !strings.HasPrefix(text, "---\n") || !found {
+	front, body, found := skill.SplitFrontMatter(string(raw))
+	if !found {
 		return planFile{}, errors.New("no front matter between two --- lines")
 	}
 	file := planFile{fields: map[string]string{}, text: strings.TrimSpace(body)}
