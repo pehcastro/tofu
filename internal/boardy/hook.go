@@ -222,8 +222,15 @@ func (m Managed) check(h rule.Hook, s subject) (string, bool, error) {
 			return "", false, fmt.Errorf("hook %q %w", h.ID, err)
 		}
 		return strings.TrimSpace(h.Text + "\n" + output), failed, nil
+	case rule.DoCheck:
+		return "", false, unknownCheck(h)
 	}
 	panic("boardy: unknown check " + string(h.Action.Do))
+}
+
+func unknownCheck(h rule.Hook) error {
+	name, _, _ := strings.Cut(h.Action.Arg, " ")
+	return fmt.Errorf("hook %q: no check named %q, and the named checks are: none", h.ID, name)
 }
 
 func (m Managed) unevidenced(ticket Ticket, leave []int) string {

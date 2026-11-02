@@ -568,6 +568,11 @@ const (
 	BoardSaidSentencesMost = 3
 	BoardSaidWordsMost     = 80
 
+	BoardBypassWhyRunesMost = 200
+	BoardBypassWaitHours    = 24
+	BoardBypassFlagCount    = 3
+	BoardBypassFlagDays     = 7
+
 	BraveSearchDollarsPerCall = 5.0 / 1000
 	KeyPollTimeoutMillis      = 5000
 )

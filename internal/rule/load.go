@@ -299,10 +299,14 @@ func (r *Rule) setField(key, value, path string, line int) error {
 }
 
 func scanKV(data []byte, path string, fn func(key, value string, line int) error) error {
+	return scanIndented(data, path, func(_ int, key, value string, line int) error { return fn(key, value, line) })
+}
+
+func scanIndented(data []byte, path string, fn func(indent int, key, value string, line int) error) error {
 	for i, raw := range strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n") {
 		line := i + 1
 		trimmed := strings.TrimSpace(raw)
-		if trimmed == "" {
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
 		at := strings.IndexByte(trimmed, ':')
@@ -314,7 +318,7 @@ func scanKV(data []byte, path string, fn func(key, value string, line int) error
 		if key == "" {
 			return fmt.Errorf("%s:%d: expected key: value, found %q", path, line, trimmed)
 		}
-		if err := fn(key, value, line); err != nil {
+		if err := fn(len(raw)-len(strings.TrimLeft(raw, " \t")), key, value, line); err != nil {
 			return err
 		}
 	}

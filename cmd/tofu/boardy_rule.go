@@ -64,8 +64,20 @@ func (c boardyCall) ruleList() int {
 		}
 		for at, line := range page.Rows(rows) {
 			lines = append(lines, line)
-			if at > 0 {
-				lines = append(lines, cli.Indent(page.Label(answer.Hooks[at-1].Trigger+" · "+does(answer.Hooks[at-1])))...)
+			if at == 0 {
+				continue
+			}
+			hook := answer.Hooks[at-1]
+			lines = append(lines, cli.Indent(page.Label(hook.Trigger+" · "+does(hook)))...)
+			named := hook.Name + hook.Description
+			if hook.Name != "" && hook.Description != "" {
+				named = hook.Name + ": " + hook.Description
+			}
+			if named != "" {
+				lines = append(lines, cli.Indent(page.Label(named))...)
+			}
+			if hook.Bypass != "" {
+				lines = append(lines, cli.Indent(page.Label("bypass "+hook.Bypass))...)
 			}
 		}
 		return lines
@@ -128,13 +140,13 @@ func (c boardyCall) hookShown(answer boardy.RuleAnswer, err error, mark cli.Mark
 	row := answer.Hook
 	return c.o.done(true, answer, func(page cli.Page) []string {
 		lines := page.Title(verb+"hook "+row.ID, []string{string(row.Scope), answer.Board}, cli.Verdict{Mark: mark})
-		lines = append(lines, page.Facts([]cli.Fact{
-			{Label: "trigger", Text: row.Trigger},
-			{Label: "does", Text: does(row)},
-			{Label: "text", Text: dash(row.Text)},
-			{Label: "last fired", Text: fired(row.LastFired)},
-			{Label: "file", Text: page.Path(row.File)},
-		})...)
+		facts := []cli.Fact{{Label: "trigger", Text: row.Trigger}, {Label: "does", Text: does(row)}, {Label: "text", Text: dash(row.Text)}}
+		for _, said := range [][2]string{{"name", row.Name}, {"description", row.Description}, {"bypass", row.Bypass}} {
+			if said[1] != "" {
+				facts = append(facts, cli.Fact{Label: said[0], Text: said[1]})
+			}
+		}
+		lines = append(lines, page.Facts(append(facts, cli.Fact{Label: "last fired", Text: fired(row.LastFired)}, cli.Fact{Label: "file", Text: page.Path(row.File)}))...)
 		return append(append(lines, ""), cli.Indent(strings.Split(strings.TrimSpace(answer.Source), "\n")...)...)
 	})
 }
@@ -156,12 +168,22 @@ func fired(at time.Time) string {
 
 func hookSource(base, id string, flags map[string]string) string {
 	top := []string{"id", "when", "on", "every", "daily", "do", "then", "text"}
-	under := []string{"from", "to", "type", "priority", "labels", "actor", "epic", "sprint", "owns", "in_status_for"}
+	under := []string{"from", "to", "type", "priority", "labels", "not_labels", "actor", "epic", "sprint", "owns", "in_status_for", "created_before", "created_after"}
 	values := map[string]string{}
-	var unknown []string
+	var unknown, bypass []string
+	inBypass := false
 	for line := range strings.Lines(base) {
 		key, value, found := strings.Cut(strings.TrimSpace(line), ":")
-		if key = strings.TrimSpace(key); !found || key == "if" {
+		if inBypass && strings.TrimLeft(line, " \t") != line {
+			bypass = append(bypass, strings.TrimRight(line, "\r\n"))
+			continue
+		}
+		key = strings.TrimSpace(key)
+		if inBypass = key == "bypass" && strings.TrimSpace(value) == ""; inBypass {
+			bypass = []string{"bypass:"}
+			continue
+		}
+		if !found || key == "if" {
 			continue
 		}
 		if !slices.Contains(top, key) && !slices.Contains(under, key) {
@@ -179,6 +201,7 @@ func hookSource(base, id string, flags map[string]string) string {
 			lines = append(lines, key+": "+values[key])
 		}
 	}
+	lines = append(lines, bypass...)
 	for _, key := range under {
 		if values[key] != "" {
 			conditions = append(conditions, "  "+key+": "+values[key])

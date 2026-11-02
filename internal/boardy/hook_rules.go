@@ -30,18 +30,29 @@ func hookScopes() []HookScope { return []HookScope{ScopeBoard, ScopeProject, Sco
 func (HookScope) Enum() []string { return enum(hookScopes()...) }
 
 type HookRow struct {
-	ID        string         `json:"id"`
-	Scope     HookScope      `json:"scope"`
-	File      string         `json:"file"`
-	When      rule.When      `json:"when"`
-	On        rule.HookEvent `json:"on"`
-	Trigger   string         `json:"trigger"`
-	Do        rule.Do        `json:"do"`
-	Arg       string         `json:"arg,omitempty"`
-	Then      rule.Then      `json:"then,omitempty"`
-	Text      string         `json:"text,omitempty"`
-	LastFired time.Time      `json:"last_fired,omitzero"`
-	hook      rule.Hook
+	ID          string         `json:"id"`
+	Scope       HookScope      `json:"scope"`
+	File        string         `json:"file"`
+	When        rule.When      `json:"when"`
+	On          rule.HookEvent `json:"on"`
+	Trigger     string         `json:"trigger"`
+	Do          rule.Do        `json:"do"`
+	Arg         string         `json:"arg,omitempty"`
+	Then        rule.Then      `json:"then,omitempty"`
+	Text        string         `json:"text,omitempty"`
+	Name        string         `json:"name,omitempty"`
+	Description string         `json:"description,omitempty"`
+	Bypass      string         `json:"bypass,omitempty"`
+	LastFired   time.Time      `json:"last_fired,omitzero"`
+	hook        rule.Hook
+}
+
+func actorNames(actors []rule.HookActor) []string {
+	names := make([]string, len(actors))
+	for i, actor := range actors {
+		names[i] = string(actor)
+	}
+	return names
 }
 
 func hookRow(h rule.Hook, scope HookScope) HookRow {
@@ -59,16 +70,12 @@ func hookRow(h rule.Hook, scope HookScope) HookRow {
 			said = append(said, key+" "+joined)
 		}
 	}
-	actors := make([]string, len(c.Actor))
-	for i, actor := range c.Actor {
-		actors[i] = string(actor)
-	}
 	add("from", c.From...)
 	add("to", c.To...)
 	add("type", c.Type...)
 	add("priority", c.Priority...)
 	add("labels", c.Labels...)
-	add("actor", actors...)
+	add("actor", actorNames(c.Actor)...)
 	add("epic", c.Epic)
 	add("sprint", c.Sprint)
 	add("owns", c.Owns)
@@ -78,7 +85,12 @@ func hookRow(h rule.Hook, scope HookScope) HookRow {
 	if said != nil {
 		words = append(words, "if "+strings.Join(said, ", "))
 	}
-	return HookRow{ID: h.ID, Scope: scope, File: h.File, When: h.When, On: h.On, Trigger: strings.Join(words, " "), Do: h.Action.Do, Arg: h.Action.Arg, Then: h.Then, Text: h.Text, hook: h}
+	row := HookRow{ID: h.ID, Scope: scope, File: h.File, When: h.When, On: h.On, Trigger: strings.Join(words, " "), Do: h.Action.Do, Arg: h.Action.Arg, Then: h.Then, Text: h.Text,
+		Name: h.Name, Description: h.Description, hook: h}
+	if b := h.Bypass; b != nil {
+		row.Bypass = fmt.Sprintf("who %s, accept %s, wait %s", strings.Join(actorNames(b.Who), ","), b.Accept, b.Wait)
+	}
+	return row
 }
 
 func shortDuration(d time.Duration) string {
@@ -186,8 +198,11 @@ func (a API) parseHook(board string, scope HookScope, source string) (string, ru
 		}
 	}
 	h, err := rule.ParseHook([]byte(source), file)
-	if err == nil && file == dir {
+	switch {
+	case err == nil && file == dir:
 		err = fmt.Errorf("%s: hook id %q names its file, so it is one plain name", dir, h.ID)
+	case err == nil && h.Action.Do == rule.DoCheck:
+		err = fmt.Errorf("%s: %w", file, unknownCheck(h))
 	}
 	if err != nil {
 		return "", rule.Hook{}, err

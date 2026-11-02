@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"tofu/internal/konst"
 	"tofu/internal/subagent"
@@ -30,6 +31,8 @@ const (
 	HookTicketLog      HookEvent = "ticket.log"
 	HookTicketWiden    HookEvent = "ticket.widen"
 	HookTicketClose    HookEvent = "ticket.close"
+	HookTicketEvidence HookEvent = "ticket.evidence"
+	HookTicketComment  HookEvent = "ticket.comment"
 	HookEpicCreate     HookEvent = "epic.create"
 	HookSprintOpen     HookEvent = "sprint.open"
 	HookSprintClose    HookEvent = "sprint.close"
@@ -46,7 +49,7 @@ const (
 
 func HookEvents() []HookEvent {
 	return []HookEvent{HookTicketCreate, HookTicketMove, HookTicketAssign, HookTicketLog, HookTicketWiden, HookTicketClose,
-		HookEpicCreate, HookSprintOpen, HookSprintClose, HookMilestoneReach, HookTriageRequest, HookTriageAccept,
+		HookTicketEvidence, HookTicketComment, HookEpicCreate, HookSprintOpen, HookSprintClose, HookMilestoneReach, HookTriageRequest, HookTriageAccept,
 		HookQuestionAsk, HookQuestionAnswer, HookAgentSpawn, HookAgentReport, HookLeadAttach, HookSchedule}
 }
 
@@ -77,6 +80,7 @@ const (
 	DoField    Do = "field"
 	DoPerson   Do = "person"
 	DoContract Do = "contract"
+	DoCheck    Do = "check"
 	DoCreate   Do = "create"
 	DoMove     Do = "move"
 	DoAssign   Do = "assign"
@@ -86,7 +90,7 @@ const (
 )
 
 func (d Do) Check() bool {
-	return slices.Contains([]Do{DoCommand, DoJev, DoField, DoPerson, DoContract}, d)
+	return slices.Contains([]Do{DoCommand, DoJev, DoField, DoPerson, DoContract, DoCheck}, d)
 }
 
 func (d Do) effect() bool {
@@ -102,11 +106,67 @@ const (
 	ActorHook     HookActor = "hook"
 )
 
+func hookActors(key string, values []string, at string) ([]HookActor, error) {
+	var actors []HookActor
+	for _, one := range values {
+		if !slices.Contains([]HookActor{ActorPerson, ActorLead, ActorSubAgent, ActorHook}, HookActor(one)) {
+			return nil, fmt.Errorf("%s: %s %q is %s, %s, %s or %s", at, key, one, ActorPerson, ActorLead, ActorSubAgent, ActorHook)
+		}
+		actors = append(actors, HookActor(one))
+	}
+	return actors, nil
+}
+
+type Accept string
+
+const (
+	AcceptPerson  Accept = "person"
+	AcceptManager Accept = "manager"
+	AcceptLead    Accept = "lead"
+	AcceptJev     Accept = "jev"
+	AcceptNone    Accept = "none"
+)
+
+type Wait string
+
+const (
+	WaitBlock Wait = "block"
+	WaitAfter Wait = "after"
+)
+
+type Bypass struct {
+	Who    []HookActor
+	Accept Accept
+	Wait   Wait
+}
+
+func (b *Bypass) set(key, value, at string) error {
+	var err error
+	switch key {
+	case "who":
+		b.Who, err = hookActors(key, commaList(value), at)
+	case "accept":
+		b.Accept = Accept(value)
+		if !slices.Contains([]Accept{AcceptPerson, AcceptManager, AcceptLead, AcceptJev, AcceptNone}, b.Accept) {
+			err = fmt.Errorf("%s: accept %q is %s, %s, %s, %s or %s", at, value, AcceptPerson, AcceptManager, AcceptLead, AcceptJev, AcceptNone)
+		}
+	case "wait":
+		b.Wait = Wait(value)
+		if b.Wait != WaitBlock && b.Wait != WaitAfter {
+			err = fmt.Errorf("%s: wait %q is %s or %s", at, value, WaitBlock, WaitAfter)
+		}
+	default:
+		err = fmt.Errorf("%s: %q is not a bypass field, and a bypass names who, accept and wait", at, key)
+	}
+	return err
+}
+
 type Conditions struct {
-	From, To, Type, Priority, Labels []string
-	Actor                            []HookActor
-	Epic, Sprint, Owns               string
-	InStatusFor                      time.Duration
+	From, To, Type, Priority, Labels, NotLabels []string
+	Actor                                       []HookActor
+	Epic, Sprint, Owns                          string
+	InStatusFor                                 time.Duration
+	CreatedBefore, CreatedAfter                 time.Time
 }
 
 type Action struct {
@@ -124,14 +184,16 @@ func (a Action) Setting() (field, value, asks string) {
 }
 
 type Hook struct {
-	ID, File, Text string
-	When           When
-	On             HookEvent
-	Every          time.Duration
-	Daily          string
-	If             Conditions
-	Action         Action
-	Then           Then
+	ID, File, Text    string
+	Name, Description string
+	Bypass            *Bypass
+	When              When
+	On                HookEvent
+	Every             time.Duration
+	Daily             string
+	If                Conditions
+	Action            Action
+	Then              Then
 }
 
 const dailyLayout = "15:04"
@@ -191,10 +253,16 @@ func (r Rule) boardHook() (Hook, error) {
 
 func ParseHook(data []byte, file string) (Hook, error) {
 	h := Hook{File: file}
-	underIf := false
-	err := scanKV(data, file, func(key, value string, line int) error {
+	topIndent, block := -1, ""
+	err := scanIndented(data, file, func(indent int, key, value string, line int) error {
 		at := fmt.Sprintf("%s:%d", file, line)
-		if underIf {
+		if topIndent < 0 || indent <= topIndent {
+			topIndent, block = indent, ""
+		}
+		switch block {
+		case "bypass":
+			return h.Bypass.set(key, value, at)
+		case "if":
 			if known, err := h.If.set(key, value, at); known {
 				return err
 			}
@@ -205,9 +273,18 @@ func ParseHook(data []byte, file string) (Hook, error) {
 			if value != "" {
 				return fmt.Errorf("%s: if: takes its conditions on the lines below it", at)
 			}
-			underIf = true
+			block = key
+		case "bypass":
+			if value != "" {
+				return fmt.Errorf("%s: bypass takes the block form, its fields indented on the lines below it: bypass:, then who: lead, sub-agent, then accept: manager, then wait: block", at)
+			}
+			h.Bypass, block = &Bypass{Wait: WaitBlock}, key
 		case "id":
 			h.ID = value
+		case "name":
+			h.Name = value
+		case "description":
+			h.Description = value
 		case "when":
 			h.When = When(value)
 		case "on":
@@ -238,13 +315,18 @@ func ParseHook(data []byte, file string) (Hook, error) {
 	return h, h.valid()
 }
 
-func (c *Conditions) set(key, value, at string) (bool, error) {
+func commaList(value string) []string {
 	var list []string
 	for one := range strings.SplitSeq(value, ",") {
 		if one = strings.TrimSpace(one); one != "" {
 			list = append(list, one)
 		}
 	}
+	return list
+}
+
+func (c *Conditions) set(key, value, at string) (bool, error) {
+	list := commaList(value)
 	var err error
 	switch key {
 	case "from":
@@ -257,22 +339,24 @@ func (c *Conditions) set(key, value, at string) (bool, error) {
 		c.Priority = list
 	case "labels":
 		c.Labels = list
+	case "not_labels":
+		c.NotLabels = list
 	case "epic":
-		c.Epic = value
+		c.Epic, err = value, planValue(value)
 	case "sprint":
-		c.Sprint = value
+		c.Sprint, err = value, planValue(value)
 	case "owns":
 		c.Owns = value
 		_, err = subagent.Matches("a/path/the/owns/condition/is/tested/against", []string{value})
 	case "in_status_for":
 		c.InStatusFor, err = time.ParseDuration(value)
+	case "created_before":
+		c.CreatedBefore, err = moment(value)
+	case "created_after":
+		c.CreatedAfter, err = moment(value)
 	case "actor":
-		for _, one := range list {
-			if !slices.Contains([]HookActor{ActorPerson, ActorLead, ActorSubAgent, ActorHook}, HookActor(one)) {
-				return true, fmt.Errorf("%s: actor %q is %s, %s, %s or %s", at, one, ActorPerson, ActorLead, ActorSubAgent, ActorHook)
-			}
-			c.Actor = append(c.Actor, HookActor(one))
-		}
+		c.Actor, err = hookActors(key, list, at)
+		return true, err
 	default:
 		return false, nil
 	}
@@ -280,6 +364,52 @@ func (c *Conditions) set(key, value, at string) (bool, error) {
 		return true, fmt.Errorf("%s: %s: %w", at, key, err)
 	}
 	return true, nil
+}
+
+const (
+	planSet   = "set"
+	planEmpty = "empty"
+)
+
+func planValue(value string) error {
+	if value == planSet || value == planEmpty {
+		return nil
+	}
+	misspelt := slices.ContainsFunc([]string{planSet, planEmpty}, func(word string) bool { return edits(value, word) <= len(word)/2 })
+	plainID := value != "" && unicode.IsLetter(rune(value[0])) && !strings.ContainsFunc(value, func(r rune) bool {
+		return r > unicode.MaxASCII || !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '-'
+	})
+	if misspelt || !plainID {
+		return fmt.Errorf("%q is %s, %s or an id of letters, digits and dashes that starts with a letter", value, planSet, planEmpty)
+	}
+	return nil
+}
+
+func edits(a, b string) int {
+	row := make([]int, len(b)+1)
+	for j := range row {
+		row[j] = j
+	}
+	for i := range len(a) {
+		diagonal := row[0]
+		row[0] = i + 1
+		for j := range len(b) {
+			cost := 1
+			if a[i] == b[j] {
+				cost = 0
+			}
+			diagonal, row[j+1] = row[j+1], min(row[j+1]+1, row[j]+1, diagonal+cost)
+		}
+	}
+	return row[len(b)]
+}
+
+func moment(value string) (time.Time, error) {
+	at, err := time.Parse(time.DateOnly, value)
+	if err != nil {
+		return time.Parse(time.RFC3339, value)
+	}
+	return at, nil
 }
 
 func (h Hook) valid() error {
@@ -301,7 +431,7 @@ func (h Hook) valid() error {
 	case h.Every > 0 && h.Every < konst.CronMinIntervalSeconds*time.Second:
 		why = fmt.Sprintf("runs every %s, under the %ds minimum", h.Every, konst.CronMinIntervalSeconds)
 	case !do.Check() && !do.effect():
-		why = fmt.Sprintf("does %q, and do is a check (command, jev, field, person, contract) or an effect (create, move, assign, log, notify, set)", do)
+		why = fmt.Sprintf("does %q, and do is a check (command, jev, field, person, contract, check) or an effect (create, move, assign, log, notify, set)", do)
 	case do.Check() && !slices.Contains([]Then{ThenRefuse, ThenNudge, ThenAsk, ThenRecord}, h.Then):
 		why = fmt.Sprintf("runs the check %s, and then says what its failure does: %s, %s, %s or %s", do, ThenRefuse, ThenNudge, ThenAsk, ThenRecord)
 	case do.effect() && h.Then != "":
@@ -316,6 +446,18 @@ func (h Hook) valid() error {
 		why = fmt.Sprintf("is on %s, which has no ticket to %s", h.On, do)
 	case do == DoSet && len(strings.Fields(h.Action.Arg)) < 2:
 		why = "does set, which names a field and its value"
+	case h.On == HookTicketMove && do == DoMove && (h.If.To == nil || slices.Contains(h.If.To, h.Action.Arg)):
+		why = fmt.Sprintf("is on %s and does move %s, which fires it again: name the statuses it runs on in if: to, without %s", h.On, h.Action.Arg, h.Action.Arg)
+	case !h.If.CreatedBefore.IsZero() && !h.If.CreatedAfter.IsZero() && !h.If.CreatedBefore.After(h.If.CreatedAfter):
+		why = "declares created_before no later than created_after, so no ticket holds it"
+	case h.Bypass == nil:
+		return nil
+	case h.Then != ThenRefuse && h.Then != ThenAsk:
+		why = fmt.Sprintf("declares a bypass and then %q, and only a hook that refuses or asks can be bypassed", h.Then)
+	case h.Bypass.Who == nil:
+		why = fmt.Sprintf("declares a bypass with no who, and who names %s, %s, %s or %s", ActorPerson, ActorLead, ActorSubAgent, ActorHook)
+	case h.Bypass.Accept == "":
+		why = fmt.Sprintf("declares a bypass with no accept, and accept is %s, %s, %s, %s or %s", AcceptPerson, AcceptManager, AcceptLead, AcceptJev, AcceptNone)
 	default:
 		return nil
 	}
