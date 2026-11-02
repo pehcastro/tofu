@@ -48,14 +48,14 @@ func TestEveryMoveToDoneNeedsTheFlowsStamp(t *testing.T) {
 	if _, err := m.Check("move", turn.ID, Done, person); err == nil {
 		t.Fatal("check allowed a move to done that the move refuses")
 	}
-	for _, owns := range []string{"apps/desk/**", "internal/session/**"} {
+	for owns, says := range map[string]string{"apps/desk/**": "apps/desk tree could not be read", "internal/session/**": "go run ./bench/flows"} {
 		gated, err := m.Create("DEMO", ticketWith(owns, owns), manager)
 		if err != nil {
 			t.Fatal(err)
 		}
 		proved(t, m, gated.ID)
 		_, err = m.Move(gated.ID, Done, closedReason, person)
-		refused(t, err, "go run ./bench/flows")
+		refused(t, err, says)
 	}
 	library, err := m.Create("DEMO", ticketWith("library", "library/**"), manager)
 	if err != nil {
@@ -85,6 +85,85 @@ func TestEveryMoveToDoneNeedsTheFlowsStamp(t *testing.T) {
 	}
 }
 
+func TestADeskTicketNeedsTheDeskStampOfItsTree(t *testing.T) {
+	t.Setenv("TOFU_STAMP_DIR", "")
+	jevSaysNothingOpen(t)
+	repo := t.TempDir()
+	gitIn(t, repo, "init", "-q")
+	commit := func(path, body string) {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(repo, path)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(repo, path), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		gitIn(t, repo, "add", "-A")
+		gitIn(t, repo, "commit", "-q", "-m", path)
+	}
+	stampAs := func(kind, tree string) {
+		path := filepath.Join(repo, ".local", kind, tree)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("tree "+tree+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	deskTree := func() string { return strings.TrimSpace(gitIn(t, repo, "rev-parse", "HEAD:apps/desk")) }
+	commit(".gitignore", ".local/\n")
+	commit("apps/desk/src/main.rs", "fn main() {}\n")
+	goTree, _, err := HeadTree(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stampAs(FlowsStamps, goTree)
+	m := managedBoard(t, "DEMO")
+	m.Store.Root = repo
+	desk, err := m.Create("DEMO", ticketWith("desk", "apps/desk/**"), manager)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proved(t, m, desk.ID)
+	_, err = m.Move(desk.ID, Done, closedReason, person)
+	refused(t, err, "apps/desk tree "+deskTree()+" has no passing desk stamp")
+	stampAs(DeskStamps, deskTree())
+	commit("apps/desk/src/main.rs", "fn main() { println!(\"changed\"); }\n")
+	if after, _, _ := HeadTree(repo); after != goTree {
+		t.Fatalf("a commit under apps/desk moved the Go tree from %s to %s", goTree, after)
+	}
+	_, err = m.Move(desk.ID, Done, closedReason, person)
+	refused(t, err, "apps/desk tree "+deskTree()+" has no passing desk stamp")
+	both, err := m.Create("DEMO", ticketWith("both", "internal/turn/**", "apps/desk/**"), manager)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proved(t, m, both.ID)
+	stampAs(DeskStamps, deskTree())
+	if err := os.Remove(filepath.Join(repo, ".local", FlowsStamps, goTree)); err != nil {
+		t.Fatal(err)
+	}
+	_, err = m.Move(both.ID, Done, closedReason, person)
+	refused(t, err, "has no passing flows stamp")
+	if moved, err := m.Move(desk.ID, Done, closedReason, person); err != nil || moved.Status != Done {
+		t.Fatalf("a desk ticket with its desk tree stamped and no Go stamp: %v", err)
+	}
+	bare := t.TempDir()
+	gitIn(t, bare, "init", "-q")
+	if err := os.WriteFile(filepath.Join(bare, "go.mod"), []byte("module x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, bare, "add", "-A")
+	gitIn(t, bare, "commit", "-q", "-m", "no desk")
+	m.Store.Root = bare
+	unread, err := m.Create("DEMO", ticketWith("no desk tree", "apps/desk/**"), manager)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proved(t, m, unread.ID)
+	_, err = m.Move(unread.ID, Done, closedReason, person)
+	refused(t, err, "apps/desk")
+}
+
 func TestFlowsAreasReachDeskAndSessions(t *testing.T) {
 	for glob, want := range map[string]string{
 		"apps/desk/**":                     "apps/desk",
@@ -94,7 +173,7 @@ func TestFlowsAreasReachDeskAndSessions(t *testing.T) {
 		"apps/other/**":                    "",
 		"internal/sessions/**":             "",
 	} {
-		if got := flowsArea([]string{glob}); got != want {
+		if got := strings.Join(flowsAreas([]string{glob}), ", "); got != want {
 			t.Errorf("%s gates %q, want %q", glob, got, want)
 		}
 	}

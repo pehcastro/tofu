@@ -16,6 +16,8 @@ import (
 const (
 	FlowsStamps    = "flows"
 	TreewideStamps = "treewide"
+	DeskStamps     = "desk"
+	deskArea       = "apps/desk"
 )
 
 func StampDir(repo string) string {
@@ -56,26 +58,43 @@ func Unstamped(repo string, kinds ...string) (string, []string, error) {
 	}
 	var run []string
 	for _, kind := range kinds {
-		stamp, _ := os.ReadFile(StampPath(repo, kind, tree))
-		if first, _, _ := strings.Cut(strings.ReplaceAll(string(stamp), "\r\n", "\n"), "\n"); first != "tree "+tree {
+		if !stamped(repo, kind, tree) {
 			run = append(run, "go run ./bench/"+kind)
 		}
 	}
 	return tree, run, nil
 }
 
+func DeskTree(repo string) (string, []string, error) {
+	tree, err := gitOut(repo, "", "rev-parse", "HEAD:"+deskArea)
+	if err != nil {
+		return "", nil, err
+	}
+	dirty, err := uncommitted(repo, deskArea)
+	return tree, dirty, err
+}
+
+func stamped(repo, kind, tree string) bool {
+	stamp, _ := os.ReadFile(StampPath(repo, kind, tree))
+	first, _, _ := strings.Cut(strings.ReplaceAll(string(stamp), "\r\n", "\n"), "\n")
+	return first == "tree "+tree
+}
+
 type DoneGate struct {
-	Area      string
-	Tree      string
-	Unread    string
-	Dirty     []string
-	Unstamped bool
-	owns      []string
-	stamps    string
+	Area          string
+	Tree          string
+	DeskTree      string
+	Unread        string
+	Dirty         []string
+	Unstamped     bool
+	DeskUnstamped bool
+	deskUnread    string
+	owns          []string
+	stamps        string
 }
 
 func checkDone(repo string, owns []string) DoneGate {
-	if flowsArea(owns) == "" {
+	if len(flowsAreas(owns)) == 0 {
 		return DoneGate{}
 	}
 	return headGate(repo).owning(repo, owns)
@@ -89,11 +108,22 @@ func headGate(repo string) DoneGate {
 	if err != nil {
 		return DoneGate{Unread: "HEAD's tree could not be read: " + err.Error()}
 	}
-	return DoneGate{Tree: tree, Unstamped: len(run) > 0, stamps: StampDir(repo)}
+	g := DoneGate{Tree: tree, Unstamped: len(run) > 0, stamps: StampDir(repo)}
+	if g.DeskTree, err = gitOut(repo, "", "rev-parse", "HEAD:"+deskArea); err != nil {
+		g.deskUnread = "HEAD's " + deskArea + " tree could not be read, so no desk stamp can be checked: " + err.Error()
+	}
+	g.DeskUnstamped = !stamped(repo, DeskStamps, g.DeskTree)
+	return g
 }
 
 func (g DoneGate) owning(repo string, owns []string) DoneGate {
-	if g.Area, g.owns = flowsArea(owns), owns; g.Area == "" || g.Unread != "" {
+	areas := flowsAreas(owns)
+	g.Area, g.owns = strings.Join(areas, ", "), owns
+	g.Unstamped = g.Unstamped && slices.ContainsFunc(areas, func(area string) bool { return area != deskArea })
+	if g.DeskUnstamped = g.DeskUnstamped && slices.Contains(areas, deskArea); g.DeskUnstamped && g.deskUnread != "" {
+		g.Unread, g.DeskUnstamped = g.deskUnread, false
+	}
+	if g.Area == "" || g.Unread != "" {
 		return g
 	}
 	var pathspecs []string
@@ -121,15 +151,18 @@ func (g DoneGate) Refusal() string {
 	if g.Unstamped {
 		causes = append(causes, "HEAD's tree "+g.Tree+" has no passing flows stamp")
 	}
+	if g.DeskUnstamped {
+		causes = append(causes, "HEAD's "+deskArea+" tree "+g.DeskTree+" has no passing desk stamp")
+	}
 	if len(causes) == 0 {
 		return ""
 	}
-	why := strings.Join(causes, ", and ") + ".\nIt owns " + strings.Join(g.owns, ", ") + ", which touches " + g.Area + ", and a move to done needs the owned paths committed and HEAD's tree stamped by ./bench/flows."
+	why := strings.Join(causes, ", and ") + ".\nIt owns " + strings.Join(g.owns, ", ") + ", which touches " + g.Area + ", and a move to done needs the owned paths committed and HEAD stamped by ./bench/flows: the Go tree for Go areas, the " + deskArea + " tree for " + deskArea + "."
 	if len(g.Dirty) > 0 {
 		why += "\nCommit the owned paths first, so the work being closed is the work a stamp covers."
 	}
-	if g.Unstamped {
-		why += "\nIn a clean clone of HEAD, run: TOFU_STAMP_DIR=" + g.stamps + " go run ./bench/flows\nIt replays eight long-session flows on fresh homes in about six minutes and stamps the tree only when every flow passes."
+	if g.Unstamped || g.DeskUnstamped {
+		why += "\nIn a clean clone of HEAD, run: TOFU_STAMP_DIR=" + g.stamps + " go run ./bench/flows\nIt replays every flow on fresh homes, the desk flows through tofu drive desk on a desk built from HEAD, and stamps the Go tree when every Go flow passes and the " + deskArea + " tree when every desk flow passes."
 	}
 	return why + "\nOn 2026-10-15 two regressions in turn and sub-agent work reached 0.5.15-rc2 with every ticket accepted on its tests, and the owner's nine-day session waited 55 minutes on two finished agents."
 }
@@ -147,16 +180,17 @@ func DoneRefusal(repo, id string, owns []string) string {
 	return checkDone(repo, owns).Refusal()
 }
 
-func flowsArea(globs []string) string {
+func flowsAreas(globs []string) []string {
+	var areas []string
 	for _, glob := range globs {
 		literal, _, _ := strings.Cut(strings.ToLower(strings.ReplaceAll(glob, `\`, "/")), "*")
-		for _, area := range []string{"internal/turn", "internal/host", "internal/subagent", "internal/session", "interface/tui", "cmd/tofu", "apps/desk"} {
-			if strings.HasPrefix(literal, area+"/") || strings.HasPrefix(area+"/", literal) {
-				return area
+		for _, area := range []string{"internal/turn", "internal/host", "internal/subagent", "internal/session", "interface/tui", "cmd/tofu", deskArea} {
+			if (strings.HasPrefix(literal, area+"/") || strings.HasPrefix(area+"/", literal)) && !slices.Contains(areas, area) {
+				areas = append(areas, area)
 			}
 		}
 	}
-	return ""
+	return areas
 }
 
 func uncommitted(repo string, pathspecs ...string) ([]string, error) {

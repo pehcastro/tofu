@@ -27,7 +27,7 @@ const (
 var requestHeader = regexp.MustCompile(`^(the orchestrator|sub-agent c\d+) request \d+: `)
 
 type session struct {
-	exe, dir, home, project string
+	exe, desk, dir, home, project string
 }
 
 type request struct {
@@ -64,8 +64,8 @@ func (h *heldOutput) String() string {
 	return h.held.String()
 }
 
-func fresh(exe, dir string) (session, error) {
-	s := session{exe: exe, dir: dir, home: filepath.Join(dir, "home"), project: filepath.Join(dir, "project")}
+func fresh(exe, desk, dir string) (session, error) {
+	s := session{exe: exe, desk: desk, dir: dir, home: filepath.Join(dir, "home"), project: filepath.Join(dir, "project")}
 	for _, made := range []string{s.home, s.project} {
 		if err := os.MkdirAll(made, 0o755); err != nil {
 			return session{}, err
@@ -185,7 +185,7 @@ func (s session) driveUntilKilled(script, sentinel string, within time.Duration)
 
 func failure(out string, err error) string {
 	for _, line := range strings.Split(out, "\n") {
-		if strings.HasPrefix(line, "tofu drive:") || strings.HasPrefix(line, "panic:") || strings.HasPrefix(line, "fatal error:") {
+		if strings.HasPrefix(line, "tofu drive:") || strings.HasPrefix(line, "tofu drive desk:") || strings.HasPrefix(line, "panic:") || strings.HasPrefix(line, "fatal error:") {
 			return strings.TrimSpace(line)
 		}
 	}

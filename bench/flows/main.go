@@ -61,26 +61,34 @@ func run(only, src string, keep bool) (bool, error) {
 	} else {
 		defer func() { _ = os.RemoveAll(work) }()
 	}
-	tree, head := "none, built from "+src, "none"
-	var dirty []string
+	head := "none"
 	if stamped {
-		if tree, dirty, err = guard.HeadTree(repo); err != nil {
-			return false, err
-		}
 		head, _ = git(repo, "rev-parse", "--short", "HEAD")
 	}
-	if len(dirty) > 0 {
-		fmt.Printf("no stamp will be written: %d uncommitted Go files, and a stamp is keyed by HEAD's tree; run in a clean clone of HEAD\n", len(dirty))
+	stamps, desk, err := stampings(repo, src, stamped)
+	if err != nil {
+		return false, err
 	}
 	machine, _ := os.Hostname()
-	fmt.Printf("flows: tree %s, HEAD %s, %s %s/%s %d cpu, GOMAXPROCS %s, %s\n",
-		tree, head, machine, runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), childProcs, time.Now().Format(time.RFC3339))
+	fmt.Printf("flows: tree %s, desk tree %s, HEAD %s, %s %s/%s %d cpu, GOMAXPROCS %s, %s\n",
+		stamps[0].tree, stamps[1].tree, head, machine, runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), childProcs, time.Now().Format(time.RFC3339))
 	fmt.Println("cassettes only, no network; every flow on a fresh HOME and project; no call is discarded as a warm up")
+	for _, each := range stamps {
+		for _, line := range each.lines {
+			fmt.Println(line)
+		}
+		if len(each.dirty) > 0 {
+			fmt.Printf("no %s stamp will be written: %d uncommitted files under its tree, and a stamp is keyed by HEAD's tree; run in a clean clone of HEAD\n", each.kind, len(each.dirty))
+		}
+		if each.held != "" {
+			fmt.Printf("no %s stamp will be written: %s\n", each.kind, each.held)
+		}
+	}
 	builds := map[bool]string{}
 	var rows []row
 	for _, each := range chosen {
-		exe, built := builds[each.seamed]
-		if !built {
+		exe, made := builds[each.seamed]
+		if !made {
 			started := time.Now()
 			if exe, err = build(src, work, each.seamed); err != nil {
 				return false, err
@@ -88,42 +96,39 @@ func run(only, src string, keep bool) (bool, error) {
 			builds[each.seamed] = exe
 			fmt.Printf("built %s in %s\n", exe, time.Since(started).Round(time.Second))
 		}
-		rows = append(rows, play(each, exe, filepath.Join(work, "flow"+strconv.Itoa(each.number))))
+		rows = append(rows, play(each, exe, desk, filepath.Join(work, "flow"+strconv.Itoa(each.number))))
 		printRow(rows[len(rows)-1])
 	}
 	failed := slices.ContainsFunc(rows, func(r row) bool { return !r.passed })
-	switch {
-	case failed:
-		fmt.Println("no stamp: a flow failed")
-	case !stamped || len(chosen) != len(flows):
-		fmt.Println("no stamp: a stamp needs every flow on the repository's own tree")
-	case len(dirty) > 0:
-		fmt.Println("no stamp: the tree held uncommitted Go files")
-		return true, nil
-	default:
-		return stamp(repo, tree, head, rows)
+	for _, each := range stamps {
+		refused, err := each.settle(repo, head, stamped, rows)
+		if err != nil {
+			return false, err
+		}
+		failed = failed || refused
 	}
 	return failed, nil
 }
 
 func choose(only string) ([]flow, error) {
+	every := slices.Concat(flows, deskFlows)
 	if only == "" {
-		return flows, nil
+		return every, nil
 	}
 	var chosen []flow
 	for _, field := range strings.Split(only, ",") {
 		number, err := strconv.Atoi(strings.TrimSpace(field))
-		if err != nil || number < 1 || number > len(flows) {
-			return nil, fmt.Errorf("-only %q names no flow from 1 to %d", field, len(flows))
+		if err != nil || number < 1 || number > len(every) {
+			return nil, fmt.Errorf("-only %q names no flow from 1 to %d", field, len(every))
 		}
-		chosen = append(chosen, flows[number-1])
+		chosen = append(chosen, every[number-1])
 	}
 	return chosen, nil
 }
 
-func play(each flow, exe, dir string) row {
+func play(each flow, exe, desk, dir string) row {
 	started := time.Now()
-	s, err := fresh(exe, dir)
+	s, err := fresh(exe, desk, dir)
 	evidence := ""
 	if err == nil {
 		evidence, err = each.run(s)
@@ -158,17 +163,63 @@ func git(dir string, args ...string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func stamp(repo, tree, head string, rows []row) (bool, error) {
-	after, dirty, err := guard.HeadTree(repo)
-	if err != nil || after != tree || len(dirty) > 0 {
-		fmt.Printf("no stamp: the run was not on a clean HEAD from start to end: tree %s then %s, %d uncommitted Go files\n", tree, after, len(dirty))
+type stamping struct {
+	kind         string
+	flows        []flow
+	read         func(repo string) (string, []string, error)
+	tree, held   string
+	dirty, lines []string
+}
+
+func stampings(repo, src string, stamped bool) ([]stamping, string, error) {
+	code := stamping{kind: guard.FlowsStamps, flows: flows, read: guard.HeadTree, tree: "none, built from " + src}
+	desk := stamping{kind: guard.DeskStamps, flows: deskFlows, read: guard.DeskTree, tree: "none"}
+	exe, built, err := deskBuild(src)
+	if err != nil {
+		desk.held = err.Error()
+	} else {
+		desk.lines = []string{"desk " + exe + " built " + built.Format(time.RFC3339)}
+	}
+	if !stamped {
+		return []stamping{code, desk}, exe, nil
+	}
+	if code.tree, code.dirty, err = code.read(repo); err != nil {
+		return nil, "", err
+	}
+	if desk.tree, desk.dirty, err = desk.read(repo); err != nil {
+		return nil, "", err
+	}
+	if exe != "" {
+		desk.held, err = deskStale(repo, exe, built)
+	}
+	return []stamping{code, desk}, exe, err
+}
+
+func (k stamping) settle(repo, head string, stamped bool, rows []row) (bool, error) {
+	ran := slices.DeleteFunc(slices.Clone(rows), func(r row) bool {
+		return !slices.ContainsFunc(k.flows, func(f flow) bool { return f.number == r.number })
+	})
+	switch {
+	case slices.ContainsFunc(ran, func(r row) bool { return !r.passed }):
+		fmt.Printf("no %s stamp: a flow failed\n", k.kind)
+		return false, nil
+	case !stamped || len(ran) != len(k.flows):
+		fmt.Printf("no %s stamp: a stamp needs every %s flow on the repository's own tree\n", k.kind, k.kind)
+		return false, nil
+	case k.held != "":
+		fmt.Printf("no %s stamp: %s\n", k.kind, k.held)
+		return true, nil
+	}
+	after, dirty, err := k.read(repo)
+	if err != nil || after != k.tree || len(k.dirty)+len(dirty) > 0 {
+		fmt.Printf("no %s stamp: the run was not on a clean HEAD from start to end: tree %s then %s, %d uncommitted files then %d\n", k.kind, k.tree, after, len(k.dirty), len(dirty))
 		return true, err
 	}
-	lines := []string{"tree " + tree, "head " + head, "date " + time.Now().Format(time.RFC3339)}
-	for _, r := range rows {
+	lines := append([]string{"tree " + k.tree, "head " + head, "date " + time.Now().Format(time.RFC3339)}, k.lines...)
+	for _, r := range ran {
 		lines = append(lines, fmt.Sprintf("flow %d pass %.0fs %s", r.number, r.took.Seconds(), r.name))
 	}
-	path := guard.StampPath(repo, guard.FlowsStamps, tree)
+	path := guard.StampPath(repo, k.kind, k.tree)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return false, err
 	}

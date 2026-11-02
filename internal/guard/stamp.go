@@ -13,6 +13,7 @@ import (
 const (
 	FlowsStamps    = boardy.FlowsStamps
 	TreewideStamps = boardy.TreewideStamps
+	DeskStamps     = boardy.DeskStamps
 )
 
 func StampDir(repo string) string { return boardy.StampDir(repo) }
@@ -20,6 +21,8 @@ func StampDir(repo string) string { return boardy.StampDir(repo) }
 func StampPath(repo, kind, tree string) string { return boardy.StampPath(repo, kind, tree) }
 
 func HeadTree(repo string) (string, []string, error) { return boardy.HeadTree(repo) }
+
+func DeskTree(repo string) (string, []string, error) { return boardy.DeskTree(repo) }
 
 func flowsRefusal(env Env, command string) string {
 	if !strings.Contains(command, "boardy") {
