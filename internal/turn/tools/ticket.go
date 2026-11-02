@@ -87,7 +87,7 @@ func TicketTools(board boardy.Managed, actor string) ([]turn.Tool, error) {
 		list[i] = ticketTool{verb: verb, board: board, actor: actor, manager: manager}
 	}
 	if manager {
-		for _, verb := range []boardVerb{boardRule, boardEpic, boardSprint, boardMilestone, boardTriage} {
+		for _, verb := range []boardVerb{boardRule, boardEpic, boardSprint, boardMilestone, boardTriage, boardRequest} {
 			list = append(list, boardTool{verb: verb, board: board, actor: actor})
 		}
 	}

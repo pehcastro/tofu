@@ -24,6 +24,7 @@ const (
 	boardSprint    boardVerb = "sprint"
 	boardMilestone boardVerb = "milestone"
 	boardTriage    boardVerb = "triage"
+	boardRequest   boardVerb = "request"
 )
 
 type boardTool struct {
@@ -33,7 +34,8 @@ type boardTool struct {
 }
 
 type boardArgs struct {
-	Board, Action, ID, Title, Source, Scope, Ticket, To, Milestone, Start, End, Due, Request, Reason, Epic, Sprint, Note, Design, First string
+	Board, Action, ID, Title, Source, Scope, Ticket, To, Milestone, Start, End, Due, Request, Reason, Epic, Sprint, Note, Design, First, Words, Verdict string
+	Tickets                                                                                                                                             []string
 }
 
 func stringParam(about string) map[string]any {
@@ -89,6 +91,13 @@ func (t boardTool) Definition() llm.Tool {
 		actions = []string{"list", "accept", "drop"}
 		properties["request"], properties["reason"] = stringParam("the request id, for accept and drop"), stringParam("why it is dropped")
 		properties["epic"], properties["sprint"] = stringParam("the epic the accepted ticket goes in"), stringParam("the sprint the accepted ticket is planned in")
+	case boardRequest:
+		describe = "holds what the person asked, in their own words, with every ticket cut from it. a request is done only when every ticket is done and a review against the words passes; a ticket moved after the review asks for a new one. say done to the person only for a request whose state is done, never for a ticket, and when part of the ask is left, cut it as its own ticket, add it here, and say the request is open. new quotes the words verbatim with the tickets; add puts a later ticket in; review records pass or fail with a note on how the work holds against the words, once every ticket is done; show and list say each request's state"
+		actions = []string{"list", "show", "new", "add", "review"}
+		properties["id"], properties["words"] = stringParam("the request id, such as R1, for show, add and review"), stringParam("the person's words exactly as written, for new")
+		properties["tickets"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "the ticket ids cut from it, for new and add"}
+		properties["verdict"] = map[string]any{"type": "string", "enum": []string{string(boardy.ReviewPass), string(boardy.ReviewFail)}, "description": "the review's verdict"}
+		properties["note"] = stringParam("how the work holds against the words, for review")
 	}
 	properties["action"] = map[string]any{"type": "string", "enum": actions}
 	return llm.Tool{Name: string(t.verb), Description: describe, Parameters: map[string]any{"type": "object", "properties": properties, "required": []string{"board", "action"}}}
@@ -113,6 +122,8 @@ func (t boardTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, err
 			said, err = t.milestone(args)
 		case boardTriage:
 			said, err = t.triage(args)
+		case boardRequest:
+			said, err = t.request(args)
 		}
 		return turn.Result{Content: said, Command: strings.TrimSpace(string(t.verb) + " " + args.Action + " " + args.Board + " " + args.ID)}, err
 	})
@@ -308,4 +319,43 @@ func (t boardTool) triage(a boardArgs) (string, error) {
 		lines = append(lines, fmt.Sprintf("- %s by %s: %s", request.ID, cmp.Or(request.By.ID, string(request.By.Kind)), request.Ticket.Title))
 	}
 	return strings.Join(lines, "\n"), err
+}
+
+func standingLine(s boardy.RequestStanding) string {
+	return s.Request.ID + " is " + string(s.State) + ": " + s.Why
+}
+
+func (t boardTool) request(a boardArgs) (string, error) {
+	var standing boardy.RequestStanding
+	var err error
+	switch a.Action {
+	case "list":
+		standings, err := t.board.Store.RequestStandings(a.Board)
+		lines := []string{fmt.Sprintf("%s has %d requests", a.Board, len(standings))}
+		for _, s := range standings {
+			lines = append(lines, "- "+standingLine(s))
+		}
+		return strings.Join(lines, "\n"), err
+	case "show":
+		standing, err = t.board.Store.RequestStanding(a.Board, a.ID)
+	case "new":
+		standing, err = t.board.NewRequest(a.Board, a.Words, a.Tickets, t.actor)
+	case "add":
+		standing, err = t.board.AddToRequest(a.Board, a.ID, a.Tickets, t.actor)
+	case "review":
+		var verdict boardy.ReviewVerdict
+		if verdict, err = boardy.ParseReviewVerdict(a.Verdict); err == nil {
+			standing, err = t.board.ReviewRequest(a.Board, a.ID, verdict, a.Note, t.actor)
+		}
+	default:
+		return "", unknownAction(a.Action, "list, show, new, add or review")
+	}
+	if err != nil {
+		return "", err
+	}
+	lines := []string{standingLine(standing), "words: " + standing.Request.Words}
+	for _, ticket := range standing.Tickets {
+		lines = append(lines, "- "+ticket.ID+" "+string(ticket.Status)+" "+ticket.Title)
+	}
+	return strings.Join(lines, "\n"), nil
 }

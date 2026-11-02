@@ -110,6 +110,26 @@ before they existed, the Log records each one, and the receipt names the
 sections it set. Given a triage request, `set T1 --board DRV ...` fills the
 request the same way, so it can be accepted rather than dropped.
 
+A request is what the person asked, in their words verbatim, with every
+ticket cut from it. It is the unit of done: two tickets done and a third open
+means the ask is open.
+
+```
+tofu boardy request new 'the picker lists the themes and deletes one' --tickets DEMO-1,DEMO-2
+tofu boardy request add R1 DEMO-3
+tofu boardy request show R1
+tofu boardy request review R1 pass --note "the picker lists and deletes, as asked"
+tofu boardy request list
+```
+
+A request is `open` while any ticket is not done, a dropped one included,
+`unreviewed` once every ticket is done, `rejected` after a failed review, and
+`done` only after a review against the words passes. The person or a manager
+reviews, and only once every ticket is done. A ticket moved after the review,
+or a ticket added, asks for a new review. Each request is
+`requests/R<n>.json` in the board folder. The lead has the same verbs as its
+`request` tool, and says done to the person only for a request that is done.
+
 Work one through review:
 
 ```

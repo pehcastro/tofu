@@ -6,10 +6,7 @@ summary: boards of tickets kept as markdown files under the tofu home, numbered 
 
 ## What it is
 
-Boardy keeps a project's tickets as plain markdown files, the way a Jira or
-Linear board keeps them on a server. A project holds as many boards as it
-needs, each with a short key such as `DEMO` or `OPS`, and each board numbers
-its own tickets from 1: `DEMO-1`, `DEMO-2`, `OPS-1`. On a board of 1,500 tickets the `boardy` verbs and the `boardy.*` calls of `tofu serve` answer in about half the time they took in 0.5.14, with the same output.
+Boardy keeps a project's tickets as plain markdown files, the way a Jira or Linear board keeps them on a server. A project holds as many boards as it needs, each with a short key such as `DEMO` or `OPS`, and each board numbers its own tickets from 1: `DEMO-1`, `DEMO-2`, `OPS-1`. On a board of 1,500 tickets the `boardy` verbs and the `boardy.*` calls of `tofu serve` answer in about half the time they took in 0.5.14, with the same output.
 
 A ticket has front matter (type, status, assignee, priority P0 to P4,
 points, owns, depends, blocks, relates, duplicates, epic, sprint, labels,
@@ -20,6 +17,8 @@ that goes back from review to doing gets a numbered acceptance revision,
 A ticket is made with Before (how it works now), Driven path (the steps a person performs to see the change), Still works (a line for each neighbour it touches) and Empty or error case (what an empty or failing input does); `new` without one is refused, naming each one missing. When Jev's `ticket_feasibility@1` judges the ask a visual or platform effect, such as a blur, Feasibility is required too: what the platform gives, what it does not, and the source.
 
 An epic made with `tofu boardy epic new` takes its first ticket only after `tofu boardy epic research <ID> <note>` records what two rivals do and the options, and `tofu boardy epic design <ID> <design> --first <smallest first version>` names the smallest first version that runs; each refusal names the step missing. It takes a second ticket only once one of its tickets is done with a Driven path, and the refusal names the ticket waiting. Dropped tickets, triage requests and sub-tickets do not count. An epic made before this step carries no `gated: true` line and takes tickets as before.
+
+A request holds what the person asked, in their words verbatim, and every ticket cut from it: `tofu boardy request new '<words>' --tickets DEMO-1,DEMO-2` makes `R1`, and `request add R1 DEMO-3` puts in a ticket cut later, such as the part left open. `request show R1` and `request list` give each request's state. It is `open` while a ticket is not done, dropped included, `unreviewed` once every ticket is done, `rejected` after a failed review and `done` only after `request review R1 pass|fail --note text` passes. The person or a manager reviews, and only once every ticket is done. A ticket moved after the review, or added to the request, asks for a new review. The lead's `request` tool does the same, and the lead says done to the person only for a request whose state is done.
 
 A move to done is refused while an acceptance line in force has no evidence entry naming it, a line left for the lead included, and the refusal names the line. It is refused too while the ticket has no before capture: `tofu boardy log <id> --before "<what you ran and what it printed>"`, or `ticket_log` kind before, records how things work before the change, on the same steps as the Driven path, and the Log shows it as `before capture:` beside the evidence. A capture logged after the ticket's first evidence entry is refused as late, and so is one logged after a commit touching the ticket's owns, made since it entered doing, naming the commit. A ticket made with `new --labels docs-only` closes without one, and so does a ticket made before this check existed; either way its done reason says why no capture was asked. Jev's `done_reason@1` reads the reason, and one that names a part still open, such as `all done except the dark theme`, is refused, quoting that part. A move with no reason asks nothing. Each Jev answer is a decision ledger row. When Jev cannot answer, an agent's create or move waits for the person, and the person's own goes through with one `nudge` line; with no classifier bound it names `tofu models bind classifier <source/model>`. Every way a ticket is made runs this check: `new`, `ticket_create`, `ticket_request`, a triage accept, a move out of triage, a hand, a hook's `create` effect and `boardy.create` in `tofu serve`; a hook follow up it refuses prints a `nudge` line on the command that fired it. `tofu boardy set <id> --before --driven --still-works --error-case --feasibility` fills the sections of an older ticket or, with `--board KEY`, of a triage request such as `T1`, and its receipt names the sections set. `new --problem` sets the Problem.
 
@@ -35,12 +34,12 @@ The setting `boardFlow` picks the words: `jira` (the default) says ticket, board
       tickets/<KEY>-<n>.md
       tickets/<KEY>-<n>/<KEY>-<n>-<m>.md   a sub-ticket, beside its own counter
       epics/ milestones/ sprints/
+      requests/R<n>.json  the person's words, the tickets cut from them, the review
       events.jsonl        every create, move, log line, question, answer,
                           spawn and report, appended
       locks/              held only while a write runs
 
-The board folder counts as the project's own tickets when a tool writes
-there, not as a file outside the project.
+The board folder counts as the project's own tickets when a tool writes there, not as a file outside the project.
 
 ## Change it
 

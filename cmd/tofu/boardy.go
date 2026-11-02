@@ -20,7 +20,7 @@ import (
 	"tofu/internal/rule"
 )
 
-const boardyUsage = "tofu boardy init|new|list|show|move|log|set|lint|boards|held|manager|triage|assign|hand|widen|check|tick|fire|rule|bypass|view|audit|report|attention|epic|sprint|ask|catchup [--json]"
+const boardyUsage = "tofu boardy init|new|list|show|move|log|set|lint|boards|held|manager|triage|assign|hand|widen|check|tick|fire|rule|bypass|request|view|audit|report|attention|epic|sprint|ask|catchup [--json]"
 
 func boardyUsageOf(subcommand string) string {
 	switch subcommand {
@@ -52,6 +52,8 @@ func boardyUsageOf(subcommand string) string {
 		return boardyRuleUsage
 	case "bypass":
 		return boardyBypassUsage
+	case "request":
+		return "tofu boardy request new <words> [--tickets A,B]|add <R> <ticket>...|review <R> pass|fail --note text|show <R>|list [--board KEY] [--as name] [--json]"
 	}
 	return cmp.Or(boardyManageUsage(subcommand), boardyViewUsageOf(subcommand), boardyDecideUsage(subcommand))
 }
@@ -125,6 +127,8 @@ func (call boardyCall) run(subcommand string) int {
 		return call.rule()
 	case "bypass":
 		return call.bypass()
+	case "request":
+		return call.request()
 	case "view":
 		return call.view()
 	case "audit":
@@ -758,5 +762,76 @@ func (c boardyCall) boards() int {
 			rows = append(rows, cli.Row{Mark: cli.Idle, Cells: []string{board.Key, plural(board.Tickets, c.words.Ticket) + ", " + strconv.Itoa(board.Live) + " live"}, Detail: page.Path(board.Dir)})
 		}
 		return append(lines, page.Rows(rows)...)
+	})
+}
+
+func requestMark(state boardy.RequestState) cli.Mark {
+	switch state {
+	case boardy.RequestDone:
+		return cli.Done
+	case boardy.RequestUnreviewed:
+		return cli.Warn
+	case boardy.RequestRejected:
+		return cli.Fail
+	}
+	return cli.Active
+}
+
+func (c boardyCall) request() int {
+	if len(c.args) == 0 {
+		return c.o.usage(errors.New("name new, add, review, show or list"))
+	}
+	key, err := c.board()
+	if err != nil {
+		return c.o.fail(err)
+	}
+	verb, rest := c.args[0], c.args[1:]
+	if verb == "list" {
+		standings, err := c.store.RequestStandings(key)
+		if err != nil {
+			return c.o.fail(err)
+		}
+		return c.o.done(true, standings, func(page cli.Page) []string {
+			rows := make([]cli.Row, 0, len(standings))
+			for _, s := range standings {
+				said, _, _ := strings.Cut(strings.TrimSpace(s.Request.Words), "\n")
+				rows = append(rows, cli.Row{Mark: requestMark(s.State), Cells: []string{s.Request.ID, string(s.State), plural(len(s.Request.Tickets), c.words.Ticket), said}})
+			}
+			return append(page.Title(key+" requests", []string{strconv.Itoa(len(standings))}, cli.Verdict{}), page.Rows(rows)...)
+		})
+	}
+	var standing boardy.RequestStanding
+	switch {
+	case verb == "new" && len(rest) > 0:
+		standing, err = c.managed.NewRequest(key, strings.Join(rest, " "), splitList(c.flags["tickets"]), c.actor)
+	case verb == "add" && len(rest) > 1:
+		standing, err = c.managed.AddToRequest(key, rest[0], rest[1:], c.actor)
+	case verb == "review" && len(rest) == 2:
+		var verdict boardy.ReviewVerdict
+		if verdict, err = boardy.ParseReviewVerdict(rest[1]); err != nil {
+			return c.o.usage(err)
+		}
+		standing, err = c.managed.ReviewRequest(key, rest[0], verdict, c.flags["note"], c.actor)
+	case verb == "show" && len(rest) == 1:
+		standing, err = c.store.RequestStanding(key, rest[0])
+	default:
+		return c.o.usage(fmt.Errorf("request %s takes other arguments", verb))
+	}
+	if err != nil {
+		return c.o.fail(err)
+	}
+	r := standing.Request
+	return c.o.done(true, standing, func(page cli.Page) []string {
+		lines := page.Title(key+" request "+r.ID, []string{plural(len(r.Tickets), c.words.Ticket)}, cli.Verdict{Mark: requestMark(standing.State), Text: string(standing.State)})
+		facts := []cli.Fact{{Label: "why", Text: standing.Why}, {Label: "by", Text: r.By + " " + r.At.Local().Format(time.DateTime)}}
+		if review := r.Review; review != nil {
+			facts = append(facts, cli.Fact{Label: "review", Text: string(review.Verdict) + " by " + review.By + " " + review.At.Local().Format(time.DateTime) + ": " + review.Note})
+		}
+		lines = append(append(lines, page.Facts(facts)...), boardySection(page, "Words", r.Words)...)
+		rows := make([]cli.Row, 0, len(standing.Tickets))
+		for _, ticket := range standing.Tickets {
+			rows = append(rows, cli.Row{Mark: statusMark(ticket.Status), Cells: []string{ticket.ID, string(ticket.Status), ticket.Title}})
+		}
+		return append(append(lines, "", page.Subject(c.words.Ticket+"s")), page.Rows(rows)...)
 	})
 }
