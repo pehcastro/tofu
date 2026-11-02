@@ -1,7 +1,7 @@
 ---
 topic: drive
 title: Driving the app from a script
-summary: what tofu drive does, the steps a script takes, and what the requests step prints
+summary: what tofu drive and tofu drive desk do, the steps they take, and what the requests step prints
 verbs: drive
 ---
 
@@ -63,6 +63,39 @@ assistant message makes, and the id of the call a tool message answers.
 `requests text` prints each message's text and tool calls under its line,
 each line cut at `--width`, and every key masked as the session log masks
 it, so a pasted run never carries one.
+
+## The desk
+
+`tofu drive desk` opens the desk app in a home made fresh for the run,
+takes its steps, and writes a screenshot once the window has painted, one
+at each `shot` step and one at the end, with `steps.log` beside them. It
+prints the folder and closes the desk. `HOME`, `USERPROFILE`, `APPDATA`,
+`LOCALAPPDATA` and the XDG folders point at `home` inside that folder, so it
+never reads or writes your home or your running desk. It builds nothing:
+it runs the newest `tofu-desktop` build under `CARGO_TARGET_DIR` or
+`apps/desk/target*`, or the one `--exe` names.
+
+- `click:X,Y`: click at X,Y in the window, in pixels from its top left
+- `type:TEXT`, `key:NAME`: type into what has focus, press a key
+- `wait:DUR`: wait `500ms`, `2s`, any duration
+- `shot:NAME`: write a screenshot named NAME
+- `--out DIR`: write there, empty or absent; without it a new folder
+  under the temp folder
+- `--first-run ready`: open a fresh home past onboarding; also
+  `no-tofu`, `no-account`, `no-project`
+- after `--`: arguments for the desk, `-- --screen boardy` for a screen or
+  `-- FOLDER` for a project
+
+The desk opens on a Windows desktop made for the run, so its window never
+shows on your screen or taskbar, and clicks and keys go to it as messages,
+never through the real cursor or keyboard. A sub-agent runs it from its shell without holding a
+path, writing under its scratch `tmp` or into `--out` inside a path it
+holds; `--exe` is refused to it. Windows only for now.
+
+    tofu drive desk --first-run ready click:20,20 -- demo
+
+opens the desk on the project `demo`, clicks the sidebar toggle, and keeps
+`01-open.png` and `02-end.png`.
 
 ## Check it
 

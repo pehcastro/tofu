@@ -88,7 +88,8 @@ Verbs:
             and propose at most five changes with your words behind each
   frame     print one recorded interface frame, at a width and a height
   drive     run a script of what a person would do against the real app,
-            with no terminal and no model call, and print the screens it asks for
+            with no terminal and no model call, and print the screens it asks for;
+            drive desk opens the desk app in a fresh home and keeps screenshots
   host      start, read or stop this project's host, the one process every
             tofu and desk of the project joins: ensure, status, stop
   serve     serve this project to a frontend: --stdio speaks tofu.host/1,
@@ -338,7 +339,12 @@ func verbNamed(name string) verb {
 	case "frame":
 		return verb{withoutIn(frameVerb), frameUsage}
 	case "drive":
-		return verb{driveVerb, driveUsage}
+		return verb{func(args []string, in io.Reader, out, errOut io.Writer) int {
+			if len(args) > 0 && args[0] == "desk" {
+				return driveDeskVerb(args[1:], out, errOut)
+			}
+			return driveVerb(args, in, out, errOut)
+		}, driveUsage + "\n" + driveDeskUsage}
 	case "serve":
 		return verb{serveVerb, serveUsage}
 	case host.HubVerb:
@@ -414,6 +420,10 @@ func verbHelp(name string, args []string) string {
 		text = hooksSubcommands
 	case "version":
 		text = "tofu version [--json]"
+	case "drive":
+		if len(args) > 0 && args[0] == "desk" {
+			text = driveDeskUsage
+		}
 	case "context":
 		text = "tofu context [<name|id|head>] [--json]"
 	case "preview":

@@ -312,15 +312,22 @@ func (c simpleCommand) manifests() []shellWord {
 	if !builds || len(packages(args)) > 0 {
 		return nil
 	}
+	if named := flagValue(args, "--manifest-path"); named != nil {
+		return named
+	}
+	return []shellWord{{text: "Cargo.toml"}}
+}
+
+func flagValue(args []shellWord, flag string) []shellWord {
 	for i, arg := range args {
-		if value, joined := strings.CutPrefix(arg.text, "--manifest-path="); joined {
+		if value, joined := strings.CutPrefix(arg.text, flag+"="); joined {
 			return []shellWord{{text: value, expands: arg.expands}}
 		}
-		if arg.text == "--manifest-path" && i+1 < len(args) {
+		if arg.text == flag && i+1 < len(args) {
 			return args[i+1 : i+2]
 		}
 	}
-	return []shellWord{{text: "Cargo.toml"}}
+	return nil
 }
 
 func packageName(manifest string) (string, bool) {
@@ -496,7 +503,15 @@ func (g Grammar) changes(c simpleCommand) []shellWord {
 	if tool == "touch" || tool == "mkdir" || g == PowerShell && tool == "cp" {
 		changed = append(changed, operands(args)...)
 	}
-	return changed
+	return append(changed, c.deskShots()...)
+}
+
+func (c simpleCommand) deskShots() []shellWord {
+	tool, args := c.unwrapped()
+	if tool != "tofu" || first(args) != "drive" || first(args[1:]) != "desk" {
+		return nil
+	}
+	return flagValue(args, "--out")
 }
 
 func (c simpleCommand) leaves() bool {
@@ -730,7 +745,10 @@ func (g Grammar) wrapped(wrapper string, args []shellWord) (bool, error) {
 }
 
 func tofuReads(args []shellWord) error {
-	if first(args) == "models" && len(operands(args)) == 1 || len(args) == 2 && first(args) == "serve" && args[1].text == "--schema" {
+	drivesDesk := first(args) == "drive" && first(args[1:]) == "desk" && !slices.ContainsFunc(args, func(arg shellWord) bool {
+		return arg.text == "--exe" || strings.HasPrefix(arg.text, "--exe=")
+	})
+	if drivesDesk || first(args) == "models" && len(operands(args)) == 1 || len(args) == 2 && first(args) == "serve" && args[1].text == "--schema" {
 		return nil
 	}
 	for _, verb := range [][]string{{"version"}, {"session", "find"}, {"session", "trace"}, {"session", "info"}, {"boardy", "show"}, {"boardy", "list"}, {"boardy", "triage", "list"}} {
@@ -738,7 +756,7 @@ func tofuReads(args []shellWord) error {
 			return nil
 		}
 	}
-	return ReadListError{Program: "tofu", Why: "runs here only as serve --schema, session find, trace or info, boardy show, list or triage list, models, or version"}
+	return ReadListError{Program: "tofu", Why: "runs here only as serve --schema, session find, trace or info, boardy show, list or triage list, models, version, or drive desk without --exe, which finds the newest desk build itself"}
 }
 
 func (g Grammar) refuses(tool string, args []shellWord, flags ...string) error {

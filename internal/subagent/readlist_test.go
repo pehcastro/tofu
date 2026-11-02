@@ -180,6 +180,9 @@ func TestWithNoOwnsBashRefusesEveryCommandThatWroteInRoundOne(t *testing.T) {
 		{"tofu run x", notRead},
 		{"tofu --dir x session find y", notRead},
 		{"/usr/bin/tofu version", notRead},
+		{"tofu drive steps.drive", notRead},
+		{"tofu drive desk --exe a.exe", notRead},
+		{"tofu drive desk --out src/shots", "outside the paths this agent holds"},
 	})
 }
 
@@ -253,6 +256,7 @@ func TestWithNoOwnsBashStillRunsReadsAndChecks(t *testing.T) {
 		{"tofu models --json", ""},
 		{"tofu version", ""},
 		{"tofu.exe version", ""},
+		{"tofu drive desk click:20,20 shot:after", ""},
 	})
 }
 
