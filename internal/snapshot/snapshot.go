@@ -1,15 +1,18 @@
 package snapshot
 
 import (
+	"bufio"
 	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -33,6 +36,7 @@ const (
 	ledgerLockName        = "undo-turns.lock"
 	indexName             = "undo.index"
 	excludeName           = "undo.exclude"
+	walkName              = "undo.walk"
 	verbatimAttributes    = "* -text -filter -ident -working-tree-encoding\n"
 	driftedWhy            = "changed after the turn ended, so it was left as it is: --force puts it back anyway"
 )
@@ -344,6 +348,12 @@ func (r Repo) gitDir() string { return filepath.Join(r.State, gitDirName) }
 func (r Repo) path(name string) string { return filepath.Join(r.Session, name) }
 
 func (r Repo) git(ctx context.Context, stdin string, args ...string) ([]byte, error) {
+	cmd, stderr := r.command(ctx, stdin, args...)
+	out, err := cmd.Output()
+	return out, failed(args[0], err, stderr)
+}
+
+func (r Repo) command(ctx context.Context, stdin string, args ...string) (*exec.Cmd, *bytes.Buffer) {
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-c", "core.autocrlf=false", "-c", "core.fsmonitor=false", "-c", "core.longpaths=true",
 		"-c", "core.quotepath=false", "-c", "core.excludesFile=" + r.path(excludeName), "--git-dir", r.gitDir(), "--work-tree", r.Tree}, args...)...)
 	cmd.Dir, cmd.Stdin = r.Tree, strings.NewReader(stdin)
@@ -351,14 +361,17 @@ func (r Repo) git(ctx context.Context, stdin string, args ...string) ([]byte, er
 		"GIT_INDEX_FILE="+r.path(indexName))
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	out, err := cmd.Output()
+	return cmd, &stderr
+}
+
+func failed(verb string, err error, stderr *bytes.Buffer) error {
 	if errors.Is(err, exec.ErrNotFound) {
-		return nil, ErrNoGit
+		return ErrNoGit
 	}
 	if err != nil {
-		return nil, fmt.Errorf("git %s: %w: %s", args[0], err, strings.TrimSpace(stderr.String()))
+		return fmt.Errorf("git %s: %w: %s", verb, err, strings.TrimSpace(stderr.String()))
 	}
-	return out, nil
+	return nil
 }
 
 func (r Repo) track(ctx context.Context) (string, error) {
@@ -382,17 +395,23 @@ func (r Repo) track(ctx context.Context) (string, error) {
 	if err := r.exclude(nil); err != nil {
 		return "", err
 	}
+	skipped, err := r.junctions(ctx)
+	if err != nil {
+		return "", err
+	}
+	if err := r.exclude(skipped); err != nil {
+		return "", err
+	}
 	untracked, err := r.git(ctx, "", "ls-files", "-z", "--others", "--exclude-standard")
 	if err != nil {
 		return "", err
 	}
-	var large []string
 	for _, path := range nulSplit(untracked) {
 		if info, err := os.Lstat(filepath.Join(r.Tree, filepath.FromSlash(path))); err == nil && info.Size() > largestUntrackedBytes {
-			large = append(large, path)
+			skipped = append(skipped, path)
 		}
 	}
-	if err := r.exclude(large); err != nil {
+	if err := r.exclude(skipped); err != nil {
 		return "", err
 	}
 	if _, err := r.git(ctx, "", "add", "--all"); err != nil {
@@ -401,7 +420,170 @@ func (r Repo) track(ctx context.Context) (string, error) {
 	return r.writeTree(ctx)
 }
 
-func (r Repo) exclude(large []string) error {
+type walkedDir struct {
+	Changed  int64    `json:"changed"`
+	Ignore   string   `json:"ignore,omitempty"`
+	Children []string `json:"children,omitempty"`
+	Ignored  []string `json:"ignored,omitempty"`
+	Links    []string `json:"links,omitempty"`
+}
+
+type walk struct {
+	Rules string               `json:"rules"`
+	Dirs  map[string]walkedDir `json:"dirs"`
+}
+
+type visit struct {
+	dir     string
+	trusted bool
+}
+
+func (r Repo) junctions(ctx context.Context) ([]string, error) {
+	rules, err := os.ReadFile(r.path(excludeName))
+	if err != nil {
+		return nil, err
+	}
+	var was walk
+	if raw, err := os.ReadFile(filepath.Join(r.State, walkName)); err == nil {
+		_ = json.Unmarshal(raw, &was)
+	}
+	now := walk{Rules: string(rules), Dirs: map[string]walkedDir{}}
+	var asker ignoreAsker
+	defer asker.close()
+	for level := []visit{{dir: ".", trusted: was.Rules == now.Rules}}; len(level) > 0; {
+		next, fresh := r.readLevel(level, was, now)
+		ignored, err := r.askIgnored(ctx, &asker, fresh)
+		if err != nil {
+			return nil, err
+		}
+		for _, child := range fresh {
+			parent, name := path.Dir(child), path.Base(child)
+			seen := now.Dirs[parent]
+			if ignored[child] {
+				seen.Ignored = append(seen.Ignored, name)
+			} else {
+				seen.Children = append(seen.Children, name)
+				next = append(next, visit{dir: child})
+			}
+			now.Dirs[parent] = seen
+		}
+		level = next
+	}
+	if raw, err := json.Marshal(now); err == nil && os.WriteFile(r.path(walkName), raw, 0o644) == nil {
+		_ = os.Rename(r.path(walkName), filepath.Join(r.State, walkName))
+	}
+	var found []string
+	for dir, seen := range now.Dirs {
+		for _, link := range seen.Links {
+			found = append(found, path.Join(dir, link))
+		}
+	}
+	slices.Sort(found)
+	return found, nil
+}
+
+func (r Repo) readLevel(level []visit, was, now walk) (next []visit, fresh []string) {
+	for _, at := range level {
+		full := filepath.Join(r.Tree, filepath.FromSlash(at.dir))
+		info, err := os.Stat(full)
+		if err != nil {
+			continue
+		}
+		cached, known := was.Dirs[at.dir]
+		changed := !known || cached.Changed != info.ModTime().UnixNano()
+		stamp := ""
+		if changed || cached.Ignore != "" {
+			if ignore, err := os.Lstat(filepath.Join(full, ".gitignore")); err == nil {
+				stamp = fmt.Sprint(ignore.ModTime().UnixNano(), ignore.Size())
+			}
+		}
+		trusted := at.trusted && known && cached.Ignore == stamp
+		if trusted && !changed {
+			now.Dirs[at.dir] = cached
+			for _, child := range cached.Children {
+				next = append(next, visit{dir: path.Join(at.dir, child), trusted: true})
+			}
+			continue
+		}
+		entries, err := os.ReadDir(full)
+		if err != nil {
+			continue
+		}
+		seen := walkedDir{Changed: info.ModTime().UnixNano(), Ignore: stamp}
+		for _, one := range entries {
+			name, child := one.Name(), path.Join(at.dir, one.Name())
+			switch {
+			case one.Type()&fs.ModeIrregular != 0:
+				if _, err := os.Readlink(filepath.Join(full, name)); err == nil {
+					seen.Links = append(seen.Links, name)
+				}
+			case !one.IsDir() || name == ".git":
+			case trusted && slices.Contains(cached.Children, name):
+				seen.Children = append(seen.Children, name)
+				next = append(next, visit{dir: child, trusted: true})
+			case trusted && slices.Contains(cached.Ignored, name):
+				seen.Ignored = append(seen.Ignored, name)
+			default:
+				fresh = append(fresh, child)
+			}
+		}
+		now.Dirs[at.dir] = seen
+	}
+	return next, fresh
+}
+
+type ignoreAsker struct {
+	cmd    *exec.Cmd
+	stdin  io.WriteCloser
+	stdout *bufio.Reader
+	stderr *bytes.Buffer
+}
+
+func (r Repo) askIgnored(ctx context.Context, asker *ignoreAsker, dirs []string) (map[string]bool, error) {
+	ignored := map[string]bool{}
+	if len(dirs) == 0 {
+		return ignored, nil
+	}
+	if asker.cmd == nil {
+		cmd, stderr := r.command(ctx, "", "check-ignore", "-z", "-v", "-n", "--stdin")
+		cmd.Stdin, cmd.Env = nil, append(cmd.Env, "GIT_FLUSH=1")
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			return nil, err
+		}
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			return nil, err
+		}
+		if err := cmd.Start(); err != nil {
+			return nil, failed("check-ignore", err, stderr)
+		}
+		*asker = ignoreAsker{cmd: cmd, stdin: stdin, stdout: bufio.NewReader(stdout), stderr: stderr}
+	}
+	go func() { _, _ = io.WriteString(asker.stdin, strings.Join(dirs, "\x00")+"\x00") }()
+	for range dirs {
+		var record [4]string
+		for i := range record {
+			field, err := asker.stdout.ReadString(0)
+			if err != nil {
+				return nil, failed("check-ignore", cmp.Or(asker.cmd.Wait(), err), asker.stderr)
+			}
+			record[i] = strings.TrimSuffix(field, "\x00")
+		}
+		source, pattern, dir := record[0], record[2], record[3]
+		ignored[dir] = source != "" && !strings.HasPrefix(pattern, "!")
+	}
+	return ignored, nil
+}
+
+func (asker *ignoreAsker) close() {
+	if asker.cmd != nil {
+		_ = asker.stdin.Close()
+		_ = asker.cmd.Wait()
+	}
+}
+
+func (r Repo) exclude(skipped []string) error {
 	var lines []string
 	if own, err := os.ReadFile(filepath.Join(r.Tree, ".git", "info", "exclude")); err == nil {
 		lines = append(lines, string(own))
@@ -410,7 +592,7 @@ func (r Repo) exclude(large []string) error {
 		lines = append(lines, "/"+filepath.ToSlash(inside)+"/")
 	}
 	escape := strings.NewReplacer(`\`, `\\`, "*", `\*`, "?", `\?`, "[", `\[`)
-	for _, path := range large {
+	for _, path := range skipped {
 		lines = append(lines, "/"+escape.Replace(path))
 	}
 	return os.WriteFile(r.path(excludeName), []byte(strings.Join(lines, "\n")+"\n"), 0o644)
