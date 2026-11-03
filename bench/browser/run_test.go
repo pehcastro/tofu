@@ -73,7 +73,7 @@ func TestTheChooserOverTheCorpus(t *testing.T) {
 			t.Skip("set TOFU_LIVE=1 for the live pass through TypeSafe, or pass -args -replay <answers file> to rebuild its report with no network")
 		}
 		sys.AllowLiveCredential(t)
-		key, err := jev.TypeSafeKey(filepath.Join("..", "..", ".env"))
+		key, err := jev.TypeSafeKey(filepath.Join(sys.SourceRoot(), ".env"))
 		if err != nil {
 			t.Fatalf("no credential: %v", err)
 		}
@@ -120,7 +120,7 @@ func TestTheImageArmsOverTheCorpus(t *testing.T) {
 			t.Skip("set TOFU_LIVE=1 for the live pass through TypeSafe, or pass -args -replay-images <answers file> to rebuild its report with no network")
 		}
 		sys.AllowLiveCredential(t)
-		key, err := jev.TypeSafeKey(filepath.Join("..", "..", ".env"))
+		key, err := jev.TypeSafeKey(filepath.Join(sys.SourceRoot(), ".env"))
 		if err != nil {
 			t.Fatalf("no credential: %v", err)
 		}

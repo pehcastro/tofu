@@ -3,7 +3,6 @@ package judge
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -53,7 +52,7 @@ func TestTaskKindAgainstTheWordList(t *testing.T) {
 		t.Skip("set TOFU_LIVE=1, with a home under the temp dir whose classifier is bound, to put the question to the real jev route")
 	}
 	sys.AllowLiveCredential(t)
-	project := filepath.Join("..", "..")
+	project := sys.SourceRoot()
 	if _, err := classifier.Open(project, jev.ReadKeyring(), 1); err != nil {
 		t.Fatalf("TOFU_LIVE=1 and jev cannot be asked, so nothing is measured: %v", err)
 	}

@@ -253,7 +253,11 @@ func readWithdrawals(path string) (map[string]withdrawal, error) {
 	if err := readJSON(path, &list); err != nil {
 		return nil, err
 	}
-	tree := filepath.Join(path, "..", "..", "..")
+	file, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	tree := strings.TrimSuffix(file, filepath.FromSlash(WithdrawalsPath))
 	byReport := make(map[string]withdrawal, len(list))
 	for _, item := range list {
 		switch item.State {

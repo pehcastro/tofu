@@ -37,9 +37,9 @@ type StoredRow struct {
 
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
-	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
-	if err != nil {
-		t.Fatalf("locate the repository root: %v", err)
+	root := sys.SourceRoot()
+	if root == "" {
+		t.Fatal("no go.mod above the tofu source, so the repository root is unknown")
 	}
 	return root
 }

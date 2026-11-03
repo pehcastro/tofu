@@ -7499,6 +7499,11 @@
       "note": "reads 1 session folder and prints where its time went, with 0 dated reports of its own."
     },
     {
+      "package": "parity",
+      "kind": "runner",
+      "note": "runs every case in its catalog against two tofu executables and writes which answers differ under bench/parity/results. A gate between two builds, not a measurement: 0 dated reports."
+    },
+    {
       "package": "profile",
       "kind": "measurement with no dated report",
       "note": "report.md, undated by name, runs of 2026-10-13 on the build 0.5.13-fix1+dev at f360965a and after TOFU-1319 at 60c41fb3, 1 run per row. runs/ holds every row as JSON."
@@ -7512,6 +7517,11 @@
       "package": "report",
       "kind": "runner",
       "note": "this package: the reader over every dated report, the viewer and its data. Measures 0 things of its own; bench/report/runs holds the 3 records it quotes that no other bench writes to disk."
+    },
+    {
+      "package": "review",
+      "kind": "measurement with no dated report",
+      "note": "re-measures the review points from tofu --json exports against bench/review/baselines.json and prints one table to the terminal; it writes 0 files, so 0 numbers from it are on this page."
     },
     {
       "package": "rivals",
@@ -7562,7 +7572,7 @@
   "counts": {
     "reports": 75,
     "packages_with_a_dated_report": 44,
-    "packages_with_no_dated_report": 24,
+    "packages_with_no_dated_report": 26,
     "withdrawn_whole_or_in_part": 19,
     "stale": 3,
     "unparsed": 2

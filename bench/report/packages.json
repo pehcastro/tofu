@@ -118,5 +118,15 @@
     "package": "treewide",
     "kind": "runner",
     "note": "runs vet and every package's tests, reruns each failing test alone, and writes a pass stamp keyed by HEAD's tree only on a clean HEAD. A gate, not a measurement: 0 dated reports."
+  },
+  {
+    "package": "parity",
+    "kind": "runner",
+    "note": "runs every case in its catalog against two tofu executables and writes which answers differ under bench/parity/results. A gate between two builds, not a measurement: 0 dated reports."
+  },
+  {
+    "package": "review",
+    "kind": "measurement with no dated report",
+    "note": "re-measures the review points from tofu --json exports against bench/review/baselines.json and prints one table to the terminal; it writes 0 files, so 0 numbers from it are on this page."
   }
 ]

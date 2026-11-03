@@ -122,7 +122,7 @@ func TestJevAgainstTheWordList(t *testing.T) {
 		t.Skip("set TOFU_LIVE=1 to put the question to the real jev route")
 	}
 	sys.AllowLiveCredential(t)
-	key, err := jev.TypeSafeKey(filepath.Join("..", "..", "..", ".env"))
+	key, err := jev.TypeSafeKey(filepath.Join(sys.SourceRoot(), ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}

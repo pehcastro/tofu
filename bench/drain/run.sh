@@ -4,7 +4,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 tofu=${DRAIN_TOFU:?set DRAIN_TOFU to the tofu binary measured}
 id=${DRAIN_SESSION:?set DRAIN_SESSION to the session id drained}
 warm=${DRAIN_WARM:-5}
-cd "${DRAIN_DIR:-$here/../..}" || exit 1
+cd "${DRAIN_DIR:-$(git -C "$here" rev-parse --show-toplevel)}" || exit 1
 results=$here/results.jsonl
 day=$(date +%F)
 machine=$(hostname)

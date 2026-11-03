@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"tofu/internal/sys"
 )
 
 const (
@@ -47,7 +49,7 @@ type load struct {
 }
 
 func readLines[T any](path string) ([]T, error) {
-	file, err := os.Open(filepath.Join(here(), "..", "..", filepath.FromSlash(path)))
+	file, err := os.Open(filepath.Join(sys.SourceRoot(), filepath.FromSlash(path)))
 	if err != nil {
 		return nil, err
 	}

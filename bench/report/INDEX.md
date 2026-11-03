@@ -421,7 +421,7 @@ Why the rest are not compared:
 
 ## Every dated report, newest first
 
-75 dated reports over 44 benches. 24 benches carry none. 19 are withdrawn whole or in part, 3 is stale, and 2 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
+75 dated reports over 44 benches. 26 benches carry none. 19 are withdrawn whole or in part, 3 is stale, and 2 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
 
 | Bench | Date | Report | What it found | Sample | State | Commit and version | Run before it |
 |---|---|---|---|---|---|---|---|
@@ -540,9 +540,11 @@ Why the rest are not compared:
 - `bench/memory`, measurement with no dated report: TOFU-1175, 2026-10-07, at c3890d91, owing its dated report because the write of bench/memory/report-2026-10-07.md was refused to the bench agent under TOFU-1181. Repeats of one correction over 10 driven chains on a cassette, no model called: memory on 0 of 9, memory off 9 of 9, delivery of the words to the request only. TOFU-1186 removed the offer on a typed message, its corpus and the jev memory_offer@1 question: memory on now keeps the correction with /remember, and memory off keeps nothing.
 - `bench/memtree`, measurement with no dated report: TOFU-1218, 2026-10-08, at b5859988, owing its dated report because an agent may not write a report file. 10000 synthetic items with a fake compaction function: prefix stability 97.84% batched against 79.39% merging at every append, 1.47 line-inputs per item against 13.30, 1.149 model calls per item.
 - `bench/orchestrator`, runner: reads 1 session folder and prints where its time went, with 0 dated reports of its own.
+- `bench/parity`, runner: runs every case in its catalog against two tofu executables and writes which answers differ under bench/parity/results. A gate between two builds, not a measurement: 0 dated reports.
 - `bench/profile`, measurement with no dated report: report.md, undated by name, runs of 2026-10-13 on the build 0.5.13-fix1+dev at f360965a and after TOFU-1319 at 60c41fb3, 1 run per row. runs/ holds every row as JSON.
 - `bench/reach`, measurement with no dated report: which library items reach which agent, added at 7308d98e as a runner that prints, 0 dated reports so far.
 - `bench/report`, runner: this package: the reader over every dated report, the viewer and its data. Measures 0 things of its own; bench/report/runs holds the 3 records it quotes that no other bench writes to disk.
+- `bench/review`, measurement with no dated report: re-measures the review points from tofu --json exports against bench/review/baselines.json and prints one table to the terminal; it writes 0 files, so 0 numbers from it are on this page.
 - `bench/rivals`, measurement with no dated report: report.md, undated by name, 15 live runs of 2026-10-13 at f360965a: tofu 0.5.13-fix1+dev, Claude Code 2.1.296, omp 18.3.2 and codex-cli 0.155.1, 3 runs each. runs/ holds every run as JSON.
 - `bench/scale`, measurement with no dated report: report.md, undated by name, 1 run per rung of 0 to 10 sub-agents on 2026-10-13, committed at b7c52479 (tofu 0.5.13-fix1). results.jsonl names no tofu version.
 - `bench/searchlarge`, measurement with no dated report: TOFU-1336, 2026-10-14, moved out of bench/search under TOFU-1364 so its source cannot answer a recorded search pattern. read, glob and search on a golang/go checkout at go1.23.0, 13,226 files, GOMAXPROCS 2: glob 2.98x and search 1.69x faster at p50 cold after c5999050, outputs byte-identical; it prints its table and writes 0 files, so 0 numbers from it are on this page.
