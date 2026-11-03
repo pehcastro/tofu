@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"tofu/internal/shell"
-	"tofu/internal/status"
 	roster "tofu/internal/subagent"
+	"tofu/internal/ui/statusline"
 )
 
 func TestServeStatusNamesTheLeadNestedAgentsAndAShellsOwnReport(t *testing.T) {

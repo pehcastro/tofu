@@ -15,7 +15,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/safe"
 	"tofu/internal/session"
-	"tofu/internal/status"
+	"tofu/internal/ui/statusline"
 )
 
 const (

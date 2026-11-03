@@ -10,7 +10,7 @@ import (
 
 	"tofu/interface/tui/shells"
 	"tofu/internal/host"
-	"tofu/internal/status"
+	"tofu/internal/ui/statusline"
 )
 
 const statusApp = "tofu"

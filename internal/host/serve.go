@@ -25,10 +25,10 @@ import (
 	"tofu/internal/session"
 	"tofu/internal/shell"
 	"tofu/internal/snapshot"
-	"tofu/internal/status"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
+	"tofu/internal/ui/statusline"
 )
 
 type ServeConfig struct {

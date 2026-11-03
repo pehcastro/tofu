@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"tofu/internal/status"
+	"tofu/internal/ui/statusline"
 )
 
 func TestServeKeepsASessionRunningWhileAnotherOpens(t *testing.T) {

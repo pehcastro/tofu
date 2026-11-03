@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"tofu/internal/shell"
-	"tofu/internal/status"
 	roster "tofu/internal/subagent"
 	"tofu/internal/turn"
+	"tofu/internal/ui/statusline"
 )
 
 const (

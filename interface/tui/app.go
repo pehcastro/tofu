@@ -41,10 +41,10 @@ import (
 	"tofu/internal/safe"
 	isession "tofu/internal/session"
 	isettings "tofu/internal/settings"
-	"tofu/internal/status"
 	isubagent "tofu/internal/subagent"
 	"tofu/internal/sys"
 	"tofu/internal/ui/keymap"
+	"tofu/internal/ui/statusline"
 )
 
 type EventKind = host.EventKind
