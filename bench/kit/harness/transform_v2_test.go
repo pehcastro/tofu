@@ -6,12 +6,10 @@ import (
 	"testing"
 
 	"tofu/bench/suites/context/transform"
-	"tofu/internal/sys"
 )
 
 func TestTransformArmsOverTheV2Session(t *testing.T) {
-	recording := filepath.Join(sys.SourceRoot(), filepath.FromSlash(v2SessionRecording))
-	writes, turns, err := transform.LoadFiles([]string{recording}, v2BeforeTestdata)
+	writes, turns, err := transform.LoadFiles([]string{v2SessionRecording}, v2BeforeTree)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +33,7 @@ func TestTransformArmsOverTheV2Session(t *testing.T) {
 		} else {
 			fallbackOut, fallbackIn = fallbackOut+fit.Tokens(row.WriteOut), fallbackIn+fit.Tokens(row.WriteIn)
 		}
-		if _, err := os.Stat(filepath.Join(v2BeforeTestdata, filepath.FromSlash(row.Path))); err != nil {
+		if _, err := os.Stat(filepath.Join(v2BeforeTree, filepath.FromSlash(row.Path))); err != nil {
 			continue
 		}
 		preexisting++

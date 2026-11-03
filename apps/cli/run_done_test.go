@@ -16,6 +16,7 @@ import (
 
 	"tofu/apps/cli/output"
 	"tofu/internal/agent/loop"
+	"tofu/internal/dummy"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
@@ -429,13 +430,9 @@ func spawnOneSubAgent(t *testing.T, review turn.DoneReview, subAgent []llm.Decis
 
 func recordedTurn(t *testing.T, name string) turn.Row {
 	t.Helper()
-	body, err := os.ReadFile(filepath.Join("..", "..", "bench", "stopcheck", "corpus", name))
+	row, err := readRecordedTurn(dummy.Path("turns", "labelled"), name)
 	if err != nil {
 		t.Fatalf("the recorded turn moved: %v", err)
-	}
-	var row turn.Row
-	if err := json.Unmarshal(body, &row); err != nil {
-		t.Fatalf("reading %s: %v", name, err)
 	}
 	return row
 }
@@ -452,8 +449,8 @@ func TestLiveTheTypedDoneReviewReadsTwoRecordedSubAgents(t *testing.T) {
 	t.Setenv(sys.TypeSafeKeyName, key)
 
 	review := reviewIn(t, gate.ModeEnforced)
-	nothing := recordedTurn(t, "turn-18d69b47d7028fec.json")
-	wrote := recordedTurn(t, "turn-18d690dd45903d58.json")
+	nothing := recordedTurn(t, turnThatRecordedNothing)
+	wrote := recordedTurn(t, turnThatWroteTheFile)
 
 	empty, err := review.Review(context.Background(), nothing)
 	if err != nil {

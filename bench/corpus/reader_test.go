@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/dummy"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
 )
@@ -579,7 +580,7 @@ func TestAnOlderShapedMessageKeepsItsToolCallIDAndToolCalls(t *testing.T) {
 	}
 }
 
-const olderShapedTurnPath = "../stopcheck/corpus/turn-18d68bcceb3d56e8.json"
+var olderShapedTurnPath = dummy.Path("turns", "labelled", "turn-18d68bcceb3d56e8.json")
 
 func TestAnOlderShapedSessionKeepsItsToolCalls(t *testing.T) {
 	data, err := os.ReadFile(olderShapedTurnPath)

@@ -28,7 +28,7 @@ type harnessOpts struct {
 	tofuBin    string
 }
 
-const harnessTranscriptDir = "bench/kit/harness/testdata/tofu-v1"
+const harnessTranscriptDir = "internal/dummy/turns/tofu-v1"
 
 const noLedger = "none, this arm reaches no jev and writes no ledger row"
 

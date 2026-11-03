@@ -7,15 +7,17 @@ import (
 	"slices"
 	"strings"
 	"testing"
-)
 
-const benchRoot = ".."
+	"tofu/internal/sys"
+)
 
 const provenanceFile = "PROVENANCE.md"
 
 var ownedRoots = []string{
-	"api", "corpus", "cost", "forkcache", "mutate", "readworth",
-	"recall", "shortlist", "stopcheck", "testquality", "tools", "transform",
+	"bench/kit/api", "bench/corpus", "bench/suites/judge/cost", "bench/suites/context/forkcache",
+	"bench/suites/rules/mutate", "bench/suites/judge/readworth", "bench/suites/context/recall",
+	"bench/suites/tools/shortlist", "bench/suites/judge/stopcheck", "bench/suites/rules/testquality",
+	"bench/suites/tools/tools", "bench/suites/context/transform", "internal/dummy",
 }
 
 var fixtureExtensions = []string{".json", ".jsonl", ".yaml", ".txt"}
@@ -24,7 +26,7 @@ var datedReportPrefixes = []string{"report-", "sweep-", "rescore-"}
 
 func TestEveryFixtureDirectorySaysWhereItCameFrom(t *testing.T) {
 	for _, root := range ownedRoots {
-		start := filepath.Join(benchRoot, root)
+		start := filepath.Join(sys.SourceRoot(), filepath.FromSlash(root))
 		err := filepath.WalkDir(start, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {
 				return err

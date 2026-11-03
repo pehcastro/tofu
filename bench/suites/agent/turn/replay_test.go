@@ -1,13 +1,14 @@
 package turn
 
 import (
-	"path/filepath"
 	"testing"
+
+	"tofu/internal/dummy"
 )
 
 func recordedTurn(tb testing.TB) RecordedTurn {
 	tb.Helper()
-	recorded, err := ReadRecordedTurn(filepath.Join("..", "..", "context", "recall", "testdata", "recorded-turn.json"))
+	recorded, err := ReadRecordedTurn(dummy.Path("turns", "edit", "recorded-turn.json"))
 	if err != nil {
 		tb.Fatalf("reading the recorded turn: %v", err)
 	}

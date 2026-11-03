@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/sys"
+	"tofu/internal/dummy"
 )
 
 func TestMain(m *testing.M) {
@@ -50,13 +50,13 @@ const (
 )
 
 var measuredElsewhere = map[string]string{
-	v2MaintenanceSession:         "the v2 maintenance session, measured on its own against testdata/v2-before",
+	v2MaintenanceSession:         "the v2 maintenance session, measured on its own against the v2 seed project",
 	"turn-18d6a5df2caeac68.json": "recorded after this census was frozen, and it carries no write call",
 }
 
 func load(t *testing.T) ([]Write, int) {
 	t.Helper()
-	names, err := filepath.Glob(filepath.Join(sys.SourceRoot(), "bench", "stopcheck", "corpus", "*.json"))
+	names, err := filepath.Glob(dummy.Path("turns", "labelled", "*.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

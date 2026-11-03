@@ -56,7 +56,7 @@ func run() error {
 	}
 	root, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
 	if err != nil {
-		return fmt.Errorf("forkcache reads its corpus from the repository it runs in: %w", err)
+		return fmt.Errorf("forkcache builds tofu from the repository it runs in: %w", err)
 	}
 	repo := strings.TrimSpace(string(root))
 	loaded, err := recall.LoadConfig()
@@ -64,7 +64,7 @@ func run() error {
 		return fmt.Errorf("recall config: %w", err)
 	}
 	ratio := bytesPerThousandTokens(loaded.OnWire(anthropic.Name).BytesPerThousandTokens)
-	scripts, err := readCorpus(repo)
+	scripts, err := readCorpus()
 	if err != nil {
 		return err
 	}

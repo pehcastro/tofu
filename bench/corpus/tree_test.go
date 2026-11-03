@@ -9,7 +9,7 @@ import (
 	"tofu/internal/sys"
 )
 
-var fixtureDirectoryNames = map[string]bool{"testdata": true, "corpus": true, "answers": true}
+var fixtureDirectoryNames = map[string]bool{"testdata": true, "corpus": true, "answers": true, "dummy": true}
 
 func isRecordedFixture(relative string) bool {
 	segments := strings.Split(relative, "/")
@@ -76,10 +76,11 @@ func TestEveryRecordedFixtureInTheTreeCarriesNothingOffTheRecordingMachine(t *te
 
 func TestTheFixtureRuleIsTheOneAPersonWouldPredict(t *testing.T) {
 	recorded := []string{
-		"bench/corpus/gate/cases.jsonl",
-		"bench/stopcheck/corpus/turn-18d68bcceb3d56e8.json",
+		"internal/dummy/toolgate/cases.jsonl",
+		"internal/dummy/turns/labelled/turn-18d68bcceb3d56e8.json",
+		"internal/dummy/turns/tofu-v1/2026-09-19.jsonl",
 		"internal/agent/loop/testdata/subscription-end-turn.sse",
-		"bench/suites/judge/cost/answers/heldout-2026-09-19.jsonl",
+		"internal/dummy/toolgate/heldout-2026-09-19.jsonl",
 		"bench/suites/judge/cost/testdata/spendsum/main.go",
 		"internal/ui/tui/app/testdata/session-80x24.golden",
 	}
@@ -87,6 +88,8 @@ func TestTheFixtureRuleIsTheOneAPersonWouldPredict(t *testing.T) {
 		"bench/corpus/scrub.go",
 		"bench/corpus/gate.go",
 		"internal/agent/loop/turn.go",
+		"internal/dummy/dummy.go",
+		"internal/dummy/toolgate/toolgate.go",
 		"bench/kit/report/api-2026-09-18.md",
 		"CHANGELOG.md",
 	}

@@ -16,7 +16,7 @@ import (
 
 const (
 	storedV2Row   = "bench/kit/harness/testdata/v2-row/row.json"
-	v2Recording   = "bench/stopcheck/corpus/turn-18d6a27c7dfb1644.json"
+	v2Recording   = "internal/dummy/turns/labelled/turn-18d6a27c7dfb1644.json"
 	v2ArmDir      = ".playground/hono-boji"
 	storeV2RowEnv = "TOFU_STORE_V2_ROW"
 	v2RowVersion  = 2

@@ -8,18 +8,20 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"tofu/internal/sys"
 )
 
-const benchRoot = ".."
+var recordingRoots = []string{"bench", filepath.Join("internal", "dummy")}
 
 var repeatsLeftForTheirOwners = map[string]string{
-	"harness/testdata/tofu-v1/session.json and stopcheck/corpus/turn-18d69bfed2bf52a0.json": "decided by TOFU-458 and kept: tofu-v1 is a named fixture pairing this transcript with its 91 ledger rows, and bench/cmd/harness.go ships it as the default transcript for bench harness --offline. a runtime default reading out of a test corpus is worse than the second copy. both provenance files name the twin",
+	"internal/dummy/turns/labelled/turn-18d69bfed2bf52a0.json and internal/dummy/turns/tofu-v1/session.json": "decided by TOFU-458 and kept: tofu-v1 is a named fixture pairing this transcript with its 91 ledger rows, and bench/cmd/harness.go ships it as the default transcript for bench harness --offline, while labelled is the set the hand labels count file by file. both provenance files name the twin",
 }
 
-func recordingsByTurnID(t *testing.T, root string) map[string][]string {
+func recordingsByTurnID(t *testing.T, root string, dirs ...string) map[string][]string {
 	t.Helper()
 	byID := map[string][]string{}
-	err := filepath.WalkDir(root, func(name string, entry fs.DirEntry, err error) error {
+	collect := func(name string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() || !strings.HasSuffix(name, ".json") {
 			return err
 		}
@@ -39,9 +41,11 @@ func recordingsByTurnID(t *testing.T, root string) map[string][]string {
 		}
 		byID[recorded.ID] = append(byID[recorded.ID], filepath.ToSlash(rel))
 		return nil
-	})
-	if err != nil {
-		t.Fatalf("walking %s: %v", root, err)
+	}
+	for _, dir := range dirs {
+		if err := filepath.WalkDir(filepath.Join(root, dir), collect); err != nil {
+			t.Fatalf("walking %s: %v", dir, err)
+		}
 	}
 	return byID
 }
@@ -59,8 +63,8 @@ func repeatedRecordings(byID map[string][]string) []string {
 	return repeats
 }
 
-func TestNoRecordedTurnIsCommittedTwiceUnderBench(t *testing.T) {
-	byID := recordingsByTurnID(t, benchRoot)
+func TestNoRecordedTurnIsCommittedTwiceUnderBenchOrDummy(t *testing.T) {
+	byID := recordingsByTurnID(t, sys.SourceRoot(), recordingRoots...)
 	repeats := repeatedRecordings(byID)
 	for _, repeat := range repeats {
 		why, known := repeatsLeftForTheirOwners[repeat]
@@ -75,7 +79,7 @@ func TestNoRecordedTurnIsCommittedTwiceUnderBench(t *testing.T) {
 			t.Logf("no longer a repeat, drop it from the list: %s, which was left because %s", repeat, why)
 		}
 	}
-	t.Logf("%d distinct recorded turns under %s, %d of them in more than one file", len(byID), benchRoot, len(repeats))
+	t.Logf("%d distinct recorded turns under %s, %d of them in more than one file", len(byID), recordingRoots, len(repeats))
 }
 
 func TestARecordingCopiedIntoASecondDirectoryIsRefused(t *testing.T) {
@@ -93,7 +97,7 @@ func TestARecordingCopiedIntoASecondDirectoryIsRefused(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	repeats := repeatedRecordings(recordingsByTurnID(t, root))
+	repeats := repeatedRecordings(recordingsByTurnID(t, root, "."))
 	planted := "copy/session.json and keeper/session.json"
 	if len(repeats) != 1 || repeats[0] != planted {
 		t.Fatalf("the planted copy was not caught, the walk found %v", repeats)

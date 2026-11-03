@@ -1,10 +1,10 @@
 # Which recorded turns this bench measures, and where they live
 
-**The recordings are not here.** They live in `bench/stopcheck/corpus`, the one committed copy, and this bench reads them from there. Until 2026-09-23 the same 17 files, 58,183 bytes, were also committed under `bench/transform/testdata/sessions`, byte identical, with nothing checking that the two copies stayed so. TOFU-456 removed this copy and left the superset.
+**The recordings are not here.** They live in `internal/dummy/turns/labelled`, the one committed copy, and this bench reads them from there. Until 2026-09-23 the same 17 files, 58,183 bytes, were also committed under `bench/transform/testdata/sessions`, byte identical, with nothing checking that the two copies stayed so. TOFU-456 removed this copy and left the superset.
 
 **The census is 17 of the 19 turns in that corpus.** Two are measured elsewhere or carry nothing to measure, and `measure_test.go` names both with the reason:
 
-- `turn-18d6a27c7dfb1644.json` is the v2 maintenance session. It is measured on its own, against `testdata/v2-before`, by `TestBothArmsOverTheV2MaintenanceSession`, and counting it here too would report its 10 write calls twice.
+- `turn-18d6a27c7dfb1644.json` is the v2 maintenance session. It is measured on its own, against `internal/dummy/projects/v2-before`, by `TestBothArmsOverTheV2MaintenanceSession`, and counting it here too would report its 10 write calls twice.
 - `turn-18d6a5df2caeac68.json` was recorded after this census was frozen and carries no write call, so it changes no figure either way.
 
 The count is asserted: a turn arriving in or leaving the shared corpus fails `load` rather than moving every figure quietly.

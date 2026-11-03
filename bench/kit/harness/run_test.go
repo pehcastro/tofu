@@ -551,7 +551,7 @@ func TestMeasureTofuFillsTheRowFromAStoredTurnRowAndLedger(t *testing.T) {
 }
 
 const (
-	harnessTestdataDir   = "bench/kit/harness/" + tofuV1Testdata
+	harnessTestdataDir   = "internal/dummy/turns/tofu-v1"
 	gradedChecklistItems = 19
 )
 

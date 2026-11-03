@@ -72,7 +72,7 @@ func agreements(steps []StepResult) (cheap, typed, chained Agreement) {
 	return cheap, typed, chained
 }
 
-const RunCommand = "TOFU_LIVE=1 GOMAXPROCS=4 go test ./bench/stopcheck -run TestLiveBatteryOverEveryRecordedStep -v"
+const RunCommand = "TOFU_LIVE=1 GOMAXPROCS=4 go test ./bench/suites/judge/stopcheck -run TestLiveBatteryOverEveryRecordedStep -v"
 
 type before struct {
 	agreed, stops string
@@ -182,7 +182,7 @@ func Render(r Result) string {
 func Summary(r Result) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Three arms\n\n")
-	b.WriteString("the cheap arm is the repeat check, the typed arm is one stop_check@1 call as shipped, the chained arm sends a second request with the brief and the last three tool results when the first is unsure: stalled and work_remains both 0.5 or more, or stop_pressure within the dead band of the ask threshold. the before columns are bench/stopcheck/report-2026-09-21.md. the shared reader now reads turn-18d68bcceb3d56e8 and turn-18d68bcff15ad87c, which that run skipped, so the first table is the 78 steps it decided and the second is every labelled step.\n\n")
+	b.WriteString("the cheap arm is the repeat check, the typed arm is one stop_check@1 call as shipped, the chained arm sends a second request with the brief and the last three tool results when the first is unsure: stalled and work_remains both 0.5 or more, or stop_pressure within the dead band of the ask threshold. the before columns are bench/suites/judge/stopcheck/report-2026-09-21.md. the shared reader now reads turn-18d68bcceb3d56e8 and turn-18d68bcff15ad87c, which that run skipped, so the first table is the 78 steps it decided and the second is every labelled step.\n\n")
 	armsTable(&b, beforeOf, decidedOn20260921(r.Steps))
 	b.WriteString("\n")
 	armsTable(&b, nil, r.Steps)

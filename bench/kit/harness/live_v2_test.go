@@ -6,15 +6,19 @@ import (
 	"path/filepath"
 	"testing"
 
+	"tofu/internal/dummy"
 	"tofu/internal/sys"
 )
 
 const (
-	liveEnv            = "TOFU_LIVE"
-	binaryEnv          = "TOFU_BIN"
-	v2SessionTestdata  = "testdata/v2-session"
-	v2BeforeTestdata   = "testdata/v2-before"
-	v2SessionRecording = "bench/stopcheck/corpus/turn-18d6a27c7dfb1644.json"
+	liveEnv           = "TOFU_LIVE"
+	binaryEnv         = "TOFU_BIN"
+	v2SessionTestdata = "testdata/v2-session"
+)
+
+var (
+	v2BeforeTree       = dummy.Path("projects", "v2-before")
+	v2SessionRecording = dummy.Path("turns", "labelled", "turn-18d6a27c7dfb1644.json")
 )
 
 func TestV2TofuArmRunsLiveAndProducesARow(t *testing.T) {

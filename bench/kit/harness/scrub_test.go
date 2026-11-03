@@ -8,9 +8,10 @@ import (
 	"testing"
 
 	"tofu/bench/corpus"
+	"tofu/internal/dummy"
 )
 
-const tofuV1Testdata = "testdata/tofu-v1"
+var tofuV1Testdata = dummy.Path("turns", "tofu-v1")
 
 var (
 	homeDirectoryPath = regexp.MustCompile(`(?i)[a-z]:[\\/]{1,2}users[\\/]{1,2}[^\\/"\s]+|/home/[^/"\s]+`)

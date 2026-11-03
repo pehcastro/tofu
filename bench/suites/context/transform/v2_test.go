@@ -1,15 +1,14 @@
 package transform
 
 import (
-	"path/filepath"
 	"testing"
 
-	"tofu/internal/sys"
+	"tofu/internal/dummy"
 )
 
 func TestBothArmsOverTheV2MaintenanceSession(t *testing.T) {
-	recording := filepath.Join(sys.SourceRoot(), "bench", "stopcheck", "corpus", v2MaintenanceSession)
-	writes, turns, err := LoadFiles([]string{recording}, filepath.Join(sys.SourceRoot(), "bench", "kit", "harness", "testdata", "v2-before"))
+	recording := dummy.Path("turns", "labelled", v2MaintenanceSession)
+	writes, turns, err := LoadFiles([]string{recording}, dummy.Path("projects", "v2-before"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,16 +1,12 @@
-# Where forks.jsonl and recorded-turn.json came from
+# Where forks.jsonl came from
 
-Two files, 110,552 bytes, both **recorded**, added 2026-09-20.
+One file, **recorded**, added 2026-09-20. `recorded-turn.json`, added beside it, moved to `internal/dummy/turns/edit` in TOFU-2284 and its notes went with it.
 
 ## forks.jsonl
 
 20 real context forks read out of `.tofu/sessions` across three origin lineages. A row is the fork point: the step, the task, the token counts either side, how long the fork blocked in microseconds, and the carry text and last word as the harness actually produced them.
 
 **One of the three lineages is real work**, `turn-18d6f8d9e45f8efc`, task "did the benchmark had any results?", **and it is one row of the twenty.** The other 19 come from two lineages of a synthetic stress task run at a deliberately lowered context ceiling to make forking happen at all: 16 rows from `turn-18d6d295...` and 3 from `turn-18d6d2c8...`. Nothing on the rows themselves says this, which is why it is here. 19 of 20 forks exist because someone wanted a fork, not because a session needed one.
-
-## recorded-turn.json
-
-One real recorded turn, `turn-18d6a7961d933ee8`, the Hono task-list change. It is the fixture for the replay and ceiling tests and **it is not part of the fork corpus**. No fork number is computed from it.
 
 ## Leakage, checked on 2026-09-23
 
@@ -22,4 +18,4 @@ One real recorded turn, `turn-18d6a7961d933ee8`, the Hono task-list change. It i
 
 ## What it does not carry
 
-Every row goes through `corpus.LeaksIn` on load, in `forkcorpus.go`. Scanned again on 2026-09-23 for every identity and credential pattern in `bench/corpus.Scrub`: no hit in either file.
+Every row goes through `corpus.LeaksIn` on load, in `forkcorpus.go`. Scanned again on 2026-09-23 for every identity and credential pattern in `bench/corpus.Scrub`: no hit.

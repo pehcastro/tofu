@@ -1,11 +1,11 @@
 package recall
 
 import (
-	"path/filepath"
 	"testing"
 
 	"tofu/bench/corpus"
 	rc "tofu/internal/agent/context/recall"
+	"tofu/internal/dummy"
 	"tofu/internal/konst"
 )
 
@@ -25,7 +25,7 @@ func recordedTurn(t *testing.T) (rc.Config, Session) {
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
-	session, err := ReadSession(filepath.Join("testdata", "recorded-turn.json"))
+	session, err := ReadSession(dummy.Path("turns", "edit", "recorded-turn.json"))
 	if err != nil {
 		t.Fatalf("read recorded turn: %v", err)
 	}

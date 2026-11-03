@@ -171,5 +171,5 @@ func TestLiveBatteryOverEveryRecordedStep(t *testing.T) {
 	if err := report.Write(path, []byte(body), 0o644, "report"); err != nil {
 		t.Fatalf("writing %s: %v", path, err)
 	}
-	t.Logf("wrote bench/stopcheck/%s", path)
+	t.Logf("wrote bench/suites/judge/stopcheck/%s", path)
 }

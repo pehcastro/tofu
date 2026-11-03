@@ -4,15 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
+
+	"tofu/internal/dummy"
 )
 
 var recordedTurns = []string{
-	"bench/suites/context/recall/testdata/recorded-turn.json",
-	"bench/stopcheck/corpus/turn-18d6a27c7dfb1644.json",
-	"bench/stopcheck/corpus/turn-18d69bfed2bf52a0.json",
-	"bench/stopcheck/corpus/turn-18d6a5df2caeac68.json",
+	dummy.Path("turns", "edit", "recorded-turn.json"),
+	dummy.Path("turns", "labelled", "turn-18d6a27c7dfb1644.json"),
+	dummy.Path("turns", "labelled", "turn-18d69bfed2bf52a0.json"),
+	dummy.Path("turns", "labelled", "turn-18d6a5df2caeac68.json"),
 }
 
 type recordedCall struct {
@@ -48,10 +49,10 @@ type script struct {
 	steps     []mockStep
 }
 
-func readCorpus(root string) ([]script, error) {
+func readCorpus() ([]script, error) {
 	var scripts []script
 	for _, path := range recordedTurns {
-		data, err := os.ReadFile(filepath.Join(root, path))
+		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, err
 		}

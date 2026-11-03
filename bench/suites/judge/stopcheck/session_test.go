@@ -7,10 +7,12 @@ import (
 	"testing"
 
 	"tofu/bench/corpus"
+	"tofu/internal/dummy"
 )
 
+var corpusDir = dummy.Path("turns", "labelled")
+
 const (
-	corpusDir         = "corpus"
 	corpusFiles       = 19
 	corpusSteps       = 82
 	corpusLabelled    = 81
