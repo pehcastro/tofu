@@ -31,10 +31,8 @@ type drop struct {
 
 func dropList() []drop {
 	return []drop{
-		{"library/general/rules/tool_gate@1.yaml", "superseded by tool_gate@3, kept so rows recorded under it still replay"},
-		{"library/general/rules/tool_gate@4.yaml", "nothing loads it: cmd/tofu/run_gate.go pins tool_gate@3"},
-		{"library/general/rules/tool_gate@5.yaml", "nothing loads it: cmd/tofu/run_gate.go pins tool_gate@3"},
-		{"library/general/rules/tool_gate@6.yaml", "nothing loads it: cmd/tofu/run_gate.go pins tool_gate@3"},
+		{"library/general/rules/tool_gate@1.yaml", "superseded by tool_gate@6, kept so recorded rows still replay"},
+		{"library/general/rules/tool_gate@3.yaml", "superseded by tool_gate@6, kept so recorded rows still replay"},
 	}
 }
 
