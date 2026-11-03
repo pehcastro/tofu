@@ -1,5 +1,5 @@
 [
-  {"id": "hotel", "source": "jev-ultrafast local hotel fixture, via internal/browser/jevloop/testdata/hotel.json",
+  {"id": "hotel", "source": "jev-ultrafast local hotel fixture, via internal/tools/web/browser/loop/testdata/hotel.json",
    "goal": "Narrow the stays to the category picked for its architecture and interiors.",
    "want": {"op": "SELECT", "element": 6, "value": "Design"}},
   {"id": "shop", "source": "fastbrowse src/fastbrowse/evals/fixtures/shop.html, task search-price",

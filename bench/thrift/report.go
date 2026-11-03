@@ -53,7 +53,7 @@ func writeProse(b *strings.Builder, result Result) {
 	for _, skip := range prose.Skips {
 		fmt.Fprintf(b, "  skipped: %s: %s\n", skip.Handle, skip.Reason)
 	}
-	fmt.Fprintf(b, "arm: keep the first %d and the last %d bytes and drop the middle, which is what internal/turn/artifact.go does today at a %d byte cap\n",
+	fmt.Fprintf(b, "arm: keep the first %d and the last %d bytes and drop the middle, which is what internal/agent/loop/artifact.go does today at a %d byte cap\n",
 		prose.ArmHead, prose.ArmTail, prose.ArmBytes)
 	fmt.Fprintf(b, "%-16s %6s %14s %10s %10s %10s %8s %8s %10s %10s %8s %9s\n",
 		"tool", "files", "bytes", "blank", "duplicate", "trailing", "lossless", "gzip", "uniq lines", "arm keeps", "over cap", "stripped")

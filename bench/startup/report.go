@@ -41,7 +41,7 @@ func crosses(s Stats) string {
 func (r Report) Render() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# bench startup, shell resolution and the toolchain probe before the first token: %s\n\n", r.Date)
-	fmt.Fprintf(&b, "Machine: %s. No live model call, no network call: every figure is `internal/turn.NewBashTool` timed directly, over %d rounds.\n\n", r.Machine, r.Rounds)
+	fmt.Fprintf(&b, "Machine: %s. No live model call, no network call: every figure is `internal/agent/loop.NewBashTool` timed directly, over %d rounds.\n\n", r.Machine, r.Rounds)
 	fmt.Fprintf(&b, "`go test ./bench/startup/... -count=1` passes, %d test functions.\n\n", testFunctionCount)
 
 	b.WriteString("## Threshold, chosen before the measurement\n\n")

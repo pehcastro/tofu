@@ -1,6 +1,6 @@
 # CLI passes
 
-Written by `go run ./bench/cli -pass <name> -note <what changed>` from the repository root, with `-modfile` to build an earlier dependency set. Each pass builds `./cmd/tofu`, then runs every command below in a home and working directory made fresh for each run, with GOMAXPROCS=2, stdin empty and HTTP(S)_PROXY pointed at a dead port so no verb reaches the network. Init is the sum of `GODEBUG=inittrace=1` over `tofu version`. Every figure is the median of the pass's runs, wall also at p90. Each pass is compared with the earlier pass named by `-against`, v0 when none is named, and every ratio is the earlier figure over the pass's.
+Written by `go run ./bench/cli -pass <name> -note <what changed>` from the repository root, with `-modfile` to build an earlier dependency set. Each pass builds the package that declares `crashTold`, then runs every command below in a home and working directory made fresh for each run, with GOMAXPROCS=2, stdin empty and HTTP(S)_PROXY pointed at a dead port so no verb reaches the network. Init is the sum of `GODEBUG=inittrace=1` over `tofu version`. Every figure is the median of the pass's runs, wall also at p90. Each pass is compared with the earlier pass named by `-against`, v0 when none is named, and every ratio is the earlier figure over the pass's.
 
 ## Init
 

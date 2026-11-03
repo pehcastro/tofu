@@ -50,7 +50,7 @@ func RenderReplayReport(r ReplayReport) string {
 	fmt.Fprintf(&out, "Machine: %s. Credential kind: none, this run makes no model call. Wire: none. Source: recorded turns replayed from `%s`.\n\n", r.Machine, r.Corpus.Dir)
 	renderThisIsNotABenchmarkRun(&out)
 	renderCorpusSection(&out, r.Corpus)
-	out.WriteString("The corpus mixes two eras of the edit tool: some turns carry `old_string`/`new_string` arguments, the shape `internal/turn/tools/edit.go` sends today, and older turns carry `anchor`/`until`, a shape that predates it. Both eras refuse the same way, zero matches or more than one, and repair the same way, a unique whitespace-only match, so the classification below reads across both without distinguishing them, the same way a session written before or after the refactor is still a real recorded turn.\n\n")
+	out.WriteString("The corpus mixes two eras of the edit tool: some turns carry `old_string`/`new_string` arguments, the shape `internal/tools/registry/edit.go` sends today, and older turns carry `anchor`/`until`, a shape that predates it. Both eras refuse the same way, zero matches or more than one, and repair the same way, a unique whitespace-only match, so the classification below reads across both without distinguishing them, the same way a session written before or after the refactor is still a real recorded turn.\n\n")
 	renderTotalsSection(&out, r.AsRecordedTotal, r.LayeredTotal)
 	renderMechanismSection(&out, r.Mechanisms)
 	renderRememberEraSection(&out, r.Corpus, r.JSONLDirCacheHits)
@@ -104,7 +104,7 @@ func renderMechanismSection(out *strings.Builder, mechanisms []Mechanism) {
 
 func renderRememberEraSection(out *strings.Builder, corpus Corpus, jsonlDirCacheHits int) {
 	out.WriteString("## Remember, measured over its own era\n\n")
-	out.WriteString("`internal/turn/tools/memo.go` was wired into the live turn loop at commit `81e2f47`, 2026-09-20 09:29:35 -03:00. Every recorded turn on disk, both schemas, predates that commit: the newest, `turn-18d6f8d9e45f8efc-f2`, was recorded at 2026-09-20 05:10:18 -03:00, over four hours earlier. So no turn in `.tofu/sessions` was recorded after the memo existed, and `remember` not firing is not an artifact of reading the wrong schema: it is the honest answer for the whole corpus that exists, old schema and new.\n\n")
+	out.WriteString("`internal/tools/registry/memo.go` was wired into the live turn loop at commit `81e2f47`, 2026-09-20 09:29:35 -03:00. Every recorded turn on disk, both schemas, predates that commit: the newest, `turn-18d6f8d9e45f8efc-f2`, was recorded at 2026-09-20 05:10:18 -03:00, over four hours earlier. So no turn in `.tofu/sessions` was recorded after the memo existed, and `remember` not firing is not an artifact of reading the wrong schema: it is the honest answer for the whole corpus that exists, old schema and new.\n\n")
 	fmt.Fprintf(out, "%d sessions on disk are stored as `header.json` plus `body.jsonl`, the newest sessions this corpus has and the closest it gets to the memo's era. %d were read as turns and %d skipped, see Corpus above. None of them, read or skipped, carried a repeated side-effect-free call: %d cache hits among the %d read.\n\n",
 		corpus.JSONLDirsSeen, len(corpus.JSONLDirs), len(corpus.JSONLDirsSkipped), jsonlDirCacheHits, len(corpus.JSONLDirs))
 	for _, id := range corpus.JSONLDirs {

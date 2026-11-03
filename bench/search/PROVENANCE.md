@@ -14,7 +14,7 @@ The leakage that can occur is the mirror of it, and it did occur. A pattern is r
 
 **Count: 4 found across two rounds, then 0.** The cost measurement first named two recorded patterns as literals in its own source, one of them a deleted policy loader. The replay of that row went from absent to found because this bench had written the name down. Then the first draft of this file quoted all three patterns in prose and the check caught it again, which is why nothing below is quoted. Every pattern the cost measurement uses is now either taken from the corpus at run time or composed from pieces, so no whole pattern appears as text anywhere in this directory. The check is 0 of 23 and runs on every suite run.
 
-`internal/secret.LeaksIn` runs over every row as it loads and refuses the load on a hit: 0 of 23 carry an identity or a credential. `bench/corpus.WalkSessions` scrubs before that, so the check is scrub then verify rather than scrub alone.
+`internal/platform/credential` `Identities.LeaksIn` runs over every row as it loads and refuses the load on a hit: 0 of 23 carry an identity or a credential. `bench/corpus.WalkSessions` scrubs before that, so the check is scrub then verify rather than scrub alone.
 
 ## What a reader should not conclude
 

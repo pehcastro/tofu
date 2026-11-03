@@ -32,7 +32,7 @@ Every field of every row went through `bench/corpus.Scrub` inside the same test 
 
 ## Why these 21 and not larger reference pages
 
-Pages such as `nodejs.org/api/fs.html` or `pkg.go.dev/strings` were fetched and measured first and dropped: `internal/web.Units` still turns them into hundreds to thousands of units, and this point sends one Jev request per page carrying one noul question per candidate unit. Jev's own state ceiling (`konst.JudgeStateTokenCeiling`, about 90,000 bytes once encoded) is a request-level limit, and a page with many hundred candidates multiplies the question instructions by every one of them, not just the state. The 21 kept here are focused, single-topic pages of the kind a fetch is actually run for, and every one of them was checked against that ceiling before being kept.
+Pages such as `nodejs.org/api/fs.html` or `pkg.go.dev/strings` were fetched and measured first and dropped: `internal/tools/web.Units` still turns them into hundreds to thousands of units, and this point sends one Jev request per page carrying one noul question per candidate unit. Jev's own state ceiling (`konst.JudgeStateTokenCeiling`, about 90,000 bytes once encoded) is a request-level limit, and a page with many hundred candidates multiplies the question instructions by every one of them, not just the state. The 21 kept here are focused, single-topic pages of the kind a fetch is actually run for, and every one of them was checked against that ceiling before being kept.
 
 ## What a row is
 

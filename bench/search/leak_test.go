@@ -57,7 +57,7 @@ func TestLoadRefusesARowThatCameOffTheRecordingMachine(t *testing.T) {
 			t.Errorf("%s carries %q", row.Turn, leaks)
 		}
 	}
-	t.Logf("identity and credential scan: %d rows, %d carrying anything internal/secret recognises", len(loaded.Rows), carried)
+	t.Logf("identity and credential scan: %d rows, %d carrying anything internal/platform/credential recognises", len(loaded.Rows), carried)
 }
 
 func TestEveryRowCameOutOfARecordingRatherThanOffThisKeyboard(t *testing.T) {

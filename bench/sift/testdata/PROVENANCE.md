@@ -25,7 +25,7 @@ One JSON object per line: `session`, `task`, `command`, `outcome` and `output`. 
 
 ## What it does not carry
 
-`internal/turn/tool_bash.go` runs a command with `CombinedOutput`, so standard error and standard output arrive interleaved in one stream and no recorded row can say which line came from which. Every row is therefore loaded as standard output with the exit status taken from `outcome`. The rule that standard error is never a candidate for removal is proved on constructed input in `internal/sift/shell_test.go` instead, and it cannot be proved on this corpus until the tool separates the two streams.
+`internal/agent/loop/tool_bash.go` runs a command with standard output and standard error written to one buffer, so standard error and standard output arrive interleaved in one stream and no recorded row can say which line came from which. Every row is therefore loaded as standard output with the exit status taken from `outcome`. The rule that standard error is never a candidate for removal is held in code instead: `internal/tools/shell/sift/shell.go` marks every standard error unit held, and it cannot be proved on this corpus until the tool separates the two streams.
 
 # Where judged-replies.jsonl came from
 
