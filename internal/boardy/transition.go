@@ -346,10 +346,15 @@ func (m Managed) mayMove(role Role, ticket Ticket, to Status, actor string) erro
 		if !heldBy(ticket, actor) {
 			return RefusedError{Ticket: ticket.ID, Why: fmt.Sprintf("it is assigned to %q, and an agent moves only its own ticket", ticket.Assignee)}
 		}
-		if ticket.Status != Doing || to != Review {
-			return RefusedError{Ticket: ticket.ID, Why: fmt.Sprintf("an agent moves its own ticket from %s to %s, and only a manager moves it from %s to %s", Doing, Review, ticket.Status, to)}
+		if ticket.Status == Doing && to == Review {
+			return nil
 		}
-		return nil
+		if ticket.Status == Doing && to == NeedsDecision {
+			if _, _, reported, err := m.NotPossibleOpen(ticket); err != nil || reported {
+				return err
+			}
+		}
+		return RefusedError{Ticket: ticket.ID, Why: fmt.Sprintf("an agent moves its own ticket from %s to %s, or to %s by reporting it not possible, and only a manager moves it from %s to %s", Doing, Review, NeedsDecision, ticket.Status, to)}
 	}
 	panic("boardy: unknown role " + string(role))
 }

@@ -185,6 +185,17 @@ func (m Managed) ReportNotPossible(id string, q Question, actor string) (Ticket,
 	if runes := []rune(q.TLDR); len(runes) > konst.BoardTLDRRunesMost {
 		q.TLDR = string(runes[:konst.BoardTLDRRunesMost])
 	}
+	hooks, err := m.Store.hooks(board.Key)
+	if err != nil {
+		return ticket, err
+	}
+	prospect := ticket
+	prospect.Questions = append(slices.Clone(ticket.Questions), q.tidy())
+	dry := m.subjectOf(rule.HookTicketMove, board.Key, prospect, NeedsDecision, actor, 0)
+	dry.dry = true
+	if _, _, err := m.weigh(slices.DeleteFunc(hooks, func(h rule.Hook) bool { return runsCheck(h, "may_move") }), rule.WhenBefore, dry); err != nil {
+		return ticket, err
+	}
 	if ticket, err = m.Ask(id, q, actor); err != nil {
 		return ticket, err
 	}
