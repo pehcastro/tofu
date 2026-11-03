@@ -256,6 +256,7 @@ type cassette struct {
 	last          llm.Request
 	sent          []sentRequest
 	dump          string
+	askedFor      string
 }
 
 type sentRequest struct {
@@ -468,6 +469,7 @@ func (c *cassette) take(request llm.Request) (recordedReply, error) {
 	c.asking[name]++
 	reply := c.decks[name][c.taken[name]-1]
 	reply.caller = name
+	reply.decision.Build = cmp.Or(c.askedFor, reply.decision.Build)
 	return reply, nil
 }
 
@@ -636,6 +638,11 @@ func driveWire(deck *cassette) func(runOpts) (appWire, error) {
 		standingIn := models.Model{ID: cassetteBuild, Windows: []string{cassetteBuild}}
 		if chosen, err := chooseModel(opts); err == nil {
 			standingIn.Subscription, standingIn.Vision, standingIn.PromptCache = chosen.Subscription, chosen.Vision, chosen.PromptCache
+			if opts.model != "" {
+				deck.mutex.Lock()
+				deck.askedFor = chosen.ID
+				deck.mutex.Unlock()
+			}
 		}
 		return appWire{
 			held:     &accounts{fixed: deck, now: time.Now},
