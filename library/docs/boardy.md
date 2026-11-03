@@ -8,11 +8,7 @@ summary: boards of tickets kept as markdown files under the tofu home, numbered 
 
 Boardy keeps a project's tickets as plain markdown files, the way a Jira or Linear board keeps them on a server. A project holds as many boards as it needs, each with a short key such as `DEMO` or `OPS`, and each board numbers its own tickets from 1: `DEMO-1`, `DEMO-2`, `OPS-1`. On a board of 1,500 tickets the `boardy` verbs and the `boardy.*` calls of `tofu serve` answer in about half the time they took in 0.5.14, with the same output.
 
-A ticket has front matter (type, status, assignee, priority P0 to P4,
-points, owns, depends, blocks, relates, duplicates, epic, sprint, labels,
-component, spec, size S, M or L) and its sections: Problem, Scope, Before, Driven path, Still works, Empty or error case, Feasibility, Acceptance and Log. A ticket
-that goes back from review to doing gets a numbered acceptance revision,
-`Acceptance 2`, so every round keeps its own list.
+A ticket has front matter (type, status, assignee, priority P0 to P4, points, owns, depends, blocks, relates, duplicates, epic, sprint, labels, component, spec, size S, M or L) and its sections: Problem, Scope, Before, Driven path, Still works, Empty or error case, Feasibility, Acceptance and Log. A ticket that goes back from review to doing gets a numbered acceptance revision, `Acceptance 2`, so every round keeps its own list.
 
 A ticket is made with Before (how it works now), Driven path (the steps a person performs to see the change), Still works (a line for each neighbour it touches) and Empty or error case (what an empty or failing input does); `new` without one is refused, naming each one missing. When Jev's `ticket_feasibility@1` judges the ask a visual or platform effect, such as a blur, Feasibility is required too: what the platform gives, what it does not, and the source.
 
@@ -96,12 +92,12 @@ commit, drops or merges a dead ticket with a pointer, and batches drives.
 prints only those front matter fields, read without the ticket bodies.
 `show --thread` adds the ticket's conversation, 78% shorter on a recorded run with every acceptance line still proven: a spawn as one handoff line, what each engineer said in at most three sentences, and reports with their verdict and each acceptance line; evidence logged with `log --evidence`, and `--line n` for the line it proves, folds into one count, kept in the Log for review. A sub-agent's ask and the lead's answer read as two people, the ask followed by `why` and `default`, and by `unanswered, went with the default:` when no answer came. Every voice is an `author` with its `role` (pm, engineer, person, hook), `harness` (tofu, claude-code, codex, other) and `model`. `held <path>` names the ticket holding a path, on any board of the project,
 and the glob that matched, or says it is not held; a hook asks it before a
-write. `lint` reads every ticket on every
-board and exits 1 on a front matter error, a reference to a ticket no board
-holds, an assignee that is no agent type, a blocked ticket with no reason, a counter behind its tickets, a
-sub-ticket owning outside its parent, or two
-doing tickets whose owns overlap, naming both: `x/*.go` and `x/*_test.go`
-overlap, because both hold `x/a_test.go`.
+write. `lint` reads every ticket on every board and exits 1 on a front
+matter error, a reference to a ticket no board holds, an assignee that is
+no agent type, a blocked ticket with no reason, a counter behind its
+tickets, a sub-ticket owning outside its parent, or two doing tickets whose
+owns overlap, naming both: `x/*.go` and `x/*_test.go` overlap, because
+both hold `x/a_test.go`.
 
 A ticket holds its owns only while it is doing, where an agent writes.
 Every other ticket keeps its owns as a record, so two review tickets may

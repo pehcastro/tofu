@@ -40,7 +40,7 @@ exit 0
         "rules": 138,
         "thresholds": 0,
         "skills": 3,
-        "agents": 7,
+        "agents": 8,
         "references": 40,
         "refused": 0
       },

@@ -7,18 +7,15 @@ summary: who may change a ticket on a boardy board, how other sessions ask throu
 ## What it is
 
 A board's managers are listed in its `board.toml`, each a session id or the
-person's name. A manager creates, assigns, accepts, widens, hands and
-closes; a board with no managers is run by the person. A lead session acts
-for the person. A sub-agent, `<session>/<ticket>`, and every other session
+person's name. A manager creates, assigns, accepts, widens, hands and closes;
+a board with no managers is run by the person, and a lead session acts for
+the person. Every other session, a sub-agent `<session>/<ticket>` included,
 is an agent: it moves its own ticket from doing to review with evidence in
-the Log, and its `tofu boardy new` becomes a triage request. Inside a tofu
-session `TOFU_SESSION` names the actor; outside one the command line is the
-person; `--as orchestrator` acts as the lead and any other `--as` name as
-that agent, never as the person. Every move checks the role, an Acceptance, a Log
-for review, owns disjoint from every doing ticket, references, and then the
-board's before hooks. A move to the status a ticket has says it is already
-there and exits 0, and an acceptance typed without a dash is stored one line
-per check.
+the Log, and its `tofu boardy new` becomes a triage request.
+
+- Inside a tofu session `TOFU_SESSION` names the actor; outside one the command line is the person. `--as orchestrator` acts as the lead and any other `--as` name as that agent, never as the person.
+- Every move checks the role, an Acceptance, a Log for review, owns disjoint from every doing ticket, references, then the board's before hooks. A move to the status a ticket has says so and exits 0; an acceptance typed without a dash is stored one line per check.
+- Built in, with no hook file: a create needs Before, Driven path, Still works and Empty or error case, plus Feasibility when Jev's `ticket_feasibility@1` judges the ask a visual or platform effect. A move to done needs an evidence entry naming every acceptance line in force, a line left for the lead included, and a reason Jev's `done_reason@1` judges names nothing still open. A ticket owning `internal/turn`, `internal/host`, `internal/subagent`, `internal/session`, `interface/tui`, `cmd/tofu` or `apps/desk` reaches done only on a HEAD tree with a passing flows stamp. Each Jev answer is a decision ledger row; when Jev cannot answer, an agent's create or move waits for the person.
 
 A hook is one YAML file:
 
@@ -45,53 +42,47 @@ A hook is one YAML file:
 - `boards/<KEY>/triage/T<n>.json`: one waiting request each.
 - `boards/<KEY>/events.jsonl`: a `rule` line for every hook that fires (actor `hook:<id>` for an effect), a `hook` line for every add, edit and remove, and under serve a `hook-failed` line naming a file that does not load.
 - `boards/<KEY>/hooks-ticked.json`: each schedule hook's last run.
-
-The `boards` folder is under the project's folder in the tofu home.
+- The `boards` folder is under the project's folder in the tofu home.
 
 ## The hooks a board starts with
 
-`tofu boardy init` with no `--mode` gives a board these 23 hooks. Each runs before its events and refuses unless it says otherwise. Only `callers_owned` takes a bypass; every other hook is not bypassable.
+`tofu boardy init` with no `--mode` gives a board these 23 hooks. Each runs before its events and refuses unless it says otherwise. Only `callers_owned` takes a bypass.
 
 Starter hooks, copied into `boards/<KEY>/rules/`, scope `board`:
 
-- `epic_suggest`, on `ticket.create` with no epic: Jev's `board_epic@1` picks an epic for the new ticket. Not bypassable.
-- `epic_at_create`, on `ticket.create`: refuses a ticket with no epic. Not bypassable.
-- `evidence_at_review`, on `ticket.move` to review by the lead, a sub-agent or a hook: refuses until every acceptance line has an evidence entry or is left for the lead. Not bypassable.
-- `report_to_review`, after `agent.report` from doing: moves the ticket to review. Not bypassable.
-- `review_waits`, a schedule every hour: notifies about a ticket that has waited in review over two hours. Not bypassable.
+- `epic_suggest`, on `ticket.create` with no epic: Jev's `board_epic@1` picks an epic for the new ticket.
+- `epic_at_create`, on `ticket.create`: refuses a ticket with no epic.
+- `evidence_at_review`, on `ticket.move` to review by the lead, a sub-agent or a hook: refuses until every acceptance line has an evidence entry or is left for the lead.
+- `report_to_review`, after `agent.report` from doing: moves the ticket to review.
+- `review_waits`, a schedule every hour: notifies about a ticket that has waited in review over two hours.
 
 Library hooks, read from the binary, scope `library`:
 
-- `may_move`, Who moves a ticket, on `ticket.move` and `ticket.close`. Not bypassable.
-- `not_possible_hold`, A not-possible question is the person's, on `ticket.move` and `ticket.close`. Not bypassable.
-- `acceptance`, Work starts with an Acceptance, on a move to doing, review or done. Not bypassable.
-- `log_entry`, Review starts with a Log entry, on a move to review. Not bypassable.
-- `evidence_chars`, Enough evidence for review, on a move to review. Not bypassable.
-- `decidable`, A decision carries its question, on a move to needs-decision. Not bypassable.
-- `done_stamp`, Done needs a stamped tree, on a close to done. Not bypassable.
-- `evidenced`, Every line has evidence, on a close to done. Not bypassable.
-- `before_captured`, Done needs a before capture, on a close to done, except a docs-only ticket or one made before the gate. Not bypassable.
-- `sub_tickets_done`, A parent waits for its sub-tickets, on a move to review or done. Not bypassable.
-- `scope_cites`, Scope names a source, on `ticket.create` and `ticket.widen`. Not bypassable.
-- `epic_ready`, An epic is researched and designed first, on `ticket.create` and on `ticket.set` of an epic. Not bypassable.
-- `owns_free`, Owns do not overlap, on `ticket.create`, `ticket.move`, `ticket.close`, `ticket.widen` and `ticket.set`. Not bypassable.
-- `drafted`, A ticket is drafted, on `ticket.create`, `triage.request`, `ticket.move` and `ticket.close`. Not bypassable.
-- `feasibility`, A platform effect states its feasibility, on `ticket.create`, `triage.request`, `ticket.move` and `ticket.close`. Not bypassable.
-- `done_reason`, Done says nothing is open, on a close to done. Not bypassable.
-- `callers_owned`, Callers are owned, on a move to doing. Bypassable by the person or the lead with `tofu boardy move <ticket> doing --bypass callers_owned --why <reason>`; nobody has to accept it, so the move passes and the bypass is a `rule` line in the board's `events.jsonl`.
-- `before_on_time`, A before is captured on time, on `ticket.log`. Not bypassable.
+- `may_move`, Who moves a ticket, on `ticket.move` and `ticket.close`.
+- `not_possible_hold`, A not-possible question is the person's, on `ticket.move` and `ticket.close`.
+- `acceptance`, Work starts with an Acceptance, on a move to doing, review or done.
+- `log_entry`, Review starts with a Log entry, on a move to review.
+- `evidence_chars`, Enough evidence for review, on a move to review.
+- `decidable`, A decision carries its question, on a move to needs-decision.
+- `done_stamp`, Done needs a stamped tree, on a close to done.
+- `evidenced`, Every line has evidence, on a close to done.
+- `before_captured`, Done needs a before capture, on a close to done, except a docs-only ticket or one made before the gate.
+- `sub_tickets_done`, A parent waits for its sub-tickets, on a move to review or done.
+- `scope_cites`, Scope names a source, on `ticket.create` and `ticket.widen`.
+- `epic_ready`, An epic is researched and designed first, on `ticket.create` and on `ticket.set` of an epic.
+- `owns_free`, Owns do not overlap, on `ticket.create`, `ticket.move`, `ticket.close`, `ticket.widen` and `ticket.set`.
+- `drafted`, A ticket is drafted, on `ticket.create`, `triage.request`, `ticket.move` and `ticket.close`.
+- `feasibility`, A platform effect states its feasibility, on `ticket.create`, `triage.request`, `ticket.move` and `ticket.close`.
+- `done_reason`, Done says nothing is open, on a close to done.
+- `callers_owned`, Callers are owned, on a move to doing. The person or the lead bypasses it with `tofu boardy move <ticket> doing --bypass callers_owned --why <reason>`; nobody accepts it, the move passes, and the bypass is a `rule` line in `events.jsonl`.
+- `before_on_time`, A before is captured on time, on `ticket.log`.
 
-`tofu boardy rule show <id>` prints the hook's file. `tofu boardy init --mode empty` starts a board with none of the 23, and `--mode custom --hooks may_move,drafted` with only the named ones. `tofu boardy rule remove <id>` deletes a starter hook's file, and for a library hook writes `boards/<KEY>/rules/<id>.removed`, which turns it off on that board alone. A board started with `--mode empty` or `--mode custom` keeps a `rules/.mode` file, so `tofu doctor` does not offer it the starter hooks again.
+`tofu boardy init --mode empty` starts a board with none of the 23, and `--mode custom --hooks may_move,drafted` with only the named ones. Such a board keeps a `rules/.mode` file, so `tofu doctor` does not offer it the starter hooks again.
 
 ## Change it
 
     tofu boardy rule add <id> [--scope board|project|user] [--file hook.yaml] --when W --on E [--every D|--daily HH:MM] --do "verb arg" [--then T] [--text t] [--from s] [--to s] [--epic E|set|empty] ...
     tofu boardy rule edit <id> [any add flag]
-    tofu boardy rule remove <id>
-
-`edit` keeps the hook's scope and changes only the fields named; an empty
-value removes one. A manager adds, edits and removes.
-
     tofu boardy manager add|remove|list [name] [--board KEY]
     tofu boardy triage list|show|accept|drop [request] [--reason text]
     tofu boardy assign <ticket> <session or name>
@@ -101,35 +92,11 @@ value removes one. A manager adds, edits and removes.
     tofu boardy tick [--board KEY]
     tofu boardy fire agent.spawn|agent.report|lead.attach [ticket] [--when before|after]
 
-`hand DEMO-3 OPS` creates the next OPS ticket with DEMO-3's Log and drops
-DEMO-3 as `handed to OPS-1`. `tick` runs the due schedule hooks once;
-`tofu serve`, and so the desk app, ticks every minute while it is open. One host per project ticks however many windows are open, so an `every` hook runs once per slot, and a failing hook is told once.
-`fire` fires the events no board command makes. `triage show T1` prints
-who asked, when, the spec and owns, then the requested ticket's sections.
-
-Serve: `boardy.rules`, `boardy.rule.get` and `boardy.rule.remove` take
-`board`, `id` and an optional `scope`, and answer the rows `--json` prints.
-`boardy.rule.put` takes `board`, `scope` and `source`, the hook's YAML, and
-refuses an invalid one naming the file. `boardy.rule.test` takes an `id` or
-an unsaved `source`, a `ticket` and an optional `to`.
-
-A move to `needs-decision` needs a question with a tldr, an eli5, two to
-four options and the pick with why. `tofu boardy ask` asks it,
-`tofu boardy catchup` writes `boards/<KEY>/catchup.md` for the answers, and
-`catchup --answers`, run by a manager, applies them. An answered question
-stays on the ticket under Questions with an `Answer:` line, and catchup,
-audit and the board's rows count only the open ones.
-
-Some checks are built in and need no hook file. A create needs Before,
-Driven path, Still works and Empty or error case, and Feasibility when Jev's
-`ticket_feasibility@1` judges the ask a visual or platform effect. A move to
-done needs an evidence entry naming every acceptance line in force, a line
-left for the lead included, and a reason that Jev's `done_reason@1` judges
-names nothing still open. A ticket owning `internal/turn`, `internal/host`,
-`internal/subagent`, `internal/session`, `interface/tui`, `cmd/tofu` or
-`apps/desk` reaches done only on a HEAD tree with a passing flows stamp.
-Each Jev answer is a decision ledger row; when Jev cannot answer, an agent's
-create or move waits for the person.
+- `edit` keeps the hook's scope and changes only the fields named; an empty value removes one. A manager adds, edits and removes.
+- `hand DEMO-3 OPS` creates the next OPS ticket with DEMO-3's Log and drops DEMO-3 as `handed to OPS-1`. `triage show T1` prints who asked, when, the spec and owns, then the requested ticket's sections.
+- `tick` runs the due schedule hooks once; `tofu serve`, and so the desk app, ticks every minute while open. One host per project ticks however many windows are open, so an `every` hook runs once per slot, and a failing hook is told once. `fire` fires the events no board command makes.
+- Serve: `boardy.rules`, `boardy.rule.get` and `boardy.rule.remove` take `board`, `id` and an optional `scope`, and answer the rows `--json` prints. `boardy.rule.put` takes `board`, `scope` and `source`, the hook's YAML, and refuses an invalid one naming the file. `boardy.rule.test` takes an `id` or an unsaved `source`, a `ticket` and an optional `to`.
+- A move to `needs-decision` needs a question with a tldr, an eli5, two to four options and the pick with why. `tofu boardy ask` asks it, `tofu boardy catchup` writes `boards/<KEY>/catchup.md` for the answers, and `catchup --answers`, run by a manager, applies them. An answered question stays under Questions with an `Answer:` line; catchup, audit and the board's rows count only the open ones.
 
 ## Check it
 
@@ -138,17 +105,15 @@ create or move waits for the person.
     tofu boardy rule test <id> [ticket] [--to status]
     tofu boardy check create|move|widen|close <ticket> [--to status]
 
-`list` shows each hook's scope, file, trigger and last fired, and warns on
-a file that does not load: schedules skip it and every before gate refuses
-until it is fixed. `test` runs one hook against a ticket, a command check
-included, says whether its conditions hold and what it would do, and
-writes nothing to the board. `check` runs every check the command runs,
-before hooks included, writes nothing, and exits 1 with the same refusal.
+`list` shows each hook's scope, file, trigger and last fired, and warns on a
+file that does not load: schedules skip it and every before gate refuses
+until it is fixed. `show` prints the hook's file. `test` runs one hook, a
+command check included, says whether its conditions hold and what it would
+do. `check` runs every check the command runs and exits 1 with the same
+refusal. Neither writes to the board.
 
 ## Undo it
 
-`tofu boardy rule remove <id>` stops a hook, and its `hook` line keeps the
-file it removed. `tofu boardy manager remove <name>` takes a manager off;
-with none left the person runs the board again. `tofu boardy triage drop T1`
-drops a request. A handed ticket stays dropped on its old board with a link
-to the new one.
+- `tofu boardy rule remove <id>` deletes a starter hook's file, and for a library hook writes `boards/<KEY>/rules/<id>.removed`, which turns it off on that board alone. Its `hook` line keeps the file it removed.
+- `tofu boardy manager remove <name>` takes a manager off; with none left the person runs the board again.
+- `tofu boardy triage drop T1` drops a request. A handed ticket stays dropped on its old board with a link to the new one.

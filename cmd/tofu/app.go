@@ -91,13 +91,14 @@ type appLaunch struct {
 	tabs          *tools.BrowserTabs
 	release       *func()
 	endSession    *func() []string
+	turnRunning   *func() (string, bool)
 	stopRestoring func()
 }
 
 func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 	registry, registryErr := launchShellRegistry(dir)
 	home, _ := os.UserHomeDir()
-	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: tools.NewBrowserTabs(home), release: new(func()), endSession: new(func() []string), stopRestoring: func() {}}
+	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: tools.NewBrowserTabs(home), release: new(func()), endSession: new(func() []string), turnRunning: new(func() (string, bool)), stopRestoring: func() {}}
 	safe.Go(sys.Crashes(dir), "state sweep", func() {
 		state, err := sys.ProjectStateDirAt(dir)
 		if err != nil {
@@ -137,6 +138,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch, he
 		live.Close()
 		engine.warm.Close()
 	}
+	*launch.turnRunning = live.Turn
 	*launch.endSession = func() []string {
 		if wiring.joins {
 			return nil

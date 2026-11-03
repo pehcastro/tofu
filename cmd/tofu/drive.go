@@ -21,7 +21,6 @@ import (
 	"tofu/interface/tui/filmstrip"
 	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/frame"
-	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
@@ -583,13 +582,13 @@ func (c *cassette) askers() string {
 	return ", with " + strings.Join(asking, " and ") + " still waiting on a recorded reply"
 }
 
-func awaitIdle(driver *filmstrip.Driver, live *host.Host, deck *cassette, within time.Duration) error {
+func awaitIdle(driver *filmstrip.Driver, turnRunning func() (string, bool), deck *cassette, within time.Duration) error {
 	deadline := time.Now().Add(within)
 	for {
 		if err := driver.Settle(); err != nil {
 			return err
 		}
-		id, running := live.Turn()
+		id, running := turnRunning()
 		if !running {
 			return driver.Settle()
 		}
@@ -685,7 +684,7 @@ func readQuotas(path string, held heldStore) (func() []frame.Quota, error) {
 	}, nil
 }
 
-func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePlan, launch appLaunch, held heldStore, quotas func() []frame.Quota) (*tui.App, *host.Host) {
+func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePlan, launch appLaunch, held heldStore, quotas func() []frame.Quota) *tui.App {
 	shown := cassetteBuild
 	if deck != nil {
 		shown = deck.name
@@ -726,8 +725,7 @@ func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePla
 		now:   clock,
 		joins: plan.host,
 	}
-	options := appOptions(dir, plan.arms, recorded, launch, held)
-	return tui.New(options), options.Host
+	return tui.New(appOptions(dir, plan.arms, recorded, launch, held))
 }
 
 func readScript(path string, in io.Reader) ([]filmstrip.Step, error) {
@@ -1020,7 +1018,7 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	defer printRecorded(out, store, eventSizes(store), dir, plan.home)
 	launch := launchOf(dir, resumed, plan.fresh)
 	defer leaveShells(launch.registry)
-	app, live := drivenApp(dir, deck, clock, plan, launch, held, quotas)
+	app := drivenApp(dir, deck, clock, plan, launch, held, quotas)
 	driver := filmstrip.Drive(app, plan.width, plan.height, crashDir(dir))
 	defer driver.Close()
 	defer (*launch.release)()
@@ -1030,7 +1028,7 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		}
 	}()
 	for _, step := range steps {
-		err := playStep(driver, deck, live, step, plan, out)
+		err := playStep(driver, deck, *launch.turnRunning, step, plan, out)
 		if err == nil {
 			continue
 		}
@@ -1085,14 +1083,14 @@ func printRecorded(out io.Writer, store *sessionstore.Store, before map[string]i
 	_, _ = fmt.Fprintf(out, "drive: recorded session %s; read it with: cd %s && %s=%s %s session trace %s\n", handle, quoted(dir), variable, quoted(home), quoted(binary), quoted(handle))
 }
 
-func playStep(driver *filmstrip.Driver, deck *cassette, live *host.Host, step filmstrip.Step, plan drivePlan, out io.Writer) error {
+func playStep(driver *filmstrip.Driver, deck *cassette, turnRunning func() (string, bool), step filmstrip.Step, plan drivePlan, out io.Writer) error {
 	said := deck.environment
 	switch step.Verb {
 	case "idle":
 		if step.Text != "" {
 			return fmt.Errorf("idle takes nothing, and was given %q", step.Text)
 		}
-		return awaitIdle(driver, live, deck, plan.timeout)
+		return awaitIdle(driver, turnRunning, deck, plan.timeout)
 	case "count":
 		if step.Text == "" {
 			return errors.New("count takes the text to count, and was given none")
