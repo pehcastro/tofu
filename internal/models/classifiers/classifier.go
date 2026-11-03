@@ -26,9 +26,9 @@ const (
 
 type provider struct {
 	key      string
-	build    func(string, wire.Config) (*wire.Wire, error)
+	build    func(string, providers.Config) (*providers.Wire, error)
 	alias    func(string) (string, error)
-	checkPin func(context.Context, string, wire.Config, *transport.Client) (jev.PinCheck, jev.Pin)
+	checkPin func(context.Context, string, providers.Config, *transport.Client) (jev.PinCheck, jev.Pin)
 	serves   func(jev.Pin, string) bool
 }
 
@@ -36,7 +36,7 @@ func providerOf(of models.Provider) (provider, bool) {
 	switch of {
 	case models.TypeSafe:
 		return provider{key: sys.TypeSafeKeyName, build: typesafe.New, alias: typesafe.Model, serves: typesafe.Serves,
-			checkPin: func(ctx context.Context, bound string, config wire.Config, _ *transport.Client) (jev.PinCheck, jev.Pin) {
+			checkPin: func(ctx context.Context, bound string, config providers.Config, _ *transport.Client) (jev.PinCheck, jev.Pin) {
 				return typesafe.CheckPin(ctx, bound, config)
 			}}, true
 	case models.OpenRouter:
@@ -113,8 +113,8 @@ func Open(dir string, keys jev.Keyring, concurrency int) (*jev.Client, error) {
 	return route.Client(concurrency)
 }
 
-func (r Route) config(concurrency int) wire.Config {
-	return wire.Config{
+func (r Route) config(concurrency int) providers.Config {
+	return providers.Config{
 		Key:      r.Key,
 		Endpoint: os.Getenv(EndpointVariable),
 		Transport: transport.Config{

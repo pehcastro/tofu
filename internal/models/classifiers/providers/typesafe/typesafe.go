@@ -23,8 +23,8 @@ const (
 )
 
 type (
-	Config = wire.Config
-	Wire   = wire.Wire
+	Config = providers.Config
+	Wire   = providers.Wire
 )
 
 func Model(bound string) (string, error) {
@@ -52,7 +52,7 @@ func New(bound string, config Config) (*Wire, error) {
 }
 
 func on(model string, config Config) (*Wire, error) {
-	return wire.New(wire.Spec{Name: Name, Endpoint: Endpoint, Model: model, FailOp: "typesafe.New", RequestIDHeader: RequestIDHeader, ListUSDPerInput: DollarsPerInputToken}, config)
+	return providers.New(providers.Spec{Name: Name, Endpoint: Endpoint, Model: model, FailOp: "typesafe.New", RequestIDHeader: RequestIDHeader, ListUSDPerInput: DollarsPerInputToken}, config)
 }
 
 func CheckPin(ctx context.Context, bound string, config Config) (jev.PinCheck, jev.Pin) {
@@ -66,7 +66,7 @@ func CheckPin(ctx context.Context, bound string, config Config) (jev.PinCheck, j
 		check.Skipped, check.Error = "no TypeSafe key, the pin stays at "+check.From, err.Error()
 		return check, jev.Pin{}
 	}
-	build, err := wire.AnsweringBuild(ctx, latest)
+	build, err := providers.AnsweringBuild(ctx, latest)
 	if err != nil {
 		check.Skipped, check.Error = "typesafe did not answer, the pin stays at "+check.From, err.Error()
 		return check, jev.Pin{}

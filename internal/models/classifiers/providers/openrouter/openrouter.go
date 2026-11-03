@@ -29,8 +29,8 @@ const (
 )
 
 type (
-	Config = wire.Config
-	Wire   = wire.Wire
+	Config = providers.Config
+	Wire   = providers.Wire
 )
 
 func Model(bound string) (string, error) {
@@ -58,7 +58,7 @@ func New(bound string, config Config) (*Wire, error) {
 }
 
 func on(model string, config Config) (*Wire, error) {
-	return wire.New(wire.Spec{Name: Name, Endpoint: Endpoint, Model: model, FailOp: "openrouter.New", RequestIDHeader: RequestIDHeader}, config)
+	return providers.New(providers.Spec{Name: Name, Endpoint: Endpoint, Model: model, FailOp: "openrouter.New", RequestIDHeader: RequestIDHeader}, config)
 }
 
 func CheckPin(ctx context.Context, bound string, config Config, client *transport.Client) (jev.PinCheck, jev.Pin) {
@@ -71,7 +71,7 @@ func CheckPin(ctx context.Context, bound string, config Config, client *transpor
 	if seed == "" {
 		answering, err := on(bound, config)
 		if err == nil {
-			seed, err = wire.AnsweringBuild(ctx, answering)
+			seed, err = providers.AnsweringBuild(ctx, answering)
 		}
 		if err != nil {
 			check.Skipped, check.Error = "nothing is pinned and "+bound+" did not answer, so there is no build to look past", err.Error()
