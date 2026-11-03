@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"tofu/internal/hook"
+	"tofu/internal/agent/hooks"
 	"tofu/internal/recall"
 	"tofu/internal/session"
 	"tofu/internal/store/session/drain"

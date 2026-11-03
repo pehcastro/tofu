@@ -19,8 +19,8 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/agent/cron"
+	"tofu/internal/agent/hooks"
 	"tofu/internal/boardy"
-	"tofu/internal/hook"
 	"tofu/internal/host"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"

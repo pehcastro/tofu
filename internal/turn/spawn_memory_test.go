@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/hook"
+	"tofu/internal/agent/hooks"
 	"tofu/internal/llm"
 	"tofu/internal/memory"
 	"tofu/internal/recall"

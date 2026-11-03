@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/hook"
+	"tofu/internal/agent/hooks"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/llm"

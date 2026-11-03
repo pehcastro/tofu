@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"tofu/internal/agent/commands"
+	"tofu/internal/agent/hooks"
 	"tofu/internal/boardy"
-	"tofu/internal/hook"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
 	"tofu/internal/learn"

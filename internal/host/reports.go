@@ -1,7 +1,7 @@
 package host
 
 import (
-	"tofu/internal/hook"
+	"tofu/internal/agent/hooks"
 	"tofu/internal/memory"
 	"tofu/internal/session"
 	settingspkg "tofu/internal/settings"

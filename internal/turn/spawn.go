@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"tofu/internal/agent/hooks"
 	"tofu/internal/boardy"
-	"tofu/internal/hook"
 	"tofu/internal/judge/method"
 	"tofu/internal/konst"
 	"tofu/internal/llm"

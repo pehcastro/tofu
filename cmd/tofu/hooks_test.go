@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/hook"
+	"tofu/internal/agent/hooks"
 	"tofu/internal/llm"
 	"tofu/internal/shell"
 	"tofu/internal/sys"

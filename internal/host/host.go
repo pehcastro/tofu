@@ -19,7 +19,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/internal/agent/cron"
-	"tofu/internal/hook"
+	"tofu/internal/agent/hooks"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/memory"

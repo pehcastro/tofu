@@ -9,7 +9,7 @@ import (
 	"strconv"
 
 	"tofu/interface/cli"
-	"tofu/internal/hook"
+	"tofu/internal/agent/hooks"
 	"tofu/internal/host"
 	"tofu/internal/shell"
 )

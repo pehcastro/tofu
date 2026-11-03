@@ -4,7 +4,7 @@ import (
 	"cmp"
 	"slices"
 
-	"tofu/internal/hook"
+	"tofu/internal/agent/hooks"
 	"tofu/internal/host"
 	"tofu/internal/session"
 	"tofu/internal/turn"
