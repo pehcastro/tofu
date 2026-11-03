@@ -164,7 +164,9 @@ type Options struct {
 	Sessions      func() ([]SessionRow, error)
 	Resume        func(id string) (string, host.Opened)
 	NewSession    func() string
-	Compact       func() string
+	Compact       func(focus string) string
+	Fork          func() string
+	BranchAt      func(message string) (note, words string)
 	Undo          func(count string) string
 	Updates       func() string
 	Now           func() time.Time

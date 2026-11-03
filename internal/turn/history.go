@@ -25,7 +25,13 @@ const (
 	ForkContinuation ForkKind = "continuation"
 	ForkAccountSpent ForkKind = "account-spent"
 	ForkCompact      ForkKind = "compact"
+	ForkByHand       ForkKind = "fork"
+	ForkBranch       ForkKind = "branch"
 )
+
+func (ForkKind) Enum() []string {
+	return []string{string(ForkContinuation), string(ForkAccountSpent), string(ForkCompact), string(ForkByHand), string(ForkBranch)}
+}
 
 type Fork struct {
 	Step          int          `json:"step"`
@@ -226,6 +232,7 @@ func heldHandle(store *recall.Store, text string) (string, error) {
 
 type overflowShrink struct {
 	results     int
+	focused     int
 	bytesBefore int
 	bytesAfter  int
 	drops       []recall.Drop
@@ -259,6 +266,11 @@ func shrinkOverflow(artifacts Artifacts, messages []llm.Message, sentTokens, win
 }
 
 type Compacted struct {
+	Kind         ForkKind
+	Focus        string
+	Focused      int
+	Message      int
+	Words        string
 	Results      int
 	TokensBefore int
 	TokensAfter  int
@@ -268,7 +280,33 @@ type Compacted struct {
 	Messages     []llm.Message
 }
 
-func CompactCarried(project string, places sys.Places, wire, task string, carried []llm.Message) (Compacted, error) {
+func BranchCarried(wire string, carried []llm.Message, message int) (Compacted, error) {
+	var said []int
+	var listed []string
+	for i, one := range carried {
+		if task, found := personTask(one); found {
+			said = append(said, i)
+			listed = append(listed, strconv.Itoa(len(said))+". "+strings.Join(strings.Fields(task), " "))
+		}
+	}
+	switch {
+	case len(said) == 0:
+		return Compacted{}, errors.New("nothing to branch: this line carries no message from you yet")
+	case message < 1 || message > len(said):
+		return Compacted{}, fmt.Errorf("which message? /branch N restarts from one of these %d, and the old line is kept:\n%s", len(said), strings.Join(listed, "\n"))
+	}
+	preview, err := recall.LoadConfig()
+	if err != nil {
+		return Compacted{}, err
+	}
+	preview = preview.OnWire(wire)
+	at := said[message-1]
+	words, _ := personTask(carried[at])
+	kept := slices.Clone(carried[:at])
+	return Compacted{Kind: ForkBranch, Message: message, Words: words, Kept: at, TokensBefore: HistoryTokens(preview, carried), TokensAfter: HistoryTokens(preview, kept), Before: carried, Messages: kept}, nil
+}
+
+func CompactCarried(project string, places sys.Places, wire, task, focus string, carried []llm.Message) (Compacted, error) {
 	artifacts, err := NewArtifacts(filepath.Join(places.State, "artifacts"), true)
 	if err != nil {
 		return Compacted{}, err
@@ -283,7 +321,7 @@ func CompactCarried(project string, places sys.Places, wire, task string, carrie
 	shrunk := slices.Clone(carried)
 	before := HistoryTokens(artifacts.preview, shrunk)
 	kept := warmFrom(artifacts.preview, shrunk)
-	shrink, err := shrinkFrom(artifacts, shrunk, before, 0, kept, causeCompact)
+	shrink, err := shrinkFrom(artifacts, shrunk, before, 0, kept, causeCompact, focus)
 	if err != nil {
 		return Compacted{}, err
 	}
@@ -297,7 +335,7 @@ func CompactCarried(project string, places sys.Places, wire, task string, carrie
 	for i := range shrunk {
 		shrunk[i].KeptHead = unchanged < len(shrunk) && i == unchanged-1
 	}
-	return Compacted{Results: shrink.results, TokensBefore: before, TokensAfter: HistoryTokens(artifacts.preview, shrunk), Kept: kept, Drops: shrink.drops, Before: carried, Messages: shrunk}, nil
+	return Compacted{Kind: ForkCompact, Focus: focus, Focused: shrink.focused, Results: shrink.results, TokensBefore: before, TokensAfter: HistoryTokens(artifacts.preview, shrunk), Kept: kept, Drops: shrink.drops, Before: carried, Messages: shrunk}, nil
 }
 
 func RecordCarried(store *session.Store, from string, compacted Compacted, by string, at time.Time) (string, error) {
@@ -317,7 +355,7 @@ func RecordCarried(store *session.Store, from string, compacted Compacted, by st
 		return "", err
 	}
 	was, into := ended.Header(), session.NewEventID()
-	log, err := store.Open(forkHeader(was, into, ForkCompact, at))
+	log, err := store.Open(forkHeader(was, into, compacted.Kind, at))
 	if err != nil {
 		return "", errors.Join(err, ended.Close())
 	}
@@ -338,8 +376,14 @@ func RecordCarried(store *session.Store, from string, compacted Compacted, by st
 	}
 	before, _ := written.keptList(compacted.Before)
 	after, _ := written.keptList(compacted.Messages)
-	_, err = log.Append(session.Event{Kind: session.EventListChange}, session.ListChangeBody{Kind: session.ListChangeFork, Before: before, After: after,
-		Why: string(ForkCompact) + " fork from " + was.ID + ", " + strconv.Itoa(compacted.TokensBefore) + " to " + strconv.Itoa(compacted.TokensAfter) + " tokens, asked by " + by})
+	why := string(compacted.Kind) + " fork from " + was.ID + ", " + strconv.Itoa(compacted.TokensBefore) + " to " + strconv.Itoa(compacted.TokensAfter) + " tokens, asked by " + by
+	switch {
+	case compacted.Focus != "":
+		why += ", keeping every result that names " + strconv.Quote(compacted.Focus)
+	case compacted.Kind == ForkBranch:
+		why += ", restarting from message " + strconv.Itoa(compacted.Message)
+	}
+	_, err = log.Append(session.Event{Kind: session.EventListChange}, session.ListChangeBody{Kind: session.ListChangeFork, Before: before, After: after, Why: why})
 	written.note(err)
 	request, steps := "", 0
 	for _, message := range compacted.Messages {
@@ -356,7 +400,10 @@ func RecordCarried(store *session.Store, from string, compacted Compacted, by st
 	if len(written.failed) > 0 {
 		return "", errors.Join(errors.New(strings.Join(written.failed, "; ")), log.Close(), ended.Close())
 	}
-	_, forked := ended.Append(session.Event{Kind: session.EventCompaction}, compactionRow{Fork: &Fork{Step: steps, Kind: ForkCompact, Into: into,
+	if compacted.Kind == ForkBranch {
+		return into, errors.Join(log.Close(), ended.Close())
+	}
+	_, forked := ended.Append(session.Event{Kind: session.EventCompaction}, compactionRow{Fork: &Fork{Step: steps, Kind: compacted.Kind, Into: into,
 		TokensBefore: compacted.TokensBefore, TokensAfter: compacted.TokensAfter}})
 	edited := ended.Edit(func(header *session.Header) {
 		header.ForkedInto, header.EndedAt, header.EndReason = into, &at, session.EndedByFork
@@ -366,7 +413,7 @@ func RecordCarried(store *session.Store, from string, compacted Compacted, by st
 }
 
 func shrinkTo(artifacts Artifacts, messages []llm.Message, estimate, target int, cause shrinkCause) (overflowShrink, error) {
-	return shrinkFrom(artifacts, messages, estimate, target, 0, cause)
+	return shrinkFrom(artifacts, messages, estimate, target, 0, cause, "")
 }
 
 func lastAssistant(messages []llm.Message) int {
@@ -377,7 +424,7 @@ func lastAssistant(messages []llm.Message) int {
 	return last
 }
 
-func shrinkFrom(artifacts Artifacts, messages []llm.Message, estimate, target, from int, cause shrinkCause) (overflowShrink, error) {
+func shrinkFrom(artifacts Artifacts, messages []llm.Message, estimate, target, from int, cause shrinkCause, focus string) (overflowShrink, error) {
 	lastStep := lastAssistant(messages)
 	shrink := overflowShrink{bytesBefore: messagesBytes(messages)}
 	calls := make(map[string]llm.ToolCall)
@@ -399,8 +446,13 @@ func shrinkFrom(artifacts Artifacts, messages []llm.Message, estimate, target, f
 			shrink.drops = append(shrink.drops, drop)
 			shrink.results++
 		}
-		if content := messages[i].Content; len(content) >= artifacts.preview.CompactFloorBytes && !recall.AlreadyDropped(content) && shrunkHandle(content) == "" {
-			candidates = append(candidates, dropCandidate{at: i, step: step, call: calls[message.ToolCallID], reason: recall.DroppedAged})
+		content := messages[i].Content
+		switch call := calls[message.ToolCallID]; {
+		case len(content) < artifacts.preview.CompactFloorBytes || recall.AlreadyDropped(content) || shrunkHandle(content) != "":
+		case focus != "" && strings.Contains(strings.ToLower(content+"\n"+call.Name+" "+string(call.Arguments)), strings.ToLower(focus)):
+			shrink.focused++
+		default:
+			candidates = append(candidates, dropCandidate{at: i, step: step, call: call, reason: recall.DroppedAged})
 		}
 	}
 	if artifacts.keep != nil && estimate > target {
@@ -775,7 +827,7 @@ func trimRead(artifacts Artifacts, budget recall.Budget, step int, messages []ll
 	if tokens <= budget.Bands.Target() {
 		return nil, overflowShrink{}, nil
 	}
-	shrink, err := shrinkFrom(artifacts, messages, tokens, budget.Bands.Target()*konst.ContextTrimPercentOfTarget/100, from, causeBudget)
+	shrink, err := shrinkFrom(artifacts, messages, tokens, budget.Bands.Target()*konst.ContextTrimPercentOfTarget/100, from, causeBudget, "")
 	if err != nil || shrink.results == 0 {
 		return nil, shrink, err
 	}

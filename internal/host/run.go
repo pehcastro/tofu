@@ -427,7 +427,7 @@ func heldAccount(sessions *session.Store, id string, now time.Time) turn.Held {
 		return held
 	}
 	header, err := sessions.Header(id)
-	if err != nil || header.CarriedFrom == nil || header.ForkKind != string(turn.ForkCompact) {
+	if err != nil || header.CarriedFrom == nil || !slices.Contains([]turn.ForkKind{turn.ForkCompact, turn.ForkByHand, turn.ForkBranch}, turn.ForkKind(header.ForkKind)) {
 		return turn.Held{}
 	}
 	return heldAccount(sessions, header.CarriedFrom.Session, now)

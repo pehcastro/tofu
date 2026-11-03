@@ -15,6 +15,7 @@ import (
 	"tofu/internal/session"
 	"tofu/internal/shell"
 	"tofu/internal/sys"
+	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 )
 
@@ -47,10 +48,12 @@ func (s *server) sessions(p SessionListParams) (any, error) {
 
 func (s *server) branch(p SessionBranchParams) (any, error) {
 	switch {
+	case p.Kind == KindMain:
+		return s.branchMain(p)
 	case s.Branch == nil:
 		return nil, &Refusal{Code: CodeRefused, Message: "this tofu branches no sessions"}
 	case p.Kind != KindSide:
-		return nil, &Refusal{Code: CodeBadParams, Message: "kind " + p.Kind + " is not built: only " + KindSide + " is, and a full branch for the Forks screen is not"}
+		return nil, &Refusal{Code: CodeBadParams, Message: "kind " + p.Kind + " is neither " + KindMain + " nor " + KindSide}
 	}
 	branched, err := s.Branch(p)
 	if err != nil || branched.Effort == "" {
@@ -61,6 +64,21 @@ func (s *server) branch(p SessionBranchParams) (any, error) {
 		_, err = store.SetEffort(branched.Session, string(branched.Effort))
 	}
 	return branched, err
+}
+
+func (s *server) branchMain(p SessionBranchParams) (any, error) {
+	from := cmp.Or(p.Session, s.focus().host.ID())
+	branched, err := s.handFork(p.Session, HandFork{Kind: turn.ForkBranch, By: s.asker("session.branch"), Message: p.Message})
+	if err != nil {
+		return nil, err
+	}
+	result := SessionBranchResult{Session: branched.Into, Handle: branched.Into, Parent: SessionParent{Session: from}, Owns: []string{}, Carried: branched.Kept, Words: branched.Words}
+	if store, err := session.OpenIn(s.Host.dir); err == nil {
+		if identity, err := store.Identity(branched.Into); err == nil {
+			result.Handle = identity.Handle()
+		}
+	}
+	return result, nil
 }
 
 func (s *server) access(p SessionAccessParams) (any, error) {

@@ -15,6 +15,8 @@ const (
 	Resume   Needs = "resume"
 	Fresh    Needs = "new"
 	Compact  Needs = "compact"
+	Fork     Needs = "fork"
+	Branch   Needs = "branch"
 	Undo     Needs = "undo"
 	Cron     Needs = "cron"
 	Turn     Needs = "turn"
@@ -24,7 +26,7 @@ const (
 func (Scope) Enum() []string { return []string{string(Tofu), string(Interface)} }
 
 func (Needs) Enum() []string {
-	return []string{string(Always), string(Reload), string(Resume), string(Fresh), string(Compact), string(Undo), string(Cron), string(Turn), string(DiffTurn)}
+	return []string{string(Always), string(Reload), string(Resume), string(Fresh), string(Compact), string(Fork), string(Branch), string(Undo), string(Cron), string(Turn), string(DiffTurn)}
 }
 
 func (c Command) Starts() bool { return c.Needs == Turn || c.Needs == DiffTurn }
@@ -59,7 +61,9 @@ func Table() []Command {
 		{Name: "resume", Summary: "pick a session of this project to carry into the next task", Scope: Tofu, Needs: Resume},
 		{Name: "side", Summary: "open a side chat beside this session, on its cache, while it keeps running", Scope: Tofu, Needs: Resume},
 		{Name: "new", Summary: "start fresh, carrying nothing from the last session", Scope: Tofu, Needs: Fresh},
-		{Name: "compact", Summary: "shrink the old tool results the next turn carries to an artifact handle each", Scope: Tofu, Needs: Compact},
+		{Name: "compact", Args: "[focus]", Summary: "shrink the old tool results the next turn carries to an artifact handle each, keeping whole any that name the focus", Scope: Tofu, Needs: Compact},
+		{Name: "fork", Summary: "start a fresh line now, carrying what /compact carries", Scope: Tofu, Needs: Fork},
+		{Name: "branch", Args: "[N]", Summary: "restart from your message N on a new line, the old line kept; /branch alone lists them", Scope: Tofu, Needs: Branch},
 		{Name: "undo", Args: "[N]", Summary: "put back the files the last turn changed, or the last N with /undo N", Scope: Tofu, Needs: Undo},
 		{Name: "cron", Args: "[list | history | edit | pause | resume | delete]", Summary: "the scheduled jobs: list, history, edit, pause, resume, delete", Scope: Tofu, Needs: Cron},
 		{Name: "loop", Args: "<interval> <prompt>", Summary: "repeat a prompt on an interval: /loop 10m <prompt>", Scope: Tofu, Needs: Cron},

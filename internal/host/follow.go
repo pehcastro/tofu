@@ -61,7 +61,7 @@ const (
 	followRelease   followOp = "release"
 	followTrace     followOp = "trace"
 	followBeat      followOp = "beat"
-	followCompact   followOp = "compact"
+	followHandFork  followOp = "handFork"
 	followRenew     followOp = "renew"
 )
 
@@ -87,6 +87,7 @@ type followAsk struct {
 	Rows      int            `json:",omitempty"`
 	Data      []byte         `json:",omitempty"`
 	Terminals bool           `json:",omitempty"`
+	Fork      HandFork       `json:",omitzero"`
 }
 
 type followReply struct {
@@ -421,9 +422,9 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 		reply.Agents = h.rosterRows()
 	case followBeat:
 		_ = s.conn.SetReadDeadline(time.Now().Add(hubBeatMissed))
-	case followCompact:
+	case followHandFork:
 		var err error
-		if reply.Compacted, err = h.Compact(ask.By); err != nil {
+		if reply.Compacted, err = h.Fork(ask.Fork); err != nil {
 			reply.OK, reply.Failed = false, err.Error()
 		}
 	case followRenew:

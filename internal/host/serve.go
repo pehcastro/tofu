@@ -48,7 +48,7 @@ type ServeConfig struct {
 	Sources  map[string]string
 	Ledger   func(LedgerParams) (LedgerReport, error)
 	Run      func(ctx context.Context, command string) (output string, stopped bool)
-	Compact  func(live *Host, by string) (Compaction, error)
+	Fork     func(live *Host, ask HandFork) (Compacted, error)
 	Stale    func() bool
 	Setup    func() []Requirement
 	SaveKey  func(provider, key string) (note string, err error)
@@ -354,7 +354,15 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 	case "shell.run":
 		return handle(raw, s.shellRun)
 	case "session.compact":
-		return handle(raw, s.compact)
+		return handle(raw, func(p SessionCompactParams) (any, error) {
+			compacted, err := s.handFork(p.Session, HandFork{Kind: turn.ForkCompact, By: s.asker("session.compact"), Focus: p.Focus})
+			return compacted.Compaction, err
+		})
+	case "session.fork":
+		return handle(raw, func(p SessionParams) (any, error) {
+			forked, err := s.handFork(p.Session, HandFork{Kind: turn.ForkByHand, By: s.asker("session.fork")})
+			return forked.Compaction, err
+		})
 	case "session.history":
 		return handle(raw, s.history)
 	case "session.turns":
@@ -467,35 +475,46 @@ func (s *server) history(p SessionHistoryParams) (any, error) {
 	return SessionHistory{Session: id, First: first, Total: len(lines), Lines: page}, nil
 }
 
-func (s *server) compact(p SessionParams) (any, error) {
-	if s.Compact == nil {
-		return nil, &Refusal{Code: CodeRefused, Message: "this tofu compacts no sessions"}
+func (s *server) handFork(id string, ask HandFork) (Compacted, error) {
+	if s.Fork == nil {
+		return Compacted{}, &Refusal{Code: CodeRefused, Message: "this tofu compacts and forks no sessions"}
 	}
-	named, err := s.lane(p.Session)
+	named, err := s.lane(id)
 	if err != nil {
-		return nil, err
+		return Compacted{}, err
 	}
 	if turn, running := named.host.Turn(); running {
-		return nil, turnRunning(turn)
+		return Compacted{}, turnRunning(turn)
 	}
-	compacted, err := s.Compact(named.host, s.asker("session.compact"))
-	if err == nil && compacted.Into != "" {
+	forked, err := s.Fork(named.host, ask)
+	if err == nil && forked.Into != "" {
 		safe.Go(s.report, "serve list", func() { s.listed(named) })
 	}
-	return compacted, err
+	return forked, err
+}
+
+type HandFork struct {
+	Kind    turn.ForkKind
+	By      string
+	Focus   string `json:",omitempty"`
+	Message int    `json:",omitempty"`
 }
 
 type Compacted struct {
 	Compaction
-	Kept int `json:"kept"`
+	Kept  int    `json:"kept"`
+	Words string `json:"words,omitempty"`
 }
 
-func (h *Host) Compact(by string) (Compacted, error) {
+const nothingToFork = "nothing to fork: this session carries no history yet"
+
+func (h *Host) Fork(ask HandFork) (Compacted, error) {
 	if err := h.reachHost(); err != nil {
 		return Compacted{}, err
 	}
 	if f := h.following.Load(); f != nil {
-		reply := f.ask(followAsk{Op: followCompact, By: "member process " + strconv.Itoa(os.Getpid()) + ", " + by})
+		ask.By = "member process " + strconv.Itoa(os.Getpid()) + ", " + ask.By
+		reply := f.ask(followAsk{Op: followHandFork, Fork: ask})
 		switch {
 		case reply.ID == 0:
 			return Compacted{}, errHostSilent
@@ -509,7 +528,10 @@ func (h *Host) Compact(by string) (Compacted, error) {
 	}
 	id, carried := h.ID(), h.Carried()
 	if id == "" || len(carried) == 0 {
-		return Compacted{}, nil
+		if ask.Kind == turn.ForkCompact {
+			return Compacted{}, nil
+		}
+		return Compacted{}, errors.New(nothingToFork)
 	}
 	store, err := session.OpenIn(h.dir)
 	if err != nil {
@@ -523,15 +545,25 @@ func (h *Host) Compact(by string) (Compacted, error) {
 	if err != nil {
 		return Compacted{}, err
 	}
-	shrunk, err := turn.CompactCarried(h.dir, places, header.Wire, cmp.Or(turn.NewestTask(carried), header.Task), carried)
+	var shrunk turn.Compacted
+	switch ask.Kind {
+	case turn.ForkBranch:
+		shrunk, err = turn.BranchCarried(header.Wire, carried, ask.Message)
+	case turn.ForkCompact, turn.ForkByHand:
+		shrunk, err = turn.CompactCarried(h.dir, places, header.Wire, cmp.Or(turn.NewestTask(carried), header.Task), ask.Focus, carried)
+	default:
+		err = errors.New("a hand fork is " + string(turn.ForkCompact) + ", " + string(turn.ForkByHand) + " or " + string(turn.ForkBranch) + ", not " + strconv.Quote(string(ask.Kind)))
+	}
 	if err != nil {
 		return Compacted{}, err
 	}
-	compacted := Compacted{Compaction: Compaction{Results: shrunk.Results, TokensBefore: shrunk.TokensBefore, TokensAfter: shrunk.TokensAfter}, Kept: shrunk.Kept}
-	if shrunk.Results == 0 {
+	compacted := Compacted{Compaction: Compaction{Kind: ask.Kind, Results: shrunk.Results, Focus: shrunk.Focus, Focused: shrunk.Focused, TokensBefore: shrunk.TokensBefore, TokensAfter: shrunk.TokensAfter},
+		Kept: shrunk.Kept, Words: shrunk.Words}
+	if shrunk.Results == 0 && ask.Kind == turn.ForkCompact {
 		return compacted, nil
 	}
-	into, err := turn.RecordCarried(store, id, shrunk, by, h.now())
+	shrunk.Kind = ask.Kind
+	into, err := turn.RecordCarried(store, id, shrunk, ask.By, h.now())
 	if err == nil {
 		err = store.SetHead(into)
 	}
@@ -541,8 +573,31 @@ func (h *Host) Compact(by string) (Compacted, error) {
 	if err != nil {
 		return Compacted{}, err
 	}
+	h.mu.Lock()
+	if h.pick.Model == "" {
+		if parent, _, err := ResumedPick(store, h.dir, id); err == nil && parent.Model != "" {
+			h.settle("", Pick{Wire: parent.Wire, Model: parent.Model, Effort: h.pick.Effort})
+		}
+	}
+	h.mu.Unlock()
 	compacted.Into = into
 	return compacted, nil
+}
+
+func ResumedPick(store *session.Store, dir, id string) (Pick, string, error) {
+	if pick, err := SessionPick(store, dir, id); pick.Model != "" || err != nil {
+		return pick, "the model tofu session set chose", err
+	}
+	exchanges, _ := store.Exchanges(id)
+	lead := slices.DeleteFunc(exchanges, func(exchange session.Exchange) bool { return exchange.Agent != "" || exchange.Model == "" })
+	if len(lead) == 0 {
+		return Pick{}, "the orchestrator binding: the session records no pick and no request", nil
+	}
+	last, library := lead[len(lead)-1], libraryAt(dir)
+	if model, known := library.Resolve(last.Model); known && library.WireOf(model) == last.Wire {
+		return Pick{Wire: last.Wire, Model: model.Slug()}, "the session's last request, which " + last.Model + " answered", nil
+	}
+	return Pick{}, "the orchestrator binding: the session records no pick and its last request was answered by " + last.Model + ", which is no model in the library", nil
 }
 
 func (s *server) rename(p SessionRenameParams) (any, error) {

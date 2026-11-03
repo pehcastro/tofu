@@ -23,6 +23,8 @@ const (
 	waitsForSubAgentsNote = "the orchestrator is idle and its turn stays open until its sub-agents report, so this runs when the turn ends. ctrl+c twice stops them now"
 	noSessionYet          = "this window has no session yet, so there is nothing to branch or read until its first task"
 	undoWithCount         = "/undo "
+	compactWithFocus      = "/compact "
+	branchAtMessage       = "/branch "
 	noSideHere            = "this interface cannot switch sessions, so it opens no side chat. tofu session branch <session> --side makes one"
 	noSideOpened          = "no side chat was opened: "
 )
@@ -49,6 +51,10 @@ func offered(options Options, needs command.Needs) bool {
 		return options.NewSession != nil
 	case command.Compact:
 		return options.Compact != nil
+	case command.Fork:
+		return options.Fork != nil
+	case command.Branch:
+		return options.BranchAt != nil
 	case command.Undo:
 		return options.Undo != nil
 	case command.Cron, command.Turn, command.DiffTurn:
@@ -128,7 +134,11 @@ func (a *App) runCommand(name string) tea.Cmd {
 	case "new":
 		a.carry(a.newSession)
 	case "compact":
-		a.carry(a.options.Compact)
+		a.carry(func() string { return a.options.Compact("") })
+	case "fork":
+		a.carry(a.options.Fork)
+	case "branch":
+		a.carry(a.branchAt(""))
 	case "undo":
 		a.carry(func() string { return a.options.Undo("") })
 	case "cron", "loop", "goal":
@@ -352,14 +362,34 @@ func (a *App) carryHeld() {
 	a.afterTurn = nil
 }
 
-func (a *App) undoCommand() bool {
-	count, asked := strings.CutPrefix(a.view.Draft(), undoWithCount)
-	if !asked || a.options.Undo == nil {
+func (a *App) commandWithArgument() bool {
+	draft := a.view.Draft()
+	var change func() string
+	if count, asked := strings.CutPrefix(draft, undoWithCount); asked && a.options.Undo != nil {
+		change = func() string { return a.options.Undo(strings.TrimSpace(count)) }
+	}
+	if focus, asked := strings.CutPrefix(draft, compactWithFocus); asked && a.options.Compact != nil {
+		change = func() string { return a.options.Compact(strings.TrimSpace(focus)) }
+	}
+	if message, asked := strings.CutPrefix(draft, branchAtMessage); asked && a.options.BranchAt != nil {
+		change = a.branchAt(strings.TrimSpace(message))
+	}
+	if change == nil {
 		return false
 	}
 	a.view.Reset()
-	a.carry(func() string { return a.options.Undo(strings.TrimSpace(count)) })
+	a.carry(change)
 	return true
+}
+
+func (a *App) branchAt(message string) func() string {
+	return func() string {
+		note, words := a.options.BranchAt(message)
+		if words != "" {
+			a.view.Redraft(words)
+		}
+		return note
+	}
 }
 
 func (a *App) refusedMidTurn() bool {

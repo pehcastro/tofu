@@ -852,10 +852,18 @@ type HistoryLine struct {
 }
 
 type Compaction struct {
-	Into         string `json:"into,omitempty"`
-	Results      int    `json:"results"`
-	TokensBefore int    `json:"tokensBefore"`
-	TokensAfter  int    `json:"tokensAfter"`
+	Into         string        `json:"into,omitempty"`
+	Kind         turn.ForkKind `json:"kind"`
+	Results      int           `json:"results"`
+	Focus        string        `json:"focus,omitempty"`
+	Focused      int           `json:"focused,omitempty"`
+	TokensBefore int           `json:"tokensBefore"`
+	TokensAfter  int           `json:"tokensAfter"`
+}
+
+type SessionCompactParams struct {
+	Session string `json:"session,omitempty"`
+	Focus   string `json:"focus,omitempty"`
 }
 
 type SessionRenameParams struct {
@@ -918,6 +926,7 @@ type SessionBranchParams struct {
 	Model   string           `json:"model,omitempty"`
 	Effort  llm.Effort       `json:"effort,omitempty"`
 	At      *SessionBranchAt `json:"at,omitempty"`
+	Message int              `json:"message,omitempty"`
 }
 
 type SessionBranchAt struct {
@@ -938,6 +947,7 @@ type SessionBranchResult struct {
 	Carried int           `json:"carried"`
 	Model   string        `json:"model,omitempty"`
 	Effort  llm.Effort    `json:"effort,omitempty"`
+	Words   string        `json:"words,omitempty"`
 }
 
 type SessionAccessParams struct {
@@ -1326,7 +1336,8 @@ func requests() []method {
 		{name: "turn.sendNow", params: SendNowParams{}, result: Ack{}},
 		{name: "turn.stop", params: TurnParams{}, result: Ack{}},
 		{name: "turn.unsteer", params: UnsteerParams{}, result: UnsteerResult{}},
-		{name: "session.compact", params: SessionParams{}, result: Compaction{}},
+		{name: "session.compact", params: SessionCompactParams{}, result: Compaction{}},
+		{name: "session.fork", params: SessionParams{}, result: Compaction{}},
 		{name: "session.history", params: SessionHistoryParams{}, result: SessionHistory{}},
 		{name: "session.turns", params: SessionParams{}, result: SessionTurns{}},
 		{name: "session.turn", params: TurnReadParams{}, result: TurnDigest{}},
@@ -1399,7 +1410,7 @@ func requests() []method {
 }
 
 func capabilities() []string {
-	return []string{"approvals", "revoke", "questions", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "sendNow", "run", "compact", "history", "ledger",
+	return []string{"approvals", "revoke", "questions", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "sendNow", "run", "compact", "fork", "branch", "history", "ledger",
 		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "drain", "accounts", "writes", "status", "mention", "boards", "side", "commands", "boardy", "scratch", "sessions", "takeover"}
 }
 

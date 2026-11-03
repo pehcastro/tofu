@@ -24,6 +24,8 @@ type ContextReport struct {
 	Occupancy              *ContextOccupancy `json:"occupancy,omitempty"`
 	Unmeasured             string            `json:"unmeasured,omitempty"`
 	Fork                   *ContextFork      `json:"fork,omitempty"`
+	CarriedFrom            *CarriedFrom      `json:"carried_from,omitempty"`
+	ForkKind               string            `json:"fork_kind,omitempty"`
 	Skipped                []SessionSkip     `json:"skipped,omitempty"`
 	Ceiling                int               `json:"ceiling,omitempty"`
 	BytesPerThousandTokens int               `json:"bytes_per_thousand_tokens,omitempty"`

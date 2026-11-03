@@ -69,6 +69,12 @@ the carry names from any of them.
   `keep_result` reads each old tool result after that and keeps the ones
   the work still needs; every other one is shrunk to its handle, and the
   shrunk history becomes a new session.
+- Steer what it keeps: `/compact <focus>` keeps whole every old tool result
+  whose text, tool name or arguments name the focus, as one phrase whatever
+  its case.
+- Fork by hand: `/fork` opens a fresh line now, carrying what `/compact`
+  carries. `/branch N` restarts from your Nth message on a new line, the old
+  line kept open, with that message back in the composer.
 - What a lead's fork carries: `tofu settings set episodes off` makes the
   model write the working state at the fork instead of carrying the
   episode view.

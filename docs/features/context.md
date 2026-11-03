@@ -144,6 +144,14 @@ its first request, so the whole history is never sent first.
   history is a new session, so `tofu --continue` carries it after a restart.
   Typed while the lead waits on its sub-agents, it says so and runs when
   the turn ends.
+- **Steer what /compact keeps**: `/compact parser.go` keeps whole every old
+  tool result whose text, tool name or arguments name `parser.go`, whatever
+  its case, and shrinks the rest. The chat says how many the focus kept.
+- **Fork by hand**: `/fork` starts a fresh line now, carrying what `/compact`
+  carries, even when nothing is left to shrink. `/branch N` restarts from
+  your Nth message on a new line and keeps the old line open; its words wait
+  in the composer. `/branch` alone lists your messages. `tofu serve` answers
+  `session.fork` and `session.branch` with `kind: "main"` and `message: N`.
 - **Watch a fork**: the chat shows **⟳ forking**, and `tofu session list`
   lists the new session.
 

@@ -152,6 +152,22 @@ func contextOf(store *session.Store, handle string, build recall.Bands, nextCeil
 	if report.Fork == nil {
 		report.Fork = headerFork(store, header)
 	}
+	if header.CarriedFrom != nil {
+		recorded, err := store.Events(header.ID)
+		if err != nil {
+			return contextReport{}, err
+		}
+		part, err := store.Part(recorded, header.ID)
+		if err != nil {
+			return contextReport{}, err
+		}
+		given, err := turn.ConversationFrom(part)
+		if err != nil {
+			return contextReport{}, err
+		}
+		report.CarriedFrom = &host.CarriedFrom{Session: header.CarriedFrom.Session, Handle: handleOf(store, header.CarriedFrom.Session), Messages: len(given)}
+		report.ForkKind = header.ForkKind
+	}
 	report.Items = recall.Items(cfg, itemBands, conversation)
 	return report, nil
 }
@@ -223,6 +239,13 @@ func contextLines(page cli.Page, r contextReport, store *session.Store) []string
 	facts = append(facts,
 		cli.Fact{Label: "bytes", Text: strconv.Itoa(r.BytesPerThousandTokens) + " per thousand tokens"},
 		cli.Fact{Label: "fork", Text: forkFact(store, r.Fork)})
+	if from := r.CarriedFrom; from != nil {
+		origin := plural(from.Messages, "message") + " from " + from.Handle
+		if r.ForkKind != "" {
+			origin += " · " + r.ForkKind
+		}
+		facts = append(facts, cli.Fact{Label: "from", Text: origin})
+	}
 	lines := append(page.Title("Context", []string{sessionHandle(r.Session, r.Name), plural(r.Steps, "step")}, verdict), "")
 	lines = append(lines, cli.Indent(page.Facts(facts)...)...)
 	return append(lines, skippedLines(page, r.Skipped)...)

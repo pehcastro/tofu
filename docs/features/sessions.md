@@ -36,11 +36,15 @@ deleted when the project's tofu host starts; see
 [Cleaning up old sessions](#cleaning-up-old-sessions).
 
 **One name for one conversation.** A fork to stay under the context
-budget, `/compact` and a move to another account start the next
-generation of the same family: the name stays and the number after the
-`.` rises, so `brisk-amber-heron#4mhr1.3` is the third. `/new` starts a new
-family. A branch, another way from a point, is a new family that records
-where it branched. A name from an older tofu still finds the generation
+budget, `/compact`, `/fork`, `/branch N` and a move to another account
+start the next generation of the same family: the name stays and the
+number after the `.` rises, so `brisk-amber-heron#4mhr1.3` is the third.
+`/branch N` carries every message before your Nth and leaves the line it
+left open and whole, so `tofu session resume` takes either. `tofu session
+<name>` lists each generation with the kind that began it, and `tofu
+session info` names the generation its history came from. `/new` starts a
+new family. A side chat, another way from a point, is a new family that
+records where it branched. A name from an older tofu still finds the generation
 that carried it, and hooks see the family id as `session_id`.
 
 **Every message has an id you can point at.** The chat shows each message,

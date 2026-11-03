@@ -162,7 +162,7 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	live, release := spawn()
 	recent := &sessionstore.Recent{}
 	err = host.Serve(host.ServeConfig{Host: live, Release: release, Spawn: spawn, Dir: dir, In: in, Out: out, Shells: launch.registry, Carry: serveCarry(recent), Verb: serveVerbs(errOut, recent), Quota: polled, Accounts: accounts,
-		Sessions: serveSessions, Branch: serveBranch, Access: serveAccess, Wires: wires, Sources: wireSources(), Ledger: serveLedger, Compact: compactCarried,
+		Sessions: serveSessions, Branch: serveBranch, Access: serveAccess, Wires: wires, Sources: wireSources(), Ledger: serveLedger, Fork: (*host.Host).Fork,
 		Run: func(ctx context.Context, command string) (string, bool) {
 			return shellCommand(ctx, dir, launch.registry, command)
 		},

@@ -349,20 +349,7 @@ func TestForkAtTheDefaultCeilingRecordsTheCountThatDecidedAndKeepsANewestStepOve
 
 func TestCompactCarriedKeepsTheWarmHeadAndTheNewSessionReadsBackShrunk(t *testing.T) {
 	big := strings.Repeat("a numbered line of a large file\n", 400)
-	read := func(id string) []llm.ToolCall {
-		return []llm.ToolCall{{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"` + id + `.txt"}`)}}
-	}
-	carried := []llm.Message{
-		{Role: llm.RoleUser, Content: "read a"},
-		{Role: llm.RoleAssistant, Content: "reading a", ToolCalls: read("a")},
-		{Role: llm.RoleTool, ToolCallID: "a", Content: big},
-		{Role: llm.RoleAssistant, Content: "a is numbered lines"},
-		{Role: llm.RoleUser, Content: "read b and c"},
-		{Role: llm.RoleAssistant, Content: "reading b", ToolCalls: read("b")},
-		{Role: llm.RoleTool, ToolCallID: "b", Content: big},
-		{Role: llm.RoleAssistant, Content: "reading c", ToolCalls: read("c")},
-		{Role: llm.RoleTool, ToolCallID: "c", Content: big},
-	}
+	carried := compactFixture(big)
 	places := sys.Places{State: t.TempDir(), Log: t.TempDir()}
 	preview, err := recall.LoadConfig()
 	if err != nil {
@@ -371,7 +358,7 @@ func TestCompactCarriedKeepsTheWarmHeadAndTheNewSessionReadsBackShrunk(t *testin
 	if tail := HistoryTokens(preview, carried[5:]); tail <= konst.TrimWarmSuffixTokens {
 		t.Fatalf("b and c hold %d tokens, under the %d token warm suffix, so a would fall inside it and the case proves nothing", tail, konst.TrimWarmSuffixTokens)
 	}
-	compacted, err := CompactCarried(t.TempDir(), places, "", "read b and c", carried)
+	compacted, err := CompactCarried(t.TempDir(), places, "", "read b and c", "", carried)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -394,7 +381,7 @@ func TestCompactCarriedKeepsTheWarmHeadAndTheNewSessionReadsBackShrunk(t *testin
 	if carried[6].Content != big {
 		t.Fatal("the history handed in was shrunk in place, so a failed write would leave it shrunk")
 	}
-	if again, err := CompactCarried(t.TempDir(), places, "", "read b and c", shrunk); err != nil || again.Messages[6].Content != shrunk[6].Content {
+	if again, err := CompactCarried(t.TempDir(), places, "", "read b and c", "", shrunk); err != nil || again.Messages[6].Content != shrunk[6].Content {
 		t.Fatalf("a second compact rewrote b's note again, err %v", err)
 	}
 
@@ -455,5 +442,95 @@ func TestCompactCarriedKeepsTheWarmHeadAndTheNewSessionReadsBackShrunk(t *testin
 		ended.ForkTokensAfter != compacted.TokensAfter || begun.ForkKind != string(ForkCompact) ||
 		begun.CarriedFrom == nil || begun.CarriedFrom.Session != old.ID() || begun.Wire != "anthropic" {
 		t.Errorf("the old session reads %+v and the new one %+v", ended, begun)
+	}
+}
+
+func compactFixture(big string) []llm.Message {
+	read := func(id string) []llm.ToolCall {
+		return []llm.ToolCall{{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"` + id + `.txt"}`)}}
+	}
+	return []llm.Message{
+		{Role: llm.RoleUser, Content: "read a"},
+		{Role: llm.RoleAssistant, Content: "reading a", ToolCalls: read("a")},
+		{Role: llm.RoleTool, ToolCallID: "a", Content: big},
+		{Role: llm.RoleAssistant, Content: "a is numbered lines"},
+		{Role: llm.RoleUser, Content: "read b and c"},
+		{Role: llm.RoleAssistant, Content: "reading b", ToolCalls: read("b")},
+		{Role: llm.RoleTool, ToolCallID: "b", Content: big},
+		{Role: llm.RoleAssistant, Content: "reading c", ToolCalls: read("c")},
+		{Role: llm.RoleTool, ToolCallID: "c", Content: big},
+	}
+}
+
+func TestCompactWithAFocusKeepsTheResultItNamesWhole(t *testing.T) {
+	big := strings.Repeat("a numbered line of a large file\n", 400)
+	carried := compactFixture(big)
+	places := sys.Places{State: t.TempDir(), Log: t.TempDir()}
+	for _, c := range []struct {
+		focus   string
+		results int
+		focused int
+	}{
+		{"", 1, 0},
+		{"B.TXT", 0, 1},
+		{"a name no result carries", 1, 0},
+	} {
+		compacted, err := CompactCarried(t.TempDir(), places, "", "read b and c", c.focus, carried)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if compacted.Results != c.results || compacted.Focused != c.focused || compacted.Focus != c.focus {
+			t.Errorf("focus %q shrank %d and spared %d for %q, want %d and %d", c.focus, compacted.Results, compacted.Focused, compacted.Focus, c.results, c.focused)
+		}
+		if whole := compacted.Messages[6].Content == big; whole != (c.focused == 1) {
+			t.Errorf("focus %q leaves b whole %v, want %v", c.focus, whole, c.focused == 1)
+		}
+	}
+}
+
+func TestBranchCarriedRestartsAtThePersonsMessageAndKeepsTheOldLine(t *testing.T) {
+	carried := compactFixture("short")
+	if _, err := BranchCarried("", carried, 3); err == nil || !strings.Contains(err.Error(), "1. read a") || !strings.Contains(err.Error(), "2. read b and c") {
+		t.Fatalf("message 3 of 2 answered %v, want a refusal listing both", err)
+	}
+	if _, err := BranchCarried("", nil, 1); err == nil || !strings.Contains(err.Error(), "nothing to branch") {
+		t.Fatalf("an empty line answered %v, want nothing to branch", err)
+	}
+	branched, err := BranchCarried("", carried, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(branched.Messages) != 4 || branched.Words != "read b and c" || branched.Kind != ForkBranch || branched.Message != 2 {
+		t.Fatalf("branch at 2 carries %d messages and words %q kind %s, want the 4 before it and its words", len(branched.Messages), branched.Words, branched.Kind)
+	}
+	store := session.OpenAt(t.TempDir())
+	old, err := store.Open(session.Header{ID: session.NewEventID(), Wire: "anthropic"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := old.Close(); err != nil {
+		t.Fatal(err)
+	}
+	into, err := RecordCarried(store, old.ID(), branched, "the test", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept, err := store.Header(old.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	begun, err := store.Header(into)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kept.EndedAt != nil || kept.ForkedInto != "" || begun.ForkKind != string(ForkBranch) || begun.CarriedFrom == nil || begun.CarriedFrom.Session != old.ID() {
+		t.Errorf("the old line reads %+v and the branch %+v, want the old one open and the branch carried from it", kept, begun)
+	}
+	events, err := store.Body(into)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reread, err := ConversationFrom(events); err != nil || len(reread) != 4 {
+		t.Errorf("the branch reads back %d messages, err %v, want 4", len(reread), err)
 	}
 }

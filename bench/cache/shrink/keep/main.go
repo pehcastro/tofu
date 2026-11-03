@@ -109,7 +109,7 @@ func runArm(dir, home string, corpus []mockedSession) (tally, error) {
 	}
 	var t tally
 	for _, session := range corpus {
-		compacted, err := turn.CompactCarried(project, places, "", session.Task, conversationOf(session))
+		compacted, err := turn.CompactCarried(project, places, "", session.Task, "", conversationOf(session))
 		if err != nil {
 			return tally{}, fmt.Errorf("%s: %w", session.Name, err)
 		}

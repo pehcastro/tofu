@@ -68,7 +68,9 @@ func TestServeStopsTheLeadUnsteersRunsCommandsCompactsAndPagesHistory(t *testing
 			{Role: llm.RoleUser, Content: "second task"}, {Role: llm.RoleAssistant, Content: "second answer"},
 		}}, nil
 	}
-	c, live, project := serving(t, play, ServeConfig{Ledger: read, Run: run, Carry: carry, Compact: func(lead *Host, _ string) (Compaction, error) { return compacted, lead.Compacted(compacted.Into, nil) }})
+	c, live, project := serving(t, play, ServeConfig{Ledger: read, Run: run, Carry: carry, Fork: func(lead *Host, _ HandFork) (Compacted, error) {
+		return Compacted{Compaction: compacted}, lead.Compacted(compacted.Into, nil)
+	}})
 	h = live
 	store, err := session.OpenIn(project)
 	if err != nil {
