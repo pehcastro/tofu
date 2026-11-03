@@ -31,7 +31,7 @@ func readerText(page string) string {
 func TestEveryMeasuredDecisionIsOnThePageWithBothMethodsOrWithWhatIsMissing(t *testing.T) {
 	data := built(t)
 	page := Page(data)
-	want := []string{"stop_check", "read_worth", "shell_sift", "page_sift", "ask", "file_shortlist", "tool_gate", "tool_gate wording"}
+	want := []string{"stop_check", "read_worth", "shell_sift", "ask", "file_shortlist", "tool_gate", "tool_gate wording"}
 	if len(data.Judgments) != len(want) {
 		t.Fatalf("%d decisions are rendered and %d are measured across the reports", len(data.Judgments), len(want))
 	}

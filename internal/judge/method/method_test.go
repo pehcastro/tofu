@@ -85,7 +85,7 @@ func TestTheTableNamesAMethodForEveryDecisionPointOnDisk(t *testing.T) {
 			t.Errorf("%s is parked as having no question file and library/questions now carries one", parked)
 		}
 	}
-	for _, coming := range []string{"file_shortlist", "instruction_trust", "spawn_gate"} {
+	for _, coming := range []string{"file_shortlist", "spawn_gate"} {
 		if _, err := table.Of(coming); err != nil {
 			t.Errorf("%v", err)
 		}
@@ -125,7 +125,7 @@ func TestReadWorthIsDecidedByTheCheapMethod(t *testing.T) {
 
 func TestAnUnwiredPointRunsNeitherArmAndSaysWhy(t *testing.T) {
 	table := shipped(t)
-	for _, point := range []string{"page_sift", "ask", "file_shortlist", "tool_gate", "instruction_trust", "spawn_gate"} {
+	for _, point := range []string{"ask", "file_shortlist", "tool_gate", "spawn_gate"} {
 		_, chosen, err := method.Run(t.Context(), table, point, method.Arms[bool]{
 			Cheap:  func(context.Context) (bool, error) { t.Fatalf("%s ran the cheap arm", point); return false, nil },
 			Judged: func(context.Context) (bool, error) { t.Fatalf("%s ran the judged arm", point); return false, nil },

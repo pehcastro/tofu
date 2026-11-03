@@ -110,7 +110,6 @@ type Config struct {
 	ImagesOf        func(said string) []llm.Image
 	Caps            Caps
 	Sift            *ShellSift
-	Thrift          *ThriftSift
 	ResultBytesCap  int
 	ArtifactDir     string
 	Places          sys.Places

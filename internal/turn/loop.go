@@ -184,7 +184,6 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	artifacts.keep = newKeepJudge(config.Project, config.Places.Log, config.Task, config.Notify)
 	artifacts.keep.index = cmp.Or(config.Drops, artifacts.keep.index)
 	sifter := siftOrNothing(config.Sift)
-	thrifter := thriftOrNothing(config.Thrift)
 	if config.Redactor == nil {
 		loaded := sys.LoadKeyRedactor()
 		config.Redactor = &loaded
@@ -1294,7 +1293,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 					if pre.Args == nil {
 						request.Asked = asked.Arguments
 					}
-					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, thrift: thrifter, redact: redactor, task: config.Task, site: recorded.site(call.ID, messages), model: model, fire: fire, hooks: hookRunOf(hook.PreToolUse, pre), before: pre.Context}
+					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, redact: redactor, task: config.Task, site: recorded.site(call.ID, messages), model: model, fire: fire, hooks: hookRunOf(hook.PreToolUse, pre), before: pre.Context}
 					code, asksCode := codeAsked(stepTools, call)
 					if asksCode = asksCode && config.SpawnedFrom != ""; !asksCode {
 						gated.refusal = boundaryRefusal(stepTools, call)

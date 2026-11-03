@@ -31,9 +31,6 @@ methods:
     method: judged
     why: jev agrees with 71 of 78 hand labels against the repeat check's 68, 1.04x, and makes a false stop a third as often; on 24 mocked sub-agent hand-backs it is right on 23 on four passes at jev-1.14.0, against 12 for the arm that never stops the turn, the one miss a stop after only reading the file it was told to change. the rule ships shadow, where the acceptance-line screen decides and the row decides nothing
     cost: a median $0.000067 a session over the 20 recorded sessions that ran it, worst $0.004574, $0.0089 over the whole recorded ledger; one call a hand-back, an open acceptance line included, $0.00093 and p50 202 ms over the 24 mocked ones
-  page_sift:
-    method: unwired
-    why: web.Reduce strips the same link-only rows at fetch time, so the link stripper elides 0 further bytes on all 24 recorded pages, 0.00 percent, where Reduce itself takes 11.69 percent of the extracted bytes. a second pass of one rule is not a decision point
   read_worth:
     method: cheap
     why: a fifteen word floor agrees with 87.1 percent of the labels, the same as jev, and saves 12.6 percent of bytes against 9.3. a tie goes to the method that costs nothing
@@ -55,9 +52,6 @@ methods:
   tool_gate:
     method: unwired
     why: the 178 case set carries no free arm, and the 6 of 6 a regular expression scored was over six cases written by something that could see all six
-  instruction_trust:
-    method: unwired
-    why: jev beats a regular expression 25 of 27 against 24 of 27, but the corpus cannot decide it, a rerun minutes later tied both arms at 24 of 27, and 27 cases is a quarter of the few hundred a two-arm gap this size needs
   spawn_gate:
     method: unwired
     why: nothing is measured, and it waits on one recorded orchestrator and sub-agent
@@ -65,9 +59,6 @@ methods:
     method: judged
     why: jev names the kind of 40 of 40 mocked tasks on two passes against the word list's 11 of 40, which reads a crash, a diff to look over or a question about a fault as no kind and an add a debug flag task as debug. the corpus and the question were written by one author, so 40 of 40 is a ceiling rather than a rate
     cost: one jev call each time a prompt is composed for a task, the lead's and each spawn's, p50 192 ms, p95 226 ms, worst 302 ms and a mean $0.0000257 list charge over 80 calls
-  thrift:
-    method: unwired
-    why: the point reads library/questions/config/thrift_rule@1.yaml directly, which ships mode off, and nothing is cut until a measurement moves it
   request_open:
     method: judged
     why: jev reads 37 and 36 of 40 mocked requests right on two passes, and 36 of 40 on a third, against 20 of 40 for the arm that always restates, which restates all 20 closed requests; jev restates 1 to 2 closed ones and misses 2 open ones a pass. the corpus is 40 requests written by one author, so this is a ceiling rather than a rate

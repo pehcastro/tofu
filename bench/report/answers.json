@@ -159,38 +159,6 @@
       "source": "bench/readworth/report-2026-09-21.md"
     },
     {
-      "point": "page_sift",
-      "question": "how much of a web page to keep",
-      "axis": {
-        "name": "planted needles kept",
-        "unit": "percent of pages",
-        "better_when": "higher"
-      },
-      "free_arm": {
-        "name": "the link stripper",
-        "does": "drops any list item or table row that is nothing but a link and keeps every other line. The report calls this the readability rule.",
-        "does_from": "internal/sift/pagearm.go",
-        "percent": 100.0,
-        "hits": 21,
-        "out_of": 21,
-        "evidence": "| readability | 21/21 | -0.2% |"
-      },
-      "judged_arm": {
-        "name": "Jev",
-        "does": "scores each part of the page for whether the task still needs it and drops anything under 0.5",
-        "does_from": "bench/websift/arm.go",
-        "percent": 71.4,
-        "hits": 15,
-        "out_of": 21,
-        "evidence": "| judged, shipped keep_at 0.5 | 15/21 | 9.1%, 10.9% (two runs) |"
-      },
-      "sample_size": 21,
-      "sample_of": "focused pages of a 24 page set, one needle planted in each",
-      "decides": "page_sift",
-      "wiring": "unwired",
-      "source": "bench/websift/report-2026-09-21.md"
-    },
-    {
       "point": "tool_gate",
       "question": "should this command be allowed to run",
       "axis": {

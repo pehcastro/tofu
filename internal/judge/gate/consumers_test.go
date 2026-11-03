@@ -18,9 +18,6 @@ var knownForeignSchemaConsumers = map[string][]string{
 	"shell_sift@1": {
 		"bench/sift/arm.go",
 	},
-	"page_sift@1": {
-		"bench/websift/arm.go",
-	},
 }
 
 var pointRefLiteral = regexp.MustCompile(`"([a-z][a-z_]*@\d+)"`)

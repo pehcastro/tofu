@@ -5362,38 +5362,6 @@
         "source": "bench/readworth/report-2026-09-21.md"
       },
       {
-        "point": "page_sift",
-        "question": "how much of a web page to keep",
-        "axis": {
-          "name": "planted needles kept",
-          "unit": "percent of pages",
-          "better_when": "higher"
-        },
-        "free_arm": {
-          "name": "the link stripper",
-          "does": "drops any list item or table row that is nothing but a link and keeps every other line. The report calls this the readability rule.",
-          "does_from": "internal/sift/pagearm.go",
-          "percent": 100,
-          "hits": 21,
-          "out_of": 21,
-          "evidence": "| readability | 21/21 | -0.2% |"
-        },
-        "judged_arm": {
-          "name": "Jev",
-          "does": "scores each part of the page for whether the task still needs it and drops anything under 0.5",
-          "does_from": "bench/websift/arm.go",
-          "percent": 71.4,
-          "hits": 15,
-          "out_of": 21,
-          "evidence": "| judged, shipped keep_at 0.5 | 15/21 | 9.1%, 10.9% (two runs) |"
-        },
-        "sample_size": 21,
-        "sample_of": "focused pages of a 24 page set, one needle planted in each",
-        "decides": "page_sift",
-        "wiring": "unwired",
-        "source": "bench/websift/report-2026-09-21.md"
-      },
-      {
         "point": "tool_gate",
         "question": "should this command be allowed to run",
         "axis": {
@@ -5505,13 +5473,6 @@
       "called_by": "cmd/tofu/run_done.go"
     },
     {
-      "point": "page_sift",
-      "on": false,
-      "switched_on": "not wired",
-      "costs": "nothing, and no call is made",
-      "why": "web.Reduce strips the same link-only rows at fetch time, so the link stripper elides 0 further bytes on all 24 recorded pages, 0.00 percent, where Reduce itself takes 11.69 percent of the extracted bytes. a second pass of one rule is not a decision point"
-    },
-    {
       "point": "read_worth",
       "on": true,
       "switched_on": "yes, through the cheap method",
@@ -5557,13 +5518,6 @@
       "why": "the 178 case set carries no free arm, and the 6 of 6 a regular expression scored was over six cases written by something that could see all six"
     },
     {
-      "point": "instruction_trust",
-      "on": false,
-      "switched_on": "not wired",
-      "costs": "nothing, and no call is made",
-      "why": "jev beats a regular expression 25 of 27 against 24 of 27, but the corpus cannot decide it, a rerun minutes later tied both arms at 24 of 27, and 27 cases is a quarter of the few hundred a two-arm gap this size needs"
-    },
-    {
       "point": "spawn_gate",
       "on": false,
       "switched_on": "not wired",
@@ -5577,13 +5531,6 @@
       "costs": "one jev call each time a prompt is composed for a task, the lead's and each spawn's, p50 192 ms, p95 226 ms, worst 302 ms and a mean $0.0000257 list charge over 80 calls",
       "why": "jev names the kind of 40 of 40 mocked tasks on two passes against the word list's 11 of 40, which reads a crash, a diff to look over or a question about a fault as no kind and an add a debug flag task as debug. the corpus and the question were written by one author, so 40 of 40 is a ceiling rather than a rate",
       "called_by": "internal/turn/compose.go"
-    },
-    {
-      "point": "thrift",
-      "on": false,
-      "switched_on": "not wired",
-      "costs": "nothing, and no call is made",
-      "why": "the point reads library/questions/config/thrift_rule@1.yaml directly, which ships mode off, and nothing is cut until a measurement moves it"
     },
     {
       "point": "request_open",
@@ -5723,30 +5670,6 @@
       "switched_on": "yes, through the cheap method",
       "wired": true,
       "source": "bench/readworth/report-2026-09-21.md"
-    },
-    {
-      "point": "page_sift",
-      "question": "how much of a web page to keep",
-      "axis": "measured as planted needles kept, percent of pages, higher is better",
-      "free_arm": {
-        "name": "the link stripper",
-        "does": "drops any list item or table row that is nothing but a link and keeps every other line. The report calls this the readability rule.",
-        "reading": "100.0%",
-        "percent": 100
-      },
-      "judged_arm": {
-        "name": "Jev",
-        "does": "scores each part of the page for whether the task still needs it and drops anything under 0.5",
-        "reading": "71.4%",
-        "percent": 71.4
-      },
-      "winner": "the link stripper",
-      "gap": "28.6 points",
-      "multiple": "1.40x",
-      "sample": "21 focused pages of a 24 page set, one needle planted in each",
-      "switched_on": "not wired",
-      "wired": false,
-      "source": "bench/websift/report-2026-09-21.md"
     },
     {
       "point": "file_shortlist",

@@ -93,7 +93,6 @@ type gatedCall struct {
 	author  string
 	task    string
 	sift    *ShellSift
-	thrift  *ThriftSift
 	redact  sys.KeyRedactor
 	site    spawnSite
 	model   Model
@@ -169,14 +168,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 	}
 
 	cut := g.cutShellResult(ctx, call.Name, result)
-	thriftCut := g.cutThriftResult(ctx, call.Name, result)
-	saved := cut.Saved
-	text := cut.Text
-	if thriftCut.Saved > 0 {
-		text = thriftCut.Text
-		saved += thriftCut.Saved
-	}
-	rendered, handle, storeErr := artifacts.Render(call.Name, call.Arguments, text, resultBytesCap)
+	rendered, handle, storeErr := artifacts.Render(call.Name, call.Arguments, cut.Text, resultBytesCap)
 	sum := sha256.Sum256([]byte(result.Content))
 	row := ToolCallRow{
 		ID:             g.id,
@@ -192,7 +184,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		RenderedBytes:  len(rendered),
 		ResultHash:     hex.EncodeToString(sum[:]),
 		ResultHandle:   handle,
-		SiftSavedBytes: saved,
+		SiftSavedBytes: cut.Saved,
 		DurationMS:     time.Since(started).Milliseconds(),
 		Error:          result.FailureText,
 		SubAgentID:     result.SubAgent,

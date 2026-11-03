@@ -30,8 +30,8 @@ shell
   ⚠ rtk  not on PATH, so bash commands run as asked  → RTK_INSTALL
 
 rules
-  ✓ library       binary · 7 points
-  ○ 6 points      shadow · thresholds from the rule
+  ✓ library       binary · 6 points
+  ○ 5 points      shadow · thresholds from the rule
     gate tool_gate@6
   ✗ shell_sift@1  unusable · the gate is off because no classifier is bound:
     store its key with tofu login classifier and pick it in Models
@@ -55,8 +55,8 @@ shell
   ⚠ rtk  not on PATH, so bash commands run as asked  → RTK_INSTALL
 
 rules
-  ✓ library       project · 1 of 7 points
-  ○ 5 points      shadow · thresholds from the rule
+  ✓ library       project · 1 of 6 points
+  ○ 4 points      shadow · thresholds from the rule
   ● shell_sift@1  enforced · thresholds from the rule
   ⚠ tool_gate@6   shadow · no lock file for tool_gate@6
 
@@ -252,8 +252,8 @@ func TestE2EDoctorJSONIsOneEnvelopeThatCarriesTheBlockersAsProblems(t *testing.T
 		{What: "jev: the gate is off because no classifier is bound: store its key with tofu login classifier and pick it in Models", Hint: "tofu models bind classifier <provider/model>"},
 	}
 	if envelope.Tofu != konst.Version || envelope.Verb != "doctor" || envelope.OK || envelope.Data.Verdict != doctorNotReady ||
-		len(envelope.Problems) != len(want) || envelope.Problems[0] != want[0] || envelope.Problems[1] != want[1] || len(envelope.Data.Rules) != 7 {
-		t.Fatalf("the envelope is %+v, want doctor, not ok, not ready, 7 rules and the problems %+v", envelope, want)
+		len(envelope.Problems) != len(want) || envelope.Problems[0] != want[0] || envelope.Problems[1] != want[1] || len(envelope.Data.Rules) != 6 {
+		t.Fatalf("the envelope is %+v, want doctor, not ok, not ready, 6 rules and the problems %+v", envelope, want)
 	}
 }
 
