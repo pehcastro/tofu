@@ -10,11 +10,11 @@ import (
 	"strconv"
 	"time"
 
-	benchcost "tofu/bench/cost"
 	benchapi "tofu/bench/kit/api"
 	"tofu/bench/kit/report"
-	benchturn "tofu/bench/turn"
-	benchwording "tofu/bench/wording"
+	benchturn "tofu/bench/suites/agent/turn"
+	benchcost "tofu/bench/suites/judge/cost"
+	benchwording "tofu/bench/suites/judge/wording"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
 )
@@ -102,7 +102,7 @@ func reportOf(target string) producer {
 			if err != nil {
 				return "", "", err
 			}
-			path := filepath.Join("bench", "cost", report.Filename("report", result.GeneratedAt))
+			path := filepath.Join("bench", "suites", "judge", "cost", report.Filename("report", result.GeneratedAt))
 			return path, benchcost.Render(result, conditions(result.GeneratedAt)), nil
 		}
 	case "wording":
@@ -111,7 +111,7 @@ func reportOf(target string) producer {
 			if err != nil {
 				return "", "", err
 			}
-			path := filepath.Join("bench", "wording", report.Filename("report", result.GeneratedAt))
+			path := filepath.Join("bench", "suites", "judge", "wording", report.Filename("report", result.GeneratedAt))
 			return path, benchwording.Render(result, conditions(result.GeneratedAt)), nil
 		}
 	case "turn":
@@ -120,7 +120,7 @@ func reportOf(target string) producer {
 			if err != nil {
 				return "", "", err
 			}
-			path := filepath.Join("bench", "turn", report.Filename("report", result.GeneratedAt))
+			path := filepath.Join("bench", "suites", "agent", "turn", report.Filename("report", result.GeneratedAt))
 			return path, benchturn.Render(result, conditions(result.GeneratedAt)), nil
 		}
 	}

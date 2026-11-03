@@ -137,7 +137,7 @@ When idle, each kind wakes it differently:
   resumed with `message`.
 - **Other finished reports** wait 1.5 seconds for more, up to 10 seconds from
   the first, and reach the lead as one turn. They go at once when no
-  sub-agent is still running, or when you type. On the `bench/fanin` cassettes, three
+  sub-agent is still running, or when you type. On the `bench/suites/agent/fanin` cassettes, three
   sub-agents finishing within a second and a half cost 1 lead turn instead
   of 3.
 - **A check** never starts a turn; it rides with the next one.

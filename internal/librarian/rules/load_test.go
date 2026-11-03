@@ -196,8 +196,8 @@ func TestLoadReadsTheMeasuredQARules(t *testing.T) {
 		if r.Kind != KindMeasured || r.Domain != "qa" {
 			t.Fatalf("%s is kind %q in domain %q, want %q in qa", name, r.Kind, r.Domain, KindMeasured)
 		}
-		if r.Measurement != "bench/testquality/flakerun" {
-			t.Fatalf("%s measurement = %q, want bench/testquality/flakerun", name, r.Measurement)
+		if r.Measurement != "bench/suites/rules/testquality/flakerun" {
+			t.Fatalf("%s measurement = %q, want bench/suites/rules/testquality/flakerun", name, r.Measurement)
 		}
 		if !strings.HasPrefix(r.Source, "library/qa/references/") {
 			t.Fatalf("%s source = %q, want a reference under library/qa/references/", name, r.Source)

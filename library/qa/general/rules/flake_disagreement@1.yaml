@@ -3,7 +3,7 @@ domain: qa
 also_reaches: work_on_tests
 kind: measured
 concern: code_rules
-measurement: bench/testquality/flakerun
+measurement: bench/suites/rules/testquality/flakerun
 scope: "**/*_test.go"
 source: library/qa/references/flakiness.md
 evidence: 3 of 2202 test names over 70 packages disagreed with themselves across 3 runs each, go1.27.1 windows/amd64. One was TestReadCorpusRefusesARowThatCameOffTheRecordingMachine with outcomes fail pass pass, two were report-tool tests that produced no result at all in runs two and three. None reproduced on a rerun of the same package, and the tree was being edited by other work during the sweep

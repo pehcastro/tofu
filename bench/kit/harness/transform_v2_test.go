@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"tofu/bench/transform"
+	"tofu/bench/suites/context/transform"
 	"tofu/internal/sys"
 )
 

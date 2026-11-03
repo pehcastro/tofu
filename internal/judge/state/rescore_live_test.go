@@ -27,7 +27,7 @@ const (
 var comparedSets = []string{toolGateV5Path, toolGateV6Path}
 
 const (
-	recordedAnswersPath = "../../../bench/cost/answers/heldout-2026-09-19.jsonl"
+	recordedAnswersPath = "../../../bench/suites/judge/cost/answers/heldout-2026-09-19.jsonl"
 	gatePolicyPath      = "../../../library/general/rules/tool_gate@1.yaml"
 	gateLibraryDir      = "../../../library"
 	labelProceed        = "proceed"

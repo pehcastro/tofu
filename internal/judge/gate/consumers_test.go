@@ -16,7 +16,7 @@ var knownForeignSchemaConsumers = map[string][]string{
 		"internal/judge/state/stop_check_rule.go",
 	},
 	"shell_sift@1": {
-		"bench/sift/arm.go",
+		"bench/suites/judge/sift/arm.go",
 	},
 }
 
