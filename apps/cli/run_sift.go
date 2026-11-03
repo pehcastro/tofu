@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"tofu/internal/agent/loop"
+	judgeverb "tofu/internal/cli/verbs/judge"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/method"
 	"tofu/internal/konst"
@@ -43,10 +44,10 @@ func shellSiftCost() string {
 
 type shellScorer struct {
 	client  *jev.Client
-	set     battery
-	batch   battery
+	set     judgeverb.Battery
+	batch   judgeverb.Battery
 	rubric  jev.Question
-	rows    rowLedger
+	rows    judgeverb.RowLedger
 	turnID  string
 	spent   sync.Mutex
 	calls   int
@@ -75,11 +76,11 @@ func shellSiftOn(arm, log string, keys jev.Keyring) (*turn.ShellSift, *shellScor
 	var scorer *shellScorer
 	var scores turn.ShellScores
 	if chosen.Method == method.Judged {
-		set, setErr := resolveLibrary(shellSiftPoint, "")
+		set, setErr := judgeverb.ResolveLibrary(shellSiftPoint, "")
 		if setErr != nil {
 			return nil, nil, setErr
 		}
-		batch, batchErr := resolveLibrary(sift.ShellBatchPoint, "")
+		batch, batchErr := judgeverb.ResolveLibrary(sift.ShellBatchPoint, "")
 		if batchErr != nil {
 			return nil, nil, batchErr
 		}
@@ -91,7 +92,7 @@ func shellSiftOn(arm, log string, keys jev.Keyring) (*turn.ShellSift, *shellScor
 		if clientErr != nil {
 			return nil, nil, clientErr
 		}
-		rows, rowsErr := openRowLedger(log)
+		rows, rowsErr := judgeverb.OpenRowLedger(log)
 		if rowsErr != nil {
 			return nil, nil, rowsErr
 		}
@@ -183,15 +184,15 @@ func (s *shellScorer) scorePerChunk(ctx context.Context, shell sift.Shell, units
 	return scores, nil
 }
 
-func (s *shellScorer) record(state json.RawMessage, set battery, builder string, decision jev.Decision) error {
+func (s *shellScorer) record(state json.RawMessage, set judgeverb.Battery, builder string, decision jev.Decision) error {
 	s.spent.Lock()
 	turnID := s.turnID
 	s.spent.Unlock()
-	row, err := s.rows.append(state, set, rowInput{
-		decision:     &decision,
-		answers:      toLedgerAnswers(set.QuestionsVersion, decision.Answers),
-		turnID:       turnID,
-		stateBuilder: builder,
+	row, err := s.rows.Append(state, set, judgeverb.RowInput{
+		Decision:     &decision,
+		Answers:      judgeverb.ToLedgerAnswers(set.QuestionsVersion, decision.Answers),
+		TurnID:       turnID,
+		StateBuilder: builder,
 	})
 	s.spent.Lock()
 	s.calls++

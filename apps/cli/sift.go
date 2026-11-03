@@ -12,6 +12,7 @@ import (
 
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	judgeverb "tofu/internal/cli/verbs/judge"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
@@ -95,7 +96,7 @@ func siftVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		if err != nil {
 			return wiring.Failed(o, err)
 		}
-		return protocol(o, output.ExitOK, struct {
+		return output.Protocol(o, output.ExitOK, struct {
 			Text string `json:"text"`
 		}{original}, original)
 	}
@@ -126,7 +127,7 @@ func siftVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		_ = page.Print(errOut, []string{page.Label(report.Arm) + cli.Gap + fmt.Sprintf("%d/%d paragraphs kept · %d/%d words · %dms · $%.6f",
 			report.Kept, report.Paragraphs, report.KeptWords, report.Words, report.ElapsedMS, report.Cost)})
 	}
-	return protocol(o, output.ExitOK, report, report.Text)
+	return output.Protocol(o, output.ExitOK, report, report.Text)
 }
 
 func siftMarks(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
@@ -149,7 +150,7 @@ func siftMarks(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
 
 func siftJev(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
 	marks := make([]sift.Mark, len(parts))
-	set, err := resolveLibrary(siftPoint, "")
+	set, err := judgeverb.ResolveLibrary(siftPoint, "")
 	if err != nil {
 		return nil, 0, err
 	}
@@ -186,7 +187,7 @@ func siftJev(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
 	return marks, total, nil
 }
 
-func siftOne(client *jev.Client, set battery, parts []sift.Part, index int, opts siftOpts, rule sift.Rule) (sift.Mark, float64, error) {
+func siftOne(client *jev.Client, set judgeverb.Battery, parts []sift.Part, index int, opts siftOpts, rule sift.Rule) (sift.Mark, float64, error) {
 	state, err := json.Marshal(sift.BuildState(parts, index, opts.task))
 	if err != nil {
 		return sift.Mark{}, 0, err
@@ -205,10 +206,10 @@ func siftOne(client *jev.Client, set battery, parts []sift.Part, index int, opts
 		return sift.Mark{}, decision.Usage.Cost, err
 	}
 	if !opts.noLog {
-		if _, err := appendRow(built, set, rowInput{
-			decision:     &decision,
-			answers:      toLedgerAnswers(set.QuestionsVersion, decision.Answers),
-			stateBuilder: siftPoint,
+		if _, err := judgeverb.AppendRow(built, set, judgeverb.RowInput{
+			Decision:     &decision,
+			Answers:      judgeverb.ToLedgerAnswers(set.QuestionsVersion, decision.Answers),
+			StateBuilder: siftPoint,
 		}); err != nil {
 			return sift.Mark{}, decision.Usage.Cost, err
 		}

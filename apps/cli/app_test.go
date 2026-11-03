@@ -30,6 +30,7 @@ import (
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/render"
+	judgeverb "tofu/internal/cli/verbs/judge"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
@@ -2994,7 +2995,7 @@ func separableRisk(corpus calibrationCorpus, blockRisk, proceedRisk float64) map
 
 func calibrationRule(t *testing.T) gate.Rule {
 	t.Helper()
-	rule, _, err := loadRulePoint(runGatePoint, "")
+	rule, _, err := judgeverb.LoadRulePoint(runGatePoint, "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,4 +1,4 @@
-package main
+package boardy
 
 import (
 	"cmp"

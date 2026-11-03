@@ -13,6 +13,9 @@ import (
 
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	boardyverb "tofu/internal/cli/verbs/boardy"
+	judgeverb "tofu/internal/cli/verbs/judge"
+	shellsverb "tofu/internal/cli/verbs/shells"
 	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/platform/recover"
@@ -221,7 +224,7 @@ func nearestCommand(args []string) (string, bool) {
 	}
 	known := usageWords(verbNamed(args[0]).usage)
 	if args[0] == "boardy" && len(args) > 1 {
-		known = append(known, usageWords(boardyUsageOf(args[1]))...)
+		known = append(known, usageWords(boardyverb.UsageOf(args[1]))...)
 	}
 	if len(known) == 0 {
 		return "", false
@@ -287,7 +290,7 @@ func verbNamed(name string) verb {
 	case "session":
 		return verb{sessionVerb, strings.Join([]string{sessionSubcommands, sessionBranchUsage, sessionDrainUsage, sessionFindUsage, sessionTraceUsage, sessionTranscriptUsage}, " ")}
 	case "shells":
-		return verb{run: withoutIn(shellsVerb)}
+		return verb{run: withoutIn(shellsverb.Verb)}
 	case "hooks":
 		return verb{run: withoutIn(hooksVerb)}
 	case "guard":
@@ -334,7 +337,7 @@ func verbNamed(name string) verb {
 	case "run":
 		return verb{run: withoutIn(runVerb)}
 	case "judge":
-		return verb{judgeVerb, judgeUsage}
+		return verb{judgeverb.Verb, judgeverb.Usage}
 	case "check":
 		return verb{withoutIn(checkVerb), checkUsage}
 	case "context":
@@ -359,9 +362,9 @@ func verbNamed(name string) verb {
 	case "rules":
 		return verb{withoutIn(rulesVerb), strings.Join([]string{rulesSubcommands, rulesListUsage, rulesOverridesUsage, rulesCheckUsage, rulesAddUsage, rulesOffUsage, rulesIDUsage, rulesWhyUsage}, " ")}
 	case "boardy":
-		return verb{withoutIn(boardyVerb), boardyUsage}
+		return verb{withoutIn(boardyverb.Verb), boardyverb.Usage}
 	case "scratch":
-		return verb{withoutIn(runScratch), scratchUsage}
+		return verb{withoutIn(shellsverb.Scratch), shellsverb.ScratchUsage}
 	case "memory":
 		return verb{withoutIn(memoryVerb), memoryUsage + " " + memoryTreeUsage}
 	case "learn":
@@ -397,9 +400,9 @@ func verbHelp(name string, args []string) string {
 	case "catalog":
 		return verbHelp("library", args)
 	case "boardy":
-		text = cmp.Or(boardyUsageOf(subcommandOf(args)), text)
+		text = cmp.Or(boardyverb.UsageOf(subcommandOf(args)), text)
 	case "shells":
-		text = shellsSubcommands
+		text = shellsverb.Subcommands
 	case "hooks":
 		text = hooksSubcommands
 	case "version":

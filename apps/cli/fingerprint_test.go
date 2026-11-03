@@ -12,6 +12,7 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/cli/output"
+	judgeverb "tofu/internal/cli/verbs/judge"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/questions"
 	"tofu/internal/judge/state"
@@ -128,14 +129,14 @@ func TestACheckedDecisionIsAPrecedentForTheSameCommandJudgedLater(t *testing.T) 
 
 func TestAReplayedRowCarriesTheFingerprintOfTheRowItReplays(t *testing.T) {
 	t.Chdir(t.TempDir())
-	set := battery{SetName: "stub_battery", QuestionsVersion: 1, Kinds: map[string]question.Kind{"approval": question.KindNoul}}
+	set := judgeverb.Battery{SetName: "stub_battery", QuestionsVersion: 1, Kinds: map[string]question.Kind{"approval": question.KindNoul}}
 	req := jev.Request{
 		State:     map[string]string{"command": forcePush},
 		Questions: []jev.Question{{ID: "approval", Kind: jev.QuestionNoul, Instructions: "?", True: "t", False: "f"}},
 	}
 	answers := []ledger.Answer{{Question: "approval", Wording: 1, Kind: ledger.AnswerNoul, Noul: 0.11}}
 
-	original, err := appendRow(req.State, set, rowInput{answers: answers, fingerprint: "bash.5ee1f0a0c0de1234"})
+	original, err := judgeverb.AppendRow(req.State, set, judgeverb.RowInput{Answers: answers, Fingerprint: "bash.5ee1f0a0c0de1234"})
 	if err != nil {
 		t.Fatalf("writing the row to be replayed: %v", err)
 	}
@@ -158,8 +159,8 @@ func TestAReplayedRowCarriesTheFingerprintOfTheRowItReplays(t *testing.T) {
 	if err != nil {
 		t.Fatalf("client: %v", err)
 	}
-	if _, err := runJudge(context.Background(), client, req, set, false); err != nil {
-		t.Fatalf("runJudge: %v", err)
+	if _, err := judgeverb.RunJudge(context.Background(), client, req, set, false); err != nil {
+		t.Fatalf("RunJudge: %v", err)
 	}
 	if wire.calls != 0 {
 		t.Fatalf("the judge asked the wire %d times, so this is not the replay path", wire.calls)
@@ -189,11 +190,11 @@ func TestAReplayedRowCarriesTheFingerprintOfTheRowItReplays(t *testing.T) {
 
 func TestARowAtAPointThatDefinesNoFingerprintWritesAndReadsBack(t *testing.T) {
 	t.Chdir(t.TempDir())
-	set := battery{SetName: "stop_check", QuestionsVersion: 1, Kinds: map[string]question.Kind{"work_remains": question.KindNoul}}
-	written, err := appendRow(map[string]string{"task": "write the note"}, set, rowInput{
-		turnID:       "turn-no-fingerprint",
-		stateBuilder: "stop_check@1",
-		answers:      []ledger.Answer{{Question: "work_remains", Wording: 1, Kind: ledger.AnswerNoul, Noul: 0.9}},
+	set := judgeverb.Battery{SetName: "stop_check", QuestionsVersion: 1, Kinds: map[string]question.Kind{"work_remains": question.KindNoul}}
+	written, err := judgeverb.AppendRow(map[string]string{"task": "write the note"}, set, judgeverb.RowInput{
+		TurnID:       "turn-no-fingerprint",
+		StateBuilder: "stop_check@1",
+		Answers:      []ledger.Answer{{Question: "work_remains", Wording: 1, Kind: ledger.AnswerNoul, Noul: 0.9}},
 	})
 	if err != nil {
 		t.Fatalf("writing a row at a point with no fingerprint: %v", err)

@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	judgeverb "tofu/internal/cli/verbs/judge"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/questions"
@@ -120,7 +121,7 @@ func rulePoint(ref string, layers []question.Layer) doctorRule {
 	if r.ModeDeclared {
 		point.Declared = r.Mode.String()
 	}
-	res, err := resolveRuleMode(r)
+	res, err := judgeverb.ResolveRuleMode(r)
 	if err != nil {
 		point.Unusable = err.Error()
 		return point
@@ -143,43 +144,6 @@ func rulePoint(ref string, layers []question.Layer) doctorRule {
 		point.Fallback = res.Reason
 	}
 	return point
-}
-
-func resolveRuleMode(r gate.Rule) (gate.Resolution, error) {
-	calibDir, err := sys.CalibrationDir()
-	if err != nil {
-		return gate.Resolution{}, err
-	}
-	lookup := lookupLock(gate.LockPath(calibDir, r))
-	ledgerDir, err := sys.LogDir()
-	if err != nil {
-		return gate.Resolution{}, err
-	}
-	current, err := currentBuild(ledgerDir, r.Questions)
-	if err != nil {
-		return gate.Resolution{}, err
-	}
-	return gate.Resolve(r, lookup, current), nil
-}
-
-func lookupLock(path string) gate.LockLookup {
-	present, err := sys.Exists(path)
-	if err != nil {
-		return gate.LockLookup{Present: true, Err: err}
-	}
-	if !present {
-		return gate.LockLookup{}
-	}
-	lock, err := gate.LoadLock(path)
-	return gate.LockLookup{Present: true, Lock: lock, Err: err}
-}
-
-func currentBuild(ledgerDir, point string) (gate.Current, error) {
-	row, found, err := ledger.NewReader(ledgerDir).Newest(ledger.Filter{Point: point})
-	if err != nil || !found {
-		return gate.Current{}, err
-	}
-	return gate.Current{Build: row.Build, QuestionsVersion: row.Version, Known: true}, nil
 }
 
 func ledgerState() string {

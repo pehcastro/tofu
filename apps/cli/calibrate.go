@@ -16,6 +16,7 @@ import (
 
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	judgeverb "tofu/internal/cli/verbs/judge"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/gate"
 	"tofu/internal/konst"
@@ -95,11 +96,11 @@ func calibrateVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return o.Usage(err)
 	}
-	set, err := resolveLibrary(ref, "")
+	set, err := judgeverb.ResolveLibrary(ref, "")
 	if err != nil {
 		return o.Fail(err)
 	}
-	rule, err := resolveRule(ref, set)
+	rule, err := judgeverb.ResolveRule(ref, set)
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -118,7 +119,7 @@ func calibrateVerb(args []string, out, errOut io.Writer) int {
 				page.Label(fmt.Sprintf("%d fit and %d held-out cases, each asked twice, nothing asked yet", report.Fit, report.Verify))}
 		})
 	}
-	resolved, err := resolveRuleMode(rule)
+	resolved, err := judgeverb.ResolveRuleMode(rule)
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -129,8 +130,8 @@ func calibrateVerb(args []string, out, errOut io.Writer) int {
 	}
 	ask := func(ctx context.Context, c calibrationCase) (askedCase, error) {
 		report.Calls++
-		outcome, _, err := askFresh(ctx, client, jev.Request{State: c.State, Questions: set.Questions}, set)
-		return askedCase{Answers: outcome.decision.Answers, Build: outcome.decision.Build}, err
+		outcome, _, err := judgeverb.AskFresh(ctx, client, jev.Request{State: c.State, Questions: set.Questions}, set)
+		return askedCase{Answers: outcome.Decision.Answers, Build: outcome.Decision.Build}, err
 	}
 	result, err := calibrate(context.Background(), rule, corpus, ask, time.Now)
 	var refused calibrationRefusal

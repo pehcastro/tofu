@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"tofu/internal/agent/loop"
+	shellsverb "tofu/internal/cli/verbs/shells"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/platform/recover"
@@ -52,7 +53,7 @@ func runHub(dir string, say func(string)) error {
 	safe.Go(crashTold(dir, say), "session sweep", func() { sweepSessions(dir, say) })
 	hostEnded := make(chan struct{})
 	defer close(hostEnded)
-	safe.Go(crashTold(dir, say), "scratch sweep", func() { sweepScratch(dir, say, hostEnded) })
+	safe.Go(crashTold(dir, say), "scratch sweep", func() { shellsverb.SweepScratch(dir, say, hostEnded) })
 	return host.RunHub(dir, crashTold(dir, say), say, func(id string, projectTurn *sync.Mutex) (*host.Host, func(), []string) {
 		resumed, unrecorded, err := hostedCarry(id)
 		switch {
@@ -66,7 +67,7 @@ func runHub(dir string, say func(string)) error {
 			shells = shells.ForSession(id)
 		}
 		engine := &appEngine{dir: dir, open: open, tabs: tools.NewBrowserTabs(home), places: places, arms: wiring.RunOpts{DoneArm: os.Getenv(doneReviewVariable)}}
-		live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: shells, Check: cronChecker(dir), Resumed: resumed.hosted(), Unrecorded: unrecorded, ProjectTurn: projectTurn, Now: clock})
+		live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: shells, Check: shellsverb.CronChecker(dir), Resumed: resumed.hosted(), Unrecorded: unrecorded, ProjectTurn: projectTurn, Now: clock})
 		return live, func() {
 			live.Close()
 			leaveShells(shells)

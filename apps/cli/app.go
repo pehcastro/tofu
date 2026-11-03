@@ -24,6 +24,8 @@ import (
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/render"
+	judgeverb "tofu/internal/cli/verbs/judge"
+	shellsverb "tofu/internal/cli/verbs/shells"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/konst"
@@ -97,7 +99,7 @@ type appLaunch struct {
 }
 
 func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
-	registry, registryErr := launchShellRegistry(dir)
+	registry, registryErr := shellsverb.LaunchShellRegistry(dir)
 	home, _ := os.UserHomeDir()
 	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: tools.NewBrowserTabs(home), release: new(func()), endSession: new(func() []string), turnRunning: new(func() (string, bool)), stopRestoring: func() {}}
 	safe.Go(sys.Crashes(dir), "state sweep", func() {
@@ -129,7 +131,7 @@ func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaun
 	defer launch.stopRestoring()
 	places, _ := sys.ResolvePlaces(".")
 	engine := &appEngine{dir: dir, arms: arms, open: wired.open, quota: wired.quota, tabs: launch.tabs, places: places}
-	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), Resumed: launch.resumed.hosted(), Joins: wired.joins, Now: wired.now})
+	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: shellsverb.CronChecker(dir), Resumed: launch.resumed.hosted(), Joins: wired.joins, Now: wired.now})
 	notes := append([]string{launch.note}, troubles...)
 	if _, err := gateKeyFrom(held.keys()); err != nil {
 		notes = append(notes, gateOffSaid(err))
@@ -539,7 +541,7 @@ func jevProvider(keys jev.Keyring) settings.Provider {
 	if keyErr == nil {
 		row.Key = widget.Mask(key)
 	}
-	current, err := currentBuild(dir, "")
+	current, err := judgeverb.CurrentBuild(dir, "")
 	switch {
 	case err != nil:
 		row.Fix = unreadableSource + err.Error()
@@ -848,7 +850,7 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 	sessions.Redacts(e.warm.keys.redactor)
 	built, plan = planAsOffered(opened.selected, built, plan)
 	if start.Pick.Fired != "" {
-		built = withoutPush(built)
+		built = shellsverb.WithoutPush(built)
 	}
 	clock.step("shell, tools and session store")
 	places := e.places

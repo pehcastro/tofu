@@ -16,6 +16,7 @@ import (
 
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	judgeverb "tofu/internal/cli/verbs/judge"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
@@ -227,7 +228,7 @@ func labelWindows(run *learn.Run, errOut io.Writer) error {
 	if err != nil {
 		return err
 	}
-	asked := battery{SetName: set.Name, QuestionsVersion: set.QuestionsVersion, Kinds: map[string]question.Kind{}}
+	asked := judgeverb.Battery{SetName: set.Name, QuestionsVersion: set.QuestionsVersion, Kinds: map[string]question.Kind{}}
 	for _, q := range set.Questions {
 		asked.Questions, asked.Kinds[q.Name] = append(asked.Questions, q.ToJev()), q.Kind
 	}
@@ -252,7 +253,7 @@ func labelWindows(run *learn.Run, errOut io.Writer) error {
 		decision, err := client.Ask(context.Background(), jev.Request{State: state, Questions: asked.Questions})
 		if err == nil {
 			var row ledger.Row
-			row, err = appendRow(state, asked, rowInput{decision: &decision, answers: toLedgerAnswers(set.QuestionsVersion, decision.Answers), stateBuilder: set.Name + "@" + strconv.Itoa(set.QuestionsVersion)})
+			row, err = judgeverb.AppendRow(state, asked, judgeverb.RowInput{Decision: &decision, Answers: judgeverb.ToLedgerAnswers(set.QuestionsVersion, decision.Answers), StateBuilder: set.Name + "@" + strconv.Itoa(set.QuestionsVersion)})
 			label.Row, label.Build, label.Cost = row.ID, decision.Build, decision.Usage.Cost
 			label.Answers, label.Chosen = map[string]float64{}, map[string]string{}
 			for name, answer := range decision.Answers {

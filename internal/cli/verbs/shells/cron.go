@@ -1,4 +1,4 @@
-package main
+package shells
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 
 var gitPush = sys.LazyRegexp(`\bgit\b[^;&|\n]*\bpush\b`)
 
-func cronChecker(dir string) cron.Checker {
+func CronChecker(dir string) cron.Checker {
 	return func(ctx context.Context, command string) (int, string, error) {
 		shell, err := turn.ResolveRunShell(settingspkg.TextSaying(dir, settingspkg.Shell, nil))
 		if err != nil {
@@ -48,7 +48,7 @@ func (f firedBash) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 	return f.Tool.Run(ctx, raw)
 }
 
-func withoutPush(built []turn.Tool) []turn.Tool {
+func WithoutPush(built []turn.Tool) []turn.Tool {
 	guarded := make([]turn.Tool, len(built))
 	for index, tool := range built {
 		guarded[index] = tool

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"tofu/internal/agent/loop"
+	shellsverb "tofu/internal/cli/verbs/shells"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/ui/tui/app"
@@ -23,7 +24,7 @@ type appSession struct {
 
 func newAppSession(dir string, open func(wiring.RunOpts) (appWire, error), answers <-chan tui.Answer, now func() time.Time, resumed sessionResume) *appSession {
 	engine := &appEngine{dir: dir, open: open}
-	live, _ := host.New(host.Config{Dir: dir, Engine: engine, Now: now, Check: cronChecker(dir), Resumed: resumed.hosted()})
+	live, _ := host.New(host.Config{Dir: dir, Engine: engine, Now: now, Check: shellsverb.CronChecker(dir), Resumed: resumed.hosted()})
 	return &appSession{Host: live, engine: engine, answers: answers, dir: dir}
 }
 

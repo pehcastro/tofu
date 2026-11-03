@@ -26,6 +26,7 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/cli/output"
+	shellsverb "tofu/internal/cli/verbs/shells"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
@@ -1129,7 +1130,7 @@ func TestTheLeadAloneHoldsTheCronToolAndAFiredTurnNeverPushes(t *testing.T) {
 		if slices.ContainsFunc(built, func(tool turn.Tool) bool { return tool.Name() == tools.CronToolName }) {
 			t.Errorf("arms %v: the cron tool is in the set a sub-agent is given", arms)
 		}
-		bash := withoutPush(built)[slices.IndexFunc(built, func(tool turn.Tool) bool { return tool.Name() == "bash" })]
+		bash := shellsverb.WithoutPush(built)[slices.IndexFunc(built, func(tool turn.Tool) bool { return tool.Name() == "bash" })]
 		for command, refused := range map[string]bool{"git push origin main": true, "git -C . push --force": true, "git status": false} {
 			raw, _ := json.Marshal(map[string]string{"command": command})
 			_, err := bash.Run(t.Context(), raw)

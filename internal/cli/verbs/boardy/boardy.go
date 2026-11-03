@@ -1,4 +1,4 @@
-package main
+package boardy
 
 import (
 	"cmp"
@@ -22,9 +22,9 @@ import (
 	settingspkg "tofu/internal/store/settings"
 )
 
-const boardyUsage = "tofu boardy init|new|list|show|move|log|set|lint|boards|held|manager|triage|assign|hand|widen|check|tick|fire|rule|bypass|request|view|audit|report|attention|epic|sprint|ask|catchup [--json]"
+const Usage = "tofu boardy init|new|list|show|move|log|set|lint|boards|held|manager|triage|assign|hand|widen|check|tick|fire|rule|bypass|request|view|audit|report|attention|epic|sprint|ask|catchup [--json]"
 
-func boardyUsageOf(subcommand string) string {
+func UsageOf(subcommand string) string {
 	switch subcommand {
 	case "init":
 		return "tofu boardy init --key KEY [--name text] [--mode default|empty|custom] [--hooks id,id] [--json]"
@@ -83,13 +83,13 @@ type boardyList struct {
 	Tickets []boardy.Ticket `json:"tickets"`
 }
 
-func boardyVerb(args []string, out, errOut io.Writer) int {
-	o := output.Verb{Name: "boardy", UsageLine: boardyUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
+func Verb(args []string, out, errOut io.Writer) int {
+	o := output.Verb{Name: "boardy", UsageLine: Usage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	args = output.WithoutJSON(args)
-	if len(args) == 0 || boardyUsageOf(args[0]) == "" {
+	if len(args) == 0 || UsageOf(args[0]) == "" {
 		return o.Usage(errors.New("name a subcommand"))
 	}
-	o.Name, o.UsageLine = "boardy "+args[0], boardyUsageOf(args[0])
+	o.Name, o.UsageLine = "boardy "+args[0], UsageOf(args[0])
 	flags, rest, err := boardyFlags(args[1:])
 	if err != nil {
 		return o.Usage(err)
@@ -103,7 +103,7 @@ func boardyVerb(args []string, out, errOut io.Writer) int {
 	if err = errors.Join(err, flowErr); err != nil {
 		return o.Fail(err)
 	}
-	actor, lead := boardyIdentity(flags["as"])
+	actor, lead := Identity(flags["as"])
 	call := boardyCall{o: o, dir: dir, managed: boardy.Managed{Local: boardy.Local{Store: store}, Person: string(boardy.RolePerson), Lead: lead}, actor: actor, store: store, words: flow.Words(), flags: flags, args: rest}
 	sizes := store.EventSizes()
 	written := host.BoardyWriting(dir, actor)

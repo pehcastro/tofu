@@ -1,4 +1,4 @@
-package main
+package boardy
 
 import (
 	"cmp"
@@ -41,7 +41,7 @@ func boardyManageUsage(subcommand string) string {
 	return ""
 }
 
-func boardyIdentity(as string) (actor, lead string) {
+func Identity(as string) (actor, lead string) {
 	if session := os.Getenv(subagent.SessionEnv); session != "" {
 		if boardy.SubAgentActor(session) {
 			return session, ""

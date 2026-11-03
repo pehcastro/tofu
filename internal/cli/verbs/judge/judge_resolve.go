@@ -1,4 +1,4 @@
-package main
+package judge
 
 import (
 	"encoding/json"
@@ -27,7 +27,7 @@ type inlineQuestion struct {
 	Options      []inlineOption  `json:"options"`
 }
 
-type battery struct {
+type Battery struct {
 	Questions        []jev.Question
 	Kinds            map[string]question.Kind
 	SetName          string
@@ -37,27 +37,27 @@ type battery struct {
 	ModeReason       string
 }
 
-func resolveQuestions(input judgeInput) (battery, error) {
+func resolveQuestions(input judgeInput) (Battery, error) {
 	switch {
 	case input.Library != "" && len(input.Questions) > 0:
-		return battery{}, errors.New("the request names both a library battery and inline questions")
+		return Battery{}, errors.New("the request names both a library battery and inline questions")
 	case input.Library != "":
-		return resolveLibrary(input.Library, "")
+		return ResolveLibrary(input.Library, "")
 	case len(input.Questions) > 0:
 		return resolveInline(input.Questions)
 	default:
-		return battery{}, errors.New("the request names neither a library battery nor questions")
+		return Battery{}, errors.New("the request names neither a library battery nor questions")
 	}
 }
 
-func resolveLibrary(ref, dir string) (battery, error) {
+func ResolveLibrary(ref, dir string) (Battery, error) {
 	layers, err := question.Layers(questions.Files(), dir)
 	if err != nil {
-		return battery{}, err
+		return Battery{}, err
 	}
 	set, _, err := question.Resolve(ref, layers)
 	if err != nil {
-		return battery{}, err
+		return Battery{}, err
 	}
 	jevQuestions := make([]jev.Question, 0, len(set.Questions))
 	kinds := make(map[string]question.Kind, len(set.Questions))
@@ -65,21 +65,21 @@ func resolveLibrary(ref, dir string) (battery, error) {
 		jevQuestions = append(jevQuestions, q.ToJev())
 		kinds[q.Name] = q.Kind
 	}
-	return battery{Questions: jevQuestions, Kinds: kinds, SetName: set.Name, QuestionsVersion: set.QuestionsVersion}, nil
+	return Battery{Questions: jevQuestions, Kinds: kinds, SetName: set.Name, QuestionsVersion: set.QuestionsVersion}, nil
 }
 
-func resolveInline(qs map[string]inlineQuestion) (battery, error) {
+func resolveInline(qs map[string]inlineQuestion) (Battery, error) {
 	names := make([]string, 0, len(qs))
 	for name := range qs {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
-	out := battery{SetName: "inline", QuestionsVersion: 1, Kinds: make(map[string]question.Kind, len(names))}
+	out := Battery{SetName: "inline", QuestionsVersion: 1, Kinds: make(map[string]question.Kind, len(names))}
 	for _, name := range names {
 		jq, kind, err := toInlineJevQuestion(name, qs[name])
 		if err != nil {
-			return battery{}, err
+			return Battery{}, err
 		}
 		out.Questions = append(out.Questions, jq)
 		out.Kinds[name] = kind
@@ -123,11 +123,11 @@ func toInlineJevQuestion(name string, in inlineQuestion) (jev.Question, question
 	return jev.Question{}, "", fmt.Errorf("question %q has the unknown type %q", name, in.Type)
 }
 
-func resolveRule(ref string, set battery) (gate.Rule, error) {
+func ResolveRule(ref string, set Battery) (gate.Rule, error) {
 	if !strings.ContainsRune(ref, '@') {
 		return gate.Rule{}, fmt.Errorf("the rule %q names no version; a rule is named name@version, so it never resolves silently to the wrong one", ref)
 	}
-	r, _, err := loadRulePoint(ref, "")
+	r, _, err := LoadRulePoint(ref, "")
 	if err != nil {
 		return gate.Rule{}, err
 	}
@@ -138,7 +138,7 @@ func resolveRule(ref string, set battery) (gate.Rule, error) {
 	return r, nil
 }
 
-func loadRulePoint(ref, dir string) (gate.Rule, gate.Origin, error) {
+func LoadRulePoint(ref, dir string) (gate.Rule, gate.Origin, error) {
 	if ref == state.StopCheckRuleRef {
 		return state.StopCheckRule()
 	}

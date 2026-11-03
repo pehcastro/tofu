@@ -1,4 +1,4 @@
-package main
+package judge
 
 import (
 	"context"
@@ -6,10 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"time"
 
 	"tofu/internal/cli/output"
-	"tofu/internal/cli/page"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
@@ -18,7 +16,7 @@ import (
 	"tofu/internal/models/classifiers/core"
 )
 
-const judgeUsage = "tofu judge [--dry-run] [--no-cache] [--no-rule] [--json] < request.json, or tofu judge --lint file [--json]"
+const Usage = "tofu judge [--dry-run] [--no-cache] [--no-rule] [--json] < request.json, or tofu judge --lint file [--json]"
 
 type judgeInput struct {
 	State     any                       `json:"state"`
@@ -49,8 +47,8 @@ type questionFinding struct {
 	Detail   string        `json:"detail"`
 }
 
-func judgeVerb(args []string, in io.Reader, out, errOut io.Writer) int {
-	o := output.Verb{Name: "judge", UsageLine: judgeUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
+func Verb(args []string, in io.Reader, out, errOut io.Writer) int {
+	o := output.Verb{Name: "judge", UsageLine: Usage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	opts, err := parseJudgeArgs(args)
 	if err != nil {
 		return o.Usage(err)
@@ -77,11 +75,11 @@ func judgeVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		return wiring.Failed(o, err)
 	}
 	if !opts.noRule && input.Rule != "" {
-		pol, err := resolveRule(input.Rule, set)
+		pol, err := ResolveRule(input.Rule, set)
 		if err != nil {
 			return wiring.Failed(o, err)
 		}
-		res, err := resolveRuleMode(pol)
+		res, err := ResolveRuleMode(pol)
 		if err != nil {
 			return wiring.Failed(o, err)
 		}
@@ -104,14 +102,14 @@ func judgeVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		if err != nil {
 			return wiring.Failed(o, err)
 		}
-		return protocol(o, output.ExitOK, json.RawMessage(body), string(body)+"\n")
+		return output.Protocol(o, output.ExitOK, json.RawMessage(body), string(body)+"\n")
 	}
 
 	client, err := wiring.NewJevClient()
 	if err != nil {
 		return wiring.Failed(o, err)
 	}
-	outcome, err := runJudge(context.Background(), client, jevRequest, set, opts.noCache)
+	outcome, err := RunJudge(context.Background(), client, jevRequest, set, opts.noCache)
 	if err != nil {
 		return wiring.Failed(o, err)
 	}
@@ -120,10 +118,10 @@ func judgeVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return wiring.Failed(o, err)
 	}
-	return protocol(o, judgeExitCode(outcome), judgeReport{answers, outcome.verdict, outcome.mode}, string(body)+"\n")
+	return output.Protocol(o, judgeExitCode(outcome), judgeReport{answers, outcome.verdict, outcome.mode}, string(body)+"\n")
 }
 
-func judgeExitCode(outcome judgeOutcome) int {
+func judgeExitCode(outcome Outcome) int {
 	if outcome.verdict == ledger.VerdictUnset {
 		return output.ExitOK
 	}
@@ -172,20 +170,7 @@ func judgeLint(o output.Verb, path string) int {
 	if len(findings) > 0 {
 		code = output.ExitVerdict
 	}
-	return protocol(o, code, struct {
+	return output.Protocol(o, code, struct {
 		Findings []questionFinding `json:"findings"`
 	}{listed}, text)
-}
-
-func protocol(o output.Verb, code int, data any, text string) int {
-	var err error
-	if o.AsJSON {
-		err = output.WriteJSON(o.Out, cli.Envelope{Verb: o.Name, OK: code == output.ExitOK, At: time.Now(), Data: data})
-	} else {
-		_, err = io.WriteString(o.Out, text)
-	}
-	if err != nil {
-		return output.ExitVerdict
-	}
-	return code
 }

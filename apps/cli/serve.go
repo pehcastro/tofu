@@ -17,6 +17,7 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/cli/output"
+	shellsverb "tofu/internal/cli/verbs/shells"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/models/llm/catalog"
@@ -152,7 +153,7 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	}
 	spawn := func() (*host.Host, func()) {
 		engine := &appEngine{dir: dir, open: open, tabs: launch.tabs, places: places}
-		live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), Joins: true, Now: clock})
+		live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: shellsverb.CronChecker(dir), Joins: true, Now: clock})
 		for _, trouble := range troubles {
 			say(trouble)
 		}

@@ -14,6 +14,7 @@ import (
 
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	boardyverb "tofu/internal/cli/verbs/boardy"
 	"tofu/internal/host"
 	"tofu/internal/project/boardy"
 	settingspkg "tofu/internal/store/settings"
@@ -196,7 +197,7 @@ func settingsSetVerb(o output.Verb, args []string, store *settingspkg.Store, dir
 	if before == "" || strings.ContainsAny(before, " \t") {
 		before = strconv.Quote(before)
 	}
-	actor, _ := boardyIdentity("")
+	actor, _ := boardyverb.Identity("")
 	written := host.Writing(dir, host.TopicSettings, actor)
 	err := writeSetting(store, scope, spec, rest[1])
 	written()

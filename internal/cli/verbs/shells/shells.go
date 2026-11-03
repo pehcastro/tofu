@@ -1,4 +1,4 @@
-package main
+package shells
 
 import (
 	"errors"
@@ -18,11 +18,11 @@ import (
 	"tofu/internal/tools/shell/process"
 )
 
-const shellsSubcommands = "tofu shells list|log|stop|restart <name> [--json]"
+const Subcommands = "tofu shells list|log|stop|restart <name> [--json]"
 
-func shellsVerb(args []string, out, errOut io.Writer) int {
+func Verb(args []string, out, errOut io.Writer) int {
 	names, _, err := output.VerbArgs(args[min(1, len(args)):])
-	o := output.Verb{Name: "shells", UsageLine: shellsSubcommands, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
+	o := output.Verb{Name: "shells", UsageLine: Subcommands, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	if len(output.WithoutJSON(args)) == 0 {
 		return o.Usage(errors.New("no subcommand"))
 	}
@@ -41,7 +41,7 @@ func shellsVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return o.Usage(err)
 	}
-	registry, err := launchShellRegistry(".")
+	registry, err := LaunchShellRegistry(".")
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -56,7 +56,7 @@ func shellsVerb(args []string, out, errOut io.Writer) int {
 	return shellsStop(o, registry, names[0])
 }
 
-func launchShellRegistry(dir string) (*shell.Registry, error) {
+func LaunchShellRegistry(dir string) (*shell.Registry, error) {
 	state, err := sys.ProjectStateDir()
 	if err != nil {
 		return nil, err

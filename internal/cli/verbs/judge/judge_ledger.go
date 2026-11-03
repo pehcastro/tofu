@@ -1,10 +1,11 @@
-package main
+package judge
 
 import (
 	"cmp"
 	"context"
 	"encoding/json"
 	"sort"
+	"strings"
 
 	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/gate"
@@ -18,18 +19,18 @@ import (
 	"tofu/library/questions"
 )
 
-type judgeOutcome struct {
+type Outcome struct {
 	answers  []ledger.Answer
-	decision jev.Decision
+	Decision jev.Decision
 	fresh    bool
 	verdict  ledger.Verdict
 	mode     gate.Mode
 }
 
-func (o judgeOutcome) output(kinds map[string]question.Kind) map[string]any {
+func (o Outcome) output(kinds map[string]question.Kind) map[string]any {
 	out := make(map[string]any, len(o.answers))
 	if o.fresh {
-		for id, answer := range o.decision.Answers {
+		for id, answer := range o.Decision.Answers {
 			out[id] = jevAnswerJSON(answer)
 		}
 		return out
@@ -40,47 +41,47 @@ func (o judgeOutcome) output(kinds map[string]question.Kind) map[string]any {
 	return out
 }
 
-type rowInput struct {
-	decision     *jev.Decision
+type RowInput struct {
+	Decision     *jev.Decision
 	replayOf     string
 	build        string
 	requestID    string
-	answers      []ledger.Answer
-	turnID       string
-	stateBuilder string
-	fingerprint  string
+	Answers      []ledger.Answer
+	TurnID       string
+	StateBuilder string
+	Fingerprint  string
 }
 
-type rowLedger struct {
+type RowLedger struct {
 	writer     *ledger.Writer
 	classifier models.Model
 }
 
-func openRowLedger(log string) (rowLedger, error) {
+func OpenRowLedger(log string) (RowLedger, error) {
 	classifier, err := wiring.BoundClassifier()
 	if jev.IsUnbound(err) {
 		err = nil
 	}
-	return rowLedger{writer: ledger.NewWriter(log), classifier: classifier}, err
+	return RowLedger{writer: ledger.NewWriter(log), classifier: classifier}, err
 }
 
-func openedRowLedger() (rowLedger, error) {
+func openedRowLedger() (RowLedger, error) {
 	dir, err := sys.LogDir()
 	if err != nil {
-		return rowLedger{}, err
+		return RowLedger{}, err
 	}
-	return openRowLedger(dir)
+	return OpenRowLedger(dir)
 }
 
-func appendRow(state any, set battery, in rowInput) (ledger.Row, error) {
+func AppendRow(state any, set Battery, in RowInput) (ledger.Row, error) {
 	rows, err := openedRowLedger()
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	return rows.append(state, set, in)
+	return rows.Append(state, set, in)
 }
 
-func appendFallbackRow(state json.RawMessage, set battery, in rowInput, cause error) (ledger.Row, error) { //nolint:unparam
+func AppendFallbackRow(state json.RawMessage, set Battery, in RowInput, cause error) (ledger.Row, error) { //nolint:unparam
 	if set.Rule == nil {
 		return ledger.Row{}, cause
 	}
@@ -88,17 +89,17 @@ func appendFallbackRow(state json.RawMessage, set battery, in rowInput, cause er
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	return rows.appendFallback(state, set, in, cause)
+	return rows.AppendFallback(state, set, in, cause)
 }
 
-func (l rowLedger) skeleton(state any, set battery, in rowInput) (ledger.Row, error) {
+func (l RowLedger) skeleton(state any, set Battery, in RowInput) (ledger.Row, error) {
 	body, err := ledger.Canonical(state)
 	if err != nil {
 		return ledger.Row{}, err
 	}
 	classifier := l.classifier
-	if in.decision != nil {
-		classifier.Provider = models.Provider(in.decision.Wire)
+	if in.Decision != nil {
+		classifier.Provider = models.Provider(in.Decision.Wire)
 	}
 	return ledger.Row{
 		Point:        set.SetName,
@@ -106,22 +107,22 @@ func (l rowLedger) skeleton(state any, set battery, in rowInput) (ledger.Row, er
 		Version:      set.QuestionsVersion,
 		Model:        classifier.Slug(),
 		StateHash:    ledger.HashOf(body),
-		Fingerprint:  in.fingerprint,
-		StateBuilder: in.stateBuilder,
+		Fingerprint:  in.Fingerprint,
+		StateBuilder: in.StateBuilder,
 		State:        body,
-		Answers:      in.answers,
+		Answers:      in.Answers,
 		ReplayOf:     in.replayOf,
-		TurnID:       in.turnID,
+		TurnID:       in.TurnID,
 	}, nil
 }
 
-func (l rowLedger) append(state any, set battery, in rowInput) (ledger.Row, error) {
+func (l RowLedger) Append(state any, set Battery, in RowInput) (ledger.Row, error) {
 	row, err := l.skeleton(state, set, in)
 	if err != nil {
 		return ledger.Row{}, err
 	}
 	if set.Rule != nil {
-		verdict, reason, err := gate.Decide(ledgerAnswersToJev(in.answers), *set.Rule)
+		verdict, reason, err := gate.Decide(LedgerAnswersToJev(in.Answers), *set.Rule)
 		if err != nil {
 			return ledger.Row{}, err
 		}
@@ -134,9 +135,9 @@ func (l rowLedger) append(state any, set battery, in rowInput) (ledger.Row, erro
 			row.Reason.ModeReason = &set.ModeReason
 		}
 	}
-	if in.decision != nil {
-		row.LatencyMS = in.decision.Latency.Milliseconds()
-		in.decision.Spent(&row)
+	if in.Decision != nil {
+		row.LatencyMS = in.Decision.Latency.Milliseconds()
+		in.Decision.Spent(&row)
 	} else {
 		row.Build = in.build
 		row.RequestID = in.requestID
@@ -144,7 +145,7 @@ func (l rowLedger) append(state any, set battery, in rowInput) (ledger.Row, erro
 	return l.writer.Append(row)
 }
 
-func (l rowLedger) appendFallback(state json.RawMessage, set battery, in rowInput, cause error) (ledger.Row, error) {
+func (l RowLedger) AppendFallback(state json.RawMessage, set Battery, in RowInput, cause error) (ledger.Row, error) {
 	if set.Rule == nil {
 		return ledger.Row{}, cause
 	}
@@ -161,81 +162,95 @@ func (l rowLedger) appendFallback(state json.RawMessage, set battery, in rowInpu
 	return l.writer.Append(row)
 }
 
-func askFresh(ctx context.Context, client *jev.Client, req jev.Request, set battery) (judgeOutcome, ledger.Entry, error) {
+func (l RowLedger) AppendOwnShell(state json.RawMessage, set Battery, in RowInput, own []string) (ledger.Row, error) {
+	row, err := l.skeleton(state, set, in)
+	if err != nil {
+		return ledger.Row{}, err
+	}
+	sentence := "the call acts on " + strings.Join(own, ", ") + ", which tofu started, so it is allowed without asking jev, and a kill runs as shell stop"
+	row.Model, row.Answers, row.Verdict = "", []ledger.Answer{}, ledger.VerdictAllow
+	row.Reason = &ledger.Reason{Mode: set.Mode.Ledger(), ModeReason: &sentence}
+	if set.Rule != nil {
+		row.Policy, row.PolicyVersion = set.Rule.Name, set.Rule.RuleVersion
+	}
+	return l.writer.Append(row)
+}
+
+func AskFresh(ctx context.Context, client *jev.Client, req jev.Request, set Battery) (Outcome, ledger.Entry, error) {
 	decision, err := client.Ask(ctx, req)
 	if err != nil {
 		state, notEncoded := json.Marshal(req.State)
 		if notEncoded != nil {
-			return judgeOutcome{}, ledger.Entry{}, err
+			return Outcome{}, ledger.Entry{}, err
 		}
-		if _, unwritten := appendFallbackRow(state, set, rowInput{}, err); unwritten != nil {
-			return judgeOutcome{}, ledger.Entry{}, unwritten
+		if _, unwritten := AppendFallbackRow(state, set, RowInput{}, err); unwritten != nil {
+			return Outcome{}, ledger.Entry{}, unwritten
 		}
-		return judgeOutcome{}, ledger.Entry{}, err
+		return Outcome{}, ledger.Entry{}, err
 	}
-	answers := toLedgerAnswers(set.QuestionsVersion, decision.Answers)
-	row, err := appendRow(req.State, set, rowInput{decision: &decision, answers: answers})
+	answers := ToLedgerAnswers(set.QuestionsVersion, decision.Answers)
+	row, err := AppendRow(req.State, set, RowInput{Decision: &decision, Answers: answers})
 	if err != nil {
-		return judgeOutcome{}, ledger.Entry{}, err
+		return Outcome{}, ledger.Entry{}, err
 	}
 	entry := ledger.Entry{RowID: row.ID, Build: decision.Build, RequestID: cmp.Or(decision.RequestID, decision.TransportID), Answers: answers}
-	return judgeOutcome{answers: answers, fresh: true, decision: decision, verdict: row.Verdict, mode: set.Mode}, entry, nil
+	return Outcome{answers: answers, fresh: true, Decision: decision, verdict: row.Verdict, mode: set.Mode}, entry, nil
 }
 
-func runJudge(ctx context.Context, client *jev.Client, req jev.Request, set battery, noCache bool) (judgeOutcome, error) {
+func RunJudge(ctx context.Context, client *jev.Client, req jev.Request, set Battery, noCache bool) (Outcome, error) {
 	if noCache {
-		outcome, _, err := askFresh(ctx, client, req, set)
+		outcome, _, err := AskFresh(ctx, client, req, set)
 		return outcome, err
 	}
 
 	cacheDir, err := ledger.CacheDir()
 	if err != nil {
-		return judgeOutcome{}, err
+		return Outcome{}, err
 	}
 	cache := ledger.NewCache(cacheDir)
 	ledgerReq := ledger.Request{State: req.State, Questions: set.SetName, Model: client.Model(), Version: set.QuestionsVersion}
 	key, err := cache.Key(ledgerReq)
 	if err != nil {
-		return judgeOutcome{}, err
+		return Outcome{}, err
 	}
 	entry, hit, err := cache.Load(key)
 	if err != nil {
-		return judgeOutcome{}, err
+		return Outcome{}, err
 	}
 	if !hit {
-		outcome, entry, err := askFresh(ctx, client, req, set)
+		outcome, entry, err := AskFresh(ctx, client, req, set)
 		if err != nil {
-			return judgeOutcome{}, err
+			return Outcome{}, err
 		}
-		ledgerReq.Model = outcome.decision.Alias
+		ledgerReq.Model = outcome.Decision.Alias
 		if key, err = cache.Key(ledgerReq); err != nil {
-			return judgeOutcome{}, err
+			return Outcome{}, err
 		}
 		if err := cache.Store(key, ledgerReq, entry); err != nil {
-			return judgeOutcome{}, err
+			return Outcome{}, err
 		}
 		return outcome, nil
 	}
 	dir, err := sys.LogDir()
 	if err != nil {
-		return judgeOutcome{}, err
+		return Outcome{}, err
 	}
 	replayed, _, err := ledger.NewReader(dir).ByID(entry.RowID)
 	if err != nil {
-		return judgeOutcome{}, err
+		return Outcome{}, err
 	}
-	replayInput := rowInput{
+	replayInput := RowInput{
 		replayOf:    entry.RowID,
 		build:       entry.Build,
 		requestID:   entry.RequestID,
-		answers:     entry.Answers,
-		fingerprint: replayed.Fingerprint,
+		Answers:     entry.Answers,
+		Fingerprint: replayed.Fingerprint,
 	}
-	row, err := appendRow(req.State, set, replayInput)
+	row, err := AppendRow(req.State, set, replayInput)
 	if err != nil {
-		return judgeOutcome{}, err
+		return Outcome{}, err
 	}
-	return judgeOutcome{answers: entry.Answers, verdict: row.Verdict, mode: set.Mode}, nil
+	return Outcome{answers: entry.Answers, verdict: row.Verdict, mode: set.Mode}, nil
 }
 
 func jevAnswerJSON(a jev.Answer) map[string]any {
@@ -270,7 +285,7 @@ func distMap(dist []ledger.Slice) map[string]float64 {
 	return out
 }
 
-func toLedgerAnswers(wording int, in map[string]jev.Answer) []ledger.Answer {
+func ToLedgerAnswers(wording int, in map[string]jev.Answer) []ledger.Answer {
 	ids := make([]string, 0, len(in))
 	for id := range in {
 		ids = append(ids, id)
@@ -315,7 +330,7 @@ func distOf(p map[string]float64) []ledger.Slice {
 	return out
 }
 
-func ledgerAnswersToJev(answers []ledger.Answer) map[string]jev.Answer {
+func LedgerAnswersToJev(answers []ledger.Answer) map[string]jev.Answer {
 	out := make(map[string]jev.Answer, len(answers))
 	for _, a := range answers {
 		ja := jev.Answer{}
@@ -346,7 +361,7 @@ func toLedgerReason(r gate.Reason) *ledger.Reason {
 	}
 }
 
-func memoryScopeJudge(dir, log string, keys jev.Keyring, say func(string)) *tools.ScopeJudge {
+func MemoryScopeJudge(dir, log string, keys jev.Keyring, say func(string)) *tools.ScopeJudge {
 	layers, err := question.Layers(questions.Files(), dir)
 	var set question.Set
 	if err == nil {

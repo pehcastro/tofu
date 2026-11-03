@@ -13,6 +13,7 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	judgeverb "tofu/internal/cli/verbs/judge"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
@@ -157,7 +158,7 @@ func withLockStanding(point doctorRule) doctorRule {
 	if point.Fallback != "" || point.Unusable != "" {
 		return point
 	}
-	r, _, err := loadRulePoint(point.Point, "")
+	r, _, err := judgeverb.LoadRulePoint(point.Point, "")
 	dir, dirErr := sys.CalibrationDir()
 	if err != nil || dirErr != nil {
 		return point
@@ -165,7 +166,7 @@ func withLockStanding(point doctorRule) doctorRule {
 	if present, _ := sys.Exists(gate.LockPath(dir, r)); !present {
 		return point
 	}
-	res, err := resolveRuleMode(r)
+	res, err := judgeverb.ResolveRuleMode(r)
 	if err != nil {
 		point.Unusable = err.Error()
 		return point

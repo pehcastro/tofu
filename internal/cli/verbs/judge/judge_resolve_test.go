@@ -1,4 +1,4 @@
-package main
+package judge
 
 import (
 	"os"
@@ -9,10 +9,10 @@ import (
 	"tofu/internal/judge/gate"
 )
 
-func toolGateBatteryInAScratchProject(t *testing.T) battery {
+func toolGateBatteryInAScratchProject(t *testing.T) Battery {
 	t.Helper()
 	t.Chdir(t.TempDir())
-	set, err := resolveLibrary(replayTestRuleRef, "")
+	set, err := ResolveLibrary(replayTestRuleRef, "")
 	if err != nil {
 		t.Fatalf("resolveLibrary: %v", err)
 	}
@@ -20,7 +20,7 @@ func toolGateBatteryInAScratchProject(t *testing.T) battery {
 }
 
 func TestResolveRuleReadsTheEmbeddedRuleWhenTheProjectHasNoLibrary(t *testing.T) {
-	pol, err := resolveRule(replayTestRuleRef, toolGateBatteryInAScratchProject(t))
+	pol, err := ResolveRule(replayTestRuleRef, toolGateBatteryInAScratchProject(t))
 	if err != nil {
 		t.Fatalf("resolveRule in a project with no library: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestResolveRulePrefersTheProjectRule(t *testing.T) {
 	if err := os.WriteFile(path, []byte(replayTestRuleBody), 0o644); err != nil {
 		t.Fatalf("writing the project rule: %v", err)
 	}
-	pol, err := resolveRule(replayTestRuleRef, set)
+	pol, err := ResolveRule(replayTestRuleRef, set)
 	if err != nil {
 		t.Fatalf("resolveRule: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestLoadRulePointReadsTheNamedProjectRatherThanTheWorkingOne(t *testing.T) 
 		t.Fatalf("writing the project rule: %v", err)
 	}
 	t.Chdir(t.TempDir())
-	pol, origin, err := loadRulePoint(replayTestRuleRef, elsewhere)
+	pol, origin, err := LoadRulePoint(replayTestRuleRef, elsewhere)
 	if err != nil {
 		t.Fatalf("loadRulePoint: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestLoadRulePointReadsTheNamedProjectRatherThanTheWorkingOne(t *testing.T) 
 }
 
 func TestResolveRuleRefusesARuleWithNoVersion(t *testing.T) {
-	_, err := resolveRule("tool_gate", toolGateBatteryInAScratchProject(t))
+	_, err := ResolveRule("tool_gate", toolGateBatteryInAScratchProject(t))
 	if err == nil || !strings.Contains(err.Error(), "names no version") {
 		t.Fatalf("err = %v, want a refusal naming the missing version", err)
 	}

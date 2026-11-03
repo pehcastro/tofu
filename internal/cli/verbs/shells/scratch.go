@@ -1,4 +1,4 @@
-package main
+package shells
 
 import (
 	"context"
@@ -22,13 +22,13 @@ import (
 )
 
 const (
-	scratchUsage          = "tofu scratch [clean [--session X] [--cache] [--dry-run] | open] [--json]"
+	ScratchUsage          = "tofu scratch [clean [--session X] [--cache] [--dry-run] | open] [--json]"
 	scratchCleanupSetting = "scratchCleanupDays"
 	scratchMaxGBSetting   = "scratchMaxGB"
 )
 
-func runScratch(args []string, out, errOut io.Writer) int {
-	o := output.Verb{Name: "scratch", UsageLine: scratchUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
+func Scratch(args []string, out, errOut io.Writer) int {
+	o := output.Verb{Name: "scratch", UsageLine: ScratchUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	args = output.WithoutJSON(args)
 	report, err := sys.ReadScratch(".")
 	if err != nil {
@@ -130,7 +130,7 @@ func busyIn(sessions *session.Store, openErr error) func(string) bool {
 	return func(id string) bool { return openErr != nil || sessions.Busy(id) != nil }
 }
 
-func sweepScratch(dir string, say func(string), stop <-chan struct{}) {
+func SweepScratch(dir string, say func(string), stop <-chan struct{}) {
 	sessions, openErr := session.OpenIn(dir)
 	live := func(id string) bool {
 		if openErr != nil || sessions.Busy(id) != nil {
@@ -161,14 +161,14 @@ func sweepScratch(dir string, say func(string), stop <-chan struct{}) {
 }
 
 func removeScratch(dir string, folders []sys.ScratchFolder) error {
-	registry, err := launchShellRegistry(dir)
+	registry, err := LaunchShellRegistry(dir)
 	if err != nil {
 		return err
 	}
 	return sys.RemoveScratch(folders, func(dir string) { registry.StopUnder(dir) }, konst.ScratchRemoveTries, konst.ScratchRemoveRetryMillis*time.Millisecond)
 }
 
-func leadScratch(ctx context.Context, config turn.Config, errOut io.Writer) (context.Context, error) {
+func LeadScratch(ctx context.Context, config turn.Config, errOut io.Writer) (context.Context, error) {
 	leading, err := turn.WithLeadScratch(ctx, config)
 	if err != nil {
 		return ctx, fmt.Errorf("the scratchpad was not made: %w", err)

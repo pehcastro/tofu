@@ -5486,7 +5486,7 @@
       "switched_on": "yes, through the judged method",
       "costs": "not measured. one jev call a remember candidate, which is rare in a session; the shadow rows carry cost and latency",
       "why": "in shadow. jev picks the scope on every remember candidate and the card preselects it, the person's pick is the label in the ledger, and a names_private yes refuses project local. nothing is measured yet, 4 probe candidates picked the expected scope on one run",
-      "called_by": "apps/cli/judge_ledger.go"
+      "called_by": "internal/cli/verbs/judge/judge_ledger.go"
     },
     {
       "point": "memory_same",

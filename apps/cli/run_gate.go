@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"tofu/internal/agent/loop"
+	judgeverb "tofu/internal/cli/verbs/judge"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
@@ -26,9 +27,9 @@ const (
 
 type toolGate struct {
 	client    *jev.Client
-	set       battery
+	set       judgeverb.Battery
 	cwd       string
-	rows      rowLedger
+	rows      judgeverb.RowLedger
 	watch     func(ctx context.Context, tool string, decision turn.GateDecision, err error)
 	decisions int
 	costUSD   float64
@@ -53,28 +54,28 @@ func toolGateOn(dir, log string, keys jev.Keyring) (*toolGate, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := openRowLedger(log)
+	rows, err := judgeverb.OpenRowLedger(log)
 	if err != nil {
 		return nil, err
 	}
 	return &toolGate{client: client, set: set, cwd: dir, rows: rows}, nil
 }
 
-func resolvePoint(point, dir string) (battery, error) {
-	set, err := resolveLibrary(point, dir)
+func resolvePoint(point, dir string) (judgeverb.Battery, error) {
+	set, err := judgeverb.ResolveLibrary(point, dir)
 	if err != nil {
-		return battery{}, err
+		return judgeverb.Battery{}, err
 	}
-	pol, origin, err := loadRulePoint(point, dir)
+	pol, origin, err := judgeverb.LoadRulePoint(point, dir)
 	if err != nil {
-		return battery{}, err
+		return judgeverb.Battery{}, err
 	}
 	if err := thresholdsInRange(pol, set); err != nil {
-		return battery{}, err
+		return judgeverb.Battery{}, err
 	}
-	resolution, err := resolveRuleMode(pol)
+	resolution, err := judgeverb.ResolveRuleMode(pol)
 	if err != nil {
-		return battery{}, err
+		return judgeverb.Battery{}, err
 	}
 	pol = resolution.Rule
 	set.Rule, set.Mode = &pol, resolution.Mode
@@ -85,7 +86,7 @@ func resolvePoint(point, dir string) (battery, error) {
 	return set, nil
 }
 
-func thresholdsInRange(r gate.Rule, set battery) error {
+func thresholdsInRange(r gate.Rule, set judgeverb.Battery) error {
 	topRisk := 0.0
 	for _, q := range set.Questions {
 		if q.ID == r.RiskQuestion {
@@ -167,37 +168,23 @@ func (g *toolGate) ask(ctx context.Context, request turn.GateRequest) (ledger.Ro
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	written := rowInput{turnID: request.TurnID, stateBuilder: builder, fingerprint: state.FingerprintOf(call)}
+	written := judgeverb.RowInput{TurnID: request.TurnID, StateBuilder: builder, Fingerprint: state.FingerprintOf(call)}
 	builtState := json.RawMessage(built)
 	if own := turn.OwnShellsCalled(ctx, request); len(own) > 0 {
-		return g.rows.appendOwnShell(builtState, g.set, written, own)
+		return g.rows.AppendOwnShell(builtState, g.set, written, own)
 	}
 	decision, err := g.client.Ask(ctx, jev.Request{State: builtState, Questions: g.set.Questions})
 	g.decisions++
 	if err != nil {
-		row, writeErr := g.rows.appendFallback(builtState, g.set, written, err)
+		row, writeErr := g.rows.AppendFallback(builtState, g.set, written, err)
 		if writeErr != nil {
 			return row, writeErr
 		}
 		return row, jevUnavailable{err}
 	}
-	written.decision = &decision
-	written.answers = toLedgerAnswers(g.set.QuestionsVersion, decision.Answers)
-	row, err := g.rows.append(builtState, g.set, written)
+	written.Decision = &decision
+	written.Answers = judgeverb.ToLedgerAnswers(g.set.QuestionsVersion, decision.Answers)
+	row, err := g.rows.Append(builtState, g.set, written)
 	g.costUSD += row.Charge.USD
 	return row, err
-}
-
-func (l rowLedger) appendOwnShell(state json.RawMessage, set battery, in rowInput, own []string) (ledger.Row, error) {
-	row, err := l.skeleton(state, set, in)
-	if err != nil {
-		return ledger.Row{}, err
-	}
-	sentence := "the call acts on " + strings.Join(own, ", ") + ", which tofu started, so it is allowed without asking jev, and a kill runs as shell stop"
-	row.Model, row.Answers, row.Verdict = "", []ledger.Answer{}, ledger.VerdictAllow
-	row.Reason = &ledger.Reason{Mode: set.Mode.Ledger(), ModeReason: &sentence}
-	if set.Rule != nil {
-		row.Policy, row.PolicyVersion = set.Rule.Name, set.Rule.RuleVersion
-	}
-	return l.writer.Append(row)
 }

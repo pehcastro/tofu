@@ -24,6 +24,8 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	judgeverb "tofu/internal/cli/verbs/judge"
+	shellsverb "tofu/internal/cli/verbs/shells"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
@@ -537,7 +539,7 @@ func runTurn(opts wiring.RunOpts, resumed runResumed, selected models.Model, clo
 	config, spawner, sessions, gate, scorer := started.Config, started.Spawner, started.Sessions, started.gate, started.scorer
 	resumed.into(&config)
 	_, _ = fmt.Fprintln(out, "context budget "+started.budget.Record())
-	registry, registryErr := launchShellRegistry(opts.Dir)
+	registry, registryErr := shellsverb.LaunchShellRegistry(opts.Dir)
 	if registryErr == nil {
 		_ = registry.Prune()
 	}
@@ -545,7 +547,7 @@ func runTurn(opts wiring.RunOpts, resumed runResumed, selected models.Model, clo
 	interrupted, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	context.AfterFunc(interrupted, stop)
-	leading, err := leadScratch(interrupted, config, errOut)
+	leading, err := shellsverb.LeadScratch(interrupted, config, errOut)
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -896,7 +898,7 @@ func runConfig(opts wiring.RunOpts, built []turn.Tool, run runtime) (turn.Config
 		asking[1] = askPersonTool(dir, run.places.Log, run.leadAsks, config.Inbox, run.keys.keyring(), run.notify)
 	}
 	if run.sessions != nil && memoryOn(dir) {
-		asking = append(asking, tools.Remember{Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox, Judge: memoryScopeJudge(dir, run.places.Log, run.keys.keyring(), run.notify),
+		asking = append(asking, tools.Remember{Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox, Judge: judgeverb.MemoryScopeJudge(dir, run.places.Log, run.keys.keyring(), run.notify),
 			Auto: func() bool { on, _ := settingspkg.IntFor(dir, settingspkg.AutoMemory); return on != 0 }})
 	}
 	if boardManaged(dir) {

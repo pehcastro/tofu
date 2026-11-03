@@ -52,7 +52,7 @@ func lintVerb(args []string, out, errOut io.Writer) int {
 	for _, f := range report.Findings {
 		text += fmt.Sprintf("%s:%d:%d: %s\n", f.File, f.Line, f.Column, f.Text)
 	}
-	return protocol(o, output.ExitVerdict, report, text)
+	return output.Protocol(o, output.ExitVerdict, report, text)
 }
 
 func lintComments(targets []string) (lintReport, error) {

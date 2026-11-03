@@ -16,8 +16,8 @@
   },
   {
     "point": "memory_scope",
-    "file": "apps/cli/judge_ledger.go",
-    "symbol": "memoryScopeJudge"
+    "file": "internal/cli/verbs/judge/judge_ledger.go",
+    "symbol": "MemoryScopeJudge"
   },
   {
     "point": "read_worth",

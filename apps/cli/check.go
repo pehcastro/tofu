@@ -12,6 +12,7 @@ import (
 
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	judgeverb "tofu/internal/cli/verbs/judge"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
@@ -122,7 +123,7 @@ func runCheck(ctx context.Context, client *jev.Client, rulePath, command string)
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	set, err := resolveLibrary(runGatePoint, "")
+	set, err := judgeverb.ResolveLibrary(runGatePoint, "")
 	if err != nil {
 		return ledger.Row{}, err
 	}
@@ -141,7 +142,7 @@ func runCheck(ctx context.Context, client *jev.Client, rulePath, command string)
 
 	var r gate.Rule
 	if rulePath == "" {
-		r, _, err = loadRulePoint(runGatePoint, "")
+		r, _, err = judgeverb.LoadRulePoint(runGatePoint, "")
 	} else {
 		r, err = gate.Load(rulePath)
 	}
@@ -154,10 +155,10 @@ func runCheck(ctx context.Context, client *jev.Client, rulePath, command string)
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	return appendRow(rawState, set, rowInput{
-		decision:     &decision,
-		answers:      toLedgerAnswers(set.QuestionsVersion, decision.Answers),
-		stateBuilder: builderVersion,
-		fingerprint:  state.FingerprintOf(call),
+	return judgeverb.AppendRow(rawState, set, judgeverb.RowInput{
+		Decision:     &decision,
+		Answers:      judgeverb.ToLedgerAnswers(set.QuestionsVersion, decision.Answers),
+		StateBuilder: builderVersion,
+		Fingerprint:  state.FingerprintOf(call),
 	})
 }
