@@ -1,7 +1,7 @@
 package prefix
 
 import (
-	"tofu/internal/prompt"
+	"tofu/internal/agent/prompt"
 	"tofu/internal/rule"
 	"tofu/internal/turn"
 	shipped "tofu/library"

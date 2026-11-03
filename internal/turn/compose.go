@@ -16,6 +16,7 @@ import (
 	"strings"
 	"unicode"
 
+	"tofu/internal/agent/prompt"
 	"tofu/internal/classifier"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
@@ -23,7 +24,6 @@ import (
 	"tofu/internal/judge/question"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
-	"tofu/internal/prompt"
 	"tofu/internal/rule"
 	"tofu/internal/session"
 	"tofu/internal/skill"
