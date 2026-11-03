@@ -6,6 +6,8 @@ running in the background, and checks what they return before it answers.
 It runs on the Claude and Codex subscriptions you already have, or on API
 keys you bring.
 
+Read [MAP.md](MAP.md) for the repository structure.
+
 ## Install
 
 Linux and macOS:
