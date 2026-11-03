@@ -1,0 +1,132 @@
+[
+  {
+    "package": "cmd",
+    "kind": "runner",
+    "note": "the bench command, package main. Runs the other benches, measures 0 things of its own."
+  },
+  {
+    "package": "corpus",
+    "kind": "library",
+    "note": "the shared reader over recorded sessions and the 6 gate cases. Every bench that reads .tofu/sessions reads it through here."
+  },
+  {
+    "package": "kit/report",
+    "kind": "runner",
+    "note": "this package: the reader over every dated report, the viewer and its data. Measures 0 things of its own; bench/kit/report/runs holds the 3 records it quotes that no other bench writes to disk."
+  },
+  {
+    "package": "orchestrator",
+    "kind": "runner",
+    "note": "reads 1 session folder and prints where its time went, with 0 dated reports of its own."
+  },
+  {
+    "package": "phase",
+    "kind": "measurement with no dated report",
+    "note": "phase labels from internal/agent/loop against hand labels on 20 mocked steps, as one test file that fails under 0.8 agreement, 0 dated reports so far."
+  },
+  {
+    "package": "cache",
+    "kind": "measurement with no dated report",
+    "note": "two offline replays over ~/.tofu/projects, rerun 2026-10-05 at 7afccaa under TOFU-1083, 0 dated reports so far. cache/shrink: shrinking browser pages only when the batch pays is 427.67 USD against 445.57 at list price, 4.0% less over 11,801 requests, with 10 requests over the context target against 1. cache/ttl: history at 5 minutes is 14.93% less than all at 1 hour and all at 5 minutes 20.51% less, over 14,934 requests whose record holds no person pausing; the layout is open in TOFU-1064."
+  },
+  {
+    "package": "longsession",
+    "kind": "measurement with no dated report",
+    "note": "TOFU-1401, in progress on 2026-10-15: a long session with hundreds of sub-agents, 0 dated reports so far."
+  },
+  {
+    "package": "judge",
+    "kind": "measurement with no dated report",
+    "note": "Jev against the word list on the task kind and the open request, added at ce5eb3a8 with 2 test-driven corpora, 0 dated reports so far."
+  },
+  {
+    "package": "reach",
+    "kind": "measurement with no dated report",
+    "note": "which library items reach which agent, added at 7308d98e as a runner that prints, 0 dated reports so far."
+  },
+  {
+    "package": "symbols",
+    "kind": "measurement with no dated report",
+    "note": "symbols over Rust and TypeScript, added at b567fdc8 as one test file, 0 dated reports so far."
+  },
+  {
+    "package": "memtree",
+    "kind": "measurement with no dated report",
+    "note": "TOFU-1218, 2026-10-08, at b5859988, owing its dated report because an agent may not write a report file. 10000 synthetic items with a fake compaction function: prefix stability 97.84% batched against 79.39% merging at every append, 1.47 line-inputs per item against 13.30, 1.149 model calls per item."
+  },
+  {
+    "package": "memory",
+    "kind": "measurement with no dated report",
+    "note": "TOFU-1175, 2026-10-07, at c3890d91, owing its dated report because the write of bench/memory/report-2026-10-07.md was refused to the bench agent under TOFU-1181. Repeats of one correction over 10 driven chains on a cassette, no model called: memory on 0 of 9, memory off 9 of 9, delivery of the words to the request only. TOFU-1186 removed the offer on a typed message, its corpus and the jev memory_offer@1 question: memory on now keeps the correction with /remember, and memory off keeps nothing."
+  },
+  {
+    "package": "learn",
+    "kind": "measurement with no dated report",
+    "note": "learn/jobs, TOFU-1305, 2026-10-13 at 6d565412 and rerun 2026-10-14 at 9586ec60: 4 of 5 labelled repeated jobs found, 0 false, on 5 made-up sessions; the output is in bench/kit/report/runs/learn-jobs-2026-10-14.txt and on the first tab. The labels.txt run of TOFU-1176 needs Jev and claude and has no committed number."
+  },
+  {
+    "package": "cli",
+    "kind": "measurement with no dated report",
+    "note": "passes.md, written by go run ./bench/cli, 5 passes from 2026-10-13: v0, v1-runewidth and v1-chroma at 06042c16 (tofu 0.5.11-fix2), v2-ceiling, v2-gogc and v2-pool at f347e62d (tofu 0.5.12). Its rows name a commit and no tofu version; the version here is read from internal/konst at that commit."
+  },
+  {
+    "package": "fanin",
+    "kind": "measurement with no dated report",
+    "note": "TOFU-1307, 2026-10-13, 2 runs on 5 cassettes before (5a267524) and after (committed as 2d7ce78a), both tofu 0.5.12. The bench prints its table and writes no file; the rows are copied from the board into bench/kit/report/runs/board-2026-10-13.md."
+  },
+  {
+    "package": "profile",
+    "kind": "measurement with no dated report",
+    "note": "report.md, undated by name, runs of 2026-10-13 on the build 0.5.13-fix1+dev at f360965a and after TOFU-1319 at 60c41fb3, 1 run per row. runs/ holds every row as JSON."
+  },
+  {
+    "package": "rivals",
+    "kind": "measurement with no dated report",
+    "note": "report.md, undated by name, 15 live runs of 2026-10-13 at f360965a: tofu 0.5.13-fix1+dev, Claude Code 2.1.296, omp 18.3.2 and codex-cli 0.155.1, 3 runs each. runs/ holds every run as JSON."
+  },
+  {
+    "package": "scale",
+    "kind": "measurement with no dated report",
+    "note": "report.md, undated by name, 1 run per rung of 0 to 10 sub-agents on 2026-10-13, committed at b7c52479 (tofu 0.5.13-fix1). results.jsonl names no tofu version."
+  },
+  {
+    "package": "searchlarge",
+    "kind": "measurement with no dated report",
+    "note": "TOFU-1336, 2026-10-14, moved out of bench/search under TOFU-1364 so its source cannot answer a recorded search pattern. read, glob and search on a golang/go checkout at go1.23.0, 13,226 files, GOMAXPROCS 2: glob 2.98x and search 1.69x faster at p50 cold after c5999050, outputs byte-identical; it prints its table and writes 0 files, so 0 numbers from it are on this page."
+  },
+  {
+    "package": "serve",
+    "kind": "measurement with no dated report",
+    "note": "times tofu serve's query methods for 2 or more tofu builds, 50 calls of each method a round over 2 rounds by default, on a cassette session of 200 steps; it prints its table and writes 0 files, so 0 numbers from it are on this page."
+  },
+  {
+    "package": "sessiontime",
+    "kind": "measurement with no dated report",
+    "note": "prints to the terminal and writes no file. Run 2026-10-13 at 7624da00 (TOFU-1313) and 2026-10-14 at 9586ec60; the second output is in bench/kit/report/runs/sessiontime-2026-10-14.txt."
+  },
+  {
+    "package": "gates/flows",
+    "kind": "runner",
+    "note": "drives 8 long-session flows on cassettes, each on a fresh home and project, and writes a pass stamp keyed by HEAD's tree when every flow passes on a clean tree. A gate, not a measurement: 0 dated reports."
+  },
+  {
+    "package": "thread",
+    "kind": "measurement with no dated report",
+    "note": "replays one recorded lead and sub-agent cassette through a before and an after tofu binary, each in a fresh home, and prints the thread, engineer and evidence characters per arm; it prints to the terminal and writes 0 files, so 0 numbers from it are on this page."
+  },
+  {
+    "package": "gates/treewide",
+    "kind": "runner",
+    "note": "runs vet and every package's tests, reruns each failing test alone, and writes a pass stamp keyed by HEAD's tree only on a clean HEAD. A gate, not a measurement: 0 dated reports."
+  },
+  {
+    "package": "gates/parity",
+    "kind": "runner",
+    "note": "runs every case in its catalog against two tofu executables and writes which answers differ under bench/gates/parity/results. A gate between two builds, not a measurement: 0 dated reports."
+  },
+  {
+    "package": "review",
+    "kind": "measurement with no dated report",
+    "note": "re-measures the review points from tofu --json exports against bench/review/baselines.json and prints one table to the terminal; it writes 0 files, so 0 numbers from it are on this page."
+  }
+]

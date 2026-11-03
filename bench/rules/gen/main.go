@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"tofu/bench/report"
+	"tofu/bench/kit/report"
 	"tofu/bench/rules/fire"
 	"tofu/internal/sys"
 )

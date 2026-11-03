@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"tofu/bench/kit/report"
 	"tofu/bench/linenumbers"
-	"tofu/bench/report"
 	"tofu/internal/sys"
 )
 

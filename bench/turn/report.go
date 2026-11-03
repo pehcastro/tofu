@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"tofu/bench/report"
+	"tofu/bench/kit/report"
 )
 
 func Render(result Result, conditions report.Conditions) string {

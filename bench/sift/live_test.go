@@ -120,7 +120,7 @@ func TestTheJudgedArmAgainstTheFreeArmOverEveryCapturedOutput(t *testing.T) {
 
 func TestTheSameChunkUnderTwoTasks(t *testing.T) {
 	asker := liveClient(t)
-	chunk := "bench/cost/report-2026-09-19.md\nbench/cost/rescore-2026-09-19.md\nbench/cost/sweep-2026-09-19.md\nbench/harness/plan.go\nbench/harness/row.go\n"
+	chunk := "bench/cost/report-2026-09-19.md\nbench/cost/rescore-2026-09-19.md\nbench/cost/sweep-2026-09-19.md\nbench/kit/harness/plan.go\nbench/kit/harness/row.go\n"
 	result := sift.Shell{Command: "git ls-files bench", Stdout: "the first line\n\n" + chunk + "\nthe last line\n"}
 	units := sift.SplitShell(result)
 	at := -1

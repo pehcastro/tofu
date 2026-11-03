@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"tofu/bench/corpus"
-	"tofu/bench/report"
+	"tofu/bench/kit/report"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
 )

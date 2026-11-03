@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"tofu/bench/corpus"
-	"tofu/bench/report"
+	"tofu/bench/kit/report"
 )
 
 const worstSessionsShown = 5
@@ -37,7 +37,7 @@ func Render(result Result) string {
 	}
 
 	b.WriteString("\n3. could this separate two arms\n")
-	b.WriteString("the harness rule in bench/harness/report.go calls a difference smaller than the widest spread no difference\n")
+	b.WriteString("the harness rule in bench/kit/harness/report.go calls a difference smaller than the widest spread no difference\n")
 	for _, shape := range result.Shapes {
 		fmt.Fprintf(b, "\n%s: mean %.2f per session, widest spread %d\n", shape.Name, shape.PerSession.Mean, shape.PerSession.Range)
 		fmt.Fprintf(b, "  under the harness rule two arms must differ by %d per session, which is %s\n",

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/bench/report"
+	"tofu/bench/kit/report"
 )
 
 const joinCallCap = 13

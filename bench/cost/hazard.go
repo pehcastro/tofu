@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 
 	"tofu/bench/corpus"
-	"tofu/bench/report"
+	"tofu/bench/kit/report"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/questions"
 	"tofu/internal/judge/state"

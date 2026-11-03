@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"tofu/bench/report"
+	"tofu/bench/kit/report"
 	"tofu/bench/schemas"
 	"tofu/bench/tokens"
 )

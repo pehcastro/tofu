@@ -18,7 +18,7 @@ CLAUDE.md
 /.tofu/
 .tofu.partial
 
-bench/harness/testdata/gates/
+bench/kit/harness/testdata/gates/
 
 rtk/
 .zed/

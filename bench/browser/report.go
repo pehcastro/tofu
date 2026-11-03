@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/bench/report"
+	"tofu/bench/kit/report"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/stat"
 	"tofu/internal/tools/web/browser/driver"

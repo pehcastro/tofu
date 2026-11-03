@@ -5,8 +5,8 @@ import (
 	"os"
 	"time"
 
+	"tofu/bench/kit/report"
 	"tofu/bench/recall"
-	"tofu/bench/report"
 	"tofu/internal/sys"
 )
 

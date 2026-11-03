@@ -260,7 +260,7 @@ func BatchTable(rows []Row, asked []Asked, keepAt float64) (string, error) {
 
 	var out strings.Builder
 	fmt.Fprintf(&out, "builds reported: %v; wire %v; total spent $%.6f\n\n", builds, slices.Collect(maps.Keys(wires)), spent)
-	out.WriteString("before: openrouter, typesafe/jev-1.13-20260917, bench/report/answers.json and bench/sift/report-2026-09-22.md\ndollars: usage.cost on openrouter; typesafe reports usage.cost 0, so input tokens times $42 per billion\n\n")
+	out.WriteString("before: openrouter, typesafe/jev-1.13-20260917, bench/kit/report/answers.json and bench/sift/report-2026-09-22.md\ndollars: usage.cost on openrouter; typesafe reports usage.cost 0, so input tokens times $42 per billion\n\n")
 	out.WriteString("wall: per shell result that sent at least one request\n\n")
 	fmt.Fprintf(&out, "| arm | run | needles kept of %d | before | $ per shell result | before | wall p50 ms | wall p95 ms | wall worst ms | before | results asked | requests |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n", len(rows))
 	for _, arm := range JevArms {

@@ -6,8 +6,8 @@ import (
 	"io/fs"
 	"os"
 
+	"tofu/bench/kit/report"
 	"tofu/bench/promote"
-	"tofu/bench/report"
 	"tofu/internal/sys"
 )
 

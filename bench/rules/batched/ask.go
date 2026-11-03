@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"tofu/bench/report"
+	"tofu/bench/kit/report"
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/classifiers/core"

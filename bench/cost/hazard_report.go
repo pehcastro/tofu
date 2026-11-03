@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/bench/report"
+	"tofu/bench/kit/report"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/classifiers/providers/typesafe"
 	"tofu/internal/stat"
@@ -17,7 +17,7 @@ const (
 	beforeUSD       = 0.0000408
 	beforeP50MS     = 346.0
 	beforeP95MS     = 376.0
-	beforeSource    = "before: $ from bench/wording/report-2026-09-18.md ($0.000734 over 18 calls, usage.cost, openrouter, tool_gate@1), ms from bench/api/report-2026-09-18.md (n=18, openrouter)"
+	beforeSource    = "before: $ from bench/wording/report-2026-09-18.md ($0.000734 over 18 calls, usage.cost, openrouter, tool_gate@1), ms from bench/kit/api/report-2026-09-18.md (n=18, openrouter)"
 	rerenderCommand = "go test ./bench/cost -run TestHazardReportRerendersFromItsAnswers -v"
 	liveCommand     = "TOFU_LIVE_HAZARDS=1 go test ./bench/cost -run TestLiveHazardArmsOverTheHeldOutHalf -v"
 )

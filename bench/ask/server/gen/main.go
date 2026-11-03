@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"tofu/bench/ask/server"
-	"tofu/bench/report"
+	"tofu/bench/kit/report"
 	"tofu/internal/sys"
 )
 

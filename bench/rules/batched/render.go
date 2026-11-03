@@ -19,7 +19,7 @@ const (
 	breaksAbove     = 0.5
 	beforeQuestions = 12
 	beforeWallMS    = 395
-	beforeReport    = "bench/api/report-2026-09-18.md"
+	beforeReport    = "bench/kit/api/report-2026-09-18.md"
 )
 
 var labelledRules = []string{"em_dash", "quote", "report_short", "stay_in_scope"}

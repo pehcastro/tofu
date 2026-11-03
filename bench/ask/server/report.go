@@ -54,7 +54,7 @@ func Render(machine, date, bobDir string) (string, error) {
 	b.WriteString("No network. It reads two named session directories and this repository's own `.tofu/sessions`, and writes nowhere but this report.\n\n")
 
 	b.WriteString("## Provenance\n\n")
-	b.WriteString("Written by the bench agent under TOFU-556, through `bench/ask/server/gen` and `bench/report.Generate`, from a live rerun of `bench/ask/server` against the tree as it stands on the date above. Every figure is from that run.\n")
+	b.WriteString("Written by the bench agent under TOFU-556, through `bench/ask/server/gen` and `bench/kit/report.Generate`, from a live rerun of `bench/ask/server` against the tree as it stands on the date above. Every figure is from that run.\n")
 
 	return b.String(), nil
 }

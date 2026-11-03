@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"tofu/bench/calibration"
-	"tofu/bench/report"
+	"tofu/bench/kit/report"
 	"tofu/internal/sys"
 )
 

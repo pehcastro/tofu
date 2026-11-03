@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/bench/harness"
+	"tofu/bench/kit/harness"
 	"tofu/internal/sys"
 )
 

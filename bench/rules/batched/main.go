@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/bench/report"
+	"tofu/bench/kit/report"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
 )

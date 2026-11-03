@@ -24,7 +24,7 @@ func SessionReaders() []Reader {
 func LogReaders() []Reader {
 	return []Reader{
 		{Package: "internal/judge/ledger", Dir: ".tofu/log",
-			Differs: "the shared one. NewReader reads the day-stamped NNNN-NN-NN.jsonl ledger rows. bench/calibration, bench/harness (parse_tofu.go) and bench/stopcheck (run.go) call it rather than reading the directory themselves."},
+			Differs: "the shared one. NewReader reads the day-stamped NNNN-NN-NN.jsonl ledger rows. bench/calibration, bench/kit/harness (parse_tofu.go) and bench/stopcheck (run.go) call it rather than reading the directory themselves."},
 		{Package: "bench/rules", Dir: ".tofu/log",
 			Differs: "ReadDir globs *.rules.jsonl, a different file suffix carrying rule-fire records (RuleID, Target, Mode, Blocked, Findings, At), not a ledger row. No overlap with ledger.NewReader's file glob, so this is a second stream in the same directory rather than the same one read twice."},
 		{Package: "bench/picker", Dir: ".tofu/sessions and .tofu/log",
@@ -56,7 +56,7 @@ func Duplications() []Duplication {
 			Recommendation: "merge: six hand-rolled two-field skip records for the same idea, a path or id and a reason a row did not count. One exported type in bench/corpus, reused everywhere a walker skips a row.",
 		},
 		{
-			A:              "bench/harness/repeats.go: SpreadOf (sorts, takes the middle, low, high by hand)",
+			A:              "bench/kit/harness/repeats.go: SpreadOf (sorts, takes the middle, low, high by hand)",
 			B:              "bench/stat/stat.go: Median, Percentile, Spread (the same three numbers, one call each)",
 			Recommendation: "merge: SpreadOf should call stat.Median and stat.Spread instead of re-sorting and re-deriving the middle index.",
 		},
@@ -77,7 +77,7 @@ type Shape struct {
 func RepeatedShapes() []Shape {
 	return []Shape{
 		{Name: "percentile / median of a float64 series",
-			Packages: []string{"bench/cost/report.go (medianLatency, calls stat.Median correctly)", "bench/harness/repeats.go (SpreadOf, does not call bench/stat)", "bench/search/cost_test.go (median, a test-local helper on time.Duration)"},
+			Packages: []string{"bench/cost/report.go (medianLatency, calls stat.Median correctly)", "bench/kit/harness/repeats.go (SpreadOf, does not call bench/stat)", "bench/search/cost_test.go (median, a test-local helper on time.Duration)"},
 			Against:  "bench/stat.Median and bench/stat.Percentile cover this. Only bench/cost uses it; harness and the search test each grew their own."},
 		{Name: "percentile / spread of an int64 series (byte and token counts)",
 			Packages: []string{"bench/thrift/spread.go (Measure/percentile, nearest-rank)"},
@@ -96,7 +96,7 @@ type NotDuplication struct {
 func NotDuplications() []NotDuplication {
 	return []NotDuplication{
 		{
-			What: "every package that accumulates a running cost with a `+=` loop: bench/cost (arm.Total.Money), bench/api (result.TotalCost from call.Response.Usage.Cost), bench/wording (V1TotalCost, V2TotalCost), bench/turn (result.TotalCostUSD)",
+			What: "every package that accumulates a running cost with a `+=` loop: bench/cost (arm.Total.Money), bench/kit/api (result.TotalCost from call.Response.Usage.Cost), bench/wording (V1TotalCost, V2TotalCost), bench/turn (result.TotalCostUSD)",
 			Why:  "each sums a different field off a different struct for a different question: jev decision cost, a recorded transcript's own dollar total, an A/B wording comparison, a turn's wall-clock cost. A shared `Sum(values []float64) float64` would save one line per call site and cost a level of indirection between the reader and the field actually being summed. Not worth it; this is what \"two packages measuring different things with similar code\" looks like.",
 		},
 	}

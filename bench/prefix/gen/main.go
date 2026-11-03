@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"tofu/bench/kit/report"
 	"tofu/bench/prefix"
-	"tofu/bench/report"
 )
 
 func main() {

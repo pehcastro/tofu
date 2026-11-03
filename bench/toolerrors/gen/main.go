@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/bench/report"
+	"tofu/bench/kit/report"
 	"tofu/bench/toolerrors"
 	"tofu/internal/sys"
 )

@@ -7,7 +7,7 @@ import (
 	"sort"
 	"time"
 
-	benchapi "tofu/bench/api"
+	benchapi "tofu/bench/kit/api"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
 	"tofu/internal/stat"

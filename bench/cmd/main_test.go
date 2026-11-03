@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/bench/harness"
+	"tofu/bench/kit/harness"
 	"tofu/internal/sys"
 )
 
@@ -136,7 +136,7 @@ func TestHarnessOfflineNeedsNoTofuBinary(t *testing.T) {
 	if strings.Contains(out.String(), "running:") {
 		t.Fatalf("the offline arm executed something: %q", out.String())
 	}
-	for _, want := range []string{"setup stock: ", "rule files, prompt ", "seed: bench/harness/task/v1.seed", "effort: " + string(harness.AskedEffort)} {
+	for _, want := range []string{"setup stock: ", "rule files, prompt ", "seed: bench/kit/harness/task/v1.seed", "effort: " + string(harness.AskedEffort)} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("stdout is missing %q, so the row from the verb names no setup and cannot be reproduced: %q", want, out.String())
 		}

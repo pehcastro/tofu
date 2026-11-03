@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"time"
 
-	benchapi "tofu/bench/api"
 	benchcost "tofu/bench/cost"
-	"tofu/bench/report"
+	benchapi "tofu/bench/kit/api"
+	"tofu/bench/kit/report"
 	benchturn "tofu/bench/turn"
 	benchwording "tofu/bench/wording"
 	"tofu/internal/models/classifiers/core"
@@ -93,7 +93,7 @@ func reportOf(target string) producer {
 			if err != nil {
 				return "", "", err
 			}
-			path := filepath.Join("bench", "report", report.Filename("api", result.GeneratedAt))
+			path := filepath.Join("bench", "kit", "report", report.Filename("api", result.GeneratedAt))
 			return path, report.Render(result, conditions(result.GeneratedAt)), nil
 		}
 	case "cost":

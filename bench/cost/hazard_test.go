@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/bench/report"
+	"tofu/bench/kit/report"
 	"tofu/internal/models/classifiers/providers/typesafe"
 )
 

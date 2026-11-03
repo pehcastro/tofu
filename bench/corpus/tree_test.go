@@ -87,7 +87,7 @@ func TestTheFixtureRuleIsTheOneAPersonWouldPredict(t *testing.T) {
 		"bench/corpus/scrub.go",
 		"bench/corpus/gate.go",
 		"internal/agent/loop/turn.go",
-		"bench/report/api-2026-09-18.md",
+		"bench/kit/report/api-2026-09-18.md",
 		"CHANGELOG.md",
 	}
 	for _, path := range recorded {

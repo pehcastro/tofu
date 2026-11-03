@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"testing"
 
-	benchapi "tofu/bench/api"
-	"tofu/bench/report"
+	benchapi "tofu/bench/kit/api"
+	"tofu/bench/kit/report"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
 	"tofu/internal/sys"

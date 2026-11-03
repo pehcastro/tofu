@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	benchapi "tofu/bench/api"
 	"tofu/bench/corpus"
+	benchapi "tofu/bench/kit/api"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/classifiers/core"

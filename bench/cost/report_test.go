@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	benchapi "tofu/bench/api"
 	"tofu/bench/corpus"
-	"tofu/bench/report"
+	benchapi "tofu/bench/kit/api"
+	"tofu/bench/kit/report"
 	"tofu/internal/judge/ledger"
 )
 

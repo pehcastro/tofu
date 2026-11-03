@@ -54,7 +54,7 @@ func renderNotDuplications(b *strings.Builder) {
 
 func renderLines(b *strings.Builder, lines []PackageLines) {
 	b.WriteString("## Source and test lines, per bench package, 2026-09-23\n\n")
-	b.WriteString("Top-level packages only; a package with its own subpackage (bench/harness/task, bench/tools/candidates, and others) is counted at its own top level here. Baseline for a later sweep to diff against.\n\n")
+	b.WriteString("Top-level packages only; a package with its own subpackage (bench/kit/harness/task, bench/tools/candidates, and others) is counted at its own top level here. Baseline for a later sweep to diff against.\n\n")
 	b.WriteString("| Package | Source | Test |\n|---|---|---|\n")
 	totalSource, totalTest := 0, 0
 	for _, l := range lines {

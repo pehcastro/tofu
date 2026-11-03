@@ -11,8 +11,8 @@ import (
 	"runtime"
 	"strings"
 
-	"tofu/bench/harness"
-	"tofu/bench/report"
+	"tofu/bench/kit/harness"
+	"tofu/bench/kit/report"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
 )
@@ -28,7 +28,7 @@ type harnessOpts struct {
 	tofuBin    string
 }
 
-const harnessTranscriptDir = "bench/harness/testdata/tofu-v1"
+const harnessTranscriptDir = "bench/kit/harness/testdata/tofu-v1"
 
 const noLedger = "none, this arm reaches no jev and writes no ledger row"
 
