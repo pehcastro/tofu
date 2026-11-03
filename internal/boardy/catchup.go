@@ -210,9 +210,12 @@ func readTypedAnswers(path string) ([]TypedAnswer, error) {
 	answering := false
 	for line := range strings.Lines(strings.ReplaceAll(string(raw), "\r\n", "\n")) {
 		line = strings.TrimSpace(line)
-		if match := catchupHeading().FindStringSubmatch(line); match != nil {
-			number, _ := strconv.Atoi(match[2])
-			typed, answering = append(typed, TypedAnswer{Ticket: match[1], Question: number, TLDR: match[3]}), false
+		if title := strings.TrimLeft(line, "#"); title != line && (title == "" || title[0] == ' ') {
+			answering = false
+			if match := catchupHeading().FindStringSubmatch(line); match != nil {
+				number, _ := strconv.Atoi(match[2])
+				typed = append(typed, TypedAnswer{Ticket: match[1], Question: number, TLDR: match[3]})
+			}
 			continue
 		}
 		if rest, found := strings.CutPrefix(line, "answer:"); found && len(typed) > 0 {
