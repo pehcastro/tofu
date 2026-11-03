@@ -36,8 +36,9 @@ type PlanItem struct {
 }
 
 type Plan struct {
-	mutex sync.Mutex
-	items []PlanItem
+	Advise func(ctx context.Context, plan string)
+	mutex  sync.Mutex
+	items  []PlanItem
 }
 
 func NewPlan() *Plan { return &Plan{} }
@@ -93,7 +94,7 @@ type planArgs struct {
 	Item  string      `json:"item"`
 }
 
-func (p *Plan) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
+func (p *Plan) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
 	args, err := parsePlanArgs(raw)
 	if err != nil {
 		return turn.Result{}, err
@@ -105,7 +106,11 @@ func (p *Plan) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) 
 		return turn.Result{}, err
 	}
 	p.items = next
-	return turn.Result{Content: planText(p.items), Command: args.Op}, nil
+	shown := planText(p.items)
+	if args.Op == "set" && p.Advise != nil {
+		p.Advise(ctx, shown)
+	}
+	return turn.Result{Content: shown, Command: args.Op}, nil
 }
 
 func (p *Plan) Items() []PlanItem {

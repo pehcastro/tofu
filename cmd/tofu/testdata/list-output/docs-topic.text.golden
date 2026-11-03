@@ -386,6 +386,11 @@ Turn
       true or false
       The lead sees its plan and each step's status before every step. off shows
       it only on the plan tool
+    planAdvisor                  shadow
+      one of shadow, off
+      shadow has the advisor sub-agent read each plan the lead sets against your
+      words and write what is missing or extra to the trace, unseen by the lead.
+      off runs none
     sideChatAccess               read
       any text
       What a new side chat may write: read, notes for .md and .html, files for

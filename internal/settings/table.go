@@ -82,6 +82,7 @@ const (
 	TurnMaySpawn                = "turnMaySpawn"
 	OneWorkingSessionPerProject = "oneWorkingSessionPerProject"
 	PlanEveryStep               = "planEveryStep"
+	PlanAdvisor                 = "planAdvisor"
 	SideChatAccess              = "sideChatAccess"
 	SubAgentsPerTurn            = "subAgentsPerTurn"
 	SubAgentDepth               = "subAgentDepth"
@@ -175,6 +176,11 @@ const (
 	FeedsFull    = "full"
 	FeedsSummary = "summary"
 	FeedsOff     = "off"
+)
+
+const (
+	AdvisorOff    = "off"
+	AdvisorShadow = "shadow"
 )
 
 const (
@@ -343,6 +349,8 @@ func Default() []Spec {
 		{Key: TurnMaySpawn, Label: "Sub-agents", Description: "a turn may spawn a sub-agent", Category: "Turn", Kind: Bool, Default: 1},
 		{Key: OneWorkingSessionPerProject, Label: "One working session per project", Description: "While one session in this project works, any other waits. off lets several work at once", Category: "Turn", Kind: Bool, Default: 1, Formerly: "oneTurnPerProject"},
 		{Key: PlanEveryStep, Label: "Plan every step", Description: "The lead sees its plan and each step's status before every step. off shows it only on the plan tool", Category: "Turn", Kind: Bool, Default: 1},
+		{Key: PlanAdvisor, Label: "Plan advisor", Description: "shadow has the advisor sub-agent read each plan the lead sets against your words and write what is missing or extra to the trace, unseen by the lead. off runs none", Category: "Turn", Kind: Text, DefaultText: AdvisorShadow,
+			Choices: []string{AdvisorShadow, AdvisorOff}},
 		{Key: SideChatAccess, Label: "Side chat access", Description: "What a new side chat may write: read, notes for .md and .html, files for anywhere, or a comma list of globs", Category: "Turn", Kind: Text, DefaultText: "read",
 			Offers: []string{"read", "notes", "files"}},
 		{Key: SubAgentsPerTurn, Label: "Sub-agents running at once", Description: "How many sub-agents may run at once. A spawn past it is refused until one ends", Category: "Turn", Kind: Int, Default: konst.SubAgentsPerTurnDefault,

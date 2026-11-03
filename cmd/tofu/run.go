@@ -1003,6 +1003,9 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		return held
 	}
 	spawner.SubAgents.Open, spawner.SubAgents.Takes = run.subAgentOpener(opts), run.subAgentTakes(opts)
+	if run.plan != nil && settingText(dir, settingspkg.PlanAdvisor, run.notify) == settingspkg.AdvisorShadow {
+		run.plan.Advise = spawner.Advise
+	}
 	if opts.agent == "" && memoryOn(dir) {
 		spawner.Remembered = func() (map[string]string, error) {
 			shelves, err := memory.Open(dir)

@@ -2,7 +2,7 @@
 title: Sub-agents
 description: You talk to one lead. It plans, splits the work, and checks it. Sub-agents write the code in the background, each in its own paths and with the rules for its language.
 order: 2
-updated: 2026-10-21
+updated: 2026-11-02
 ---
 
 You talk to one model, the **lead**. The lead does not write the code. It
@@ -50,6 +50,34 @@ needs you), each acceptance line as met, unmet, or not mine to prove, and
 the files it saw written. A move to review with an unmet line is refused,
 naming it. The lead checks the work and answers you.
 ```
+
+## An advisor reads the lead's plan
+
+Each time the lead sets a plan, the `advisor` sub-agent reads it in shadow.
+It gets two things: your own messages in the session and the plan as set. It
+never gets the lead's reasoning, its replies or its tool results. It answers
+in one request, with a `Missing` line for each thing you asked that no plan
+item does, and an `Extra` line for each plan item nothing you said asks for.
+
+The lead never sees the answer. Its next request is the same, byte for byte,
+whether the advisor runs or not. The answer goes to the session's trace:
+
+    tofu session trace <session> --kind advisor
+
+    ○ 19:54:06  advisor  advisor  the advisor read the plan against 1 of the person's messages: 1 missing, 1 extra
+    ○ 19:54:06  advisor  advisor  Missing: a test for the toggle, which the person asked for
+    ○ 19:54:06  advisor  advisor  Extra: rewrite the settings file format
+
+An advisor that fails, such as a model that is overloaded, writes one row
+saying why, and the lead goes on. The advisor runs on the model its row in
+**Settings > Models & roles** names, the orchestrator's model unless you
+assign it another. Each plan set costs that model one request, which the
+trace shows under `--kind request` as the advisor's, and the session's cost
+counts it like any sub-agent's. The idea
+comes from the advisors in oh-my-pi, which watch a primary agent and write
+notes beside it; tofu's reads only the plan, against your words.
+
+To turn it off: `tofu settings set planAdvisor off`.
 
 ## When the lead writes and when it spawns
 
@@ -245,3 +273,4 @@ To run the lead alone: `tofu settings set turnMaySpawn false`.
 | `subAgentWatchSeconds` (600) | Seconds a sub-agent's call runs before its row says what it is doing, and with nothing moving, before it reads stalled |
 | `verifySubAgents` (true) | On: a report tofu reads as clean, done with its gate passed after the last edit, is answered from as it stands; for any other, before it calls the work done, the lead reads what the sub-agent changed, runs the build or tests again or opens what it made, and says what it saw. Off: the lead takes a finished report as the result, unless the report says something failed. `tofu rules off verify_sub_agents` also turns it off |
 | `turnMaySpawn` (`true`) | Whether the lead may spawn at all |
+| `planAdvisor` (`shadow`) | `shadow`: the advisor reads each plan the lead sets against your words and writes Missing and Extra rows to the trace, unseen by the lead. `off`: no advisor runs |

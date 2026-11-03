@@ -70,7 +70,7 @@ exit 0
       {
         "topic": "drive",
         "title": "Driving the app from a script",
-        "summary": "what tofu drive does, the steps a script takes, and what the requests step prints"
+        "summary": "what tofu drive and tofu drive desk do, the steps they take, and what the requests step prints"
       },
       {
         "topic": "files",

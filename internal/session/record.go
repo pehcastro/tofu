@@ -169,6 +169,23 @@ type ReportBody struct {
 	Text  string `json:"text"`
 }
 
+type AdvisorNotice struct {
+	NoticeBody
+	Advisor *AdvisorRead `json:"advisor,omitempty"`
+}
+
+type AdvisorRead struct {
+	Agent      string   `json:"agent"`
+	Model      string   `json:"model,omitempty"`
+	Words      int      `json:"person_words"`
+	Plan       string   `json:"plan"`
+	Missing    []string `json:"missing,omitempty"`
+	Extra      []string `json:"extra,omitempty"`
+	Error      string   `json:"error,omitempty"`
+	DurationMS int64    `json:"duration_ms"`
+	CostUSD    float64  `json:"cost_usd"`
+}
+
 type AgentEndBody struct {
 	Status  string  `json:"status"`
 	Usage   Usage   `json:"usage"`

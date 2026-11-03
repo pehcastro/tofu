@@ -102,8 +102,8 @@ drain  tofu session drain weighs every call of a session, says what woke the
   where did a session's tokens go
     → tofu session drain <name|id|head>
 
-drive  what tofu drive does, the steps a script takes, and what the requests
-  step prints
+drive  what tofu drive and tofu drive desk do, the steps they take, and what
+  the requests step prints
 
 files  every path tofu uses in your home and in a project, and which one wins
   where does tofu keep its files

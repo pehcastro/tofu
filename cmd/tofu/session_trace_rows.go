@@ -231,6 +231,23 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			_ = json.Unmarshal(event.Body, &read)
 			row.Kind, row.Text, row.Outcome = kindRead, traced(read.Tool+" "+read.Source, read.Span, sized(read.Bytes), read.Error), traceProblem(false, read.Error)
 		case session.EventNotice:
+			var advised session.AdvisorNotice
+			if json.Unmarshal(event.Body, &advised) == nil && advised.Advisor != nil {
+				read := advised.Advisor
+				row.Kind, row.Agent, row.State = kindAdvisor, read.Agent, "read"
+				row.Text, row.Outcome = traced(oneLine(advised.Text), read.Model, took(read.DurationMS), spent(read.CostUSD)), traceProblem(false, read.Error)
+				rows = append(rows, row)
+				row.Outcome = ""
+				for _, missing := range read.Missing {
+					row.State, row.Text = "missing", "Missing: "+oneLine(missing)
+					rows = append(rows, row)
+				}
+				for _, extra := range read.Extra {
+					row.State, row.Text = "extra", "Extra: "+oneLine(extra)
+					rows = append(rows, row)
+				}
+				continue
+			}
 			var notice session.StopBody
 			_ = json.Unmarshal(event.Body, &notice)
 			row.Kind, row.Text, row.Origin = kindNotice, oneLine(notice.Text), notice.From

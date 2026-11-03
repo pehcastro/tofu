@@ -1,12 +1,18 @@
 exit 1
 --- stdout
-Sub-agents · 13 defined                                               ✗ 1 broken
+Sub-agents · 14 defined                                               ✗ 1 broken
 
   ○ idle      inherit                   project  runs on the orchestrator's
     model
   ● planner   claude-sub/claude-opus-5  project  plans the work
     tools      read, search
   ● reviewer  codex-sub/gpt-5.6-sol     global   reviews a diff
+  ○ advisor   inherit                   library  Reads a plan the lead set
+    against the person's own words, never the lead's reasoning, and names what
+    the person asked that the plan misses and what the plan does that nobody
+    asked for. Read-only. Runs in shadow on every plan the lead sets while
+    planAdvisor is shadow; its answer goes to the trace, not to the lead.
+    tools      read
   ○ go-dev    inherit                   library  Writes and fixes Go in the
     project it is given. Reads go.mod, the lint config and the project's own
     gate before it edits, changes the least it can, and is done only when go
@@ -109,5 +115,6 @@ Sub-agents · 13 defined                                               ✗ 1 bro
     reference  verify-a-running-service  2.5 KB
 
 broken
-  ✗ ~/project/.tofu/agents/broken.md  the file opens with no front matter
+  ✗ ~/project/.tofu/agents/broken.md  the file opens with no front matter, or
+    never closes it
 --- stderr

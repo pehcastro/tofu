@@ -356,6 +356,14 @@ exit 0
         "description": "The lead sees its plan and each step's status before every step. off shows it only on the plan tool"
       },
       {
+        "key": "planAdvisor",
+        "category": "Turn",
+        "default": "shadow",
+        "takes": "one of shadow, off",
+        "restart": false,
+        "description": "shadow has the advisor sub-agent read each plan the lead sets against your words and write what is missing or extra to the trace, unseen by the lead. off runs none"
+      },
+      {
         "key": "sideChatAccess",
         "category": "Turn",
         "default": "read",
