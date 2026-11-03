@@ -8,7 +8,7 @@ import (
 	"testing/fstest"
 
 	"tofu/internal/judge/jev"
-	"tofu/internal/web"
+	"tofu/internal/tools/web"
 	"tofu/library"
 )
 

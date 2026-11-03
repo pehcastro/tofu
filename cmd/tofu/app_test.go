@@ -46,10 +46,10 @@ import (
 	"tofu/internal/shell"
 	roster "tofu/internal/subagent"
 	"tofu/internal/sys"
+	"tofu/internal/tools/web"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
-	"tofu/internal/web"
 	"tofu/internal/widget"
 	shipped "tofu/library"
 )

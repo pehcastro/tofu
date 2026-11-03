@@ -41,12 +41,12 @@ import (
 	"tofu/internal/skill"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
+	"tofu/internal/tools/web"
 	"tofu/internal/tools/web/browser/loop"
 	"tofu/internal/tools/web/browser/recipe"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
-	"tofu/internal/web"
 	shipped "tofu/library"
 	"tofu/library/questions"
 )

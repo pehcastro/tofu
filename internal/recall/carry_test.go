@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"tofu/internal/recall"
-	"tofu/internal/web"
+	"tofu/internal/tools/web"
 )
 
 func TestEachListingReadOnOneTabSurvivesAForkWithItsWholeUrlAndItsContent(t *testing.T) {

@@ -22,11 +22,11 @@ import (
 	"tofu/internal/settings"
 	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/web"
 	"tofu/internal/tools/web/browser/driver"
 	"tofu/internal/tools/web/browser/loop"
 	"tofu/internal/tools/web/browser/motion"
 	"tofu/internal/turn"
-	"tofu/internal/web"
 )
 
 type browserSession struct {

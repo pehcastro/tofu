@@ -15,7 +15,7 @@ import (
 	"tofu/internal/recall"
 	"tofu/internal/session"
 	"tofu/internal/sys"
-	"tofu/internal/web"
+	"tofu/internal/tools/web"
 )
 
 type scriptedPages struct {

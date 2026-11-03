@@ -15,9 +15,9 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/web"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
-	"tofu/internal/web"
 	"tofu/library"
 )
 

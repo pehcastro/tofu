@@ -15,7 +15,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
-	"tofu/internal/web"
+	"tofu/internal/tools/web"
 )
 
 func NewWeb(config web.Config) []contract.Tool {

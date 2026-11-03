@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/web"
+	"tofu/internal/tools/web"
 )
 
 const slowAnswer = 500 * time.Millisecond

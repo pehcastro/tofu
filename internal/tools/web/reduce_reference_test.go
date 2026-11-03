@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/web"
+	"tofu/internal/tools/web"
 )
 
-const referenceCorpus = "../../bench/websift/testdata/page-corpus.jsonl"
+const referenceCorpus = "../../../bench/websift/testdata/page-corpus.jsonl"
 
 type referenceRow struct {
 	Source      string `json:"source"`
