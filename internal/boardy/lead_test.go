@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"tofu/internal/rule"
 )
 
 func sessionBoard(t *testing.T, managers ...string) (Managed, Ticket) {
@@ -42,10 +44,10 @@ func TestALeadSessionActsForThePersonAndItsSubAgentDoesNot(t *testing.T) {
 	if _, err := m.Move(ticket.ID, Done, "", sub); err == nil {
 		t.Error("a sub-agent moved its own ticket to done")
 	}
-	if event := m.boardEvent("move", ticket, Review, lead); !event.ByPerson {
+	if m.actorKind(lead) != rule.ActorPerson {
 		t.Error("a lead's move is not by the person")
 	}
-	if event := m.boardEvent("move", ticket, Review, sub); event.ByPerson {
+	if m.actorKind(sub) == rule.ActorPerson {
 		t.Error("a sub-agent's move is by the person")
 	}
 

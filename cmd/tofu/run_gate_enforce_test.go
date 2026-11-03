@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"tofu/interface/tui"
+	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/turn"
@@ -53,9 +54,9 @@ func TestTofuRunUnderEnforceDoesNotWriteTheDeniedFile(t *testing.T) {
 	dir := chdirTemp(t)
 	stubJev(t, 200, untrustedDenyReply)
 
-	gate, err := newToolGate(dir, logHere(t))
+	gate, err := toolGateOn(dir, logHere(t), jev.ReadKeyring())
 	if err != nil {
-		t.Fatalf("newToolGate: %v", err)
+		t.Fatalf("toolGateOn:%v", err)
 	}
 	built, err := buildTestRunTools(dir, toolSetFull)
 	if err != nil {

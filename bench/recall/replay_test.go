@@ -12,8 +12,12 @@ import (
 var (
 	armNothing   = Arm{Name: "nothing"}
 	armHandles   = Arm{Name: "fork, handles", Carry: rc.HandleCarry, Signpost: konst.FactSignpostBytes}
-	armDistilled = Arm{Name: "fork, distilled", Carry: rc.DistilledCarry, Signpost: konst.CarrySignpostBytes}
+	armDistilled = Arm{Name: "fork, distilled", Carry: distilledCarry, Signpost: konst.CarrySignpostBytes}
 )
+
+func distilledCarry(store *rc.Store, cfg rc.Config, c rc.Conversation) (rc.Carry, error) {
+	return rc.CarryWithFiles(store, cfg, c, rc.WordsAlone, 0)
+}
 
 func recordedTurn(t *testing.T) (rc.Config, Session) {
 	t.Helper()

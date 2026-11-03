@@ -11,14 +11,14 @@ func TestThePersonsWordsSurviveEveryForkOnceEachAndWordForWord(t *testing.T) {
 	store := recall.NewStore(t.TempDir())
 	correction := "never run git push\nnot even with --dry-run"
 	cron := "keep six agents running"
-	first, err := recall.DistilledCarry(store, recall.Config{}, recall.Conversation{Entries: []recall.Entry{
+	first, err := recall.CarryWithFiles(store, recall.Config{}, recall.Conversation{Entries: []recall.Entry{
 		{Step: 0, Text: "fix the parser", Said: "fix the parser"},
 		{Step: 1, Text: correction, Said: correction},
 		{Step: 1, Text: cron, Said: cron},
 		{Step: 2, Tool: "bash", SupersedeKey: `bash {"command":"go test"}`, Text: "ok"},
 		{Step: 2, Text: cron, Said: cron},
 		{Step: 3, Text: "the parser is fixed"},
-	}})
+	}}, recall.WordsAlone, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,12 +26,12 @@ func TestThePersonsWordsSurviveEveryForkOnceEachAndWordForWord(t *testing.T) {
 	if strings.Join(first.Said, "|") != strings.Join(want, "|") {
 		t.Fatalf("the first fork carries %q, want %q", first.Said, want)
 	}
-	second, err := recall.DistilledCarry(store, recall.Config{}, recall.Conversation{Entries: []recall.Entry{
+	second, err := recall.CarryWithFiles(store, recall.Config{}, recall.Conversation{Entries: []recall.Entry{
 		{Step: 0, Text: "the report of go-dev-2"},
 		{Step: 0, Text: first.Text},
 		{Step: 1, Text: "now the lexer", Said: "now the lexer"},
 		{Step: 2, Text: "said: \"an assistant line is not the person\""},
-	}})
+	}}, recall.WordsAlone, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,11 +55,11 @@ func TestTheStandingJudgeChoosesTheOrdersAndACarriedOrderIsNotAskedAgain(t *test
 		}
 		return kept
 	}
-	carry, err := recall.JudgedCarry(recall.NewStore(t.TempDir()), recall.Config{}, recall.Conversation{Entries: []recall.Entry{
+	carry, err := recall.CarryWithFiles(recall.NewStore(t.TempDir()), recall.Config{}, recall.Conversation{Entries: []recall.Entry{
 		{Text: "an earlier fork\n" + recall.SaidCarryHeading + "the standing orders the person gave in this line of sessions:\norder: \"Never print the key.\"\n"},
 		{Text: "a", Said: "Make every reply short. Do not worry about it."},
 		{Text: "b", Said: "Use tabs in this repo."},
-	}}, judge)
+	}}, judge, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,11 +74,11 @@ func TestTheStandingJudgeChoosesTheOrdersAndACarriedOrderIsNotAskedAgain(t *test
 
 func TestThePersonsWordsKeepTheNewestWithinTheCap(t *testing.T) {
 	long := strings.Repeat("a", 40000)
-	carry, err := recall.DistilledCarry(recall.NewStore(t.TempDir()), recall.Config{}, recall.Conversation{Entries: []recall.Entry{
+	carry, err := recall.CarryWithFiles(recall.NewStore(t.TempDir()), recall.Config{}, recall.Conversation{Entries: []recall.Entry{
 		{Text: "the oldest", Said: "the oldest"},
 		{Text: long, Said: long},
 		{Text: "the newest", Said: "the newest"},
-	}})
+	}}, recall.WordsAlone, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

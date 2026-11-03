@@ -46,10 +46,6 @@ func (u unusableRule) Error() string { return u.err.Error() }
 
 func (u unusableRule) Unwrap() error { return u.err }
 
-func newToolGate(dir, log string) (*toolGate, error) {
-	return toolGateOn(dir, log, jev.ReadKeyring())
-}
-
 func toolGateOn(dir, log string, keys jev.Keyring) (*toolGate, error) {
 	set, err := resolvePoint(runGatePoint, dir)
 	if err != nil {

@@ -66,10 +66,6 @@ var providerFields = map[string]bool{
 	"results_path": true, "title_field": true, "url_field": true, "snippet_field": true,
 }
 
-func Load(layers []Layer) (Config, error) {
-	return LoadKeyed(layers, jev.ReadKeyring())
-}
-
 func LoadKeyed(layers []Layer, keys jev.Keyring) (Config, error) {
 	fetch := sheet{values: map[string]string{}}
 	providers := map[string]*sheet{}

@@ -14,8 +14,6 @@ const (
 	noLineOpened          = "no new line was opened, and the next turn carries the history as it was: "
 )
 
-func compactSession(live *host.Host) string { return forkNote(live, turn.ForkCompact, "") }
-
 func branchLine(live *host.Host, message string) (string, string) {
 	number, err := strconv.Atoi(cmp.Or(message, "0"))
 	if err != nil {

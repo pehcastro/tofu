@@ -74,4 +74,4 @@ func (s *appSession) resume(handle string) (string, []tui.Event) {
 	return note, opened.Chat
 }
 
-func (s *appSession) compact() string { return compactSession(s.Host) }
+func (s *appSession) compact() string { return forkNote(s.Host, turn.ForkCompact, "") }

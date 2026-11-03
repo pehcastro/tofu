@@ -490,7 +490,7 @@ func TestTheSearchKeyMovesWithTheGateKeyAndWebSearchReadsItFromTheStore(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	config, err := web.Load(layers)
+	config, err := web.LoadKeyed(layers, jev.ReadKeyring())
 	if err != nil {
 		t.Fatal(err)
 	}

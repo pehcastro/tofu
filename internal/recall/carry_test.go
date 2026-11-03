@@ -23,7 +23,7 @@ func TestEachListingReadOnOneTabSurvivesAForkWithItsWholeUrlAndItsContent(t *tes
 		snapshot := fmt.Sprintf("tab 1 %s %q\n- main\n  - heading %q [level=1]\n  - button \"Reserve\" [ref=e3]", listing.url, listing.heading, listing.heading)
 		entries = append(entries, recall.Entry{Step: step, Tool: "browser_observe", SupersedeKey: `browser_observe {"tab":1}`, Text: web.Untrusted("Chrome tab 1", snapshot)})
 	}
-	carry, err := recall.DistilledCarry(recall.NewStore(t.TempDir()), recall.Config{}, recall.Conversation{Entries: entries})
+	carry, err := recall.CarryWithFiles(recall.NewStore(t.TempDir()), recall.Config{}, recall.Conversation{Entries: entries}, recall.WordsAlone, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestAForkCarriesTheLastInteractiveSnapshotOfEachTabWithItsUrl(t *testing.T)
 		snapshot(2, "browser_act", `{"tab":1,"actions":[{"action":"click","ref":"e1"}]}`, "tab 1 https://www.airbnb.com/s/Atibaia/homes?adults=4 \"Filters\"\n- dialog \"Filters\"\n  - button \"Show 27 places\" [ref=e9]"),
 		snapshot(3, "browser_observe", `{"tab":1,"interactive":false}`, "tab 1 https://www.airbnb.com/s/Atibaia/homes?adults=4 \"Filters\"\n- heading \"the whole tree, too long to carry\""),
 	}
-	carry, err := recall.DistilledCarry(recall.NewStore(t.TempDir()), recall.Config{}, recall.Conversation{Entries: entries})
+	carry, err := recall.CarryWithFiles(recall.NewStore(t.TempDir()), recall.Config{}, recall.Conversation{Entries: entries}, recall.WordsAlone, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,11 +87,11 @@ func TestACarryBesideAHeldTailRepeatsNothingTheTailHoldsAndKeepsWhatItDropped(t 
 		page(3, "browser_observe", `{"tab":1}`, "tab 1 https://stays.test/s?filters=1 \"Filters\"\n- button \"Show 27\" [ref=e9]"),
 		{Step: 4, Text: "the filters are open"},
 	}
-	whole, err := recall.DistilledCarry(recall.NewStore(t.TempDir()), recall.Config{}, recall.Conversation{Entries: entries})
+	whole, err := recall.CarryWithFiles(recall.NewStore(t.TempDir()), recall.Config{}, recall.Conversation{Entries: entries}, recall.WordsAlone, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	beside, err := recall.DistilledCarry(recall.NewStore(t.TempDir()), recall.Config{}, recall.Conversation{Entries: entries, HeldWhole: 4})
+	beside, err := recall.CarryWithFiles(recall.NewStore(t.TempDir()), recall.Config{}, recall.Conversation{Entries: entries, HeldWhole: 4}, recall.WordsAlone, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

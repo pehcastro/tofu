@@ -81,9 +81,9 @@ func gateAndCheckRows(t *testing.T) (gated, checked ledger.Row) {
 	checked = rowByID(t, checkCommand(t, rulePath, forcePush).ID)
 	time.Sleep(2 * time.Millisecond)
 
-	gate, err := newToolGate(dir, logHere(t))
+	gate, err := toolGateOn(dir, logHere(t), jev.ReadKeyring())
 	if err != nil {
-		t.Fatalf("newToolGate: %v", err)
+		t.Fatalf("toolGateOn:%v", err)
 	}
 	decision, err := gate.Decide(t.Context(), turn.GateRequest{
 		TurnID: "turn-precedent",

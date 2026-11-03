@@ -163,14 +163,6 @@ func HandleCarry(store *Store, cfg Config, c Conversation) (Carry, error) {
 	return buildCarry(store, cfg, c, konst.FactSignpostBytes, WordsAlone, 0)
 }
 
-func DistilledCarry(store *Store, cfg Config, c Conversation) (Carry, error) {
-	return JudgedCarry(store, cfg, c, WordsAlone)
-}
-
-func JudgedCarry(store *Store, cfg Config, c Conversation, standing StandingOrders) (Carry, error) {
-	return buildCarry(store, cfg, c, konst.CarrySignpostBytes, standing, 0)
-}
-
 func CarryWithFiles(store *Store, cfg Config, c Conversation, standing StandingOrders, fileTokens int) (Carry, error) {
 	return buildCarry(store, cfg, c, konst.CarrySignpostBytes, standing, fileTokens)
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"tofu/internal/judge/jev"
 	"tofu/internal/web"
 	"tofu/library"
 )
@@ -84,7 +85,7 @@ func TestTheProjectWebFileBeatsTheGlobalWhichBeatsTheShipped(t *testing.T) {
 	}
 
 	ceiling := func() int {
-		config, err := web.Load(found)
+		config, err := web.LoadKeyed(found, jev.ReadKeyring())
 		if err != nil {
 			t.Fatalf("loading: %v", err)
 		}
@@ -117,7 +118,7 @@ func TestTheProjectLayerIsTheNamedDirectoryAndNotTheWorkingOne(t *testing.T) {
 	if err != nil {
 		t.Fatalf("layers in %s: %v", named, err)
 	}
-	config, err := web.Load(layers)
+	config, err := web.LoadKeyed(layers, jev.ReadKeyring())
 	if err != nil {
 		t.Fatalf("loading: %v", err)
 	}
@@ -134,7 +135,7 @@ func TestTheShippedLibraryResolvesFromAnyWorkingDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("building the layers: %v", err)
 	}
-	config, err := web.Load(layers)
+	config, err := web.LoadKeyed(layers, jev.ReadKeyring())
 	t.Logf("library layer %q, provider %q, ceiling %d, err %v", layers[0].Origin, config.Provider.Name, config.MaxPageBytes, err)
 	if err != nil {
 		t.Fatalf("loading away from the repository root: %v", err)
@@ -145,7 +146,7 @@ func TestTheShippedLibraryResolvesFromAnyWorkingDirectory(t *testing.T) {
 }
 
 func TestTheShippedLibraryNamesTheProviderAndTheFetchCeiling(t *testing.T) {
-	config, err := web.Load([]web.Layer{shipped(t)})
+	config, err := web.LoadKeyed([]web.Layer{shipped(t)}, jev.ReadKeyring())
 	if err != nil {
 		t.Fatalf("loading the shipped library: %v", err)
 	}
@@ -164,11 +165,11 @@ func TestTheShippedLibraryNamesTheProviderAndTheFetchCeiling(t *testing.T) {
 
 func TestAProjectTurnsFetchOffWithoutTouchingSearch(t *testing.T) {
 	t.Setenv(absentKey, "")
-	config, err := web.Load([]web.Layer{shipped(t), project(map[string]string{
+	config, err := web.LoadKeyed([]web.Layer{shipped(t), project(map[string]string{
 		"fetch.yaml":          "use: off\n",
 		"search/searxng.yaml": "use: default\nendpoint: http://searx.example/search?format=json\n",
 		"search/brave.yaml":   "use: excluded\n",
-	})})
+	})}, jev.ReadKeyring())
 	if err != nil {
 		t.Fatalf("loading with fetch off: %v", err)
 	}
@@ -183,11 +184,11 @@ func TestAProjectTurnsFetchOffWithoutTouchingSearch(t *testing.T) {
 
 func TestAProjectOverridesTheProviderWithoutTouchingCode(t *testing.T) {
 	t.Setenv(absentKey, "")
-	config, err := web.Load([]web.Layer{shipped(t), project(map[string]string{
+	config, err := web.LoadKeyed([]web.Layer{shipped(t), project(map[string]string{
 		"search/brave.yaml":   "use: excluded\n",
 		"search/searxng.yaml": "use: default\nendpoint: http://searx.example/search?format=json\n",
 		"fetch.yaml":          "max_bytes: 4096\n",
-	})})
+	})}, jev.ReadKeyring())
 	if err != nil {
 		t.Fatalf("loading with a project layer: %v", err)
 	}
@@ -209,7 +210,7 @@ func TestAProviderWhoseKeyIsMissingIsNotAvailable(t *testing.T) {
 	})}
 
 	t.Setenv(absentKey, "")
-	without, err := web.Load(layers)
+	without, err := web.LoadKeyed(layers, jev.ReadKeyring())
 	if err != nil {
 		t.Fatalf("loading without the key: %v", err)
 	}
@@ -218,7 +219,7 @@ func TestAProviderWhoseKeyIsMissingIsNotAvailable(t *testing.T) {
 	}
 
 	t.Setenv(absentKey, "a-key-that-is-never-printed")
-	with, err := web.Load(layers)
+	with, err := web.LoadKeyed(layers, jev.ReadKeyring())
 	if err != nil {
 		t.Fatalf("loading with the key: %v", err)
 	}
@@ -265,7 +266,7 @@ func TestALibraryThatCannotBeTrustedIsRefusedRatherThanGuessed(t *testing.T) {
 		},
 	} {
 		t.Run(broken.name, func(t *testing.T) {
-			_, err := web.Load([]web.Layer{shipped(t), project(broken.files)})
+			_, err := web.LoadKeyed([]web.Layer{shipped(t), project(broken.files)}, jev.ReadKeyring())
 			t.Logf("%s: %v", broken.name, err)
 			if err == nil || !strings.Contains(err.Error(), broken.says) {
 				t.Fatalf("%s was not refused with %q: %v", broken.name, broken.says, err)

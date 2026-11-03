@@ -12,6 +12,7 @@ import (
 
 	"tofu/interface/tui"
 	"tofu/internal/judge/gate"
+	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
 	"tofu/internal/llm"
@@ -103,7 +104,7 @@ func writeGateLedgerRowFixture(t *testing.T) {
 
 func gateThresholds(t *testing.T, dir string) gate.Thresholds {
 	t.Helper()
-	gate, err := newToolGate(dir, logHere(t))
+	gate, err := toolGateOn(dir, logHere(t), jev.ReadKeyring())
 	if err != nil {
 		t.Fatalf("building the gate: %v", err)
 	}
@@ -146,9 +147,9 @@ func enableGateAsking(t *testing.T) {
 func TestADecisionMadeNowCarriesTheFingerprintOfTheCallItJudged(t *testing.T) {
 	dir, _, _ := gateScratch(t, gateFixtureBuild)
 	stubJev(t, 200, middlingRiskAskReply)
-	gate, err := newToolGate(dir, logHere(t))
+	gate, err := toolGateOn(dir, logHere(t), jev.ReadKeyring())
 	if err != nil {
-		t.Fatalf("newToolGate: %v", err)
+		t.Fatalf("toolGateOn:%v", err)
 	}
 
 	decision, err := gate.Decide(t.Context(), turn.GateRequest{
@@ -249,9 +250,9 @@ const lowRiskAllowReply = `{"model":"typesafe/jev-1.13-20260917","provider":"Typ
 func TestASettingsCallJevAllowsStillReachesThePersonAsAnAsk(t *testing.T) {
 	dir, _, _ := gateScratch(t, gateFixtureBuild)
 	stubJev(t, 200, lowRiskAllowReply)
-	gate, err := newToolGate(dir, logHere(t))
+	gate, err := toolGateOn(dir, logHere(t), jev.ReadKeyring())
 	if err != nil {
-		t.Fatalf("newToolGate: %v", err)
+		t.Fatalf("toolGateOn:%v", err)
 	}
 	watched := map[string]ledger.Verdict{}
 	gate.watch = func(_ context.Context, tool string, decision turn.GateDecision, _ error) {

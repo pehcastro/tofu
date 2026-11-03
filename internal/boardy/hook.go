@@ -323,12 +323,6 @@ func (m Managed) actorKind(actor string) rule.HookActor {
 	return rule.ActorLead
 }
 
-type personCheck struct{ ByPerson bool }
-
-func (m Managed) boardEvent(_ rule.HookEvent, _ Ticket, _ Status, actor string) personCheck {
-	return personCheck{ByPerson: m.actorKind(actor) == rule.ActorPerson}
-}
-
 func (m Managed) holds(h rule.Hook, s subject) bool {
 	c, t := h.If, s.ticket
 	among := func(want []string, have ...string) bool {

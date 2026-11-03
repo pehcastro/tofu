@@ -10,6 +10,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
@@ -104,7 +105,7 @@ func toolNames(t *testing.T, key string, projectFiles map[string]string) string 
 	for name, body := range projectFiles {
 		project[name] = &fstest.MapFile{Data: []byte(body)}
 	}
-	config, err := web.Load([]web.Layer{layers[0], {Origin: "project", FS: project}})
+	config, err := web.LoadKeyed([]web.Layer{layers[0], {Origin: "project", FS: project}}, jev.ReadKeyring())
 	if err != nil {
 		t.Fatalf("loading the web library: %v", err)
 	}
