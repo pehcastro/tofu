@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"tofu/apps/cli/output"
+	"tofu/apps/cli/page"
 	"tofu/internal/agent/loop"
-	"tofu/internal/cli/output"
-	"tofu/internal/cli/page"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"

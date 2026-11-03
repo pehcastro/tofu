@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/apps/cli/output"
+	settingsverb "tofu/apps/cli/verbs/settings"
 	"tofu/internal/agent/loop"
-	"tofu/internal/cli/output"
-	settingsverb "tofu/internal/cli/verbs/settings"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"

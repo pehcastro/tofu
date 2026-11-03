@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/cli/output"
+	"tofu/apps/cli/output"
 )
 
 func everyRuleMatched(files map[string]string) map[string]string {

@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"tofu/apps/cli/output"
 	"tofu/internal/agent/loop"
-	"tofu/internal/cli/output"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"

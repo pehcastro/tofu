@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/cli/page"
+	"tofu/apps/cli/page"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/cli/render"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"

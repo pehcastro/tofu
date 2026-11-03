@@ -11,8 +11,8 @@ import (
 	"sync"
 	"testing"
 
-	"tofu/internal/cli/output"
-	"tofu/internal/cli/wiring"
+	"tofu/apps/cli/output"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/sys"
 	testkit "tofu/internal/testkit/cli"

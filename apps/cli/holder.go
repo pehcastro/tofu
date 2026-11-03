@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"sync"
 
+	shellsverb "tofu/apps/cli/verbs/shells"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
-	shellsverb "tofu/internal/cli/verbs/shells"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/platform/recover"
 	sessionstore "tofu/internal/store/session"

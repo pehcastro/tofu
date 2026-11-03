@@ -15,9 +15,9 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/apps/cli/output"
+	"tofu/apps/cli/page"
 	"tofu/internal/agent/loop"
-	"tofu/internal/cli/output"
-	"tofu/internal/cli/page"
 	"tofu/internal/models/llm/core"
 	testkit "tofu/internal/testkit/cli"
 )

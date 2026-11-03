@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/cli/output"
-	"tofu/internal/cli/page"
+	"tofu/apps/cli/output"
+	"tofu/apps/cli/page"
 )
 
 type importRule struct {

@@ -19,14 +19,14 @@ import (
 
 	"github.com/charmbracelet/x/term"
 
+	"tofu/apps/cli/output"
+	judgeverb "tofu/apps/cli/verbs/judge"
+	shellsverb "tofu/apps/cli/verbs/shells"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/loop"
 	roster "tofu/internal/agent/subagents"
-	"tofu/internal/cli/output"
 	"tofu/internal/cli/render"
-	judgeverb "tofu/internal/cli/verbs/judge"
-	shellsverb "tofu/internal/cli/verbs/shells"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers"

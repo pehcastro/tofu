@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"testing"
 
-	"tofu/internal/cli/output"
+	"tofu/apps/cli/output"
 	testkit "tofu/internal/testkit/cli"
 )
 

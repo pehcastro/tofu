@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/models/llm/core"
 	sessionstore "tofu/internal/store/session"
 	"tofu/internal/testkit/cli"

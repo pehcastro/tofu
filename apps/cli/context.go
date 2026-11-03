@@ -11,10 +11,10 @@ import (
 	"strconv"
 	"strings"
 
+	"tofu/apps/cli/output"
+	"tofu/apps/cli/page"
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/loop"
-	"tofu/internal/cli/output"
-	"tofu/internal/cli/page"
 	"tofu/internal/host"
 	"tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"

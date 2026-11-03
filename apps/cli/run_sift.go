@@ -8,9 +8,9 @@ import (
 	"slices"
 	"sync"
 
+	judgeverb "tofu/apps/cli/verbs/judge"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
-	judgeverb "tofu/internal/cli/verbs/judge"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/method"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"

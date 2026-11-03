@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/cli/output"
+	"tofu/apps/cli/output"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
 )

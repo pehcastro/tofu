@@ -12,7 +12,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"tofu/internal/cli/output"
+	"tofu/apps/cli/output"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/ui/tui/app"

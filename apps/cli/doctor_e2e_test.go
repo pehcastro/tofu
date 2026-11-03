@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/cli/output"
-	"tofu/internal/cli/page"
-	"tofu/internal/cli/wiring"
+	"tofu/apps/cli/output"
+	"tofu/apps/cli/page"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/konst"
 	sessionstore "tofu/internal/store/session"
 	testkit "tofu/internal/testkit/cli"

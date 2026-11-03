@@ -15,10 +15,10 @@ import (
 	"sync"
 	"time"
 
+	"tofu/apps/cli/output"
+	shellsverb "tofu/apps/cli/verbs/shells"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
-	"tofu/internal/cli/output"
-	shellsverb "tofu/internal/cli/verbs/shells"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/quota"

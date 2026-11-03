@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"tofu/apps/cli/output"
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/hooks"
 	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
-	"tofu/internal/cli/output"
 	"tofu/internal/cli/render"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/librarian/rules"

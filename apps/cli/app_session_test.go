@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/cron"
 	"tofu/internal/agent/loop"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/models/llm/core"
 	sessionstore "tofu/internal/store/session"

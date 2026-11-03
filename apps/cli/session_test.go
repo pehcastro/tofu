@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"tofu/apps/cli/output"
+	"tofu/apps/cli/page"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
-	"tofu/internal/cli/output"
-	"tofu/internal/cli/page"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"

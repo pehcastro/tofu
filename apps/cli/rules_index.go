@@ -9,10 +9,10 @@ import (
 	"strconv"
 	"strings"
 
+	"tofu/apps/cli/output"
+	"tofu/apps/cli/page"
 	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
-	"tofu/internal/cli/output"
-	"tofu/internal/cli/page"
 	"tofu/internal/librarian/rules"
 )
 

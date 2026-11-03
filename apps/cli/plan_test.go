@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/cli/output"
-	"tofu/internal/cli/wiring"
+	"tofu/apps/cli/output"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
 	testkit "tofu/internal/testkit/cli"

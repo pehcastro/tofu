@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	judgeverb "tofu/internal/cli/verbs/judge"
-	"tofu/internal/cli/wiring"
+	judgeverb "tofu/apps/cli/verbs/judge"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/llm/catalog"

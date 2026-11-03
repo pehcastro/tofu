@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/cli/output"
-	judgeverb "tofu/internal/cli/verbs/judge"
+	"tofu/apps/cli/output"
+	judgeverb "tofu/apps/cli/verbs/judge"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	sessionstore "tofu/internal/store/session"

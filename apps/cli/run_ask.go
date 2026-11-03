@@ -3,9 +3,9 @@ package main
 import (
 	"time"
 
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"

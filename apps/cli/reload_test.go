@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
-	"tofu/internal/cli/output"
+	"tofu/apps/cli/output"
 
 	"tofu/internal/testkit/cli"
 	"tofu/internal/ui/tui/app"

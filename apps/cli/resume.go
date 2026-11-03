@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/cli/output"
+	"tofu/apps/cli/output"
 	"tofu/internal/cli/render"
 	"tofu/internal/platform/recover"
 	"tofu/internal/ui/tui/panels/progress"

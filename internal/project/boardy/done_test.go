@@ -217,7 +217,7 @@ func TestFlowsAreasReachDeskAndSessions(t *testing.T) {
 		"apps/**":                          "apps/cli, apps/desk",
 		"apps/cli/**":                      "apps/cli",
 		"internal/cli/**":                  "internal/cli",
-		"internal/cli/verbs/lint/lint.go":  "internal/cli",
+		"apps/cli/verbs/lint/lint.go":      "apps/cli",
 		"docs/x.md":                        "",
 		"internal/store/session/**":        "internal/store/session",
 		"apps/other/**":                    "",

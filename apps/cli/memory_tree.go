@@ -14,10 +14,10 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"tofu/apps/cli/output"
+	memoryverb "tofu/apps/cli/verbs/memory"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
-	"tofu/internal/cli/output"
-	memoryverb "tofu/internal/cli/verbs/memory"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/core"

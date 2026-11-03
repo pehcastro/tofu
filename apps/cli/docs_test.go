@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/cli/output"
+	"tofu/apps/cli/output"
 	"tofu/internal/project/guard"
 	"tofu/internal/store/settings"
 	"tofu/library/docs"

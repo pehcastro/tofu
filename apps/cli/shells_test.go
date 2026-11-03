@@ -14,7 +14,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	shellsverb "tofu/internal/cli/verbs/shells"
+	shellsverb "tofu/apps/cli/verbs/shells"
 	settingspkg "tofu/internal/store/settings"
 	testkit "tofu/internal/testkit/cli"
 	"tofu/internal/tools/shell/process"

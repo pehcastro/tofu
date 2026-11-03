@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	judgeverb "tofu/internal/cli/verbs/judge"
+	judgeverb "tofu/apps/cli/verbs/judge"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/questions"

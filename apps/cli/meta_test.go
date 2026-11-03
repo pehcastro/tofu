@@ -14,9 +14,9 @@ import (
 	"sync"
 	"testing"
 
+	"tofu/apps/cli/output"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
-	"tofu/internal/cli/output"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/sys"

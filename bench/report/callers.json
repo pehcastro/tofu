@@ -16,12 +16,12 @@
   },
   {
     "point": "memory_scope",
-    "file": "internal/cli/verbs/judge/judge_ledger.go",
+    "file": "apps/cli/verbs/judge/judge_ledger.go",
     "symbol": "MemoryScopeJudge"
   },
   {
     "point": "read_worth",
-    "file": "internal/cli/verbs/judge/sift.go",
+    "file": "apps/cli/verbs/judge/sift.go",
     "symbol": "sift.Length"
   },
   {

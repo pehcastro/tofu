@@ -8,9 +8,9 @@ import (
 	"slices"
 	"strings"
 
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/loop"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/quota"

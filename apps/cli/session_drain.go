@@ -12,10 +12,10 @@ import (
 	"sync"
 	"time"
 
+	"tofu/apps/cli/output"
+	"tofu/apps/cli/page"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/context/recall"
-	"tofu/internal/cli/output"
-	"tofu/internal/cli/page"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/store/session"

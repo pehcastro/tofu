@@ -15,10 +15,10 @@ import (
 	"strconv"
 	"strings"
 
+	"tofu/apps/cli/output"
+	"tofu/apps/cli/page"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/subagents"
-	"tofu/internal/cli/output"
-	"tofu/internal/cli/page"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/librarian/skills"
 	"tofu/internal/models/llm/catalog"

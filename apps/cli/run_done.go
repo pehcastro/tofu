@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
+	judgeverb "tofu/apps/cli/verbs/judge"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
-	judgeverb "tofu/internal/cli/verbs/judge"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"

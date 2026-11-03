@@ -18,7 +18,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"tofu/internal/cli/output"
+	"tofu/apps/cli/output"
 	"tofu/internal/konst"
 	"tofu/internal/tools/web/browser/driver"
 )

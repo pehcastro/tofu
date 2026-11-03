@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"tofu/internal/cli/output"
+	"tofu/apps/cli/output"
 	"tofu/internal/host"
 )
 

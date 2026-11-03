@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"tofu/apps/cli/output"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/hooks"
-	"tofu/internal/cli/output"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
 	testkit "tofu/internal/testkit/cli"

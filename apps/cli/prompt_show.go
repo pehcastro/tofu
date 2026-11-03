@@ -7,9 +7,9 @@ import (
 	"slices"
 	"strings"
 
+	"tofu/apps/cli/output"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
-	"tofu/internal/cli/output"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
 	settingspkg "tofu/internal/store/settings"

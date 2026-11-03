@@ -9,9 +9,9 @@ import (
 	"slices"
 	"strings"
 
+	"tofu/apps/cli/output"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/subagents"
-	"tofu/internal/cli/output"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/sys"
 )

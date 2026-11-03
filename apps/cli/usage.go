@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
-	"tofu/internal/cli/output"
-	"tofu/internal/cli/page"
+	"tofu/apps/cli/output"
+	"tofu/apps/cli/page"
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"

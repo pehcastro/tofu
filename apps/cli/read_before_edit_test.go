@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/cli/wiring"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/testkit/cli"
 )

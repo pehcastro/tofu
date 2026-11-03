@@ -4,9 +4,9 @@ import (
 	"cmp"
 	"slices"
 
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/hooks"
 	"tofu/internal/agent/loop"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/store/session"
 )

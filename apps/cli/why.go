@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/cli/output"
-	"tofu/internal/cli/page"
-	judgeverb "tofu/internal/cli/verbs/judge"
+	"tofu/apps/cli/output"
+	"tofu/apps/cli/page"
+	judgeverb "tofu/apps/cli/verbs/judge"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
 	sessionstore "tofu/internal/store/session"

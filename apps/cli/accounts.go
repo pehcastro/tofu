@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/loop"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"

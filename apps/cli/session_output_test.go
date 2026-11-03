@@ -12,10 +12,10 @@ import (
 	"testing/synctest"
 	"time"
 
+	"tofu/apps/cli/output"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/loop"
-	"tofu/internal/cli/output"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/konst"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"

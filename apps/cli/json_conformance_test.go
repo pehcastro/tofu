@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/cli/output"
+	"tofu/apps/cli/output"
 	"tofu/internal/sys"
 	testkit "tofu/internal/testkit/cli"
 )

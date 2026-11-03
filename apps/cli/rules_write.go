@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/cli/output"
+	"tofu/apps/cli/output"
 	"tofu/internal/host"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/sys"

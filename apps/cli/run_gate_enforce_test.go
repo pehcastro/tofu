@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
-	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"

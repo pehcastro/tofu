@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/apps/cli/output"
 	"tofu/internal/agent/loop"
-	"tofu/internal/cli/output"
 	"tofu/internal/librarian/rules"
 )
 

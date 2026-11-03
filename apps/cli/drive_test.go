@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/cli/output"
-	"tofu/internal/cli/wiring"
+	"tofu/apps/cli/output"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	settingspkg "tofu/internal/store/settings"

@@ -24,8 +24,8 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/cli/output"
-	"tofu/internal/cli/page"
+	"tofu/apps/cli/output"
+	"tofu/apps/cli/page"
 	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/models/transport"

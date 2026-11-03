@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
+	"tofu/apps/cli/page"
 	"tofu/internal/agent/loop"
-	"tofu/internal/cli/page"
 	"tofu/internal/cli/render"
 	sessionstore "tofu/internal/store/session"
 )

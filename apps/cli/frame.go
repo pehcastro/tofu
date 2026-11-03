@@ -8,7 +8,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/internal/cli/output"
+	"tofu/apps/cli/output"
 	"tofu/internal/ui/tui/fixture"
 	"tofu/internal/ui/tui/frame/filmstrip"
 )

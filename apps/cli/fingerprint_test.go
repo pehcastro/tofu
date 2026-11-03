@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"tofu/apps/cli/output"
+	judgeverb "tofu/apps/cli/verbs/judge"
 	"tofu/internal/agent/loop"
-	"tofu/internal/cli/output"
-	judgeverb "tofu/internal/cli/verbs/judge"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/questions"
 	"tofu/internal/judge/state"
