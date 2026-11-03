@@ -154,10 +154,11 @@ type runtime struct {
 }
 
 func (r runtime) leadTools(lead []turn.Tool) turn.Registry {
+	scheduled := turn.Tool(turn.ListedOnly{Tool: tools.Cron{}, Why: "tofu run has no host to fire a job, so one made here would never run: schedule it in the app or tofu serve"})
 	if r.cron != nil {
-		lead = append(slices.Clone(lead), tools.Cron{Book: r.cron, Now: r.now, Told: r.notify})
+		scheduled = tools.Cron{Book: r.cron, Now: r.now, Told: r.notify}
 	}
-	return turn.NewRegistry(lead...)
+	return turn.NewRegistry(append(slices.Clone(lead), scheduled)...)
 }
 
 type summaryOmitted struct{ inner turn.Model }
@@ -950,7 +951,10 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		run.scorer.turnID = orchestratorID
 	}
 	if opts.toolSet == toolSetThree && run.leadAsks == nil {
-		config.Tools = run.leadTools(built)
+		config.Tools = turn.NewRegistry(built...)
+		if run.cron != nil {
+			config.Tools = run.leadTools(built)
+		}
 		return config, nil, nil
 	}
 	layers, err := userRuleLayers(dir)
@@ -961,9 +965,9 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		rules, _, err := loadRules("", dir)
 		return rules, err
 	}
-	asking := []turn.Tool{tools.RuleOverride{Ask: run.leadAsks, Running: running, Global: layers[0].dir, Project: layers[1].dir}}
+	asking := []turn.Tool{tools.RuleOverride{Ask: run.leadAsks, Running: running, Global: layers[0].dir, Project: layers[1].dir}, tools.AskPerson{}}
 	if run.leadAsks != nil {
-		asking = append(asking, askPersonTool(dir, run.places.Log, run.leadAsks, config.Inbox, run.keys.keyring(), run.notify))
+		asking[1] = askPersonTool(dir, run.places.Log, run.leadAsks, config.Inbox, run.keys.keyring(), run.notify)
 	}
 	if run.sessions != nil && memoryOn(dir) {
 		asking = append(asking, tools.Remember{Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox, Judge: memoryScopeJudge(dir, run.places.Log, run.keys.keyring(), run.notify),

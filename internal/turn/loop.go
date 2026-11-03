@@ -35,6 +35,21 @@ import (
 const theResponseHitTheOutputTokenLimit = "the response hit the output token limit, so its arguments may be truncated. " +
 	"Re-issue the tool call with complete arguments."
 
+const nobodyAnswersThisTurn = "nobody is here to answer this turn: tofu run has no person and a cron job runs unattended, so take the recommended option where it can be undone, or end the turn on the question"
+
+type ListedOnly struct {
+	Tool Tool
+	Why  string
+}
+
+func (t ListedOnly) Name() string { return t.Tool.Name() }
+
+func (t ListedOnly) Definition() llm.Tool { return t.Tool.Definition() }
+
+func (t ListedOnly) Run(context.Context, json.RawMessage) (Result, error) {
+	return Result{}, fmt.Errorf("%s refused: %s. it stays listed so the tool list matches the one this session's cache was written with", t.Tool.Name(), t.Why)
+}
+
 const memoryAddedSince = "added to memory outside this session since its memory was sent, and held from now on:\n"
 
 func memoryUnsent(memory string, carried []llm.Message, inbox *Inbox) []string {
@@ -195,7 +210,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	var recorded *record
 	personAnswers := config.Person != nil && config.SpawnedFrom == "" && config.TaskOrigin.Source != llm.SourceCronFire
-	unoffered := func(name string) bool { return !personAnswers && name == AskPersonToolName }
+	unoffered := func(name string) bool { return config.SpawnedFrom != "" && name == AskPersonToolName }
 	referencesOffered := slices.ContainsFunc(config.Parts, func(part PromptPart) bool {
 		return part.Concern == ConcernReferences && part.State == session.PartOffered
 	})
@@ -226,7 +241,13 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		return added
 	}
 	answerable := func(tools []Tool) []Tool {
-		return slices.DeleteFunc(tools, func(tool Tool) bool { return unoffered(tool.Name()) })
+		tools = slices.DeleteFunc(tools, func(tool Tool) bool { return unoffered(tool.Name()) })
+		for at, tool := range tools {
+			if !personAnswers && tool.Name() == AskPersonToolName {
+				tools[at] = ListedOnly{Tool: tool, Why: nobodyAnswersThisTurn}
+			}
+		}
+		return tools
 	}
 	currentTools := func() Registry {
 		return NewRegistry(answerable(withLoopTools(source().tools))...)
@@ -1188,7 +1209,11 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			if offered := handedBack(decision.Content); offered != "" && config.SpawnedFrom == "" && concluding == "" && handbacks < konst.LeadHandbackContinuations {
 				handbacks++
 				stepRow.Warnings = append(stepRow.Warnings, "the lead ended by handing the person a step, so it was asked to take it: "+offered)
-				messages = append(messages, inserted(llm.Origin{Source: llm.SourceHandback}, handbackNote(offered, stepTools)))
+				asking := stepTools
+				if !personAnswers {
+					asking = NewRegistry()
+				}
+				messages = append(messages, inserted(llm.Origin{Source: llm.SourceHandback}, handbackNote(offered, asking)))
 				keep(stepRow)
 				continue
 			}

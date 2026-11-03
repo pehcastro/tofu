@@ -152,6 +152,10 @@ tools.
   and its first line says which. It holds the session until it ends, so a session open in
   the app or `tofu serve` is refused as busy. A name it cannot find exits 2
   before any request. It starts with no sub-agents from earlier turns.
+  `tofu run` lists the same tools as the app and `tofu serve`, so a session
+  begun in one and continued in the other reads its cache: `ask_person` and
+  `cron` stay listed in `tofu run` and refuse when called, since nobody
+  answers a run and no host fires its jobs.
 - **Start fresh**: `/new`.
 - **Name one**: `tofu session rename <name|id|head> "checkout redesign"` makes it
   `checkout-redesign`, on every generation.
