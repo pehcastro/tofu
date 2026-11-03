@@ -497,18 +497,19 @@ const (
 )
 
 const (
-	HostEventBuffer     = 256
-	HostSteeringQueue   = 64
-	HostCloseWaitMillis = 3000
-	HostLingerMillis    = 5000
-	HostReadyMillis     = 10000
-	HostAnswerMillis    = 1000
-	HostJoinMillis      = 120000
-	HostRetryMillis     = 50
-	FollowQueue         = 1024
-	FollowQueueBytes    = 8 << 20
-	FollowSettledKept   = 32
-	FollowReplyMillis   = 3000
+	HostEventBuffer      = 256
+	HostSteeringQueue    = 64
+	HostCloseWaitMillis  = 3000
+	HostLingerMillis     = 5000
+	HostReadyMillis      = 10000
+	HostAnswerMillis     = 1000
+	HostJoinMillis       = 120000
+	HostRetryMillis      = 50
+	FollowQueue          = 1024
+	FollowQueueBytes     = 8 << 20
+	FollowSettledKept    = 32
+	FollowReplyMillis    = 3000
+	FollowHubStartMillis = 20000
 )
 
 const (

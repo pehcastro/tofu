@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"io"
 	"io/fs"
 	"net"
@@ -20,6 +21,7 @@ import (
 	"time"
 
 	"tofu/internal/host"
+	"tofu/internal/konst"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
 	"tofu/internal/turn"
@@ -87,19 +89,36 @@ func TestFollowHubProcess(t *testing.T) {
 	if project == "" {
 		t.Skip("runs only as the tofu host of another Follow test")
 	}
-	var ran sync.WaitGroup
-	ran.Go(func() {
-		_ = host.RunHub(project, nil, func(string) {}, func(id string, projectTurn *sync.Mutex) (*host.Host, func(), []string) {
+	ran := make(chan error, 1)
+	go func() {
+		ran <- host.RunHub(project, nil, func(string) {}, func(id string, projectTurn *sync.Mutex) (*host.Host, func(), []string) {
 			h, troubles := host.New(host.Config{Dir: project, Play: play, Resumed: host.Carry{Session: id}, Unrecorded: true, ProjectTurn: projectTurn})
 			return h, h.Close, troubles
 		})
-	})
+	}()
+	asks := make(chan string)
+	go func() {
+		for lines := bufio.NewScanner(os.Stdin); lines.Scan(); {
+			asks <- lines.Text()
+		}
+		close(asks)
+	}()
+	ready := konst.HostReadyMillis * time.Millisecond
+	gaveUp := time.After(ready)
 	for _, err := host.HubStatusOf(project); err != nil; _, err = host.HubStatusOf(project) {
-		time.Sleep(pollGap)
+		select {
+		case err := <-ran:
+			t.Fatalf("the hub did not start: %v", err)
+		case <-asks:
+			t.Fatal("stdin ended before the hub served")
+		case <-gaveUp:
+			t.Fatalf("the hub did not answer in %s: %v", ready, err)
+		case <-time.After(pollGap):
+		}
 	}
 	_, _ = os.Stdout.WriteString("serving\n")
-	for lines := bufio.NewScanner(os.Stdin); lines.Scan(); {
-		switch lines.Text() {
+	for ask := range asks {
+		switch ask {
 		case "goroutines":
 			_, _ = os.Stdout.WriteString("goroutines " + strconv.Itoa(runtime.NumGoroutine()) + "\n")
 		case "heap":
@@ -110,7 +129,14 @@ func TestFollowHubProcess(t *testing.T) {
 		}
 	}
 	_, _ = host.StopHub(project)
-	ran.Wait()
+	select {
+	case err := <-ran:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(ready):
+		t.Fatalf("the hub did not stop in %s", ready)
+	}
 }
 
 func startHub(t *testing.T) (*hubProcess, string) {
@@ -123,7 +149,7 @@ func startHub(t *testing.T) (*hubProcess, string) {
 	project := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	cmd := exec.Command(os.Args[0], "-test.run=^TestFollowHubProcess$")
+	cmd := exec.Command(os.Args[0], "-test.run=^TestFollowHubProcess$", "-test.timeout="+flag.Lookup("test.timeout").Value.String())
 	cmd.Env = append(os.Environ(), followHubVariable+"="+project)
 	in, err := cmd.StdinPipe()
 	if err != nil {
@@ -150,8 +176,23 @@ func startHub(t *testing.T) (*hubProcess, string) {
 			<-h.ended
 		}
 	})
-	if said, err := h.out.ReadString('\n'); strings.TrimSpace(said) != "serving" {
-		t.Fatalf("the hub process said %q, %v", said, err)
+	said := make(chan string, 1)
+	go func() {
+		first, _ := h.out.ReadString('\n')
+		if strings.TrimSpace(first) != "serving" {
+			rest, _ := io.ReadAll(h.out)
+			first += string(rest)
+		}
+		said <- first
+	}()
+	start := konst.FollowHubStartMillis * time.Millisecond
+	select {
+	case first := <-said:
+		if strings.TrimSpace(first) != "serving" {
+			t.Fatalf("the hub process said %q", first)
+		}
+	case <-time.After(start):
+		t.Fatalf("the hub process said nothing in %s", start)
 	}
 	return h, project
 }
