@@ -152,8 +152,12 @@ func gateMissed(project string, recipes map[string]string, definition subagent.D
 			verdict := checkPrinted(check, printed, call.ExitCode)
 			cargo := strings.HasPrefix(check, "cargo ")
 			dead, foreign := cargoFindings(project, lastEdit, owns, printed)
+			line, mine := errorLine(printed), true
+			if call.Tool == "typecheck" && call.Error != "" {
+				line, mine = typecheckOwnError(project, owns, printed, call.Command)
+			}
 			quoted := ""
-			if line := errorLine(printed); line != "" {
+			if line != "" {
 				quoted = ": " + line
 			}
 			switch {
@@ -171,7 +175,7 @@ func gateMissed(project string, recipes map[string]string, definition subagent.D
 				said = ""
 			case call.ExitCode != nil && *call.ExitCode != 0:
 				said = fmt.Sprintf("%s exited %d%s", check, *call.ExitCode, quoted)
-			case call.Tool == "typecheck" && call.Error != "" && !typecheckNamesOwnFile(project, owns, call, rounds):
+			case !mine:
 				said = ""
 			case call.Error != "" && !strings.HasPrefix(call.Error, testNoTests):
 				said = check + " failed" + quoted
@@ -258,16 +262,16 @@ func checkerMissing(printed string) bool {
 	return slices.ContainsFunc([]string{"No module named", "command not found", "is not recognized"}, func(said string) bool { return strings.Contains(printed, said) })
 }
 
-func typecheckNamesOwnFile(project string, owns []string, call ToolCallRow, rounds []Row) bool {
-	_, listed, hasList := strings.Cut(printedBy(rounds, call.Call), ":\n")
-	scope := call.Command
+func typecheckOwnError(project string, owns []string, printed, scope string) (quoted string, mine bool) {
+	_, listed, hasList := strings.Cut(printed, ":\n")
 	if !filepath.IsAbs(scope) {
 		scope = filepath.Join(project, scope)
 	}
 	tsconfig, found := findUp(scope, tsconfigName)
 	if len(owns) == 0 || !hasList || !found {
-		return true
+		return errorLine(printed), true
 	}
+	var unplaced []string
 	for _, line := range strings.Split(listed, "\n") {
 		if strings.TrimSpace(line) == "" || strings.HasPrefix(line, " ") {
 			continue
@@ -276,14 +280,17 @@ func typecheckNamesOwnFile(project string, owns []string, call ToolCallRow, roun
 		if located, _, tsc := strings.Cut(line, "): error TS"); tsc {
 			path = located[:max(strings.LastIndex(located, "("), 0)]
 		} else if position == "" || position[0] < '0' || position[0] > '9' {
-			return true
+			unplaced = append(unplaced, line)
+			continue
 		}
 		relative, err := filepath.Rel(project, filepath.Join(filepath.Dir(tsconfig), path))
-		if mine, _ := subagent.Matches(filepath.ToSlash(relative), owns); path == "" || err != nil || mine {
-			return true
+		if owned, _ := subagent.Matches(filepath.ToSlash(relative), owns); path == "" || err != nil {
+			unplaced = append(unplaced, line)
+		} else if owned {
+			return line, true
 		}
 	}
-	return false
+	return errorLine(strings.Join(unplaced, "\n")), len(unplaced) > 0
 }
 
 func gateRan(check string, call ToolCallRow, recipes map[string]string) bool {
