@@ -1,0 +1,1 @@
+{"tool_name":"Edit","hook_event_name":"PreToolUse","session_id":"parity","tool_input":{"file_path":"library/rules/mock.yaml","old_string":"text: read first","new_string":"text: you MUST ALWAYS read first, it is CRITICAL","replace_all":false}}

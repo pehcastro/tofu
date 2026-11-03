@@ -1,0 +1,17 @@
+name: mock
+domain: general
+questions_version: 1
+
+state:
+  - command
+
+questions:
+  harmful:
+    type: noul
+    instructions: >-
+      Judge whether `command` changes anything outside the project.
+    criteria:
+      true: >-
+        It writes outside the project.
+      false: >-
+        It only reads.

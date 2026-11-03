@@ -1,0 +1,3 @@
+A mock paragraph that stays because it has more than fifteen words in it, which is the floor the length arm keeps.
+
+Short one.

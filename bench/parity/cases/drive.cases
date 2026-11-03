@@ -1,0 +1,196 @@
+case drive/chat
+drive chat --cassette $DATA/serve/tools.jsonl
+
+case drive/tab-subagents
+drive tab-subagents --cassette $DATA/serve/spawn.jsonl
+
+case drive/tab-subagents-command
+drive tab-subagents-command
+
+case drive/tab-file-edits
+drive tab-file-edits --cassette $DATA/serve/tools.jsonl
+
+case drive/tab-file-edits-command
+drive tab-file-edits-command --cassette $DATA/serve/tools.jsonl
+
+case drive/tab-shells
+drive tab-shells --cassette $DATA/serve/kept.jsonl
+
+case drive/tab-shells-command
+drive tab-shells-command
+
+case drive/tab-orders
+drive tab-orders --cassette $DATA/serve/hello.jsonl
+
+case drive/tab-orders-command
+drive tab-orders-command --cassette $DATA/serve/hello.jsonl
+
+case drive/settings
+drive settings
+
+case drive/settings-search
+drive settings-search
+
+case drive/models
+drive models
+
+case drive/quota
+drive quota --quota $DATA/inputs/quota.json
+
+case drive/palette
+drive palette
+
+case drive/search
+drive search --cassette $DATA/serve/tools.jsonl
+
+case drive/file-picker
+drive file-picker
+
+case drive/history
+drive history --cassette $DATA/serve/hello.jsonl
+
+case drive/bang
+drive bang
+
+case drive/steer
+drive steer
+
+case drive/interrupt
+drive interrupt --cassette $DATA/serve/slow.jsonl
+
+case drive/keys-help
+drive keys-help
+
+case drive/slash-keys
+drive slash-keys --cassette $DATA/serve/hello.jsonl
+
+case drive/slash-links
+drive slash-links --cassette $DATA/serve/hello.jsonl
+
+case drive/slash-memory
+drive slash-memory --cassette $DATA/serve/hello.jsonl
+
+case drive/slash-remember
+drive slash-remember --cassette $DATA/serve/hello.jsonl
+
+case drive/slash-permissions
+drive slash-permissions --cassette $DATA/serve/hello.jsonl
+
+case drive/slash-reload
+drive slash-reload --cassette $DATA/serve/hello.jsonl
+
+case drive/slash-resume
+drive slash-resume --cassette $DATA/serve/hello.jsonl
+
+case drive/slash-side
+drive slash-side --cassette $DATA/serve/hello.jsonl
+
+case drive/slash-new
+drive slash-new --cassette $DATA/serve/hello.jsonl
+
+case drive/slash-compact
+drive slash-compact --cassette $DATA/serve/hello.jsonl
+
+case drive/slash-fork
+drive slash-fork --cassette $DATA/serve/hello.jsonl
+
+case drive/slash-branch
+drive slash-branch --cassette $DATA/serve/hello.jsonl
+
+case drive/slash-undo
+drive slash-undo --cassette $DATA/serve/hello.jsonl
+
+case drive/slash-help
+drive slash-help --cassette $DATA/serve/hello.jsonl
+
+case drive/slash-status
+drive slash-status --cassette $DATA/serve/hello.jsonl
+
+case drive/slash-settings
+drive slash-settings --cassette $DATA/serve/hello.jsonl
+
+case drive/slash-models
+drive slash-models --cassette $DATA/serve/hello.jsonl
+
+case drive/slash-orders
+drive slash-orders --cassette $DATA/serve/hello.jsonl
+
+case drive/slash-nope
+drive slash-nope --cassette $DATA/serve/hello.jsonl
+
+case drive/host-cron
+drive host-cron --cassette $DATA/serve/hello.jsonl --host
+
+case drive/host-loop
+drive host-loop --cassette $DATA/serve/hello.jsonl --host
+
+case drive/host-goal
+drive host-goal --cassette $DATA/serve/hello.jsonl --host
+
+case drive/host-permissions
+drive host-permissions --cassette $DATA/serve/hello.jsonl --host
+
+case drive/host-simplify
+drive host-simplify --cassette $DATA/serve/hello.jsonl --host
+
+case drive/host-debug
+drive host-debug --cassette $DATA/serve/hello.jsonl --host
+
+case drive/host-hunt
+drive host-hunt --cassette $DATA/serve/hello.jsonl --host
+
+case drive/host-cron-list
+drive host-cron-list --cassette $DATA/serve/hello.jsonl --host
+
+case drive/host-loop-5m-say-hello
+drive host-loop-5m-say-hello --cassette $DATA/serve/hello.jsonl --host
+
+case drive/host-goal-say-hello-twice
+drive host-goal-say-hello-twice --cassette $DATA/serve/hello.jsonl --host
+
+case drive/setup
+drive setup --setup
+
+case drive/setup with a binding
+tofu models bind orchestrator claude-sub/claude-opus-5
+drive setup --setup
+
+case drive/welcome fresh
+drive welcome --fresh
+
+case drive/welcome
+drive welcome
+
+case drive/continue after a run
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --dir $PROJECT "read the note and write one"
+drive tab-subagents-command --continue
+
+case drive/source claude-sub
+drive chat --cassette $DATA/serve/tools.jsonl --source claude-sub
+
+case drive/source codex-sub
+drive chat --cassette $DATA/serve/tools.jsonl --source codex-sub
+
+case drive/arm no-subagents
+drive chat --cassette $DATA/serve/tools.jsonl --no-subagents
+
+case drive/arm tools three
+drive chat --cassette $DATA/serve/tools.jsonl --tools three
+
+case drive/arm no-instructions
+write AGENTS.md always answer in a mock voice\n
+drive chat --cassette $DATA/serve/tools.jsonl --no-instructions
+
+case drive/agents file read
+write AGENTS.md always answer in a mock voice\n
+drive chat --cassette $DATA/serve/tools.jsonl
+
+case drive/flow 1-two-report
+drive 1-two-report
+
+case drive/flow 10-steer-image
+drive 10-steer-image --host --clipboard $DATA/drive/10-shot.png
+
+case drive/flow 11-fork-roster
+drive 11-fork-roster

@@ -1,0 +1,4 @@
+type /shells
+key enter
+screen
+key esc

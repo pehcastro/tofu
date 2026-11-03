@@ -1,0 +1,152 @@
+case serve/handshake
+serve handshake
+
+case serve/initialize-twice
+serve initialize-twice
+
+case serve/initialize-bad-version
+serve initialize-bad-version
+
+case serve/session-list
+serve session-list
+
+case serve/session-state
+serve session-state
+
+case serve/session-set
+serve session-set
+
+case serve/session-rename
+serve session-rename
+
+case serve/session-access
+serve session-access
+
+case serve/session-close
+serve session-close
+
+case serve/session-compact-empty
+serve session-compact-empty
+
+case serve/session-fork-empty
+serve session-fork-empty
+
+case serve/session-branch-empty
+serve session-branch-empty
+
+case serve/session-history-empty
+serve session-history-empty
+
+case serve/session-turns-empty
+serve session-turns-empty
+
+case serve/session-info-empty
+serve session-info-empty
+
+case serve/session-open-unknown
+serve session-open-unknown
+
+case serve/approvals
+serve approvals
+
+case serve/status
+serve status
+
+case serve/label
+serve label
+
+case serve/shells
+serve shells
+
+case serve/queries-reads
+serve queries-reads
+
+case serve/query-update
+serve query-update
+
+case serve/query-usage
+serve query-usage
+
+case serve/query-session
+serve query-session
+
+case serve/query-ledger
+serve query-ledger
+
+case serve/query-docs
+serve query-docs
+
+case serve/memory
+serve memory
+
+case serve/rules-writes
+serve rules-writes
+
+case serve/agents-writes
+serve agents-writes
+
+case serve/settings-set
+serve settings-set
+
+case serve/cron
+serve cron
+
+case serve/learn
+serve learn
+
+case serve/learn-scan
+serve learn-scan
+
+case serve/reload
+serve reload
+
+case serve/models-reload
+serve models-reload
+
+case serve/login
+serve login
+
+case serve/login-key-openrouter
+serve login-key-openrouter
+
+case serve/mention
+serve mention
+
+case serve/scratch
+serve scratch
+
+case serve/boardy-empty
+serve boardy-empty
+
+case serve/boardy
+serve boardy
+
+case serve/turn-send
+serve turn-send --cassette $DATA/serve/hello.jsonl
+
+case serve/turn-tools
+serve turn-tools --cassette $DATA/serve/tools.jsonl
+
+case serve/turn-fork
+serve turn-fork --cassette $DATA/serve/hello.jsonl
+
+case serve/turn-compact
+serve turn-compact --cassette $DATA/serve/hello.jsonl
+
+case serve/turn-branch
+serve turn-branch --cassette $DATA/serve/hello.jsonl
+
+case serve/turn-idle-errors
+serve turn-idle-errors --cassette $DATA/serve/hello.jsonl
+
+case serve/turn-steer
+serve turn-steer --cassette $DATA/serve/slow.jsonl
+
+case serve/schema
+tofu serve --schema
+
+case serve/no stdio
+tofu serve
+
+case serve/both
+tofu serve --stdio --schema

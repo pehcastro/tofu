@@ -1,0 +1,4 @@
+{"text":"reading the note","tools":[{"name":"read","args":{"path":"note.txt"}}]}
+{"text":"writing one","tools":[{"name":"write","args":{"path":"written.txt","content":"a mock line\n"}}]}
+{"text":"PARITYTOOLS the note says a mock note and written.txt holds a mock line"}
+{"text":"PARITYSPARE one"}

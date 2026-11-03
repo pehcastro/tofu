@@ -1,0 +1,5 @@
+{"text":"starting one worker","tools":[{"name":"spawn","args":{"task":"read note.txt and say what it holds","owns":["note.txt"]}}]}
+{"text":"PARITYSPAWN the worker read the note"}
+{"text":"PARITYSPARE one"}
+{"agent":"c1","text":"PARITYWORKER the note holds a mock note"}
+{"agent":"c1","text":"PARITYSPARE c1"}

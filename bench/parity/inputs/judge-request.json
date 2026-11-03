@@ -1,0 +1,1 @@
+{"library":"general","rule":"ask@1","state":{"asker":"lead","question":"which mock file","options":["a","b"],"recommended":"a","path":"src/a.go","in_owns":true,"answered_by_spec_or_ticket":false,"precedent_exists":false,"reversibility":"easy"}}

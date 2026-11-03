@@ -1,0 +1,7 @@
+type start working
+key enter
+wait LEADWORKS
+key ctrl+v
+type what is in this picture
+key enter
+wait STEERSEEN

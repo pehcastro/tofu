@@ -1,0 +1,8 @@
+type run the alpha and beta workers
+key enter
+wait LEADDONE
+wait LEADREAD
+idle
+requests text 1
+key alt+2
+screen

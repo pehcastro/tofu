@@ -1,0 +1,13 @@
+type /settings
+key enter
+screen
+key down
+key down
+screen
+key enter
+screen
+key esc
+key shift+tab
+screen
+key esc
+screen

@@ -1,0 +1,2 @@
+{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"client": "parity", "versions": ["tofu.host/9"], "capabilities": []}}
+{"jsonrpc": "2.0", "id": 2, "method": "session.list", "params": {}}

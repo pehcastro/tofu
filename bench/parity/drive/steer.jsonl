@@ -1,0 +1,3 @@
+{"text":"PARITYWORKS sleeping","tools":[{"name":"bash","args":{"command":"sleep 4"}}]}
+{"text":"PARITYSTEERED read the steer"}
+{"text":"PARITYSPARE one"}

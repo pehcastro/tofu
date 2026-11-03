@@ -1,0 +1,14 @@
+type run one worker
+key enter
+wait PARITYSPAWN
+idle
+key alt+2
+screen
+key t
+screen
+key f
+screen
+key enter
+screen
+key esc
+screen

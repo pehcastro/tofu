@@ -1,0 +1,6 @@
+{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"client": "parity", "versions": ["tofu.host/1"], "capabilities": ["questions", "takeover"]}}
+{"jsonrpc": "2.0", "id": 2, "method": "session.open", "params": {}}
+wait status
+{"jsonrpc": "2.0", "id": 3, "method": "status.list", "params": {}}
+{"jsonrpc": "2.0", "id": 4, "method": "status.list", "params": {"session": "nope"}}
+{"jsonrpc": "2.0", "id": 5, "method": "status.ack", "params": {"id": "nope"}}

@@ -1,0 +1,1094 @@
+case settings/get theme
+tofu settings get theme
+
+case settings/get theme json
+tofu settings get theme --json
+
+case settings/set theme global
+tofu settings set theme "tofu light" --json
+tofu settings get theme
+tofu settings
+
+case settings/set theme project
+tofu settings set --scope project theme "tofu light"
+tofu settings get theme --json
+
+case settings/get density
+tofu settings get density
+
+case settings/get density json
+tofu settings get density --json
+
+case settings/set density global
+tofu settings set density compact --json
+tofu settings get density
+tofu settings
+
+case settings/set density project
+tofu settings set --scope project density compact
+tofu settings get density --json
+
+case settings/get animations
+tofu settings get animations
+
+case settings/get animations json
+tofu settings get animations --json
+
+case settings/set animations global
+tofu settings set animations off --json
+tofu settings get animations
+tofu settings
+
+case settings/set animations project
+tofu settings set --scope project animations off
+tofu settings get animations --json
+
+case settings/get statusBar
+tofu settings get statusBar
+
+case settings/get statusBar json
+tofu settings get statusBar --json
+
+case settings/set statusBar global
+tofu settings set statusBar detailed --json
+tofu settings get statusBar
+tofu settings
+
+case settings/set statusBar project
+tofu settings set --scope project statusBar detailed
+tofu settings get statusBar --json
+
+case settings/get colorMode
+tofu settings get colorMode
+
+case settings/get colorMode json
+tofu settings get colorMode --json
+
+case settings/set colorMode global
+tofu settings set colorMode truecolor --json
+tofu settings get colorMode
+tofu settings
+
+case settings/set colorMode project
+tofu settings set --scope project colorMode truecolor
+tofu settings get colorMode --json
+
+case settings/get continueOnSubscription
+tofu settings get continueOnSubscription
+
+case settings/get continueOnSubscription json
+tofu settings get continueOnSubscription --json
+
+case settings/set continueOnSubscription global
+tofu settings set continueOnSubscription parity-value --json
+tofu settings get continueOnSubscription
+tofu settings
+
+case settings/set continueOnSubscription project
+tofu settings set --scope project continueOnSubscription parity-value
+tofu settings get continueOnSubscription --json
+
+case settings/get subscriptionOrder
+tofu settings get subscriptionOrder
+
+case settings/get subscriptionOrder json
+tofu settings get subscriptionOrder --json
+
+case settings/set subscriptionOrder global
+tofu settings set subscriptionOrder claude-sub --json
+tofu settings get subscriptionOrder
+tofu settings
+
+case settings/set subscriptionOrder project
+tofu settings set --scope project subscriptionOrder claude-sub
+tofu settings get subscriptionOrder --json
+
+case settings/get continueOnAPIModel
+tofu settings get continueOnAPIModel
+
+case settings/get continueOnAPIModel json
+tofu settings get continueOnAPIModel --json
+
+case settings/set continueOnAPIModel global
+tofu settings set continueOnAPIModel parity-value --json
+tofu settings get continueOnAPIModel
+tofu settings
+
+case settings/set continueOnAPIModel project
+tofu settings set --scope project continueOnAPIModel parity-value
+tofu settings get continueOnAPIModel --json
+
+case settings/get composer
+tofu settings get composer
+
+case settings/get composer json
+tofu settings get composer --json
+
+case settings/set composer global
+tofu settings set composer compact --json
+tofu settings get composer
+tofu settings
+
+case settings/set composer project
+tofu settings set --scope project composer compact
+tofu settings get composer --json
+
+case settings/get gatePrompt
+tofu settings get gatePrompt
+
+case settings/get gatePrompt json
+tofu settings get gatePrompt --json
+
+case settings/set gatePrompt global
+tofu settings set gatePrompt ask --json
+tofu settings get gatePrompt
+tofu settings
+
+case settings/set gatePrompt project
+tofu settings set --scope project gatePrompt ask
+tofu settings get gatePrompt --json
+
+case settings/get gateAskWaitSeconds
+tofu settings get gateAskWaitSeconds
+
+case settings/get gateAskWaitSeconds json
+tofu settings get gateAskWaitSeconds --json
+
+case settings/set gateAskWaitSeconds global
+tofu settings set gateAskWaitSeconds 2 --json
+tofu settings get gateAskWaitSeconds
+tofu settings
+
+case settings/set gateAskWaitSeconds project
+tofu settings set --scope project gateAskWaitSeconds 2
+tofu settings get gateAskWaitSeconds --json
+
+case settings/get gateAskTimeout
+tofu settings get gateAskTimeout
+
+case settings/get gateAskTimeout json
+tofu settings get gateAskTimeout --json
+
+case settings/set gateAskTimeout global
+tofu settings set gateAskTimeout allow --json
+tofu settings get gateAskTimeout
+tofu settings
+
+case settings/set gateAskTimeout project
+tofu settings set --scope project gateAskTimeout allow
+tofu settings get gateAskTimeout --json
+
+case settings/get askPersonWaitSeconds
+tofu settings get askPersonWaitSeconds
+
+case settings/get askPersonWaitSeconds json
+tofu settings get askPersonWaitSeconds --json
+
+case settings/set askPersonWaitSeconds global
+tofu settings set askPersonWaitSeconds 2 --json
+tofu settings get askPersonWaitSeconds
+tofu settings
+
+case settings/set askPersonWaitSeconds project
+tofu settings set --scope project askPersonWaitSeconds 2
+tofu settings get askPersonWaitSeconds --json
+
+case settings/get readBeforeEdit
+tofu settings get readBeforeEdit
+
+case settings/get readBeforeEdit json
+tofu settings get readBeforeEdit --json
+
+case settings/set readBeforeEdit global
+tofu settings set readBeforeEdit false --json
+tofu settings get readBeforeEdit
+tofu settings
+
+case settings/set readBeforeEdit project
+tofu settings set --scope project readBeforeEdit false
+tofu settings get readBeforeEdit --json
+
+case settings/get autoUpdate
+tofu settings get autoUpdate
+
+case settings/get autoUpdate json
+tofu settings get autoUpdate --json
+
+case settings/set autoUpdate global
+tofu settings set autoUpdate false --json
+tofu settings get autoUpdate
+tofu settings
+
+case settings/set autoUpdate project
+tofu settings set --scope project autoUpdate false
+tofu settings get autoUpdate --json
+
+case settings/get chatShowsTools
+tofu settings get chatShowsTools
+
+case settings/get chatShowsTools json
+tofu settings get chatShowsTools --json
+
+case settings/set chatShowsTools global
+tofu settings set chatShowsTools true --json
+tofu settings get chatShowsTools
+tofu settings
+
+case settings/set chatShowsTools project
+tofu settings set --scope project chatShowsTools true
+tofu settings get chatShowsTools --json
+
+case settings/get agentFeeds
+tofu settings get agentFeeds
+
+case settings/get agentFeeds json
+tofu settings get agentFeeds --json
+
+case settings/set agentFeeds global
+tofu settings set agentFeeds summary --json
+tofu settings get agentFeeds
+tofu settings
+
+case settings/set agentFeeds project
+tofu settings set --scope project agentFeeds summary
+tofu settings get agentFeeds --json
+
+case settings/get showThinking
+tofu settings get showThinking
+
+case settings/get showThinking json
+tofu settings get showThinking --json
+
+case settings/set showThinking global
+tofu settings set showThinking false --json
+tofu settings get showThinking
+tofu settings
+
+case settings/set showThinking project
+tofu settings set --scope project showThinking false
+tofu settings get showThinking --json
+
+case settings/get thinkingSummary
+tofu settings get thinkingSummary
+
+case settings/get thinkingSummary json
+tofu settings get thinkingSummary --json
+
+case settings/set thinkingSummary global
+tofu settings set thinkingSummary omitted --json
+tofu settings get thinkingSummary
+tofu settings
+
+case settings/set thinkingSummary project
+tofu settings set --scope project thinkingSummary omitted
+tofu settings get thinkingSummary --json
+
+case settings/get images
+tofu settings get images
+
+case settings/get images json
+tofu settings get images --json
+
+case settings/set images global
+tofu settings set images inline --json
+tofu settings get images
+tofu settings
+
+case settings/set images project
+tofu settings set --scope project images inline
+tofu settings get images --json
+
+case settings/get projectInstructionsCap
+tofu settings get projectInstructionsCap
+
+case settings/get projectInstructionsCap json
+tofu settings get projectInstructionsCap --json
+
+case settings/set projectInstructionsCap global
+tofu settings set projectInstructionsCap 2 --json
+tofu settings get projectInstructionsCap
+tofu settings
+
+case settings/set projectInstructionsCap project
+tofu settings set --scope project projectInstructionsCap 2
+tofu settings get projectInstructionsCap --json
+
+case settings/get contextCeiling
+tofu settings get contextCeiling
+
+case settings/get contextCeiling json
+tofu settings get contextCeiling --json
+
+case settings/set contextCeiling global
+tofu settings set contextCeiling 2 --json
+tofu settings get contextCeiling
+tofu settings
+
+case settings/set contextCeiling project
+tofu settings set --scope project contextCeiling 2
+tofu settings get contextCeiling --json
+
+case settings/get fork
+tofu settings get fork
+
+case settings/get fork json
+tofu settings get fork --json
+
+case settings/set fork global
+tofu settings set fork off --json
+tofu settings get fork
+tofu settings
+
+case settings/set fork project
+tofu settings set --scope project fork off
+tofu settings get fork --json
+
+case settings/get autoCompaction
+tofu settings get autoCompaction
+
+case settings/get autoCompaction json
+tofu settings get autoCompaction --json
+
+case settings/set autoCompaction global
+tofu settings set autoCompaction off --json
+tofu settings get autoCompaction
+tofu settings
+
+case settings/set autoCompaction project
+tofu settings set --scope project autoCompaction off
+tofu settings get autoCompaction --json
+
+case settings/get instructionSources
+tofu settings get instructionSources
+
+case settings/get instructionSources json
+tofu settings get instructionSources --json
+
+case settings/set instructionSources global
+tofu settings set instructionSources claude-first --json
+tofu settings get instructionSources
+tofu settings
+
+case settings/set instructionSources project
+tofu settings set --scope project instructionSources claude-first
+tofu settings get instructionSources --json
+
+case settings/get skills
+tofu settings get skills
+
+case settings/get skills json
+tofu settings get skills --json
+
+case settings/set skills global
+tofu settings set skills off --json
+tofu settings get skills
+tofu settings
+
+case settings/set skills project
+tofu settings set --scope project skills off
+tofu settings get skills --json
+
+case settings/get memory
+tofu settings get memory
+
+case settings/get memory json
+tofu settings get memory --json
+
+case settings/set memory global
+tofu settings set memory false --json
+tofu settings get memory
+tofu settings
+
+case settings/set memory project
+tofu settings set --scope project memory false
+tofu settings get memory --json
+
+case settings/get autoMemory
+tofu settings get autoMemory
+
+case settings/get autoMemory json
+tofu settings get autoMemory --json
+
+case settings/set autoMemory global
+tofu settings set autoMemory true --json
+tofu settings get autoMemory
+tofu settings
+
+case settings/set autoMemory project
+tofu settings set --scope project autoMemory true
+tofu settings get autoMemory --json
+
+case settings/get episodes
+tofu settings get episodes
+
+case settings/get episodes json
+tofu settings get episodes --json
+
+case settings/set episodes global
+tofu settings set episodes off --json
+tofu settings get episodes
+tofu settings
+
+case settings/set episodes project
+tofu settings set --scope project episodes off
+tofu settings get episodes --json
+
+case settings/get memoryFromAllUsers
+tofu settings get memoryFromAllUsers
+
+case settings/get memoryFromAllUsers json
+tofu settings get memoryFromAllUsers --json
+
+case settings/set memoryFromAllUsers global
+tofu settings set memoryFromAllUsers on --json
+tofu settings get memoryFromAllUsers
+tofu settings
+
+case settings/set memoryFromAllUsers project
+tofu settings set --scope project memoryFromAllUsers on
+tofu settings get memoryFromAllUsers --json
+
+case settings/get memoryModel
+tofu settings get memoryModel
+
+case settings/get memoryModel json
+tofu settings get memoryModel --json
+
+case settings/set memoryModel global
+tofu settings set memoryModel parity-value --json
+tofu settings get memoryModel
+tofu settings
+
+case settings/set memoryModel project
+tofu settings set --scope project memoryModel parity-value
+tofu settings get memoryModel --json
+
+case settings/get learn
+tofu settings get learn
+
+case settings/get learn json
+tofu settings get learn --json
+
+case settings/set learn global
+tofu settings set learn true --json
+tofu settings get learn
+tofu settings
+
+case settings/set learn project
+tofu settings set --scope project learn true
+tofu settings get learn --json
+
+case settings/get diffContext
+tofu settings get diffContext
+
+case settings/get diffContext json
+tofu settings get diffContext --json
+
+case settings/set diffContext global
+tofu settings set diffContext 2 --json
+tofu settings get diffContext
+tofu settings
+
+case settings/set diffContext project
+tofu settings set --scope project diffContext 2
+tofu settings get diffContext --json
+
+case settings/get hyperlinks
+tofu settings get hyperlinks
+
+case settings/get hyperlinks json
+tofu settings get hyperlinks --json
+
+case settings/set hyperlinks global
+tofu settings set hyperlinks on --json
+tofu settings get hyperlinks
+tofu settings
+
+case settings/set hyperlinks project
+tofu settings set --scope project hyperlinks on
+tofu settings get hyperlinks --json
+
+case settings/get groupByAgent
+tofu settings get groupByAgent
+
+case settings/get groupByAgent json
+tofu settings get groupByAgent --json
+
+case settings/set groupByAgent global
+tofu settings set groupByAgent false --json
+tofu settings get groupByAgent
+tofu settings
+
+case settings/set groupByAgent project
+tofu settings set --scope project groupByAgent false
+tofu settings get groupByAgent --json
+
+case settings/get persistentRegistry
+tofu settings get persistentRegistry
+
+case settings/get persistentRegistry json
+tofu settings get persistentRegistry --json
+
+case settings/set persistentRegistry global
+tofu settings set persistentRegistry true --json
+tofu settings get persistentRegistry
+tofu settings
+
+case settings/set persistentRegistry project
+tofu settings set --scope project persistentRegistry true
+tofu settings get persistentRegistry --json
+
+case settings/get logTail
+tofu settings get logTail
+
+case settings/get logTail json
+tofu settings get logTail --json
+
+case settings/set logTail global
+tofu settings set logTail 100 --json
+tofu settings get logTail
+tofu settings
+
+case settings/set logTail project
+tofu settings set --scope project logTail 100
+tofu settings get logTail --json
+
+case settings/get killConfirm
+tofu settings get killConfirm
+
+case settings/get killConfirm json
+tofu settings get killConfirm --json
+
+case settings/set killConfirm global
+tofu settings set killConfirm false --json
+tofu settings get killConfirm
+tofu settings
+
+case settings/set killConfirm project
+tofu settings set --scope project killConfirm false
+tofu settings get killConfirm --json
+
+case settings/get shell
+tofu settings get shell
+
+case settings/get shell json
+tofu settings get shell --json
+
+case settings/set shell global
+tofu settings set shell wsl --json
+tofu settings get shell
+tofu settings
+
+case settings/set shell project
+tofu settings set --scope project shell wsl
+tofu settings get shell --json
+
+case settings/get decisionCap
+tofu settings get decisionCap
+
+case settings/get decisionCap json
+tofu settings get decisionCap --json
+
+case settings/set decisionCap global
+tofu settings set decisionCap 1 --json
+tofu settings get decisionCap
+tofu settings
+
+case settings/set decisionCap project
+tofu settings set --scope project decisionCap 1
+tofu settings get decisionCap --json
+
+case settings/get turnMaySpawn
+tofu settings get turnMaySpawn
+
+case settings/get turnMaySpawn json
+tofu settings get turnMaySpawn --json
+
+case settings/set turnMaySpawn global
+tofu settings set turnMaySpawn false --json
+tofu settings get turnMaySpawn
+tofu settings
+
+case settings/set turnMaySpawn project
+tofu settings set --scope project turnMaySpawn false
+tofu settings get turnMaySpawn --json
+
+case settings/get oneWorkingSessionPerProject
+tofu settings get oneWorkingSessionPerProject
+
+case settings/get oneWorkingSessionPerProject json
+tofu settings get oneWorkingSessionPerProject --json
+
+case settings/set oneWorkingSessionPerProject global
+tofu settings set oneWorkingSessionPerProject false --json
+tofu settings get oneWorkingSessionPerProject
+tofu settings
+
+case settings/set oneWorkingSessionPerProject project
+tofu settings set --scope project oneWorkingSessionPerProject false
+tofu settings get oneWorkingSessionPerProject --json
+
+case settings/get planEveryStep
+tofu settings get planEveryStep
+
+case settings/get planEveryStep json
+tofu settings get planEveryStep --json
+
+case settings/set planEveryStep global
+tofu settings set planEveryStep false --json
+tofu settings get planEveryStep
+tofu settings
+
+case settings/set planEveryStep project
+tofu settings set --scope project planEveryStep false
+tofu settings get planEveryStep --json
+
+case settings/get planAdvisor
+tofu settings get planAdvisor
+
+case settings/get planAdvisor json
+tofu settings get planAdvisor --json
+
+case settings/set planAdvisor global
+tofu settings set planAdvisor off --json
+tofu settings get planAdvisor
+tofu settings
+
+case settings/set planAdvisor project
+tofu settings set --scope project planAdvisor off
+tofu settings get planAdvisor --json
+
+case settings/get sideChatAccess
+tofu settings get sideChatAccess
+
+case settings/get sideChatAccess json
+tofu settings get sideChatAccess --json
+
+case settings/set sideChatAccess global
+tofu settings set sideChatAccess notes --json
+tofu settings get sideChatAccess
+tofu settings
+
+case settings/set sideChatAccess project
+tofu settings set --scope project sideChatAccess notes
+tofu settings get sideChatAccess --json
+
+case settings/get subAgentsPerTurn
+tofu settings get subAgentsPerTurn
+
+case settings/get subAgentsPerTurn json
+tofu settings get subAgentsPerTurn --json
+
+case settings/set subAgentsPerTurn global
+tofu settings set subAgentsPerTurn 2 --json
+tofu settings get subAgentsPerTurn
+tofu settings
+
+case settings/set subAgentsPerTurn project
+tofu settings set --scope project subAgentsPerTurn 2
+tofu settings get subAgentsPerTurn --json
+
+case settings/get subAgentDepth
+tofu settings get subAgentDepth
+
+case settings/get subAgentDepth json
+tofu settings get subAgentDepth --json
+
+case settings/set subAgentDepth global
+tofu settings set subAgentDepth 3 --json
+tofu settings get subAgentDepth
+tofu settings
+
+case settings/set subAgentDepth project
+tofu settings set --scope project subAgentDepth 3
+tofu settings get subAgentDepth --json
+
+case settings/get leadCache
+tofu settings get leadCache
+
+case settings/get leadCache json
+tofu settings get leadCache --json
+
+case settings/set leadCache global
+tofu settings set leadCache 5m --json
+tofu settings get leadCache
+tofu settings
+
+case settings/set leadCache project
+tofu settings set --scope project leadCache 5m
+tofu settings get leadCache --json
+
+case settings/get subAgentCache
+tofu settings get subAgentCache
+
+case settings/get subAgentCache json
+tofu settings get subAgentCache --json
+
+case settings/set subAgentCache global
+tofu settings set subAgentCache 5m --json
+tofu settings get subAgentCache
+tofu settings
+
+case settings/set subAgentCache project
+tofu settings set --scope project subAgentCache 5m
+tofu settings get subAgentCache --json
+
+case settings/get subAgentCheckSeconds
+tofu settings get subAgentCheckSeconds
+
+case settings/get subAgentCheckSeconds json
+tofu settings get subAgentCheckSeconds --json
+
+case settings/set subAgentCheckSeconds global
+tofu settings set subAgentCheckSeconds 1 --json
+tofu settings get subAgentCheckSeconds
+tofu settings
+
+case settings/set subAgentCheckSeconds project
+tofu settings set --scope project subAgentCheckSeconds 1
+tofu settings get subAgentCheckSeconds --json
+
+case settings/get subAgentWatchSeconds
+tofu settings get subAgentWatchSeconds
+
+case settings/get subAgentWatchSeconds json
+tofu settings get subAgentWatchSeconds --json
+
+case settings/set subAgentWatchSeconds global
+tofu settings set subAgentWatchSeconds 2 --json
+tofu settings get subAgentWatchSeconds
+tofu settings
+
+case settings/set subAgentWatchSeconds project
+tofu settings set --scope project subAgentWatchSeconds 2
+tofu settings get subAgentWatchSeconds --json
+
+case settings/get verifySubAgents
+tofu settings get verifySubAgents
+
+case settings/get verifySubAgents json
+tofu settings get verifySubAgents --json
+
+case settings/set verifySubAgents global
+tofu settings set verifySubAgents false --json
+tofu settings get verifySubAgents
+tofu settings
+
+case settings/set verifySubAgents project
+tofu settings set --scope project verifySubAgents false
+tofu settings get verifySubAgents --json
+
+case settings/get doneReview
+tofu settings get doneReview
+
+case settings/get doneReview json
+tofu settings get doneReview --json
+
+case settings/set doneReview global
+tofu settings set doneReview off --json
+tofu settings get doneReview
+tofu settings
+
+case settings/set doneReview project
+tofu settings set --scope project doneReview off
+tofu settings get doneReview --json
+
+case settings/get agentSources
+tofu settings get agentSources
+
+case settings/get agentSources json
+tofu settings get agentSources --json
+
+case settings/set agentSources global
+tofu settings set agentSources tofu --json
+tofu settings get agentSources
+tofu settings
+
+case settings/set agentSources project
+tofu settings set --scope project agentSources tofu
+tofu settings get agentSources --json
+
+case settings/get modelTier.genius
+tofu settings get modelTier.genius
+
+case settings/get modelTier.genius json
+tofu settings get modelTier.genius --json
+
+case settings/set modelTier.genius global
+tofu settings set modelTier.genius parity-value --json
+tofu settings get modelTier.genius
+tofu settings
+
+case settings/set modelTier.genius project
+tofu settings set --scope project modelTier.genius parity-value
+tofu settings get modelTier.genius --json
+
+case settings/get modelTier.smart
+tofu settings get modelTier.smart
+
+case settings/get modelTier.smart json
+tofu settings get modelTier.smart --json
+
+case settings/set modelTier.smart global
+tofu settings set modelTier.smart parity-value --json
+tofu settings get modelTier.smart
+tofu settings
+
+case settings/set modelTier.smart project
+tofu settings set --scope project modelTier.smart parity-value
+tofu settings get modelTier.smart --json
+
+case settings/get modelTier.worker
+tofu settings get modelTier.worker
+
+case settings/get modelTier.worker json
+tofu settings get modelTier.worker --json
+
+case settings/set modelTier.worker global
+tofu settings set modelTier.worker parity-value --json
+tofu settings get modelTier.worker
+tofu settings
+
+case settings/set modelTier.worker project
+tofu settings set --scope project modelTier.worker parity-value
+tofu settings get modelTier.worker --json
+
+case settings/get modelTier.dumb
+tofu settings get modelTier.dumb
+
+case settings/get modelTier.dumb json
+tofu settings get modelTier.dumb --json
+
+case settings/set modelTier.dumb global
+tofu settings set modelTier.dumb parity-value --json
+tofu settings get modelTier.dumb
+tofu settings
+
+case settings/set modelTier.dumb project
+tofu settings set --scope project modelTier.dumb parity-value
+tofu settings get modelTier.dumb --json
+
+case settings/get projectManagement
+tofu settings get projectManagement
+
+case settings/get projectManagement json
+tofu settings get projectManagement --json
+
+case settings/set projectManagement global
+tofu settings set projectManagement boardy --json
+tofu settings get projectManagement
+tofu settings
+
+case settings/set projectManagement project
+tofu settings set --scope project projectManagement boardy
+tofu settings get projectManagement --json
+
+case settings/get boardFlow
+tofu settings get boardFlow
+
+case settings/get boardFlow json
+tofu settings get boardFlow --json
+
+case settings/set boardFlow global
+tofu settings set boardFlow linear --json
+tofu settings get boardFlow
+tofu settings
+
+case settings/set boardFlow project
+tofu settings set --scope project boardFlow linear
+tofu settings get boardFlow --json
+
+case settings/get scratchCleanupDays
+tofu settings get scratchCleanupDays
+
+case settings/get scratchCleanupDays json
+tofu settings get scratchCleanupDays --json
+
+case settings/set scratchCleanupDays global
+tofu settings set scratchCleanupDays 1 --json
+tofu settings get scratchCleanupDays
+tofu settings
+
+case settings/set scratchCleanupDays project
+tofu settings set --scope project scratchCleanupDays 1
+tofu settings get scratchCleanupDays --json
+
+case settings/get scratchMaxGB
+tofu settings get scratchMaxGB
+
+case settings/get scratchMaxGB json
+tofu settings get scratchMaxGB --json
+
+case settings/set scratchMaxGB global
+tofu settings set scratchMaxGB 2 --json
+tofu settings get scratchMaxGB
+tofu settings
+
+case settings/set scratchMaxGB project
+tofu settings set --scope project scratchMaxGB 2
+tofu settings get scratchMaxGB --json
+
+case settings/get scratchRoots
+tofu settings get scratchRoots
+
+case settings/get scratchRoots json
+tofu settings get scratchRoots --json
+
+case settings/set scratchRoots global
+tofu settings set scratchRoots parity-value --json
+tofu settings get scratchRoots
+tofu settings
+
+case settings/set scratchRoots project
+tofu settings set --scope project scratchRoots parity-value
+tofu settings get scratchRoots --json
+
+case settings/get sessionStaleDays
+tofu settings get sessionStaleDays
+
+case settings/get sessionStaleDays json
+tofu settings get sessionStaleDays --json
+
+case settings/set sessionStaleDays global
+tofu settings set sessionStaleDays 1 --json
+tofu settings get sessionStaleDays
+tofu settings
+
+case settings/set sessionStaleDays project
+tofu settings set --scope project sessionStaleDays 1
+tofu settings get sessionStaleDays --json
+
+case settings/get browser
+tofu settings get browser
+
+case settings/get browser json
+tofu settings get browser --json
+
+case settings/set browser global
+tofu settings set browser off --json
+tofu settings get browser
+tofu settings
+
+case settings/set browser project
+tofu settings set --scope project browser off
+tofu settings get browser --json
+
+case settings/get browserDriver
+tofu settings get browserDriver
+
+case settings/get browserDriver json
+tofu settings get browserDriver --json
+
+case settings/set browserDriver global
+tofu settings set browserDriver steps --json
+tofu settings get browserDriver
+tofu settings
+
+case settings/set browserDriver project
+tofu settings set --scope project browserDriver steps
+tofu settings get browserDriver --json
+
+case settings/get browserSteps
+tofu settings get browserSteps
+
+case settings/get browserSteps json
+tofu settings get browserSteps --json
+
+case settings/set browserSteps global
+tofu settings set browserSteps 2 --json
+tofu settings get browserSteps
+tofu settings
+
+case settings/set browserSteps project
+tofu settings set --scope project browserSteps 2
+tofu settings get browserSteps --json
+
+case settings/get browserModel
+tofu settings get browserModel
+
+case settings/get browserModel json
+tofu settings get browserModel --json
+
+case settings/set browserModel global
+tofu settings set browserModel parity-value --json
+tofu settings get browserModel
+tofu settings
+
+case settings/set browserModel project
+tofu settings set --scope project browserModel parity-value
+tofu settings get browserModel --json
+
+case settings/get browserEffort
+tofu settings get browserEffort
+
+case settings/get browserEffort json
+tofu settings get browserEffort --json
+
+case settings/set browserEffort global
+tofu settings set browserEffort low --json
+tofu settings get browserEffort
+tofu settings
+
+case settings/set browserEffort project
+tofu settings set --scope project browserEffort low
+tofu settings get browserEffort --json
+
+case settings/get browserCursor
+tofu settings get browserCursor
+
+case settings/get browserCursor json
+tofu settings get browserCursor --json
+
+case settings/set browserCursor global
+tofu settings set browserCursor false --json
+tofu settings get browserCursor
+tofu settings
+
+case settings/set browserCursor project
+tofu settings set --scope project browserCursor false
+tofu settings get browserCursor --json
+
+case settings/get browserProfile
+tofu settings get browserProfile
+
+case settings/get browserProfile json
+tofu settings get browserProfile --json
+
+case settings/set browserProfile global
+tofu settings set browserProfile parity-value --json
+tofu settings get browserProfile
+tofu settings
+
+case settings/set browserProfile project
+tofu settings set --scope project browserProfile parity-value
+tofu settings get browserProfile --json
+
+case settings/get browserHeadless
+tofu settings get browserHeadless
+
+case settings/get browserHeadless json
+tofu settings get browserHeadless --json
+
+case settings/set browserHeadless global
+tofu settings set browserHeadless false --json
+tofu settings get browserHeadless
+tofu settings
+
+case settings/set browserHeadless project
+tofu settings set --scope project browserHeadless false
+tofu settings get browserHeadless --json
+
+case settings/get browserSleepMinutes
+tofu settings get browserSleepMinutes
+
+case settings/get browserSleepMinutes json
+tofu settings get browserSleepMinutes --json
+
+case settings/set browserSleepMinutes global
+tofu settings set browserSleepMinutes 2 --json
+tofu settings get browserSleepMinutes
+tofu settings
+
+case settings/set browserSleepMinutes project
+tofu settings set --scope project browserSleepMinutes 2
+tofu settings get browserSleepMinutes --json

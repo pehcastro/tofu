@@ -1,0 +1,10 @@
+type say hello
+key enter
+wait PARITYHELLO
+idle
+type /side
+key enter
+idle
+screen
+key esc
+screen

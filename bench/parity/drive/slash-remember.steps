@@ -1,0 +1,10 @@
+type say hello
+key enter
+wait PARITYHELLO
+idle
+type /remember the mock project uses tabs
+key enter
+idle
+screen
+key esc
+screen

@@ -1,0 +1,52 @@
+manual login claude-sub and codex-sub
+why OAuth against the vendor, which an offline run cannot answer
+step build both exes, then for each: set TOFU_CLAUDE_TOKEN_URL and TOFU_CODEX_TOKEN_URL to a local stub that answers the token exchange
+step tofu login llm claude-sub --paste with a mock code, in a home made fresh in the run, and the same for codex-sub
+step tofu login --status --json on both builds, diff after masking the token expiry
+step drive chat --source claude-sub and --source codex-sub on a cassette, both builds, diff
+
+manual live sub turns
+why a real wire to the vendor
+step point TOFU_CLAUDE_BASE_URL and TOFU_CODEX_SOCKET_URL at a recording stub and run tofu run with the same task on both builds, diff the requests the stub saw
+step the orchestrator runs one real claude-sub session in the interface on the candidate build at the end
+
+manual usage and quota
+why the vendor usage endpoints
+step stub the usage URLs, run tofu usage --json on both builds, diff
+step drive quota --quota inputs/quota.json is in the catalog and covers the footer and /status
+
+manual openrouter, meta, typesafe and brave key check
+why each key check is a network call
+step openrouter and meta: point TOFU_OPENROUTER_API_URL and TOFU_META_BASE_URL at a stub answering 200, run tofu login llm openrouter and tofu login llm meta with a fake key on both builds, diff
+step typesafe and brave have no URL override, so only the refused path is in the catalog (login/typesafe key, login/brave key)
+
+manual jev paths
+why every jev answer is a classifier call
+step start a local stub answering the jev wire and set TOFU_JUDGE_ENDPOINT to it with a fake key in a fresh home
+step run tofu judge, tofu check, tofu sift --arm jev, tofu run --gate enforce and drive with a gate ask on both builds, diff
+step the dry runs and the no-key answers are in the catalog (judge/dry run, judge/no key, check/no key, sift/jev no key, run/gate enforce without a classifier)
+
+manual learn scan model step
+why the scan calls a model and has no cassette path
+step run tofu learn on a fixed project on both builds with a live key, compare the proposals by hand
+
+manual browser and chrome extension host
+why Chrome and HKCU are the person's own
+step start a fake relay on HOME/.tofu/browser/relay.sock as cmd/tofu/browser_test.go does
+step run tofu browser tabs, read, observe, click, open, close and batch on both builds against it, diff
+step never run browser install, uninstall or profile login against the real machine
+
+manual drive desk and flows 12 to 14
+why tofu-desktop renders pixels
+step run tofu serve --stdio --cassette with the desk core cassettes on both builds and diff the transcripts; the serve catalog already covers every method
+step render the desk on both builds and compare screenshots by eye
+
+manual update install, models reload and query.update
+why the release and model registries are on the network
+step serve a copy of the release json on a local port, set TOFU_UPDATE_API and TOFU_UPDATE_TARGET to a scratch copy of the exe, run tofu update on both builds, diff
+step set TOFU_MODELS_REGISTRY_URL to a local copy of the registry, run tofu models reload --json on both builds, diff after sorting the provider rows
+
+manual ctrl+g editor and the clipboard
+why ctrl+g opens EDITOR and /copy writes the person's clipboard
+step set EDITOR to a script that appends a line to its file, drive ctrl+g by hand in a terminal on both builds, compare the composer
+step paste is in the catalog through drive --clipboard (drive/flow 10-steer-image)

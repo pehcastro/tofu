@@ -1,0 +1,1 @@
+{"tool_name":"Task","hook_event_name":"PreToolUse","session_id":"parity","tool_input":{"subagent_type":"go-dev","prompt":"Ticket PAR-1: fix the mock. Acceptance: it says hello."}}

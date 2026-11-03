@@ -1,0 +1,1 @@
+{"tool_name":"Write","hook_event_name":"PreToolUse","session_id":"parity","tool_input":{"file_path":"internal/mock/mock.go","content":"package mock\n\nfunc Mock() string { return \"hello\" }\n"}}

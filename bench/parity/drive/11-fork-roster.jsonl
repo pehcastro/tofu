@@ -1,0 +1,13 @@
+{"text":"spawning two","usage":{"input":2,"cache_read":200000,"cache_write":900},"tools":[{"name":"spawn","args":{"task":"alpha worker: write the alpha note","owns":["alpha/**"],"ticket":"T-1"}},{"name":"spawn","args":{"task":"beta worker: write the beta note","owns":["beta/**"],"ticket":"T-2"}},{"name":"bash","args":{"command":"true"}}]}
+{"text":"steering alpha","tools":[{"name":"message","args":{"to":"sub-1","text":"STEERMSG put the date in the alpha note"}}]}
+{"text":"LEADDONE the workers go on"}
+{"text":"LEADREAD a report came"}
+{"text":"LEADREAD another report came"}
+{"text":"spare reply one"}
+{"text":"spare reply two"}
+{"agent":"c1","text":"working","tools":[{"name":"bash","args":{"command":"sleep 4"}}]}
+{"agent":"c1","text":"WORKERREPORT the note is written"}
+{"agent":"c1","text":"spare c1"}
+{"agent":"c2","text":"working","tools":[{"name":"bash","args":{"command":"sleep 4"}}]}
+{"agent":"c2","text":"WORKERREPORT the note is written"}
+{"agent":"c2","text":"spare c2"}

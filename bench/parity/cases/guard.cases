@@ -1,0 +1,80 @@
+case guard/emdash refused
+write dash.json {"tool_name":"Write","tool_input":{"file_path":"notes.md","content":"one \U00002014 two"}}\n
+tofu guard emdash < $PROJECT/dash.json
+
+case guard/emdash clean
+tofu guard emdash < inputs/hook-write-clean.json
+
+case guard/comments refused
+tofu guard comments < inputs/hook-write-go.json
+
+case guard/comments clean
+tofu guard comments < inputs/hook-write-clean.json
+
+case guard/library-wording
+tofu guard library-wording < inputs/hook-edit-library.json
+
+case guard/shell suite
+tofu guard shell < inputs/hook-bash-suite.json
+
+case guard/shell sed
+tofu guard shell < inputs/hook-bash-sed.json
+
+case guard/shell commit
+tofu guard shell < inputs/hook-bash-commit.json
+
+case guard/shell plain
+tofu guard shell < inputs/hook-bash-plain.json
+
+case guard/loc-track
+tofu guard loc-track < inputs/hook-write-clean.json
+
+case guard/snapshot
+tofu guard snapshot < inputs/hook-write-clean.json
+
+case guard/minify-gate
+tofu guard minify-gate < inputs/hook-stop.json
+
+case guard/require-ticket
+tofu guard require-ticket < inputs/hook-task.json
+
+case guard/require-ticket with a board
+tofu boardy init --key PAR
+tofu guard require-ticket < inputs/hook-task.json
+
+case guard/own-paths
+tofu guard own-paths < inputs/hook-write-clean.json
+
+case guard/ticket-log
+tofu guard ticket-log < inputs/hook-stop.json
+
+case guard/research-used
+tofu guard research-used < inputs/hook-task.json
+
+case guard/unknown rule
+tofu guard parity-none < inputs/hook-stop.json
+
+case guard/no rule
+tofu guard
+
+case guard/not json
+tofu guard comments < inputs/commit-good.txt
+
+case guard/commit-msg good
+git init -q
+tofu guard git commit-msg $DATA/inputs/commit-good.txt
+
+case guard/commit-msg trailer
+git init -q
+tofu guard git commit-msg $DATA/inputs/commit-trailer.txt
+
+case guard/commit-msg long
+git init -q
+tofu guard git commit-msg $DATA/inputs/commit-long.txt
+
+case guard/release-docs
+git init -q
+tofu guard git release-docs $DATA/inputs/commit-good.txt
+
+case guard/git unknown
+tofu guard git parity-none $DATA/inputs/commit-good.txt

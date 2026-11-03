@@ -1,0 +1,7 @@
+type start a kept shell
+key enter
+wait PARITYKEPT
+idle
+key alt+4
+screen
+key esc

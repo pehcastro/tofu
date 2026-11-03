@@ -1,0 +1,478 @@
+case memory/add then list
+tofu memory add "the mock project uses tabs"
+tofu memory
+tofu memory list --json
+
+case memory/add every scope
+tofu memory add --scope user-local "a"
+tofu memory add --scope project-local --kind project "b"
+tofu memory add --scope project-global --kind reference "c"
+tofu memory add --scope user-global --kind person --said "my words" "d"
+tofu memory
+
+case memory/add bad scope
+tofu memory add --scope nope "a"
+
+case memory/add empty
+tofu memory add
+
+case memory/remove unknown
+tofu memory remove nope
+
+case memory/tree
+tofu memory tree $DATA/inputs/memory-log.jsonl
+tofu memory tree $DATA/inputs/memory-log.jsonl --budget 400
+
+case memory/zoom
+tofu memory zoom $DATA/inputs/memory-log.jsonl 1 1
+
+case memory/recall
+tofu memory recall $DATA/inputs/memory-log.jsonl note
+
+case memory/tree missing
+tofu memory tree $PROJECT/nope.jsonl
+
+case agents/list
+tofu agents
+
+case agents/list json
+tofu agents --json
+
+case agents/add set remove
+tofu agents add parity-helper --description "reads files" --model claude-sub/claude-opus-5 --tools read,grep
+tofu agents
+tofu agents set parity-helper codex-sub/gpt-5.6-sol
+tofu agents remove parity-helper
+tofu agents
+
+case agents/add global
+tofu agents add --global parity-helper --description "reads files" --model claude-sub/claude-opus-5
+tofu agents --json
+
+case agents/add refused
+tofu agents add parity-helper
+
+case agents/set unknown
+tofu agents set nope claude-sub/claude-opus-5
+
+case agents/remove library
+tofu agents remove advisor
+
+case agents/from a claude folder
+write .claude/agents/mock.md ---\nname: mock\ndescription: a mock agent\nmodel: sonnet\n---\nYou are a mock.\n
+tofu agents
+
+case rules/list
+tofu rules list
+
+case rules/list json
+tofu rules list --json
+
+case rules/overrides
+tofu rules overrides
+tofu rules overrides --json
+
+case rules/check
+tofu rules check
+tofu rules check --json
+
+case rules/fired
+tofu rules fired
+tofu rules fired --json
+
+case rules/index
+tofu rules index "fix the login bug"
+tofu rules index "fix the login bug" --json
+tofu rules index "write docs" --role sub-agent
+
+case rules/index no task
+tofu rules index
+
+case rules/add off restore remove
+tofu rules add parity_rule "say parity" --reason "a mock reason"
+tofu rules overrides
+tofu rules off parity_rule --reason "a mock reason"
+tofu rules restore parity_rule
+tofu rules remove parity_rule
+
+case rules/add global
+tofu rules add --global parity_rule "say parity" --json
+tofu rules list --json
+
+case rules/off shipped
+tofu rules off tool_pick --reason "a mock reason"
+tofu rules off tool_pick --reason again
+tofu rules restore tool_pick
+
+case rules/add replace
+tofu rules add parity_rule "say parity"
+tofu rules add parity_rule "say it twice"
+tofu rules add --replace parity_rule "say it twice"
+
+case rules/remove unknown
+tofu rules remove nope
+
+case rules/no subcommand
+tofu rules
+
+case rules/why no session
+tofu rules why nope
+
+case models/list
+tofu models
+
+case models/list json
+tofu models --json
+
+unreachable models/reload
+why the providers it fetches fail in the order they finish, so two runs of one build print them in a different order
+
+case models/bind every role
+tofu models bind orchestrator claude-sub/claude-opus-5
+tofu models bind sub-agent codex-sub/gpt-5.6-sol --json
+tofu models bind classifier openrouter/jev
+tofu models
+
+case models/bind refused
+tofu models bind orchestrator nope/nope
+tofu models bind nope claude-sub/claude-opus-5
+tofu models bind
+
+case login/status
+tofu login --status
+tofu login --status --json
+tofu login --status --redact
+
+case login/disable enable
+tofu login --disable 1
+tofu login --enable 1
+
+case login/bare
+tofu login
+
+case login/unknown role
+tofu login nope nope
+
+case login/openrouter key
+tofu login llm openrouter < inputs/fake-key.txt
+tofu login --status
+
+case login/meta key
+tofu login llm meta < inputs/fake-key.txt
+
+case login/typesafe key
+tofu login classifier typesafe < inputs/fake-key.txt
+
+case login/openrouter classifier key
+tofu login classifier openrouter < inputs/fake-key.txt
+tofu login --status --json
+
+case login/brave key
+tofu login search brave < inputs/fake-key.txt
+
+case logout/none stored
+tofu logout llm claude-sub
+tofu logout llm openrouter
+tofu logout classifier typesafe 1
+
+case logout/bare
+tofu logout
+
+case usage/fresh
+tofu usage
+tofu usage --json
+tofu usage --history
+tofu usage --history --json
+
+case changelog/first then again
+tofu changelog
+tofu changelog
+tofu changelog --all
+
+case changelog/json
+tofu changelog --json
+tofu changelog --json
+
+case update/check
+tofu update --check
+tofu update --check --json
+
+case doctor/fresh
+tofu doctor
+
+case doctor/json
+tofu doctor --json
+
+case doctor/imports
+tofu doctor --imports
+tofu doctor --imports --json
+
+case doctor/fix
+tofu doctor --fix
+tofu doctor
+
+case doctor/bound
+tofu models bind orchestrator claude-sub/claude-opus-5
+tofu doctor
+
+case hooks/fresh
+tofu hooks
+tofu hooks --json
+
+case hooks/project hooks
+write .claude/settings.json {"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"echo mock"}]}]}}\n
+tofu hooks
+tofu hooks trust
+tofu hooks
+tofu hooks trust --json
+
+case lint/clean tree
+tofu lint comments
+tofu lint comments --json
+
+case lint/comments
+file inputs/commented.go.txt src/mock.go
+tofu lint comments
+tofu lint comments src
+tofu lint comments --json
+
+case lint/bare
+tofu lint
+
+case lint/unknown check
+tofu lint nope
+
+case judge/lint
+tofu judge --lint $DATA/inputs/judge-battery.yaml
+tofu judge --lint $DATA/inputs/judge-battery.yaml --json
+
+case judge/dry run
+tofu judge --dry-run < inputs/judge-request.json
+tofu judge --dry-run --json < inputs/judge-request.json
+
+case judge/no key
+tofu judge < inputs/judge-request.json
+tofu judge --json < inputs/judge-request.json
+
+case judge/bad json
+tofu judge < inputs/commit-good.txt
+
+case judge/no rule no cache
+tofu judge --dry-run --no-cache --no-rule < inputs/judge-request.json
+
+case check/no key
+tofu check "ls -la"
+tofu check "ls -la" --json
+tofu check "ls -la" --quiet
+
+case check/no command
+tofu check
+
+case sift/length
+tofu sift < inputs/sift-paragraphs.txt
+tofu sift --json < inputs/sift-paragraphs.txt
+
+case sift/signpost
+tofu sift --arm signpost < inputs/sift-paragraphs.txt
+
+case sift/brevity
+tofu sift --arm brevity < inputs/sift-paragraphs.txt
+tofu sift --arm brevity --json < inputs/sift-paragraphs.txt
+
+case sift/jev no key
+tofu sift --arm jev --task "read the config" < inputs/sift-paragraphs.txt
+tofu sift --arm jev --no-log < inputs/sift-paragraphs.txt
+
+case sift/restore
+tofu sift < inputs/sift-paragraphs.txt
+tofu sift --restore < inputs/sift-fenced.txt
+
+case sift/empty
+tofu sift < inputs/empty.txt
+
+case sift/bad arm
+tofu sift --arm nope < inputs/sift-paragraphs.txt
+
+case calibrate/dry run
+tofu calibrate gate@1 --cases $DATA/inputs/calibrate-cases.jsonl --split $DATA/inputs/calibrate-split.json --dry-run
+tofu calibrate gate@1 --cases $DATA/inputs/calibrate-cases.jsonl --split $DATA/inputs/calibrate-split.json --dry-run --json
+
+case calibrate/missing files
+tofu calibrate gate@1 --cases $PROJECT/nope.jsonl --split $PROJECT/nope.json --dry-run
+
+case calibrate/bare
+tofu calibrate
+
+case replay/empty ledger
+tofu replay --point gate
+tofu replay --point gate --json
+tofu replay --point gate --set threshold=0.5 --since 7d --verbose
+
+case replay/no point
+tofu replay
+
+case why/empty ledger
+tofu why --last
+tofu why --last --json
+tofu why nope
+tofu why --last 3 --point gate --state
+
+case why/bare
+tofu why
+
+case label/empty ledger
+tofu label --last allow
+tofu label --last allow --json
+tofu label nope deny
+
+case label/bad outcome
+tofu label --last maybe
+
+case library/list
+tofu library
+tofu library --json
+
+case library/resolve
+tofu library resolve gate
+tofu library resolve gate --json
+tofu library resolve nope
+
+case library/dir
+tofu library --dir $PROJECT
+
+case library/reach fresh
+tofu library reach
+tofu library reach --never
+tofu library reach --json
+
+case library/catalog alias
+tofu catalog
+
+case library/project override
+write .tofu/library/roles/orchestrator.yaml model: claude-sub/claude-opus-5\n
+tofu library
+tofu library --json
+
+case scratch/fresh
+tofu scratch
+tofu scratch --json
+tofu scratch clean --dry-run
+tofu scratch clean --cache
+tofu scratch clean --session nope
+
+case reload/twice
+tofu reload
+tofu reload
+tofu reload --json
+
+case reload/after a rule
+tofu reload
+tofu rules add parity_rule "say parity"
+tofu reload
+
+case migrate/fresh
+tofu migrate --dry-run
+tofu migrate --dry-run --json
+tofu migrate
+tofu migrate --relink
+
+case migrate/project state
+write .tofu/sessions/mock.jsonl {}\n
+tofu migrate --dry-run
+tofu migrate
+tofu migrate --dry-run
+
+case browser/recipes
+tofu browser recipes
+tofu browser recipes --json
+
+case browser/profiles
+tofu browser profile list
+tofu browser profile list --json
+
+case browser/unknown
+tofu browser nope
+
+case host/status none
+tofu host status
+tofu host status --json
+
+case host/ensure status stop
+tofu host ensure --dir $PROJECT
+tofu host status --dir $PROJECT
+tofu host status --json
+tofu host stop --dir $PROJECT
+tofu host status
+
+case host/stop none
+tofu host stop
+
+case host/ensure twice
+tofu host ensure --json
+tofu host ensure --json
+tofu host stop
+
+case host/bare
+tofu host
+
+case version/plain
+tofu version
+
+case version/json
+tofu version --json
+
+case preview/plain
+tofu preview
+
+case preview/json
+tofu preview --json
+
+case app/continue fresh
+tofu --continue --json
+
+case app/no terminal
+tofu
+
+case app/temporary no terminal
+tofu --temporary-project
+
+case app/profile no terminal
+tofu --profile
+
+case app/continue no terminal
+tofu --continue
+
+case settings/list
+tofu settings
+tofu settings --json
+
+case settings/get unknown
+tofu settings get nope
+
+case settings/set unknown
+tofu settings set nope 1
+
+case settings/set bad value
+tofu settings set gateAskWaitSeconds -1
+tofu settings set theme nope
+tofu settings set readBeforeEdit maybe
+
+case settings/set bad scope
+tofu settings set --scope nope theme Nord
+
+case settings/bare set
+tofu settings set
+
+case shells/fresh
+tofu shells list
+tofu shells list --json
+tofu shells log nope
+tofu shells stop nope
+tofu shells restart nope
+tofu shells
+
+case shells/after a kept shell
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/kept.jsonl tofu run --no-gate --dir $PROJECT "start a kept shell"
+tofu shells list
+tofu shells list --json

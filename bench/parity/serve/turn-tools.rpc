@@ -1,0 +1,8 @@
+{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"client": "parity", "versions": ["tofu.host/1"], "capabilities": ["questions", "takeover"]}}
+{"jsonrpc": "2.0", "id": 2, "method": "session.open", "params": {}}
+{"jsonrpc": "2.0", "id": 3, "method": "turn.send", "params": {"session": "${2.result.session}", "text": "read the note and write one"}}
+wait turn.completed
+{"jsonrpc": "2.0", "id": 4, "method": "session.turns", "params": {"session": "${2.result.session}"}}
+{"jsonrpc": "2.0", "id": 5, "method": "session.find", "params": {"session": "${2.result.session}", "tool": "read"}}
+{"jsonrpc": "2.0", "id": 6, "method": "undo", "params": {"session": "${2.result.session}", "turns": 1}}
+{"jsonrpc": "2.0", "id": 7, "method": "session.trace", "params": {"session": "${2.result.session}"}}

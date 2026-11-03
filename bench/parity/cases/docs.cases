@@ -1,0 +1,263 @@
+case docs/index
+tofu docs
+
+case docs/index json
+tofu docs --json
+
+case docs/unknown
+tofu docs parity-no-such-topic
+
+case docs/nothing
+tofu docs ""
+
+case docs/agents
+tofu docs agents
+
+case docs/agents json
+tofu docs agents --json
+
+case docs/api-keys
+tofu docs api-keys
+
+case docs/api-keys json
+tofu docs api-keys --json
+
+case docs/asking
+tofu docs asking
+
+case docs/asking json
+tofu docs asking --json
+
+case docs/boardy
+tofu docs boardy
+
+case docs/boardy json
+tofu docs boardy --json
+
+case docs/boardy-rules
+tofu docs boardy-rules
+
+case docs/boardy-rules json
+tofu docs boardy-rules --json
+
+case docs/boardy-views
+tofu docs boardy-views
+
+case docs/boardy-views json
+tofu docs boardy-views --json
+
+case docs/browser
+tofu docs browser
+
+case docs/browser json
+tofu docs browser --json
+
+case docs/calibration
+tofu docs calibration
+
+case docs/calibration json
+tofu docs calibration --json
+
+case docs/commands
+tofu docs commands
+
+case docs/commands json
+tofu docs commands --json
+
+case docs/context
+tofu docs context
+
+case docs/context json
+tofu docs context --json
+
+case docs/cron
+tofu docs cron
+
+case docs/cron json
+tofu docs cron --json
+
+case docs/doctor
+tofu docs doctor
+
+case docs/doctor json
+tofu docs doctor --json
+
+case docs/drain
+tofu docs drain
+
+case docs/drain json
+tofu docs drain --json
+
+case docs/drive
+tofu docs drive
+
+case docs/drive json
+tofu docs drive --json
+
+case docs/files
+tofu docs files
+
+case docs/files json
+tofu docs files --json
+
+case docs/gate
+tofu docs gate
+
+case docs/gate json
+tofu docs gate --json
+
+case docs/guard
+tofu docs guard
+
+case docs/guard json
+tofu docs guard --json
+
+case docs/hooks
+tofu docs hooks
+
+case docs/hooks json
+tofu docs hooks --json
+
+case docs/instructions
+tofu docs instructions
+
+case docs/instructions json
+tofu docs instructions --json
+
+case docs/keys
+tofu docs keys
+
+case docs/keys json
+tofu docs keys --json
+
+case docs/learn
+tofu docs learn
+
+case docs/learn json
+tofu docs learn --json
+
+case docs/library
+tofu docs library
+
+case docs/library json
+tofu docs library --json
+
+case docs/memory
+tofu docs memory
+
+case docs/memory json
+tofu docs memory --json
+
+case docs/models
+tofu docs models
+
+case docs/models json
+tofu docs models --json
+
+case docs/rules
+tofu docs rules
+
+case docs/rules json
+tofu docs rules --json
+
+case docs/scratchpad
+tofu docs scratchpad
+
+case docs/scratchpad json
+tofu docs scratchpad --json
+
+case docs/serve
+tofu docs serve
+
+case docs/serve json
+tofu docs serve --json
+
+case docs/serve-methods
+tofu docs serve-methods
+
+case docs/serve-methods json
+tofu docs serve-methods --json
+
+case docs/sessions
+tofu docs sessions
+
+case docs/sessions json
+tofu docs sessions --json
+
+case docs/settings
+tofu docs settings
+
+case docs/settings json
+tofu docs settings --json
+
+case docs/shells
+tofu docs shells
+
+case docs/shells json
+tofu docs shells --json
+
+case docs/skills
+tofu docs skills
+
+case docs/skills json
+tofu docs skills --json
+
+case docs/start
+tofu docs start
+
+case docs/start json
+tofu docs start --json
+
+case docs/status
+tofu docs status
+
+case docs/status json
+tofu docs status --json
+
+case docs/update
+tofu docs update
+
+case docs/update json
+tofu docs update --json
+
+case docs/usage
+tofu docs usage
+
+case docs/usage json
+tofu docs usage --json
+
+case docs/search how do I undo a turn
+tofu docs "how do I undo a turn"
+
+case docs/search how do I undo a turn json
+tofu docs "how do I undo a turn" --json
+
+case docs/search sign in to claude
+tofu docs "sign in to claude"
+
+case docs/search sign in to claude json
+tofu docs "sign in to claude" --json
+
+case docs/search keep a shell running
+tofu docs "keep a shell running"
+
+case docs/search keep a shell running json
+tofu docs "keep a shell running" --json
+
+case docs/search change the theme
+tofu docs "change the theme"
+
+case docs/search change the theme json
+tofu docs "change the theme" --json
+
+case docs/search remember something
+tofu docs "remember something"
+
+case docs/search remember something json
+tofu docs "remember something" --json
+
+case docs/search what did the gate decide
+tofu docs "what did the gate decide"
+
+case docs/search what did the gate decide json
+tofu docs "what did the gate decide" --json

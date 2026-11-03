@@ -1,0 +1,7 @@
+type !echo parity-bang
+key enter
+wait parity-bang
+idle
+screen
+key esc
+screen

@@ -1,0 +1,122 @@
+case run/plain
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate  --dir $PROJECT "read the note and write one"
+
+case run/--dry-run
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --dry-run --dir $PROJECT "read the note and write one"
+
+case run/--show-prompt
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --show-prompt --dir $PROJECT "read the note and write one"
+
+case run/--show-prompt --agent advisor
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --show-prompt --agent advisor --dir $PROJECT "read the note and write one"
+
+case run/--tools three
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --tools three --dir $PROJECT "read the note and write one"
+
+case run/--effort high
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --effort high --dir $PROJECT "read the note and write one"
+
+case run/--effort nonsense
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --effort nonsense --dir $PROJECT "read the note and write one"
+
+case run/--max-steps 1
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --max-steps 1 --dir $PROJECT "read the note and write one"
+
+case run/--no-subagents
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --no-subagents --dir $PROJECT "read the note and write one"
+
+case run/--no-instructions
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --no-instructions --dir $PROJECT "read the note and write one"
+
+case run/--no-docs
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --no-docs --dir $PROJECT "read the note and write one"
+
+case run/--temporary-project
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --temporary-project --dir $PROJECT "read the note and write one"
+
+case run/--sift free
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --sift free --dir $PROJECT "read the note and write one"
+
+case run/--done-review off
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --done-review off --dir $PROJECT "read the note and write one"
+
+case run/--loop-guard-repeats 2 --loop-guard-window 4
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --loop-guard-repeats 2 --loop-guard-window 4 --dir $PROJECT "read the note and write one"
+
+case run/--wire codex
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --wire codex --dir $PROJECT "read the note and write one"
+
+case run/--thinking-summary omitted
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --thinking-summary omitted --dir $PROJECT "read the note and write one"
+
+case run/--gate shadow
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --gate shadow --dir $PROJECT "read the note and write one"
+
+case run/--gate off
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --gate off --dir $PROJECT "read the note and write one"
+
+case run/--model codex-sub/gpt-5.6-sol
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --model codex-sub/gpt-5.6-sol --dir $PROJECT "read the note and write one"
+
+case run/--agent advisor
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --agent advisor --dir $PROJECT "read the note and write one"
+
+case run/no binding
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --dir $PROJECT "read the note and write one"
+
+case run/gate enforce without a classifier
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --dir $PROJECT "read the note and write one"
+
+case run/no dir
+tofu models bind orchestrator claude-sub/claude-opus-5
+tofu run "read the note"
+
+case run/no task
+tofu models bind orchestrator claude-sub/claude-opus-5
+tofu run --dir $PROJECT
+
+case run/no cassette
+tofu models bind orchestrator claude-sub/claude-opus-5
+tofu run --no-gate --dir $PROJECT "read the note"
+
+case run/second turn of the session
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/tools.jsonl tofu run --no-gate --dir $PROJECT "read the note and write one"
+TOFU_DRIVE_CASSETTE=$DATA/serve/hello.jsonl tofu run --no-gate --session head --dir $PROJECT "say hello"
+tofu session list
+
+case run/sub-agents
+tofu models bind orchestrator claude-sub/claude-opus-5
+TOFU_DRIVE_CASSETTE=$DATA/serve/spawn.jsonl tofu run --no-gate --dir $PROJECT "run two workers"
+tofu session info head
+
+case run/unknown flag
+tofu models bind orchestrator claude-sub/claude-opus-5
+tofu run --parity-bogus --dir $PROJECT "x"
+
+case run/AGENTS.md read
+tofu models bind orchestrator claude-sub/claude-opus-5
+write AGENTS.md always answer in a mock voice\n
+TOFU_DRIVE_CASSETTE=$DATA/serve/hello.jsonl tofu run --no-gate --show-prompt --dir $PROJECT "say hello"

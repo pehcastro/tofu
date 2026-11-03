@@ -1,0 +1,17 @@
+type say hello
+key enter
+wait PARITYHELLO
+idle
+type say it again
+key enter
+wait PARITYSPARE one
+idle
+key ctrl+p
+screen
+key esc
+key up
+screen
+key up
+screen
+key down
+screen

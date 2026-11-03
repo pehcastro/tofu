@@ -1,0 +1,32 @@
+unreachable flows 4, 6, 7 and 9
+why bench/flows seams them inside its own runner (a panic hook, a cap, a fold cassette built at run time, a survive kill), so a script alone does not replay them; bench/flows itself runs them
+
+unreachable slash /copy, /copy-call and /quote
+why tofu drive leaves the app's Copy unset, so the app writes the real Windows clipboard; the hook needed is a Copy sink in cmd/tofu/drive.go beside the --clipboard reader
+
+unreachable serve session.history right after turn.completed
+why one build answers from the live event lines (turn.started first, 14 lines) or from the persisted log (session.updated first, 6 lines) depending on timing, so two runs of one build differ; session-history-empty covers the method
+
+unreachable gate ask keys 1 to 3
+why the ask card only shows after jev answers ask, and no offline classifier exists; needs a TOFU_JUDGE_ENDPOINT stub
+
+unreachable ctrl+g editor
+why it opens EDITOR in a terminal that drive does not have
+
+unreachable tofu with no arguments, tofu --profile and tofu --temporary-project in a terminal
+why the app needs a real terminal; without one the catalog covers the refusal (app/no terminal and the rest), and drive covers the app itself
+
+unreachable --profile output
+why verbs.md section 4 says profiles are not diffed, and the profile is timing
+
+unreachable browser install, uninstall, profile new, login, stop and remove
+why they write HKCU or start Chrome on the person's machine
+
+unreachable browser tabs, read, observe, click, fill, select, press, scroll, back, open, close, batch, build, bench, motion
+why they talk to the person's real Chrome through the relay
+
+unreachable update without --check
+why it replaces the installed exe
+
+unreachable learn
+why the scan step calls a model with no cassette path

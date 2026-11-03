@@ -1,0 +1,8 @@
+type start working
+key enter
+wait PARITYWORKS
+type read the steer
+key enter
+wait PARITYSTEERED
+idle
+screen

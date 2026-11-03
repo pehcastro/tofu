@@ -1,0 +1,5 @@
+package mock
+
+func Hello() string {
+	return "hello" // a mock trailing remark
+}

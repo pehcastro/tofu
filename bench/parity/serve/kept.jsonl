@@ -1,0 +1,3 @@
+{"text":"starting a kept shell","tools":[{"name":"bash","args":{"command":"sleep 20","background":true}}]}
+{"text":"PARITYKEPT the shell started"}
+{"text":"PARITYSPARE one"}

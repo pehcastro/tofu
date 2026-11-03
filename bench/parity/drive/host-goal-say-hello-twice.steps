@@ -1,0 +1,10 @@
+type say hello
+key enter
+wait PARITYHELLO
+idle
+type /goal say hello twice
+key enter
+idle
+screen
+key esc
+screen

@@ -1,0 +1,26 @@
+{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"client": "parity", "versions": ["tofu.host/1"], "capabilities": ["questions", "takeover"]}}
+{"jsonrpc": "2.0", "id": 2, "method": "session.open", "params": {}}
+{"jsonrpc": "2.0", "id": 3, "method": "boardy.init", "params": {"key": "PAR", "name": "parity board"}}
+{"jsonrpc": "2.0", "id": 4, "method": "boardy.boards", "params": {}}
+{"jsonrpc": "2.0", "id": 5, "method": "boardy.create", "params": {"board": "PAR", "ticket": {"title": "parity ticket", "type": "task", "priority": "P2", "problem": "a mock problem", "scope": "a mock scope", "acceptance": ["a mock line"]}}}
+{"jsonrpc": "2.0", "id": 6, "method": "boardy.list", "params": {"board": "PAR"}}
+{"jsonrpc": "2.0", "id": 7, "method": "boardy.rows", "params": {"board": "PAR"}}
+{"jsonrpc": "2.0", "id": 8, "method": "boardy.get", "params": {"id": "PAR-1"}}
+{"jsonrpc": "2.0", "id": 9, "method": "boardy.log", "params": {"id": "PAR-1", "text": "a mock log line"}}
+{"jsonrpc": "2.0", "id": 10, "method": "boardy.move", "params": {"id": "PAR-1", "to": "doing", "reason": "a mock reason"}}
+{"jsonrpc": "2.0", "id": 11, "method": "boardy.assign", "params": {"id": "PAR-1", "assignee": "parity"}}
+{"jsonrpc": "2.0", "id": 12, "method": "boardy.events", "params": {"board": "PAR"}}
+{"jsonrpc": "2.0", "id": 13, "method": "boardy.report", "params": {"board": "PAR"}}
+{"jsonrpc": "2.0", "id": 14, "method": "boardy.audit", "params": {"board": "PAR"}}
+{"jsonrpc": "2.0", "id": 15, "method": "boardy.plan", "params": {"board": "PAR"}}
+{"jsonrpc": "2.0", "id": 16, "method": "boardy.questions", "params": {"board": "PAR"}}
+{"jsonrpc": "2.0", "id": 17, "method": "boardy.answer", "params": {"ticket": "PAR-1", "id": 1, "answer": "yes"}}
+{"jsonrpc": "2.0", "id": 18, "method": "boardy.rules", "params": {"board": "PAR"}}
+{"jsonrpc": "2.0", "id": 19, "method": "boardy.rule.put", "params": {"board": "PAR", "source": "id: parity-nudge\nwhen: after\non: ticket.move\nthen: nudge\ntext: a mock nudge\n"}}
+{"jsonrpc": "2.0", "id": 20, "method": "boardy.rule.get", "params": {"board": "PAR", "id": "parity-nudge"}}
+{"jsonrpc": "2.0", "id": 21, "method": "boardy.rule.test", "params": {"board": "PAR", "id": "parity-nudge", "ticket": "PAR-1", "to": "review"}}
+{"jsonrpc": "2.0", "id": 22, "method": "boardy.rule.remove", "params": {"board": "PAR", "id": "parity-nudge"}}
+{"jsonrpc": "2.0", "id": 23, "method": "boardy.bypass.list", "params": {"board": "PAR"}}
+{"jsonrpc": "2.0", "id": 24, "method": "boardy.bypass.answer", "params": {"board": "PAR", "id": "B-1", "yes": true}}
+{"jsonrpc": "2.0", "id": 25, "method": "boardy.triage", "params": {"board": "PAR", "action": "list"}}
+{"jsonrpc": "2.0", "id": 26, "method": "boardy.hand", "params": {"id": "PAR-1", "to": "NOPE"}}

@@ -1,0 +1,8 @@
+type write slowly
+key enter
+wait writing slowly
+key ctrl+c
+idle
+screen
+key ctrl+c
+screen

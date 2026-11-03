@@ -1,0 +1,4 @@
+type /status
+key enter
+screen
+key esc

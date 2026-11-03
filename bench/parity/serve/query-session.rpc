@@ -1,0 +1,6 @@
+{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"client": "parity", "versions": ["tofu.host/1"], "capabilities": ["questions", "takeover"]}}
+{"jsonrpc": "2.0", "id": 2, "method": "session.open", "params": {}}
+{"jsonrpc": "2.0", "id": 3, "method": "query.context", "params": {"session": "${2.result.session}"}}
+{"jsonrpc": "2.0", "id": 4, "method": "query.drain", "params": {"session": "${2.result.session}"}}
+{"jsonrpc": "2.0", "id": 5, "method": "query.session", "params": {"session": "${2.result.session}"}}
+{"jsonrpc": "2.0", "id": 6, "method": "query.request", "params": {"session": "${2.result.session}", "request": "last"}}

@@ -1,0 +1,323 @@
+case help/top
+tofu
+tofu help
+tofu -h
+tofu --help
+tofu nope
+tofu --nope
+
+case help/version
+tofu version --help
+tofu version -h
+tofu version --parity-bogus
+
+case help/changelog
+tofu changelog --help
+tofu changelog -h
+tofu changelog --parity-bogus
+
+case help/update
+tofu update --help
+tofu update -h
+tofu update --parity-bogus
+
+case help/docs
+tofu docs --help
+tofu docs -h
+tofu docs --parity-bogus
+
+case help/doctor
+tofu doctor --help
+tofu doctor -h
+tofu doctor --parity-bogus
+
+case help/login
+tofu login --help
+tofu login -h
+tofu login --parity-bogus
+
+case help/logout
+tofu logout --help
+tofu logout -h
+tofu logout --parity-bogus
+
+case help/usage
+tofu usage --help
+tofu usage -h
+tofu usage --parity-bogus
+
+case help/models
+tofu models --help
+tofu models -h
+tofu models --parity-bogus
+
+case help/agents
+tofu agents --help
+tofu agents -h
+tofu agents --parity-bogus
+
+case help/why
+tofu why --help
+tofu why -h
+tofu why --parity-bogus
+
+case help/run
+tofu run --help
+tofu run -h
+tofu run --parity-bogus
+
+case help/judge
+tofu judge --help
+tofu judge -h
+tofu judge --parity-bogus
+
+case help/check
+tofu check --help
+tofu check -h
+tofu check --parity-bogus
+
+case help/session
+tofu session --help
+tofu session -h
+tofu session --parity-bogus
+
+case help/shells
+tofu shells --help
+tofu shells -h
+tofu shells --parity-bogus
+
+case help/hooks
+tofu hooks --help
+tofu hooks -h
+tofu hooks --parity-bogus
+
+case help/guard
+tofu guard --help
+tofu guard -h
+tofu guard --parity-bogus
+
+case help/undo
+tofu undo --help
+tofu undo -h
+tofu undo --parity-bogus
+
+case help/context
+tofu context --help
+tofu context -h
+tofu context --parity-bogus
+
+case help/sift
+tofu sift --help
+tofu sift -h
+tofu sift --parity-bogus
+
+case help/label
+tofu label --help
+tofu label -h
+tofu label --parity-bogus
+
+case help/replay
+tofu replay --help
+tofu replay -h
+tofu replay --parity-bogus
+
+case help/calibrate
+tofu calibrate --help
+tofu calibrate -h
+tofu calibrate --parity-bogus
+
+case help/library
+tofu library --help
+tofu library -h
+tofu library --parity-bogus
+
+case help/lint
+tofu lint --help
+tofu lint -h
+tofu lint --parity-bogus
+
+case help/rules
+tofu rules --help
+tofu rules -h
+tofu rules --parity-bogus
+
+case help/boardy
+tofu boardy --help
+tofu boardy -h
+tofu boardy --parity-bogus
+
+case help/scratch
+tofu scratch --help
+tofu scratch -h
+tofu scratch --parity-bogus
+
+case help/memory
+tofu memory --help
+tofu memory -h
+tofu memory --parity-bogus
+
+case help/learn
+tofu learn --help
+tofu learn -h
+tofu learn --parity-bogus
+
+case help/frame
+tofu frame --help
+tofu frame -h
+tofu frame --parity-bogus
+
+case help/drive
+tofu drive --help
+tofu drive -h
+tofu drive --parity-bogus
+
+case help/host
+tofu host --help
+tofu host -h
+tofu host --parity-bogus
+
+case help/serve
+tofu serve --help
+tofu serve -h
+tofu serve --parity-bogus
+
+case help/settings
+tofu settings --help
+tofu settings -h
+tofu settings --parity-bogus
+
+case help/reload
+tofu reload --help
+tofu reload -h
+tofu reload --parity-bogus
+
+case help/migrate
+tofu migrate --help
+tofu migrate -h
+tofu migrate --parity-bogus
+
+case help/browser
+tofu browser --help
+tofu browser -h
+tofu browser --parity-bogus
+
+case help/preview
+tofu preview --help
+tofu preview -h
+tofu preview --parity-bogus
+
+case help/boardy init
+tofu boardy init --help
+tofu boardy init --parity-bogus
+
+case help/boardy new
+tofu boardy new --help
+tofu boardy new --parity-bogus
+
+case help/boardy list
+tofu boardy list --help
+tofu boardy list --parity-bogus
+
+case help/boardy show
+tofu boardy show --help
+tofu boardy show --parity-bogus
+
+case help/boardy move
+tofu boardy move --help
+tofu boardy move --parity-bogus
+
+case help/boardy log
+tofu boardy log --help
+tofu boardy log --parity-bogus
+
+case help/boardy set
+tofu boardy set --help
+tofu boardy set --parity-bogus
+
+case help/boardy lint
+tofu boardy lint --help
+tofu boardy lint --parity-bogus
+
+case help/boardy boards
+tofu boardy boards --help
+tofu boardy boards --parity-bogus
+
+case help/boardy held
+tofu boardy held --help
+tofu boardy held --parity-bogus
+
+case help/boardy manager
+tofu boardy manager --help
+tofu boardy manager --parity-bogus
+
+case help/boardy triage
+tofu boardy triage --help
+tofu boardy triage --parity-bogus
+
+case help/boardy assign
+tofu boardy assign --help
+tofu boardy assign --parity-bogus
+
+case help/boardy hand
+tofu boardy hand --help
+tofu boardy hand --parity-bogus
+
+case help/boardy widen
+tofu boardy widen --help
+tofu boardy widen --parity-bogus
+
+case help/boardy check
+tofu boardy check --help
+tofu boardy check --parity-bogus
+
+case help/boardy tick
+tofu boardy tick --help
+tofu boardy tick --parity-bogus
+
+case help/boardy fire
+tofu boardy fire --help
+tofu boardy fire --parity-bogus
+
+case help/boardy rule
+tofu boardy rule --help
+tofu boardy rule --parity-bogus
+
+case help/boardy bypass
+tofu boardy bypass --help
+tofu boardy bypass --parity-bogus
+
+case help/boardy request
+tofu boardy request --help
+tofu boardy request --parity-bogus
+
+case help/boardy view
+tofu boardy view --help
+tofu boardy view --parity-bogus
+
+case help/boardy audit
+tofu boardy audit --help
+tofu boardy audit --parity-bogus
+
+case help/boardy report
+tofu boardy report --help
+tofu boardy report --parity-bogus
+
+case help/boardy attention
+tofu boardy attention --help
+tofu boardy attention --parity-bogus
+
+case help/boardy epic
+tofu boardy epic --help
+tofu boardy epic --parity-bogus
+
+case help/boardy sprint
+tofu boardy sprint --help
+tofu boardy sprint --parity-bogus
+
+case help/boardy ask
+tofu boardy ask --help
+tofu boardy ask --parity-bogus
+
+case help/boardy catchup
+tofu boardy catchup --help
+tofu boardy catchup --parity-bogus

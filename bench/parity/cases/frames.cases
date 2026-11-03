@@ -1,0 +1,332 @@
+case frame/list
+tofu frame --list
+
+case frame/bare
+tofu frame
+
+case frame/unknown
+tofu frame parity/none
+
+case frame/plain/01-fresh
+tofu frame plain/01-fresh --width 200 --height 50 --plain
+
+case frame/plain/02-typing
+tofu frame plain/02-typing --width 200 --height 50 --plain
+
+case frame/plain/03-sent
+tofu frame plain/03-sent --width 200 --height 50 --plain
+
+case frame/plain/04-requesting
+tofu frame plain/04-requesting --width 200 --height 50 --plain
+
+case frame/plain/05-thinking
+tofu frame plain/05-thinking --width 200 --height 50 --plain
+
+case frame/plain/06-tooling
+tofu frame plain/06-tooling --width 200 --height 50 --plain
+
+case frame/plain/07-second-tool
+tofu frame plain/07-second-tool --width 200 --height 50 --plain
+
+case frame/plain/08-streaming
+tofu frame plain/08-streaming --width 200 --height 50 --plain
+
+case frame/plain/09-answered
+tofu frame plain/09-answered --width 200 --height 50 --plain
+
+case frame/twelve-tools/01-fresh
+tofu frame twelve-tools/01-fresh --width 200 --height 50 --plain
+
+case frame/twelve-tools/02-typing
+tofu frame twelve-tools/02-typing --width 200 --height 50 --plain
+
+case frame/twelve-tools/03-sent
+tofu frame twelve-tools/03-sent --width 200 --height 50 --plain
+
+case frame/twelve-tools/04-first-tool
+tofu frame twelve-tools/04-first-tool --width 200 --height 50 --plain
+
+case frame/twelve-tools/05-fourth-tool
+tofu frame twelve-tools/05-fourth-tool --width 200 --height 50 --plain
+
+case frame/twelve-tools/06-eighth-tool
+tofu frame twelve-tools/06-eighth-tool --width 200 --height 50 --plain
+
+case frame/twelve-tools/07-twelfth-tool
+tofu frame twelve-tools/07-twelfth-tool --width 200 --height 50 --plain
+
+case frame/twelve-tools/08-answered
+tofu frame twelve-tools/08-answered --width 200 --height 50 --plain
+
+case frame/markdown/01-fresh
+tofu frame markdown/01-fresh --width 200 --height 50 --plain
+
+case frame/markdown/02-typing
+tofu frame markdown/02-typing --width 200 --height 50 --plain
+
+case frame/markdown/03-sent
+tofu frame markdown/03-sent --width 200 --height 50 --plain
+
+case frame/markdown/04-requesting
+tofu frame markdown/04-requesting --width 200 --height 50 --plain
+
+case frame/markdown/05-first-paragraph
+tofu frame markdown/05-first-paragraph --width 200 --height 50 --plain
+
+case frame/markdown/06-heading
+tofu frame markdown/06-heading --width 200 --height 50 --plain
+
+case frame/markdown/07-list
+tofu frame markdown/07-list --width 200 --height 50 --plain
+
+case frame/markdown/08-answered
+tofu frame markdown/08-answered --width 200 --height 50 --plain
+
+case frame/asking/01-fresh
+tofu frame asking/01-fresh --width 200 --height 50 --plain
+
+case frame/asking/02-typing
+tofu frame asking/02-typing --width 200 --height 50 --plain
+
+case frame/asking/03-sent
+tofu frame asking/03-sent --width 200 --height 50 --plain
+
+case frame/asking/04-tooling
+tofu frame asking/04-tooling --width 200 --height 50 --plain
+
+case frame/asking/05-asked
+tofu frame asking/05-asked --width 200 --height 50 --plain
+
+case frame/asking/06-waiting
+tofu frame asking/06-waiting --width 200 --height 50 --plain
+
+case frame/asking/07-allowed
+tofu frame asking/07-allowed --width 200 --height 50 --plain
+
+case frame/asking/08-answered
+tofu frame asking/08-answered --width 200 --height 50 --plain
+
+case frame/interrupted/01-fresh
+tofu frame interrupted/01-fresh --width 200 --height 50 --plain
+
+case frame/interrupted/02-typing
+tofu frame interrupted/02-typing --width 200 --height 50 --plain
+
+case frame/interrupted/03-sent
+tofu frame interrupted/03-sent --width 200 --height 50 --plain
+
+case frame/interrupted/04-tooling
+tofu frame interrupted/04-tooling --width 200 --height 50 --plain
+
+case frame/interrupted/05-answering
+tofu frame interrupted/05-answering --width 200 --height 50 --plain
+
+case frame/interrupted/06-stopping
+tofu frame interrupted/06-stopping --width 200 --height 50 --plain
+
+case frame/interrupted/07-stopped
+tofu frame interrupted/07-stopped --width 200 --height 50 --plain
+
+case frame/letting-tools-finish/01-fresh
+tofu frame letting-tools-finish/01-fresh --width 200 --height 50 --plain
+
+case frame/letting-tools-finish/02-typing
+tofu frame letting-tools-finish/02-typing --width 200 --height 50 --plain
+
+case frame/letting-tools-finish/03-sent
+tofu frame letting-tools-finish/03-sent --width 200 --height 50 --plain
+
+case frame/letting-tools-finish/04-tooling
+tofu frame letting-tools-finish/04-tooling --width 200 --height 50 --plain
+
+case frame/letting-tools-finish/05-second-tool
+tofu frame letting-tools-finish/05-second-tool --width 200 --height 50 --plain
+
+case frame/letting-tools-finish/06-stopping-the-model
+tofu frame letting-tools-finish/06-stopping-the-model --width 200 --height 50 --plain
+
+case frame/letting-tools-finish/07-stopped
+tofu frame letting-tools-finish/07-stopped --width 200 --height 50 --plain
+
+case frame/failed/01-fresh
+tofu frame failed/01-fresh --width 200 --height 50 --plain
+
+case frame/failed/02-typing
+tofu frame failed/02-typing --width 200 --height 50 --plain
+
+case frame/failed/03-sent
+tofu frame failed/03-sent --width 200 --height 50 --plain
+
+case frame/failed/04-tooling
+tofu frame failed/04-tooling --width 200 --height 50 --plain
+
+case frame/failed/05-failing
+tofu frame failed/05-failing --width 200 --height 50 --plain
+
+case frame/failed/06-failed
+tofu frame failed/06-failed --width 200 --height 50 --plain
+
+case frame/failed/07-closed
+tofu frame failed/07-closed --width 200 --height 50 --plain
+
+case frame/sub-agent/01-fresh
+tofu frame sub-agent/01-fresh --width 200 --height 50 --plain
+
+case frame/sub-agent/02-typing
+tofu frame sub-agent/02-typing --width 200 --height 50 --plain
+
+case frame/sub-agent/03-sent
+tofu frame sub-agent/03-sent --width 200 --height 50 --plain
+
+case frame/sub-agent/04-spawned
+tofu frame sub-agent/04-spawned --width 200 --height 50 --plain
+
+case frame/sub-agent/05-sub-agent-working
+tofu frame sub-agent/05-sub-agent-working --width 200 --height 50 --plain
+
+case frame/sub-agent/06-sub-agent-thinking
+tofu frame sub-agent/06-sub-agent-thinking --width 200 --height 50 --plain
+
+case frame/sub-agent/07-answered
+tofu frame sub-agent/07-answered --width 200 --height 50 --plain
+
+case frame/welcome/01-sitting
+tofu frame welcome/01-sitting --width 200 --height 50 --plain
+
+case frame/welcome/02-typed
+tofu frame welcome/02-typed --width 200 --height 50 --plain
+
+case frame/welcome/03-lying
+tofu frame welcome/03-lying --width 200 --height 50 --plain
+
+case frame/sub-agents/01-overview
+tofu frame sub-agents/01-overview --width 200 --height 50 --plain
+
+case frame/sub-agents/02-waiting-agent
+tofu frame sub-agents/02-waiting-agent --width 200 --height 50 --plain
+
+case frame/sub-agents/03-dead-agent
+tofu frame sub-agents/03-dead-agent --width 200 --height 50 --plain
+
+case frame/file-edits/01-index
+tofu frame file-edits/01-index --width 200 --height 50 --plain
+
+case frame/file-edits/02-modified
+tofu frame file-edits/02-modified --width 200 --height 50 --plain
+
+case frame/file-edits/03-created-first-line
+tofu frame file-edits/03-created-first-line --width 200 --height 50 --plain
+
+case frame/file-edits/04-created-last-line
+tofu frame file-edits/04-created-last-line --width 200 --height 50 --plain
+
+case frame/shells/01-running
+tofu frame shells/01-running --width 200 --height 50 --plain
+
+case frame/shells/02-exited
+tofu frame shells/02-exited --width 200 --height 50 --plain
+
+case frame/shells/03-kill-confirm
+tofu frame shells/03-kill-confirm --width 200 --height 50 --plain
+
+case frame/settings/01-appearance
+tofu frame settings/01-appearance --width 200 --height 50 --plain
+
+case frame/settings/02-models-and-roles
+tofu frame settings/02-models-and-roles --width 200 --height 50 --plain
+
+case frame/settings/03-interaction
+tofu frame settings/03-interaction --width 200 --height 50 --plain
+
+case frame/settings/04-context
+tofu frame settings/04-context --width 200 --height 50 --plain
+
+case frame/settings/05-files
+tofu frame settings/05-files --width 200 --height 50 --plain
+
+case frame/settings/06-shell
+tofu frame settings/06-shell --width 200 --height 50 --plain
+
+case frame/settings/07-turn
+tofu frame settings/07-turn --width 200 --height 50 --plain
+
+case frame/settings/08-projects
+tofu frame settings/08-projects --width 200 --height 50 --plain
+
+case frame/settings/09-browser
+tofu frame settings/09-browser --width 200 --height 50 --plain
+
+case frame/theme/01-choice-open
+tofu frame theme/01-choice-open --width 200 --height 50 --plain
+
+case frame/theme/02-previewing
+tofu frame theme/02-previewing --width 200 --height 50 --plain
+
+case frame/settings-search/01-open
+tofu frame settings-search/01-open --width 200 --height 50 --plain
+
+case frame/settings-search/02-typed
+tofu frame settings-search/02-typed --width 200 --height 50 --plain
+
+case frame/models/01-models
+tofu frame models/01-models --width 200 --height 50 --plain
+
+case frame/models/02-roles
+tofu frame models/02-roles --width 200 --height 50 --plain
+
+case frame/quota/01-open
+tofu frame quota/01-open --width 200 --height 50 --plain
+
+case frame/commands/01-open
+tofu frame commands/01-open --width 200 --height 50 --plain
+
+case frame/commands/02-filtered
+tofu frame commands/02-filtered --width 200 --height 50 --plain
+
+case frame/search/01-open
+tofu frame search/01-open --width 200 --height 50 --plain
+
+case frame/search/02-typed
+tofu frame search/02-typed --width 200 --height 50 --plain
+
+case frame/file-picker/01-open
+tofu frame file-picker/01-open --width 200 --height 50 --plain
+
+case frame/file-picker/02-moved
+tofu frame file-picker/02-moved --width 200 --height 50 --plain
+
+case frame/hostkeys/01-keybindings
+tofu frame hostkeys/01-keybindings --width 200 --height 50 --plain
+
+case frame/hostkeys/02-host
+tofu frame hostkeys/02-host --width 200 --height 50 --plain
+
+case frame/narrow/01-chat
+tofu frame narrow/01-chat --width 200 --height 50 --plain
+
+case frame/narrow/02-sub-agents
+tofu frame narrow/02-sub-agents --width 200 --height 50 --plain
+
+case frame/welcome/01-sitting 80x24
+tofu frame welcome/01-sitting --width 80 --height 24 --plain
+
+case frame/welcome/01-sitting styled
+tofu frame welcome/01-sitting --width 120 --height 40
+
+case frame/sub-agents/01-overview 80x24
+tofu frame sub-agents/01-overview --width 80 --height 24 --plain
+
+case frame/sub-agents/01-overview styled
+tofu frame sub-agents/01-overview --width 120 --height 40
+
+case frame/settings/01-appearance 80x24
+tofu frame settings/01-appearance --width 80 --height 24 --plain
+
+case frame/settings/01-appearance styled
+tofu frame settings/01-appearance --width 120 --height 40
+
+case frame/plain/09-answered 80x24
+tofu frame plain/09-answered --width 80 --height 24 --plain
+
+case frame/plain/09-answered styled
+tofu frame plain/09-answered --width 120 --height 40

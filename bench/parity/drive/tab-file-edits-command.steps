@@ -1,0 +1,8 @@
+type read the note and write one
+key enter
+wait PARITYTOOLS
+idle
+type /file-edits
+key enter
+screen
+key esc

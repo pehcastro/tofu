@@ -1,0 +1,10 @@
+type say hello
+key enter
+wait PARITYHELLO
+idle
+type /orders
+key enter
+idle
+screen
+key esc
+screen

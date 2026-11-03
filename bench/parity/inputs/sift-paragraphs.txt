@@ -1,0 +1,11 @@
+## Summary:
+
+The build reads the configuration from the project folder and the home folder, merging them field by field so that a value set in the project wins over the same value set at home.
+
+Great question!
+
+Short line.
+
+When a value is missing in both places, the declared default applies, and the settings screen says so beside the value, which is how a person can tell a default from a choice somebody made on purpose.
+
+**Note:** **this** is **bold**.

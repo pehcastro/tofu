@@ -1,0 +1,2 @@
+{"type":"user","message":{"role":"user","content":"read the mock note"},"uuid":"00000000-0000-0000-0000-000000000001","timestamp":"2026-10-17T10:00:00Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"the mock note says hello"}]},"uuid":"00000000-0000-0000-0000-000000000002","timestamp":"2026-10-17T10:00:01Z"}

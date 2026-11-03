@@ -1,0 +1,369 @@
+case boardy/init default
+tofu boardy init --key PAR
+tofu boardy boards
+tofu boardy rule list
+
+case boardy/init json
+tofu boardy init --key PAR --name "parity board" --json
+
+case boardy/init custom
+tofu boardy init --key PAR --mode custom --hooks epic_at_create
+
+case boardy/init twice
+tofu boardy init --key PAR --mode empty
+tofu boardy init --key PAR --mode empty
+
+case boardy/init bad key
+tofu boardy init --key par-1
+
+case boardy/new refused without an epic
+tofu boardy init --key PAR
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+
+case boardy/new missing fields
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR "a bare ticket"
+
+case boardy/new json
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket" --json
+
+case boardy/new subtask
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy new --parent PAR-1 --type subtask --before b --driven d --still-works s --error-case e "a mock subtask"
+
+case boardy/list
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy list
+
+case boardy/list --all
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy list --all
+
+case boardy/list --json
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy list --json
+
+case boardy/list --status backlog
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy list --status backlog
+
+case boardy/list --fields id,status,owns
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy list --fields id,status,owns
+
+case boardy/show PAR-1
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy show PAR-1
+
+case boardy/show PAR-1 --json
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy show PAR-1 --json
+
+case boardy/show PAR-1 --thread
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy show PAR-1 --thread
+
+case boardy/show PAR-9
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy show PAR-9
+
+case boardy/move PAR-1 doing --reason start
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy move PAR-1 doing --reason start
+
+case boardy/move PAR-1 nonsense
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy move PAR-1 nonsense
+
+case boardy/move PAR-1 doing --json
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy move PAR-1 doing --json
+
+case boardy/log PAR-1 "a mock log line"
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy log PAR-1 "a mock log line"
+
+case boardy/log PAR-1 --before "ran tofu version, it printed the version"
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy log PAR-1 --before "ran tofu version, it printed the version"
+
+case boardy/log PAR-1 --evidence
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy log PAR-1 --evidence
+
+case boardy/set PAR-1 --title "a renamed ticket"
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy set PAR-1 --title "a renamed ticket"
+
+case boardy/set PAR-1 --owns src/**,docs/** --reason widened
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy set PAR-1 --owns src/**,docs/** --reason widened
+
+case boardy/lint
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy lint
+
+case boardy/lint --json
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy lint --json
+
+case boardy/boards
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy boards
+
+case boardy/boards --json
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy boards --json
+
+case boardy/held src/main.go
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy held src/main.go
+
+case boardy/held docs/x.md
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy held docs/x.md
+
+case boardy/manager list
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy manager list
+
+case boardy/manager add parity
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy manager add parity
+
+case boardy/triage list
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy triage list
+
+case boardy/assign PAR-1 parity
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy assign PAR-1 parity
+
+case boardy/widen PAR-1 docs/**
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy widen PAR-1 docs/**
+
+case boardy/check create PAR-1
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy check create PAR-1
+
+case boardy/check move PAR-1 --to doing
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy check move PAR-1 --to doing
+
+case boardy/tick
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy tick
+
+case boardy/fire agent.spawn PAR-1
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy fire agent.spawn PAR-1
+
+case boardy/rule list
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy rule list
+
+case boardy/rule show nope
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy rule show nope
+
+case boardy/bypass list
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy bypass list
+
+case boardy/request list
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy request list
+
+case boardy/request new "a mock request" --tickets PAR-1
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy request new "a mock request" --tickets PAR-1
+
+case boardy/view
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy view
+
+case boardy/view --json
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy view --json
+
+case boardy/audit
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy audit
+
+case boardy/audit --json
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy audit --json
+
+case boardy/report
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy report
+
+case boardy/report --since 7d
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy report --since 7d
+
+case boardy/report --json
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy report --json
+
+case boardy/attention
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy attention
+
+case boardy/epic list
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy epic list
+
+case boardy/epic new MOCK "a mock epic"
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy epic new MOCK "a mock epic"
+
+case boardy/sprint list
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy sprint list
+
+case boardy/sprint new S1 "a mock sprint" --start 1d --end 7d
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy sprint new S1 "a mock sprint" --start 1d --end 7d
+
+case boardy/ask PAR-1 --tldr t --eli5 e --options "one | two" --recommend 1 --why w
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy ask PAR-1 --tldr t --eli5 e --options "one | two" --recommend 1 --why w
+
+case boardy/catchup
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy catchup
+
+case boardy/catchup --answers
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy catchup --answers
+
+case boardy/hand PAR-1 NOPE
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy hand PAR-1 NOPE
+
+case boardy/nope
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy nope
+
+case boardy/move through every status
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy move PAR-1 doing --reason a
+tofu boardy move PAR-1 review --reason b
+tofu boardy move PAR-1 done --reason c
+tofu boardy list --all
+tofu boardy report
+
+case boardy/epic flow
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy epic new MOCK "a mock epic"
+tofu boardy epic research MOCK "two rivals do it two ways"
+tofu boardy epic design MOCK "a mock design" --first "a mock first version"
+tofu boardy epic milestone MOCK "a mock milestone" --due 7d
+tofu boardy epic list
+tofu boardy epic done MOCK
+
+case boardy/sprint flow
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy sprint new S1 "a mock sprint"
+tofu boardy sprint start S1
+tofu boardy sprint list
+tofu boardy sprint close S1
+
+case boardy/request flow
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy request new "a mock request" --tickets PAR-1
+tofu boardy request list
+tofu boardy request show R-1
+tofu boardy request review R-1 pass --note fine
+
+case boardy/rule flow
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy rule add parity-nudge --when after --on ticket.move --then nudge --text "a mock nudge"
+tofu boardy rule list
+tofu boardy rule show parity-nudge
+tofu boardy rule test parity-nudge PAR-1 --to doing
+tofu boardy move PAR-1 doing --reason r
+tofu boardy rule remove parity-nudge
+
+case boardy/manager flow
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy manager add parity
+tofu boardy manager list
+tofu boardy manager remove parity
+tofu boardy manager list
+
+case boardy/ask then catchup
+tofu boardy init --key PAR --mode empty
+tofu boardy new --board PAR --type task --priority P2 --owns src/** --problem "a mock problem" --scope "a mock scope" --before "nothing ran" --driven "tofu version prints it" --still-works "tofu docs still prints" --error-case "a bad flag exits 2" --acceptance "tofu version prints the version" "parity mock ticket"
+tofu boardy ask PAR-1 --tldr t --eli5 e --options "one | two" --recommend 1 --why w
+tofu boardy catchup
+tofu boardy attention
+
+case boardy/no board
+tofu boardy list
+tofu boardy show PAR-1
+tofu boardy boards --json

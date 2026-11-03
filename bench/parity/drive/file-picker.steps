@@ -1,0 +1,12 @@
+type @
+screen
+type no
+screen
+key tab
+screen
+key esc
+key ctrl+u
+type /attach
+key enter
+screen
+key esc

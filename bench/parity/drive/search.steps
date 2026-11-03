@@ -1,0 +1,11 @@
+type read the note and write one
+key enter
+wait PARITYTOOLS
+idle
+key ctrl+k
+type note
+screen
+key down
+screen
+key esc
+screen
