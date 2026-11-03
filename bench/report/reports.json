@@ -5478,7 +5478,7 @@
       "switched_on": "yes, through the cheap method",
       "costs": "nothing, and no call is made",
       "why": "a fifteen word floor agrees with 87.1 percent of the labels, the same as jev, and saves 12.6 percent of bytes against 9.3. a tie goes to the method that costs nothing",
-      "called_by": "apps/cli/sift.go"
+      "called_by": "internal/cli/verbs/judge/sift.go"
     },
     {
       "point": "memory_scope",

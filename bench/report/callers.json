@@ -21,7 +21,7 @@
   },
   {
     "point": "read_worth",
-    "file": "apps/cli/sift.go",
+    "file": "internal/cli/verbs/judge/sift.go",
     "symbol": "sift.Length"
   },
   {
