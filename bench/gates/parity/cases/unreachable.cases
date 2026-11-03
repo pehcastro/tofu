@@ -1,5 +1,5 @@
 unreachable flows 4, 6, 7 and 9
-why bench/flows seams them inside its own runner (a panic hook, a cap, a fold cassette built at run time, a survive kill), so a script alone does not replay them; bench/flows itself runs them
+why bench/gates/flows seams them inside its own runner (a panic hook, a cap, a fold cassette built at run time, a survive kill), so a script alone does not replay them; bench/gates/flows itself runs them
 
 unreachable slash /copy, /copy-call and /quote
 why tofu drive leaves the app's Copy unset, so the app writes the real Windows clipboard; the hook needed is a Copy sink in apps/cli/drive.go beside the --clipboard reader

@@ -44,11 +44,11 @@ func TestEveryMoveToDoneNeedsTheFlowsStamp(t *testing.T) {
 	}
 	proved(t, m, turn.ID)
 	_, err = m.Move(turn.ID, Done, closedReason, person)
-	refused(t, err, "go run ./bench/flows")
+	refused(t, err, "go run ./bench/gates/flows")
 	if _, err := m.Check("move", turn.ID, Done, person); err == nil {
 		t.Fatal("check allowed a move to done that the move refuses")
 	}
-	for owns, says := range map[string]string{"apps/desk/**": "apps/desk tree could not be read", "internal/store/session/**": "go run ./bench/flows"} {
+	for owns, says := range map[string]string{"apps/desk/**": "apps/desk tree could not be read", "internal/store/session/**": "go run ./bench/gates/flows"} {
 		gated, err := m.Create("DEMO", ticketWith(owns, owns), manager)
 		if err != nil {
 			t.Fatal(err)

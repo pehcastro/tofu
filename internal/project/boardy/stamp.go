@@ -84,7 +84,7 @@ func Unstamped(repo string, kinds ...string) (string, []string, error) {
 	var run []string
 	for _, kind := range kinds {
 		if !stamped(repo, kind, tree) {
-			run = append(run, "go run ./bench/"+kind)
+			run = append(run, "go run ./bench/gates/"+kind)
 		}
 	}
 	return tree, run, nil
@@ -206,12 +206,12 @@ func (g DoneGate) Refusal() string {
 	if len(causes) == 0 {
 		return ""
 	}
-	why := strings.Join(causes, ", and ") + ".\nIt owns " + strings.Join(g.owns, ", ") + ", which touches " + g.Area + ", and a move to done needs the owned paths committed and HEAD stamped by ./bench/flows: the Go tree for Go areas, the " + deskArea + " tree for " + deskArea + "."
+	why := strings.Join(causes, ", and ") + ".\nIt owns " + strings.Join(g.owns, ", ") + ", which touches " + g.Area + ", and a move to done needs the owned paths committed and HEAD stamped by ./bench/gates/flows: the Go tree for Go areas, the " + deskArea + " tree for " + deskArea + "."
 	if len(g.Dirty) > 0 {
 		why += "\nCommit the owned paths first, so the work being closed is the work a stamp covers."
 	}
 	if g.Unstamped || g.DeskUnstamped {
-		why += "\nIn a clean clone of HEAD, run: TOFU_STAMP_DIR=" + g.stamps + " go run ./bench/flows\nIt replays every flow on fresh homes, the desk flows through tofu drive desk on a desk built from HEAD, and stamps the Go tree when every Go flow passes and the " + deskArea + " tree when every desk flow passes."
+		why += "\nIn a clean clone of HEAD, run: TOFU_STAMP_DIR=" + g.stamps + " go run ./bench/gates/flows\nIt replays every flow on fresh homes, the desk flows through tofu drive desk on a desk built from HEAD, and stamps the Go tree when every Go flow passes and the " + deskArea + " tree when every desk flow passes."
 	}
 	return why + "\nOn 2026-10-15 two regressions in turn and sub-agent work reached 0.5.15-rc2 with every ticket accepted on its tests, and the owner's nine-day session waited 55 minutes on two finished agents."
 }

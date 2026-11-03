@@ -79,7 +79,7 @@ func TestDoneMoveNeedsAFlowsStampForHeadAndCommittedWork(t *testing.T) {
 		before              func()
 		refused             bool
 	}{
-		{name: "a turn ticket with no stamp", command: move + " --reason ok", refused: true, want: "go run ./bench/flows"},
+		{name: "a turn ticket with no stamp", command: move + " --reason ok", refused: true, want: "go run ./bench/gates/flows"},
 		{name: "a broad internal glob touches turn", command: "tofu boardy move TOFU-3 done", refused: true},
 		{name: "one file in apps/cli", command: "tofu boardy move TOFU-4 done", refused: true},
 		{name: "a desk ticket with no stamp", command: "tofu boardy move TOFU-5 done", refused: true, want: "apps/desk"},
@@ -94,10 +94,10 @@ func TestDoneMoveNeedsAFlowsStampForHeadAndCommittedWork(t *testing.T) {
 		{name: "a stamp for HEAD", before: func() { stampHead(t, repo, "flows") }, command: move},
 		{name: "another ticket's uncommitted Go", before: func() { put(t, repo, "internal/guard/guard.go", "package guard\n") }, command: move},
 		{name: "an uncommitted edit in an owned path", before: func() { put(t, repo, "internal/agent/loop/turn.go", "package turn\n\nconst X = 1\n") }, command: move, refused: true, want: "internal/agent/loop/turn.go"},
-		{name: "committed but not stamped", before: func() { commitAll(t, repo) }, command: move, refused: true, want: "go run ./bench/flows"},
+		{name: "committed but not stamped", before: func() { commitAll(t, repo) }, command: move, refused: true, want: "go run ./bench/gates/flows"},
 		{name: "stamped after the commit", before: func() { stampHead(t, repo, "flows") }, command: move},
 		{name: "a commit under apps only", before: func() { put(t, repo, "apps/desk/main.rs", "fn main() {}\n"); commitAll(t, repo) }, command: move},
-		{name: "a commit under internal/apps", before: func() { put(t, repo, "internal/apps/apps.go", "package apps\n"); commitAll(t, repo) }, command: move, refused: true, want: "go run ./bench/flows"},
+		{name: "a commit under internal/apps", before: func() { put(t, repo, "internal/apps/apps.go", "package apps\n"); commitAll(t, repo) }, command: move, refused: true, want: "go run ./bench/gates/flows"},
 		{name: "stamped after internal/apps", before: func() { stampHead(t, repo, "flows") }, command: move},
 		{name: "an untracked file in an owned path", before: func() { put(t, repo, "internal/agent/loop/new.go", "package turn\n") }, command: move, refused: true, want: "internal/agent/loop/new.go"},
 	}
@@ -162,8 +162,8 @@ func TestReleaseCommitNeedsBothStampsOnHead(t *testing.T) {
 		before     func()
 		want, lack []string
 	}{
-		{name: "no stamps", want: []string{"go run ./bench/flows", "go run ./bench/treewide"}},
-		{name: "flows only", before: func() { stampHead(t, repo, "flows") }, want: []string{"go run ./bench/treewide"}, lack: []string{"go run ./bench/flows"}},
+		{name: "no stamps", want: []string{"go run ./bench/gates/flows", "go run ./bench/gates/treewide"}},
+		{name: "flows only", before: func() { stampHead(t, repo, "flows") }, want: []string{"go run ./bench/gates/treewide"}, lack: []string{"go run ./bench/gates/flows"}},
 		{name: "both, and the release files staged", before: func() {
 			stampHead(t, repo, "treewide")
 			put(t, repo, "internal/konst/konst.go", "package konst\n\nconst Version = \"9.9.9\"\n")

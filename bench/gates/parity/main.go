@@ -16,6 +16,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"tofu/internal/sys"
 )
 
 //go:embed cases drive serve inputs
@@ -41,7 +43,7 @@ func main() {
 	a := flag.String("a", "", "the baseline tofu executable")
 	b := flag.String("b", "", "the tofu executable compared with it")
 	runs := flag.String("runs", "", "the folder each run makes its homes and projects under; beside --a when empty")
-	out := flag.String("out", "", "the report path; bench/parity/results/<stamp>.md when empty")
+	out := flag.String("out", "", "the report path; bench/gates/parity/results/<stamp>.md when empty")
 	only := flag.String("only", "", "run only the cases whose name or catalog file holds this text")
 	flag.Parse()
 	failed, err := run(*a, *b, *runs, *out, *only)
@@ -90,7 +92,7 @@ func run(aExe, bExe, runs, out, only string) (bool, error) {
 	}
 	report := renderReport(sides, cat, results)
 	if out == "" {
-		out = filepath.Join("bench", "parity", "results", stamp+".md")
+		out = filepath.Join(sys.SourceRoot(), "bench", "gates", "parity", "results", stamp+".md")
 	}
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return false, err

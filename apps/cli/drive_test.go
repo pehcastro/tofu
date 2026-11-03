@@ -792,6 +792,6 @@ func TestAHomeInsideTheTempFolderDrivesEvenWhenItIsTheAmbientHome(t *testing.T) 
 	script := written(t, dir, "look.drive", "wait "+session.Placeholder+"\n")
 	var out, errOut bytes.Buffer
 	if code := driveVerb([]string{script, "--home", home, "--timeout", "30s"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
-		t.Errorf("a home inside %s that is also HOME, as bench/flows sets it, exited %d: %s", os.TempDir(), code, errOut.String())
+		t.Errorf("a home inside %s that is also HOME, as bench/gates/flows sets it, exited %d: %s", os.TempDir(), code, errOut.String())
 	}
 }
