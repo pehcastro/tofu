@@ -72,7 +72,11 @@ var (
 		{regexp.MustCompile(`\b[0-9a-f]{8}-[0-9a-f-]*…`), "UUID…"},
 		{regexp.MustCompile(`[\x{2800}-\x{28FF}]`), "SPIN"},
 		{regexp.MustCompile(`\b(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) )?\d{2}:\d{2}(?::\d{2})?\b`), `CLOCK`},
+		{regexp.MustCompile(` {2,}(?:\d+[smhd] ago|just now)\b`), `  AGO`},
 		{regexp.MustCompile(`\b\d+[smhd] ago\b`), `AGO`},
+		{regexp.MustCompile(` {2,}(NAME\d+)`), `  $1`},
+		{regexp.MustCompile(`("commit": ?")[^"\n]*"`), `${1}COMMIT"`},
+		{regexp.MustCompile(`(?m)^(commit +)\S+$`), `${1}COMMIT`},
 		{regexp.MustCompile(`\| [0-9dhms ]+ \[settings\]`), `| AGE [settings]`},
 		{regexp.MustCompile(`\b\d+(?:\.\d+)?\s*[KMG]?B\b`), `SIZE`},
 	}

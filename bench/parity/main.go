@@ -155,7 +155,7 @@ func describe(label, exe string, w work, root string) (build, error) {
 		return build{}, err
 	}
 	var envelope struct {
-		Data struct{ Version, Commit, Go string } `json:"data"`
+		Data struct{ Version, Go string } `json:"data"`
 	}
 	if err := json.Unmarshal(raw, &envelope); err != nil {
 		return build{}, fmt.Errorf("%s version --json: %w", exe, err)
@@ -166,7 +166,7 @@ func describe(label, exe string, w work, root string) (build, error) {
 	for _, path := range [][2]string{{w.project, "PROJECT"}, {w.home, "HOME"}, {w.hostTemp, "HOSTTEMP"}, {w.data, "DATA"}, {w.root, "WORK"}, {root, "RUNS"}, {exe, "EXE"}} {
 		literals = append(literals, pathForms(path[0], path[1])...)
 	}
-	literals = append(literals, [2]string{version.Commit, "COMMIT"}, [2]string{version.Version, "VERSION"}, [2]string{plain, "VERSION"}, [2]string{version.Go, "GOVERSION"})
+	literals = append(literals, [2]string{version.Version, "VERSION"}, [2]string{plain, "VERSION"}, [2]string{version.Go, "GOVERSION"})
 	return build{label: label, exe: exe, sum: sum, literals: literals}, nil
 }
 

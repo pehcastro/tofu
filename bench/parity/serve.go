@@ -22,8 +22,9 @@ const (
 )
 
 var (
-	earlier      = regexp.MustCompile(`\$\{(\d+)\.([^}]+)\}`)
-	racingFields = []string{"seq", "session"}
+	earlier        = regexp.MustCompile(`\$\{(\d+)\.([^}]+)\}`)
+	racingFields   = []string{"seq", "session"}
+	racingByMethod = map[string]string{"turn.steered": "turn"}
 )
 
 type wireLine struct {
@@ -132,6 +133,7 @@ func (x *exchange) take(line string) wireLine {
 			for _, field := range racingFields {
 				delete(params, field)
 			}
+			delete(params, racingByMethod[got.Method])
 		}
 		canonical, _ := json.Marshal(whole)
 		line = string(canonical)

@@ -5,3 +5,4 @@ wait message.delta
 {"jsonrpc": "2.0", "id": 4, "method": "turn.steer", "params": {"session": "${2.result.session}", "expectedTurnId": "${3.result.turn}", "text": "and add a mock line"}}
 {"jsonrpc": "2.0", "id": 5, "method": "turn.stop", "params": {"session": "${2.result.session}", "turn": "${3.result.turn}", "everything": true}}
 wait turn.completed
+wait session.turns.updated

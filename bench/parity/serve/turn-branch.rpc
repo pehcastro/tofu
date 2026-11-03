@@ -5,3 +5,8 @@ wait turn.completed
 {"jsonrpc": "2.0", "id": 4, "method": "session.branch", "params": {"session": "${2.result.session}", "kind": "main", "message": 1}}
 {"jsonrpc": "2.0", "id": 5, "method": "session.branch", "params": {"session": "${2.result.session}", "kind": "side", "seed": "none", "preset": "read", "name": "parity side"}}
 {"jsonrpc": "2.0", "id": 6, "method": "session.list", "params": {}}
+wait session.updated
+wait session.updated
+wait session.updated
+wait session.updated
+wait session.updated
