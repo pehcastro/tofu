@@ -44,13 +44,13 @@ func TestEveryPageAForkedRunReachedIsVisitedFromItsRows(t *testing.T) {
 	var rows []turn.Row
 	acts := 0
 	last, err := turn.Run(context.Background(), turn.Config{Model: &actsPastTheFactSheet{}, Spend: turn.SpendAPIKey, Tools: turn.NewRegistry(searchPage{acts: &acts}),
-		Task: "find a house in Atibaia", ResultBytesCap: 4096, ArtifactDir: t.TempDir(), Budget: recall.Budget{Bands: recall.Bands{Recent: 1}},
+		Task: "find a house in Atibaia", ResultBytesCap: 4096, ArtifactDir: t.TempDir(), Budget: recall.Budget{Bands: recall.Bands{Recent: 8000}},
 		EndedSession: func(ended turn.Row) error { rows = append(rows, ended); return nil }})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(rows) == 0 || acts <= konst.FactSheetLines {
-		t.Fatalf("the run forked %d times over %d acts, want a fork after every act", len(rows), acts)
+		t.Fatalf("the run forked %d times over %d acts and ended %s %q, want forks and more acts than the fact sheet holds", len(rows), acts, last.Outcome, last.ForkStop)
 	}
 	var visited []string
 	for _, round := range append(rows, last) {
