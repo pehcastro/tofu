@@ -13,12 +13,12 @@ import (
 	"time"
 
 	"tofu/interface/cli"
-	"tofu/internal/drain"
-	"tofu/internal/drain/claudecode"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/llm/models"
 	"tofu/internal/recall"
 	"tofu/internal/session"
+	"tofu/internal/store/session/drain"
+	"tofu/internal/store/session/drain/claudecode"
 	"tofu/internal/sys"
 )
 

@@ -10,7 +10,6 @@ import (
 
 	"tofu/internal/agent/commands"
 	"tofu/internal/boardy"
-	"tofu/internal/drain"
 	"tofu/internal/hook"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
@@ -22,6 +21,7 @@ import (
 	"tofu/internal/settings"
 	"tofu/internal/skill"
 	"tofu/internal/snapshot"
+	"tofu/internal/store/session/drain"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
 	"tofu/internal/tools/web/browser/driver"

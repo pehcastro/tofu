@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"tofu/internal/drain"
 	"tofu/internal/llm"
 	"tofu/internal/session"
+	"tofu/internal/store/session/drain"
 )
 
 const (

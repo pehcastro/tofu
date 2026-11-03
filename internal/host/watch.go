@@ -14,11 +14,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"tofu/internal/drain"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/safe"
 	"tofu/internal/session"
+	"tofu/internal/store/session/drain"
 	roster "tofu/internal/subagent"
 	"tofu/internal/turn"
 	"tofu/internal/ui/toolcard"

@@ -18,11 +18,11 @@ import (
 	"time"
 
 	"tofu/interface/cli"
-	"tofu/internal/drain"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/llm/quota"
 	"tofu/internal/session"
+	"tofu/internal/store/session/drain"
 	"tofu/internal/sys"
 	"tofu/internal/widget"
 )

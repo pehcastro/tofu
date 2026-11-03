@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"time"
 
-	"tofu/internal/drain"
 	"tofu/internal/hook"
 	"tofu/internal/recall"
 	"tofu/internal/session"
+	"tofu/internal/store/session/drain"
 	"tofu/internal/turn"
 )
 
