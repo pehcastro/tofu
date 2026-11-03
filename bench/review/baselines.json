@@ -1,0 +1,106 @@
+{
+  "spec": ".local/boji/review/analysis.md, TOFU-1848, forks 70 to 105 of spry-maple-ibis",
+  "baselineWindow": {
+    "from": "2026-10-14T06:07:00-03:00",
+    "to": "2026-10-31T00:00:00-03:00",
+    "cite": "findings/tickets-70-87.md: 10-14 06:07 to 10-22 03:19; findings/tickets-88-105.md: 10-22 to 10-30"
+  },
+  "since": {
+    "at": "2026-11-02T02:02:32-03:00",
+    "cite": "install of tofu 0.5.20+dev at 13bdadf5 to C:/Users/Luiz/.local/bin/tofu.exe, the file time of that binary"
+  },
+  "patterns": {
+    "limit": "(?i)not[ _]possible",
+    "limitSaid": "(?i)not[ _]possible|\\bcannot\\b|\\bcan'?t\\b|\\bimpossible\\b|\\bdoes not (support|give)\\b",
+    "restate": "(?i)waiting for your go or your correction",
+    "reviewer": "(?i)\\bran as (reviewer|hunter|skeptic|referee)\\b|\\bsent back\\b",
+    "ownerDefect": "(?i)\\b(broken|broke|doesn'?t work|does not work|not working|still wrong|regress\\w*)\\b",
+    "regression": "(?i)\\bregress\\w*|\\bbroke\\b|\\bno longer\\b|\\bstopped working\\b",
+    "openPart": "(?i)\\bnot (yet )?(driven|verified|proved|done|covered)\\b|\\bunverified\\b|\\bfollow[- ]?up\\b|\\bopen:|\\bleft open\\b|\\bremaining\\b|\\bdeferred\\b|\\bsplit (off|out|to)\\b|\\bpartial(ly)?\\b|\\binconclusive\\b|\\bwith concerns\\b|\\bexcept\\b|\\bstill open\\b",
+    "qaCite": "(?i)\\bqa\\b|library/qa|\\b(coverage_split|e2e_first|failure_modes_first|flake_disagreement|no_unit_test_after_code|skipped_test_budget|test_assertion|test_boundary_cases|test_mock_boundary)\\b",
+    "beforeCapture": "(?i)before capture:",
+    "docsOnly": "docs-only",
+    "decisionKind": "point"
+  },
+  "repeat": {
+    "similarity": 0.5,
+    "minWords": 3,
+    "minLetters": 3
+  },
+  "points": [
+    {
+      "point": 1,
+      "title": "intent, and honesty about what is possible",
+      "measures": [
+        {"key": "cannot_said_same_turn", "name": "share of agent not-possible reports said plainly before his next message", "baseline": "about 59 hours from the first cannot to a plain sentence", "cite": "### 1, Measure", "bound": "least", "target": 1, "least": 1}
+      ]
+    },
+    {
+      "point": 2,
+      "title": "research and a small first version",
+      "measures": [
+        {"key": "epic_tickets_before_run", "name": "worst epic: tickets written before its first done", "baseline": "14, the theme system", "cite": "### 2, Measure", "bound": "most", "target": 3, "least": 3}
+      ]
+    },
+    {
+      "point": 3,
+      "title": "acceptance a person drives",
+      "measures": [
+        {"key": "five_lines_share", "name": "share of new tickets with before, driven, still works, error case and a QA cite", "baseline": "16 of 189 for the whole feature, 0 of 157 cite QA", "cite": "### 3, Measure", "bound": "least", "target": 1, "least": 5}
+      ]
+    },
+    {
+      "point": 4,
+      "title": "regressions",
+      "measures": [
+        {"key": "regressions_per_100", "name": "regressions per 100 new tickets", "baseline": "about 26 in 346 tickets, 7.5 per 100", "cite": "### 4, What happened and Measure; 189 and 157 tickets from ### 3", "bound": "none", "target": 0, "least": 5},
+        {"key": "regressions_caught_share", "name": "share of regressions caught before merge", "baseline": "1 of about 26", "cite": "### 4, Measure", "bound": "least", "target": 0.5, "least": 5}
+      ]
+    },
+    {
+      "point": 5,
+      "title": "rules and library visibly applied",
+      "measures": [
+        {"key": "rules_dropped_unlisted", "name": "rules missing from rules why on an agent turn, or listed with no reason", "baseline": "unknown, at least every QA rule", "cite": "### 5, Measure", "bound": "most", "target": 0, "least": 1}
+      ]
+    },
+    {
+      "point": 6,
+      "title": "restate the request",
+      "measures": [
+        {"key": "restatement_rate", "name": "lead replies that restate the request", "baseline": "3 of 523 replies, 0.0057", "cite": "### 6, Measure", "bound": "above", "target": 0.0057, "least": 20},
+        {"key": "repeats_per_fork", "name": "repeated requests per fork", "baseline": "20 in 10 forks, 2.0", "cite": "### 6, Measure", "bound": "below", "target": 2.0, "least": 1}
+      ]
+    },
+    {
+      "point": 7,
+      "title": "principles fixed in places, not memory",
+      "measures": [
+        {"key": "chains_stopped_share", "name": "repeat chains that stop at the first repeat", "baseline": "2 of 8 chains stopped, both after a hook", "cite": "### 7, Measure; My side, and findings/mine.md section 1", "bound": "least", "target": 1, "least": 3},
+        {"key": "wrong_memory_matches", "name": "wrong memory matches per fork", "baseline": "at least 8 in forks 85 to 94, 8 of 11 notes in 95 to 100", "cite": "### 7, What happened", "bound": "most", "target": 0, "least": 1}
+      ]
+    },
+    {
+      "point": 8,
+      "title": "a review turn before done",
+      "measures": [
+        {"key": "reviewer_share", "name": "share of defects the reviewer found, against his", "baseline": "0 reviewer spawns in 393, he found all of them", "cite": "### 8, What happened and Measure", "bound": "above", "target": 0.5, "least": 5}
+      ]
+    },
+    {
+      "point": 10,
+      "title": "drive before and after, never his home",
+      "measures": [
+        {"key": "before_share", "name": "share of new done tickets with a before capture", "baseline": "29 of 189", "cite": "### 10, Measure", "bound": "least", "target": 1, "least": 5},
+        {"key": "real_home_changes", "name": "state changes to his real home", "baseline": "9 in forks 95 to 100", "cite": "### 10, Measure", "bound": "most", "target": 0, "least": 1}
+      ]
+    },
+    {
+      "point": 11,
+      "title": "a part open means not done",
+      "measures": [
+        {"key": "open_done_share", "name": "share of done moves with an open part", "baseline": "69 of 168 (41%) and 34 of 128 (27%)", "cite": "### 11, Measure", "bound": "most", "target": 0, "least": 5}
+      ]
+    }
+  ]
+}
