@@ -15,7 +15,7 @@ import (
 	"tofu/interface/cli"
 	"tofu/internal/konst"
 	sessionstore "tofu/internal/session"
-	rewind "tofu/internal/snapshot"
+	rewind "tofu/internal/store/snapshot"
 )
 
 const undoUsage = "tofu undo [N] [--dir path] [--session id] [--turn id] [--force] [--dry-run] [--json]"

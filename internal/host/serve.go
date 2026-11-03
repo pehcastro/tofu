@@ -24,7 +24,7 @@ import (
 	"tofu/internal/safe"
 	"tofu/internal/session"
 	"tofu/internal/shell"
-	"tofu/internal/snapshot"
+	"tofu/internal/store/snapshot"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"

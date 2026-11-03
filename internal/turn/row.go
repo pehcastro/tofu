@@ -19,7 +19,7 @@ import (
 	"tofu/internal/recall"
 	"tofu/internal/safe"
 	"tofu/internal/session"
-	"tofu/internal/snapshot"
+	"tofu/internal/store/snapshot"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
 )
