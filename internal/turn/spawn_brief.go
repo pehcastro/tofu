@@ -36,7 +36,7 @@ func (s SubAgents) prompt(inherited Config, definition subagent.Definition, task
 		}
 		system, parts, environment = composed.Head(), composed.Recorded(), composed.WithTaskRules(spec.Environment)
 	case definition.Name != "":
-		system += "\n\n" + agentPart(definition).Text
+		system, parts = system+"\n\n"+agentPart(definition).Text, referenceParts(definition)
 	}
 	return system, parts, Redated(strings.TrimSpace(environment+"\n\n"+holdingWords(owns)), inherited.Now), nil
 }

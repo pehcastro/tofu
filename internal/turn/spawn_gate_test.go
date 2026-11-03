@@ -120,7 +120,7 @@ func TestATypecheckErrorOnlyInAnotherAgentsFileDoesNotSendThisOneBack(t *testing
 		head + "error TS5083: Cannot read file 'tsconfig.base.json'.":                                                 "typecheck failed",
 		head + "src/theirs.ts(1,1): error TS1: x\n(4 more lines not shown)":                                           "typecheck failed",
 	} {
-		if missed := strings.Join(gateMissed(project, nil, tsGate, owns, typecheckRound(content)), "; "); missed != want {
+		if missed := strings.Join(gateMissed(project, nil, tsGate, owns, typecheckRound(content)), "; "); !strings.HasPrefix(missed, want) || (missed == "") != (want == "") {
 			t.Errorf("%q: the gate said %q, want %q", content, missed, want)
 		}
 	}

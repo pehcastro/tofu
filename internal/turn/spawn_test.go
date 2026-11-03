@@ -45,7 +45,7 @@ func TestASubAgentIsOfferedWriteAndEditOnlyWhenItsDefinitionNamesThem(t *testing
 	for _, tool := range base {
 		names = append(names, tool.Name())
 	}
-	found := subagent.Definitions(subagent.Scan{Library: library.Files(), Tools: append(names, "spawn", "skill")})
+	found := subagent.Definitions(subagent.Scan{Library: library.Files(), Tools: append(names, "spawn", "skill"), KnownTools: []string{"web_search"}})
 	gates := map[string]string{"go-dev": "go vet, go test", "py-dev": "ruff check, pytest"}
 	for _, definition := range found.Definitions {
 		if gate, isLanguageAgent := gates[definition.Name]; isLanguageAgent && (len(definition.References) != 4 || len(definition.Cut) > 0 || strings.Join(definition.Gate, ", ") != gate) {
