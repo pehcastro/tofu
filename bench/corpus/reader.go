@@ -275,7 +275,7 @@ func (w Walked) RecordedBy(cut time.Time) Walked {
 	return held
 }
 
-func scrubTurn(identities secret.Identities, recorded RecordedTurn) RecordedTurn {
+func scrubTurn(identities credential.Identities, recorded RecordedTurn) RecordedTurn {
 	recorded.Task = identities.Scrub(recorded.Task)
 	recorded.Outcome = identities.Scrub(recorded.Outcome)
 	recorded.AutoCompaction = identities.Scrub(recorded.AutoCompaction)
@@ -300,7 +300,7 @@ func scrubTurn(identities secret.Identities, recorded RecordedTurn) RecordedTurn
 	return recorded
 }
 
-func finishedTurn(identities secret.Identities, recorded RecordedTurn, place string) (RecordedTurn, error) {
+func finishedTurn(identities credential.Identities, recorded RecordedTurn, place string) (RecordedTurn, error) {
 	scrubbed := scrubTurn(identities, recorded)
 	if len(scrubbed.Steps) == 0 || scrubbed.WallClockMS == 0 {
 		return scrubbed, fmt.Errorf("bench/corpus: %s carries no step and no wall clock: %w", place, ErrNoWallClock)
@@ -309,10 +309,10 @@ func finishedTurn(identities secret.Identities, recorded RecordedTurn, place str
 }
 
 func ReadTurn(path string) (RecordedTurn, error) {
-	return readTurn(secret.Machine(), path)
+	return readTurn(credential.Machine(), path)
 }
 
-func readTurn(identities secret.Identities, path string) (RecordedTurn, error) {
+func readTurn(identities credential.Identities, path string) (RecordedTurn, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return RecordedTurn{}, err
@@ -381,7 +381,7 @@ func ReadTurnDir(dir string) (RecordedTurn, error) {
 	if err != nil {
 		return RecordedTurn{}, err
 	}
-	return finishedTurn(secret.Machine(), segments[len(segments)-1], dir)
+	return finishedTurn(credential.Machine(), segments[len(segments)-1], dir)
 }
 
 func WalkSessions(dir string) (Walked, error) {
@@ -390,7 +390,7 @@ func WalkSessions(dir string) (Walked, error) {
 	if err != nil {
 		return Walked{}, err
 	}
-	walked, identities := Walked{Dir: dir, EntryCount: len(entries)}, secret.Machine()
+	walked, identities := Walked{Dir: dir, EntryCount: len(entries)}, credential.Machine()
 	for _, entry := range entries {
 		name := entry.Name()
 		if !entry.IsDir() && filepath.Ext(name) != ".json" {

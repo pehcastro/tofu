@@ -59,7 +59,7 @@ func TestHowManyRecordedTurnsOnThisMachineCarrySomethingCredentialShaped(t *test
 	flagged, withValueShape := 0, 0
 	for _, entry := range entries {
 		text := readableBytesUnder(t, filepath.Join(recordedSessionsDir(), entry.Name()))
-		markers := secret.CredentialsIn(text)
+		markers := credential.CredentialsIn(text)
 		if len(markers) == 0 {
 			continue
 		}
