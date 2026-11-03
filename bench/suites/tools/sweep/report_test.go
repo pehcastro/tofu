@@ -28,21 +28,21 @@ func TestRenderNamesEveryReaderAndDuplication(t *testing.T) {
 	}
 }
 
-func TestCountLinesFindsTheStatPackage(t *testing.T) {
+func TestCountLinesFindsTheCorpusPackage(t *testing.T) {
 	lines, err := CountLines(filepath.Join(sys.SourceRoot(), "bench"))
 	if err != nil {
 		t.Fatalf("CountLines: %v", err)
 	}
 	found := false
 	for _, l := range lines {
-		if l.Package == "stat" {
+		if l.Package == "corpus" {
 			found = true
 			if l.Source == 0 {
-				t.Fatal("bench/stat has source files, counted 0")
+				t.Fatal("bench/corpus has source files, counted 0")
 			}
 		}
 	}
 	if !found {
-		t.Fatal("CountLines over bench did not find the stat package")
+		t.Fatal("CountLines over bench did not find the corpus package")
 	}
 }
