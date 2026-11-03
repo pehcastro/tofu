@@ -1,4 +1,4 @@
-package main
+package rules
 
 import (
 	"fmt"
@@ -13,13 +13,13 @@ import (
 	"tofu/internal/sys"
 )
 
-type ruleFiredReport struct {
-	Fires      []ruleFireRecord `json:"fires"`
-	Blocked    int              `json:"blocked"`
-	Unreadable int              `json:"unreadable_lines"`
+type firedReport struct {
+	Fires      []fireRecord `json:"fires"`
+	Blocked    int          `json:"blocked"`
+	Unreadable int          `json:"unreadable_lines"`
 }
 
-func rulesFiredVerb(args []string, out, errOut io.Writer) int {
+func firedVerb(args []string, out, errOut io.Writer) int {
 	o := output.Verb{Name: "rules fired", UsageLine: "tofu rules fired [2006-01-02] [--json]", Out: out, ErrOut: errOut}
 	day := ""
 	for _, arg := range args {
@@ -43,13 +43,13 @@ func rulesFiredVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return o.Fail(err)
 	}
-	fires, unreadable, err := output.JSONLRecords[ruleFireRecord](dir, func(name string) bool {
-		return strings.HasSuffix(name, rulesFireSuffix) && strings.HasPrefix(name, day)
+	fires, unreadable, err := output.JSONLRecords[fireRecord](dir, func(name string) bool {
+		return strings.HasSuffix(name, FireSuffix) && strings.HasPrefix(name, day)
 	})
 	if err != nil {
 		return o.Fail(err)
 	}
-	report := ruleFiredReport{Fires: fires, Unreadable: unreadable}
+	report := firedReport{Fires: fires, Unreadable: unreadable}
 	for _, fire := range fires {
 		if fire.Blocked {
 			report.Blocked++
@@ -59,7 +59,7 @@ func rulesFiredVerb(args []string, out, errOut io.Writer) int {
 	return o.Done(true, report, func(page cli.Page) []string { return report.lines(page, day, now) })
 }
 
-func (report ruleFiredReport) lines(page cli.Page, day string, now time.Time) []string {
+func (report firedReport) lines(page cli.Page, day string, now time.Time) []string {
 	var facts []string
 	if day != "" {
 		facts = []string{day}

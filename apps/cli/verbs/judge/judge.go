@@ -75,11 +75,11 @@ func Verb(args []string, in io.Reader, out, errOut io.Writer) int {
 		return wiring.Failed(o, err)
 	}
 	if !opts.noRule && input.Rule != "" {
-		pol, err := ResolveRule(input.Rule, set)
+		pol, err := wiring.ResolveRule(input.Rule, set)
 		if err != nil {
 			return wiring.Failed(o, err)
 		}
-		res, err := ResolveRuleMode(pol)
+		res, err := wiring.ResolveRuleMode(pol)
 		if err != nil {
 			return wiring.Failed(o, err)
 		}
@@ -113,7 +113,7 @@ func Verb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return wiring.Failed(o, err)
 	}
-	answers := outcome.output(set.Kinds)
+	answers := outcome.output()
 	body, err := json.Marshal(answers)
 	if err != nil {
 		return wiring.Failed(o, err)

@@ -215,7 +215,7 @@ func runReplay(reader *ledger.Reader, filter ledger.Filter, sets map[string]floa
 		for key, value := range sets {
 			*named[key] = value
 		}
-		verdict, _, err := gate.Decide(LedgerAnswersToJev(row.Answers), pol)
+		verdict, _, err := gate.Decide(wiring.LedgerAnswersToJev(row.Answers), pol)
 		if err != nil {
 			return err
 		}
@@ -295,7 +295,7 @@ func (r *replayReport) rule(ref string, load func() replayRule) *replayRule {
 
 func gateRule(ref string, sets map[string]float64) replayRule {
 	rule := replayRule{Ref: ref, slots: gateThresholdSlots}
-	if rule.pol, rule.Origin, rule.err = LoadRulePoint(ref, ""); rule.err != nil {
+	if rule.pol, rule.Origin, rule.err = wiring.LoadRulePoint(ref, ""); rule.err != nil {
 		return rule
 	}
 	rule.File = rule.pol.File

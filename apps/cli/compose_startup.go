@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/core"
@@ -86,26 +87,26 @@ func (c *startupClock) picking(accounts turn.Accounts, store *cred.Store) turn.A
 	return accounts
 }
 
-func (a *accounts) checkUsageAlongside(clock *startupClock) (wait func()) {
+func (c *startupClock) checkUsageAlongside(a *wiring.Accounts) (wait func()) {
 	var checking sync.WaitGroup
-	if a.fixed != nil || a.store == nil {
+	if a.Fixed != nil || a.Store == nil {
 		return checking.Wait
 	}
-	rows, err := a.store.List()
-	poller, pollerErr := a.quota()
+	rows, err := a.Store.List()
+	poller, pollerErr := a.Quota()
 	if err != nil || pollerErr != nil {
 		return checking.Wait
 	}
-	mine := slices.DeleteFunc(rows, func(row cred.Row) bool { return row.Credential.Provider != a.provider })
+	mine := slices.DeleteFunc(rows, func(row cred.Row) bool { return row.Credential.Provider != a.Provider })
 	began := time.Now()
 	checking.Go(func() {
 		_ = safe.Call(sys.Crashes("."), "usage check alongside", func() error {
-			results, _ := pollRowsOn(context.Background(), a.store, mine, a.now, a.urls, poller)
-			clock.mu.Lock()
-			defer clock.mu.Unlock()
+			results, _ := wiring.PollRowsOn(context.Background(), a.Store, mine, a.Now, a.URLs, poller)
+			c.mu.Lock()
+			defer c.mu.Unlock()
 			for _, result := range results {
-				if !result.report.FetchedAt.Before(began) {
-					clock.usageAskedAlongside = append(clock.usageAskedAlongside, result.report.FetchedAt.Sub(began))
+				if !result.Report.FetchedAt.Before(began) {
+					c.usageAskedAlongside = append(c.usageAskedAlongside, result.Report.FetchedAt.Sub(began))
 				}
 			}
 			return nil

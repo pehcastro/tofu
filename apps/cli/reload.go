@@ -52,7 +52,7 @@ func takeInventory(dir string) ([]reloadPart, error) {
 	if err != nil {
 		return nil, err
 	}
-	rules, _, err := loadRules("", dir)
+	rules, _, err := wiring.LoadRules("", dir)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +237,7 @@ func (d reloadDiff) lines(page cli.Page) []string {
 		}
 		var counted []cli.Fact
 		for _, part := range d.Parts {
-			counted = append(counted, cli.Fact{Label: part.Name, Text: nonZero(part.Count)})
+			counted = append(counted, cli.Fact{Label: part.Name, Text: output.NonZero(part.Count)})
 		}
 		return append(append(title(verdict), ""), cli.Indent(page.Facts(counted)...)...)
 	}
@@ -255,7 +255,7 @@ func (d reloadDiff) lines(page cli.Page) []string {
 			body = append(append(body, "", page.Section(part.Name, cli.Verdict{})), cli.Indent(page.Rows(rows)...)...)
 		}
 	}
-	said := countsSaid(counts, []markNoun{{cli.Added, "added"}, {cli.Removed, "removed"}, {cli.Changed, "changed"}})
+	said := output.CountsSaid(counts, []output.MarkNoun{{Mark: cli.Added, Noun: "added"}, {Mark: cli.Removed, Noun: "removed"}, {Mark: cli.Changed, Noun: "changed"}})
 	return append(title(cli.Verdict{Mark: cli.Done, Text: cmp.Or(said, "nothing changed")}), body...)
 }
 

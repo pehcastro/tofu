@@ -293,7 +293,7 @@ func screenshotBoard(t *testing.T, live *appSession) paste.Board {
 func TestAnImagePastedBeforeTheFirstSendLandsInTheSessionThatSendCreates(t *testing.T) {
 	dir := testkit.ScratchProject(t)
 	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"}}}
-	live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) {
+	live := newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) {
 		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
 
@@ -329,7 +329,7 @@ func TestACronFileThatDidNotLoadIsLeftAsItIsBySends(t *testing.T) {
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "first"},
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "second"},
 	}}
-	live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) {
+	live := newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) {
 		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
 	var first eventLog
@@ -373,7 +373,7 @@ func TestACronFileThatDidNotLoadIsLeftAsItIsBySends(t *testing.T) {
 func TestAPastedImageReachesTheRequestSentToTheModel(t *testing.T) {
 	dir := testkit.ScratchProject(t)
 	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"}}}
-	live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) {
+	live := newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) {
 		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
 
@@ -399,7 +399,7 @@ func TestAPastedImageReachesTheRequestSentToTheModel(t *testing.T) {
 func TestDeletingAPastedImagesTokenDropsItFromTheRequestSentToTheModel(t *testing.T) {
 	dir := testkit.ScratchProject(t)
 	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"}}}
-	live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) {
+	live := newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) {
 		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
 
@@ -444,7 +444,7 @@ func TestAPasteInARepositoryWithNoRecordedSessionWorks(t *testing.T) {
 func TestASendRecordsTheAttachmentEventInTheSessionBody(t *testing.T) {
 	dir := testkit.ScratchProject(t)
 	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"}}}
-	live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) {
+	live := newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) {
 		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
 
@@ -537,7 +537,7 @@ func TestLiveASecondSendReadsTheCacheOfTheFirst(t *testing.T) {
 		}
 	}
 
-	send := newAppSession(dir, openAppWire, nil, time.Now, sessionResume{}).run
+	send := newAppSession(dir, wiring.OpenWire, nil, time.Now, sessionResume{}).run
 	var events eventLog
 	send(t.Context(), onTheSubscription, "read loop.md and judge.md and say in one sentence what each is about", events.add)
 	send(t.Context(), onTheSubscription, "without calling any tool, repeat what judge.md was about", events.add)

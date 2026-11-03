@@ -15,6 +15,8 @@ import (
 
 	"tofu/apps/cli/output"
 	"tofu/apps/cli/page"
+	modelsverb "tofu/apps/cli/verbs/models"
+	"tofu/internal/host"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/models/llm/wire/codex"
@@ -183,7 +185,7 @@ func oneEnvelope(t *testing.T, printed string, into any) {
 
 func modelsJSONLines(t *testing.T, printed string) string {
 	t.Helper()
-	var envelope envelopeOf[modelsReport]
+	var envelope envelopeOf[host.ModelsReport]
 	oneEnvelope(t, printed, &envelope)
 	lines := []string{envelope.Verb + " ok " + strconv.FormatBool(envelope.OK) + " problems " + strconv.Itoa(len(envelope.Problems))}
 	for _, model := range envelope.Data.Models {
@@ -258,7 +260,7 @@ func TestModelsReloadWithNpmDownPassesAndSaysTheVersionCheckWasSkipped(t *testin
 	if code := run([]string{"models", "reload", output.JSONFlag}, strings.NewReader(""), &printed, &errOut); code != output.ExitOK {
 		t.Fatalf("tofu models reload --json with npm down exited %d\n%s%s", code, printed.String(), errOut.String())
 	}
-	var envelope envelopeOf[modelReload]
+	var envelope envelopeOf[modelsverb.ModelReload]
 	oneEnvelope(t, printed.String(), &envelope)
 	if !envelope.OK || !strings.Contains(envelope.Data.Versions.Skipped, "skipped") || len(envelope.Data.Versions.Raised) != 0 {
 		t.Fatalf("the envelope does not say the version check was skipped\n%s", printed.String())
@@ -278,25 +280,25 @@ func TestModelsReloadShowsANewModelAndARefusedAccountWithTheVendorBodyOnlyInJSON
 		{Subscription: models.ClaudeSub, Token: token, BaseURL: stubbed(t, http.StatusOK, `{"data":[{"id":"claude-opus-5"},{"id":"claude-sonnet-5"},{"id":"claude-sonnet-5-5"}]}`)},
 		{Subscription: models.CodexSub, Token: token, BaseURL: stubbed(t, http.StatusForbidden, vendorBody)},
 	}
-	client, err := reloadClient()
+	client, err := modelsverb.ReloadClient()
 	if err != nil {
 		t.Fatal(err)
 	}
-	report, err := reloadModels(context.Background(), client, accounts, nil)
+	report, err := modelsverb.ReloadModels(context.Background(), client, accounts, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var text bytes.Buffer
-	if err := (cli.Page{Width: 80}).Print(&text, reloadLines(cli.Page{Width: 80}, report)); err != nil {
+	if err := (cli.Page{Width: 80}).Print(&text, modelsverb.ReloadLines(cli.Page{Width: 80}, report)); err != nil {
 		t.Fatal(err)
 	}
 	testkit.SameText(t, "a reload where one account serves a new model and the other is refused", text.String(), reloadOfANewModelAndARefusedAccount)
 
 	var printed bytes.Buffer
-	if err := output.WriteJSON(&printed, report.envelope()); err != nil {
+	if err := output.WriteJSON(&printed, report.Envelope()); err != nil {
 		t.Fatal(err)
 	}
-	var envelope envelopeOf[modelReload]
+	var envelope envelopeOf[modelsverb.ModelReload]
 	oneEnvelope(t, printed.String(), &envelope)
 	if envelope.Verb != "models reload" || envelope.OK || len(envelope.Problems) != 1 || envelope.Problems[0].Hint != "tofu login llm codex-sub" {
 		t.Errorf("the envelope does not carry one problem for the refused account with its login hint\n%s", printed.String())
@@ -308,8 +310,8 @@ func TestModelsReloadShowsANewModelAndARefusedAccountWithTheVendorBodyOnlyInJSON
 			t.Errorf("the JSON drops the vendor body for the refused account: %q", source.Error)
 		}
 	}
-	if states["claude-sub"] != sourceReloaded || states["codex-sub"] != sourceRefused {
-		t.Errorf("the sources are %v, want claude-sub %s and codex-sub %s", states, sourceReloaded, sourceRefused)
+	if states["claude-sub"] != modelsverb.SourceReloaded || states["codex-sub"] != modelsverb.SourceRefused {
+		t.Errorf("the sources are %v, want claude-sub %s and codex-sub %s", states, modelsverb.SourceReloaded, modelsverb.SourceRefused)
 	}
 
 	if _, err := os.Stat(filepath.Join(catalog, "models", "anthropic", "claude-sonnet-5-5.yaml")); err != nil {
@@ -344,14 +346,14 @@ func TestModelsReloadWithNobodySignedInSaysSoInTextAndInJSON(t *testing.T) {
 	if code := run([]string{"models", "reload", output.JSONFlag}, strings.NewReader(""), &printed, &errOut); code != output.ExitOK {
 		t.Fatalf("tofu models reload --json exited %d\n%s%s", code, printed.String(), errOut.String())
 	}
-	var envelope envelopeOf[modelReload]
+	var envelope envelopeOf[modelsverb.ModelReload]
 	oneEnvelope(t, printed.String(), &envelope)
 	if !envelope.OK || len(envelope.Data.Sources) != 2 {
 		t.Fatalf("the envelope is not ok with two sources\n%s", printed.String())
 	}
 	for _, source := range envelope.Data.Sources {
-		if source.State != sourceNotSignedIn || source.Hint != "tofu login llm "+source.Source {
-			t.Errorf("%s is %q with hint %q, want %q with its login hint", source.Source, source.State, source.Hint, sourceNotSignedIn)
+		if source.State != modelsverb.SourceNotSignedIn || source.Hint != "tofu login llm "+source.Source {
+			t.Errorf("%s is %q with hint %q, want %q with its login hint", source.Source, source.State, source.Hint, modelsverb.SourceNotSignedIn)
 		}
 	}
 }

@@ -1,4 +1,4 @@
-package main
+package login
 
 import (
 	"io"
@@ -11,6 +11,7 @@ import (
 	"tofu/apps/cli/page"
 	"tofu/internal/cli/render"
 	"tofu/internal/models/llm/quota"
+	"tofu/internal/sys"
 )
 
 type quotaHistoryRow struct {
@@ -27,7 +28,7 @@ type quotaHistoryReport struct {
 
 func usageHistoryVerb(out, errOut io.Writer, asJSON bool) int {
 	now := time.Now()
-	dir, err := quotaReadingDir()
+	dir, err := sys.QuotaDir()
 	if err != nil {
 		return usageFail(errOut, err)
 	}

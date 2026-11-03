@@ -560,13 +560,13 @@ func linesShown(t *testing.T, screen string) int {
 
 func TestDriveTakesTheRunArmsThatChangeWhatATurnDoes(t *testing.T) {
 	plan, taken := driveArgs([]string{
-		"--sift", siftFree, "--gate", gateShadow, "--tools", toolSetThree,
+		"--sift", wiring.SiftFree, "--gate", gateShadow, "--tools", toolSetThree,
 		"--no-subagents", "--no-instructions", "--max-steps", "7", "--context-ceiling", "20000",
 	}, io.Discard)
 	if !taken {
 		t.Fatal("tofu drive refused the arms tofu run takes")
 	}
-	want := wiring.RunOpts{SiftArm: siftFree, GateArm: gateShadow, ToolSet: toolSetThree, NoSubAgents: true, NoInstructions: true, MaxSteps: 7, ContextCeiling: 20000}
+	want := wiring.RunOpts{SiftArm: wiring.SiftFree, GateArm: gateShadow, ToolSet: toolSetThree, NoSubAgents: true, NoInstructions: true, MaxSteps: 7, ContextCeiling: 20000}
 	if plan.arms != want {
 		t.Fatalf("drive parsed %+v, want %+v", plan.arms, want)
 	}

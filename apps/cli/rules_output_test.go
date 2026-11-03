@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
+	rulesverb "tofu/apps/cli/verbs/rules"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
 	"tofu/internal/testkit/cli"
@@ -76,7 +77,7 @@ func outputProject(t *testing.T) string {
 	fired := `{"rule_id":"em_dash","target":"docs/a.md","mode":"enforced","blocked":true,"findings":1,"at":"` + at + `"}` + "\n" +
 		`{"rule_id":"comments","target":"internal/x.go","mode":"shadow","blocked":false,"findings":2,"at":"` + at + `"}` + "\n" +
 		"not json\n"
-	if err := sys.WriteFile(filepath.Join(logDir, "2026-09-28"+rulesFireSuffix), []byte(fired), 0o644); err != nil {
+	if err := sys.WriteFile(filepath.Join(logDir, "2026-09-28"+rulesverb.FireSuffix), []byte(fired), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return home

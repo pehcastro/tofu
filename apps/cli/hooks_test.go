@@ -85,7 +85,7 @@ func TestHooksTheAppFiresSessionStartForStartupClearAndResumeAndSessionEndAtExit
 	for range 4 {
 		model.queued = append(model.queued, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"})
 	}
-	live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
+	live := newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
 	var events eventLog
 	live.run(t.Context(), onTheSubscription, "first", events.add)
 	first := live.ID()

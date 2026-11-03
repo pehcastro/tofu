@@ -1,7 +1,8 @@
-package main
+package doctor
 
 import (
 	"bytes"
+	"encoding/json"
 	"maps"
 	"os"
 	"path/filepath"
@@ -15,6 +16,8 @@ func everyRuleMatched(files map[string]string) map[string]string {
 	tree := map[string]string{
 		"bench/cost/cost.go":                    "package cost\n\nfunc Run() int { return 1 }\n",
 		"apps/cli/main.go":                      "package main\n\nfunc main() {}\n",
+		"apps/cli/wiring/wiring.go":             "package wiring\n",
+		"apps/cli/verbs/doctor/doctor.go":       "package doctor\n",
 		"library/embed.go":                      "package library\n",
 		"internal/judge/questions/questions.go": "package questions\n\nimport \"tofu/internal/sys\"\n\nfunc Name() string { return sys.OS() }\n",
 		"internal/sys/sys.go":                   "package sys\n\nfunc OS() string { return \"windows\" }\n",
@@ -47,12 +50,12 @@ func TestImportsFailsOnACommandImportingBench(t *testing.T) {
 	}))
 
 	out := &bytes.Buffer{}
-	code := doctorImports(dir, false, out, out)
+	code := Imports(dir, false, out, out)
 	if code != output.ExitVerdict {
 		t.Fatalf("exit = %d, want %d, output %q", code, output.ExitVerdict, out.String())
 	}
 	for _, want := range []string{
-		"Imports · 7 packages · 8 rules",
+		"Imports · 9 packages · 10 rules",
 		"✗ 1 violations\n",
 		"  ✗ tofu/apps                       never tofu/bench\n",
 		"violations\n  ✗ tofu/apps/cli  imports tofu/bench/cost\n",
@@ -92,11 +95,11 @@ func TestImportsPassesOnATreeThatObeysTheRules(t *testing.T) {
 	}))
 
 	out := &bytes.Buffer{}
-	code := doctorImports(dir, false, out, out)
+	code := Imports(dir, false, out, out)
 	if code != output.ExitOK {
 		t.Fatalf("exit = %d, want %d, output %q", code, output.ExitOK, out.String())
 	}
-	if first := strings.SplitN(out.String(), "\n", 2)[0]; !strings.HasPrefix(first, "Imports · 7 packages · 8 rules ") || !strings.HasSuffix(first, " ✓ no violations") {
+	if first := strings.SplitN(out.String(), "\n", 2)[0]; !strings.HasPrefix(first, "Imports · 9 packages · 10 rules ") || !strings.HasSuffix(first, " ✓ no violations") {
 		t.Fatalf("title %q, want the counts and no violations", first)
 	}
 	if strings.Contains(out.String(), "✗") {
@@ -108,7 +111,7 @@ func TestImportsNamesEveryRuleItChecked(t *testing.T) {
 	dir := writeFixtureModule(t, everyRuleMatched(nil))
 
 	out := &bytes.Buffer{}
-	if code := doctorImports(dir, true, out, out); code != output.ExitOK {
+	if code := Imports(dir, true, out, out); code != output.ExitOK {
 		t.Fatalf("exit = %d, output %q", code, out.String())
 	}
 	var envelope struct {
@@ -116,7 +119,10 @@ func TestImportsNamesEveryRuleItChecked(t *testing.T) {
 		OK   bool
 		Data importsReport
 	}
-	oneEnvelope(t, out.String(), &envelope)
+	decoder := json.NewDecoder(strings.NewReader(out.String()))
+	if err := decoder.Decode(&envelope); err != nil || decoder.More() {
+		t.Fatalf("stdout is not one JSON envelope: %v\n%s", err, out.String())
+	}
 	if envelope.Verb != "doctor --imports" || !envelope.OK || len(envelope.Data.Rules) != len(importRules()) {
 		t.Fatalf("envelope %+v, want doctor --imports, ok, and %d rules", envelope, len(importRules()))
 	}
@@ -148,13 +154,13 @@ func TestImportsFailsOnARuleThatMatchesNoPackage(t *testing.T) {
 		t.Fatalf("violations %+v, want one per rule matching no package: %v", report.Violations, want)
 	}
 	out := &bytes.Buffer{}
-	if code := doctorImports(dir, false, out, out); code != output.ExitVerdict || !strings.Contains(out.String(), "tofu/bench  matches no package: nothing under tofu/internal imports") {
+	if code := Imports(dir, false, out, out); code != output.ExitVerdict || !strings.Contains(out.String(), "tofu/bench  matches no package: nothing under tofu/internal imports") {
 		t.Fatalf("exit %d, output\n%s\nwant exit %d and the dead rule named", code, out.String(), output.ExitVerdict)
 	}
 }
 
 func TestImportsOnThisTreeFindsNothing(t *testing.T) {
-	report, err := readImports(filepath.Join("..", ".."))
+	report, err := readImports(filepath.Join("..", "..", "..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +171,7 @@ func TestImportsOnThisTreeFindsNothing(t *testing.T) {
 
 func TestImportsReportsAnUnreadableTreeOnStderr(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := doctorImports(filepath.Join(t.TempDir(), "absent"), false, &out, &errOut)
+	code := Imports(filepath.Join(t.TempDir(), "absent"), false, &out, &errOut)
 	if code != output.ExitUsage || out.Len() > 0 || !strings.Contains(errOut.String(), "✗ tofu doctor --imports: unreadable:") {
 		t.Fatalf("exit %d, stdout %q, stderr %q, want exit %d, nothing on stdout and the refusal on stderr", code, out.String(), errOut.String(), output.ExitUsage)
 	}

@@ -27,7 +27,7 @@ func TestAFileReadInTurnOneIsEditedInTurnTwoWithoutARefusal(t *testing.T) {
 		call("call-2", "edit", `{"path":"package.json","old_string":"moth","new_string":"inky"}`),
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "renamed it"},
 	}}
-	live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) {
+	live := newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) {
 		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
 

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
+	loginverb "tofu/apps/cli/verbs/login"
 	shellsverb "tofu/apps/cli/verbs/shells"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
@@ -126,15 +127,15 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return serveFail(errOut, err)
 	}
-	kept, err := quota.NewPoller(nil, time.Now, nil, recordQuotaReading)
+	kept, err := quota.NewPoller(nil, time.Now, nil, wiring.RecordQuotaReading)
 	if err != nil {
 		return serveFail(errOut, err)
 	}
 	polled, accounts := serveQuota(kept)
-	open, wires := openAppWire, signedInWires
+	open, wires := deckOpener(deck), signedInWires
 	if deck != nil {
 		_ = os.Setenv(cassetteVariable, plan.cassette)
-		open, wires = driveWire(deck), func() []string { return append(wiring.RunWires(), wiring.WireMeta) }
+		wires = func() []string { return append(wiring.RunWires(), wiring.WireMeta) }
 		if os.Getenv(quota.ClaudeUsageURLVariable) == "" && os.Getenv(quota.CodexUsageURLVariable) == "" {
 			polled = nil
 		}
@@ -169,7 +170,7 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		Run: func(ctx context.Context, command string) (string, bool) {
 			return shellCommand(ctx, dir, launch.registry, command)
 		},
-		Stale: func() bool { return catalogStale(time.Now()) }, Setup: serveSetup, SaveKey: serveKey, Logout: serveLogout})
+		Stale: func() bool { return wiring.CatalogStale(time.Now()) }, Setup: serveSetup, SaveKey: serveKey, Logout: serveLogout})
 	leaveShells(launch.registry)
 	if err != nil {
 		return serveFail(errOut, err)
@@ -331,10 +332,10 @@ func serveLedger(p host.LedgerParams) (host.LedgerReport, error) {
 }
 
 func serveSetup() []host.Requirement {
-	held := holdStore()
-	defer held.close()
+	held := wiring.HoldStore()
+	defer held.Close()
 	var steps []host.Requirement
-	for _, needed := range held.requirements() {
+	for _, needed := range held.Requirements() {
 		step := host.Requirement{Step: needed.Step, What: needed.What, Fix: needed.Fix, Done: needed.Done}
 		for _, choice := range needed.Choices {
 			step.Choices = append(step.Choices, host.RequirementChoice{Label: choice.Label, Key: choice.Key})
@@ -345,9 +346,9 @@ func serveSetup() []host.Requirement {
 }
 
 func serveKey(provider, key string) (string, error) {
-	for _, stored := range keyStatuses(func(string) string { return "" }) {
+	for _, stored := range wiring.KeyStatuses(func(string) string { return "" }) {
 		if stored.Provider == provider {
-			return storeKeyFor(context.Background(), stored.Variable, key)
+			return loginverb.StoreKeyFor(context.Background(), stored.Variable, key)
 		}
 	}
 	return "", &host.Refusal{Code: host.CodeBadParams, Message: "tofu stores no key for " + strconv.Quote(provider)}
@@ -358,11 +359,11 @@ func serveLogout(p host.LogoutParams) (string, error) {
 	if p.Number != 0 {
 		args = append(args, strconv.Itoa(p.Number))
 	}
-	receipt, refusal := logout(args)
+	receipt, refusal := loginverb.Logout(args)
 	if refusal != nil {
-		return "", &host.Refusal{Code: host.CodeRefused, Message: strings.TrimSpace(refusal.problem.What + ": " + refusal.problem.Hint)}
+		return "", &host.Refusal{Code: host.CodeRefused, Message: strings.TrimSpace(refusal.Problem.What + ": " + refusal.Problem.Hint)}
 	}
-	return receipt.text, nil
+	return receipt.Text, nil
 }
 
 func wireSources() map[string]string {
@@ -370,10 +371,10 @@ func wireSources() map[string]string {
 }
 
 func signedInWires() []string {
-	held := holdStore()
-	defer held.close()
+	held := wiring.HoldStore()
+	defer held.Close()
 	var names []string
-	for _, wire := range held.wires() {
+	for _, wire := range held.Wires() {
 		names = append(names, wire.Name)
 	}
 	return names
@@ -398,17 +399,17 @@ func serveVerbs(errOut io.Writer, recent *sessionstore.Recent) func([]string) (h
 
 func serveQuota(kept *quota.Poller) (func() []host.QuotaWindow, func() []host.AccountNow) {
 	var mu sync.Mutex
-	var last []pollResult
+	var last []wiring.PollResult
 	windows := func() []host.QuotaWindow {
-		results, _ := pollCredentials(context.Background(), time.Now, kept)
+		results, _ := wiring.PollCredentials(context.Background(), time.Now, kept)
 		mu.Lock()
 		last = results
 		mu.Unlock()
 		var windows []host.QuotaWindow
 		for _, result := range results {
-			for _, read := range quotaFrames([]pollResult{result}, nil) {
+			for _, read := range wiring.QuotaFrames([]wiring.PollResult{result}, nil) {
 				window := host.QuotaWindow{Account: read.Account, Window: read.Label, Percent: read.Fraction * percentOfOne, Reported: read.Reported,
-					Source: string(result.report.Provider), AccountID: result.row, Stale: read.Stale, ReadAt: read.ReadAt.UTC()}
+					Source: string(result.Report.Provider), AccountID: result.Row, Stale: read.Stale, ReadAt: read.ReadAt.UTC()}
 				if !read.ResetsAt.IsZero() {
 					window.ResetsAt = &read.ResetsAt
 				}
@@ -422,9 +423,9 @@ func serveQuota(kept *quota.Poller) (func() []host.QuotaWindow, func() []host.Ac
 		defer mu.Unlock()
 		var held []host.AccountNow
 		for _, result := range last {
-			now := host.AccountNow{Source: string(result.report.Provider), AccountID: result.row, RetryAt: result.report.RetryAt.UTC()}
-			switch condition := quota.Diagnose(result.report, result.err); {
-			case transport.KindOf(result.err) == transport.KindRateLimit:
+			now := host.AccountNow{Source: string(result.Report.Provider), AccountID: result.Row, RetryAt: result.Report.RetryAt.UTC()}
+			switch condition := quota.Diagnose(result.Report, result.Err); {
+			case transport.KindOf(result.Err) == transport.KindRateLimit:
 				now.State = host.ConditionRateLimited
 			case condition == quota.ConditionWindowSpent:
 				now.State = host.ConditionSpent

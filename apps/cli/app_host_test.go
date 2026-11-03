@@ -22,7 +22,7 @@ type appSession struct {
 	warmClosed sync.Once
 }
 
-func newAppSession(dir string, open func(wiring.RunOpts) (appWire, error), answers <-chan tui.Answer, now func() time.Time, resumed sessionResume) *appSession {
+func newAppSession(dir string, open wiring.Opener, answers <-chan tui.Answer, now func() time.Time, resumed sessionResume) *appSession {
 	engine := &appEngine{dir: dir, open: open}
 	live, _ := host.New(host.Config{Dir: dir, Engine: engine, Now: now, Check: shellsverb.CronChecker(dir), Resumed: resumed.hosted()})
 	return &appSession{Host: live, engine: engine, answers: answers, dir: dir}

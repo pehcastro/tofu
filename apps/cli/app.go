@@ -20,16 +20,15 @@ import (
 	"github.com/charmbracelet/x/term"
 
 	"tofu/apps/cli/output"
-	judgeverb "tofu/apps/cli/verbs/judge"
+	loginverb "tofu/apps/cli/verbs/login"
+	modelsverb "tofu/apps/cli/verbs/models"
 	shellsverb "tofu/apps/cli/verbs/shells"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/loop"
 	roster "tofu/internal/agent/subagents"
-	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/konst"
-	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/catalog"
@@ -47,17 +46,10 @@ import (
 	"tofu/internal/ui/tui/composer/paste"
 	"tofu/internal/ui/tui/frame/frame"
 	"tofu/internal/ui/tui/panels/shells"
-	"tofu/internal/ui/tui/pickers/settings"
 )
 
 const (
 	noTerminal       = "tofu: the app needs a terminal. with input redirected, use tofu run --dir <dir> <task>"
-	gateOffNote      = "gate off: no tool call is judged until tofu login classifier stores the key of the bound classifier"
-	noCredential     = "no subscription is signed in, so no model can answer"
-	modelStep        = "language model"
-	classifierStep   = "classifier · jev, required"
-	unreadableSource = "unreadable: "
-	jevName          = "jev"
 	freshSessionNote = "the next task starts a new session and carries nothing from the last one"
 	sessionEnded     = "tofu: session ended"
 	stoppingPrefix   = ", stopping "
@@ -76,7 +68,7 @@ const (
 )
 
 type appWiring struct {
-	open      func(wiring.RunOpts) (appWire, error)
+	open      wiring.Opener
 	wires     func() []tui.Wire
 	blockers  func() []tui.Requirement
 	clipboard func() (sys.Clipboard, error)
@@ -128,14 +120,14 @@ func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 	return launch
 }
 
-func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaunch, held heldStore) tui.Options {
+func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaunch, held wiring.HeldStore) tui.Options {
 	defer launch.stopRestoring()
 	places, _ := sys.ResolvePlaces(".")
 	engine := &appEngine{dir: dir, arms: arms, open: wired.open, quota: wired.quota, tabs: launch.tabs, places: places}
 	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: shellsverb.CronChecker(dir), Resumed: launch.resumed.hosted(), Joins: wired.joins, Now: wired.now})
 	notes := append([]string{launch.note}, troubles...)
-	if _, err := wiring.GateKeyFrom(held.keys()); err != nil {
-		notes = append(notes, gateOffSaid(err))
+	if _, err := wiring.GateKeyFrom(held.Keys()); err != nil {
+		notes = append(notes, wiring.GateOffSaid(err))
 	}
 	note := strings.Join(slices.DeleteFunc(notes, func(one string) bool { return one == "" }), noteSeparator)
 	*launch.release = func() {
@@ -171,16 +163,16 @@ func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaun
 		Note:         note,
 		Requirements: wired.blockers(),
 		Recheck:      wired.blockers,
-		SignIn:       func(source string) *exec.Cmd { return loginCommand(source)() },
-		SaveKey:      storeKeyFor,
+		SignIn:       func(source string) *exec.Cmd { return wiring.LoginCommand(source)() },
+		SaveKey:      loginverb.StoreKeyFor,
 		Wires:        wired.wires,
 		Models:       func() (models.Library, error) { return wiring.ModelLibrary(dir) },
-		Providers:    held.providers(),
+		Providers:    held.Providers(),
 		Quota:        wired.quota,
 		Settings:     settingsStore,
 		Reload:       appReload(dir),
 		ReloadModels: modelsReload(dir, wired.reload),
-		ModelsStale:  catalogStale(time.Now()),
+		ModelsStale:  wiring.CatalogStale(time.Now()),
 		Host:         live,
 		Paste:        paste.Board{Read: wired.clipboard, Dir: live.AttachmentDir, Recorded: live.Attached},
 		Paths:        appPaths(dir),
@@ -205,53 +197,13 @@ func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaun
 	}
 }
 
-const (
-	reloadStampSuffix = ".reload"
-	reloadSucceeded   = "succeeded"
-	reloadFailed      = "failed"
-	reloadFound       = "models reload found "
-)
-
-func catalogStale(now time.Time) bool {
-	catalog, err := models.CatalogDir()
-	if err != nil {
-		return false
-	}
-	stamp := catalog + reloadStampSuffix
-	outcome, readErr := os.ReadFile(stamp)
-	info, statErr := os.Stat(stamp)
-	if readErr != nil || statErr != nil {
-		return true
-	}
-	age := now.Sub(info.ModTime())
-	switch string(outcome) {
-	case reloadSucceeded:
-		return age >= konst.CatalogStaleHours*time.Hour
-	case reloadFailed:
-		return age >= konst.CatalogRetryHours*time.Hour
-	}
-	return true
-}
-
-func stampReload(exit int) {
-	catalog, err := models.CatalogDir()
-	if err != nil || os.MkdirAll(filepath.Dir(catalog), 0o755) != nil {
-		return
-	}
-	outcome := reloadFailed
-	if exit == output.ExitOK {
-		outcome = reloadSucceeded
-	}
-	_ = os.WriteFile(catalog+reloadStampSuffix, []byte(outcome), 0o644)
-}
-
 func modelsReload(dir string, reload func(context.Context, io.Writer) int) func() string {
 	if reload == nil {
 		return nil
 	}
 	return func() string {
 		before, unreadBefore := wiring.ModelLibrary(dir)
-		stampReload(reload(context.Background(), io.Discard))
+		wiring.StampReload(reload(context.Background(), io.Discard))
 		debug.FreeOSMemory()
 		after, err := wiring.ModelLibrary(dir)
 		if err != nil {
@@ -267,7 +219,7 @@ func modelsReload(dir string, reload func(context.Context, io.Writer) int) func(
 		if len(found) == 0 || unreadBefore != nil {
 			return ""
 		}
-		return reloadFound + strings.Join(found, ", ")
+		return wiring.ReloadFound + strings.Join(found, ", ")
 	}
 }
 
@@ -297,9 +249,10 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 		return output.ExitVerdict
 	}
 	stopRestoring := restoring(out, resumed)
-	held := holdStore()
-	defer held.close()
-	live := appWiring{open: openAppWire, wires: held.wires, blockers: held.requirements, quota: held.quota, reload: held.reload, joins: true}
+	held := wiring.HoldStore()
+	defer held.Close()
+	reload := func(ctx context.Context, out io.Writer) int { return modelsverb.Reload(ctx, held, out) }
+	live := appWiring{open: wiring.OpenWire, wires: held.Wires, blockers: held.Requirements, quota: held.Quota, reload: reload, joins: true}
 	launch := launchOf(dir, resumed, resumed.Session == "")
 	launch.stopRestoring = stopRestoring
 	var identity sync.WaitGroup
@@ -360,202 +313,6 @@ func appPaths(dir string) func() []string {
 	}
 }
 
-func loginCommand(provider string) func() *exec.Cmd {
-	return func() *exec.Cmd {
-		return exec.Command(os.Args[0], append([]string{"login"}, loginWords(provider)...)...)
-	}
-}
-
-func (h heldStore) wires() []tui.Wire {
-	library, err := wiring.ModelLibrary("")
-	if h.err != nil || err != nil {
-		return nil
-	}
-	now := time.Now()
-	var wires []tui.Wire
-	for _, spec := range library.Subscriptions {
-		row, present, err := h.store.RowAt(cred.Provider(spec.ID), now)
-		if err != nil || !present || row.Unusable(now) != "" {
-			continue
-		}
-		if selected, err := library.Default(spec.ID); err == nil {
-			wires = append(wires, tui.Wire{Name: spec.Wire, Model: selected.ID, Provider: string(spec.ID), Efforts: wireEfforts(spec.Wire)})
-		}
-	}
-	if _, err := h.keys().KeyFor(sys.CredentialFileName, models.Meta.KeyName()); err != nil {
-		return wires
-	}
-	if chosen, err := library.Default(models.Subscription(models.Meta)); err == nil {
-		wires = append(wires, tui.Wire{Name: wiring.WireMeta, Model: chosen.ID, Provider: string(models.Meta), Efforts: chosen.Efforts})
-	}
-	return wires
-}
-
-type startStep struct {
-	label   string
-	step    string
-	what    string
-	command string
-	done    string
-	choices []tui.Choice
-}
-
-func (h heldStore) startSteps() []startStep {
-	return []startStep{h.orchestratorStep(), classifierStepOf(h.keys())}
-}
-
-func (h heldStore) orchestratorStep() startStep {
-	step := startStep{label: string(models.RoleOrchestrator), step: modelStep}
-	library, _ := wiring.ModelLibrary(".")
-	orchestrator, bound := library.Bound(models.RoleOrchestrator)
-	wires := h.wires()
-	signed := slices.ContainsFunc(wires, func(wire tui.Wire) bool { return wire.Provider == orchestrator.Source() })
-	switch {
-	case bound && signed:
-		step.done = orchestrator.Source() + " · " + orchestrator.ID
-		return step
-	case bound:
-		step.what, step.command = "the orchestrator runs "+orchestrator.Slug()+", and "+orchestrator.Source()+" is not signed in", loginHint(orchestrator.Source())
-	case len(wires) == 0:
-		step.what, step.command = noCredential, wiring.CommandFor("login", roleLLM, "<source>")
-	default:
-		step.what, step.command = models.RoleOrchestrator.Unset().Error(), "tofu models bind orchestrator <provider/model>"
-	}
-	for _, wire := range wires {
-		slug := wire.Provider + "/" + wire.Model
-		step.choices = append(step.choices, tui.Choice{Label: "bind " + slug, Run: func() *exec.Cmd {
-			return exec.Command(os.Args[0], "models", "bind", string(models.RoleOrchestrator), slug)
-		}})
-	}
-	for _, spec := range library.Subscriptions {
-		if !slices.ContainsFunc(wires, func(wire tui.Wire) bool { return wire.Provider == string(spec.ID) }) {
-			step.choices = append(step.choices, tui.Choice{Label: string(spec.ID) + ", signs in through the browser", Run: loginCommand(string(spec.ID))})
-		}
-	}
-	if !slices.ContainsFunc(wires, func(wire tui.Wire) bool { return wire.Name == wiring.WireMeta }) {
-		step.choices = append(step.choices, tui.Choice{Label: models.Meta.Display() + " API key", Key: sys.MetaMuseKeyName})
-	}
-	return step
-}
-
-func classifierStepOf(keys jev.Keyring) startStep {
-	step := startStep{label: jevName, step: classifierStep}
-	route, err := classifier.Resolve(".", keys)
-	if jev.IsUnbound(err) {
-		step.what, step.command = err.Error(), "tofu models bind classifier <provider/model>"
-		library, _ := wiring.ModelLibrary(".")
-		for _, model := range library.Models {
-			if model.Kind == models.KindClassifier && model.Use != models.UseExcluded {
-				step.choices = append(step.choices, tui.Choice{Label: "bind " + model.Slug(), Run: func() *exec.Cmd {
-					return exec.Command(os.Args[0], "models", "bind", string(models.RoleClassifier), model.Slug())
-				}})
-			}
-		}
-		return step
-	}
-	provider := route.Model.Provider
-	if provider == "" {
-		step.what = err.Error()
-		return step
-	}
-	step.what = "there is no " + string(provider) + " key, so jev judges no tool call"
-	step.command = wiring.CommandFor("login", roleClassifier, string(provider))
-	step.choices = []tui.Choice{{Label: provider.Display() + " key", Key: classifier.KeyName(provider)}}
-	if err == nil {
-		step.done = provider.Display() + " key " + widget.Mask(route.Key)
-	}
-	return step
-}
-
-func gateOffSaid(err error) string {
-	if jev.IsUnbound(err) {
-		return err.Error()
-	}
-	return gateOffNote
-}
-
-func (h heldStore) startBlockers() []startStep {
-	return slices.DeleteFunc(h.startSteps(), func(step startStep) bool { return step.done != "" })
-}
-
-func (h heldStore) requirements() []tui.Requirement {
-	steps := h.startSteps()
-	needed := make([]tui.Requirement, 0, len(steps))
-	for _, step := range steps {
-		needed = append(needed, tui.Requirement{Step: step.step, What: step.what, Fix: step.command, Done: step.done, Choices: step.choices})
-	}
-	return needed
-}
-
-func (h heldStore) providers() []settings.Provider {
-	library, _ := wiring.ModelLibrary("")
-	var rows []settings.Provider
-	for _, spec := range library.Subscriptions {
-		rows = append(rows, h.subscriptionProvider(cred.Provider(spec.ID)))
-	}
-	return append(rows, openRouterProvider(h.keys()), jevProvider(h.keys()))
-}
-
-func (h heldStore) subscriptionProvider(provider cred.Provider) settings.Provider {
-	row := settings.Provider{Name: string(provider), Source: h.path}
-	if h.err != nil {
-		row.Fix = unreadableSource + h.err.Error()
-		return row
-	}
-	now := time.Now()
-	stored, present, err := h.store.RowAt(provider, now)
-	switch {
-	case err != nil:
-		row.Fix = unreadableSource + err.Error()
-	case !present:
-		row.Fix = "run " + loginHint(string(provider))
-	case stored.Unusable(now) != "":
-		row.State = stored.Unusable(now)
-	default:
-		row.State = strings.TrimSpace("signed in " + maskedAccount(stored.Credential.Identity))
-	}
-	return row
-}
-
-func openRouterProvider(keys jev.Keyring) settings.Provider {
-	located, err := keys.LocateFor(sys.CredentialFileName, jev.OpenRouterVariable)
-	row := settings.Provider{Name: openRouterName, Source: located.Path}
-	if located.Source == jev.SourceEnvironment {
-		row.Source = located.Name + " in the environment"
-	}
-	key, keyErr := keys.KeyFor(sys.CredentialFileName, jev.OpenRouterVariable)
-	if err != nil || keyErr != nil {
-		row.Fix = openRouterFix
-		return row
-	}
-	row.Key = widget.Mask(key)
-	return row
-}
-
-func jevProvider(keys jev.Keyring) settings.Provider {
-	dir, err := sys.LogDir()
-	if err != nil {
-		return settings.Provider{Name: jevName, Fix: unreadableSource + err.Error()}
-	}
-	row := settings.Provider{Name: jevName, Source: dir}
-	key, keyErr := wiring.GateKeyFrom(keys)
-	if keyErr == nil {
-		row.Key = widget.Mask(key)
-	}
-	current, err := judgeverb.CurrentBuild(dir, "")
-	switch {
-	case err != nil:
-		row.Fix = unreadableSource + err.Error()
-	case keyErr != nil:
-		row.Fix = gateOffSaid(keyErr)
-	case current.Known:
-		row.State = current.Build
-	default:
-		row.Fix = "no decision recorded yet"
-	}
-	return row
-}
-
 func branchOf(dir string) string {
 	head, err := os.ReadFile(filepath.Join(dir, ".git", "HEAD"))
 	if err != nil {
@@ -608,50 +365,6 @@ func appKillShell(registry *shell.Registry, openErr error) func(string) error {
 		}
 		return registry.Kill(name)
 	}
-}
-
-func (h heldStore) quota() []frame.Quota {
-	if h.err != nil {
-		return nil
-	}
-	return quotaFrames(pollStore(context.Background(), h.store, time.Now, nil))
-}
-
-func quotaFrames(results []pollResult, err error) []frame.Quota {
-	if err != nil {
-		return nil
-	}
-	var quotas []frame.Quota
-	for _, result := range results {
-		for _, window := range result.report.Windows {
-			quotas = append(quotas, frame.Quota{
-				Label:    string(result.report.Provider) + " " + window.ID,
-				Account:  "#" + strconv.FormatInt(result.row, 10),
-				Fraction: window.Used.Fraction,
-				Reported: window.Used.Reported,
-				ResetsAt: window.ResetsAt,
-				ReadAt:   result.report.FetchedAt,
-				Stale:    result.report.Stale,
-			})
-		}
-	}
-	return quotas
-}
-
-type appWire struct {
-	held     *accounts
-	spend    turn.Spend
-	selected models.Model
-}
-
-func openAppWire(opts wiring.RunOpts) (appWire, error) {
-	selected, err := chooseModel(opts)
-	if err != nil {
-		return appWire{}, err
-	}
-	opts.Effort = selected.EffortTaken(opts.Effort)
-	held, spend, err := openAccounts(opts, selected)
-	return appWire{held: held, spend: spend, selected: selected}, err
 }
 
 func shellCommand(ctx context.Context, dir string, registry *shell.Registry, command string) (string, bool) {
@@ -730,7 +443,7 @@ func imagesRefused(setting string, model models.Model, attached int) string {
 }
 
 func pickedOpts(dir string, start host.Turn, maxSteps int) wiring.RunOpts {
-	return onTheBoundWire(wiring.RunOpts{
+	return wiring.OnTheBoundWire(wiring.RunOpts{
 		Dir:              dir,
 		Task:             start.Task,
 		TurnID:           start.ID,
@@ -755,7 +468,7 @@ const (
 type appEngine struct {
 	dir          string
 	arms         wiring.RunOpts
-	open         func(wiring.RunOpts) (appWire, error)
+	open         wiring.Opener
 	quota        func() []frame.Quota
 	tabs         *tools.BrowserTabs
 	warm         *warmProcesses
@@ -767,7 +480,7 @@ type appEngine struct {
 type startedTurn struct {
 	host.Prepared
 	gate   *toolGate
-	scorer *shellScorer
+	scorer *wiring.ShellScorer
 	budget recall.Budget
 }
 
@@ -805,7 +518,7 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 		closing := started.Close
 		started.Close = func() {
 			closing()
-			if calls, cost := started.scorer.spend(); calls > 0 {
+			if calls, cost := started.scorer.Spend(); calls > 0 {
 				hooks.Say(fmt.Sprintf("sift decisions %d cost $%.6f", calls, cost))
 			}
 		}
@@ -824,21 +537,21 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 	opts.Shell = shell
 	clock.step("settings")
 	opened, err := e.open(opts)
-	if opened.held != nil {
-		prepared.Close = opened.held.close
+	if opened.Held != nil {
+		prepared.Close = opened.Held.Close
 	}
 	if err != nil {
 		return started, err
 	}
-	checked := opened.held.checkUsageAlongside(clock)
+	checked := clock.checkUsageAlongside(opened.Held)
 	prepared.Close = func() {
 		checked()
-		opened.held.close()
+		opened.Held.Close()
 	}
 	clock.step("model choice and credentials")
 	images := start.Images
 	if len(images) > 0 {
-		if refused := imagesRefused(settingspkg.TextSaying(dir, settingspkg.Images, say), opened.selected, len(images)); refused != "" {
+		if refused := imagesRefused(settingspkg.TextSaying(dir, settingspkg.Images, say), opened.Selected, len(images)); refused != "" {
 			say(refused)
 			images = nil
 		}
@@ -849,7 +562,7 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 		return started, err
 	}
 	sessions.Redacts(e.warm.keys.redactor)
-	built, plan = planAsOffered(opened.selected, built, plan)
+	built, plan = planAsOffered(opened.Selected, built, plan)
 	if start.Pick.Fired != "" {
 		built = shellsverb.WithoutPush(built)
 	}
@@ -880,7 +593,7 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 			}
 		}
 	}
-	sifter, scorer, siftErr := shellSiftOn(opts.SiftArm, places.Log, e.warm.keys.keyring())
+	sifter, scorer, siftErr := wiring.ShellSiftOn(opts.SiftArm, places.Log, e.warm.keys.keyring())
 	var contradiction turn.RuleContradictsTheTableError
 	if siftErr != nil && e.missingJudge == missingJudgeRefuses && !errors.As(siftErr, &contradiction) {
 		return started, siftErr
@@ -889,12 +602,12 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 		say("no shell result is cut: " + siftErr.Error())
 	}
 	clock.step("gate and sift")
-	budget, err := contextBudget(opts, opened.selected)
+	budget, err := wiring.ContextBudget(opts, opened.Selected)
 	if err != nil {
 		return started, err
 	}
 	clock.step("model catalogue")
-	opened.held.wrapping(func(model turn.Model, budget recall.Budget) (turn.Model, error) {
+	opened.Held.Wrapping(func(model turn.Model, budget recall.Budget) (turn.Model, error) {
 		asked, guardErr := wiring.Guarded(model, budget)
 		if guardErr != nil {
 			return nil, guardErr
@@ -906,12 +619,12 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 		return hooks.SubAgent(asked), guardErr
 	}
 	person := hooks.Inbox.LeadAsks(hooks.Person)
-	turnAccounts, account := opened.held.forTurn(), spentAccount(opened.held, opened.selected.ID)
-	if stand := e.standIns(opened.held, opts.Wire); len(stand.mine()) > 0 {
-		turnAccounts, account = stand.forTurn(), stand.spent
+	turnAccounts, account := opened.Held.ForTurn(), spentAccount(opened.Held, opened.Selected.ID)
+	if stand := e.standIns(opened.Held, opts.Wire); len(stand.Mine()) > 0 {
+		turnAccounts, account = stand.ForTurn(), stand.Spent
 	}
-	config, spawner, err := runConfig(opts, built, runtime{accounts: clock.picking(turnAccounts, opened.held.store), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: say, roster: hooks.Roster, inbox: hooks.Inbox, now: hooks.Now,
-		open: e.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.selected, tabs: e.tabs, leadAsks: person, cron: hooks.Cron, plan: plan, places: places, startup: clock, keys: &e.warm.keys, memory: &e.warm.memory, drops: e.warm.drops})
+	config, spawner, err := runConfig(opts, built, runtime{accounts: clock.picking(turnAccounts, opened.Held.Store), spend: opened.Spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: say, roster: hooks.Roster, inbox: hooks.Inbox, now: hooks.Now,
+		open: e.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.Selected, tabs: e.tabs, leadAsks: person, cron: hooks.Cron, plan: plan, places: places, startup: clock, keys: &e.warm.keys, memory: &e.warm.memory, drops: e.warm.drops})
 	if err != nil {
 		return started, err
 	}
@@ -940,24 +653,24 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 	return started, nil
 }
 
-func (e *appEngine) standIns(held *accounts, wire string) standIns {
-	if _, recorded := held.fixed.(*cassette); !recorded || e.quota == nil {
-		return standIns{}
+func (e *appEngine) standIns(held *wiring.Accounts, wire string) wiring.StandIns {
+	if _, recorded := held.Fixed.(*cassette); !recorded || e.quota == nil {
+		return wiring.StandIns{}
 	}
 	library, _ := wiring.ModelLibrary(e.dir)
 	spec, _ := library.ForWire(wire)
-	return standIns{held: held, source: string(spec.ID), readings: e.quota()}
+	return wiring.StandIns{Held: held, Source: string(spec.ID), Readings: e.quota()}
 }
 
-func spentAccount(held *accounts, model string) func(int64) host.TurnAccount {
+func spentAccount(held *wiring.Accounts, model string) func(int64) host.TurnAccount {
 	return func(id int64) host.TurnAccount {
-		spent := host.TurnAccount{Source: string(held.provider), AccountID: id, Model: model}
-		if held.store == nil {
+		spent := host.TurnAccount{Source: string(held.Provider), AccountID: id, Model: model}
+		if held.Store == nil {
 			return spent
 		}
-		rows, err := held.store.List()
+		rows, err := held.Store.List()
 		if at := slices.IndexFunc(rows, func(row cred.Row) bool { return row.ID == id }); err == nil && at >= 0 {
-			spent.Login = accountName(rows[at].Credential.Identity, false)
+			spent.Login = wiring.AccountName(rows[at].Credential.Identity, false)
 		}
 		return spent
 	}

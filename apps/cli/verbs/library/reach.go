@@ -1,4 +1,4 @@
-package main
+package library
 
 import (
 	"cmp"
@@ -12,18 +12,19 @@ import (
 
 	"tofu/apps/cli/output"
 	"tofu/apps/cli/page"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/cli/render"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/store/session"
 )
 
 const (
-	libraryReachUsage = "tofu library reach [--never] [--json]"
-	libraryWhatTool   = "tool"
+	reachUsage = "tofu library reach [--never] [--json]"
+	whatTool   = "tool"
 )
 
 func reachKinds() []string {
-	return []string{libraryWhatRule, libraryWhatReference, libraryWhatSkill, libraryWhatAgent, libraryWhatTool}
+	return []string{wiring.LibraryWhatRule, wiring.LibraryWhatReference, wiring.LibraryWhatSkill, wiring.LibraryWhatAgent, whatTool}
 }
 
 type reachRow struct {
@@ -38,13 +39,13 @@ type reachRow struct {
 }
 
 func (r reachRow) used() bool {
-	if r.Kind == libraryWhatTool {
+	if r.Kind == whatTool {
 		return r.Calls > 0
 	}
 	return r.Reached+r.Calls > 0
 }
 
-type libraryReach struct {
+type reach struct {
 	Sessions int        `json:"sessions"`
 	Never    bool       `json:"never"`
 	Rows     []reachRow `json:"rows"`
@@ -83,53 +84,53 @@ func (t reachTally) read(header session.Header, events []session.Event) {
 			var prompt session.PromptBody
 			_ = json.Unmarshal(event.Body, &prompt)
 			for _, tool := range prompt.Tools {
-				t.saw(libraryWhatTool, tool, header.ID, false, event.At)
+				t.saw(whatTool, tool, header.ID, false, event.At)
 			}
 			for _, part := range prompt.Parts {
-				if what, name := libraryItem(part); what != "" && !part.Off && part.State != session.PartDropped {
+				if what, name := wiring.LibraryItem(part); what != "" && !part.Off && part.State != session.PartDropped {
 					t.saw(what, name, header.ID, part.State == session.PartHeld, event.At)
 				}
 			}
 		case session.EventToolCall:
 			var call session.CallBody
 			_ = json.Unmarshal(event.Body, &call)
-			t.saw(libraryWhatTool, call.Tool, header.ID, false, event.At).Calls++
-			if what, name := libraryLoad(call); what != "" {
+			t.saw(whatTool, call.Tool, header.ID, false, event.At).Calls++
+			if what, name := wiring.LibraryLoad(call); what != "" {
 				t.saw(what, name, header.ID, false, event.At).Calls++
 			}
 		case session.EventToolResult:
 			var result session.ResultBody
 			_ = json.Unmarshal(event.Body, &result)
 			for _, found := range result.Rules {
-				t.saw(libraryWhatRule, found.Rule, header.ID, false, event.At)
+				t.saw(wiring.LibraryWhatRule, found.Rule, header.ID, false, event.At)
 			}
 		}
 	}
 }
 
-func libraryReachVerb(o output.Verb, args []string, now time.Time) int {
-	o.Name, o.UsageLine = "library reach", libraryReachUsage
-	var report libraryReach
+func reachVerb(o output.Verb, args []string, now time.Time) int {
+	o.Name, o.UsageLine = "library reach", reachUsage
+	var report reach
 	for _, arg := range args {
 		if arg != "--never" {
 			return o.Usage(errors.New("unknown argument " + strconv.Quote(arg)))
 		}
 		report.Never = true
 	}
-	files, _, _ := librarySource()
-	domains, err := rule.LoadDomains(files, libraryRoot)
+	files, _, _ := wiring.LibrarySource()
+	domains, err := rule.LoadDomains(files, wiring.LibraryRoot)
 	if err != nil {
 		return o.Fail(err)
 	}
 	tally := reachTally{}
 	for _, domain := range domains {
 		for _, one := range domain.Rules {
-			tally.item(libraryWhatRule, one.ID)
+			tally.item(wiring.LibraryWhatRule, one.ID)
 		}
 		for _, name := range domain.References {
-			tally.item(libraryWhatReference, name)
+			tally.item(wiring.LibraryWhatReference, name)
 		}
-		for kind, docs := range map[string][]rule.Document{libraryWhatSkill: domain.Skills, libraryWhatAgent: domain.Agents} {
+		for kind, docs := range map[string][]rule.Document{wiring.LibraryWhatSkill: domain.Skills, wiring.LibraryWhatAgent: domain.Agents} {
 			for _, doc := range docs {
 				tally.item(kind, strings.TrimSuffix(path.Base(doc.File), path.Ext(doc.File)))
 			}
@@ -161,10 +162,10 @@ func libraryReachVerb(o output.Verb, args []string, now time.Time) int {
 		return cmp.Or(cmp.Compare(slices.Index(reachKinds(), a.Kind), slices.Index(reachKinds(), b.Kind)), cmp.Compare(b.Reached, a.Reached),
 			cmp.Compare(b.Calls, a.Calls), cmp.Compare(b.Held, a.Held), strings.Compare(a.Name, b.Name))
 	})
-	return o.Done(true, report, func(page cli.Page) []string { return libraryReachLines(page, report, now) })
+	return o.Done(true, report, func(page cli.Page) []string { return reachLines(page, report, now) })
 }
 
-func libraryReachLines(page cli.Page, report libraryReach, now time.Time) []string {
+func reachLines(page cli.Page, report reach, now time.Time) []string {
 	title, listed, mark := "Library reach", "reached", cli.Done
 	if report.Never {
 		title, listed, mark = "Library never reached", "never reached", cli.Idle
@@ -181,7 +182,7 @@ func libraryReachLines(page cli.Page, report libraryReach, now time.Time) []stri
 			}
 			var said []string
 			switch {
-			case row.Reached > 0 && kind == libraryWhatTool:
+			case row.Reached > 0 && kind == whatTool:
 				said = append(said, "offered in "+output.Plural(row.Reached, "session"))
 			case row.Reached > 0:
 				said = append(said, "reached "+output.Plural(row.Reached, "session"))
@@ -189,7 +190,7 @@ func libraryReachLines(page cli.Page, report libraryReach, now time.Time) []stri
 			if row.Held > 0 {
 				said = append(said, "held in "+output.Plural(row.Held, "session"))
 			}
-			if row.Calls > 0 || kind == libraryWhatTool {
+			if row.Calls > 0 || kind == whatTool {
 				said = append(said, output.Plural(row.Calls, "call"))
 			}
 			if !row.LastAt.IsZero() {

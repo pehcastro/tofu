@@ -33,7 +33,7 @@ func version(args []string, out, errOut io.Writer) int {
 		err = page.Print(out, page.Facts([]cli.Fact{{Label: "version", Text: report.Version}, {Label: "commit", Text: report.Commit}, {Label: "go", Text: report.Go}}))
 	}
 	if err != nil {
-		return printFailure(errOut, output.ExitVerdict, "tofu version: "+err.Error(), "")
+		return output.PrintFailure(errOut, output.ExitVerdict, "tofu version: "+err.Error(), "")
 	}
 	return output.ExitOK
 }

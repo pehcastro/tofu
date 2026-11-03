@@ -1,10 +1,8 @@
-package main
+package library
 
 import (
 	"errors"
 	"io"
-	"io/fs"
-	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -12,23 +10,19 @@ import (
 
 	"tofu/apps/cli/output"
 	"tofu/apps/cli/page"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/judge/questions"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/catalog"
-	"tofu/internal/sys"
 	shipped "tofu/library"
 	"tofu/library/questions"
 )
 
-const libraryUsage = "tofu library [resolve <name>] [--dir <path>] [--json] | tofu library reach [--never] [--json]"
+const Usage = "tofu library [resolve <name>] [--dir <path>] [--json] | tofu library reach [--never] [--json]"
 
-type (
-	libraryLayer  = host.LibraryLayer
-	libraryDomain = host.LibraryDomain
-	libraryReport = host.LibraryReport
-)
+type Report = host.LibraryReport
 
 type resolvedField struct {
 	Path  string `json:"path"`
@@ -37,21 +31,23 @@ type resolvedField struct {
 	Line  int    `json:"line"`
 }
 
-func libraryVerb(args []string, out, errOut io.Writer) int {
-	o := output.Verb{Name: "library", UsageLine: libraryUsage, AsJSON: slices.Contains(args, output.JSONFlag), Out: out, ErrOut: errOut}
-	dir, rest, err := takeDir(slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return arg == output.JSONFlag }))
-	switch {
-	case err != nil:
-		return o.Usage(err)
-	case len(rest) == 0:
-		return libraryReportVerb(o, dir)
-	case rest[0] == "reach" && dir == "":
-		return libraryReachVerb(o, rest[1:], time.Now())
-	case len(rest) == 2 && rest[0] == "resolve":
-		o.Name = "library resolve"
-		return libraryResolve(o, rest[1], dir)
+func Verb(verbs []string) func(args []string, out, errOut io.Writer) int {
+	return func(args []string, out, errOut io.Writer) int {
+		o := output.Verb{Name: "library", UsageLine: Usage, AsJSON: slices.Contains(args, output.JSONFlag), Out: out, ErrOut: errOut}
+		dir, rest, err := takeDir(slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return arg == output.JSONFlag }))
+		switch {
+		case err != nil:
+			return o.Usage(err)
+		case len(rest) == 0:
+			return reportVerb(o, dir, verbs)
+		case rest[0] == "reach" && dir == "":
+			return reachVerb(o, rest[1:], time.Now())
+		case len(rest) == 2 && rest[0] == "resolve":
+			o.Name = "library resolve"
+			return resolve(o, rest[1], dir)
+		}
+		return o.Usage(errors.New("unknown argument " + strconv.Quote(rest[0])))
 	}
-	return o.Usage(errors.New("unknown argument " + strconv.Quote(rest[0])))
 }
 
 func takeDir(args []string) (string, []string, error) {
@@ -67,7 +63,7 @@ func takeDir(args []string) (string, []string, error) {
 	return "", args, nil
 }
 
-func libraryResolve(o output.Verb, name, dir string) int {
+func resolve(o output.Verb, name, dir string) int {
 	layers, err := question.Layers(questions.Files(), dir)
 	if err != nil {
 		return o.Fail(err)
@@ -99,37 +95,25 @@ func libraryResolve(o output.Verb, name, dir string) int {
 	})
 }
 
-func librarySource() (fs.FS, string, string) {
-	dir, err := sys.LibraryDir()
-	if err != nil {
-		return shipped.Files(), libraryRoot, rulesFromTheBinary
-	}
-	isDir, err := sys.IsDir(dir)
-	if err != nil || !isDir {
-		return shipped.Files(), libraryRoot, rulesFromTheBinary
-	}
-	return os.DirFS(dir), dir, rulesFromTheProject
-}
-
-func libraryReportVerb(o output.Verb, dir string) int {
+func reportVerb(o output.Verb, dir string, verbs []string) int {
 	layers, err := models.Layers(shipped.Files(), dir)
 	if err != nil {
 		return o.Fail(err)
 	}
 	library, _ := models.Load(layers)
-	sets, refused := question.LoadAll(questions.Files(), libraryRoot+"/questions")
-	proxy := loadProxySetting(dir)
-	corpus, missing := docsCoverage(usageVerbs())
-	report := libraryReport{
+	sets, refused := question.LoadAll(questions.Files(), wiring.LibraryRoot+"/questions")
+	proxy := wiring.LoadProxySetting(dir)
+	corpus, missing := DocsCoverage(verbs)
+	report := Report{
 		Models: len(library.Models), Subscriptions: len(library.Subscriptions), Roles: len(library.Roles), Questions: len(sets),
-		DocPages: len(corpus.Pages), DocEntries: len(corpus.Entries), Proxy: proxy.use, ProxyFrom: proxy.layer,
+		DocPages: len(corpus.Pages), DocEntries: len(corpus.Entries), Proxy: proxy.Use, ProxyFrom: proxy.Layer,
 	}
-	refused = slices.Concat(refused, proxy.refused, missing)
+	refused = slices.Concat(refused, proxy.Refused, missing)
 	for _, layer := range layers {
-		report.Layers = append(report.Layers, libraryLayer{Name: layer.Name, Origin: layer.Origin})
+		report.Layers = append(report.Layers, host.LibraryLayer{Name: layer.Name, Origin: layer.Origin})
 	}
-	files, domainsDir, origin := librarySource()
-	domains, err := rule.LoadDomains(files, libraryRoot)
+	files, domainsDir, origin := wiring.LibrarySource()
+	domains, err := rule.LoadDomains(files, wiring.LibraryRoot)
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -140,7 +124,7 @@ func libraryReportVerb(o output.Verb, dir string) int {
 		for _, unreachable := range domain.Unreachable() {
 			refused = append(refused, errors.New(unreachable))
 		}
-		report.Domains = append(report.Domains, libraryDomain{Name: domain.Name, Rules: len(domain.Rules), Thresholds: len(domain.Thresholds),
+		report.Domains = append(report.Domains, host.LibraryDomain{Name: domain.Name, Rules: len(domain.Rules), Thresholds: len(domain.Thresholds),
 			Skills: len(domain.Skills), Agents: len(domain.Agents), References: len(domain.References), Refused: refusedHere})
 	}
 	for _, broken := range library.Broken {
@@ -151,19 +135,13 @@ func libraryReportVerb(o output.Verb, dir string) int {
 		problems[i] = cli.Problem{What: one.Error()}
 	}
 	return output.Show(o.Out, o.AsJSON, cli.Envelope{Verb: o.Name, OK: len(problems) == 0, At: time.Now(), Data: report, Problems: problems},
-		func(page cli.Page) []string { return libraryLines(page, report, problems) })
+		func(page cli.Page) []string { return reportLines(page, report, problems) })
 }
 
-func libraryLines(page cli.Page, report libraryReport, problems []cli.Problem) []string {
+func reportLines(page cli.Page, report Report, problems []cli.Problem) []string {
 	verdict := cli.Verdict{Mark: cli.Done, Text: "nothing refused"}
 	if len(problems) > 0 {
 		verdict = cli.Verdict{Mark: cli.Fail, Text: strconv.Itoa(len(problems)) + " refused"}
-	}
-	number := func(count int) string {
-		if count == 0 {
-			return ""
-		}
-		return strconv.Itoa(count)
 	}
 	proxyFrom := report.ProxyFrom
 	for _, layer := range report.Layers {
@@ -173,10 +151,10 @@ func libraryLines(page cli.Page, report libraryReport, problems []cli.Problem) [
 	}
 	lines := append(page.Title("Library", []string{output.Plural(len(report.Layers), "layer")}, verdict), "")
 	lines = append(lines, cli.Indent(page.Facts([]cli.Fact{
-		{Label: "models", Text: number(report.Models)},
-		{Label: "subscriptions", Text: number(report.Subscriptions)},
-		{Label: "roles", Text: number(report.Roles)},
-		{Label: "questions", Text: number(report.Questions)},
+		{Label: "models", Text: output.NonZero(report.Models)},
+		{Label: "subscriptions", Text: output.NonZero(report.Subscriptions)},
+		{Label: "roles", Text: output.NonZero(report.Roles)},
+		{Label: "questions", Text: output.NonZero(report.Questions)},
 		{Label: "docs", Text: output.Plural(report.DocPages, "page") + " · " + strconv.Itoa(report.DocEntries) + " index entries"},
 		{Label: "proxy", Text: report.Proxy + " · " + proxyFrom},
 	})...)...)
@@ -200,7 +178,7 @@ func libraryLines(page cli.Page, report libraryReport, problems []cli.Problem) [
 		}
 	}
 	from := report.DomainsFrom
-	if from == rulesFromTheProject {
+	if from == wiring.RulesFromTheProject {
 		from = page.Path(report.DomainsDir)
 	}
 	lines = append(append(lines, "", page.Section("domains · "+from, cli.Verdict{})), cli.Indent(page.Rows(rows)...)...)

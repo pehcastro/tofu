@@ -8,7 +8,6 @@ import (
 	"os"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -16,8 +15,8 @@ import (
 	"tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/context/recall"
+	"tofu/internal/cli/render"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/models/llm/catalog"
 	"tofu/internal/store/session"
 	"tofu/internal/store/session/drain"
 	"tofu/internal/store/session/drain/claudecode"
@@ -28,8 +27,6 @@ const (
 	sessionDrainUsage = "tofu session drain [name|id|head] [--claude <transcript.jsonl>] [--json]"
 	claudeFlag        = "--claude"
 	drainShownRows    = 10
-	drainMillion      = 1_000_000
-	drainThousand     = 1_000
 	drainPercent      = 100
 )
 
@@ -60,24 +57,12 @@ func sessionDrainVerb(o output.Verb, args []string) int {
 	return sessionReport(o, func(store *session.Store) (drainReport, error) { return sessionDrain(store, handles) }, drainLines)
 }
 
-func pricedByProvider(registry models.Registry) (func(slug string) drain.Weights, error) {
-	library, err := wiring.ModelLibrary("")
-	weights := drain.WeightsFrom(registry)
-	return func(slug string) drain.Weights {
-		wire, model, wired := strings.Cut(slug, "/")
-		if spec, subscribed := library.ForWire(wire); wired && subscribed {
-			slug = string(spec.Provider) + "/" + model
-		}
-		return weights(slug)
-	}, err
-}
-
 func claudeDrain(o output.Verb, path string) int {
-	registry, err := modelRegistry()
+	registry, err := wiring.ModelRegistry()
 	if err != nil {
 		return o.Fail(err)
 	}
-	weights, err := pricedByProvider(registry)
+	weights, err := wiring.PricedByProvider(registry)
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -106,11 +91,11 @@ func sessionDrain(store *session.Store, handles []string) (drainReport, error) {
 	if err != nil {
 		return drainReport{}, err
 	}
-	registry, err := modelRegistry()
+	registry, err := wiring.ModelRegistry()
 	if err != nil {
 		return drainReport{}, err
 	}
-	weights, err := pricedByProvider(registry)
+	weights, err := wiring.PricedByProvider(registry)
 	if err != nil {
 		return drainReport{}, err
 	}
@@ -177,16 +162,6 @@ func sessionDrain(store *session.Store, handles []string) (drainReport, error) {
 	return drainReport{Handle: handleOf(once, header.ID), Report: report}, nil
 }
 
-func weighted(tokens float64) string {
-	switch {
-	case tokens >= drainMillion:
-		return strconv.FormatFloat(tokens/drainMillion, 'f', 1, 64) + "M"
-	case tokens >= drainThousand:
-		return strconv.FormatFloat(tokens/drainThousand, 'f', 0, 64) + "k"
-	}
-	return strconv.FormatFloat(tokens, 'f', 0, 64)
-}
-
 func percentOf(part, whole float64) string {
 	if whole <= 0 {
 		return "0%"
@@ -197,7 +172,7 @@ func percentOf(part, whole float64) string {
 func spendRows(lines []drain.Line, whole float64) []cli.Row {
 	rows := make([]cli.Row, len(lines))
 	for i, line := range lines {
-		rows[i] = cli.Row{Mark: cli.Idle, Cells: []string{line.Name, percentOf(line.Weighted, whole), weighted(line.Weighted), output.Plural(line.Calls, "call"), dollars(line.USD)}}
+		rows[i] = cli.Row{Mark: cli.Idle, Cells: []string{line.Name, percentOf(line.Weighted, whole), widget.Weighted(line.Weighted), output.Plural(line.Calls, "call"), dollars(line.USD)}}
 	}
 	return rows
 }
@@ -223,7 +198,7 @@ func drainTldr(report drainReport) []cli.Fact {
 	return append(tldr, cli.Fact{Label: "context", Text: heaviest.Name + " band took " + percentOf(heaviest.Weighted, total)},
 		cli.Fact{Label: "rebuilds", Text: output.Plural(len(report.Rebuilds), "cache rebuild") + ", " + percentOf(rebuilt, total) + " of the total, " + percentOf(idle, rebuilt) + " of it after idle"},
 		cli.Fact{Label: "unread", Text: percentOf(report.Unread, total) + " went to cache writes the next call never read"},
-		cli.Fact{Label: "outside", Text: "memory writer " + weighted(report.Memory.Weighted) + " " + dollars(report.Memory.USD) + ", not in the total"})
+		cli.Fact{Label: "outside", Text: "memory writer " + widget.Weighted(report.Memory.Weighted) + " " + dollars(report.Memory.USD) + ", not in the total"})
 }
 
 func drainLines(page cli.Page, report drainReport) []string {
@@ -231,7 +206,7 @@ func drainLines(page cli.Page, report drainReport) []string {
 	if report.CostRecorded {
 		cost = dollars(report.Total.USD)
 	}
-	lines := append(page.Title("Drain", []string{report.Handle, output.Plural(report.Total.Calls, "call"), weighted(total) + " weighted tokens", cost}, cli.Verdict{}), "")
+	lines := append(page.Title("Drain", []string{report.Handle, output.Plural(report.Total.Calls, "call"), widget.Weighted(total) + " weighted tokens", cost}, cli.Verdict{}), "")
 	lines = append(lines, cli.Indent(page.Facts(drainTldr(report))...)...)
 	section := func(name string, rows []cli.Row, render func([]cli.Row) []string) {
 		lines = append(append(lines, "", page.Section(name, cli.Verdict{})), render(rows[:min(len(rows), drainShownRows)])...)
@@ -252,22 +227,22 @@ func drainLines(page cli.Page, report drainReport) []string {
 	section("context band", spendRows(report.Bands, total), fit)
 	residency := make([]cli.Row, len(report.Residency))
 	for i, resident := range report.Residency {
-		residency[i] = cli.Row{Mark: cli.Idle, Cells: []string{resident.Kind, output.Plural(resident.Blocks, "block"), weighted(float64(resident.Tokens)) + " tokens",
-			weighted(float64(resident.TokenCalls)) + " token-calls", "stays " + strconv.FormatInt(resident.TokenCalls/int64(max(resident.Tokens, 1)), 10) + " calls", weighted(resident.Weighted) + " weighted"}}
+		residency[i] = cli.Row{Mark: cli.Idle, Cells: []string{resident.Kind, output.Plural(resident.Blocks, "block"), widget.Weighted(float64(resident.Tokens)) + " tokens",
+			widget.Weighted(float64(resident.TokenCalls)) + " token-calls", "stays " + strconv.FormatInt(resident.TokenCalls/int64(max(resident.Tokens, 1)), 10) + " calls", widget.Weighted(resident.Weighted) + " weighted"}}
 	}
 	section("residency", residency, fit)
 	slices.SortStableFunc(report.Rebuilds, func(a, b drain.Rebuild) int { return cmp.Compare(b.Weighted, a.Weighted) })
 	rebuilds := make([]cli.Row, len(report.Rebuilds))
 	for i, rebuild := range report.Rebuilds {
-		rebuilds[i] = cli.Row{Mark: cli.Warn, Cells: []string{cmp.Or(rebuild.Agent, traceLead), string(rebuild.Cause), weighted(rebuild.Weighted) + " weighted",
+		rebuilds[i] = cli.Row{Mark: cli.Warn, Cells: []string{cmp.Or(rebuild.Agent, traceLead), string(rebuild.Cause), widget.Weighted(rebuild.Weighted) + " weighted",
 			"gap " + (time.Duration(rebuild.GapMS) * time.Millisecond).Round(time.Second).String()}, Detail: traced("first difference: "+rebuild.Differs, "turn "+rebuild.Turn, rebuild.Request)}
 	}
 	section("cache rebuilds", rebuilds, wrap)
 	section("agent types", spendRows(report.Types, total), fit)
 	agents := make([]cli.Row, len(report.Agents))
 	for i, run := range report.Agents {
-		agents[i] = cli.Row{Mark: cli.Idle, Cells: []string{run.Name, run.Type, percentOf(run.Weighted, total), weighted(run.Weighted), output.Plural(run.Calls, "call"),
-			"peak " + weighted(float64(run.PeakContext)), "rebuilt " + weighted(run.Rebuilt), "unread " + weighted(run.Unread)}}
+		agents[i] = cli.Row{Mark: cli.Idle, Cells: []string{run.Name, run.Type, percentOf(run.Weighted, total), widget.Weighted(run.Weighted), output.Plural(run.Calls, "call"),
+			"peak " + widget.Weighted(float64(run.PeakContext)), "rebuilt " + widget.Weighted(run.Rebuilt), "unread " + widget.Weighted(run.Unread)}}
 	}
 	section("sub-agents", agents, fit)
 	return lines

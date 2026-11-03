@@ -1,4 +1,4 @@
-package main
+package rules
 
 import (
 	"cmp"
@@ -11,35 +11,37 @@ import (
 
 	"tofu/apps/cli/output"
 	"tofu/apps/cli/page"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
+	"tofu/internal/host"
 	"tofu/internal/librarian/rules"
 )
 
-type ruleIndexListing struct {
-	RuleID   string           `json:"rule_id"`
-	Fires    bool             `json:"fires"`
-	Why      string           `json:"why"`
-	Concern  string           `json:"concern"`
-	Kind     string           `json:"kind"`
-	Mode     string           `json:"mode"`
-	Override *overrideListing `json:"override,omitempty"`
+type IndexListing struct {
+	RuleID   string                `json:"rule_id"`
+	Fires    bool                  `json:"fires"`
+	Why      string                `json:"why"`
+	Concern  string                `json:"concern"`
+	Kind     string                `json:"kind"`
+	Mode     string                `json:"mode"`
+	Override *host.OverrideListing `json:"override,omitempty"`
 }
 
-type ruleIndexReport struct {
-	Origin     string             `json:"origin"`
-	Task       string             `json:"task"`
-	TaskKind   string             `json:"task_kind"`
-	Role       string             `json:"role,omitempty"`
-	Agent      string             `json:"agent,omitempty"`
-	Paths      []string           `json:"paths"`
-	Frameworks []string           `json:"frameworks,omitempty"`
-	DecidedBy  string             `json:"decided_by,omitempty"`
-	Firing     int                `json:"firing"`
-	Rules      []ruleIndexListing `json:"rules"`
+type IndexReport struct {
+	Origin     string         `json:"origin"`
+	Task       string         `json:"task"`
+	TaskKind   string         `json:"task_kind"`
+	Role       string         `json:"role,omitempty"`
+	Agent      string         `json:"agent,omitempty"`
+	Paths      []string       `json:"paths"`
+	Frameworks []string       `json:"frameworks,omitempty"`
+	DecidedBy  string         `json:"decided_by,omitempty"`
+	Firing     int            `json:"firing"`
+	Rules      []IndexListing `json:"rules"`
 }
 
-func rulesIndexVerb(args []string, out, errOut io.Writer) int {
+func indexVerb(args []string, out, errOut io.Writer, agentsIn func(dir string) (subagent.Found, error)) int {
 	o := output.Verb{Name: "rules index", UsageLine: `tofu rules index "<task>" [path...] [--task kind] [--role orchestrator|sub-agent] [--agent name] [--library dir] [--dir project] [--json]`, Out: out, ErrOut: errOut}
 	kept := make([]string, 0, len(args))
 	verb, role, agentName, verbAsked, roleAsked := rule.VerbNone, rule.RoleAny, "", false, false
@@ -72,7 +74,7 @@ func rulesIndexVerb(args []string, out, errOut io.Writer) int {
 	if agentName != "" && role == rule.RoleOrchestrator {
 		return o.Usage(fmt.Errorf("--agent %s composes a sub-agent's prompt, and --role is %s", agentName, role))
 	}
-	opts, err := parseRulesFlags(kept)
+	opts, err := parseFlags(kept)
 	if err == nil && len(opts.rest) == 0 {
 		err = errors.New("no task")
 	}
@@ -80,7 +82,7 @@ func rulesIndexVerb(args []string, out, errOut io.Writer) int {
 		return o.Usage(err)
 	}
 	o.AsJSON = opts.json
-	stack, err := stackRules(opts.library, opts.dir)
+	stack, err := wiring.StackRules(opts.library, opts.dir)
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -95,7 +97,7 @@ func rulesIndexVerb(args []string, out, errOut io.Writer) int {
 		}
 		role = rule.RoleSubAgent
 	}
-	rules := stack.rules
+	rules := stack.Rules
 	task := turn.TaskNamed(opts.rest[0])
 	if verbAsked {
 		task.Verb = verb
@@ -105,7 +107,7 @@ func rulesIndexVerb(args []string, out, errOut io.Writer) int {
 			task.Paths = append(task.Paths, named)
 		}
 	}
-	report := ruleIndexReport{Origin: stack.origin, Task: task.Text, TaskKind: string(task.Verb), Role: string(role), Agent: agent.Name, Paths: task.Paths, Rules: make([]ruleIndexListing, 0, len(rules))}
+	report := IndexReport{Origin: stack.Origin, Task: task.Text, TaskKind: string(task.Verb), Role: string(role), Agent: agent.Name, Paths: task.Paths, Rules: make([]IndexListing, 0, len(rules))}
 	if report.Frameworks, err = rule.Frameworks(opts.dir, report.Paths); err != nil {
 		return o.Fail(err)
 	}
@@ -121,22 +123,22 @@ func rulesIndexVerb(args []string, out, errOut io.Writer) int {
 		if m.Fires {
 			report.Firing++
 		}
-		report.Rules = append(report.Rules, ruleIndexListing{RuleID: m.RuleID, Fires: m.Fires, Why: m.Why, Concern: string(rules[i].Concern), Kind: string(rules[i].Kind), Mode: rules[i].Mode.String(), Override: stack.applied(rules[i])})
+		report.Rules = append(report.Rules, IndexListing{RuleID: m.RuleID, Fires: m.Fires, Why: m.Why, Concern: string(rules[i].Concern), Kind: string(rules[i].Kind), Mode: rules[i].Mode.String(), Override: stack.Applied(rules[i])})
 	}
-	for _, off := range stack.switchedOff() {
-		report.Rules = append(report.Rules, ruleIndexListing{RuleID: off.Base.ID, Why: "never fires while it is switched off", Concern: string(off.Base.Concern), Kind: string(off.Base.Kind), Mode: string(rule.ModeOff), Override: off.listing()})
+	for _, off := range stack.SwitchedOff() {
+		report.Rules = append(report.Rules, IndexListing{RuleID: off.Base.ID, Why: "never fires while it is switched off", Concern: string(off.Base.Concern), Kind: string(off.Base.Kind), Mode: string(rule.ModeOff), Override: off.Listing()})
 	}
 	return o.Done(true, report, report.lines)
 }
 
-func (report ruleIndexReport) lines(page cli.Page) []string {
+func (report IndexReport) lines(page cli.Page) []string {
 	var concerns []string
 	rows := make([]cli.Row, len(report.Rules))
 	running := len(report.Rules)
 	for i, r := range report.Rules {
 		rows[i] = cli.Row{Mark: cli.Idle, Cells: []string{r.RuleID}, Detail: r.Why}
 		if r.Override != nil {
-			rows[i].Detail = overrideWhy(*r.Override) + factSeparator + r.Why
+			rows[i].Detail = wiring.OverrideWhy(*r.Override) + output.FactSeparator + r.Why
 		}
 		if r.Mode == string(rule.ModeOff) {
 			rows[i].Mark = cli.Removed

@@ -12,6 +12,7 @@ import (
 
 	"tofu/apps/cli/output"
 	judgeverb "tofu/apps/cli/verbs/judge"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/questions"
@@ -129,14 +130,14 @@ func TestACheckedDecisionIsAPrecedentForTheSameCommandJudgedLater(t *testing.T) 
 
 func TestAReplayedRowCarriesTheFingerprintOfTheRowItReplays(t *testing.T) {
 	t.Chdir(t.TempDir())
-	set := judgeverb.Battery{SetName: "stub_battery", QuestionsVersion: 1, Kinds: map[string]question.Kind{"approval": question.KindNoul}}
+	set := wiring.Battery{SetName: "stub_battery", QuestionsVersion: 1, Kinds: map[string]question.Kind{"approval": question.KindNoul}}
 	req := jev.Request{
 		State:     map[string]string{"command": forcePush},
 		Questions: []jev.Question{{ID: "approval", Kind: jev.QuestionNoul, Instructions: "?", True: "t", False: "f"}},
 	}
 	answers := []ledger.Answer{{Question: "approval", Wording: 1, Kind: ledger.AnswerNoul, Noul: 0.11}}
 
-	original, err := judgeverb.AppendRow(req.State, set, judgeverb.RowInput{Answers: answers, Fingerprint: "bash.5ee1f0a0c0de1234"})
+	original, err := wiring.AppendRow(req.State, set, wiring.RowInput{Answers: answers, Fingerprint: "bash.5ee1f0a0c0de1234"})
 	if err != nil {
 		t.Fatalf("writing the row to be replayed: %v", err)
 	}
@@ -190,8 +191,8 @@ func TestAReplayedRowCarriesTheFingerprintOfTheRowItReplays(t *testing.T) {
 
 func TestARowAtAPointThatDefinesNoFingerprintWritesAndReadsBack(t *testing.T) {
 	t.Chdir(t.TempDir())
-	set := judgeverb.Battery{SetName: "stop_check", QuestionsVersion: 1, Kinds: map[string]question.Kind{"work_remains": question.KindNoul}}
-	written, err := judgeverb.AppendRow(map[string]string{"task": "write the note"}, set, judgeverb.RowInput{
+	set := wiring.Battery{SetName: "stop_check", QuestionsVersion: 1, Kinds: map[string]question.Kind{"work_remains": question.KindNoul}}
+	written, err := wiring.AppendRow(map[string]string{"task": "write the note"}, set, wiring.RowInput{
 		TurnID:       "turn-no-fingerprint",
 		StateBuilder: "stop_check@1",
 		Answers:      []ledger.Answer{{Question: "work_remains", Wording: 1, Kind: ledger.AnswerNoul, Noul: 0.9}},

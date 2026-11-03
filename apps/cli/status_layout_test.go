@@ -12,6 +12,8 @@ import (
 
 	"tofu/apps/cli/output"
 	"tofu/apps/cli/page"
+	loginverb "tofu/apps/cli/verbs/login"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/sys"
@@ -28,28 +30,28 @@ const (
 
 func fixtureMoment() time.Time { return time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC) }
 
-func statusFixture() statusData {
+func statusFixture() host.Accounts {
 	at := fixtureMoment()
-	data := statusData{
-		Subscriptions: []subscriptionStatus{
-			{Source: "claude-sub", Accounts: []accountStatus{
-				{ID: 1, Account: "ada@example.com", State: stateInUse, Login: "oauth", ReloginBy: time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC), Windows: []windowStatus{
+	data := host.Accounts{
+		Subscriptions: []host.SubscriptionStatus{
+			{Source: "claude-sub", Accounts: []host.AccountStatus{
+				{ID: 1, Account: "ada@example.com", State: host.AccountInUse, Login: "oauth", ReloginBy: time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC), Windows: []host.WindowStatus{
 					{ID: "5h", ResetsAt: at.Add(4*time.Hour + 28*time.Minute)},
 					{ID: "7d", Used: 0.67, ResetsAt: at.Add(22 * time.Hour)},
 					{ID: "7d:opus", Only: []string{"opus-5", "opus-5-5"}},
 				}},
-				{ID: 2, Account: "lin.marsh@example.org", State: stateStandby, Login: "oauth", ReloginBy: time.Date(2026, 11, 3, 9, 0, 0, 0, time.UTC), Windows: []windowStatus{
+				{ID: 2, Account: "lin.marsh@example.org", State: host.AccountStandby, Login: "oauth", ReloginBy: time.Date(2026, 11, 3, 9, 0, 0, 0, time.UTC), Windows: []host.WindowStatus{
 					{ID: "5h", Used: 0.92, ResetsAt: at.Add(51 * time.Minute)},
 				}},
-				{ID: 3, Account: "ops@example.net", State: stateRefreshFailed, Login: "refresh failed 2h ago · 400 invalid_grant: Refresh token not found or invalid"},
+				{ID: 3, Account: "ops@example.net", State: host.AccountRefreshFailed, Login: "refresh failed 2h ago · 400 invalid_grant: Refresh token not found or invalid"},
 			}},
-			{Source: "codex-sub", Accounts: []accountStatus{
-				{ID: 4, Account: "11111111-2222-3333-4444-555555555555", State: stateSpent, Login: "oauth", Plan: "pro", Windows: []windowStatus{
+			{Source: "codex-sub", Accounts: []host.AccountStatus{
+				{ID: 4, Account: "11111111-2222-3333-4444-555555555555", State: host.AccountSpent, Login: "oauth", Plan: "pro", Windows: []host.WindowStatus{
 					{ID: "5h", Used: 1, ResetsAt: at.Add(2 * time.Hour)},
 				}},
 			}},
 		},
-		Keys: keyStatuses(func(variable string) string {
+		Keys: wiring.KeyStatuses(func(variable string) string {
 			if variable == sys.OpenRouterKeyName {
 				return "sk-or-v1-made-up-000000003498"
 			}
@@ -70,7 +72,7 @@ func statusFixture() statusData {
 func printedStatus(t *testing.T, page cli.Page) string {
 	t.Helper()
 	var out bytes.Buffer
-	if err := page.Print(&out, statusLines(page, statusFixture(), fixtureMoment())); err != nil {
+	if err := page.Print(&out, loginverb.StatusLines(page, statusFixture(), fixtureMoment())); err != nil {
 		t.Fatal(err)
 	}
 	return out.String()
@@ -100,7 +102,7 @@ func TestLoginTypeSafeAgainstAStubPrintsOneReceiptLine(t *testing.T) {
 	testkit.ScratchProject(t)
 	jevStub(t, http.StatusOK, loginReachableReply, nil)
 	var out, errOut bytes.Buffer
-	if code := loginVerb([]string{"classifier", typeSafeName}, strings.NewReader(madeUpGateKey+"\n"), &out, &errOut); code != output.ExitOK {
+	if code := loginverb.Verb([]string{"classifier", wiring.TypeSafeName}, strings.NewReader(madeUpGateKey+"\n"), &out, &errOut); code != output.ExitOK {
 		t.Fatalf("login typesafe exited %d:\n%s", code, errOut.String())
 	}
 	if want := "✓ TypeSafe key ····7Qx2 checked and stored  ~/.tofu/agent.db\n"; out.String() != want {
@@ -112,7 +114,7 @@ func TestLoginTypeSafeRefusedWithA401PrintsOneErrorLineAndNoVendorBody(t *testin
 	testkit.ScratchProject(t)
 	jevStub(t, http.StatusUnauthorized, madeUpVendorBody, nil)
 	var out, errOut bytes.Buffer
-	if code := loginVerb([]string{"classifier", typeSafeName}, strings.NewReader(madeUpGateKey+"\n"), &out, &errOut); code != output.ExitVerdict {
+	if code := loginverb.Verb([]string{"classifier", wiring.TypeSafeName}, strings.NewReader(madeUpGateKey+"\n"), &out, &errOut); code != output.ExitVerdict {
 		t.Fatalf("a refused key exited %d, want %d", code, output.ExitVerdict)
 	}
 	lines := strings.Split(strings.TrimSuffix(errOut.String(), "\n"), "\n")
@@ -130,7 +132,7 @@ func TestDisableAndEnablePrintOneReceiptLineEach(t *testing.T) {
 		{"--enable", "✓ #1 claude-sub ada@example.com enabled  ~/.tofu/agent.db\n"},
 	} {
 		var out, errOut bytes.Buffer
-		if code := loginVerb([]string{c.flag, "1"}, nil, &out, &errOut); code != output.ExitOK {
+		if code := loginverb.Verb([]string{c.flag, "1"}, nil, &out, &errOut); code != output.ExitOK {
 			t.Fatalf("login %s 1 exited %d:\n%s", c.flag, code, errOut.String())
 		}
 		if out.String() != c.want {
@@ -144,14 +146,14 @@ func TestLogoutWithTwoAccountsNamesBothAndRemovesOnlyTheOneNumbered(t *testing.T
 	savedAccount(t)
 	savedAccountAs(t, "lin.marsh@example.org")
 	var out, errOut bytes.Buffer
-	if code := logoutVerb([]string{"llm", "claude-sub"}, &out, &errOut); code != output.ExitUsage || !strings.Contains(strings.Join(strings.Fields(errOut.String()), " "), "#1 ada@example.com, #2 lin.marsh@example.org") {
+	if code := loginverb.LogoutVerb([]string{"llm", "claude-sub"}, &out, &errOut); code != output.ExitUsage || !strings.Contains(strings.Join(strings.Fields(errOut.String()), " "), "#1 ada@example.com, #2 lin.marsh@example.org") {
 		t.Fatalf("a logout with two accounts and no number exited %d:\n%s", code, errOut.String())
 	}
 	errOut.Reset()
-	if code := logoutVerb([]string{"llm", "codex-sub", "2"}, &out, &errOut); code != output.ExitVerdict {
+	if code := loginverb.LogoutVerb([]string{"llm", "codex-sub", "2"}, &out, &errOut); code != output.ExitVerdict {
 		t.Fatalf("a logout naming a claude-sub number under codex-sub exited %d:\n%s", code, errOut.String())
 	}
-	if code := logoutVerb([]string{"llm", "claude-sub", "2"}, &out, &errOut); code != output.ExitOK {
+	if code := loginverb.LogoutVerb([]string{"llm", "claude-sub", "2"}, &out, &errOut); code != output.ExitOK {
 		t.Fatalf("logout llm claude-sub 2 exited %d:\n%s", code, errOut.String())
 	}
 	if want := "✓ #2 claude-sub lin.marsh@example.org signed out  ~/.tofu/agent.db\n"; out.String() != want {

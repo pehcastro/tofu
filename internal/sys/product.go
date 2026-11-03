@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const ProductSymbol = `^func crashTold\(`
+const ProductSymbol = `^func nearestCommand\(`
 
 func ProductPackage(root string) (string, error) {
 	found, err := exec.Command("git", "-C", root, "grep", "-l", "-E", ProductSymbol, "--", "*.go").Output()

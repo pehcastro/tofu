@@ -17,6 +17,7 @@ import (
 
 	"tofu/apps/cli/output"
 	"tofu/apps/cli/page"
+	libraryverb "tofu/apps/cli/verbs/library"
 	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/core"
 	testkit "tofu/internal/testkit/cli"
@@ -278,15 +279,15 @@ func TestLibraryNamesARefusedProxyFileAndTheFieldThatFailed(t *testing.T) {
 }
 
 type libraryEnvelope struct {
-	OK       bool          `json:"ok"`
-	Data     libraryReport `json:"data"`
-	Problems []cli.Problem `json:"problems"`
+	OK       bool               `json:"ok"`
+	Data     libraryverb.Report `json:"data"`
+	Problems []cli.Problem      `json:"problems"`
 }
 
 func libraryJSON(t *testing.T) (int, libraryEnvelope, string) {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	code := libraryVerb([]string{output.JSONFlag}, &out, &errOut)
+	code := libraryverb.Verb(usageVerbs())([]string{output.JSONFlag}, &out, &errOut)
 	var report libraryEnvelope
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil || errOut.Len() != 0 {
 		t.Fatalf("tofu library --json is not one document, or wrote stderr %q: %v\n%s", errOut.String(), err, out.String())

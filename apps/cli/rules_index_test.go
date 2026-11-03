@@ -11,9 +11,26 @@ import (
 	"testing"
 
 	"tofu/apps/cli/output"
+	rulesverb "tofu/apps/cli/verbs/rules"
 	"tofu/internal/agent/loop"
 	"tofu/internal/librarian/rules"
 )
+
+func writeFixtureModule(t *testing.T, files map[string]string) string {
+	t.Helper()
+	dir := t.TempDir()
+	files["go.mod"] = "module tofu\n\ngo 1.25\n"
+	for name, body := range files {
+		path := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir for %s: %v", name, err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatalf("writing %s: %v", name, err)
+		}
+	}
+	return dir
+}
 
 func TestRulesIndexFiresAFrameworkRuleOnlyInItsOwnProject(t *testing.T) {
 	root := t.TempDir()
@@ -48,7 +65,7 @@ func TestRulesIndexFiresAFrameworkRuleOnlyInItsOwnProject(t *testing.T) {
 	} {
 		args := append(append([]string{"rules", "index", "write the page"}, c.paths...), "--library", library, "--dir", filepath.Join(root, c.dir), output.JSONFlag)
 		code, out, errOut := runOutput(args)
-		var printed struct{ Data ruleIndexReport }
+		var printed struct{ Data rulesverb.IndexReport }
 		if err := json.Unmarshal([]byte(out), &printed); code != output.ExitOK || err != nil {
 			t.Fatalf("%s %v exited %d (%v):\n%s%s", c.dir, c.paths, code, err, out, errOut)
 		}
@@ -90,7 +107,7 @@ func TestRulesIndexRoleFiresTheRulesOfThatRole(t *testing.T) {
 		}
 		code, out, errOut := runOutput(append(args, output.JSONFlag))
 		var keys struct{ Data map[string]json.RawMessage }
-		var printed struct{ Data ruleIndexReport }
+		var printed struct{ Data rulesverb.IndexReport }
 		if err := errors.Join(json.Unmarshal([]byte(out), &keys), json.Unmarshal([]byte(out), &printed)); code != output.ExitOK || err != nil {
 			t.Fatalf("%v exited %d (%v):\n%s%s", c.role, code, err, out, errOut)
 		}
@@ -173,7 +190,7 @@ func TestRulesIndexFiresWhatTheComposerSendsForEveryRole(t *testing.T) {
 			}
 		}
 		code, out, errOut := runOutput(append([]string{"rules", "index", c.spec.Task, "--library", library, "--dir", project, output.JSONFlag}, c.args...))
-		var printed struct{ Data ruleIndexReport }
+		var printed struct{ Data rulesverb.IndexReport }
 		if err := json.Unmarshal([]byte(out), &printed); code != output.ExitOK || err != nil {
 			t.Fatalf("%q %v exited %d (%v):\n%s%s", c.spec.Task, c.args, code, err, out, errOut)
 		}
@@ -222,7 +239,7 @@ func TestRulesIndexFiresATouchesRuleForASubAgentOnlyWhenItsTaskOrPathsNameIt(t *
 			args = append(args, "--role", c.role)
 		}
 		code, out, errOut := runOutput(args)
-		var printed struct{ Data ruleIndexReport }
+		var printed struct{ Data rulesverb.IndexReport }
 		if err := json.Unmarshal([]byte(out), &printed); code != output.ExitOK || err != nil || len(printed.Data.Rules) != 1 {
 			t.Fatalf("%q %q exited %d (%v):\n%s%s", c.role, c.task, code, err, out, errOut)
 		}
@@ -258,7 +275,7 @@ func TestRulesIndexKeepsTheShippedFrontendRulesASubAgentTaskNames(t *testing.T) 
 			map[string]bool{"fe_dialog": true, "vue_router_guards": true, "fe_form_validation": true, "vue_ssr_state": false}},
 	} {
 		code, out, errOut := runOutput([]string{"rules", "index", c.task, "--role", "sub-agent", "--library", filepath.Join("..", "..", "library"), "--dir", c.dir, output.JSONFlag})
-		var printed struct{ Data ruleIndexReport }
+		var printed struct{ Data rulesverb.IndexReport }
 		if err := json.Unmarshal([]byte(out), &printed); code != output.ExitOK || err != nil {
 			t.Fatalf("%q exited %d (%v):\n%s%s", c.task, code, err, out, errOut)
 		}

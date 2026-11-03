@@ -16,6 +16,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	doctorverb "tofu/apps/cli/verbs/doctor"
+	"tofu/apps/cli/wiring"
+	"tofu/internal/host"
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
@@ -30,9 +33,9 @@ func firstRunApp(t *testing.T, width, height int) *tui.App {
 	app := tui.New(tui.Options{
 		Repo:         "scratch",
 		Branch:       "develop",
-		Requirements: held.requirements(),
-		Recheck:      held.requirements,
-		Providers:    held.providers(),
+		Requirements: held.Requirements(),
+		Recheck:      held.Requirements,
+		Providers:    held.Providers(),
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: width, Height: height})
@@ -44,12 +47,12 @@ func plainFrame(app *tui.App) string { return ansi.Strip(app.View().Content) }
 func TestAFirstRunWithNothingStoredDrawsTheSetupAndNotAnError(t *testing.T) {
 	testkit.ScratchProject(t)
 	narrow, wide := plainFrame(firstRunApp(t, 80, 24)), plainFrame(firstRunApp(t, 120, 36))
-	for _, want := range []string{noCredential, "1. " + modelStep, "2. " + classifierStep, "tofu login llm <source>"} {
+	for _, want := range []string{wiring.NoCredential, "1. " + wiring.ModelStep, "2. " + wiring.ClassifierStep, "tofu login llm <source>"} {
 		if !strings.Contains(narrow, want) {
 			t.Errorf("the first frame at 80 columns does not say %q\n%s", want, narrow)
 		}
 	}
-	for _, want := range []string{"1. " + modelStep, "Meta API key", "2. " + classifierStep} {
+	for _, want := range []string{"1. " + wiring.ModelStep, "Meta API key", "2. " + wiring.ClassifierStep} {
 		if !strings.Contains(wide, want) {
 			t.Errorf("the first frame at 120 columns does not say %q\n%s", want, wide)
 		}
@@ -74,7 +77,7 @@ func TestACredentialWithoutAKeyLeavesOnlyTheKeyStep(t *testing.T) {
 	if !strings.Contains(frame, "no classifier is bound") || !strings.Contains(frame, "bind typesafe/jev-latest") {
 		t.Errorf("the classifier step is not drawn with its choices\n%s", frame)
 	}
-	if strings.Contains(frame, noCredential) || !strings.Contains(frame, "✓ 1. "+modelStep+"   claude-sub") {
+	if strings.Contains(frame, wiring.NoCredential) || !strings.Contains(frame, "✓ 1. "+wiring.ModelStep+"   claude-sub") {
 		t.Errorf("the language model step is not drawn as done by claude-sub\n%s", frame)
 	}
 	t.Log("\n" + frame)
@@ -87,7 +90,7 @@ func TestWithBothStoredNoSetupIsDrawnAndTheComposerHasFocus(t *testing.T) {
 	storeGateKey(t, gateKeyForTests)
 	app := firstRunApp(t, 80, 24)
 	frame := plainFrame(app)
-	for _, absent := range []string{noCredential, "jev judges no tool call", "no classifier is bound", "run the fix"} {
+	for _, absent := range []string{wiring.NoCredential, "jev judges no tool call", "no classifier is bound", "run the fix"} {
 		if strings.Contains(frame, absent) {
 			t.Errorf("setup is still drawn with everything stored: %q\n%s", absent, frame)
 		}
@@ -121,10 +124,10 @@ func drive(t *testing.T, app *tui.App, cmd tea.Cmd) {
 func TestALoginRunInAnotherTerminalMovesTheAppOnWithoutARestart(t *testing.T) {
 	testkit.ScratchProject(t)
 	held := heldForTest(t)
-	app := tui.New(tui.Options{Repo: "scratch", Requirements: held.requirements(), Recheck: held.requirements})
+	app := tui.New(tui.Options{Repo: "scratch", Requirements: held.Requirements(), Recheck: held.Requirements})
 	start := app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	if !strings.Contains(plainFrame(app), noCredential) {
+	if !strings.Contains(plainFrame(app), wiring.NoCredential) {
 		t.Fatalf("the app did not start on the setup screen\n%s", plainFrame(app))
 	}
 
@@ -136,7 +139,7 @@ func TestALoginRunInAnotherTerminalMovesTheAppOnWithoutARestart(t *testing.T) {
 
 	frame := plainFrame(app)
 	t.Logf("the app noticed the logins %s after they were stored, with no restart", time.Since(began).Round(time.Millisecond))
-	for _, absent := range []string{noCredential, "no classifier is bound"} {
+	for _, absent := range []string{wiring.NoCredential, "no classifier is bound"} {
 		if strings.Contains(frame, absent) {
 			t.Errorf("the app still asks for %q after the login ran elsewhere\n%s", absent, frame)
 		}
@@ -159,9 +162,9 @@ func TestTheAppAndDoctorCallTheSameStateReady(t *testing.T) {
 		{"the orchestrator bound", func() { bindOrchestrator(t, "claude-sub/claude-opus-5") }},
 	} {
 		step.store()
-		required := slices.DeleteFunc(heldForTest(t).requirements(), func(step tui.Requirement) bool { return step.Done != "" })
-		report := doctorState(time.Now())
-		appReady, doctorSaysReady := len(required) == 0, report.Verdict == doctorReady
+		required := slices.DeleteFunc(heldForTest(t).Requirements(), func(step tui.Requirement) bool { return step.Done != "" })
+		report := doctorverb.State(time.Now())
+		appReady, doctorSaysReady := len(required) == 0, report.Verdict == host.DoctorReady
 		t.Logf("%s: the app lists %d blockers, doctor says %s", step.what, len(required), report.Verdict)
 		if appReady != doctorSaysReady {
 			t.Errorf("with %s the app says ready=%v and doctor says %s", step.what, appReady, report.Verdict)

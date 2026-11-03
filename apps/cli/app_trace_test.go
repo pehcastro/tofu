@@ -50,7 +50,7 @@ func TestTheHashChatDrawsIsTheIDOfTheCallInTheRecord(t *testing.T) {
 		}},
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "read it"},
 	}}
-	live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
+	live := newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
 	live.run(t.Context(), onTheSubscription, "read the note", driver.emit)
 	sessions, err := sessionstore.Open()
 	if err != nil {

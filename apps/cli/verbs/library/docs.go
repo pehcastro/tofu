@@ -1,4 +1,4 @@
-package main
+package library
 
 import (
 	"cmp"
@@ -24,32 +24,24 @@ import (
 
 const (
 	docsIndexFile = "index.yaml"
-	docsUsage     = `tofu docs [topic | "a few words"] [--json]`
+	DocsUsage     = `tofu docs [topic | "a few words"] [--json]`
 )
-
-type (
-	docsEntry  = host.DocsEntry
-	docsPage   = host.DocsPage
-	settingDoc = host.SettingDoc
-)
-
-type docsCorpus host.DocsCorpus
 
 type docsMatch struct {
 	Text string `json:"text"`
 	Do   string `json:"do"`
 }
 
-func (c docsCorpus) topics() []string {
-	topics := make([]string, len(c.Pages))
-	for i, page := range c.Pages {
-		topics[i] = page.Topic
+func topics(corpus host.DocsCorpus) []string {
+	names := make([]string, len(corpus.Pages))
+	for i, page := range corpus.Pages {
+		names[i] = page.Topic
 	}
-	return topics
+	return names
 }
 
-func docsVerb(args []string, out, errOut io.Writer) int {
-	o := output.Verb{Name: "docs", UsageLine: docsUsage, AsJSON: slices.Contains(args, output.JSONFlag), Out: out, ErrOut: errOut}
+func DocsVerb(args []string, out, errOut io.Writer) int {
+	o := output.Verb{Name: "docs", UsageLine: DocsUsage, AsJSON: slices.Contains(args, output.JSONFlag), Out: out, ErrOut: errOut}
 	query := strings.Join(slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return arg == output.JSONFlag }), " ")
 	corpus, err := loadDocs()
 	if err != nil {
@@ -67,10 +59,12 @@ func docsVerb(args []string, out, errOut io.Writer) int {
 	case strings.ContainsAny(query, " \t"):
 		return searchDocs(o, query, corpus)
 	}
-	at := slices.IndexFunc(corpus.Pages, func(page docsPage) bool { return page.Topic == query })
+	at := slices.IndexFunc(corpus.Pages, func(page host.DocsPage) bool { return page.Topic == query })
 	if at < 0 {
-		closest := corpus.topics()
-		slices.SortStableFunc(closest, func(a, b string) int { return cmp.Compare(editDistance(query, a), editDistance(query, b)) })
+		closest := topics(corpus)
+		slices.SortStableFunc(closest, func(a, b string) int {
+			return cmp.Compare(output.EditDistance(query, a), output.EditDistance(query, b))
+		})
 		return o.Fail(output.ProblemError{What: fmt.Sprintf("no topic %q", query), Hint: "tofu docs " + closest[0]})
 	}
 	topic := host.DocsTopic{DocsPage: corpus.Pages[at]}
@@ -83,8 +77,8 @@ func docsVerb(args []string, out, errOut io.Writer) int {
 	})
 }
 
-func loadDocs() (docsCorpus, error) {
-	var corpus docsCorpus
+func loadDocs() (host.DocsCorpus, error) {
+	var corpus host.DocsCorpus
 	files := docs.Files()
 	names, err := fs.Glob(files, "*.md")
 	if err != nil {
@@ -109,38 +103,38 @@ func loadDocs() (docsCorpus, error) {
 		return corpus, err
 	}
 	for _, entry := range corpus.Entries {
-		if !slices.ContainsFunc(corpus.Pages, func(page docsPage) bool { return page.Topic == entry.Topic }) {
+		if !slices.ContainsFunc(corpus.Pages, func(page host.DocsPage) bool { return page.Topic == entry.Topic }) {
 			return corpus, fmt.Errorf("%s: %q names the topic %q, which has no page", docsIndexFile, entry.Ask, entry.Topic)
 		}
 	}
 	return corpus, nil
 }
 
-func parseDocsPage(text string) (docsPage, error) {
+func parseDocsPage(text string) (host.DocsPage, error) {
 	header, body, found := skill.SplitFrontMatter(text)
 	if !found {
-		return docsPage{}, errors.New("a page opens with front matter between two --- lines")
+		return host.DocsPage{}, errors.New("a page opens with front matter between two --- lines")
 	}
 	fields := map[string]string{}
 	for _, line := range strings.Split(header, "\n") {
 		key, value, _ := strings.Cut(line, ":")
 		fields[strings.TrimSpace(key)] = strings.TrimSpace(value)
 	}
-	page := docsPage{Topic: fields["topic"], Title: fields["title"], Summary: fields["summary"], Body: body}
+	page := host.DocsPage{Topic: fields["topic"], Title: fields["title"], Summary: fields["summary"], Body: body}
 	if page.Topic == "" || page.Title == "" || page.Summary == "" {
-		return docsPage{}, errors.New("the front matter names a topic, a title and a summary")
+		return host.DocsPage{}, errors.New("the front matter names a topic, a title and a summary")
 	}
 	return page, nil
 }
 
-func parseDocsIndex(text string) ([]docsEntry, error) {
-	var entries []docsEntry
+func parseDocsIndex(text string) ([]host.DocsEntry, error) {
+	var entries []host.DocsEntry
 	for n, line := range strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n") {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
 		if item, opens := strings.CutPrefix(line, "- "); opens {
-			entries, line = append(entries, docsEntry{}), item
+			entries, line = append(entries, host.DocsEntry{}), item
 		}
 		key, value, split := strings.Cut(strings.TrimSpace(line), ": ")
 		if !split || len(entries) == 0 {
@@ -168,7 +162,7 @@ func parseDocsIndex(text string) ([]docsEntry, error) {
 	return entries, nil
 }
 
-func docsIndexPage(page cli.Page, corpus docsCorpus) []string {
+func docsIndexPage(page cli.Page, corpus host.DocsCorpus) []string {
 	lines := page.Title("Docs", []string{strconv.Itoa(len(corpus.Entries)) + " asks"}, cli.Verdict{Text: strconv.Itoa(len(corpus.Pages)) + " topics"})
 	for _, topic := range corpus.Pages {
 		lines = append(lines, "", page.Subject(topic.Topic)+cli.Gap+page.Label(topic.Summary))
@@ -185,7 +179,7 @@ func docsMatchLines(page cli.Page, match docsMatch) []string {
 	return cli.Indent(match.Text, cli.Gap+page.Hint(match.Do))
 }
 
-func searchDocs(o output.Verb, query string, corpus docsCorpus) int {
+func searchDocs(o output.Verb, query string, corpus host.DocsCorpus) int {
 	asked := slices.Compact(slices.Sorted(slices.Values(docsWords(strings.ToLower(query)))))
 	type hit struct {
 		score int
@@ -294,35 +288,15 @@ func docsWords(text string) []string {
 	return words
 }
 
-func editDistance(a, b string) int {
-	previous := make([]int, len(b)+1)
-	for j := range previous {
-		previous[j] = j
-	}
-	for i := 1; i <= len(a); i++ {
-		current := make([]int, len(b)+1)
-		current[0] = i
-		for j := 1; j <= len(b); j++ {
-			substitution := previous[j-1]
-			if a[i-1] != b[j-1] {
-				substitution++
-			}
-			current[j] = min(previous[j]+1, current[j-1]+1, substitution)
-		}
-		previous = current
-	}
-	return previous[len(b)]
-}
-
-func settingDocs() []settingDoc {
-	var table []settingDoc
+func settingDocs() []host.SettingDoc {
+	var table []host.SettingDoc
 	for _, spec := range settingspkg.Default() {
-		table = append(table, settingDoc{Key: spec.Key, Category: spec.Category, Default: settingDefault(spec), Takes: settingTakes(spec), Restart: spec.Restart, Description: spec.Description})
+		table = append(table, host.SettingDoc{Key: spec.Key, Category: spec.Category, Default: settingDefault(spec), Takes: settingTakes(spec), Restart: spec.Restart, Description: spec.Description})
 	}
 	return table
 }
 
-func settingsTable(page cli.Page, table []settingDoc) []string {
+func settingsTable(page cli.Page, table []host.SettingDoc) []string {
 	rows := make([]cli.Row, len(table))
 	for i, setting := range table {
 		rows[i] = cli.Row{Cells: []string{setting.Key, setting.Default}}
@@ -375,18 +349,7 @@ func settingTakes(spec settingspkg.Spec) string {
 	return "any text"
 }
 
-func usageVerbs() []string {
-	_, listing, _ := strings.Cut(usage, "\nVerbs:\n")
-	var verbs []string
-	for _, line := range strings.Split(listing, "\n") {
-		if name, indented := strings.CutPrefix(line, "  "); indented && name != "" && name[0] != ' ' {
-			verbs = append(verbs, strings.Fields(name)[0])
-		}
-	}
-	return verbs
-}
-
-func docsCoverage(verbs []string) (docsCorpus, []error) {
+func DocsCoverage(verbs []string) (host.DocsCorpus, []error) {
 	corpus, err := loadDocs()
 	if err != nil {
 		return corpus, []error{fmt.Errorf("docs: %w", err)}

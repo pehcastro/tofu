@@ -15,6 +15,8 @@ import (
 	"testing"
 
 	"tofu/apps/cli/output"
+	loginverb "tofu/apps/cli/verbs/login"
+	modelsverb "tofu/apps/cli/verbs/models"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	"tofu/internal/host"
@@ -152,7 +154,7 @@ func TestAMetaTurnSendsTheKeyAndTheModelAndRunsTheStreamedToolCall(t *testing.T)
 	})
 
 	var out, errOut bytes.Buffer
-	code := runVerb([]string{"--dir", project, "--model", "meta/muse-spark-1.3", "--no-gate", "--sift", siftFree, "read note.txt"}, &out, &errOut)
+	code := runVerb([]string{"--dir", project, "--model", "meta/muse-spark-1.3", "--no-gate", "--sift", wiring.SiftFree, "read note.txt"}, &out, &errOut)
 	if code != output.ExitOK {
 		t.Fatalf("tofu run exited %d\n%s\n%s", code, out.String(), errOut.String())
 	}
@@ -203,7 +205,7 @@ func TestAMetaTurnSendsTheKeyAndTheModelAndRunsTheStreamedToolCall(t *testing.T)
 
 func TestABoundMetaOrchestratorRunsOnMetaWithNoModelAndTheAppListsItsWire(t *testing.T) {
 	_, project := metaHome(t)
-	if wires := heldForTest(t).wires(); len(wires) != 0 {
+	if wires := heldForTest(t).Wires(); len(wires) != 0 {
 		t.Errorf("with no meta key the app lists %+v", wires)
 	}
 	if err := sys.SaveKey(sys.MetaMuseKeyName, madeUpMetaKey); err != nil {
@@ -217,7 +219,7 @@ func TestABoundMetaOrchestratorRunsOnMetaWithNoModelAndTheAppListsItsWire(t *tes
 		_, _ = io.WriteString(w, metaAnswer)
 	})
 	var out, errOut bytes.Buffer
-	if code := runVerb([]string{"--dir", project, "--no-gate", "--sift", siftFree, "--tools", toolSetThree, "say ok"}, &out, &errOut); code != output.ExitOK {
+	if code := runVerb([]string{"--dir", project, "--no-gate", "--sift", wiring.SiftFree, "--tools", toolSetThree, "say ok"}, &out, &errOut); code != output.ExitOK {
 		t.Fatalf("tofu run with the orchestrator bound to meta exited %d\n%s", code, errOut.String())
 	}
 	if len(*heard) == 0 || !strings.Contains((*heard)[0].body, `"model":"muse-spark-1.3-contributor"`) {
@@ -226,7 +228,7 @@ func TestABoundMetaOrchestratorRunsOnMetaWithNoModelAndTheAppListsItsWire(t *tes
 	if opts := pickedOpts(project, host.Turn{Task: "say ok"}, 1); opts.Wire != wiring.WireMeta || opts.Model != "meta/muse-spark-1.3-contributor" {
 		t.Errorf("the app runs a bound meta orchestrator on wire %q model %q", opts.Wire, opts.Model)
 	}
-	wires := heldForTest(t).wires()
+	wires := heldForTest(t).Wires()
 	if len(wires) != 1 || wires[0].Name != wiring.WireMeta || wires[0].Model != "muse-spark-1.3" {
 		t.Errorf("with a meta key the app lists %+v, want the meta wire on muse-spark-1.3", wires)
 	}
@@ -236,7 +238,7 @@ func TestAMetaTurnWithNoKeySaysHowToStoreOne(t *testing.T) {
 	_, project := metaHome(t)
 	heard := metaStub(t, func(heardMeta, http.ResponseWriter) {})
 	var out, errOut bytes.Buffer
-	code := runVerb([]string{"--dir", project, "--model", "meta/muse-spark-1.3", "--no-gate", "--sift", siftFree, "--tools", toolSetThree, "say ok"}, &out, &errOut)
+	code := runVerb([]string{"--dir", project, "--model", "meta/muse-spark-1.3", "--no-gate", "--sift", wiring.SiftFree, "--tools", toolSetThree, "say ok"}, &out, &errOut)
 	if code == output.ExitOK || !strings.Contains(errOut.String(), "tofu login llm meta") || len(*heard) != 0 {
 		t.Fatalf("with no key the run exited %d after %d requests and said:\n%s", code, len(*heard), errOut.String())
 	}
@@ -244,8 +246,8 @@ func TestAMetaTurnWithNoKeySaysHowToStoreOne(t *testing.T) {
 
 func TestAMetaSlugPicksItsOwnWireAndRefusesAnother(t *testing.T) {
 	opts, err := parseRunArgs([]string{"--dir", ".", "--model", "meta/muse-spark-1.3-contributor", "task"})
-	if err != nil || opts.Wire != wiring.WireMeta || wireSpend(opts.Wire) != turn.SpendAPIKey {
-		t.Fatalf("meta/muse-spark-1.3-contributor parsed to wire %q spend %q (%v)", opts.Wire, wireSpend(opts.Wire), err)
+	if err != nil || opts.Wire != wiring.WireMeta || wiring.WireSpend(opts.Wire) != turn.SpendAPIKey {
+		t.Fatalf("meta/muse-spark-1.3-contributor parsed to wire %q spend %q (%v)", opts.Wire, wiring.WireSpend(opts.Wire), err)
 	}
 	if bound, err := boundSubAgent(opts); bound != "" || err != nil {
 		t.Errorf("an unnamed sub-agent under a meta orchestrator bound %q (%v)", bound, err)
@@ -272,7 +274,7 @@ func TestLoginMetaChecksTheKeyBeforeStoringItAndNeverPrintsIt(t *testing.T) {
 	})
 
 	var out, errOut bytes.Buffer
-	if code := loginVerb([]string{"llm", "meta"}, strings.NewReader(madeUpMetaKey+"\r\n"), &out, &errOut); code == output.ExitOK {
+	if code := loginverb.Verb([]string{"llm", "meta"}, strings.NewReader(madeUpMetaKey+"\r\n"), &out, &errOut); code == output.ExitOK {
 		t.Fatalf("a refused key was stored:\n%s%s", out.String(), errOut.String())
 	}
 	stored, _ := sys.StoredKeys()
@@ -286,7 +288,7 @@ func TestLoginMetaChecksTheKeyBeforeStoringItAndNeverPrintsIt(t *testing.T) {
 	status = http.StatusOK
 	out.Reset()
 	errOut.Reset()
-	if code := loginVerb([]string{"llm", "meta"}, strings.NewReader(madeUpMetaKey+"\n"), &out, &errOut); code != output.ExitOK {
+	if code := loginverb.Verb([]string{"llm", "meta"}, strings.NewReader(madeUpMetaKey+"\n"), &out, &errOut); code != output.ExitOK {
 		t.Fatalf("login meta exited %d:\n%s", code, errOut.String())
 	}
 	stored, _ = sys.StoredKeys()
@@ -314,18 +316,18 @@ func TestAMetaKeyOnlyInTheEnvironmentIsRedacted(t *testing.T) {
 
 func TestModelsListsTheFiveMetaModelsWithTheirWindowAndTheContributorNotice(t *testing.T) {
 	home, _ := metaHome(t)
-	listed := func() map[string]modelReport {
+	listed := func() map[string]host.ModelReport {
 		var out bytes.Buffer
-		if code := modelsVerb([]string{output.JSONFlag}, &out, io.Discard); code != output.ExitOK {
+		if code := modelsverb.Verb([]string{output.JSONFlag}, &out, io.Discard); code != output.ExitOK {
 			t.Fatalf("tofu models --json exited %d", code)
 		}
 		var envelope struct {
-			Data modelsReport `json:"data"`
+			Data host.ModelsReport `json:"data"`
 		}
 		if err := json.Unmarshal(out.Bytes(), &envelope); err != nil {
 			t.Fatal(err)
 		}
-		meta := map[string]modelReport{}
+		meta := map[string]host.ModelReport{}
 		for _, model := range envelope.Data.Models {
 			if model.Provider == string(models.Meta) {
 				meta[model.Slug] = model

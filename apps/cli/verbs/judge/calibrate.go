@@ -95,11 +95,11 @@ func CalibrateVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return o.Usage(err)
 	}
-	set, err := ResolveLibrary(ref, "")
+	set, err := wiring.ResolveLibrary(ref, "")
 	if err != nil {
 		return o.Fail(err)
 	}
-	rule, err := ResolveRule(ref, set)
+	rule, err := wiring.ResolveRule(ref, set)
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -118,7 +118,7 @@ func CalibrateVerb(args []string, out, errOut io.Writer) int {
 				page.Label(fmt.Sprintf("%d fit and %d held-out cases, each asked twice, nothing asked yet", report.Fit, report.Verify))}
 		})
 	}
-	resolved, err := ResolveRuleMode(rule)
+	resolved, err := wiring.ResolveRuleMode(rule)
 	if err != nil {
 		return o.Fail(err)
 	}

@@ -11,8 +11,10 @@ import (
 	"testing"
 
 	"tofu/apps/cli/output"
+	doctorverb "tofu/apps/cli/verbs/doctor"
 	settingsverb "tofu/apps/cli/verbs/settings"
 	"tofu/internal/agent/loop"
+	"tofu/internal/host"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
@@ -117,7 +119,7 @@ func gateThresholds(t *testing.T, dir string) gate.Thresholds {
 	return gate.set.Rule.Thresholds
 }
 
-func gateThresholdsAsDoctorReadsThem(point doctorRule) gate.Thresholds {
+func gateThresholdsAsDoctorReadsThem(point host.DoctorRule) gate.Thresholds {
 	return gate.Thresholds{
 		RiskAskAt:            point.Thresholds.RiskAskAt,
 		RiskDenyAt:           point.Thresholds.RiskDenyAt,
@@ -336,16 +338,16 @@ func envVarName() string { return "TYPESAFE" + "_API_KEY" }
 
 func fakeSecret(tag string) string { return "fake-test-secret-" + tag }
 
-func doctorJSON(t *testing.T) doctorReport {
+func doctorJSON(t *testing.T) host.DoctorReport {
 	t.Helper()
 	out := &bytes.Buffer{}
-	doctor([]string{output.JSONFlag}, out, out)
-	var envelope struct{ Data doctorReport }
+	doctorverb.Verb([]string{output.JSONFlag}, out, out)
+	var envelope struct{ Data host.DoctorReport }
 	oneEnvelope(t, out.String(), &envelope)
 	return envelope.Data
 }
 
-func rulePointOf(t *testing.T, point string) doctorRule {
+func rulePointOf(t *testing.T, point string) host.DoctorRule {
 	t.Helper()
 	for _, candidate := range doctorJSON(t).Rules {
 		if candidate.Point == point {
@@ -353,5 +355,5 @@ func rulePointOf(t *testing.T, point string) doctorRule {
 		}
 	}
 	t.Fatalf("no point %s in tofu doctor --json", point)
-	return doctorRule{}
+	return host.DoctorRule{}
 }

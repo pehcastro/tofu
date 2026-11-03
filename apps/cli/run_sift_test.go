@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/method"
@@ -108,7 +109,7 @@ func chunkAsked(t *testing.T, id, request string) int {
 
 func assumesTheRuleIsOutOfShadow(t *testing.T) {
 	t.Helper()
-	rule, err := sift.LoadShellRule(shipped.Files(), shellSiftPoint)
+	rule, err := sift.LoadShellRule(shipped.Files(), wiring.ShellSiftPoint)
 	if err != nil {
 		t.Fatalf("sift.LoadShellRule: %v", err)
 	}
@@ -139,7 +140,7 @@ func TestTheRunAttachesAScorerBuiltOverTheJevClient(t *testing.T) {
 	stubRecordedJudgedReplies(t)
 	bindTypeSafe(t)
 
-	sifter, scorer, err := buildShellSift(siftFollowsTheTable, logHere(t))
+	sifter, scorer, err := wiring.BuildShellSift(wiring.SiftFollowsTheTable, logHere(t))
 	if err != nil {
 		t.Fatalf("buildShellSift: %v", err)
 	}
@@ -150,18 +151,15 @@ func TestTheRunAttachesAScorerBuiltOverTheJevClient(t *testing.T) {
 	if sifter.Scores != turn.ShellScores(scorer) {
 		t.Fatalf("the sieve scores through %#v, not the scorer the run built", sifter.Scores)
 	}
-	if scorer.client == nil || scorer.set.SetName != sift.ShellSchema {
-		t.Fatalf("the scorer carries client %v and the question set %q", scorer.client, scorer.set.SetName)
-	}
 	opts := armOpts(t)
 	config, _ := mustConfig(t, opts, nil, runtime{spend: turn.SpendSubscription, sift: sifter, scorer: scorer})
 	if config.Sift != sifter {
 		t.Fatalf("turn.Config carries %v, not the sieve the run built", config.Sift)
 	}
-	if scorer.turnID == "" {
+	if scorer.TurnID == "" {
 		t.Fatal("the scorer writes ledger rows against no turn")
 	}
-	t.Logf("config.Sift keeps at %.2f, scores through the jev client, and rows say turn %s", config.Sift.KeepAt, scorer.turnID)
+	t.Logf("config.Sift keeps at %.2f, scores through the jev client, and rows say turn %s", config.Sift.KeepAt, scorer.TurnID)
 }
 
 type bashingModel struct {
@@ -196,7 +194,7 @@ func TestABashResultReachesTheModelSmallerThanTheOutputItRan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
-	sifter, scorer, err := buildShellSift(siftFollowsTheTable, logHere(t))
+	sifter, scorer, err := wiring.BuildShellSift(wiring.SiftFollowsTheTable, logHere(t))
 	if err != nil {
 		t.Fatalf("buildShellSift: %v", err)
 	}
@@ -220,7 +218,7 @@ func TestABashResultReachesTheModelSmallerThanTheOutputItRan(t *testing.T) {
 	if call.Error != "" {
 		t.Fatalf("the bash call failed: %s", call.Error)
 	}
-	calls, cost := scorer.spend()
+	calls, cost := scorer.Spend()
 	if len(messages[0]) >= call.ResultBytes {
 		t.Fatalf("the command returned %d bytes and %d reached the model after %d answered calls: nothing was cut, and the message ends %q",
 			call.ResultBytes, len(messages[0]), calls, lastLine(messages[0]))
@@ -246,11 +244,11 @@ func TestTheThreeStatesOfTheShellSiftCountedInBytes(t *testing.T) {
 	shell := siftedShell()
 	whole := len(shell.Stdout)
 
-	judged, _, err := buildShellSift(siftJudged, logHere(t))
+	judged, _, err := wiring.BuildShellSift(wiring.SiftJudged, logHere(t))
 	if err != nil {
 		t.Fatalf("buildShellSift judged: %v", err)
 	}
-	free, freeScorer, err := buildShellSift(siftFree, logHere(t))
+	free, freeScorer, err := wiring.BuildShellSift(wiring.SiftFree, logHere(t))
 	if err != nil {
 		t.Fatalf("buildShellSift free: %v", err)
 	}
@@ -314,7 +312,7 @@ func TestAnArmThatIsNeitherFreeNorJudgedIsRefused(t *testing.T) {
 	if _, err := parseRunArgs([]string{"--dir", t.TempDir(), "--sift", "maybe", "a task"}); err == nil {
 		t.Fatal("--sift maybe parsed")
 	}
-	for _, arm := range siftArms() {
+	for _, arm := range wiring.SiftArms() {
 		opts, err := parseRunArgs([]string{"--dir", t.TempDir(), "--sift", arm, "a task"})
 		if err != nil || opts.SiftArm != arm {
 			t.Fatalf("--sift %s parsed as %q: %v", arm, opts.SiftArm, err)
@@ -403,7 +401,7 @@ func TestWhatTheJudgedSiftSavesAndCostsOverEveryRecordedSession(t *testing.T) {
 	stubRecordedJudgedReplies(t)
 	bindTypeSafe(t)
 
-	sifter, scorer, err := buildShellSift(siftFollowsTheTable, logHere(t))
+	sifter, scorer, err := wiring.BuildShellSift(wiring.SiftFollowsTheTable, logHere(t))
 	if err != nil {
 		t.Fatalf("buildShellSift: %v", err)
 	}
@@ -414,12 +412,12 @@ func TestWhatTheJudgedSiftSavesAndCostsOverEveryRecordedSession(t *testing.T) {
 	var whole spent
 	asked := 0
 	for _, one := range results {
-		scorer.turnID = one.session
+		scorer.TurnID = one.session
 		cut, cutErr := sifter.Cut(t.Context(), one.shell, one.task)
 		if cutErr != nil {
 			t.Fatalf("%s: %v", one.session, cutErr)
 		}
-		calls, _ := scorer.spend()
+		calls, _ := scorer.Spend()
 		session := perSession[one.session]
 		perSession[one.session] = spent{
 			raw:   session.raw + len(one.shell.Stdout),
@@ -477,11 +475,11 @@ func TestEveryShellSiftDecisionIsWrittenToTheLedger(t *testing.T) {
 	testkit.ChdirTemp(t)
 	stubRecordedJudgedReplies(t)
 	bindTypeSafe(t)
-	sifter, scorer, err := buildShellSift(siftFollowsTheTable, logHere(t))
+	sifter, scorer, err := wiring.BuildShellSift(wiring.SiftFollowsTheTable, logHere(t))
 	if err != nil {
 		t.Fatalf("buildShellSift: %v", err)
 	}
-	scorer.turnID = "turn-sift-ledger"
+	scorer.TurnID = "turn-sift-ledger"
 	if _, err := sifter.Cut(t.Context(), siftedShell(), "find the line that says what failed"); err != nil {
 		t.Fatalf("Cut: %v", err)
 	}
@@ -499,7 +497,7 @@ func TestEveryShellSiftDecisionIsWrittenToTheLedger(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("reading the ledger back: %v", err)
 	}
-	calls, _ := scorer.spend()
+	calls, _ := scorer.Spend()
 	if rows != calls || rows == 0 {
 		t.Fatalf("%d jev calls left %d ledger rows", calls, rows)
 	}

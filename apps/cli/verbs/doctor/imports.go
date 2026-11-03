@@ -1,4 +1,4 @@
-package main
+package doctor
 
 import (
 	"bytes"
@@ -20,6 +20,7 @@ type importRule struct {
 	from  string
 	scope string
 	allow []string
+	apart bool
 }
 
 func importRules() []importRule {
@@ -28,6 +29,8 @@ func importRules() []importRule {
 		{from: "tofu/apps", scope: "tofu/bench"},
 		{from: "tofu/internal", scope: "tofu/bench"},
 		{from: "tofu/internal", scope: "tofu/apps"},
+		{from: "tofu/apps/cli/wiring", scope: "tofu/apps/cli/verbs"},
+		{from: "tofu/apps/cli/verbs", scope: "tofu/apps/cli/verbs", apart: true},
 		{from: "tofu/library", scope: "tofu"},
 		{from: "tofu/internal/judge", scope: "tofu/internal", allow: slices.Concat([]string{"tofu/internal/judge"}, leaves, []string{"tofu/internal/models/transport", "tofu/internal/models/classifiers/core", "tofu/internal/models/classifiers/providers"})},
 	}
@@ -38,7 +41,10 @@ func importRules() []importRule {
 }
 
 func (r importRule) String() string {
-	if len(r.allow) == 0 {
+	switch {
+	case r.apart:
+		return "each package under " + r.from + " imports no other one under " + r.scope
+	case len(r.allow) == 0:
 		return "nothing under " + r.from + " imports " + r.scope
 	}
 	return "under " + r.scope + ", a package in " + r.from + " imports only " + strings.Join(r.allow, ", ")
@@ -47,6 +53,10 @@ func (r importRule) String() string {
 func (r importRule) broken(from, to string) bool {
 	if !under(from, r.from) || !under(to, r.scope) {
 		return false
+	}
+	if r.apart {
+		own, _, _ := strings.Cut(strings.TrimPrefix(from, r.from+"/"), "/")
+		return !under(to, r.from+"/"+own)
 	}
 	for _, allowed := range r.allow {
 		if under(to, allowed) {
@@ -61,7 +71,10 @@ func under(path, prefix string) bool {
 }
 
 func (r importRule) short() string {
-	if len(r.allow) == 0 {
+	switch {
+	case r.apart:
+		return "never another under " + r.scope
+	case len(r.allow) == 0:
 		return "never " + r.scope
 	}
 	names := make([]string, len(r.allow))
@@ -151,11 +164,11 @@ func readImports(dir string) (importsReport, error) {
 	return report, nil
 }
 
-func doctorImports(dir string, asJSON bool, out, errOut io.Writer) int {
+func Imports(dir string, asJSON bool, out, errOut io.Writer) int {
 	now := time.Now()
 	report, err := readImports(dir)
 	if err != nil {
-		return printFailure(errOut, output.ExitUsage, "tofu doctor --imports: unreadable: "+err.Error(), "")
+		return output.PrintFailure(errOut, output.ExitUsage, "tofu doctor --imports: unreadable: "+err.Error(), "")
 	}
 	if asJSON {
 		err = output.WriteJSON(out, cli.Envelope{Verb: "doctor --imports", OK: len(report.Violations) == 0, At: now, Data: report, Problems: importProblems(report)})
@@ -165,7 +178,7 @@ func doctorImports(dir string, asJSON bool, out, errOut io.Writer) int {
 	}
 	switch {
 	case err != nil:
-		return printFailure(errOut, output.ExitVerdict, "tofu doctor --imports: "+err.Error(), "")
+		return output.PrintFailure(errOut, output.ExitVerdict, "tofu doctor --imports: "+err.Error(), "")
 	case len(report.Violations) > 0:
 		return output.ExitVerdict
 	}

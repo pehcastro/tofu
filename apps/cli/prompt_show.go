@@ -26,7 +26,7 @@ func showPrompt(opts wiring.RunOpts, out, errOut io.Writer) int {
 	if err != nil {
 		return runFail(errOut, err)
 	}
-	prompt, err := composeRun(opts, named, runtime{notify: writeNotice(errOut), open: openAppWire})
+	prompt, err := composeRun(opts, named, runtime{notify: writeNotice(errOut), open: wiring.OpenWire})
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -70,19 +70,19 @@ func showPrompt(opts wiring.RunOpts, out, errOut io.Writer) int {
 		_, _ = fmt.Fprintf(out, "off %s: %s\n", part.RuleID, part.Why)
 	}
 	for _, loaded := range prompt.subAgents.Prompt.Rules {
-		if why := shadowCheck(loaded); why != "" {
+		if why := wiring.ShadowCheck(loaded); why != "" {
 			_, _ = fmt.Fprintf(out, "shadow %s: %s\n", loaded.ID, why)
 		}
 	}
 	for _, effect := range board.effects {
 		_, _ = fmt.Fprintf(out, "board hook %s after lead.attach; show-prompt ran nothing\n", effect)
 	}
-	library, points := readLibrary()
+	library, points := wiring.ReadLibrary()
 	if library.Unreadable != "" {
 		_, _ = fmt.Fprintf(out, "points unreadable: %s\n", library.Unreadable)
 	}
 	for _, point := range points {
-		listed := pointListing(point)
+		listed := wiring.PointListing(point)
 		_, _ = fmt.Fprintf(out, "point %s: %s\n", listed.ID, strings.TrimSpace(listed.Mode+" "+listed.Switch))
 	}
 
@@ -109,7 +109,7 @@ func showPrompt(opts wiring.RunOpts, out, errOut io.Writer) int {
 
 func offeredTools(opts wiring.RunOpts, prompt composedRun, named []contract.Tool) ([]llm.Tool, leadForeseen, error) {
 	var board leadForeseen
-	config, spawner, err := runConfig(opts, named, runtime{open: openAppWire, composed: &prompt, foreseen: &board})
+	config, spawner, err := runConfig(opts, named, runtime{open: wiring.OpenWire, composed: &prompt, foreseen: &board})
 	if err != nil || opts.Agent == "" {
 		return config.Tools.Definitions(), board, err
 	}

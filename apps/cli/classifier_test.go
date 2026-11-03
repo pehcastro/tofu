@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	judgeverb "tofu/apps/cli/verbs/judge"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
@@ -73,8 +72,8 @@ func TestEachBindingOpensItsOwnWireWithItsOwnClassifierKey(t *testing.T) {
 				t.Errorf("the request named another model than %s: %s", bound.model, request.body)
 			}
 
-			set := judgeverb.Battery{SetName: "stop_check", QuestionsVersion: 1, Kinds: map[string]question.Kind{"work_remains": question.KindNoul}}
-			row, err := judgeverb.AppendRow(map[string]string{"task": "write the note"}, set, judgeverb.RowInput{})
+			set := wiring.Battery{SetName: "stop_check", QuestionsVersion: 1, Kinds: map[string]question.Kind{"work_remains": question.KindNoul}}
+			row, err := wiring.AppendRow(map[string]string{"task": "write the note"}, set, wiring.RowInput{})
 			if err != nil {
 				t.Fatal(err)
 			}

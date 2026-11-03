@@ -337,8 +337,8 @@ func TestASpawnedSubAgentsRequestsCarryTheEffortTheSpawnNames(t *testing.T) {
 				}
 				return turn.Subscription{Wire: wire, Effort: effort}
 			}
-			open := func(opts wiring.RunOpts) (appWire, error) {
-				return appWire{held: &accounts{fixed: subscription(opts.Effort), now: time.Now}, spend: turn.SpendSubscription, selected: orchestrator}, nil
+			open := func(opts wiring.RunOpts) (wiring.Wire, error) {
+				return wiring.Wire{Held: wiring.FixedAccounts(subscription(opts.Effort)), Spend: turn.SpendSubscription, Selected: orchestrator}, nil
 			}
 			dir := t.TempDir()
 			opener := runtime{orchestrator: orchestrator, open: open}.subAgentOpener(wiring.RunOpts{Dir: dir, Wire: wiring.WireSubscription, Model: orchestrator.Slug(), Effort: llm.EffortMedium})
@@ -435,7 +435,7 @@ func TestTheContextCeilingFlagWinsOverTheEnvironmentVariable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseRunArgs: %v", err)
 	}
-	budget, err := contextBudget(opts, chosenFor(t))
+	budget, err := wiring.ContextBudget(opts, chosenFor(t))
 	if err != nil {
 		t.Fatalf("contextBudget: %v", err)
 	}
@@ -446,7 +446,7 @@ func TestTheContextCeilingFlagWinsOverTheEnvironmentVariable(t *testing.T) {
 		t.Fatalf("the record does not say which of the two won: %q", budget.Source)
 	}
 
-	variableAlone, err := contextBudget(armOpts(t), chosenFor(t))
+	variableAlone, err := wiring.ContextBudget(armOpts(t), chosenFor(t))
 	if err != nil {
 		t.Fatalf("contextBudget with the variable alone: %v", err)
 	}
@@ -478,7 +478,7 @@ func TestARunAtACeilingUnderItsPromptIsRefusedAndJustAboveItCompactsAndRecordsTh
 			}})
 		}
 		model := &queuedModel{decisions: append(decisions, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "read it"})}
-		budget, err := contextBudget(opts, chosenFor(t))
+		budget, err := wiring.ContextBudget(opts, chosenFor(t))
 		if err != nil {
 			t.Fatalf("contextBudget: %v", err)
 		}
@@ -532,7 +532,7 @@ func TestRunHelpKeepsTheCeilingFlagWorkingAndDoesNotOfferIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the flag the help no longer names stopped working: %v", err)
 	}
-	budget, err := contextBudget(opts, chosenFor(t))
+	budget, err := wiring.ContextBudget(opts, chosenFor(t))
 	if err != nil {
 		t.Fatalf("contextBudget: %v", err)
 	}
@@ -597,7 +597,7 @@ func TestAModelWithNoRecordedWindowCompactsAtTheOperatingCeiling(t *testing.T) {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
 
-	budget, err := contextBudget(opts, models.Model{ID: "a model no library records"})
+	budget, err := wiring.ContextBudget(opts, models.Model{ID: "a model no library records"})
 	if err != nil {
 		t.Fatalf("contextBudget: %v", err)
 	}
@@ -843,7 +843,7 @@ func chosenFor(t *testing.T) models.Model {
 	if err != nil {
 		t.Fatalf("parseRunArgs returned an error: %v", err)
 	}
-	selected, err := chooseModel(opts)
+	selected, err := wiring.ChooseModel(opts)
 	if err != nil {
 		t.Fatalf("chooseModel returned an error: %v", err)
 	}
@@ -1098,7 +1098,7 @@ func TestAnOffOverrideLeavesOneLineInThePromptAndAStaleOneLeavesTheRule(t *testi
 		if err := sys.WriteFile(filepath.Join(project, ".tofu", "rules", overrideAsked+"@1.yaml"), data, 0o644); err != nil {
 			t.Fatal(err)
 		}
-		prompt, err := composeRun(wiring.RunOpts{Dir: project, Task: "add unit tests to the parser"}, nil, runtime{open: openAppWire})
+		prompt, err := composeRun(wiring.RunOpts{Dir: project, Task: "add unit tests to the parser"}, nil, runtime{open: wiring.OpenWire})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -5,14 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strings"
 
-	"tofu/internal/judge/gate"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/judge/questions"
-	"tofu/internal/judge/state"
 	"tofu/internal/models/classifiers/core"
-	shipped "tofu/library"
-	"tofu/library/questions"
 )
 
 type inlineOption struct {
@@ -27,59 +23,31 @@ type inlineQuestion struct {
 	Options      []inlineOption  `json:"options"`
 }
 
-type Battery struct {
-	Questions        []jev.Question
-	Kinds            map[string]question.Kind
-	SetName          string
-	QuestionsVersion int
-	Rule             *gate.Rule
-	Mode             gate.Mode
-	ModeReason       string
-}
-
-func resolveQuestions(input judgeInput) (Battery, error) {
+func resolveQuestions(input judgeInput) (wiring.Battery, error) {
 	switch {
 	case input.Library != "" && len(input.Questions) > 0:
-		return Battery{}, errors.New("the request names both a library battery and inline questions")
+		return wiring.Battery{}, errors.New("the request names both a library battery and inline questions")
 	case input.Library != "":
-		return ResolveLibrary(input.Library, "")
+		return wiring.ResolveLibrary(input.Library, "")
 	case len(input.Questions) > 0:
 		return resolveInline(input.Questions)
 	default:
-		return Battery{}, errors.New("the request names neither a library battery nor questions")
+		return wiring.Battery{}, errors.New("the request names neither a library battery nor questions")
 	}
 }
 
-func ResolveLibrary(ref, dir string) (Battery, error) {
-	layers, err := question.Layers(questions.Files(), dir)
-	if err != nil {
-		return Battery{}, err
-	}
-	set, _, err := question.Resolve(ref, layers)
-	if err != nil {
-		return Battery{}, err
-	}
-	jevQuestions := make([]jev.Question, 0, len(set.Questions))
-	kinds := make(map[string]question.Kind, len(set.Questions))
-	for _, q := range set.Questions {
-		jevQuestions = append(jevQuestions, q.ToJev())
-		kinds[q.Name] = q.Kind
-	}
-	return Battery{Questions: jevQuestions, Kinds: kinds, SetName: set.Name, QuestionsVersion: set.QuestionsVersion}, nil
-}
-
-func resolveInline(qs map[string]inlineQuestion) (Battery, error) {
+func resolveInline(qs map[string]inlineQuestion) (wiring.Battery, error) {
 	names := make([]string, 0, len(qs))
 	for name := range qs {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
-	out := Battery{SetName: "inline", QuestionsVersion: 1, Kinds: make(map[string]question.Kind, len(names))}
+	out := wiring.Battery{SetName: "inline", QuestionsVersion: 1, Kinds: make(map[string]question.Kind, len(names))}
 	for _, name := range names {
 		jq, kind, err := toInlineJevQuestion(name, qs[name])
 		if err != nil {
-			return Battery{}, err
+			return wiring.Battery{}, err
 		}
 		out.Questions = append(out.Questions, jq)
 		out.Kinds[name] = kind
@@ -121,34 +89,4 @@ func toInlineJevQuestion(name string, in inlineQuestion) (jev.Question, question
 		return jq, question.KindScore, nil
 	}
 	return jev.Question{}, "", fmt.Errorf("question %q has the unknown type %q", name, in.Type)
-}
-
-func ResolveRule(ref string, set Battery) (gate.Rule, error) {
-	if !strings.ContainsRune(ref, '@') {
-		return gate.Rule{}, fmt.Errorf("the rule %q names no version; a rule is named name@version, so it never resolves silently to the wrong one", ref)
-	}
-	r, _, err := LoadRulePoint(ref, "")
-	if err != nil {
-		return gate.Rule{}, err
-	}
-	if r.Questions != set.SetName || r.QuestionsVersion != set.QuestionsVersion {
-		return gate.Rule{}, fmt.Errorf("rule %s names the question set %s@%d and the battery resolved %s@%d",
-			ref, r.Questions, r.QuestionsVersion, set.SetName, set.QuestionsVersion)
-	}
-	return r, nil
-}
-
-func LoadRulePoint(ref, dir string) (gate.Rule, gate.Origin, error) {
-	if ref == state.StopCheckRuleRef {
-		return state.StopCheckRule()
-	}
-	layers, err := question.Layers(questions.Files(), dir)
-	if err != nil {
-		return gate.Rule{}, "", err
-	}
-	set, _, err := question.Resolve(ref, layers)
-	if err != nil {
-		return gate.Rule{}, "", err
-	}
-	return gate.LoadPoint(shipped.Files(), ref, set, dir)
 }

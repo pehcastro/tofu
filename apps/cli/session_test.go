@@ -215,7 +215,7 @@ func TestSessionResumeSendsTheMessagesTheRecordHolds(t *testing.T) {
 }
 
 func liveAppSession(dir string, model turn.Model) *appSession {
-	return newAppSession(dir, func(wiring.RunOpts) (appWire, error) {
+	return newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) {
 		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
 }
@@ -244,7 +244,7 @@ func TestSlashNewDropsWhatIsCarriedAndSlashResumeTakesTheSessionBack(t *testing.
 	}
 
 	second := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "still here"}}}
-	live.engine.open = func(wiring.RunOpts) (appWire, error) {
+	live.engine.open = func(wiring.RunOpts) (wiring.Wire, error) {
 		return wireOn(second), nil
 	}
 	live.run(t.Context(), onTheSubscription, "what did you write", events.add)

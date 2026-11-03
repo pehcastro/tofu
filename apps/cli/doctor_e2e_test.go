@@ -10,7 +10,9 @@ import (
 
 	"tofu/apps/cli/output"
 	"tofu/apps/cli/page"
+	doctorverb "tofu/apps/cli/verbs/doctor"
 	"tofu/apps/cli/wiring"
+	"tofu/internal/host"
 	"tofu/internal/konst"
 	sessionstore "tofu/internal/store/session"
 	testkit "tofu/internal/testkit/cli"
@@ -148,7 +150,7 @@ func TestE2EDoctorReadsTheKeyAndTheRuleOfTheProjectItRunsIn(t *testing.T) {
 			}
 		}
 		body = before + "\n" + after
-		testkit.SameText(t, step.name, body, strings.ReplaceAll(step.body, "RTK_INSTALL", rtkInstall()))
+		testkit.SameText(t, step.name, body, strings.ReplaceAll(step.body, "RTK_INSTALL", doctorverb.RtkInstall()))
 	}
 }
 
@@ -173,12 +175,12 @@ func TestE2EDoctorAndARunInTheSameHomeAgreeOnWhetherTheShellSiftCuts(t *testing.
 		testkit.WriteFile(t, p.home, "deck.jsonl", `{"text":"reading it","tools":[{"name":"bash","args":{"command":"cat long.txt"}}]}`+"\n"+`{"text":"done"}`+"\n")
 		env := append([]string{"USERPROFILE=" + p.home, "HOME=" + p.home, "TEMP=" + p.home, "TMP=" + p.home, "SystemRoot=" + os.Getenv("SystemRoot"), "PATH=" + os.Getenv("PATH")}, step.env...)
 		page, _ := runBinary(t, p.dir, env, "doctor")
-		var envelope struct{ Data doctorReport }
+		var envelope struct{ Data host.DoctorReport }
 		printed, _ := runBinary(t, p.dir, env, "doctor", "--json")
 		oneEnvelope(t, printed, &envelope)
-		var said doctorRule
+		var said host.DoctorRule
 		for _, rule := range envelope.Data.Rules {
-			if rule.Point == shellSiftPoint {
+			if rule.Point == wiring.ShellSiftPoint {
 				said = rule
 			}
 		}
@@ -231,7 +233,7 @@ func TestE2EDoctorNamesTheRtkVersionOrThatAProjectTurnedItOff(t *testing.T) {
 		if code != output.ExitVerdict || !strings.Contains(said, "\nshell\n"+step.line) {
 			t.Fatalf("%s: exit %d, want %d and a shell section starting %q\n%s", step.name, code, output.ExitVerdict, step.line, said)
 		}
-		var envelope struct{ Data doctorReport }
+		var envelope struct{ Data host.DoctorReport }
 		printed, _ := runBinary(t, p.dir, env, "doctor", "--json")
 		oneEnvelope(t, printed, &envelope)
 		if envelope.Data.Proxy.Use != step.use {
@@ -246,7 +248,7 @@ func TestE2EDoctorJSONIsOneEnvelopeThatCarriesTheBlockersAsProblems(t *testing.T
 		Tofu     string
 		Verb     string
 		OK       bool
-		Data     doctorReport
+		Data     host.DoctorReport
 		Problems []cli.Problem
 	}
 	oneEnvelope(t, newProject(t, "doctor").run(t, output.ExitVerdict, "doctor", "--json"), &envelope)
@@ -254,7 +256,7 @@ func TestE2EDoctorJSONIsOneEnvelopeThatCarriesTheBlockersAsProblems(t *testing.T
 		{What: "orchestrator: no subscription is signed in, so no model can answer", Hint: "tofu login llm <source>"},
 		{What: "jev: the gate is off because no classifier is bound: store its key with tofu login classifier and pick it in Models", Hint: "tofu models bind classifier <provider/model>"},
 	}
-	if envelope.Tofu != konst.Version || envelope.Verb != "doctor" || envelope.OK || envelope.Data.Verdict != doctorNotReady ||
+	if envelope.Tofu != konst.Version || envelope.Verb != "doctor" || envelope.OK || envelope.Data.Verdict != host.DoctorNotReady ||
 		len(envelope.Problems) != len(want) || envelope.Problems[0] != want[0] || envelope.Problems[1] != want[1] || len(envelope.Data.Rules) != 6 {
 		t.Fatalf("the envelope is %+v, want doctor, not ok, not ready, 6 rules and the problems %+v", envelope, want)
 	}

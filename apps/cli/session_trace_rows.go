@@ -10,13 +10,13 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/hooks"
 	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/cli/render"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
@@ -40,7 +40,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			var prompt session.PromptBody
 			_ = json.Unmarshal(event.Body, &prompt)
 			for _, part := range prompt.Parts {
-				what, name := libraryItem(part)
+				what, name := wiring.LibraryItem(part)
 				if what == "" {
 					continue
 				}
@@ -49,7 +49,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 				switch {
 				case part.Off:
 					state = "switched off"
-				case what == libraryWhatAgent && part.Sent():
+				case what == wiring.LibraryWhatAgent && part.Sent():
 					state = "used"
 				}
 				row.Kind, row.State, row.Text = kindLibrary, state, traced(what+" "+name+" "+state, output.OneLine(part.Why), part.File)
@@ -112,7 +112,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			case call.Tool == turn.TicketMoveToolName && json.Unmarshal(call.Args, &ticketed) == nil:
 				row.Ticket, row.work = ticketed.ID, workStep{what: workMove, said: traced("to "+ticketed.To, ticketed.Reason), to: ticketed.To}
 			}
-			if what, name := libraryLoad(call); what != "" {
+			if what, name := wiring.LibraryLoad(call); what != "" {
 				rows = append(rows, row)
 				row.Kind, row.State = kindLibrary, "asked"
 				row.Text = traced(what+" "+name+" asked by the model", libraryFiles[event.Agent+"\x00"+what+"\x00"+name])
@@ -134,7 +134,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			if result.ToolOutcome != session.ToolOutcomeSkipped && (result.Error != "" || result.Refused || result.ToolOutcome == session.ToolOutcomeFailed || result.ToolOutcome == session.ToolOutcomeAborted) {
 				answered.Outcome = traceProblem(result.ToolOutcome == session.ToolOutcomeAborted, cmp.Or(reason, answered.State))
 			}
-			if what, name := libraryLoad(call); what != "" {
+			if what, name := wiring.LibraryLoad(call); what != "" {
 				loaded, said, why := &rows[placed+1], "loaded by the model", ""
 				loaded.State = string(session.PartLoaded)
 				if answered.Outcome != "" {
@@ -302,36 +302,6 @@ func checkSummary(tool, content string) string {
 		return ""
 	}
 	return strings.Join(checkCounts().FindAllString(content, -1), "; ")
-}
-
-const (
-	libraryWhatRule      = "rule"
-	libraryWhatAgent     = "agent"
-	libraryWhatSkill     = "skill"
-	libraryWhatReference = "reference"
-)
-
-func libraryItem(part session.PromptPart) (string, string) {
-	switch {
-	case part.Rule != "":
-		return libraryWhatRule, part.Rule
-	case part.Kind == string(rule.ConcernIdentity) && (part.Agent != "" || part.File != ""):
-		return libraryWhatAgent, cmp.Or(part.Agent, "unnamed")
-	case part.Kind == string(turn.ConcernSkills) && part.Name != "":
-		return libraryWhatSkill, part.Name
-	case part.Kind == string(turn.ConcernReferences):
-		return libraryWhatReference, part.Name
-	}
-	return "", ""
-}
-
-func libraryLoad(call session.CallBody) (string, string) {
-	var named struct{ Name string }
-	what := map[string]string{turn.SkillToolName: libraryWhatSkill, turn.ReferenceToolName: libraryWhatReference}[call.Tool]
-	if what == "" || json.Unmarshal(call.Args, &named) != nil {
-		return "", ""
-	}
-	return what, named.Name
 }
 
 type stopCause struct {

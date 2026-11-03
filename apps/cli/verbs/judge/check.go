@@ -125,7 +125,7 @@ func RunCheck(ctx context.Context, client *jev.Client, rulePath, command string)
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	set, err := ResolveLibrary(runGatePoint, "")
+	set, err := wiring.ResolveLibrary(runGatePoint, "")
 	if err != nil {
 		return ledger.Row{}, err
 	}
@@ -144,7 +144,7 @@ func RunCheck(ctx context.Context, client *jev.Client, rulePath, command string)
 
 	var r gate.Rule
 	if rulePath == "" {
-		r, _, err = LoadRulePoint(runGatePoint, "")
+		r, _, err = wiring.LoadRulePoint(runGatePoint, "")
 	} else {
 		r, err = gate.Load(rulePath)
 	}
@@ -157,9 +157,9 @@ func RunCheck(ctx context.Context, client *jev.Client, rulePath, command string)
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	return AppendRow(rawState, set, RowInput{
+	return wiring.AppendRow(rawState, set, wiring.RowInput{
 		Decision:     &decision,
-		Answers:      ToLedgerAnswers(set.QuestionsVersion, decision.Answers),
+		Answers:      wiring.ToLedgerAnswers(set.QuestionsVersion, decision.Answers),
 		StateBuilder: builderVersion,
 		Fingerprint:  state.FingerprintOf(call),
 	})

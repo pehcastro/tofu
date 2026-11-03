@@ -26,6 +26,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/apps/cli/output"
+	doctorverb "tofu/apps/cli/verbs/doctor"
+	loginverb "tofu/apps/cli/verbs/login"
 	settingsverb "tofu/apps/cli/verbs/settings"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/context/recall"
@@ -125,10 +127,10 @@ func TestBareTofuWithoutATerminalSaysSo(t *testing.T) {
 
 const gateKeyForTests = "tsk-7f3k9x2m4q8w1z5v6b0nj3hQ9W4"
 
-func heldForTest(t *testing.T) heldStore {
+func heldForTest(t *testing.T) wiring.HeldStore {
 	t.Helper()
-	held := holdStore()
-	t.Cleanup(held.close)
+	held := wiring.HoldStore()
+	t.Cleanup(held.Close)
 	return held
 }
 
@@ -146,11 +148,11 @@ func setupScreen(t *testing.T, required []tui.Requirement) string {
 
 func TestSetupAsksForBothLoginsAndTheSecondOneStoresTheKey(t *testing.T) {
 	testkit.EmptyHome(t)
-	required := heldForTest(t).requirements()
+	required := heldForTest(t).Requirements()
 	if len(required) != 2 || required[0].Done != "" || required[1].Done != "" {
 		t.Fatalf("requirements %+v, want two steps, neither done", required)
 	}
-	if required[0].Step != modelStep || required[0].What != noCredential || required[0].Fix != "tofu login llm <source>" || len(required[0].Choices) != 3 {
+	if required[0].Step != wiring.ModelStep || required[0].What != wiring.NoCredential || required[0].Fix != "tofu login llm <source>" || len(required[0].Choices) != 3 {
 		t.Fatalf("step 1 is %+v", required[0])
 	}
 	var logins []string
@@ -173,11 +175,11 @@ func TestSetupAsksForBothLoginsAndTheSecondOneStoresTheKey(t *testing.T) {
 	t.Log("\n" + setupScreen(t, required))
 
 	storeGateKey(t, gateKeyForTests)
-	left := heldForTest(t).requirements()
+	left := heldForTest(t).Requirements()
 	if left[0].Done != "" || !strings.HasSuffix(left[1].Done, "····Q9W4") {
 		t.Fatalf("after the key was stored the steps are %+v, want step 2 done by the key's last four", left)
 	}
-	if blockers := heldForTest(t).startBlockers(); len(blockers) != 1 || blockers[0].label != string(models.RoleOrchestrator) {
+	if blockers := heldForTest(t).StartBlockers(); len(blockers) != 1 || blockers[0].Label != string(models.RoleOrchestrator) {
 		t.Fatalf("doctor's blockers are %+v, want the orchestrator step alone", blockers)
 	}
 	t.Log("\n" + setupScreen(t, left))
@@ -186,7 +188,7 @@ func TestSetupAsksForBothLoginsAndTheSecondOneStoresTheKey(t *testing.T) {
 func TestASignInWithNothingBoundAsksForTheOrchestratorAndBindingItClearsTheStep(t *testing.T) {
 	testkit.EmptyHome(t)
 	storeCredential(t, cred.CodexSub)
-	asked := heldForTest(t).requirements()[0]
+	asked := heldForTest(t).Requirements()[0]
 	if asked.Done != "" || asked.What != models.RoleOrchestrator.Unset().Error() || asked.Fix != "tofu models bind orchestrator <provider/model>" {
 		t.Fatalf("with codex signed in and nothing bound step 1 is %+v, want it to ask for the orchestrator", asked)
 	}
@@ -201,13 +203,13 @@ func TestASignInWithNothingBoundAsksForTheOrchestratorAndBindingItClearsTheStep(
 	t.Log("\n" + setupScreen(t, []tui.Requirement{asked}))
 
 	bindOrchestrator(t, "claude-sub/claude-opus-5")
-	elsewhere := heldForTest(t).requirements()[0]
+	elsewhere := heldForTest(t).Requirements()[0]
 	if elsewhere.Done != "" || elsewhere.Fix != "tofu login llm claude-sub" {
 		t.Fatalf("bound to claude-sub with codex alone signed in, step 1 is %+v, want it to ask for the claude-sub sign-in", elsewhere)
 	}
 
 	bindOrchestrator(t, "codex-sub/gpt-5.6-sol")
-	if done := heldForTest(t).requirements()[0].Done; done != "codex-sub · gpt-5.6-sol" {
+	if done := heldForTest(t).Requirements()[0].Done; done != "codex-sub · gpt-5.6-sol" {
 		t.Fatalf("bound to codex with codex signed in, step 1 reads done %q", done)
 	}
 }
@@ -225,11 +227,11 @@ func bindOrchestrator(t *testing.T, slug string) {
 
 func TestAWireWithNoCredentialIsNeverOffered(t *testing.T) {
 	testkit.EmptyHome(t)
-	if wires := heldForTest(t).wires(); len(wires) != 0 {
+	if wires := heldForTest(t).Wires(); len(wires) != 0 {
 		t.Fatalf("wires %+v with nothing signed in", wires)
 	}
 	storeCredential(t, cred.CodexSub)
-	codexAlone := heldForTest(t).wires()
+	codexAlone := heldForTest(t).Wires()
 	if len(codexAlone) != 1 || codexAlone[0].Name != "codex" || codexAlone[0].Model != "gpt-5.6-sol" {
 		t.Fatalf("wires %+v with only codex signed in, want codex and its default model alone", codexAlone)
 	}
@@ -237,7 +239,7 @@ func TestAWireWithNoCredentialIsNeverOffered(t *testing.T) {
 		t.Fatalf("the codex wire reports provider %q, want codex-sub, the subscription form the frame header composes", codexAlone[0].Provider)
 	}
 	storeCredential(t, cred.ClaudeSub)
-	both := heldForTest(t).wires()
+	both := heldForTest(t).Wires()
 	if len(both) != 2 || both[0].Name != "anthropic" || both[0].Model != "claude-opus-5" || both[1].Name != "codex" {
 		t.Fatalf("wires %+v with both signed in", both)
 	}
@@ -251,7 +253,7 @@ func TestLiveAppRunsATurnOnEachWire(t *testing.T) {
 	if key, err := jev.TypeSafeKey("../../.env"); err == nil {
 		t.Setenv(sys.TypeSafeKeyName, key)
 	}
-	offered := heldForTest(t).wires()
+	offered := heldForTest(t).Wires()
 	if len(offered) != 2 {
 		t.Fatalf("wires %+v, want both subscriptions signed in", offered)
 	}
@@ -262,16 +264,16 @@ func TestLiveAppRunsATurnOnEachWire(t *testing.T) {
 				Repo:   filepath.Base(dir),
 				Branch: "scratch",
 				Wires:  func() []tui.Wire { return []tui.Wire{wire} },
-				Quota:  heldForTest(t).quota,
+				Quota:  heldForTest(t).Quota,
 			})
 			app.Init()
 			app.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
-			app.Update(heldForTest(t).quota())
+			app.Update(heldForTest(t).Quota())
 
 			task := "create notes.txt holding the single word ready, then read it back and say what it holds"
 			app.Update(tui.Event{Kind: tui.EventText, Text: task})
 			var turned eventLog
-			newAppSession(dir, openAppWire, nil, time.Now, sessionResume{}).run(t.Context(), tui.Pick{Wire: wire.Name}, task, turned.add)
+			newAppSession(dir, wiring.OpenWire, nil, time.Now, sessionResume{}).run(t.Context(), tui.Pick{Wire: wire.Name}, task, turned.add)
 			answered := ""
 			for _, event := range turned.all() {
 				if event.Model != "" {
@@ -357,7 +359,7 @@ func TestLoginTypeSafeStoresTheKeyInTheDatabaseAndPrintsNoMoreThanItsTail(t *tes
 	jevStub(t, http.StatusOK, loginReachableReply, nil)
 
 	var out, errOut bytes.Buffer
-	if code := loginVerb([]string{"classifier", typeSafeName}, strings.NewReader(key+"\r\n"), &out, &errOut); code != output.ExitOK {
+	if code := loginverb.Verb([]string{"classifier", wiring.TypeSafeName}, strings.NewReader(key+"\r\n"), &out, &errOut); code != output.ExitOK {
 		t.Fatalf("login typesafe exited %d: %s", code, errOut.String())
 	}
 	stored, err := sys.StoredKeys()
@@ -368,14 +370,14 @@ func TestLoginTypeSafeStoresTheKeyInTheDatabaseAndPrintsNoMoreThanItsTail(t *tes
 		t.Fatalf("login left a .env under %s: %v", home, err)
 	}
 	var status bytes.Buffer
-	if code := loginVerb([]string{"--status"}, nil, &status, &errOut); code != output.ExitOK {
+	if code := loginverb.Verb([]string{"--status"}, nil, &status, &errOut); code != output.ExitOK {
 		t.Fatalf("login --status exited %d: %s", code, errOut.String())
 	}
 	if !strings.Contains(status.String(), key[len(key)-4:]) {
 		t.Errorf("login --status does not show the last four characters:\n%s", status.String())
 	}
 	var checked bytes.Buffer
-	doctor(nil, &checked, &errOut)
+	doctorverb.Verb(nil, &checked, &errOut)
 	if !strings.Contains(strings.Join(strings.Fields(checked.String()), " "), "jev key · credential store") {
 		t.Errorf("tofu doctor does not say the key came from the credential store:\n%s", checked.String())
 	}
@@ -389,7 +391,7 @@ func TestLoginBraveStoresTheSearchKeyInTheDatabase(t *testing.T) {
 	t.Setenv(sys.BraveSearchKeyName, "")
 	const key = "Xq2Lp9Rz4Tn8Vw3Ks6Gw1"
 	var out, errOut bytes.Buffer
-	if code := loginVerb([]string{"search", "brave"}, strings.NewReader(key+"\n"), &out, &errOut); code != output.ExitOK {
+	if code := loginverb.Verb([]string{"search", "brave"}, strings.NewReader(key+"\n"), &out, &errOut); code != output.ExitOK {
 		t.Fatalf("login brave exited %d: %s", code, errOut.String())
 	}
 	stored, err := sys.StoredKeys()
@@ -400,10 +402,10 @@ func TestLoginBraveStoresTheSearchKeyInTheDatabase(t *testing.T) {
 
 	storeGateKey(t, gateKeyForTests)
 	var status, asJSON bytes.Buffer
-	if code := loginVerb([]string{"--status"}, nil, &status, &errOut); code != output.ExitOK {
+	if code := loginverb.Verb([]string{"--status"}, nil, &status, &errOut); code != output.ExitOK {
 		t.Fatalf("login --status exited %d: %s", code, errOut.String())
 	}
-	if code := loginVerb([]string{"--status", "--json"}, nil, &asJSON, &errOut); code != output.ExitOK {
+	if code := loginverb.Verb([]string{"--status", "--json"}, nil, &asJSON, &errOut); code != output.ExitOK {
 		t.Fatalf("login --status --json exited %d: %s", code, errOut.String())
 	}
 	tails := []string{key[len(key)-4:], gateKeyForTests[len(gateKeyForTests)-4:]}
@@ -528,7 +530,7 @@ func TestSettingsNamesEveryProviderAndTheSourceThatDecidedIt(t *testing.T) {
 	storeCredential(t, cred.CodexSub)
 	storeGateKey(t, gateKeyForTests)
 
-	providers := heldForTest(t).providers()
+	providers := heldForTest(t).Providers()
 	if len(providers) != 4 {
 		t.Fatalf("providers %+v, want four rows", providers)
 	}
@@ -538,7 +540,7 @@ func TestSettingsNamesEveryProviderAndTheSourceThatDecidedIt(t *testing.T) {
 		}
 	}
 	screen := settingsScreen(t, providers)
-	for _, name := range []string{string(cred.ClaudeSub), openRouterName, "jev", string(cred.CodexSub)} {
+	for _, name := range []string{string(cred.ClaudeSub), wiring.OpenRouterName, "jev", string(cred.CodexSub)} {
 		if !strings.Contains(screen, name) {
 			t.Errorf("the settings view does not name %q:\n%s", name, screen)
 		}
@@ -552,7 +554,7 @@ func TestProvidersHoldNoMoreOfTheKeyThanItsTail(t *testing.T) {
 	storeGateKey(t, key)
 
 	var held string
-	for _, provider := range heldForTest(t).providers() {
+	for _, provider := range heldForTest(t).Providers() {
 		held += provider.Name + provider.State + provider.Key + provider.Fix + provider.Source
 	}
 	if !strings.Contains(held, key[len(key)-4:]) {
@@ -574,13 +576,13 @@ func TestAProviderThatCannotBeReadSaysSo(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 	t.Setenv(sys.TypeSafeKeyName, "")
 
-	providers := heldForTest(t).providers()
+	providers := heldForTest(t).Providers()
 	if len(providers) != 4 {
 		t.Fatalf("providers %+v, want four rows", providers)
 	}
 	said := providers[0].State + providers[0].Fix
-	if !strings.HasPrefix(said, unreadableSource) {
-		t.Errorf("the anthropic row says %q, want it to start with %q", said, unreadableSource)
+	if !strings.HasPrefix(said, wiring.UnreadableSource) {
+		t.Errorf("the anthropic row says %q, want it to start with %q", said, wiring.UnreadableSource)
 	}
 	t.Log("\n" + settingsScreen(t, providers))
 }
@@ -656,12 +658,12 @@ func stubbedTurn(dir string, model turn.Model, answers ...bool) tui.Turn {
 
 var stubSelection = models.Model{ID: "stub-model", Windows: []string{"stub"}}
 
-func wireOn(model turn.Model) appWire {
-	return appWire{held: &accounts{fixed: model, now: time.Now}, spend: turn.SpendSubscription, selected: stubSelection}
+func wireOn(model turn.Model) wiring.Wire {
+	return wiring.Wire{Held: wiring.FixedAccounts(model), Spend: turn.SpendSubscription, Selected: stubSelection}
 }
 
 func resumedTurn(dir string, model turn.Model, person chan tui.Answer, resumed sessionResume) tui.Turn {
-	return newAppSession(dir, func(wiring.RunOpts) (appWire, error) {
+	return newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) {
 		return wireOn(model), nil
 	}, person, time.Now, resumed).run
 }
@@ -1260,7 +1262,7 @@ func TestASubAgentRunningForTenSecondsIsHandedToTheViewAsTenSeconds(t *testing.T
 		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent did it"}},
 	)
 	driver := driveApp(t)
-	newAppSession(dir, func(wiring.RunOpts) (appWire, error) {
+	newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) {
 		return wireOn(model), nil
 	}, nil, model.clock, sessionResume{}).run(t.Context(), onTheSubscription, "hand the note to a sub-agent", driver.emit)
 
@@ -1293,7 +1295,7 @@ func subAgentHeldInsideOneCall(t *testing.T) *appDriver {
 		clockedStep{waited: orchestratorHeldFor, holds: heldInsideOneCall, decision: reply("the sub-agent did it")},
 	)
 	driver := driveApp(t)
-	newAppSession(dir, func(wiring.RunOpts) (appWire, error) {
+	newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) {
 		return wireOn(model), nil
 	}, nil, model.clock, sessionResume{}).run(t.Context(), onTheSubscription, "hand the note to a sub-agent", driver.emit)
 	return driver
@@ -1687,7 +1689,7 @@ func TestAFailedWriteIsNotAnEdit(t *testing.T) {
 
 func answeredByKeys(t *testing.T, dir string, model turn.Model, keys ...string) []tui.Event {
 	t.Helper()
-	live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
+	live := newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
 	t.Cleanup(live.Close)
 	app := tui.New(tui.Options{
 		Repo:  "scratch",
@@ -2195,7 +2197,7 @@ func TestTofuDriveTakesNoDocsAndTheAppItDrivesOffersNoDocs(t *testing.T) {
 			t.Fatalf("tofu drive refused %v: %s", arm.args, strings.SplitN(refused.String(), "\n", 2)[0])
 		}
 		model := &offeredModel{}
-		live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
+		live := newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
 		live.engine.arms = plan.arms
 		driver := driveApp(t)
 		live.run(t.Context(), onTheSubscription, "say done", driver.emit)
@@ -2475,8 +2477,8 @@ func TestBrowserModelResolvesFromTheSettingAndRefusesAnUnknownSlug(t *testing.T)
 				t.Fatalf("%v resolves to %T %q, %v, want the turn's own model, said so", arm.set, model, said, err)
 			}
 		default:
-			named, opened := model.(subscriptionModel)
-			if err != nil || !opened || named.opts.Model != arm.slug || named.opts.Wire != arm.wire || said != arm.slug+" from "+arm.from {
+			named, opened := model.(wiring.SubscriptionModel)
+			if err != nil || !opened || named.Opts.Model != arm.slug || named.Opts.Wire != arm.wire || said != arm.slug+" from "+arm.from {
 				t.Fatalf("%v resolves to %+v %q, %v, want %s on --wire %s from %s", arm.set, model, said, err, arm.slug, arm.wire, arm.from)
 			}
 		}
@@ -2561,8 +2563,8 @@ func TestABrowserRunTeachesItsHostARecipeTheNextRunIsGivenUntilItFailsTwice(t *t
 	built = append(slices.DeleteFunc(built, func(tool contract.Tool) bool { return strings.HasPrefix(tool.Name(), "browser_") }),
 		fakeBrowser{"browser_tabs", &page}, fakeBrowser{"browser_observe", &page}, fakeBrowser{"browser_act", &page}, fakeBrowser{"browser_motion", &page})
 	script := &scriptedBrowserRuns{}
-	noWire := func(wiring.RunOpts) (appWire, error) {
-		return appWire{}, errors.New("the browser sub-agent inherits the scripted model")
+	noWire := func(wiring.RunOpts) (wiring.Wire, error) {
+		return wiring.Wire{}, errors.New("the browser sub-agent inherits the scripted model")
 	}
 	_, spawner := mustConfig(t, opts, built, runtime{model: script, spend: turn.SpendSubscription, open: noWire})
 	answer := func(text string) llm.Decision {
@@ -2662,14 +2664,14 @@ func TestFiftyStepsOnOneAccountPollItsQuotaAtMostTwice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	held := &accounts{dir: t.TempDir(), provider: cred.CodexSub, spec: spec, store: store, modelID: "gpt-5.6-sol", now: time.Now,
-		urls: map[quota.Provider]string{quota.CodexSub: server.URL}}
-	pinned, err := held.pick(context.Background())
+	held := &wiring.Accounts{Dir: t.TempDir(), Provider: cred.CodexSub, Spec: spec, Store: store, ModelID: "gpt-5.6-sol", Now: time.Now,
+		URLs: map[quota.Provider]string{quota.CodexSub: server.URL}}
+	pinned, err := held.Pick(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 	for range 50 {
-		if _, _, err := held.next(context.Background(), pinned); err != nil {
+		if _, _, err := held.Next(context.Background(), pinned); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -2697,7 +2699,7 @@ data: {"type":"response.completed","response":{"id":"resp_1","model":"gpt-5.6-so
 	if err != nil {
 		t.Fatal(err)
 	}
-	decision, err := codexTurn{wire: wire}.Ask(context.Background(), llm.Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: "go"}}})
+	decision, err := wiring.CodexTurn{Wire: wire}.Ask(context.Background(), llm.Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: "go"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2712,7 +2714,7 @@ data: {"type":"response.completed","response":{"id":"resp_1","model":"gpt-5.6-so
 		t.Fatal(err)
 	}
 	store := sessionstore.NewStore(t.TempDir())
-	config, _ := mustConfig(t, opts, built, runtime{model: codexTurn{wire: wire}, spend: turn.SpendSubscription, sessions: store})
+	config, _ := mustConfig(t, opts, built, runtime{model: wiring.CodexTurn{Wire: wire}, spend: turn.SpendSubscription, sessions: store})
 	row, err := turn.Run(context.Background(), config)
 	if err != nil {
 		t.Fatal(err)
@@ -2732,8 +2734,8 @@ data: {"type":"response.completed","response":{"id":"resp_1","model":"gpt-5.6-so
 func TestASubAgentAskingForAnEffortOnTheOpenrouterKeySpawnsWithoutItAndSaysSoOnce(t *testing.T) {
 	var said []string
 	orchestrator := models.Model{Provider: models.Anthropic, ID: "claude-opus-5"}
-	refuse := func(wiring.RunOpts) (appWire, error) {
-		return appWire{}, errors.New("the opener must not open a wire of its own")
+	refuse := func(wiring.RunOpts) (wiring.Wire, error) {
+		return wiring.Wire{}, errors.New("the opener must not open a wire of its own")
 	}
 	run := runtime{orchestrator: orchestrator, notify: func(notice string) { said = append(said, notice) }, open: refuse}
 	open := run.subAgentOpener(wiring.RunOpts{Dir: t.TempDir(), Wire: wiring.WireKey, Model: orchestrator.Slug()})
@@ -2891,7 +2893,7 @@ func TestStoppingTheLeadMidTurnLeavesItsSubAgentRunningToItsReport(t *testing.T)
 	spawnAndRead.ToolCalls = append(spawnAndRead.ToolCalls, llm.ToolCall{ID: "call-read", Name: "read", Arguments: json.RawMessage(`{"path":"note.txt"}`)})
 	firstClose := make(chan struct{})
 	var once sync.Once
-	live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
+	live := newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
 	ran := make(chan struct{})
 	go func() {
 		defer close(ran)

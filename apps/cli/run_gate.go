@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strings"
 
-	judgeverb "tofu/apps/cli/verbs/judge"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	"tofu/internal/host"
@@ -27,9 +26,9 @@ const (
 
 type toolGate struct {
 	client    *jev.Client
-	set       judgeverb.Battery
+	set       wiring.Battery
 	cwd       string
-	rows      judgeverb.RowLedger
+	rows      wiring.RowLedger
 	watch     func(ctx context.Context, tool string, decision turn.GateDecision, err error)
 	decisions int
 	costUSD   float64
@@ -54,28 +53,28 @@ func toolGateOn(dir, log string, keys jev.Keyring) (*toolGate, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := judgeverb.OpenRowLedger(log)
+	rows, err := wiring.OpenRowLedger(log)
 	if err != nil {
 		return nil, err
 	}
 	return &toolGate{client: client, set: set, cwd: dir, rows: rows}, nil
 }
 
-func resolvePoint(point, dir string) (judgeverb.Battery, error) {
-	set, err := judgeverb.ResolveLibrary(point, dir)
+func resolvePoint(point, dir string) (wiring.Battery, error) {
+	set, err := wiring.ResolveLibrary(point, dir)
 	if err != nil {
-		return judgeverb.Battery{}, err
+		return wiring.Battery{}, err
 	}
-	pol, origin, err := judgeverb.LoadRulePoint(point, dir)
+	pol, origin, err := wiring.LoadRulePoint(point, dir)
 	if err != nil {
-		return judgeverb.Battery{}, err
+		return wiring.Battery{}, err
 	}
 	if err := thresholdsInRange(pol, set); err != nil {
-		return judgeverb.Battery{}, err
+		return wiring.Battery{}, err
 	}
-	resolution, err := judgeverb.ResolveRuleMode(pol)
+	resolution, err := wiring.ResolveRuleMode(pol)
 	if err != nil {
-		return judgeverb.Battery{}, err
+		return wiring.Battery{}, err
 	}
 	pol = resolution.Rule
 	set.Rule, set.Mode = &pol, resolution.Mode
@@ -86,7 +85,7 @@ func resolvePoint(point, dir string) (judgeverb.Battery, error) {
 	return set, nil
 }
 
-func thresholdsInRange(r gate.Rule, set judgeverb.Battery) error {
+func thresholdsInRange(r gate.Rule, set wiring.Battery) error {
 	topRisk := 0.0
 	for _, q := range set.Questions {
 		if q.ID == r.RiskQuestion {
@@ -151,7 +150,7 @@ func (g *toolGate) ask(ctx context.Context, request turn.GateRequest) (ledger.Ro
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	written := judgeverb.RowInput{TurnID: request.TurnID, StateBuilder: builder, Fingerprint: state.FingerprintOf(call)}
+	written := wiring.RowInput{TurnID: request.TurnID, StateBuilder: builder, Fingerprint: state.FingerprintOf(call)}
 	builtState := json.RawMessage(built)
 	if own := turn.OwnShellsCalled(ctx, request); len(own) > 0 {
 		return g.rows.AppendOwnShell(builtState, g.set, written, own)
@@ -166,7 +165,7 @@ func (g *toolGate) ask(ctx context.Context, request turn.GateRequest) (ledger.Ro
 		return row, jevUnavailable{err}
 	}
 	written.Decision = &decision
-	written.Answers = judgeverb.ToLedgerAnswers(g.set.QuestionsVersion, decision.Answers)
+	written.Answers = wiring.ToLedgerAnswers(g.set.QuestionsVersion, decision.Answers)
 	row, err := g.rows.Append(builtState, g.set, written)
 	g.costUSD += row.Charge.USD
 	return row, err

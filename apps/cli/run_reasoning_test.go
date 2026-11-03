@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/wire/codex"
 	"tofu/internal/store/session"
@@ -66,7 +67,7 @@ func TestAReasoningItemFromStepOneReachesTheStepTwoCodexRequestAndTheStoredRow(t
 	if err != nil {
 		t.Fatalf("building the codex wire: %v", err)
 	}
-	model := codexTurn{wire: wire}
+	model := wiring.CodexTurn{Wire: wire}
 
 	dir := t.TempDir()
 	opts := armOpts(t, "--tools", toolSetThree)

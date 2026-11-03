@@ -1,4 +1,4 @@
-package main
+package login
 
 import (
 	"math"
@@ -9,6 +9,7 @@ import (
 
 	"tofu/apps/cli/output"
 	"tofu/apps/cli/page"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
 )
@@ -18,33 +19,33 @@ const (
 	cardInset  = "  │ "
 )
 
-func stateLook(s accountState) (cli.Verdict, string) {
+func stateLook(s host.AccountState) (cli.Verdict, string) {
 	switch s {
-	case stateInUse:
+	case host.AccountInUse:
 		return cli.Verdict{Mark: cli.Active, Text: "in use"}, ""
-	case stateStandby:
+	case host.AccountStandby:
 		return cli.Verdict{Mark: cli.Idle, Text: "standby"}, ""
-	case stateUnchecked:
+	case host.AccountUnchecked:
 		return cli.Verdict{Mark: cli.Idle, Text: "not checked"}, ""
-	case stateSpent:
+	case host.AccountSpent:
 		return cli.Verdict{Mark: cli.Warn, Text: "spent"}, ""
-	case stateRateLimited:
+	case host.AccountRateLimited:
 		return cli.Verdict{Mark: cli.Warn, Text: "rate limited"}, ""
-	case stateUnread:
+	case host.AccountUnread:
 		return cli.Verdict{Mark: cli.Warn, Text: "usage unread"}, ""
-	case stateSetAside:
+	case host.AccountSetAside:
 		return cli.Verdict{Mark: cli.Fail, Text: "set aside"}, "set aside by hand"
-	case stateRefreshFailed:
+	case host.AccountRefreshFailed:
 		return cli.Verdict{Mark: cli.Fail, Text: "set aside"}, ""
-	case stateExpired:
+	case host.AccountExpired:
 		return cli.Verdict{Mark: cli.Fail, Text: "expired"}, "login expired, sign in again"
-	case stateRefused:
+	case host.AccountRefused:
 		return cli.Verdict{Mark: cli.Fail, Text: "signed out"}, "the token was refused, sign in again"
 	}
 	panic("tofu login: unknown account state " + string(s))
 }
 
-func statusLines(page cli.Page, data statusData, now time.Time) []string {
+func StatusLines(page cli.Page, data host.Accounts, now time.Time) []string {
 	signedIn, attention := 0, 0
 	var blocks [][]string
 	for _, sub := range data.Subscriptions {
@@ -73,11 +74,11 @@ func statusLines(page cli.Page, data statusData, now time.Time) []string {
 		facts = []string{strconv.Itoa(signedIn) + " signed in"}
 	}
 	lines := append(page.Title("Accounts", facts, verdict), "", page.Section("language model", cli.Verdict{}))
-	lines = append(lines, separated(append(blocks, keyBlocks(page, data.Keys, roleLLM, now)...))...)
+	lines = append(lines, separated(append(blocks, keyBlocks(page, data.Keys, host.RoleLLM, now)...))...)
 	for _, group := range []struct {
 		title string
-		of    role
-	}{{"classifier · jev, required", roleClassifier}, {"search", roleSearch}} {
+		of    host.AccountRole
+	}{{"classifier · jev, required", host.RoleClassifier}, {"search", host.RoleSearch}} {
 		lines = append(lines, "", page.Section(group.title, cli.Verdict{}))
 		lines = append(lines, separated(keyBlocks(page, data.Keys, group.of, now))...)
 	}
@@ -103,20 +104,20 @@ func cardFacts(page cli.Page, facts []cli.Fact) []string {
 	return lines
 }
 
-func keyBlocks(page cli.Page, keys []keyStatus, of role, now time.Time) [][]string {
+func keyBlocks(page cli.Page, keys []host.KeyStatus, of host.AccountRole, now time.Time) [][]string {
 	var blocks [][]string
 	var unset []cli.Row
 	for _, key := range keys {
 		if key.Role != of {
 			continue
 		}
-		facts := keyFactsOf(key.Role, key.Provider)
+		facts := wiring.KeyFactsOf(key.Role, key.Provider)
 		if key.Key == "" {
-			unset = append(unset, cli.Row{Mark: cli.Idle, Cells: []string{facts.name, "not set"}, Hint: facts.hint()})
+			unset = append(unset, cli.Row{Mark: cli.Idle, Cells: []string{facts.Name, "not set"}, Hint: facts.Hint()})
 			continue
 		}
-		head := page.Subject(facts.name) + cli.Gap + page.Label(key.Key)
-		body := cardFacts(page, []cli.Fact{{Label: "use", Text: facts.use}, {Label: "calls", Text: callsText(key, now)}, standingFact(key, now)})
+		head := page.Subject(facts.Name) + cli.Gap + page.Label(key.Key)
+		body := cardFacts(page, []cli.Fact{{Label: "use", Text: facts.Use}, {Label: "calls", Text: callsText(key, now)}, standingFact(key, now)})
 		blocks = append(blocks, page.Card(head, cli.Verdict{Mark: cli.Done, Text: "set"}, body))
 	}
 	if len(unset) > 0 {
@@ -125,7 +126,7 @@ func keyBlocks(page cli.Page, keys []keyStatus, of role, now time.Time) [][]stri
 	return blocks
 }
 
-func callsText(key keyStatus, now time.Time) string {
+func callsText(key host.KeyStatus, now time.Time) string {
 	if key.Calls == 0 {
 		return "none yet"
 	}
@@ -141,7 +142,7 @@ func callsText(key keyStatus, now time.Time) string {
 	return text
 }
 
-func standingFact(key keyStatus, now time.Time) cli.Fact {
+func standingFact(key host.KeyStatus, now time.Time) cli.Fact {
 	if failure := key.LastError; failure != nil && failure.At.After(key.LastUsedAt) {
 		return cli.Fact{Label: "error", Text: strconv.Itoa(failure.Status) + " " + failure.What + " · " + widget.Until(now.Sub(failure.At)) + " ago"}
 	}
@@ -179,22 +180,22 @@ func significantDecimals(usd float64) int {
 	return decimals + 1
 }
 
-func lastRefreshFailed(account accountStatus) bool {
+func lastRefreshFailed(account host.AccountStatus) bool {
 	tries := account.Attempts
 	return len(tries) > 0 && tries[len(tries)-1].Status != http.StatusOK
 }
 
-func accountCard(page cli.Page, source string, account accountStatus, now time.Time) ([]string, bool) {
+func accountCard(page cli.Page, source string, account host.AccountStatus, now time.Time) ([]string, bool) {
 	verdict, reason := stateLook(account.State)
 	id := strconv.FormatInt(account.ID, 10)
 	login, hint := account.Login, ""
 	switch {
-	case account.State == stateSetAside:
+	case account.State == host.AccountSetAside:
 		login, hint = reason, "tofu login --enable "+id
-	case account.State == stateRefreshFailed, account.State == stateRefused && lastRefreshFailed(account):
-		hint = loginHint(source)
+	case account.State == host.AccountRefreshFailed, account.State == host.AccountRefused && lastRefreshFailed(account):
+		hint = wiring.LoginHint(source)
 	case reason != "":
-		login, hint = reason, loginHint(source)
+		login, hint = reason, wiring.LoginHint(source)
 	case !account.ReloginBy.IsZero():
 		login += " · re-login by " + account.ReloginBy.UTC().Format(reloginDay)
 	}

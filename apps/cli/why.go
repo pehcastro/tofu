@@ -12,7 +12,7 @@ import (
 
 	"tofu/apps/cli/output"
 	"tofu/apps/cli/page"
-	judgeverb "tofu/apps/cli/verbs/judge"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
 	sessionstore "tofu/internal/store/session"
@@ -242,7 +242,7 @@ func blockingQuestion(row ledger.Row) string {
 	if row.Reason == nil || !row.Reason.Blocked || row.Policy == "" {
 		return ""
 	}
-	pol, _, err := judgeverb.LoadRulePoint(fmt.Sprintf("%s@%d", row.Policy, row.PolicyVersion), "")
+	pol, _, err := wiring.LoadRulePoint(fmt.Sprintf("%s@%d", row.Policy, row.PolicyVersion), "")
 	if err != nil {
 		return ""
 	}

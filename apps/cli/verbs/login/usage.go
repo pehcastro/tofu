@@ -1,4 +1,4 @@
-package main
+package login
 
 import (
 	"bytes"
@@ -19,6 +19,7 @@ import (
 
 	"tofu/apps/cli/output"
 	"tofu/apps/cli/page"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
@@ -29,22 +30,15 @@ import (
 )
 
 const (
-	usageFlags            = "tofu usage [--history] [--json]"
-	historyFlag           = "--history"
-	usageNoWindowReported = "no window is reporting use"
-	usageDay              = 24 * time.Hour
-	usageRunOutFormat     = "Mon 2 Jan 15:04"
-	windowScopeMark       = ":"
+	UsageFlags        = "tofu usage [--history] [--json]"
+	historyFlag       = "--history"
+	usageDay          = 24 * time.Hour
+	usageRunOutFormat = "Mon 2 Jan 15:04"
+	windowScopeMark   = ":"
 )
 
-const (
-	usageServing   = host.UsageServing
-	usageAttention = host.UsageAttention
-	usageNone      = host.UsageNone
-)
-
-func usageVerb(args []string, out, errOut io.Writer) int {
-	o := output.Verb{Name: "usage", UsageLine: usageFlags, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
+func UsageVerb(args []string, out, errOut io.Writer) int {
+	o := output.Verb{Name: "usage", UsageLine: UsageFlags, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	for _, arg := range args {
 		if arg != output.JSONFlag && arg != historyFlag {
 			return o.Usage(errors.New("unknown argument " + strconv.Quote(arg)))
@@ -116,23 +110,23 @@ func readClassifierSpend(now time.Time) (classifierSpend, error) {
 }
 
 func usageFail(errOut io.Writer, err error) int {
-	return printFailure(errOut, output.ExitVerdict, "tofu usage: "+err.Error(), "")
+	return output.PrintFailure(errOut, output.ExitVerdict, "tofu usage: "+err.Error(), "")
 }
 
 func readUsage(now time.Time) (host.UsageReport, error) {
-	results, err := pollCredentials(context.Background(), time.Now, nil)
+	results, err := wiring.PollCredentials(context.Background(), time.Now, nil)
 	if err != nil {
 		return host.UsageReport{}, err
 	}
-	answer := host.UsageReport{State: usageServing, Providers: credentialReports(results, now), SpendLimit: quota.SpendLimitLine()}
+	answer := host.UsageReport{State: host.UsageServing, Providers: wiring.CredentialReports(results, now), SpendLimit: quota.SpendLimitLine()}
 	if len(results) == 0 {
-		answer.State, answer.Missing = usageNone, doctorBlockers()
+		answer.State, answer.Missing = host.UsageNone, wiring.DoctorBlockers()
 		return answer, nil
 	}
 	fullest := -1.0
 	for _, provider := range answer.Providers {
-		if provider.State != usageServingState {
-			answer.State = usageAttention
+		if provider.State != wiring.UsageServingState {
+			answer.State = host.UsageAttention
 		}
 		for _, window := range provider.Windows {
 			if window.Reported && window.Used > fullest {
@@ -144,16 +138,16 @@ func readUsage(now time.Time) (host.UsageReport, error) {
 	return answer, err
 }
 
-func windowSpends(results []pollResult, now time.Time) ([]host.WindowSpend, int, error) {
+func windowSpends(results []wiring.PollResult, now time.Time) ([]host.WindowSpend, int, error) {
 	var spends []host.WindowSpend
 	earliest := now
 	for _, result := range results {
-		for _, window := range result.report.Windows {
+		for _, window := range result.Report.Windows {
 			since := window.ResetsAt.Add(-window.Duration)
 			if window.Duration == 0 || window.ResetsAt.IsZero() || !window.Used.Reported || !since.Before(now) {
 				continue
 			}
-			if spends = append(spends, host.WindowSpend{Account: quotaAccount(result.row), Window: window.ID, Since: since, Row: result.row}); since.Before(earliest) {
+			if spends = append(spends, host.WindowSpend{Account: wiring.QuotaAccount(result.Row), Window: window.ID, Since: since, Row: result.Row}); since.Before(earliest) {
 				earliest = since
 			}
 		}
@@ -161,7 +155,7 @@ func windowSpends(results []pollResult, now time.Time) ([]host.WindowSpend, int,
 	if len(spends) == 0 {
 		return nil, 0, nil
 	}
-	readings, err := quotaReadingDir()
+	readings, err := sys.QuotaDir()
 	if err != nil {
 		return nil, 0, err
 	}
@@ -181,11 +175,11 @@ func windowSpends(results []pollResult, now time.Time) ([]host.WindowSpend, int,
 }
 
 func tofuSpend(spends []host.WindowSpend, earliest, now time.Time) (int, error) {
-	registry, err := modelRegistry()
+	registry, err := wiring.ModelRegistry()
 	if err != nil {
 		return 0, err
 	}
-	weights, err := pricedByProvider(registry)
+	weights, err := wiring.PricedByProvider(registry)
 	if err != nil {
 		return 0, err
 	}
@@ -315,18 +309,18 @@ func windowPace(page cli.Page, spends []host.WindowSpend, account, window string
 	if spend.Requests == 0 {
 		return cli.Fact{Text: page.Label(text + "; tofu spent nothing")}, true
 	}
-	return cli.Fact{Text: page.Label(text + "; tofu " + weighted(spend.Weighted) + " weighted, " + weighted(spend.PerDay) + "/day")}, true
+	return cli.Fact{Text: page.Label(text + "; tofu " + widget.Weighted(spend.Weighted) + " weighted, " + widget.Weighted(spend.PerDay) + "/day")}, true
 }
 
 func usagePage(page cli.Page, report host.UsageReport, now time.Time) []string {
 	verdict := cli.Verdict{Mark: cli.Done, Text: string(report.State)}
 	switch report.State {
-	case usageServing:
-	case usageAttention:
+	case host.UsageServing:
+	case host.UsageAttention:
 		verdict.Mark = cli.Warn
-	case usageNone:
+	case host.UsageNone:
 		lines := append(page.Title("Usage", nil, cli.Verdict{Mark: cli.Idle, Text: "none signed in"}), "")
-		return append(lines, blockerRows(page, report.Missing)...)
+		return append(lines, wiring.BlockerRows(page, report.Missing)...)
 	}
 	lines := page.Title("Usage", []string{strconv.Itoa(len(report.Providers)) + " signed in"}, verdict)
 	for i, provider := range report.Providers {
@@ -334,14 +328,14 @@ func usagePage(page cli.Page, report host.UsageReport, now time.Time) []string {
 		if i == 0 || provider.Provider != report.Providers[i-1].Provider {
 			lines = append(lines, page.Section(provider.Provider, cli.Verdict{}))
 		}
-		cardVerdict := cli.Verdict{Mark: cli.Active, Text: usageServingState}
+		cardVerdict := cli.Verdict{Mark: cli.Active, Text: wiring.UsageServingState}
 		var facts []cli.Fact
-		if provider.State != usageServingState {
-			cardVerdict = cli.Verdict{Mark: cli.Warn, Text: string(usageAttention)}
+		if provider.State != wiring.UsageServingState {
+			cardVerdict = cli.Verdict{Mark: cli.Warn, Text: string(host.UsageAttention)}
 			facts = append(facts, cli.Fact{Label: "state", Text: provider.State})
 		}
 		for _, window := range provider.Windows {
-			text := page.Label(windowPercent(window))
+			text := page.Label(wiring.WindowPercent(window))
 			if window.Reported {
 				text = page.Bar(window.Used)
 				if left := window.ResetsAt.Sub(now); left > 0 {

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"tofu/apps/cli/wiring"
 	"tofu/internal/judge/gate"
 	"tofu/internal/models/classifiers/core"
 )
@@ -66,7 +67,7 @@ func separableRisk(corpus calibrationCorpus, blockRisk, proceedRisk float64) map
 
 func calibrationRule(t *testing.T) gate.Rule {
 	t.Helper()
-	rule, _, err := LoadRulePoint(runGatePoint, "")
+	rule, _, err := wiring.LoadRulePoint(runGatePoint, "")
 	if err != nil {
 		t.Fatal(err)
 	}

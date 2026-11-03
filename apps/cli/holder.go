@@ -33,13 +33,10 @@ func runHub(dir string, say func(string)) error {
 	if err != nil {
 		return err
 	}
-	open := openAppWire
-	if deck != nil {
-		open = driveWire(deck)
-	} else {
-		held := holdStore()
-		defer held.close()
-		defer keepAccountsAlive(held, say, say)()
+	if deck == nil {
+		held := wiring.HoldStore()
+		defer held.Close()
+		defer wiring.KeepAccountsAlive(held, say, say)()
 	}
 	launch := launchOf(dir, sessionResume{}, false)
 	if launch.note != "" {
@@ -50,11 +47,12 @@ func runHub(dir string, say func(string)) error {
 		return err
 	}
 	home, _ := os.UserHomeDir()
-	safe.Go(crashTold(dir, say), "session sweep", func() { sweepSessions(dir, say) })
+	told := wiring.CrashTold(dir, say)
+	safe.Go(told, "session sweep", func() { sweepSessions(dir, say) })
 	hostEnded := make(chan struct{})
 	defer close(hostEnded)
-	safe.Go(crashTold(dir, say), "scratch sweep", func() { shellsverb.SweepScratch(dir, say, hostEnded) })
-	return host.RunHub(dir, crashTold(dir, say), say, func(id string, projectTurn *sync.Mutex) (*host.Host, func(), []string) {
+	safe.Go(told, "scratch sweep", func() { shellsverb.SweepScratch(dir, say, hostEnded) })
+	return host.RunHub(dir, told, say, func(id string, projectTurn *sync.Mutex) (*host.Host, func(), []string) {
 		resumed, unrecorded, err := hostedCarry(id)
 		switch {
 		case err != nil:
@@ -66,7 +64,7 @@ func runHub(dir string, say func(string)) error {
 		if shells != nil {
 			shells = shells.ForSession(id)
 		}
-		engine := &appEngine{dir: dir, open: open, tabs: tools.NewBrowserTabs(home), places: places, arms: wiring.RunOpts{DoneArm: os.Getenv(doneReviewVariable)}}
+		engine := &appEngine{dir: dir, open: deckOpener(deck), tabs: tools.NewBrowserTabs(home), places: places, arms: wiring.RunOpts{DoneArm: os.Getenv(doneReviewVariable)}}
 		live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: shells, Check: shellsverb.CronChecker(dir), Resumed: resumed.hosted(), Unrecorded: unrecorded, ProjectTurn: projectTurn, Now: clock})
 		return live, func() {
 			live.Close()
@@ -89,4 +87,22 @@ func hostedCarry(id string) (resumed sessionResume, unrecorded bool, err error) 
 	}
 	resumed, err = resumeOf(store, id)
 	return resumed, false, err
+}
+
+func wireOpener() wiring.Opener {
+	read := sync.OnceValues(func() (*cassette, error) { return readCassette(os.Getenv(cassetteVariable)) })
+	return func(opts wiring.RunOpts) (wiring.Wire, error) {
+		deck, err := read()
+		if err != nil {
+			return wiring.Wire{}, err
+		}
+		return deckOpener(deck)(opts)
+	}
+}
+
+func deckOpener(deck *cassette) wiring.Opener {
+	if deck == nil {
+		return wiring.OpenWire
+	}
+	return driveWire(deck)
 }

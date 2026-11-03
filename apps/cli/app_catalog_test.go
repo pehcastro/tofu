@@ -13,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"tofu/apps/cli/output"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/ui/tui/app"
@@ -66,12 +67,12 @@ func TestAStaleCatalogReloadsOnceOffTheMainPathAndAFreshOneRunsNothing(t *testin
 	catalog := catalogHome(t)
 	dir := t.TempDir()
 	now := time.Now()
-	if !catalogStale(now) {
+	if !wiring.CatalogStale(now) {
 		t.Fatal("a home with no catalog reads as fresh")
 	}
 	var calls atomic.Int32
 	release := make(chan struct{})
-	app := tui.New(tui.Options{Root: dir, ReloadModels: modelsReload(dir, stubReload(t, catalog, output.ExitOK, &calls, release)), ModelsStale: catalogStale(now)})
+	app := tui.New(tui.Options{Root: dir, ReloadModels: modelsReload(dir, stubReload(t, catalog, output.ExitOK, &calls, release)), ModelsStale: wiring.CatalogStale(now)})
 	began := time.Now()
 	cmd := app.Init()
 	if took := time.Since(began); took > 100*time.Millisecond {
@@ -95,14 +96,14 @@ func TestAStaleCatalogReloadsOnceOffTheMainPathAndAFreshOneRunsNothing(t *testin
 			t.Fatalf("the footer never named %s:\n%s", servedID, app.View().Content)
 		}
 	}
-	if catalogStale(time.Now()) {
+	if wiring.CatalogStale(time.Now()) {
 		t.Fatal("a successful reload left the catalog stale")
 	}
-	if !catalogStale(time.Now().Add(konst.CatalogStaleHours * time.Hour)) {
+	if !wiring.CatalogStale(time.Now().Add(konst.CatalogStaleHours * time.Hour)) {
 		t.Fatalf("the catalog is still fresh after %d hours", konst.CatalogStaleHours)
 	}
 	var again atomic.Int32
-	fresh := tui.New(tui.Options{Root: dir, ReloadModels: modelsReload(dir, stubReload(t, catalog, output.ExitOK, &again, release)), ModelsStale: catalogStale(time.Now())})
+	fresh := tui.New(tui.Options{Root: dir, ReloadModels: modelsReload(dir, stubReload(t, catalog, output.ExitOK, &again, release)), ModelsStale: wiring.CatalogStale(time.Now())})
 	deliver(fresh.Init(), make(chan tea.Msg, 64))
 	time.Sleep(200 * time.Millisecond)
 	if got := again.Load(); got != 0 {
@@ -119,22 +120,22 @@ func TestAFailedReloadRetriesAfterAnHourAndASuccessAfterItStampsFresh(t *testing
 	modelsReload(dir, stubReload(t, catalog, output.ExitVerdict, &calls, released))()
 	now := time.Now()
 	retry := konst.CatalogRetryHours * time.Hour
-	if catalogStale(now) || catalogStale(now.Add(retry-time.Minute)) {
+	if wiring.CatalogStale(now) || wiring.CatalogStale(now.Add(retry-time.Minute)) {
 		t.Fatal("a failed reload is retried before the retry time")
 	}
-	if !catalogStale(now.Add(retry)) {
+	if !wiring.CatalogStale(now.Add(retry)) {
 		t.Fatalf("a failed reload is not retried after %v, though it wrote %s", retry, catalog)
 	}
 	if note := modelsReload(dir, stubReload(t, catalog, output.ExitOK, &calls, released))(); note != "" {
 		t.Fatalf("a model already in the catalog was noted as new: %q", note)
 	}
-	if catalogStale(time.Now().Add(retry + time.Minute)) {
+	if wiring.CatalogStale(time.Now().Add(retry + time.Minute)) {
 		t.Fatal("a success after a failure still waits the retry time instead of the stale time")
 	}
-	if err := os.WriteFile(catalog+reloadStampSuffix, []byte("unknown"), 0o644); err != nil {
+	if err := os.WriteFile(catalog+wiring.ReloadStampSuffix, []byte("unknown"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if !catalogStale(time.Now()) {
+	if !wiring.CatalogStale(time.Now()) {
 		t.Fatal("a stamp with unknown content reads as fresh")
 	}
 }

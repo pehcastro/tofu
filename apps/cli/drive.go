@@ -200,7 +200,6 @@ const (
 	cassetteVariable   = "TOFU_DRIVE_CASSETTE"
 	clockVariable      = "TOFU_DRIVE_CLOCK"
 	requestsVariable   = "TOFU_DRIVE_REQUESTS"
-	cassetteBuild      = "cassette"
 	envOpen            = "<env>"
 	envClose           = "</env>"
 	stdinScript        = "-"
@@ -344,13 +343,13 @@ func readCassette(path string) (*cassette, error) {
 		if len(reply.Deltas) == 0 && reply.Text != "" {
 			reply.Deltas = []string{reply.Text}
 		}
-		decision := llm.Decision{Build: cassetteBuild, Outcome: llm.OutcomeMessage, Content: strings.Join(reply.Deltas, ""), FirstTokenMS: recordedFlight.Milliseconds(),
+		decision := llm.Decision{Build: wiring.CassetteBuild, Outcome: llm.OutcomeMessage, Content: strings.Join(reply.Deltas, ""), FirstTokenMS: recordedFlight.Milliseconds(),
 			Usage: llm.Usage{InputTokens: reply.Usage.Input}, PromptAccounting: llm.PromptExcludesCacheReads,
 			CacheReadTokens: reply.Usage.CacheRead, CacheWriteTokens: reply.Usage.CacheWrite, Thinking: llm.Thinking{Text: reply.Thinking}}
 		for index, one := range reply.Tools {
 			decision.Outcome = llm.OutcomeToolCalls
 			decision.ToolCalls = append(decision.ToolCalls, llm.ToolCall{
-				ID:        fmt.Sprintf("%s_%d_%d", cassetteBuild, number+1, index+1),
+				ID:        fmt.Sprintf("%s_%d_%d", wiring.CassetteBuild, number+1, index+1),
 				Name:      one.Name,
 				Arguments: one.Args,
 			})
@@ -382,7 +381,7 @@ func readCassette(path string) (*cassette, error) {
 			}
 			said.Account = refused.Account
 			if said.Account.Source != "" {
-				said.Account.SignIn = loginHint(said.Account.Source)
+				said.Account.SignIn = wiring.LoginHint(said.Account.Source)
 			}
 			recorded.refused = said
 		}
@@ -404,7 +403,7 @@ func anthropicRefuses(request llm.Request) error {
 		}
 		messages = append(messages, message)
 	}
-	_, err := anthropic.Request{Model: cassetteBuild, System: system, Messages: messages, Tools: request.Tools, ToolChoice: request.ToolChoice}.Encode(true)
+	_, err := anthropic.Request{Model: wiring.CassetteBuild, System: system, Messages: messages, Tools: request.Tools, ToolChoice: request.ToolChoice}.Encode(true)
 	return err
 }
 
@@ -633,13 +632,13 @@ func (c *cassette) images() string {
 	return noRequest
 }
 
-func driveWire(deck *cassette) func(wiring.RunOpts) (appWire, error) {
-	return func(opts wiring.RunOpts) (appWire, error) {
+func driveWire(deck *cassette) wiring.Opener {
+	return func(opts wiring.RunOpts) (wiring.Wire, error) {
 		if deck == nil {
-			return appWire{}, errors.New("tofu drive opens no live wire: name a recorded one with --cassette or " + cassetteVariable)
+			return wiring.Wire{}, errors.New("tofu drive opens no live wire: name a recorded one with --cassette or " + cassetteVariable)
 		}
-		standingIn := models.Model{ID: cassetteBuild, Windows: []string{cassetteBuild}}
-		if chosen, err := chooseModel(opts); err == nil {
+		standingIn := models.Model{ID: wiring.CassetteBuild, Windows: []string{wiring.CassetteBuild}}
+		if chosen, err := wiring.ChooseModel(opts); err == nil {
 			standingIn.Subscription, standingIn.Vision, standingIn.PromptCache = chosen.Subscription, chosen.Vision, chosen.PromptCache
 			if opts.Model != "" {
 				deck.mutex.Lock()
@@ -647,11 +646,7 @@ func driveWire(deck *cassette) func(wiring.RunOpts) (appWire, error) {
 				deck.mutex.Unlock()
 			}
 		}
-		return appWire{
-			held:     &accounts{fixed: deck, now: time.Now},
-			spend:    turn.SpendSubscription,
-			selected: standingIn,
-		}, nil
+		return wiring.Wire{Held: wiring.FixedAccounts(deck), Spend: turn.SpendSubscription, Selected: standingIn}, nil
 	}
 }
 
@@ -660,9 +655,9 @@ type quotaReading struct {
 	ResetsIn string `json:"resetsIn"`
 }
 
-func readQuotas(path string, held heldStore) (func() []frame.Quota, error) {
+func readQuotas(path string, held wiring.HeldStore) (func() []frame.Quota, error) {
 	if path == "" {
-		return held.quota, nil
+		return held.Quota, nil
 	}
 	body, err := os.ReadFile(path)
 	if err != nil {
@@ -694,8 +689,8 @@ func readQuotas(path string, held heldStore) (func() []frame.Quota, error) {
 	}, nil
 }
 
-func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePlan, launch appLaunch, held heldStore, quotas func() []frame.Quota) *tui.App {
-	shown := cassetteBuild
+func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePlan, launch appLaunch, held wiring.HeldStore, quotas func() []frame.Quota) *tui.App {
+	shown := wiring.CassetteBuild
 	if deck != nil {
 		shown = deck.name
 	}
@@ -703,16 +698,16 @@ func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePla
 		open: driveWire(deck),
 		wires: func() []tui.Wire {
 			if plan.setup {
-				return held.wires()
+				return held.Wires()
 			}
 			library, _ := wiring.ModelLibrary(dir)
-			listed := []tui.Wire{{Name: library.WireFor(models.Subscription(plan.source)), Model: shown, Provider: cmp.Or(plan.source, cassetteBuild)}}
+			listed := []tui.Wire{{Name: library.WireFor(models.Subscription(plan.source)), Model: shown, Provider: cmp.Or(plan.source, wiring.CassetteBuild)}}
 			if plan.quota == "" {
 				return listed
 			}
 			for _, spec := range library.Subscriptions {
 				source := string(spec.ID)
-				named := slices.ContainsFunc(quotas(), func(reading frame.Quota) bool { return readingSource(reading) == source })
+				named := slices.ContainsFunc(quotas(), func(reading frame.Quota) bool { return wiring.ReadingSource(reading) == source })
 				if named && source != listed[0].Provider {
 					listed = append(listed, tui.Wire{Name: spec.Wire, Model: shown, Provider: source})
 				}
@@ -721,7 +716,7 @@ func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePla
 		},
 		blockers: func() []tui.Requirement {
 			if plan.setup {
-				return held.requirements()
+				return held.Requirements()
 			}
 			return nil
 		},
@@ -870,7 +865,7 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 	}
 	if err := cmp.Or(
 		armIsKnown("--gate", plan.arms.GateArm, gateArms()),
-		armIsKnown("--sift", plan.arms.SiftArm, siftArms()),
+		armIsKnown("--sift", plan.arms.SiftArm, wiring.SiftArms()),
 		armIsKnown("--done-review", plan.arms.DoneArm, settingspkg.DoneReviews()),
 		armIsKnown("--tools", plan.arms.ToolSet, []string{toolSetFull, toolSetThree}),
 		armIsKnown("--source", plan.source, []string{string(cred.ClaudeSub), string(cred.CodexSub)}),
@@ -1011,8 +1006,8 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return driveFail(errOut, err)
 	}
-	held := holdStore()
-	defer held.close()
+	held := wiring.HoldStore()
+	defer held.Close()
 	quotas, err := readQuotas(plan.quota, held)
 	if err != nil {
 		return driveFail(errOut, err)

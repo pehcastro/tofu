@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	judgeverb "tofu/apps/cli/verbs/judge"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	"tofu/internal/judge/gate"
@@ -43,7 +42,7 @@ func newDoneReview(arm string, say func(string)) turn.DoneReview {
 
 type typedDoneReview struct {
 	client *jev.Client
-	set    judgeverb.Battery
+	set    wiring.Battery
 }
 
 func newTypedDoneReview() (typedDoneReview, error) {
@@ -58,22 +57,22 @@ func newTypedDoneReview() (typedDoneReview, error) {
 	return typedDoneReview{client: client, set: set}, nil
 }
 
-func resolveStopCheckPoint() (judgeverb.Battery, error) {
-	set, err := judgeverb.ResolveLibrary(doneReviewPoint, "")
+func resolveStopCheckPoint() (wiring.Battery, error) {
+	set, err := wiring.ResolveLibrary(doneReviewPoint, "")
 	if err != nil {
-		return judgeverb.Battery{}, err
+		return wiring.Battery{}, err
 	}
 	pol, origin, err := state.StopCheckRule()
 	if err != nil {
-		return judgeverb.Battery{}, err
+		return wiring.Battery{}, err
 	}
 	if pol.Questions != set.SetName || pol.QuestionsVersion != set.QuestionsVersion {
-		return judgeverb.Battery{}, fmt.Errorf("rule %s names the question set %s@%d and the battery resolved %s@%d",
+		return wiring.Battery{}, fmt.Errorf("rule %s names the question set %s@%d and the battery resolved %s@%d",
 			doneReviewPoint, pol.Questions, pol.QuestionsVersion, set.SetName, set.QuestionsVersion)
 	}
-	resolution, err := judgeverb.ResolveRuleMode(pol)
+	resolution, err := wiring.ResolveRuleMode(pol)
 	if err != nil {
-		return judgeverb.Battery{}, err
+		return wiring.Battery{}, err
 	}
 	pol = resolution.Rule
 	set.Rule, set.Mode = &pol, resolution.Mode
@@ -91,11 +90,11 @@ func (r typedDoneReview) Review(ctx context.Context, subAgent turn.Row) (turn.Do
 		return turn.DoneDecision{}, err
 	}
 	asked := json.RawMessage(built)
-	in := judgeverb.RowInput{TurnID: subAgent.ID, StateBuilder: builder}
+	in := wiring.RowInput{TurnID: subAgent.ID, StateBuilder: builder}
 
 	decision, askErr := r.client.Ask(ctx, jev.Request{State: asked, Questions: r.set.Questions})
 	if askErr != nil {
-		row, writeErr := judgeverb.AppendFallbackRow(asked, r.set, in, askErr)
+		row, writeErr := wiring.AppendFallbackRow(asked, r.set, in, askErr)
 		if writeErr != nil {
 			return turn.DoneDecision{}, fmt.Errorf("%w, and the row saying so did not write either: %w", askErr, writeErr)
 		}
@@ -107,8 +106,8 @@ func (r typedDoneReview) Review(ctx context.Context, subAgent turn.Row) (turn.Do
 	}
 
 	in.Decision = &decision
-	in.Answers = judgeverb.ToLedgerAnswers(r.set.QuestionsVersion, decision.Answers)
-	row, err := judgeverb.AppendRow(asked, r.set, in)
+	in.Answers = wiring.ToLedgerAnswers(r.set.QuestionsVersion, decision.Answers)
+	row, err := wiring.AppendRow(asked, r.set, in)
 	if err != nil {
 		return turn.DoneDecision{}, err
 	}

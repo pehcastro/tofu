@@ -14,13 +14,20 @@ import (
 	"tofu/apps/cli/output"
 	"tofu/apps/cli/page"
 	boardyverb "tofu/apps/cli/verbs/boardy"
+	doctorverb "tofu/apps/cli/verbs/doctor"
 	guardverb "tofu/apps/cli/verbs/guard"
 	hooksverb "tofu/apps/cli/verbs/hooks"
 	judgeverb "tofu/apps/cli/verbs/judge"
+	learnverb "tofu/apps/cli/verbs/learn"
+	libraryverb "tofu/apps/cli/verbs/library"
 	lintverb "tofu/apps/cli/verbs/lint"
+	loginverb "tofu/apps/cli/verbs/login"
 	memoryverb "tofu/apps/cli/verbs/memory"
+	modelsverb "tofu/apps/cli/verbs/models"
+	rulesverb "tofu/apps/cli/verbs/rules"
 	settingsverb "tofu/apps/cli/verbs/settings"
 	shellsverb "tofu/apps/cli/verbs/shells"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/platform/recover"
@@ -114,12 +121,8 @@ Every verb that reports state takes --json and prints one JSON document.
 
 func loadLocalTimeZone() { _ = time.Local.String() }
 
-func crashTold(project string, tell func(string)) safe.Report {
-	return func(p safe.Panic) { tell(p.Saved(sys.CrashDir(project))) }
-}
-
 func main() {
-	safe.Go(crashTold(".", func(said string) { _, _ = fmt.Fprintln(os.Stderr, "tofu: "+said) }), "time zone load", loadLocalTimeZone)
+	safe.Go(wiring.CrashTold(".", func(said string) { _, _ = fmt.Fprintln(os.Stderr, "tofu: "+said) }), "time zone load", loadLocalTimeZone)
 	stopProfile := sys.StartProfile()
 	reapTemporaryProjects(os.Stderr)
 	args, temporary := temporaryProject(os.Args[1:])
@@ -216,14 +219,7 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 }
 
 func nearestCommand(args []string) (string, bool) {
-	_, verbLines, _ := strings.Cut(usage, "\nVerbs:\n")
-	var listed []string
-	for _, line := range strings.Split(verbLines, "\n") {
-		if name, indented := strings.CutPrefix(line, "  "); indented && name != "" && name[0] != ' ' {
-			listed = append(listed, strings.Fields(name)[0])
-		}
-	}
-	if !slices.Contains(listed, args[0]) {
+	if listed := usageVerbs(); !slices.Contains(listed, args[0]) {
 		near, found := nearestWord(args[0], listed)
 		return "tofu " + near, found
 	}
@@ -256,7 +252,7 @@ func nearestCommand(args []string) (string, bool) {
 func nearestWord(word string, candidates []string) (string, bool) {
 	best, distance := "", len(word)/konst.NearestWordBytesPerEdit+1
 	for _, candidate := range candidates {
-		if d := editDistance(word, candidate); d < distance {
+		if d := output.EditDistance(word, candidate); d < distance {
 			best, distance = candidate, d
 		}
 	}
@@ -311,17 +307,17 @@ func verbNamed(name string) verb {
 			return changelogVerb(args, changelog.Markdown, out, errOut)
 		}, changelogUsage}
 	case "docs":
-		return verb{withoutIn(docsVerb), docsUsage}
+		return verb{withoutIn(libraryverb.DocsVerb), libraryverb.DocsUsage}
 	case "doctor":
-		return verb{withoutIn(doctor), doctorUsage}
+		return verb{withoutIn(doctorverb.Verb), doctorverb.Usage}
 	case "login":
-		return verb{loginVerb, loginUsage + " " + asideUsage}
+		return verb{loginverb.Verb, loginverb.Usage + " " + loginverb.AsideUsage}
 	case "logout":
-		return verb{withoutIn(logoutVerb), logoutUsage}
+		return verb{withoutIn(loginverb.LogoutVerb), loginverb.LogoutUsage}
 	case "usage":
-		return verb{withoutIn(usageVerb), usageFlags}
+		return verb{withoutIn(loginverb.UsageVerb), loginverb.UsageFlags}
 	case "models":
-		return verb{withoutIn(modelsVerb), modelsUsage}
+		return verb{withoutIn(modelsverb.Verb), modelsverb.Usage}
 	case "agents":
 		return verb{withoutIn(agentsVerb), strings.Join([]string{agentsUsage, agentsAddUsage, agentsSetUsage, agentsRemoveUsage}, " ")}
 	case "why":
@@ -356,24 +352,24 @@ func verbNamed(name string) verb {
 	case "replay":
 		return verb{withClock(judgeverb.ReplayVerb), judgeverb.ReplayUsage}
 	case "library":
-		return verb{withoutIn(libraryVerb), libraryUsage}
+		return verb{withoutIn(libraryverb.Verb(usageVerbs())), libraryverb.Usage}
 	case "catalog":
 		return verb{run: func(args []string, _ io.Reader, out, errOut io.Writer) int {
 			_, _ = fmt.Fprintln(errOut, "tofu catalog is now tofu library")
-			return libraryVerb(args, out, errOut)
+			return libraryverb.Verb(usageVerbs())(args, out, errOut)
 		}}
 	case "lint":
 		return verb{withoutIn(lintverb.Verb), lintverb.Usage}
 	case "rules":
-		return verb{withoutIn(rulesVerb), strings.Join([]string{rulesSubcommands, rulesListUsage, rulesOverridesUsage, rulesCheckUsage, rulesAddUsage, rulesOffUsage, rulesIDUsage, rulesWhyUsage}, " ")}
+		return verb{withoutIn(rulesverb.Verb(rulesverb.Deps{Agents: agentsIn, Why: rulesWhyVerb})), rulesverb.Usage + " " + rulesWhyUsage}
 	case "boardy":
 		return verb{withoutIn(boardyverb.Verb), boardyverb.Usage}
 	case "scratch":
 		return verb{withoutIn(shellsverb.Scratch), shellsverb.ScratchUsage}
 	case "memory":
-		return verb{withoutIn(memoryVerb), memoryverb.Usage + " " + memoryTreeUsage}
+		return verb{withoutIn(memoryverb.Verb(wireOpener())), memoryverb.Usage + " " + memoryverb.TreeUsage}
 	case "learn":
-		return verb{withoutIn(learnVerb), learnUsage}
+		return verb{withoutIn(learnverb.Verb(learnverb.Deps{SetSetting: settingsverb.Verb, AddRule: rulesverb.AddVerb})), learnverb.Usage}
 	case "settings":
 		return verb{withoutIn(settingsverb.Verb), settingsverb.Usage}
 	case "reload":
@@ -445,6 +441,17 @@ func verbHelp(name string, args []string) string {
 		picked = all
 	}
 	return strings.Join(picked, "\n") + "\n"
+}
+
+func usageVerbs() []string {
+	_, listing, _ := strings.Cut(usage, "\nVerbs:\n")
+	var verbs []string
+	for _, line := range strings.Split(listing, "\n") {
+		if name, indented := strings.CutPrefix(line, "  "); indented && name != "" && name[0] != ' ' {
+			verbs = append(verbs, strings.Fields(name)[0])
+		}
+	}
+	return verbs
 }
 
 func subcommandOf(args []string) string {

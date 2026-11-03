@@ -10,8 +10,10 @@ import (
 	"testing"
 
 	"tofu/apps/cli/output"
+	rulesverb "tofu/apps/cli/verbs/rules"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
+	"tofu/internal/host"
 	"tofu/internal/sys"
 	"tofu/internal/testkit/cli"
 )
@@ -23,18 +25,18 @@ func tofuRules(t *testing.T, args ...string) (int, string, string) {
 	return code, out.String(), errOut.String()
 }
 
-func listedRule(t *testing.T, id string) ruleListing {
+func listedRule(t *testing.T, id string) host.RuleListing {
 	t.Helper()
 	code, out, errOut := tofuRules(t, "list", output.JSONFlag)
 	var envelope struct {
-		Data ruleListReport `json:"data"`
+		Data host.RuleListReport `json:"data"`
 	}
 	if err := json.Unmarshal([]byte(out), &envelope); code != output.ExitOK || err != nil {
 		t.Fatalf("rules list --json exited %d, %v: %s", code, err, errOut)
 	}
-	at := slices.IndexFunc(envelope.Data.Rules, func(r ruleListing) bool { return r.ID == id })
+	at := slices.IndexFunc(envelope.Data.Rules, func(r host.RuleListing) bool { return r.ID == id })
 	if at < 0 {
-		return ruleListing{}
+		return host.RuleListing{}
 	}
 	return envelope.Data.Rules[at]
 }
@@ -123,7 +125,7 @@ func TestThePromptAndReloadSeeTheSameProjectRule(t *testing.T) {
 	if at := slices.IndexFunc(after.Parts, func(part partDiff) bool { return part.Name == "rules" }); at < 0 || !slices.Equal(after.Parts[at].Added, []string{"p1"}) {
 		t.Errorf("reload after the add reads %+v, want the rules part to add p1 alone", after.Parts)
 	}
-	prompt, err := composeRun(wiring.RunOpts{Dir: project}, nil, runtime{open: openAppWire})
+	prompt, err := composeRun(wiring.RunOpts{Dir: project}, nil, runtime{open: wiring.OpenWire})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,11 +134,11 @@ func TestThePromptAndReloadSeeTheSameProjectRule(t *testing.T) {
 	}
 }
 
-func overridesListed(t *testing.T) []overrideListing {
+func overridesListed(t *testing.T) []host.OverrideListing {
 	t.Helper()
 	code, out, errOut := tofuRules(t, "overrides", output.JSONFlag)
 	var envelope struct {
-		Data overridesReport `json:"data"`
+		Data rulesverb.OverridesReport `json:"data"`
 	}
 	if err := json.Unmarshal([]byte(out), &envelope); code != output.ExitOK || err != nil {
 		t.Fatalf("rules overrides --json exited %d, %v: %s%s", code, err, out, errOut)
@@ -180,11 +182,11 @@ func TestRulesOffNeedsAReasonIsMarkedEverywhereAndRestoreBringsTheRuleBack(t *te
 		t.Errorf("rules list shows %s as %+v, want it marked with the project and its reason", id, marked)
 	}
 	code, out, errOut := tofuRules(t, "index", "add unit tests for the parser", "parser_test.go", output.JSONFlag)
-	var index struct{ Data ruleIndexReport }
+	var index struct{ Data rulesverb.IndexReport }
 	if err := json.Unmarshal([]byte(out), &index); code != output.ExitOK || err != nil {
 		t.Fatalf("rules index exited %d (%v): %s%s", code, err, out, errOut)
 	}
-	if at := slices.IndexFunc(index.Data.Rules, func(r ruleIndexListing) bool { return r.RuleID == id }); at < 0 || index.Data.Rules[at].Fires || index.Data.Rules[at].Override == nil || index.Data.Rules[at].Override.Layer != "project" {
+	if at := slices.IndexFunc(index.Data.Rules, func(r rulesverb.IndexListing) bool { return r.RuleID == id }); at < 0 || index.Data.Rules[at].Fires || index.Data.Rules[at].Override == nil || index.Data.Rules[at].Override.Layer != "project" {
 		t.Errorf("rules index does not mark %s as overridden in the project: %+v", id, index.Data.Rules)
 	}
 

@@ -66,7 +66,7 @@ func parseMemoryArgs(args []string) (memoryOpts, error) {
 	return opts, nil
 }
 
-func Verb(args []string, out, errOut io.Writer) int {
+func shelvesVerb(args []string, out, errOut io.Writer) int {
 	verb := "list"
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		verb, args = args[0], args[1:]

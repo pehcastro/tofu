@@ -6,13 +6,14 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/apps/cli/wiring"
 	"tofu/internal/judge/gate"
 )
 
-func toolGateBatteryInAScratchProject(t *testing.T) Battery {
+func toolGateBatteryInAScratchProject(t *testing.T) wiring.Battery {
 	t.Helper()
 	t.Chdir(t.TempDir())
-	set, err := ResolveLibrary(replayTestRuleRef, "")
+	set, err := wiring.ResolveLibrary(replayTestRuleRef, "")
 	if err != nil {
 		t.Fatalf("resolveLibrary: %v", err)
 	}
@@ -20,7 +21,7 @@ func toolGateBatteryInAScratchProject(t *testing.T) Battery {
 }
 
 func TestResolveRuleReadsTheEmbeddedRuleWhenTheProjectHasNoLibrary(t *testing.T) {
-	pol, err := ResolveRule(replayTestRuleRef, toolGateBatteryInAScratchProject(t))
+	pol, err := wiring.ResolveRule(replayTestRuleRef, toolGateBatteryInAScratchProject(t))
 	if err != nil {
 		t.Fatalf("resolveRule in a project with no library: %v", err)
 	}
@@ -41,7 +42,7 @@ func TestResolveRulePrefersTheProjectRule(t *testing.T) {
 	if err := os.WriteFile(path, []byte(replayTestRuleBody), 0o644); err != nil {
 		t.Fatalf("writing the project rule: %v", err)
 	}
-	pol, err := ResolveRule(replayTestRuleRef, set)
+	pol, err := wiring.ResolveRule(replayTestRuleRef, set)
 	if err != nil {
 		t.Fatalf("resolveRule: %v", err)
 	}
@@ -64,7 +65,7 @@ func TestLoadRulePointReadsTheNamedProjectRatherThanTheWorkingOne(t *testing.T) 
 		t.Fatalf("writing the project rule: %v", err)
 	}
 	t.Chdir(t.TempDir())
-	pol, origin, err := LoadRulePoint(replayTestRuleRef, elsewhere)
+	pol, origin, err := wiring.LoadRulePoint(replayTestRuleRef, elsewhere)
 	if err != nil {
 		t.Fatalf("loadRulePoint: %v", err)
 	}
@@ -74,7 +75,7 @@ func TestLoadRulePointReadsTheNamedProjectRatherThanTheWorkingOne(t *testing.T) 
 }
 
 func TestResolveRuleRefusesARuleWithNoVersion(t *testing.T) {
-	_, err := ResolveRule("tool_gate", toolGateBatteryInAScratchProject(t))
+	_, err := wiring.ResolveRule("tool_gate", toolGateBatteryInAScratchProject(t))
 	if err == nil || !strings.Contains(err.Error(), "names no version") {
 		t.Fatalf("err = %v, want a refusal naming the missing version", err)
 	}

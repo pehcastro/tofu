@@ -1,4 +1,4 @@
-package main
+package login
 
 import (
 	"cmp"
@@ -8,11 +8,11 @@ import (
 	"net/http"
 	"os"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"tofu/apps/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
@@ -31,24 +31,19 @@ const (
 	day                   = 24 * time.Hour
 )
 
-func braveReports() string {
-	return "Brave reports monthly calls remaining and the reset; it has no spend API, so cost is estimated from " +
-		strconv.FormatFloat(konst.BraveSearchDollarsPerCall*1000, 'f', -1, 64) + " USD per 1000 calls"
-}
-
-func withSpend(ctx context.Context, keys []keyStatus, now time.Time) (func(), error) {
+func withSpend(ctx context.Context, keys []host.KeyStatus, now time.Time) (func(), error) {
 	uses, err := ledger.KeyUses()
 	if err != nil {
 		return func() {}, err
 	}
 	for _, use := range uses {
-		if at := slices.IndexFunc(keys, func(key keyStatus) bool { return key.Variable == use.Key }); at >= 0 {
+		if at := slices.IndexFunc(keys, func(key host.KeyStatus) bool { return key.Variable == use.Key }); at >= 0 {
 			spendOn(&keys[at], use, now)
 		}
 	}
 	var polls sync.WaitGroup
 	for index := range keys {
-		if key := &keys[index]; key.Provider == openRouterName && key.Key != "" {
+		if key := &keys[index]; key.Provider == wiring.OpenRouterName && key.Key != "" {
 			polls.Go(func() { limitOnOpenRouter(ctx, key, now) })
 			polls.Go(func() { balanceOnOpenRouter(ctx, key, now) })
 		}
@@ -56,7 +51,7 @@ func withSpend(ctx context.Context, keys []keyStatus, now time.Time) (func(), er
 	return polls.Wait, nil
 }
 
-func spendOn(key *keyStatus, use ledger.KeyUse, now time.Time) {
+func spendOn(key *host.KeyStatus, use ledger.KeyUse, now time.Time) {
 	for _, read := range use.Allowances {
 		allowance := host.KeyAllowance{From: rateLimitHeaders, Scope: host.AllowanceScope(read.Scope), Unit: host.AllowanceUnit(read.Unit),
 			Limit: read.Limit, Remaining: read.Remaining, ResetsAt: read.ResetsAt, ReadAt: use.At}
@@ -133,7 +128,7 @@ func readOpenRouter(ctx context.Context, variable, path string, into any) error 
 	return json.Unmarshal(response.Body, into)
 }
 
-func limitOnOpenRouter(ctx context.Context, key *keyStatus, now time.Time) {
+func limitOnOpenRouter(ctx context.Context, key *host.KeyStatus, now time.Time) {
 	var read struct {
 		Data struct {
 			Label     string   `json:"label"`
@@ -163,7 +158,7 @@ func limitOnOpenRouter(ctx context.Context, key *keyStatus, now time.Time) {
 	}
 }
 
-func balanceOnOpenRouter(ctx context.Context, key *keyStatus, now time.Time) {
+func balanceOnOpenRouter(ctx context.Context, key *host.KeyStatus, now time.Time) {
 	var read struct {
 		Data struct {
 			Credits float64 `json:"total_credits"`

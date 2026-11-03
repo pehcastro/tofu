@@ -149,7 +149,7 @@ func siftMarks(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
 
 func siftJev(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
 	marks := make([]sift.Mark, len(parts))
-	set, err := ResolveLibrary(siftPoint, "")
+	set, err := wiring.ResolveLibrary(siftPoint, "")
 	if err != nil {
 		return nil, 0, err
 	}
@@ -186,7 +186,7 @@ func siftJev(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
 	return marks, total, nil
 }
 
-func siftOne(client *jev.Client, set Battery, parts []sift.Part, index int, opts siftOpts, rule sift.Rule) (sift.Mark, float64, error) {
+func siftOne(client *jev.Client, set wiring.Battery, parts []sift.Part, index int, opts siftOpts, rule sift.Rule) (sift.Mark, float64, error) {
 	state, err := json.Marshal(sift.BuildState(parts, index, opts.task))
 	if err != nil {
 		return sift.Mark{}, 0, err
@@ -205,9 +205,9 @@ func siftOne(client *jev.Client, set Battery, parts []sift.Part, index int, opts
 		return sift.Mark{}, decision.Usage.Cost, err
 	}
 	if !opts.noLog {
-		if _, err := AppendRow(built, set, RowInput{
+		if _, err := wiring.AppendRow(built, set, wiring.RowInput{
 			Decision:     &decision,
-			Answers:      ToLedgerAnswers(set.QuestionsVersion, decision.Answers),
+			Answers:      wiring.ToLedgerAnswers(set.QuestionsVersion, decision.Answers),
 			StateBuilder: siftPoint,
 		}); err != nil {
 			return sift.Mark{}, decision.Usage.Cost, err

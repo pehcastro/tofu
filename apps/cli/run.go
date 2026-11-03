@@ -3,8 +3,6 @@ package main
 import (
 	"cmp"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -37,8 +35,6 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/models/llm/wire/codex"
-	"tofu/internal/models/llm/wire/openrouter"
-	"tofu/internal/models/transport"
 	"tofu/internal/platform/recover"
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/memory/entries"
@@ -55,35 +51,15 @@ import (
 )
 
 const (
-	toolSetFull         = "full"
-	toolSetThree        = "three"
-	toolPickRule        = "tool_pick"
-	verifySubAgentsRule = "verify_sub_agents"
+	toolSetFull  = "full"
+	toolSetThree = "three"
+	toolPickRule = "tool_pick"
 
 	gateFollowsTheRule = ""
 	gateOff            = "off"
 	gateShadow         = "shadow"
 	gateEnforce        = "enforce"
-
-	openRouterEndpointVariable = "TOFU_OPENROUTER_ENDPOINT"
 )
-
-func wireEfforts(wire string) []llm.Effort {
-	switch wire {
-	case wiring.WireSubscription:
-		return anthropic.ReasoningEfforts()
-	case wiring.WireCodex:
-		return llm.Efforts()
-	}
-	return nil
-}
-
-func wireSpend(wire string) turn.Spend {
-	if wire == wiring.WireKey || wire == wiring.WireMeta {
-		return turn.SpendAPIKey
-	}
-	return turn.SpendSubscription
-}
 
 type runtime struct {
 	model        turn.Model
@@ -93,13 +69,13 @@ type runtime struct {
 	budget       recall.Budget
 	gate         *toolGate
 	sift         *turn.ShellSift
-	scorer       *shellScorer
+	scorer       *wiring.ShellScorer
 	sessions     *session.Store
 	notify       func(string)
 	roster       *subagent.Roster
 	inbox        *turn.Inbox
 	now          func() time.Time
-	open         func(wiring.RunOpts) (appWire, error)
+	open         wiring.Opener
 	wrapSubAgent func(turn.Model, recall.Budget) (turn.Model, error)
 	orchestrator models.Model
 	tabs         *tools.BrowserTabs
@@ -108,7 +84,7 @@ type runtime struct {
 	places       sys.Places
 	startup      *startupClock
 	keys         *storedKeys
-	memory       *sessionMemoryModel
+	memory       *wiring.SessionMemoryModel
 	drops        *turn.DropIndex
 	current      func(subagent.Definition) subagent.Definition
 	composed     *composedRun
@@ -178,68 +154,6 @@ func (r runtime) applyThinkingSummary(accounts turn.Accounts) turn.Accounts {
 		}
 	}
 	return omitting
-}
-
-func chooseModel(opts wiring.RunOpts) (models.Model, error) {
-	switch opts.Wire {
-	case "":
-		return models.Model{}, models.RoleOrchestrator.Unset()
-	case wiring.WireKey:
-		if opts.Model == "" {
-			return models.Model{}, errors.New("--wire openrouter names no model: pass --model, or bind the orchestrator to an openrouter model")
-		}
-		library, err := wiring.ModelLibrary(opts.Dir)
-		if err != nil {
-			return models.Model{}, err
-		}
-		if listed, known := library.Resolve(opts.Model); known && listed.Provider == models.OpenRouter {
-			return library.Select(listed.Slug())
-		}
-		return models.Model{ID: opts.Model}, nil
-	case wiring.WireMeta:
-		library, err := wiring.ModelLibrary(opts.Dir)
-		if err != nil {
-			return models.Model{}, err
-		}
-		if opts.Model == "" {
-			return library.Default(models.Subscription(models.Meta))
-		}
-		return library.Select(opts.Model)
-	}
-	if opts.Model != "" {
-		return wiring.SelectModel(opts.Wire, opts.Model)
-	}
-	bound, err := wiring.BoundRoles(opts.Wire, opts.Dir)
-	if err != nil {
-		return models.Model{}, err
-	}
-	orchestrator := bound[models.RoleOrchestrator]
-	if orchestrator.Wire != opts.Wire {
-		return models.Model{}, fmt.Errorf(
-			"%s, and --wire %s reaches another subscription: run --wire %s instead, or bind the orchestrator role to a model --wire %s serves",
-			orchestrator.Says(), opts.Wire, orchestrator.Wire, opts.Wire)
-	}
-	return orchestrator.Model, nil
-}
-
-func onTheBoundWire(opts wiring.RunOpts) wiring.RunOpts {
-	if opts.Wire != "" && opts.Model != "" {
-		return opts
-	}
-	library, err := wiring.ModelLibrary(opts.Dir)
-	if err != nil {
-		return opts
-	}
-	if opts.Model != "" {
-		if named, err := library.Select(opts.Model); err == nil {
-			opts.Wire = library.WireOf(named)
-		}
-		return opts
-	}
-	if orchestrator, bound := library.Bound(models.RoleOrchestrator); bound && (opts.Wire == "" || opts.Wire == library.WireOf(orchestrator)) {
-		opts.Wire, opts.Model = library.WireOf(orchestrator), orchestrator.Slug()
-	}
-	return opts
 }
 
 func boundSubAgent(opts wiring.RunOpts) (string, error) {
@@ -332,20 +246,20 @@ func (r runtime) subAgentOpener(opts wiring.RunOpts) func(subagent.Definition, l
 		}
 		opened, err := r.open(subAgent)
 		if err != nil {
-			if opened.held != nil {
-				opened.held.close()
+			if opened.Held != nil {
+				opened.Held.Close()
 			}
 			return turn.SubAgentModel{}, err
 		}
-		opened.held.wrapping(r.wrapSubAgent, r.budget, subAgent)
-		return turn.SubAgentModel{Slug: asked, Windows: opened.selected.WindowText(), Wire: subAgent.Wire, Cache: opened.selected.PromptCache, Effort: subAgent.Effort, Spend: opened.spend, Accounts: r.applyThinkingSummary(opened.held.forTurn()), Close: opened.held.close}, nil
+		opened.Held.Wrapping(r.wrapSubAgent, r.budget, subAgent)
+		return turn.SubAgentModel{Slug: asked, Windows: opened.Selected.WindowText(), Wire: subAgent.Wire, Cache: opened.Selected.PromptCache, Effort: subAgent.Effort, Spend: opened.Spend, Accounts: r.applyThinkingSummary(opened.Held.ForTurn()), Close: opened.Held.Close}, nil
 	}
 }
 
 func runUsage() string {
 	return fmt.Sprintf(runUsageText,
 		llm.EffortList(llm.Efforts()), llm.EffortDefault,
-		llm.EffortList(anthropic.ReasoningEfforts()), strings.Join(thinkingSummaries(), " or "), shellSiftCost(), turn.LeadAloneMostNamedFiles, turn.InstructionsOff, konst.TemporaryProjectIdleHours)
+		llm.EffortList(anthropic.ReasoningEfforts()), strings.Join(thinkingSummaries(), " or "), wiring.ShellSiftCost(), turn.LeadAloneMostNamedFiles, turn.InstructionsOff, konst.TemporaryProjectIdleHours)
 }
 
 const runUsageText = `tofu run works a task in a directory until it is done.
@@ -423,7 +337,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	}
 	defer resumed.letGo()
 	opts, modelFrom := resumed.onItsModel(opts)
-	opts = onTheBoundWire(opts)
+	opts = wiring.OnTheBoundWire(opts)
 	clock.step("model roles")
 	dir := cmp.Or(opts.Dir, ".")
 	say := func(unreadable string) { _, _ = fmt.Fprintln(errOut, "tofu run: "+unreadable) }
@@ -444,7 +358,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	}
 	clock.step("settings")
 
-	selected, err := chooseModel(opts)
+	selected, err := wiring.ChooseModel(opts)
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -472,12 +386,12 @@ func dryRun(opts wiring.RunOpts, selected models.Model, dir string, say func(str
 		return runFail(errOut, err)
 	}
 	built, _ = planAsOffered(selected, built, plan)
-	budget, err := contextBudget(opts, selected)
+	budget, err := wiring.ContextBudget(opts, selected)
 	if err != nil {
 		return runFail(errOut, err)
 	}
 	opts.Effort = selected.EffortTaken(opts.Effort)
-	config, _, err := runConfig(opts, built, runtime{spend: turn.SpendSubscription, budget: budget, notify: writeNotice(errOut), open: openAppWire, orchestrator: selected})
+	config, _, err := runConfig(opts, built, runtime{spend: turn.SpendSubscription, budget: budget, notify: writeNotice(errOut), open: wiring.OpenWire, orchestrator: selected})
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -490,33 +404,7 @@ func dryRun(opts wiring.RunOpts, selected models.Model, dir string, say func(str
 	return output.ExitOK
 }
 
-func contextBudget(opts wiring.RunOpts, model models.Model) (recall.Budget, error) {
-	registry, err := modelRegistry()
-	if err != nil {
-		return recall.Budget{}, err
-	}
-	windowTokens, windowSource := models.WindowFor(model, registry, models.Served{})
-	budget, err := recall.BudgetUnder(model.ID, windowTokens, settingspkg.IntSaying(opts.Dir, settingspkg.ContextCeiling, nil))
-	if err != nil {
-		return recall.Budget{}, err
-	}
-	budget.WindowSource = windowSource
-	if opts.ContextCeiling <= 0 {
-		return budget, nil
-	}
-	return budget.At(opts.ContextCeiling, fmt.Sprintf("--context-ceiling %d, which is read before %s and wins when both are set",
-		opts.ContextCeiling, recall.CeilingVariable)), nil
-}
-
 func runTurn(opts wiring.RunOpts, resumed runResumed, selected models.Model, clock *startupClock, out, errOut io.Writer) int {
-	open := openAppWire
-	deck, err := readCassette(os.Getenv(cassetteVariable))
-	if err != nil {
-		return runFail(errOut, err)
-	}
-	if deck != nil {
-		open = driveWire(deck)
-	}
 	places, err := sys.ResolvePlaces(".")
 	if err != nil {
 		return runFail(errOut, err)
@@ -528,7 +416,7 @@ func runTurn(opts wiring.RunOpts, resumed runResumed, selected models.Model, clo
 	if opts.GateArm == gateOff {
 		missing = missingJudgeRunsWithout
 	}
-	engine := &appEngine{dir: opts.Dir, open: open, tabs: warm.tabs, warm: warm, places: places, missingJudge: missing}
+	engine := &appEngine{dir: opts.Dir, open: wireOpener(), tabs: warm.tabs, warm: warm, places: places, missingJudge: missing}
 	same := func(model turn.Model) turn.Model { return model }
 	started, err := engine.startTurn(opts, host.Turn{}, host.Hooks{Lead: same, SubAgent: same, Say: writeNotice(errOut), Reads: turn.NewReadLedger()}, clock)
 	if started.Close != nil {
@@ -580,7 +468,7 @@ func runTurn(opts wiring.RunOpts, resumed runResumed, selected models.Model, clo
 		}
 	}
 	if scorer != nil {
-		calls, cost := scorer.spend()
+		calls, cost := scorer.Spend()
 		_, _ = fmt.Fprintf(out, "sift decisions %d cost $%.6f\n", calls, cost)
 	}
 	if runErr != nil {
@@ -654,7 +542,7 @@ func composeRun(opts wiring.RunOpts, built []contract.Tool, run runtime) (compos
 	}
 	found := make(chan subagent.Found, 1)
 	if !opts.NoSubAgents && opts.ToolSet != toolSetThree && run.open != nil {
-		scanned := crashTold(cmp.Or(opts.Dir, "."), func(said string) {
+		scanned := wiring.CrashTold(cmp.Or(opts.Dir, "."), func(said string) {
 			say(said)
 			found <- subagent.Found{}
 		})
@@ -688,14 +576,14 @@ func composeRun(opts wiring.RunOpts, built []contract.Tool, run runtime) (compos
 		brokenAgents = append(brokenAgents, turn.PromptPart{Concern: rule.ConcernIdentity, File: filepath.ToSlash(broken.Path), Why: broken.Reason, State: session.PartDropped})
 	}
 	run.startup.step("sub-agent definitions")
-	stack, err := stackRules("", cmp.Or(opts.Dir, "."))
+	stack, err := wiring.StackRules("", cmp.Or(opts.Dir, "."))
 	if err != nil {
 		return composedRun{}, err
 	}
 	run.startup.step("rules")
-	rules := stack.rules
+	rules := stack.Rules
 	var switchedOff []rule.Overriding
-	for _, applied := range stack.overrides {
+	for _, applied := range stack.Overrides {
 		if applied.Rule.Mode == rule.ModeOff && !applied.Stale && !slices.ContainsFunc(rules, func(r rule.Rule) bool { return r.ID == applied.Base.ID }) {
 			switchedOff = append(switchedOff, applied.Overriding)
 		}
@@ -715,7 +603,7 @@ func composeRun(opts wiring.RunOpts, built []contract.Tool, run runtime) (compos
 		for _, one := range offered.Unoffered {
 			unloaded = append(unloaded, turn.PromptPart{Concern: turn.ConcernSkills, Name: one.Name, File: filepath.ToSlash(one.File), Why: one.Why, State: session.PartDropped})
 		}
-		library, err := skill.Shipped(shipped.Files(), libraryRoot)
+		library, err := skill.Shipped(shipped.Files(), wiring.LibraryRoot)
 		if err != nil {
 			return composedRun{}, err
 		}
@@ -740,7 +628,7 @@ func composeRun(opts wiring.RunOpts, built []contract.Tool, run runtime) (compos
 	}
 	if opts.LeadAlone {
 		spec.Rules = slices.DeleteFunc(slices.Clone(rules), func(loaded rule.Rule) bool {
-			return slices.Contains([]string{"orchestrate", verifySubAgentsRule, "plan_before_spawn", "spawn_effort", "research_fan_out", "brief_from_references", "announce_spawn"}, loaded.ID)
+			return slices.Contains([]string{"orchestrate", wiring.VerifySubAgentsRule, "plan_before_spawn", "spawn_effort", "research_fan_out", "brief_from_references", "announce_spawn"}, loaded.ID)
 		})
 		spec.Alone = true
 	}
@@ -756,7 +644,7 @@ func composeRun(opts wiring.RunOpts, built []contract.Tool, run runtime) (compos
 	composed, err := turn.Compose(first)
 	run.startup.step("frameworks and prompt")
 	return composedRun{opts: opts, environment: environment, files: files, memory: remembered, instructions: instructions, composed: composed, composeTask: composeTask, subAgents: subAgents, skills: skills,
-		shippedOff: stack.shippedOff, checksWork: slices.ContainsFunc(rules, func(loaded rule.Rule) bool { return loaded.ID == verifySubAgentsRule })}, err
+		shippedOff: stack.ShippedOff, checksWork: slices.ContainsFunc(rules, func(loaded rule.Rule) bool { return loaded.ID == wiring.VerifySubAgentsRule })}, err
 }
 
 func taskSpec(spec turn.ComposeSpec, dir, task string, say func(string)) turn.ComposeSpec {
@@ -778,18 +666,18 @@ func taskSpec(spec turn.ComposeSpec, dir, task string, say func(string)) turn.Co
 	return spec
 }
 
-func droppedRules(stack ruleStack, kept []rule.Rule, switchedOff []rule.Overriding, opts wiring.RunOpts) []turn.PromptPart {
+func droppedRules(stack wiring.RuleStack, kept []rule.Rule, switchedOff []rule.Overriding, opts wiring.RunOpts) []turn.PromptPart {
 	var dropped []turn.PromptPart
-	for _, one := range slices.Concat(stack.rules, stack.shippedOff) {
+	for _, one := range slices.Concat(stack.Rules, stack.ShippedOff) {
 		if slices.ContainsFunc(kept, func(r rule.Rule) bool { return r.ID == one.ID }) || slices.ContainsFunc(switchedOff, func(off rule.Overriding) bool { return off.Base.ID == one.ID }) {
 			continue
 		}
 		reason, why := rule.ReasonSetting, "the run's setting --tools three sends no "+one.ID
 		switch {
-		case one.Mode == rule.ModeOff && ruleSetting(one.ID) == "":
-			reason, why = rule.ReasonMode, stack.switchOn(one.ID, cmp.Or(opts.Dir, "."))
+		case one.Mode == rule.ModeOff && wiring.RuleSetting(one.ID) == "":
+			reason, why = rule.ReasonMode, stack.SwitchOn(one.ID, cmp.Or(opts.Dir, "."))
 		case one.Mode == rule.ModeOff:
-			why = stack.switchOn(one.ID, cmp.Or(opts.Dir, "."))
+			why = stack.SwitchOn(one.ID, cmp.Or(opts.Dir, "."))
 		case opts.LeadAlone:
 			why = "the run's lead alone setting: the task names few files in one folder, so the spawn rules are not sent"
 		}
@@ -860,7 +748,7 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (turn.Co
 		Session:        sessionID,
 		Drops:          run.drops,
 		Sift:           run.sift,
-		Proxy:          loadProxySetting(opts.Dir).proxy,
+		Proxy:          wiring.LoadProxySetting(opts.Dir).Proxy,
 		Inbox:          cmp.Or(run.inbox, turn.NewInbox()),
 		Notify:         run.notify,
 		GatePromptAsks: func() bool {
@@ -877,7 +765,7 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (turn.Co
 	}
 	config.NewID = func() string { return orchestratorID }
 	if run.scorer != nil {
-		run.scorer.turnID = orchestratorID
+		run.scorer.TurnID = orchestratorID
 	}
 	if opts.ToolSet == toolSetThree && run.leadAsks == nil {
 		config.Tools = turn.NewRegistry(built...)
@@ -886,15 +774,15 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (turn.Co
 		}
 		return config, nil, nil
 	}
-	layers, err := userRuleLayers(dir)
+	layers, err := wiring.UserRuleLayers(dir)
 	if err != nil {
 		return turn.Config{}, nil, err
 	}
 	running := func() ([]rule.Rule, error) {
-		rules, _, err := loadRules("", dir)
+		rules, _, err := wiring.LoadRules("", dir)
 		return rules, err
 	}
-	asking := []contract.Tool{tools.RuleOverride{Ask: run.leadAsks, Running: running, Global: layers[0].dir, Project: layers[1].dir}, tools.AskPerson{}}
+	asking := []contract.Tool{tools.RuleOverride{Ask: run.leadAsks, Running: running, Global: layers[0].Dir, Project: layers[1].Dir}, tools.AskPerson{}}
 	if run.leadAsks != nil {
 		asking[1] = askPersonTool(dir, run.places.Log, run.leadAsks, config.Inbox, run.keys.keyring(), run.notify)
 	}
@@ -923,12 +811,13 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (turn.Co
 	}
 	if opts.Agent == "" && episodesOn(dir) {
 		zoom := &tools.Zoom{Project: dir, Compactor: func(ask turn.RecordedAsk) (memtree.Compact, memtree.CompactAll, func()) {
+			open := wireOpener()
 			if run.memory == nil {
-				opened := openMemoryModel(dir, run.orchestrator)
-				one, all := opened.compactors(ask)
-				return one, all, opened.release
+				opened := wiring.OpenMemoryModel(dir, run.orchestrator, open)
+				one, all := opened.Compactors(ask)
+				return one, all, opened.Release
 			}
-			one, all := run.memory.model(dir, run.orchestrator).compactors(ask)
+			one, all := run.memory.Model(dir, run.orchestrator, open).Compactors(ask)
 			return one, all, func() {}
 		}}
 		asking = append(asking, zoom, tools.Recall{Zoom: zoom, Sessions: run.sessions, Session: sessionID})
@@ -1071,7 +960,7 @@ func scanSubAgents(dir string, built []contract.Tool) subagent.Found {
 	dir = cmp.Or(dir, ".")
 	catalog, _ := wiring.ModelLibrary(dir)
 	home, _ := os.UserHomeDir()
-	library, _, _ := librarySource()
+	library, _, _ := wiring.LibrarySource()
 	sources, tiers := settingspkg.DeclaredDefaultText(settingspkg.AgentSources), map[subagent.Tier]string{}
 	if store, err := settingspkg.OpenFor(dir); err == nil {
 		sources = store.Text(settingspkg.AgentSources)
@@ -1125,106 +1014,8 @@ func dryRunBody(opts wiring.RunOpts, selected models.Model, config turn.Config) 
 		return codex.Request{Model: selected.ID, Instructions: config.SystemMessage(), Messages: messages, Tools: tools, Effort: opts.Effort, SummaryOff: summaryOff,
 			Verbosity: string(selected.Verbosity), ReasoningContext: string(selected.ReasoningContext)}.Encode(nil)
 	}
-	versions, _ := subFingerprint(opts.Dir)
+	versions, _ := wiring.SubFingerprint(opts.Dir)
 	return anthropic.Request{Model: selected.ID, System: []string{config.SystemMessage()}, Messages: messages, Tools: tools, Effort: opts.Effort, ClaudeCodeVersion: versions.ClaudeCode, OmitThinkingSummary: summaryOff}.Encode(true)
-}
-
-func turnTransportConfig() transport.Config {
-	return transport.Config{
-		AttemptTimeout: time.Duration(konst.TurnAttemptTimeoutMillis) * time.Millisecond,
-		Retries:        konst.TurnRetries,
-		Backoff:        time.Duration(konst.TurnBackoffMillis) * time.Millisecond,
-		MaxBackoff:     time.Duration(konst.TurnMaxBackoffMillis) * time.Millisecond,
-		Growth:         konst.TurnBackoffGrowth,
-		JitterFraction: konst.TurnBackoffJitterFraction,
-		TotalWait:      time.Duration(konst.TurnTotalBackoffCeilingMillis) * time.Millisecond,
-		Concurrency:    1,
-	}
-}
-
-func keyModel(model string) (turn.Model, error) {
-	facts := keyFactsOf(roleLLM, openRouterName)
-	key, err := jev.KeyFor(sys.CredentialFileName, facts.variable)
-	if err != nil {
-		return nil, fmt.Errorf("no %s %s key, run %s: %w", facts.name, facts.role, facts.hint(), err)
-	}
-	wire, err := openrouter.New(openrouter.Config{
-		Endpoint:  os.Getenv(openRouterEndpointVariable),
-		Model:     model,
-		Key:       key,
-		KeyName:   facts.variable,
-		Transport: turnTransportConfig(),
-	})
-	if err != nil {
-		return nil, err
-	}
-	return llm.NewClient(wire)
-}
-
-type codexTurn struct {
-	wire             *codex.Wire
-	effort           llm.Effort
-	verbosity        models.Verbosity
-	reasoningContext models.ReasoningContext
-}
-
-func (c codexTurn) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
-	var instructions []string
-	messages := make([]llm.Message, 0, len(request.Messages))
-	for _, message := range request.Messages {
-		if message.Role == llm.RoleSystem {
-			instructions = append(instructions, message.Content)
-			continue
-		}
-		messages = append(messages, message)
-	}
-
-	result, _, err := c.wire.Ask(ctx, codex.Request{
-		Turn:             request.Turn,
-		Instructions:     strings.Join(instructions, "\n\n"),
-		Messages:         messages,
-		Tools:            request.Tools,
-		ToolChoice:       request.ToolChoice.OpenAIValue(),
-		Effort:           c.effort,
-		SummaryOff:       request.OmitThinkingSummary,
-		Verbosity:        string(c.verbosity),
-		ReasoningContext: string(c.reasoningContext),
-		OnThinking:       request.OnThinking,
-		OnRetry:          request.OnRetry,
-	})
-	if err != nil {
-		return llm.Decision{}, err
-	}
-
-	decision := llm.Decision{
-		Build:            result.Model,
-		RequestID:        result.ID,
-		Outcome:          llm.OutcomeAfter(result.Stop, len(result.ToolCalls)),
-		Stop:             result.StopReason,
-		Content:          result.Content,
-		Thinking:         llm.Thinking{Text: result.Thinking, Signature: codex.EncodeReasoning(result.ReasoningID, result.ReasoningEncrypted)},
-		ToolCalls:        result.ToolCalls,
-		Usage:            llm.Usage{InputTokens: result.Usage.Input, OutputTokens: result.Usage.Output, ReasoningTokens: result.Usage.Reasoning},
-		PromptAccounting: llm.PromptAccountingFor(codex.Name),
-		CacheReadTokens:  result.Usage.CacheRead,
-		FirstTokenMS:     result.FirstTokenMS,
-		Warnings:         result.Warnings,
-	}
-	if decision.Outcome == llm.OutcomeRefusal {
-		decision.Refusal = cmp.Or(result.Refusal, result.StopReason)
-	}
-	return decision, nil
-}
-
-func sessionID() (string, error) {
-	var raw [16]byte
-	if _, err := rand.Read(raw[:]); err != nil {
-		return "", err
-	}
-	raw[6] = raw[6]&0x0f | 0x40
-	raw[8] = raw[8]&0x3f | 0x80
-	text := hex.EncodeToString(raw[:])
-	return text[:8] + "-" + text[8:12] + "-" + text[12:16] + "-" + text[16:20] + "-" + text[20:], nil
 }
 
 const docsSentence = "for a question about tofu itself, or a request to change its settings, rules, sub-agents or models, call " +
@@ -1306,7 +1097,7 @@ type warmProcesses struct {
 	tests    *turn.TestRunners
 	tabs     *tools.BrowserTabs
 	keys     storedKeys
-	memory   sessionMemoryModel
+	memory   wiring.SessionMemoryModel
 	drops    *turn.DropIndex
 }
 
@@ -1319,7 +1110,7 @@ func (w *warmProcesses) Close() {
 		w.checkers.Close()
 		w.tests.Close()
 		w.tabs.Close()
-		w.memory.close()
+		w.memory.Close()
 	}
 }
 
@@ -1344,7 +1135,7 @@ func assembleRunTools(dir, set string, ledger *turn.ReadLedger, warm *warmProces
 	if err := cmp.Or(readErr, writeErr); err != nil {
 		return nil, nil, err
 	}
-	rules, _, rulesErr := loadRules("", dir)
+	rules, _, rulesErr := wiring.LoadRules("", dir)
 	if rulesErr != nil {
 		return nil, nil, rulesErr
 	}
@@ -1399,23 +1190,6 @@ func planAsOffered(model models.Model, built []contract.Tool, plan *tools.Plan) 
 	return slices.DeleteFunc(built, func(tool contract.Tool) bool { return tool.Name() == tools.PlanToolName }), nil
 }
 
-type subscriptionModel struct{ opts wiring.RunOpts }
-
-func (s subscriptionModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
-	opened, err := openAppWire(s.opts)
-	if opened.held != nil {
-		defer opened.held.close()
-	}
-	if err != nil {
-		return llm.Decision{}, err
-	}
-	account, err := opened.held.forTurn().Pick(ctx)
-	if err != nil {
-		return llm.Decision{}, err
-	}
-	return account.Model.Ask(ctx, request)
-}
-
 func browserSlug(dir string) (slug, key string) {
 	for _, key := range []string{settingspkg.BrowserModel, subagent.TierDumb.Setting(), subagent.TierWorker.Setting()} {
 		if slug := strings.TrimSpace(settingspkg.TextSaying(dir, key, nil)); slug != "" {
@@ -1442,7 +1216,7 @@ func browserModel(dir string) (turn.Model, string, error) {
 	if len(model.Efforts) > 0 {
 		opts.Effort = wiring.DefaultEffort(model.Efforts)
 	}
-	return subscriptionModel{opts}, slug + " from " + key, nil
+	return wiring.SubscriptionModel{Opts: opts}, slug + " from " + key, nil
 }
 
 func browserRecipeBrief(notify func(string)) func(subagent.Definition, string) string {
@@ -1564,14 +1338,14 @@ func keySpend(row turn.Row, askedAs string) string {
 	if row.TotalCostUSD > 0 {
 		return reported
 	}
-	registry, _ := modelRegistry()
+	registry, _ := wiring.ModelRegistry()
 	price, priced := registry.Prices[askedAs]
 	if !priced {
 		return reported
 	}
 	var estimate float64
 	for _, step := range row.Steps {
-		estimate += listUSD(price, step.PromptTokens, step.CacheReadTokens, step.CompletionTokens)
+		estimate += wiring.ListUSD(price, step.PromptTokens, step.CacheReadTokens, step.CompletionTokens)
 	}
 	return fmt.Sprintf("spend api key estimated $%.6f at list price", estimate)
 }
@@ -1754,9 +1528,9 @@ func parseRunArgs(args []string) (wiring.RunOpts, error) {
 		return wiring.RunOpts{}, fmt.Errorf("--gate %q is none of %s: with no --gate jev's verdict is enforced",
 			opts.GateArm, strings.Join(gateArms(), ", "))
 	}
-	if opts.SiftArm != siftFollowsTheTable && !slices.Contains(siftArms(), opts.SiftArm) {
+	if opts.SiftArm != wiring.SiftFollowsTheTable && !slices.Contains(wiring.SiftArms(), opts.SiftArm) {
 		return wiring.RunOpts{}, fmt.Errorf("--sift %q is none of %s: with no --sift the method table decides",
-			opts.SiftArm, strings.Join(siftArms(), ", "))
+			opts.SiftArm, strings.Join(wiring.SiftArms(), ", "))
 	}
 	if opts.DoneArm != "" && !slices.Contains(settingspkg.DoneReviews(), opts.DoneArm) {
 		return wiring.RunOpts{}, fmt.Errorf("--done-review %q is none of %s: with no --done-review the %s setting decides", opts.DoneArm, strings.Join(settingspkg.DoneReviews(), ", "), settingspkg.DoneReview)
