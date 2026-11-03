@@ -36,6 +36,7 @@ import (
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/testkit/cli"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/registry"
 	tuisession "tofu/internal/ui/tui/chat/session"
 )
@@ -49,7 +50,7 @@ func projectSessions(t *testing.T, dir string) *session.Store {
 	return session.OpenAt(state)
 }
 
-func buildTestRunTools(dir, set string) ([]turn.Tool, error) {
+func buildTestRunTools(dir, set string) ([]contract.Tool, error) {
 	shell, err := turn.ResolveRunShell("")
 	if err != nil {
 		return nil, err
@@ -135,7 +136,7 @@ func TestASecondIdenticalReadInOneTurnNeverReachesTheTool(t *testing.T) {
 	t.Logf("the file was deleted between the two reads and the second answered %d bytes: %q", second.ResultBytes, answers[1])
 }
 
-func ranTool(t *testing.T, dir, name, args string) turn.Result {
+func ranTool(t *testing.T, dir, name, args string) contract.Result {
 	t.Helper()
 	built, err := buildTestRunTools(dir, toolSetFull)
 	if err != nil {
@@ -152,7 +153,7 @@ func ranTool(t *testing.T, dir, name, args string) turn.Result {
 		return result
 	}
 	t.Fatalf("no tool named %s was built", name)
-	return turn.Result{}
+	return contract.Result{}
 }
 
 func TestTheWriteAndEditARunBuildsAreCheckedByTheWarmTscItIsGiven(t *testing.T) {
@@ -175,7 +176,7 @@ func TestTheWriteAndEditARunBuildsAreCheckedByTheWarmTscItIsGiven(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	named := map[string]turn.Tool{}
+	named := map[string]contract.Tool{}
 	for _, tool := range built {
 		named[tool.Name()] = tool
 	}
@@ -808,7 +809,7 @@ func armOpts(t *testing.T, args ...string) wiring.RunOpts {
 	return opts
 }
 
-func mustConfig(t *testing.T, opts wiring.RunOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool) {
+func mustConfig(t *testing.T, opts wiring.RunOpts, built []contract.Tool, run runtime) (turn.Config, *turn.SpawnTool) {
 	t.Helper()
 	places, err := sys.ResolvePlaces(".")
 	if err != nil {
@@ -1127,10 +1128,10 @@ func TestTheLeadAloneHoldsTheCronToolAndAFiredTurnNeverPushes(t *testing.T) {
 		if !slices.Contains(lead, tools.CronToolName) {
 			t.Errorf("arms %v: the lead is not given the cron tool: %v", arms, lead)
 		}
-		if slices.ContainsFunc(built, func(tool turn.Tool) bool { return tool.Name() == tools.CronToolName }) {
+		if slices.ContainsFunc(built, func(tool contract.Tool) bool { return tool.Name() == tools.CronToolName }) {
 			t.Errorf("arms %v: the cron tool is in the set a sub-agent is given", arms)
 		}
-		bash := shellsverb.WithoutPush(built)[slices.IndexFunc(built, func(tool turn.Tool) bool { return tool.Name() == "bash" })]
+		bash := shellsverb.WithoutPush(built)[slices.IndexFunc(built, func(tool contract.Tool) bool { return tool.Name() == "bash" })]
 		for command, refused := range map[string]bool{"git push origin main": true, "git -C . push --force": true, "git status": false} {
 			raw, _ := json.Marshal(map[string]string{"command": command})
 			_, err := bash.Run(t.Context(), raw)

@@ -39,6 +39,7 @@ import (
 	sessionstore "tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/registry"
 	"tofu/internal/tools/shell/process"
 	"tofu/internal/ui/keymap"
@@ -667,7 +668,7 @@ func shellCommand(ctx context.Context, dir string, registry *shell.Registry, com
 	if err != nil {
 		return err.Error(), false
 	}
-	return result.Content, result.Outcome == turn.ResultAborted
+	return result.Content, result.Outcome == contract.ResultAborted
 }
 
 func freshSession(live *host.Host) string {

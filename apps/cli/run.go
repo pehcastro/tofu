@@ -46,6 +46,7 @@ import (
 	"tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/registry"
 	"tofu/internal/tools/web"
 	"tofu/internal/tools/web/browser/loop"
@@ -116,8 +117,8 @@ type runtime struct {
 	omitThinkingSummary bool
 }
 
-func (r runtime) leadTools(lead []turn.Tool) turn.Registry {
-	scheduled := turn.Tool(turn.ListedOnly{Tool: tools.Cron{}, Why: "tofu run has no host to fire a job, so one made here would never run: schedule it in the app or tofu serve"})
+func (r runtime) leadTools(lead []contract.Tool) turn.Registry {
+	scheduled := contract.Tool(turn.ListedOnly{Tool: tools.Cron{}, Why: "tofu run has no host to fire a job, so one made here would never run: schedule it in the app or tofu serve"})
 	if r.cron != nil {
 		scheduled = tools.Cron{Book: r.cron, Now: r.now, Told: r.notify}
 	}
@@ -642,7 +643,7 @@ type composedRun struct {
 	checksWork   bool
 }
 
-func composeRun(opts wiring.RunOpts, built []turn.Tool, run runtime) (composedRun, error) {
+func composeRun(opts wiring.RunOpts, built []contract.Tool, run runtime) (composedRun, error) {
 	if run.composed != nil {
 		return *run.composed, nil
 	}
@@ -797,10 +798,10 @@ func droppedRules(stack ruleStack, kept []rule.Rule, switchedOff []rule.Overridi
 	return dropped
 }
 
-func runConfig(opts wiring.RunOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool, error) {
+func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (turn.Config, *turn.SpawnTool, error) {
 	orchestratorID, sessionID := cmp.Or(opts.TurnID, turn.NewID(time.Now())), cmp.Or(opts.Session, opts.TurnID, session.NewEventID())
 	if opts.NoDocs {
-		built = slices.DeleteFunc(slices.Clone(built), func(tool turn.Tool) bool { return tool.Name() == tools.DocsToolName })
+		built = slices.DeleteFunc(slices.Clone(built), func(tool contract.Tool) bool { return tool.Name() == tools.DocsToolName })
 	}
 	if run.sessions != nil && opts.ToolSet != toolSetThree {
 		built = append(slices.Clone(built), tools.NewQuote(run.sessions, sessionID))
@@ -893,7 +894,7 @@ func runConfig(opts wiring.RunOpts, built []turn.Tool, run runtime) (turn.Config
 		rules, _, err := loadRules("", dir)
 		return rules, err
 	}
-	asking := []turn.Tool{tools.RuleOverride{Ask: run.leadAsks, Running: running, Global: layers[0].dir, Project: layers[1].dir}, tools.AskPerson{}}
+	asking := []contract.Tool{tools.RuleOverride{Ask: run.leadAsks, Running: running, Global: layers[0].dir, Project: layers[1].dir}, tools.AskPerson{}}
 	if run.leadAsks != nil {
 		asking[1] = askPersonTool(dir, run.places.Log, run.leadAsks, config.Inbox, run.keys.keyring(), run.notify)
 	}
@@ -981,12 +982,12 @@ func runConfig(opts wiring.RunOpts, built []turn.Tool, run runtime) (turn.Config
 		return turn.SubAgentLimits{Running: store.Int(settingspkg.SubAgentsPerTurn), Depth: store.Int(settingspkg.SubAgentDepth),
 			CheckIn: time.Duration(store.Int(settingspkg.SubAgentCheckSeconds)) * time.Second, CacheTTL: store.Text(settingspkg.SubAgentCache)}
 	}
-	own := slices.DeleteFunc(slices.Clone(built), func(tool turn.Tool) bool { return slices.Contains(leadNeverCalls(), tool.Name()) })
+	own := slices.DeleteFunc(slices.Clone(built), func(tool contract.Tool) bool { return slices.Contains(leadNeverCalls(), tool.Name()) })
 	if settingspkg.TextSaying(dir, settingspkg.BrowserDriver, run.notify) == settingspkg.DriverSubagent {
-		own = slices.DeleteFunc(own, func(tool turn.Tool) bool { return strings.HasPrefix(tool.Name(), "browser_") })
+		own = slices.DeleteFunc(own, func(tool contract.Tool) bool { return strings.HasPrefix(tool.Name(), "browser_") })
 	}
 	if !nodeProject(dir) {
-		own = slices.DeleteFunc(own, func(tool turn.Tool) bool { return tool.Name() == "typecheck" || tool.Name() == "test" })
+		own = slices.DeleteFunc(own, func(tool contract.Tool) bool { return tool.Name() == "typecheck" || tool.Name() == "test" })
 	}
 	orchestrating := append(turn.WithSourceBudget(append(own, spawner), prompt.subAgents.Defined), asking...)
 	if run.gate != nil {
@@ -1055,7 +1056,7 @@ func leadNeverCalls() []string {
 	return []string{"github_pr_diff", "tofu_rules_check", "tofu_judge", "tofu_why", "tofu_replay"}
 }
 
-func scanSubAgents(dir string, built []turn.Tool) subagent.Found {
+func scanSubAgents(dir string, built []contract.Tool) subagent.Found {
 	names := []string{(&turn.SpawnTool{}).Name(), turn.SkillToolName}
 	for _, tool := range built {
 		names = append(names, tool.Name())
@@ -1322,7 +1323,7 @@ func (w *warmProcesses) Close() {
 	}
 }
 
-func buildRunToolsForRun(dir, set string, ledger *turn.ReadLedger, warm *warmProcesses, shell turn.RunShell) ([]turn.Tool, *tools.Plan, error) {
+func buildRunToolsForRun(dir, set string, ledger *turn.ReadLedger, warm *warmProcesses, shell turn.RunShell) ([]contract.Tool, *tools.Plan, error) {
 	bashTool, bashErr := turn.NewBashToolFromShell(dir, shell)
 	if bashErr != nil {
 		return nil, nil, bashErr
@@ -1333,7 +1334,7 @@ func buildRunToolsForRun(dir, set string, ledger *turn.ReadLedger, warm *warmPro
 	return assembleRunTools(dir, set, ledger, warm, bashTool)
 }
 
-func assembleRunTools(dir, set string, ledger *turn.ReadLedger, warm *warmProcesses, bashTool *turn.BashTool) ([]turn.Tool, *tools.Plan, error) {
+func assembleRunTools(dir, set string, ledger *turn.ReadLedger, warm *warmProcesses, bashTool *turn.BashTool) ([]contract.Tool, *tools.Plan, error) {
 	if warm == nil {
 		warm = &warmProcesses{}
 	}
@@ -1349,13 +1350,13 @@ func assembleRunTools(dir, set string, ledger *turn.ReadLedger, warm *warmProces
 	}
 	read := readTool.Reading(ledger)
 	write := writeTool.Reading(ledger).Checking(checkers).Ruling(rules)
-	checked, checkErr := tools.Checked(dir, []turn.Tool{bashTool})
+	checked, checkErr := tools.Checked(dir, []contract.Tool{bashTool})
 	if checkErr != nil {
 		return nil, nil, checkErr
 	}
 	shell := checked[0]
 	if set == toolSetThree {
-		return tools.NewMemo().Wrap([]turn.Tool{read, write, shell}), nil, nil
+		return tools.NewMemo().Wrap([]contract.Tool{read, write, shell}), nil, nil
 	}
 	globTool, globErr := tools.NewGlob(dir)
 	searchTool, searchErr := tools.NewSearch(dir)
@@ -1387,15 +1388,15 @@ func assembleRunTools(dir, set string, ledger *turn.ReadLedger, warm *warmProces
 		return nil, nil, err
 	}
 	plan := tools.NewPlan()
-	full := append([]turn.Tool{read, write, shell, plan, tools.Shells{}, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger).Checking(checkers).Ruling(rules), typecheckTool, testTool, githubTool}, verbTools...)
+	full := append([]contract.Tool{read, write, shell, plan, tools.Shells{}, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger).Checking(checkers).Ruling(rules), typecheckTool, testTool, githubTool}, verbTools...)
 	return tools.NewMemo().Wrap(append(append(full, webTools...), browserTools...)), plan, nil
 }
 
-func planAsOffered(model models.Model, built []turn.Tool, plan *tools.Plan) ([]turn.Tool, *tools.Plan) {
+func planAsOffered(model models.Model, built []contract.Tool, plan *tools.Plan) ([]contract.Tool, *tools.Plan) {
 	if model.Plan != models.PlanWithheld {
 		return built, plan
 	}
-	return slices.DeleteFunc(built, func(tool turn.Tool) bool { return tool.Name() == tools.PlanToolName }), nil
+	return slices.DeleteFunc(built, func(tool contract.Tool) bool { return tool.Name() == tools.PlanToolName }), nil
 }
 
 type subscriptionModel struct{ opts wiring.RunOpts }
@@ -1537,7 +1538,7 @@ func onBrowserModel(dir string, found subagent.Found, catalog models.Library) su
 
 const browserAgent = "browser"
 
-func buildWebTools(dir string, keys jev.Keyring) ([]turn.Tool, error) {
+func buildWebTools(dir string, keys jev.Keyring) ([]contract.Tool, error) {
 	layers, err := web.Layers(shipped.Files(), dir)
 	if err != nil {
 		return nil, err

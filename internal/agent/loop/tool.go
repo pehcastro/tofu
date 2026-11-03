@@ -8,29 +8,6 @@ import (
 	"tofu/internal/tools/contract"
 )
 
-type ResultOutcome = contract.ResultOutcome
-
-const (
-	ResultUnset     = contract.ResultUnset
-	ResultSucceeded = contract.ResultSucceeded
-	ResultFailed    = contract.ResultFailed
-	ResultAborted   = contract.ResultAborted
-)
-
-type Result = contract.Result
-
-type Tool = contract.Tool
-
-type Root = contract.Root
-
-func NewRoot(dir string) (Root, error) {
-	return contract.NewRoot(dir)
-}
-
-func within(base, path string) (string, bool) {
-	return contract.Within(base, path)
-}
-
 func runeSafeHead(s string, n int) string {
 	if n >= len(s) {
 		return s
@@ -53,12 +30,12 @@ func runeSafeTail(s string, n int) string {
 }
 
 type Registry struct {
-	tools  []Tool
-	byName map[string]Tool
+	tools  []contract.Tool
+	byName map[string]contract.Tool
 }
 
-func NewRegistry(tools ...Tool) Registry {
-	byName := make(map[string]Tool, len(tools))
+func NewRegistry(tools ...contract.Tool) Registry {
+	byName := make(map[string]contract.Tool, len(tools))
 	for _, tool := range tools {
 		byName[tool.Name()] = tool
 	}

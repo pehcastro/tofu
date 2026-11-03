@@ -13,6 +13,7 @@ import (
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
 	settingspkg "tofu/internal/store/settings"
+	"tofu/internal/tools/contract"
 )
 
 func showPrompt(opts wiring.RunOpts, out, errOut io.Writer) int {
@@ -106,7 +107,7 @@ func showPrompt(opts wiring.RunOpts, out, errOut io.Writer) int {
 	return output.ExitOK
 }
 
-func offeredTools(opts wiring.RunOpts, prompt composedRun, named []turn.Tool) ([]llm.Tool, leadForeseen, error) {
+func offeredTools(opts wiring.RunOpts, prompt composedRun, named []contract.Tool) ([]llm.Tool, leadForeseen, error) {
 	var board leadForeseen
 	config, spawner, err := runConfig(opts, named, runtime{open: openAppWire, composed: &prompt, foreseen: &board})
 	if err != nil || opts.Agent == "" {

@@ -3,6 +3,7 @@ package schemas
 import (
 	iturn "tofu/internal/agent/loop"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/registry"
 )
 
@@ -17,10 +18,10 @@ func FullRegistry(dir string) iturn.Registry {
 	readTool := must(iturn.NewReadTool(dir))
 	writeTool := must(iturn.NewWriteTool(dir))
 	bashTool := must(iturn.NewBashTool(dir))
-	shell := must(tools.Checked(dir, []iturn.Tool{bashTool}))[0]
+	shell := must(tools.Checked(dir, []contract.Tool{bashTool}))[0]
 
 	verbTools := must(tools.NewVerbs(dir))
-	full := append([]iturn.Tool{
+	full := append([]contract.Tool{
 		readTool, writeTool, shell, tools.NewPlan(),
 		must(tools.NewProject(dir)), must(tools.NewGlob(dir)), must(tools.NewSearch(dir)),
 		must(tools.NewSymbols(dir)), must(tools.NewEdit(dir)), must(tools.NewGitHubPRDiff(dir)),
