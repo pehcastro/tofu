@@ -23,8 +23,10 @@ Not in git: `.local/`, `.tofu/`, `.claude/`, `.agents/`, `.playground/`, `.zed/`
 
 | A new... | Goes in | Copy the shape of |
 |---|---|---|
-| verb | `apps/cli/<verb>.go` | `apps/cli/` |
+| verb | `internal/cli/verbs/<verb>/`, registered in `apps/cli/main.go` | `internal/cli/verbs/shells/` |
 | verb output or page layout | `internal/cli/output/`, `internal/cli/page/` | `internal/cli/page/` |
+| run option, wire or classifier a verb builds | `internal/cli/wiring/` | `internal/cli/wiring/` |
+| verb test helper | `internal/testkit/cli/` | `internal/testkit/cli/` |
 | tool an agent calls | `internal/tools/registry/<name>.go`, its engine in `internal/tools/<category>/` | `internal/tools/web/` |
 | wire protocol for a model | `internal/models/llm/wire/<name>/` | `internal/models/llm/wire/anthropic/` |
 | classifier provider | `internal/models/classifiers/providers/<name>/` | `internal/models/classifiers/providers/typesafe/` |
@@ -42,7 +44,7 @@ Not in git: `.local/`, `.tofu/`, `.claude/`, `.agents/`, `.playground/`, `.zed/`
 
 ## When two folders both seem to fit
 
-- `apps/cli/` or `internal/cli/`: the verb itself is in `apps/cli/`; what two verbs share is in `internal/cli/`.
+- `apps/cli/` or `internal/cli/`: a verb is a package in `internal/cli/verbs/` (boardy, shells, judge, lint, guard, hooks, settings, memory); the verbs tied to the run and the session (run, session, drive, status, models, rules, learn, memory tree, doctor, library, browser) live in `apps/cli/`; how a verb builds its run options, wires, classifier and names is in `internal/cli/wiring/`; what verbs print through is in `internal/cli/output/`.
 - `internal/tools/registry/` or `internal/tools/<category>/`: what the model sees and calls is in `registry/`; the code that does the work is in the category.
 - `internal/judge/` or `internal/models/classifiers/`: the decision and its question are in `judge/`; the client that asks the classifier is in `classifiers/`.
 - `library/` or `internal/librarian/`: a file a person edits is in `library/`; the code that loads it and picks what reaches a prompt is in `internal/librarian/`.
@@ -107,7 +109,9 @@ tofu/
 │   │   ├── output/
 │   │   ├── page/
 │   │   ├── render/
-│   │   └── sample/
+│   │   ├── sample/
+│   │   ├── verbs/
+│   │   └── wiring/
 │   ├── host/
 │   ├── judge/
 │   │   ├── gate/
@@ -137,6 +141,7 @@ tofu/
 │   │   └── snapshot/
 │   ├── sys/
 │   ├── testkit/
+│   │   ├── cli/
 │   │   └── golden/
 │   ├── tools/
 │   │   ├── code/
