@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/llm/catalog"
@@ -52,9 +53,9 @@ func TestEachBindingOpensItsOwnWireWithItsOwnClassifierKey(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			client, err := newJevClient()
+			client, err := wiring.NewJevClient()
 			if err != nil {
-				t.Fatalf("newJevClient: %v", err)
+				t.Fatalf("wiring.NewJevClient: %v", err)
 			}
 			if name := client.Caps().Name; name != bound.wire {
 				t.Errorf("the bound %s opened the %s wire", bound.slug, name)

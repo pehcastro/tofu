@@ -15,6 +15,7 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/sys"
+	testkit "tofu/internal/testkit/cli"
 	"tofu/internal/testkit/golden"
 )
 
@@ -96,7 +97,7 @@ func TestNoColourStatusWritesNoEscapeAndAColourTerminalDoes(t *testing.T) {
 }
 
 func TestLoginTypeSafeAgainstAStubPrintsOneReceiptLine(t *testing.T) {
-	scratchProject(t)
+	testkit.ScratchProject(t)
 	jevStub(t, http.StatusOK, loginReachableReply, nil)
 	var out, errOut bytes.Buffer
 	if code := loginVerb([]string{"classifier", typeSafeName}, strings.NewReader(madeUpGateKey+"\n"), &out, &errOut); code != output.ExitOK {
@@ -108,7 +109,7 @@ func TestLoginTypeSafeAgainstAStubPrintsOneReceiptLine(t *testing.T) {
 }
 
 func TestLoginTypeSafeRefusedWithA401PrintsOneErrorLineAndNoVendorBody(t *testing.T) {
-	scratchProject(t)
+	testkit.ScratchProject(t)
 	jevStub(t, http.StatusUnauthorized, madeUpVendorBody, nil)
 	var out, errOut bytes.Buffer
 	if code := loginVerb([]string{"classifier", typeSafeName}, strings.NewReader(madeUpGateKey+"\n"), &out, &errOut); code != output.ExitVerdict {
@@ -122,7 +123,7 @@ func TestLoginTypeSafeRefusedWithA401PrintsOneErrorLineAndNoVendorBody(t *testin
 }
 
 func TestDisableAndEnablePrintOneReceiptLineEach(t *testing.T) {
-	scratchProject(t)
+	testkit.ScratchProject(t)
 	savedAccount(t)
 	for _, c := range []struct{ flag, want string }{
 		{"--disable", "✓ #1 claude-sub ada@example.com set aside  ~/.tofu/agent.db\n"},
@@ -139,7 +140,7 @@ func TestDisableAndEnablePrintOneReceiptLineEach(t *testing.T) {
 }
 
 func TestLogoutWithTwoAccountsNamesBothAndRemovesOnlyTheOneNumbered(t *testing.T) {
-	scratchProject(t)
+	testkit.ScratchProject(t)
 	savedAccount(t)
 	savedAccountAs(t, "lin.marsh@example.org")
 	var out, errOut bytes.Buffer

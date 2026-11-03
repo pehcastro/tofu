@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"tofu/internal/agent/loop"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/method"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
@@ -86,7 +87,7 @@ func shellSiftOn(arm, log string, keys jev.Keyring) (*turn.ShellSift, *shellScor
 		if at < 0 {
 			return nil, nil, fmt.Errorf("%s asks no %s, and it is the rubric every chunk is judged by", sift.ShellBatchPoint, sift.NeededQuestion)
 		}
-		client, clientErr := jevClientFrom(keys, konst.SiftConcurrency)
+		client, clientErr := wiring.JevClientFrom(keys, konst.SiftConcurrency)
 		if clientErr != nil {
 			return nil, nil, clientErr
 		}

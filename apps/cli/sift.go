@@ -12,6 +12,7 @@ import (
 
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/platform/recover"
@@ -85,14 +86,14 @@ func siftVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	}
 	raw, err := io.ReadAll(in)
 	if err != nil {
-		return failed(o, fmt.Errorf("reading standard input: %w", err))
+		return wiring.Failed(o, fmt.Errorf("reading standard input: %w", err))
 	}
 	text := string(raw)
 
 	if opts.restore {
 		original, err := sift.Restore(text)
 		if err != nil {
-			return failed(o, err)
+			return wiring.Failed(o, err)
 		}
 		return protocol(o, output.ExitOK, struct {
 			Text string `json:"text"`
@@ -101,16 +102,16 @@ func siftVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 
 	parts, err := sift.Split(text)
 	if err != nil {
-		return failed(o, err)
+		return wiring.Failed(o, err)
 	}
 	if len(parts) == 0 {
-		return failed(o, errors.New("standard input carries no text"))
+		return wiring.Failed(o, errors.New("standard input carries no text"))
 	}
 
 	started := time.Now()
 	marks, cost, err := siftMarks(parts, opts)
 	if err != nil {
-		return failed(o, err)
+		return wiring.Failed(o, err)
 	}
 	report := siftReport{Arm: opts.arm, Paragraphs: len(parts), ElapsedMS: time.Since(started).Milliseconds(), Cost: cost, Text: sift.Render(parts, marks)}
 	for i, p := range parts {

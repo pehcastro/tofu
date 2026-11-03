@@ -20,6 +20,7 @@ import (
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
 	"tofu/internal/cli/render"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
@@ -72,11 +73,9 @@ func isRole(word string) bool {
 
 func loginWords(provider string) []string { return []string{string(firstRoleOf(provider)), provider} }
 
-func commandFor(verb string, of role, provider string) string {
-	return "tofu " + verb + " " + string(of) + " " + provider
+func loginHint(provider string) string {
+	return wiring.CommandFor("login", firstRoleOf(provider), provider)
 }
-
-func loginHint(provider string) string { return commandFor("login", firstRoleOf(provider), provider) }
 
 func keyedProvider(provider string) bool {
 	return slices.ContainsFunc(keyTable(), func(fact keyFacts) bool { return fact.provider == provider })
@@ -215,9 +214,9 @@ func providerFor(verb string, want role, args []string) (cred.Spec, *loginRefusa
 	spec, err := cred.Lookup(provider)
 	switch {
 	case err == nil && string(spec.Provider) != provider:
-		return cred.Spec{}, usageRefusal(provider+" is now "+string(spec.Provider), commandFor(verb, roleLLM, string(spec.Provider)))
+		return cred.Spec{}, usageRefusal(provider+" is now "+string(spec.Provider), wiring.CommandFor(verb, roleLLM, string(spec.Provider)))
 	case err == nil && want != roleLLM:
-		return cred.Spec{}, usageRefusal(provider+" is under "+string(roleLLM)+", not "+string(want), commandFor(verb, roleLLM, provider))
+		return cred.Spec{}, usageRefusal(provider+" is under "+string(roleLLM)+", not "+string(want), wiring.CommandFor(verb, roleLLM, provider))
 	case err != nil && !keyedProvider(provider):
 		return cred.Spec{}, usageRefusal("unknown provider "+provider, loginUsage)
 	case err != nil && !keyedUnder(want, provider):
@@ -238,7 +237,7 @@ func logout(args []string) (loginReceipt, *loginRefusal) {
 	case refusal != nil:
 		return loginReceipt{}, refusal
 	case spec.Provider == "" && len(args) > 2:
-		return loginReceipt{}, usageRefusal("a key has no number", commandFor("logout", role(args[0]), args[1]))
+		return loginReceipt{}, usageRefusal("a key has no number", wiring.CommandFor("logout", role(args[0]), args[1]))
 	case spec.Provider == "":
 		return removeKey(keyFactsOf(role(args[0]), args[1]))
 	case len(args) > 3:
@@ -284,7 +283,7 @@ func removeAccount(provider cred.Provider, number []string) (loginReceipt, *logi
 		return loginReceipt{}, failure(err.Error(), "")
 	}
 	rows = slices.DeleteFunc(rows, func(row cred.Row) bool { return row.Credential.Provider != provider })
-	hint := commandFor("logout", roleLLM, string(provider)) + " <number>"
+	hint := wiring.CommandFor("logout", roleLLM, string(provider)) + " <number>"
 	switch {
 	case len(rows) == 0:
 		return loginReceipt{}, none
@@ -523,7 +522,7 @@ func promptKey(in io.Reader, prompts io.Writer, name, variable string) (string, 
 }
 
 func reachesJev(ctx context.Context, provider models.Provider, key string) error {
-	library, err := modelLibrary(".")
+	library, err := wiring.ModelLibrary(".")
 	if err != nil {
 		return err
 	}
@@ -537,7 +536,7 @@ func reachesJev(ctx context.Context, provider models.Provider, key string) error
 		}
 		model = library.Models[at]
 	}
-	client, err := classifier.Route{Model: model, Key: key}.Client(oneCallAtATime)
+	client, err := classifier.Route{Model: model, Key: key}.Client(wiring.OneCallAtATime)
 	if err != nil {
 		return err
 	}
@@ -552,14 +551,6 @@ func reachesJev(ctx context.Context, provider models.Provider, key string) error
 		}},
 	})
 	return err
-}
-
-func locateGateKey(keys jev.Keyring) (jev.Located, error) {
-	bound, err := classifier.Bound(".", keys)
-	if err != nil {
-		return jev.Located{}, err
-	}
-	return keys.LocateFor(sys.CredentialFileName, classifier.KeyName(bound.Provider))
 }
 
 func promptPaste(in io.Reader, prompts io.Writer) (string, error) {

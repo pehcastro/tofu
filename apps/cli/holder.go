@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"tofu/internal/agent/loop"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/platform/recover"
 	sessionstore "tofu/internal/store/session"
@@ -64,7 +65,7 @@ func runHub(dir string, say func(string)) error {
 		if shells != nil {
 			shells = shells.ForSession(id)
 		}
-		engine := &appEngine{dir: dir, open: open, tabs: tools.NewBrowserTabs(home), places: places, arms: runOpts{doneArm: os.Getenv(doneReviewVariable)}}
+		engine := &appEngine{dir: dir, open: open, tabs: tools.NewBrowserTabs(home), places: places, arms: wiring.RunOpts{DoneArm: os.Getenv(doneReviewVariable)}}
 		live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: shells, Check: cronChecker(dir), Resumed: resumed.hosted(), Unrecorded: unrecorded, ProjectTurn: projectTurn, Now: clock})
 		return live, func() {
 			live.Close()

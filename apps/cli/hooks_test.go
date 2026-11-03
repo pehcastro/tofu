@@ -12,8 +12,10 @@ import (
 
 	"tofu/internal/agent/hooks"
 	"tofu/internal/cli/output"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
+	testkit "tofu/internal/testkit/cli"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -57,7 +59,7 @@ func sessionEvents(t *testing.T, logged string) []string {
 }
 
 func TestHooksRunFiresSessionStartFirstAndSessionEndWhenItsLeadReturns(t *testing.T) {
-	isolateHome(t)
+	testkit.IsolateHome(t)
 	project := t.TempDir()
 	logged := sessionHooks(t, project)
 	deck := filepath.Join(t.TempDir(), "deck.jsonl")
@@ -66,7 +68,7 @@ func TestHooksRunFiresSessionStartFirstAndSessionEndWhenItsLeadReturns(t *testin
 	}
 	t.Setenv(cassetteVariable, deck)
 	var out, errOut bytes.Buffer
-	if code := runVerb([]string{"--dir", project, "--wire", wireSubscription, "--no-gate", "--sift", "free", "say hi"}, &out, &errOut); code != output.ExitOK {
+	if code := runVerb([]string{"--dir", project, "--wire", wiring.WireSubscription, "--no-gate", "--sift", "free", "say hi"}, &out, &errOut); code != output.ExitOK {
 		t.Fatalf("tofu run exited %d: %s", code, errOut.String())
 	}
 	seen := sessionEvents(t, logged)
@@ -77,13 +79,13 @@ func TestHooksRunFiresSessionStartFirstAndSessionEndWhenItsLeadReturns(t *testin
 }
 
 func TestHooksTheAppFiresSessionStartForStartupClearAndResumeAndSessionEndAtExit(t *testing.T) {
-	logged := sessionHooks(t, scratchProject(t))
+	logged := sessionHooks(t, testkit.ScratchProject(t))
 	dir, _ := os.Getwd()
 	model := &sendModel{}
 	for range 4 {
 		model.queued = append(model.queued, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"})
 	}
-	live := newAppSession(dir, func(runOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
+	live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
 	var events eventLog
 	live.run(t.Context(), onTheSubscription, "first", events.add)
 	first := live.ID()
@@ -106,7 +108,7 @@ func TestHooksTheAppFiresSessionStartForStartupClearAndResumeAndSessionEndAtExit
 }
 
 func TestHooksListsEverySourceWithItsTrustAndTrustTrustsTheProjectsOnce(t *testing.T) {
-	isolateHome(t)
+	testkit.IsolateHome(t)
 	t.Setenv("NO_COLOR", "1")
 	home, project := os.Getenv("USERPROFILE"), t.TempDir()
 	t.Chdir(project)

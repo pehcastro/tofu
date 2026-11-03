@@ -8,18 +8,16 @@ import (
 	"strings"
 
 	"tofu/internal/agent/loop"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/models/llm/catalog"
 	"tofu/internal/sys"
 	"tofu/library/questions"
 )
-
-const oneCallAtATime = 1
 
 const (
 	runGatePoint       = questions.ToolGatePin
@@ -51,7 +49,7 @@ func toolGateOn(dir, log string, keys jev.Keyring) (*toolGate, error) {
 	if err != nil {
 		return nil, unusableRule{err}
 	}
-	client, err := jevClientFrom(keys, oneCallAtATime)
+	client, err := wiring.JevClientFrom(keys, wiring.OneCallAtATime)
 	if err != nil {
 		return nil, err
 	}
@@ -112,20 +110,8 @@ func thresholdsInRange(r gate.Rule, set battery) error {
 	return nil
 }
 
-func newJevClient() (*jev.Client, error) {
-	return jevClientFrom(jev.ReadKeyring(), oneCallAtATime)
-}
-
-func jevClientFrom(keys jev.Keyring, concurrency int) (*jev.Client, error) {
-	return classifier.Open(".", keys, concurrency)
-}
-
-func boundClassifier() (models.Model, error) {
-	return classifier.Bound(".", jev.ReadKeyring())
-}
-
 func jevClientOn(key string, concurrency int) (*jev.Client, error) {
-	model, err := boundClassifier()
+	model, err := wiring.BoundClassifier()
 	if err != nil {
 		return nil, err
 	}

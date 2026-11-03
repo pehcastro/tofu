@@ -16,6 +16,7 @@ import (
 
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/questions"
@@ -272,8 +273,8 @@ func labelWindows(run *learn.Run, errOut io.Writer) error {
 }
 
 func groupByMeaning(run *learn.Run, known learn.Known, dir string, errOut io.Writer) {
-	opts := onTheBoundWire(runOpts{dir: dir, effort: llm.EffortDefault})
-	if opts.wire == wireKey {
+	opts := onTheBoundWire(wiring.RunOpts{Dir: dir, Effort: llm.EffortDefault})
+	if opts.Wire == wiring.WireKey {
 		run.Sent.Kept = "the lead model is reached through the OpenRouter key, which learning never spends"
 		return
 	}

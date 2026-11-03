@@ -9,18 +9,19 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/cli/output"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
 	settingspkg "tofu/internal/store/settings"
 )
 
-func showPrompt(opts runOpts, out, errOut io.Writer) int {
-	shell, err := turn.ResolveRunShell(settingspkg.TextSaying(opts.dir, settingspkg.Shell, writeNotice(errOut)))
+func showPrompt(opts wiring.RunOpts, out, errOut io.Writer) int {
+	shell, err := turn.ResolveRunShell(settingspkg.TextSaying(opts.Dir, settingspkg.Shell, writeNotice(errOut)))
 	if err != nil {
 		return runFail(errOut, err)
 	}
-	opts.shell = shell
-	named, _, err := buildRunToolsForRun(opts.dir, opts.toolSet, readsWhen(opts.readBeforeEdit, turn.NewReadLedger()), nil, shell)
+	opts.Shell = shell
+	named, _, err := buildRunToolsForRun(opts.Dir, opts.ToolSet, readsWhen(opts.ReadBeforeEdit, turn.NewReadLedger()), nil, shell)
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -33,7 +34,7 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 		return runFail(errOut, err)
 	}
 	opts, instructions, composed := prompt.opts, prompt.instructions, prompt.composed
-	sent := turn.Config{System: composed.Head(), Instructions: prompt.files, Memory: prompt.memory, Environment: composed.WithTaskRules(prompt.environment) + board.attached, Task: opts.task, Notes: []string{board.notified}}
+	sent := turn.Config{System: composed.Head(), Instructions: prompt.files, Memory: prompt.memory, Environment: composed.WithTaskRules(prompt.environment) + board.attached, Task: opts.Task, Notes: []string{board.notified}}
 	system, firstUser := sent.SystemMessage(), sent.FirstUserMessage()
 	uncomposed := len(runSystem(opts))
 
@@ -53,7 +54,7 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 		widest = max(widest, len(part.Concern))
 	}
 	_, _ = fmt.Fprintf(out, "task: %s\ninstruction files: %s\npaths the task names: %s\nverb the task names: %s\nrules: %d loaded, %d fire, %d held back, %d switched off\n\n",
-		opts.task, instructions,
+		opts.Task, instructions,
 		cmp.Or(strings.Join(composed.Task.Paths, ", "), "none, so a scope and a language reach nothing"),
 		cmp.Or(string(composed.Task.Verb), "none, so a rule that names a task holds back"),
 		fired+off+len(held), fired, len(held), off)
@@ -105,13 +106,13 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 	return output.ExitOK
 }
 
-func offeredTools(opts runOpts, prompt composedRun, named []turn.Tool) ([]llm.Tool, leadForeseen, error) {
+func offeredTools(opts wiring.RunOpts, prompt composedRun, named []turn.Tool) ([]llm.Tool, leadForeseen, error) {
 	var board leadForeseen
 	config, spawner, err := runConfig(opts, named, runtime{open: openAppWire, composed: &prompt, foreseen: &board})
-	if err != nil || opts.agent == "" {
+	if err != nil || opts.Agent == "" {
 		return config.Tools.Definitions(), board, err
 	}
-	agent, err := prompt.subAgents.Named(opts.agent)
+	agent, err := prompt.subAgents.Named(opts.Agent)
 	if err != nil {
 		return nil, leadForeseen{}, err
 	}

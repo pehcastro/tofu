@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"tofu/internal/agent/loop"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
@@ -49,7 +50,7 @@ func newTypedDoneReview() (typedDoneReview, error) {
 	if err != nil {
 		return typedDoneReview{}, err
 	}
-	client, err := newJevClient()
+	client, err := wiring.NewJevClient()
 	if err != nil {
 		return typedDoneReview{}, err
 	}

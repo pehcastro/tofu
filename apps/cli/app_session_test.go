@@ -16,10 +16,12 @@ import (
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/cron"
 	"tofu/internal/agent/loop"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/models/llm/core"
 	sessionstore "tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/testkit/cli"
 	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/composer/paste"
 )
@@ -74,7 +76,7 @@ func (l *eventLog) all() []tui.Event {
 }
 
 func TestASecondSendCarriesTheFirstExchangeAndItsToolCalls(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	model := &sendModel{queued: []llm.Decision{
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-1")}},
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the repo is a go harness"},
@@ -140,7 +142,7 @@ func (m *stoppingModel) Ask(ctx context.Context, request llm.Request) (llm.Decis
 }
 
 func TestASendStoppedPartWayCarriesItsWorkIntoThePleaseContinue(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	model := &stoppingModel{queued: []llm.Decision{{
 		Build:     "stub-model",
 		Outcome:   llm.OutcomeToolCalls,
@@ -191,7 +193,7 @@ func TestASendStoppedPartWayCarriesItsWorkIntoThePleaseContinue(t *testing.T) {
 }
 
 func TestASecondSendAnswersFromWhatTheFirstLearnedWithoutATool(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	fact := "tofu is a go harness whose code owns the loop"
 	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte(fact+"\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -229,7 +231,7 @@ func TestASecondSendAnswersFromWhatTheFirstLearnedWithoutATool(t *testing.T) {
 }
 
 func TestTwoSendsAppendToOneSessionBody(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	model := &sendModel{queued: []llm.Decision{
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "first answer"},
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "second answer"},
@@ -289,9 +291,9 @@ func screenshotBoard(t *testing.T, live *appSession) paste.Board {
 }
 
 func TestAnImagePastedBeforeTheFirstSendLandsInTheSessionThatSendCreates(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"}}}
-	live := newAppSession(dir, func(runOpts) (appWire, error) {
+	live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) {
 		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
 
@@ -322,12 +324,12 @@ func TestAnImagePastedBeforeTheFirstSendLandsInTheSessionThatSendCreates(t *test
 }
 
 func TestACronFileThatDidNotLoadIsLeftAsItIsBySends(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	model := &sendModel{queued: []llm.Decision{
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "first"},
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "second"},
 	}}
-	live := newAppSession(dir, func(runOpts) (appWire, error) {
+	live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) {
 		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
 	var first eventLog
@@ -369,9 +371,9 @@ func TestACronFileThatDidNotLoadIsLeftAsItIsBySends(t *testing.T) {
 }
 
 func TestAPastedImageReachesTheRequestSentToTheModel(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"}}}
-	live := newAppSession(dir, func(runOpts) (appWire, error) {
+	live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) {
 		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
 
@@ -395,9 +397,9 @@ func TestAPastedImageReachesTheRequestSentToTheModel(t *testing.T) {
 }
 
 func TestDeletingAPastedImagesTokenDropsItFromTheRequestSentToTheModel(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"}}}
-	live := newAppSession(dir, func(runOpts) (appWire, error) {
+	live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) {
 		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
 
@@ -422,7 +424,7 @@ func TestDeletingAPastedImagesTokenDropsItFromTheRequestSentToTheModel(t *testin
 }
 
 func TestAPasteInARepositoryWithNoRecordedSessionWorks(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	live := newAppSession(dir, nil, nil, time.Now, sessionResume{})
 	board := screenshotBoard(t, live)
 	msg := board.Attach(1)()
@@ -440,9 +442,9 @@ func TestAPasteInARepositoryWithNoRecordedSessionWorks(t *testing.T) {
 }
 
 func TestASendRecordsTheAttachmentEventInTheSessionBody(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"}}}
-	live := newAppSession(dir, func(runOpts) (appWire, error) {
+	live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) {
 		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
 
@@ -488,7 +490,7 @@ func TestASendRecordsTheAttachmentEventInTheSessionBody(t *testing.T) {
 }
 
 func TestAConversationThatOutgrowsItsBudgetAcrossSendsForks(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	model := &sendModel{}
 	send := stubbedTurn(dir, model)
 	cfg, err := recall.LoadConfig()
@@ -496,7 +498,7 @@ func TestAConversationThatOutgrowsItsBudgetAcrossSendsForks(t *testing.T) {
 		t.Fatal(err)
 	}
 	sentence := "carry this sentence forward. "
-	bulk := strings.Repeat(sentence, 18_800*cfg.OnWire(wireSubscription).BytesPerThousandTokens/1000/len(sentence))
+	bulk := strings.Repeat(sentence, 18_800*cfg.OnWire(wiring.WireSubscription).BytesPerThousandTokens/1000/len(sentence))
 	forkedAt := 0
 	for attempt := 1; attempt <= 8 && forkedAt == 0; attempt++ {
 		model.queued = []llm.Decision{

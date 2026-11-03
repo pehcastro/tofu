@@ -14,6 +14,7 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
@@ -21,6 +22,7 @@ import (
 	"tofu/internal/models/transport"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	testkit "tofu/internal/testkit/cli"
 )
 
 func recorded(t *testing.T, store *session.Store, id, task string, at time.Time, messages ...llm.Message) {
@@ -37,7 +39,7 @@ func recorded(t *testing.T, store *session.Store, id, task string, at time.Time,
 		}
 		events = append(events, session.Event{Kind: session.EventMessage, Body: body})
 	}
-	header := session.Header{ID: id, At: at, Task: task, Root: id, Wire: wireSubscription, Model: "stub-model", Outcome: "stopped"}
+	header := session.Header{ID: id, At: at, Task: task, Root: id, Wire: wiring.WireSubscription, Model: "stub-model", Outcome: "stopped"}
 	if err := store.Write(header, events); err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +47,7 @@ func recorded(t *testing.T, store *session.Store, id, task string, at time.Time,
 
 func sessionProject(t *testing.T) *session.Store {
 	t.Helper()
-	scratchProject(t)
+	testkit.ScratchProject(t)
 	store, err := session.Open()
 	if err != nil {
 		t.Fatal(err)
@@ -144,7 +146,7 @@ func TestSessionInfoPrintsTheHeaderAndTheCounts(t *testing.T) {
 	if code != output.ExitOK {
 		t.Fatalf("tofu session info exited %d", code)
 	}
-	for _, want := range []string{"turn-one", "stopped", "explain the repo", "1 step", "2 messages", wireSubscription, "stub-model"} {
+	for _, want := range []string{"turn-one", "stopped", "explain the repo", "1 step", "2 messages", wiring.WireSubscription, "stub-model"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("tofu session info does not say %q", want)
 		}
@@ -159,7 +161,7 @@ func TestSessionInfoPrintsTheHeaderAndTheCounts(t *testing.T) {
 }
 
 func TestSessionResumeSendsTheMessagesTheRecordHolds(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	first := &sendModel{queued: []llm.Decision{
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-1")}},
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the note is written"},
@@ -213,13 +215,13 @@ func TestSessionResumeSendsTheMessagesTheRecordHolds(t *testing.T) {
 }
 
 func liveAppSession(dir string, model turn.Model) *appSession {
-	return newAppSession(dir, func(runOpts) (appWire, error) {
+	return newAppSession(dir, func(wiring.RunOpts) (appWire, error) {
 		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
 }
 
 func TestSlashNewDropsWhatIsCarriedAndSlashResumeTakesTheSessionBack(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	first := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "wrote it"}}}
 	live := liveAppSession(dir, first)
 	var events eventLog
@@ -242,7 +244,7 @@ func TestSlashNewDropsWhatIsCarriedAndSlashResumeTakesTheSessionBack(t *testing.
 	}
 
 	second := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "still here"}}}
-	live.engine.open = func(runOpts) (appWire, error) {
+	live.engine.open = func(wiring.RunOpts) (appWire, error) {
 		return wireOn(second), nil
 	}
 	live.run(t.Context(), onTheSubscription, "what did you write", events.add)
@@ -298,7 +300,7 @@ func TestResumingATurnInterruptedMidToolCallSendsAListBothWiresAccept(t *testing
 }
 
 func TestContinueWithNoSessionRecordedPrintsNothingBeforeTheApp(t *testing.T) {
-	scratchProject(t)
+	testkit.ScratchProject(t)
 	out, errOut, _ := sessionRun(t, "--continue")
 	if out != "" {
 		t.Errorf("tofu --continue with nothing recorded printed before the app, and the app says it starts fresh:\n%s", out)
@@ -794,7 +796,7 @@ func TestTheForkSentenceReadsTheSameInSessionInfoAndInContext(t *testing.T) {
 }
 
 func TestAFailedCallAndAFailedTurnKeepTheirReasonInTraceAndInfo(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
 		{ID: "call-1", Name: "bash", Arguments: json.RawMessage(`{"command":"echo first; echo the disk is gone >&2; exit 3"}`)},
 	}}}}
@@ -847,7 +849,7 @@ func (m *thenRefused) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 }
 
 func TestSessionRequestPrintsTheFailingRequestAsSentAndTheWholeErrorBody(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	detail := `{"type":"error","error":{"type":"invalid_request_error","message":"messages.3: tool_use ids were found without tool_result blocks immediately after: call-a"}}`
 	model := &thenRefused{sendModel: sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
 		{ID: "call-a", Name: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)},

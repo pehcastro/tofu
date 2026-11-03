@@ -6,6 +6,7 @@ import (
 
 	"tofu/internal/agent/hooks"
 	"tofu/internal/agent/loop"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/store/session"
 )
@@ -62,27 +63,27 @@ func lastAsked(store *session.Store, dir, id string) (host.Pick, string) {
 		return host.Pick{}, "the orchestrator binding: the session records no pick and no request"
 	}
 	last := lead[len(lead)-1]
-	library, _ := modelLibrary(dir)
+	library, _ := wiring.ModelLibrary(dir)
 	if model, known := library.Resolve(last.Model); known && library.WireOf(model) == last.Wire {
 		return host.Pick{Wire: last.Wire, Model: model.Slug()}, "the session's last request, which " + last.Model + " answered"
 	}
 	return host.Pick{}, "the orchestrator binding: the session records no pick and its last request was answered by " + last.Model + ", which is no model in the library"
 }
 
-func (r runResumed) onItsModel(opts runOpts) (runOpts, string) {
+func (r runResumed) onItsModel(opts wiring.RunOpts) (wiring.RunOpts, string) {
 	if r.carry.Session == "" {
 		return opts, ""
 	}
-	opts.session = r.carry.Session
+	opts.Session = r.carry.Session
 	switch {
-	case opts.model != "":
+	case opts.Model != "":
 		return opts, "--model"
 	case r.pick.Model == "":
 		return opts, r.pickFrom
-	case opts.wire != "" && opts.wire != r.pick.Wire:
-		return opts, "the orchestrator binding on --wire " + opts.wire + ", which is not " + r.pick.Model + "'s"
+	case opts.Wire != "" && opts.Wire != r.pick.Wire:
+		return opts, "the orchestrator binding on --wire " + opts.Wire + ", which is not " + r.pick.Model + "'s"
 	}
-	opts.wire, opts.model = r.pick.Wire, r.pick.Model
+	opts.Wire, opts.Model = r.pick.Wire, r.pick.Model
 	return opts, r.pickFrom
 }
 

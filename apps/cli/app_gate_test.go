@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"tofu/internal/models/llm/core"
+	"tofu/internal/testkit/cli"
 	"tofu/internal/ui/tui/app"
 )
 
@@ -22,7 +23,7 @@ func gateEvents(t *testing.T, events []tui.Event) (failure, gateOff string) {
 }
 
 func TestARuleWithAThresholdOutOfRangeRefusesToStartTheTurn(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	t.Setenv(envVarName(), fakeSecret("gate"))
 	path := writeGateRuleWithThresholds(t, strings.Replace(gateFixtureThresholds, "relax_at: 0.85", "relax_at: 1.85", 1))
 
@@ -50,7 +51,7 @@ func TestARuleWithAThresholdOutOfRangeRefusesToStartTheTurn(t *testing.T) {
 }
 
 func TestAMissingKeyStartsTheTurnWithTheGateOff(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "wrote it"}}}
 	var events eventLog
 	liveAppSession(dir, model).run(t.Context(), onTheSubscription, "write a note", events.add)

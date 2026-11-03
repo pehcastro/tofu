@@ -13,6 +13,7 @@ import (
 	"tofu/internal/cli/output"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
+	testkit "tofu/internal/testkit/cli"
 	"tofu/internal/testkit/golden"
 )
 
@@ -49,7 +50,7 @@ func notesChangelog() string {
 
 func notesProject(t *testing.T) string {
 	t.Helper()
-	isolateHome(t)
+	testkit.IsolateHome(t)
 	home := os.Getenv("USERPROFILE")
 	project := filepath.Join(home, "project")
 	files := map[string]string{

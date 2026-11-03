@@ -18,6 +18,7 @@ import (
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
 	"tofu/internal/cli/render"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
 	"tofu/internal/konst"
@@ -93,15 +94,6 @@ type (
 	modelsReport = host.ModelsReport
 )
 
-func modelLibrary(dir string) (models.Library, error) {
-	layers, err := models.Layers(shipped.Files(), dir)
-	if err != nil {
-		return models.Library{}, err
-	}
-	library, _ := models.Load(layers)
-	return library, nil
-}
-
 func verbFailed(out, errOut io.Writer, verb string, asJSON bool, err error) int {
 	if asJSON {
 		_ = output.WriteJSON(out, cli.Envelope{Verb: verb, At: time.Now(), Problems: []cli.Problem{{What: err.Error()}}})
@@ -119,7 +111,7 @@ func bindVerb(args []string, out, errOut io.Writer) int {
 		return o.Usage(errors.New("models bind takes a role and a model written provider/name"))
 	}
 	role, slug := models.RoleID(args[0]), args[1]
-	library, err := modelLibrary("")
+	library, err := wiring.ModelLibrary("")
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -162,7 +154,7 @@ func modelsVerb(args []string, out, errOut io.Writer) int {
 		stampReload(code)
 		return code
 	}
-	library, err := modelLibrary("")
+	library, err := wiring.ModelLibrary("")
 	if err != nil {
 		return verbFailed(out, errOut, "models", asJSON, err)
 	}
@@ -497,7 +489,7 @@ func reloadModels(ctx context.Context, client *transport.Client, accounts []mode
 		}
 	}
 	report.ContextWindows, report.Table = len(registry.Windows), registry.From
-	library, err := modelLibrary("")
+	library, err := wiring.ModelLibrary("")
 	if err != nil {
 		return report, err
 	}
@@ -548,7 +540,7 @@ func (r reloadRun) account(ctx context.Context, account models.Account) reloadSo
 }
 
 func unresolvedTiers() ([]string, error) {
-	library, err := modelLibrary("")
+	library, err := wiring.ModelLibrary("")
 	if err != nil {
 		return nil, err
 	}
@@ -687,33 +679,4 @@ func countsSaid(counts map[cli.Mark]int, nouns []markNoun) string {
 		}
 	}
 	return strings.Join(parts, " · ")
-}
-
-func outsideTheLibrary(library models.Library, wire string) error {
-	return fmt.Errorf(
-		"the model library covers the subscriptions reached by --wire %s, and --wire %s spends an api key, which is money rather than a window",
-		strings.Join(library.Wires(), " and --wire "), wire)
-}
-
-func selectModel(wire, want string) (models.Model, error) {
-	library, err := modelLibrary("")
-	if err != nil {
-		return models.Model{}, err
-	}
-	spec, carried := library.ForWire(wire)
-	if !carried {
-		return models.Model{}, outsideTheLibrary(library, wire)
-	}
-	if want == "" {
-		return library.Default(spec.ID)
-	}
-	model, err := library.Select(want)
-	if err != nil {
-		return models.Model{}, err
-	}
-	if model.Subscription != spec.ID {
-		return models.Model{}, fmt.Errorf("%s belongs to the %s subscription, and --wire %s reaches %s",
-			model.Slug(), model.Subscription, wire, spec.ID)
-	}
-	return model, nil
 }

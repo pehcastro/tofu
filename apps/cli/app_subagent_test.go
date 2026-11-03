@@ -9,12 +9,13 @@ import (
 
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/testkit/cli"
 	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/panels/subagent"
 )
 
 func TestTheSubAgentViewShowsTheStepsASubAgentHasTakenWhileItIsStillRunning(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	model := noteSubAgent(writeNote("call-2"))
 	driver := driveApp(t)
 	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "hand the note to a sub-agent", driver.emit)
@@ -74,7 +75,7 @@ func subAgentCallsWhileRunningAndOnceFinished(t *testing.T, dir, planted string)
 
 func TestASubAgentsCallsGainTheirTextWhenItFinishesAndItsArgumentsNeverReachTheView(t *testing.T) {
 	const planted = "sk-live-9f3a1c7e4b2d8a6f0e5c3b1a"
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 
 	running, finished := subAgentCallsWhileRunningAndOnceFinished(t, dir, planted)
 	if len(running) == 0 {

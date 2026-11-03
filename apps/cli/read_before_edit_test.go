@@ -7,11 +7,13 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/cli/wiring"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/testkit/cli"
 )
 
 func TestAFileReadInTurnOneIsEditedInTurnTwoWithoutARefusal(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	target := filepath.Join(dir, "package.json")
 	if err := os.WriteFile(target, []byte("{\n  \"name\": \"moth\"\n}\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -25,7 +27,7 @@ func TestAFileReadInTurnOneIsEditedInTurnTwoWithoutARefusal(t *testing.T) {
 		call("call-2", "edit", `{"path":"package.json","old_string":"moth","new_string":"inky"}`),
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "renamed it"},
 	}}
-	live := newAppSession(dir, func(runOpts) (appWire, error) {
+	live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) {
 		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
 

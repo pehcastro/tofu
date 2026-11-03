@@ -10,8 +10,10 @@ import (
 
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/konst"
 	sessionstore "tofu/internal/store/session"
+	testkit "tofu/internal/testkit/cli"
 )
 
 const (
@@ -129,9 +131,9 @@ func TestE2EDoctorReadsTheKeyAndTheRuleOfTheProjectItRunsIn(t *testing.T) {
 	} {
 		p := newProject(t, "doctor")
 		if step.env != "" {
-			writeFile(t, p.dir, ".env", step.env)
-			writeFile(t, p.dir, ".tofu/library/general/rules/"+runGatePoint+".yaml", step.rule)
-			writeFile(t, p.dir, ".tofu/roles/classifier.yaml", "model: typesafe/jev-latest\n")
+			testkit.WriteFile(t, p.dir, ".env", step.env)
+			testkit.WriteFile(t, p.dir, ".tofu/library/general/rules/"+runGatePoint+".yaml", step.rule)
+			testkit.WriteFile(t, p.dir, ".tofu/roles/classifier.yaml", "model: typesafe/jev-latest\n")
 		}
 		title, body, _ := strings.Cut(p.run(t, output.ExitVerdict, "doctor"), "\n")
 		if !titleOf.MatchString(title) {
@@ -146,7 +148,7 @@ func TestE2EDoctorReadsTheKeyAndTheRuleOfTheProjectItRunsIn(t *testing.T) {
 			}
 		}
 		body = before + "\n" + after
-		sameText(t, step.name, body, strings.ReplaceAll(step.body, "RTK_INSTALL", rtkInstall()))
+		testkit.SameText(t, step.name, body, strings.ReplaceAll(step.body, "RTK_INSTALL", rtkInstall()))
 	}
 }
 
@@ -163,12 +165,12 @@ func TestE2EDoctorAndARunInTheSameHomeAgreeOnWhetherTheShellSiftCuts(t *testing.
 			"  ● shell_sift@1  enforced · thresholds from the rule\n", output.ExitOK},
 	} {
 		p := newProject(t, "sift")
-		writeFile(t, p.dir, ".tofu/tools/shell/proxy.yaml", "use: off\n")
+		testkit.WriteFile(t, p.dir, ".tofu/tools/shell/proxy.yaml", "use: off\n")
 		if step.env != nil {
-			writeFile(t, p.dir, ".tofu/roles/classifier.yaml", "model: typesafe/jev-latest\n")
+			testkit.WriteFile(t, p.dir, ".tofu/roles/classifier.yaml", "model: typesafe/jev-latest\n")
 		}
-		writeFile(t, p.dir, "long.txt", siftableOutput())
-		writeFile(t, p.home, "deck.jsonl", `{"text":"reading it","tools":[{"name":"bash","args":{"command":"cat long.txt"}}]}`+"\n"+`{"text":"done"}`+"\n")
+		testkit.WriteFile(t, p.dir, "long.txt", siftableOutput())
+		testkit.WriteFile(t, p.home, "deck.jsonl", `{"text":"reading it","tools":[{"name":"bash","args":{"command":"cat long.txt"}}]}`+"\n"+`{"text":"done"}`+"\n")
 		env := append([]string{"USERPROFILE=" + p.home, "HOME=" + p.home, "TEMP=" + p.home, "TMP=" + p.home, "SystemRoot=" + os.Getenv("SystemRoot"), "PATH=" + os.Getenv("PATH")}, step.env...)
 		page, _ := runBinary(t, p.dir, env, "doctor")
 		var envelope struct{ Data doctorReport }
@@ -180,7 +182,7 @@ func TestE2EDoctorAndARunInTheSameHomeAgreeOnWhetherTheShellSiftCuts(t *testing.
 				said = rule
 			}
 		}
-		ran, code := runBinary(t, p.dir, append(env, cassetteVariable+"="+filepath.Join(p.home, "deck.jsonl")), "run", "--dir", ".", "--wire", wireSubscription, "--no-gate", "read long.txt")
+		ran, code := runBinary(t, p.dir, append(env, cassetteVariable+"="+filepath.Join(p.home, "deck.jsonl")), "run", "--dir", ".", "--wire", wiring.WireSubscription, "--no-gate", "read long.txt")
 		events, _ := filepath.Glob(filepath.Join(p.home, ".tofu", "projects", "*", "sessions", "*", "events.jsonl"))
 		session := ""
 		for _, path := range events {
@@ -222,7 +224,7 @@ func TestE2EDoctorNamesTheRtkVersionOrThatAProjectTurnedItOff(t *testing.T) {
 	} {
 		p := newProject(t, "doctor")
 		if step.sheet != "" {
-			writeFile(t, p.dir, ".tofu/tools/shell/proxy.yaml", step.sheet)
+			testkit.WriteFile(t, p.dir, ".tofu/tools/shell/proxy.yaml", step.sheet)
 		}
 		env := []string{"USERPROFILE=" + p.home, "HOME=" + p.home, "TEMP=" + p.home, "TMP=" + p.home, "SystemRoot=" + os.Getenv("SystemRoot"), "PATH=" + os.Getenv("PATH")}
 		said, code := runBinary(t, p.dir, env, "doctor")
@@ -262,7 +264,7 @@ func TestE2EVersionJSONIsOneEnvelope(t *testing.T) {
 	printed := newProject(t, "version").run(t, output.ExitOK, "version", "--json")
 	var envelope struct{ Data versionReport }
 	oneEnvelope(t, printed, &envelope)
-	sameText(t, "tofu version --json", normalEnvelope(printed, map[string]string{
+	testkit.SameText(t, "tofu version --json", normalEnvelope(printed, map[string]string{
 		"version": envelope.Data.Version, "commit": envelope.Data.Commit, "go": envelope.Data.Go,
 	}), versionEnvelope)
 }

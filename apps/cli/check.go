@@ -12,6 +12,7 @@ import (
 
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
@@ -40,7 +41,7 @@ func checkVerb(args []string, out, errOut io.Writer) int {
 	}
 	row, err := checkedRow(opts.command)
 	if err != nil {
-		return failed(o, err)
+		return wiring.Failed(o, err)
 	}
 	if opts.quiet {
 		return output.ExitOK
@@ -71,7 +72,7 @@ func checkedRow(command string) (ledger.Row, error) {
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	client, err := jevClientOn(key, oneCallAtATime)
+	client, err := jevClientOn(key, wiring.OneCallAtATime)
 	if err != nil {
 		return ledger.Row{}, err
 	}

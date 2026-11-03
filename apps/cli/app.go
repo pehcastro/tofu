@@ -24,6 +24,7 @@ import (
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/render"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers"
@@ -61,7 +62,6 @@ const (
 	leftOverNote     = "shells left over from an earlier tofu: "
 	leftOverFix      = ", end them in the shells screen"
 	noteSeparator    = "  ·  "
-	roundMark        = "-r"
 	artifactsDirName = "artifacts"
 	sessionsDirName  = "sessions"
 	sweptStampName   = "swept"
@@ -73,7 +73,7 @@ const (
 )
 
 type appWiring struct {
-	open      func(runOpts) (appWire, error)
+	open      func(wiring.RunOpts) (appWire, error)
 	wires     func() []tui.Wire
 	blockers  func() []tui.Requirement
 	clipboard func() (sys.Clipboard, error)
@@ -125,11 +125,11 @@ func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 	return launch
 }
 
-func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch, held heldStore) tui.Options {
+func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaunch, held heldStore) tui.Options {
 	defer launch.stopRestoring()
 	places, _ := sys.ResolvePlaces(".")
-	engine := &appEngine{dir: dir, arms: arms, open: wiring.open, quota: wiring.quota, tabs: launch.tabs, places: places}
-	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), Resumed: launch.resumed.hosted(), Joins: wiring.joins, Now: wiring.now})
+	engine := &appEngine{dir: dir, arms: arms, open: wired.open, quota: wired.quota, tabs: launch.tabs, places: places}
+	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), Resumed: launch.resumed.hosted(), Joins: wired.joins, Now: wired.now})
 	notes := append([]string{launch.note}, troubles...)
 	if _, err := gateKeyFrom(held.keys()); err != nil {
 		notes = append(notes, gateOffSaid(err))
@@ -141,7 +141,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch, he
 	}
 	*launch.turnRunning = live.Turn
 	*launch.endSession = func() []string {
-		if wiring.joins {
+		if wired.joins {
 			return nil
 		}
 		return turn.EndSession(context.Background(), dir, live.ID(), sessionEndExit)
@@ -166,20 +166,20 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch, he
 		Root:         dir,
 		Branch:       branchOf(dir),
 		Note:         note,
-		Requirements: wiring.blockers(),
-		Recheck:      wiring.blockers,
+		Requirements: wired.blockers(),
+		Recheck:      wired.blockers,
 		SignIn:       func(source string) *exec.Cmd { return loginCommand(source)() },
 		SaveKey:      storeKeyFor,
-		Wires:        wiring.wires,
-		Models:       func() (models.Library, error) { return modelLibrary(dir) },
+		Wires:        wired.wires,
+		Models:       func() (models.Library, error) { return wiring.ModelLibrary(dir) },
 		Providers:    held.providers(),
-		Quota:        wiring.quota,
+		Quota:        wired.quota,
 		Settings:     settingsStore,
 		Reload:       appReload(dir),
-		ReloadModels: modelsReload(dir, wiring.reload),
+		ReloadModels: modelsReload(dir, wired.reload),
 		ModelsStale:  catalogStale(time.Now()),
 		Host:         live,
-		Paste:        paste.Board{Read: wiring.clipboard, Dir: live.AttachmentDir, Recorded: live.Attached},
+		Paste:        paste.Board{Read: wired.clipboard, Dir: live.AttachmentDir, Recorded: live.Attached},
 		Paths:        appPaths(dir),
 		Sessions:     func() ([]tui.SessionRow, error) { return appSessions(live.ID()) },
 		Resume:       func(handle string) (string, host.Opened) { return appResume(live, handle) },
@@ -247,10 +247,10 @@ func modelsReload(dir string, reload func(context.Context, io.Writer) int) func(
 		return nil
 	}
 	return func() string {
-		before, unreadBefore := modelLibrary(dir)
+		before, unreadBefore := wiring.ModelLibrary(dir)
 		stampReload(reload(context.Background(), io.Discard))
 		debug.FreeOSMemory()
-		after, err := modelLibrary(dir)
+		after, err := wiring.ModelLibrary(dir)
 		if err != nil {
 			return models.ReloadVerb + ": " + err.Error()
 		}
@@ -304,7 +304,7 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 	identity.Go(func() {
 		identityErr = sys.Crashed(dir, safe.Call(nil, "project identity", func() error { return sys.RecordIdentity(dir) }))
 	})
-	err = tui.Run(appOptions(dir, runOpts{}, live, launch, held))
+	err = tui.Run(appOptions(dir, wiring.RunOpts{}, live, launch, held))
 	identity.Wait()
 	if identityErr != nil {
 		_, _ = fmt.Fprintf(errOut, "tofu: the git remote and root of this project were not recorded: %v\n", identityErr)
@@ -364,7 +364,7 @@ func loginCommand(provider string) func() *exec.Cmd {
 }
 
 func (h heldStore) wires() []tui.Wire {
-	library, err := modelLibrary("")
+	library, err := wiring.ModelLibrary("")
 	if h.err != nil || err != nil {
 		return nil
 	}
@@ -383,7 +383,7 @@ func (h heldStore) wires() []tui.Wire {
 		return wires
 	}
 	if chosen, err := library.Default(models.Subscription(models.Meta)); err == nil {
-		wires = append(wires, tui.Wire{Name: wireMeta, Model: chosen.ID, Provider: string(models.Meta), Efforts: chosen.Efforts})
+		wires = append(wires, tui.Wire{Name: wiring.WireMeta, Model: chosen.ID, Provider: string(models.Meta), Efforts: chosen.Efforts})
 	}
 	return wires
 }
@@ -403,7 +403,7 @@ func (h heldStore) startSteps() []startStep {
 
 func (h heldStore) orchestratorStep() startStep {
 	step := startStep{label: string(models.RoleOrchestrator), step: modelStep}
-	library, _ := modelLibrary(".")
+	library, _ := wiring.ModelLibrary(".")
 	orchestrator, bound := library.Bound(models.RoleOrchestrator)
 	wires := h.wires()
 	signed := slices.ContainsFunc(wires, func(wire tui.Wire) bool { return wire.Provider == orchestrator.Source() })
@@ -414,7 +414,7 @@ func (h heldStore) orchestratorStep() startStep {
 	case bound:
 		step.what, step.command = "the orchestrator runs "+orchestrator.Slug()+", and "+orchestrator.Source()+" is not signed in", loginHint(orchestrator.Source())
 	case len(wires) == 0:
-		step.what, step.command = noCredential, commandFor("login", roleLLM, "<source>")
+		step.what, step.command = noCredential, wiring.CommandFor("login", roleLLM, "<source>")
 	default:
 		step.what, step.command = models.RoleOrchestrator.Unset().Error(), "tofu models bind orchestrator <provider/model>"
 	}
@@ -429,7 +429,7 @@ func (h heldStore) orchestratorStep() startStep {
 			step.choices = append(step.choices, tui.Choice{Label: string(spec.ID) + ", signs in through the browser", Run: loginCommand(string(spec.ID))})
 		}
 	}
-	if !slices.ContainsFunc(wires, func(wire tui.Wire) bool { return wire.Name == wireMeta }) {
+	if !slices.ContainsFunc(wires, func(wire tui.Wire) bool { return wire.Name == wiring.WireMeta }) {
 		step.choices = append(step.choices, tui.Choice{Label: models.Meta.Display() + " API key", Key: sys.MetaMuseKeyName})
 	}
 	return step
@@ -440,7 +440,7 @@ func classifierStepOf(keys jev.Keyring) startStep {
 	route, err := classifier.Resolve(".", keys)
 	if jev.IsUnbound(err) {
 		step.what, step.command = err.Error(), "tofu models bind classifier <provider/model>"
-		library, _ := modelLibrary(".")
+		library, _ := wiring.ModelLibrary(".")
 		for _, model := range library.Models {
 			if model.Kind == models.KindClassifier && model.Use != models.UseExcluded {
 				step.choices = append(step.choices, tui.Choice{Label: "bind " + model.Slug(), Run: func() *exec.Cmd {
@@ -456,7 +456,7 @@ func classifierStepOf(keys jev.Keyring) startStep {
 		return step
 	}
 	step.what = "there is no " + string(provider) + " key, so jev judges no tool call"
-	step.command = commandFor("login", roleClassifier, string(provider))
+	step.command = wiring.CommandFor("login", roleClassifier, string(provider))
 	step.choices = []tui.Choice{{Label: provider.Display() + " key", Key: classifier.KeyName(provider)}}
 	if err == nil {
 		step.done = provider.Display() + " key " + widget.Mask(route.Key)
@@ -485,7 +485,7 @@ func (h heldStore) requirements() []tui.Requirement {
 }
 
 func (h heldStore) providers() []settings.Provider {
-	library, _ := modelLibrary("")
+	library, _ := wiring.ModelLibrary("")
 	var rows []settings.Provider
 	for _, spec := range library.Subscriptions {
 		rows = append(rows, h.subscriptionProvider(cred.Provider(spec.ID)))
@@ -578,7 +578,7 @@ func appShells(dir string, registry *shell.Registry, openErr error) func() []she
 		}
 		entries := make([]shells.Entry, 0, len(found))
 		for _, one := range found {
-			entry := shells.Entry{Name: one.Name, Command: one.Command, Started: one.Started, Ended: one.Ended, ExitCode: one.ExitCode, PID: one.PID, Dir: one.Dir, Owner: ownerName(one.Owner), OneShot: one.OneShot()}
+			entry := shells.Entry{Name: one.Name, Command: one.Command, Started: one.Started, Ended: one.Ended, ExitCode: one.ExitCode, PID: one.PID, Dir: one.Dir, Owner: wiring.OwnerName(one.Owner), OneShot: one.OneShot()}
 			switch one.State {
 			case shell.Running:
 				entry.State = shells.Running
@@ -596,17 +596,6 @@ func appShells(dir string, registry *shell.Registry, openErr error) func() []she
 		tails.Forget(found)
 		return entries
 	}
-}
-
-func ownerName(owner string) string {
-	at := strings.LastIndex(owner, roundMark)
-	if at < 0 {
-		return owner
-	}
-	if _, err := strconv.Atoi(owner[at+len(roundMark):]); err != nil {
-		return owner
-	}
-	return owner[:at]
 }
 
 func appKillShell(registry *shell.Registry, openErr error) func(string) error {
@@ -652,12 +641,12 @@ type appWire struct {
 	selected models.Model
 }
 
-func openAppWire(opts runOpts) (appWire, error) {
+func openAppWire(opts wiring.RunOpts) (appWire, error) {
 	selected, err := chooseModel(opts)
 	if err != nil {
 		return appWire{}, err
 	}
-	opts.effort = selected.EffortTaken(opts.effort)
+	opts.Effort = selected.EffortTaken(opts.Effort)
 	held, spend, err := openAccounts(opts, selected)
 	return appWire{held: held, spend: spend, selected: selected}, err
 }
@@ -737,19 +726,19 @@ func imagesRefused(setting string, model models.Model, attached int) string {
 	panic("tofu: unknown images setting " + setting)
 }
 
-func pickedOpts(dir string, start host.Turn, maxSteps int) runOpts {
-	return onTheBoundWire(runOpts{
-		dir:              dir,
-		task:             start.Task,
-		turnID:           start.ID,
-		session:          start.Session,
-		wire:             start.Pick.Wire,
-		model:            start.Pick.Model,
-		toolSet:          toolSetFull,
-		effort:           cmp.Or(start.Pick.Effort, llm.EffortDefault),
-		loopGuardRepeats: konst.TurnLoopGuardRepeats,
-		loopGuardWindow:  konst.TurnLoopGuardWindow,
-		maxSteps:         maxSteps,
+func pickedOpts(dir string, start host.Turn, maxSteps int) wiring.RunOpts {
+	return onTheBoundWire(wiring.RunOpts{
+		Dir:              dir,
+		Task:             start.Task,
+		TurnID:           start.ID,
+		Session:          start.Session,
+		Wire:             start.Pick.Wire,
+		Model:            start.Pick.Model,
+		ToolSet:          toolSetFull,
+		Effort:           cmp.Or(start.Pick.Effort, llm.EffortDefault),
+		LoopGuardRepeats: konst.TurnLoopGuardRepeats,
+		LoopGuardWindow:  konst.TurnLoopGuardWindow,
+		MaxSteps:         maxSteps,
 	})
 }
 
@@ -762,8 +751,8 @@ const (
 
 type appEngine struct {
 	dir          string
-	arms         runOpts
-	open         func(runOpts) (appWire, error)
+	arms         wiring.RunOpts
+	open         func(wiring.RunOpts) (appWire, error)
 	quota        func() []frame.Quota
 	tabs         *tools.BrowserTabs
 	warm         *warmProcesses
@@ -779,18 +768,18 @@ type startedTurn struct {
 	budget recall.Budget
 }
 
-func settled(opts runOpts, say func(string)) runOpts {
-	dir := cmp.Or(opts.dir, ".")
-	if opts.maxSteps == 0 {
-		opts.maxSteps = settingspkg.IntSaying(dir, settingspkg.DecisionCap, say)
+func settled(opts wiring.RunOpts, say func(string)) wiring.RunOpts {
+	dir := cmp.Or(opts.Dir, ".")
+	if opts.MaxSteps == 0 {
+		opts.MaxSteps = settingspkg.IntSaying(dir, settingspkg.DecisionCap, say)
 	}
-	opts.noSubAgents = opts.noSubAgents || settingspkg.IntSaying(dir, settingspkg.TurnMaySpawn, say) == 0
-	opts.readBeforeEdit = settingspkg.IntSaying(dir, settingspkg.ReadBeforeEdit, say) != 0
-	opts.planEveryStep = settingspkg.IntSaying(dir, settingspkg.PlanEveryStep, say) != 0
-	if opts.doneArm == "" && spawnlessFlag(opts) == "" {
-		opts.doneArm = settingspkg.TextSaying(dir, settingspkg.DoneReview, say)
+	opts.NoSubAgents = opts.NoSubAgents || settingspkg.IntSaying(dir, settingspkg.TurnMaySpawn, say) == 0
+	opts.ReadBeforeEdit = settingspkg.IntSaying(dir, settingspkg.ReadBeforeEdit, say) != 0
+	opts.PlanEveryStep = settingspkg.IntSaying(dir, settingspkg.PlanEveryStep, say) != 0
+	if opts.DoneArm == "" && spawnlessFlag(opts) == "" {
+		opts.DoneArm = settingspkg.TextSaying(dir, settingspkg.DoneReview, say)
 	}
-	opts.doneArm = cmp.Or(opts.doneArm, settingspkg.DoneReviewOff)
+	opts.DoneArm = cmp.Or(opts.DoneArm, settingspkg.DoneReviewOff)
 	return opts
 }
 
@@ -805,9 +794,9 @@ func (e *appEngine) OneTurnPerProject() bool {
 }
 
 func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, error) {
-	opts := pickedOpts(e.dir, start, e.arms.maxSteps)
-	opts.gateArm, opts.siftArm, opts.doneArm, opts.noInstructions, opts.noDocs = e.arms.gateArm, e.arms.siftArm, e.arms.doneArm, e.arms.noInstructions, e.arms.noDocs
-	opts.toolSet, opts.contextCeiling, opts.noSubAgents = cmp.Or(e.arms.toolSet, opts.toolSet), e.arms.contextCeiling, e.arms.noSubAgents
+	opts := pickedOpts(e.dir, start, e.arms.MaxSteps)
+	opts.GateArm, opts.SiftArm, opts.DoneArm, opts.NoInstructions, opts.NoDocs = e.arms.GateArm, e.arms.SiftArm, e.arms.DoneArm, e.arms.NoInstructions, e.arms.NoDocs
+	opts.ToolSet, opts.ContextCeiling, opts.NoSubAgents = cmp.Or(e.arms.ToolSet, opts.ToolSet), e.arms.ContextCeiling, e.arms.NoSubAgents
 	started, err := e.startTurn(settled(opts, hooks.Say), start, hooks, clockFromNow())
 	if started.scorer != nil {
 		closing := started.Close
@@ -821,15 +810,15 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 	return started.Prepared, err
 }
 
-func (e *appEngine) startTurn(opts runOpts, start host.Turn, hooks host.Hooks, clock *startupClock) (startedTurn, error) {
-	say, dir := hooks.Say, cmp.Or(opts.dir, ".")
-	started := startedTurn{Prepared: host.Prepared{MaxSteps: opts.maxSteps}}
+func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.Hooks, clock *startupClock) (startedTurn, error) {
+	say, dir := hooks.Say, cmp.Or(opts.Dir, ".")
+	started := startedTurn{Prepared: host.Prepared{MaxSteps: opts.MaxSteps}}
 	prepared := &started.Prepared
 	shell, err := turn.ResolveRunShell(settingspkg.TextSaying(dir, settingspkg.Shell, say))
 	if err != nil {
 		return started, err
 	}
-	opts.shell = shell
+	opts.Shell = shell
 	clock.step("settings")
 	opened, err := e.open(opts)
 	if opened.held != nil {
@@ -851,7 +840,7 @@ func (e *appEngine) startTurn(opts runOpts, start host.Turn, hooks host.Hooks, c
 			images = nil
 		}
 	}
-	built, plan, builtErr := buildRunToolsForRun(opts.dir, opts.toolSet, readsWhen(opts.readBeforeEdit, hooks.Reads), e.warm, shell)
+	built, plan, builtErr := buildRunToolsForRun(opts.Dir, opts.ToolSet, readsWhen(opts.ReadBeforeEdit, hooks.Reads), e.warm, shell)
 	sessions, sessionsErr := sessionstore.OpenIn(dir)
 	if err := cmp.Or(builtErr, sessionsErr); err != nil {
 		return started, err
@@ -870,8 +859,8 @@ func (e *appEngine) startTurn(opts runOpts, start host.Turn, hooks host.Hooks, c
 	}
 	var gate *toolGate
 	var gateErr error
-	if opts.gateArm != gateOff {
-		gate, gateErr = toolGateOn(opts.dir, places.Log, e.warm.keys.keyring())
+	if opts.GateArm != gateOff {
+		gate, gateErr = toolGateOn(opts.Dir, places.Log, e.warm.keys.keyring())
 	}
 	var unusable unusableRule
 	switch {
@@ -888,7 +877,7 @@ func (e *appEngine) startTurn(opts runOpts, start host.Turn, hooks host.Hooks, c
 			}
 		}
 	}
-	sifter, scorer, siftErr := shellSiftOn(opts.siftArm, places.Log, e.warm.keys.keyring())
+	sifter, scorer, siftErr := shellSiftOn(opts.SiftArm, places.Log, e.warm.keys.keyring())
 	var contradiction turn.RuleContradictsTheTableError
 	if siftErr != nil && e.missingJudge == missingJudgeRefuses && !errors.As(siftErr, &contradiction) {
 		return started, siftErr
@@ -903,19 +892,19 @@ func (e *appEngine) startTurn(opts runOpts, start host.Turn, hooks host.Hooks, c
 	}
 	clock.step("model catalogue")
 	opened.held.wrapping(func(model turn.Model, budget recall.Budget) (turn.Model, error) {
-		asked, guardErr := guarded(model, budget)
+		asked, guardErr := wiring.Guarded(model, budget)
 		if guardErr != nil {
 			return nil, guardErr
 		}
 		return hooks.Lead(clock.leading(asked)), nil
 	}, budget, opts)
 	wrapSubAgent := func(model turn.Model, budget recall.Budget) (turn.Model, error) {
-		asked, guardErr := guarded(model, budget)
+		asked, guardErr := wiring.Guarded(model, budget)
 		return hooks.SubAgent(asked), guardErr
 	}
 	person := hooks.Inbox.LeadAsks(hooks.Person)
 	turnAccounts, account := opened.held.forTurn(), spentAccount(opened.held, opened.selected.ID)
-	if stand := e.standIns(opened.held, opts.wire); len(stand.mine()) > 0 {
+	if stand := e.standIns(opened.held, opts.Wire); len(stand.mine()) > 0 {
 		turnAccounts, account = stand.forTurn(), stand.spent
 	}
 	config, spawner, err := runConfig(opts, built, runtime{accounts: clock.picking(turnAccounts, opened.held.store), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: say, roster: hooks.Roster, inbox: hooks.Inbox, now: hooks.Now,
@@ -924,7 +913,7 @@ func (e *appEngine) startTurn(opts runOpts, start host.Turn, hooks host.Hooks, c
 		return started, err
 	}
 	if spawner != nil {
-		spawner.Review = newDoneReview(opts.doneArm, say)
+		spawner.Review = newDoneReview(opts.DoneArm, say)
 	}
 	clock.step("lead tools, board and spawn")
 	if config.Session != e.timed {
@@ -952,7 +941,7 @@ func (e *appEngine) standIns(held *accounts, wire string) standIns {
 	if _, recorded := held.fixed.(*cassette); !recorded || e.quota == nil {
 		return standIns{}
 	}
-	library, _ := modelLibrary(e.dir)
+	library, _ := wiring.ModelLibrary(e.dir)
 	spec, _ := library.ForWire(wire)
 	return standIns{held: held, source: string(spec.ID), readings: e.quota()}
 }

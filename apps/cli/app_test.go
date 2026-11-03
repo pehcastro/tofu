@@ -30,6 +30,7 @@ import (
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/render"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
 	"tofu/internal/konst"
@@ -43,6 +44,7 @@ import (
 	sessionstore "tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
+	"tofu/internal/testkit/cli"
 	"tofu/internal/tools/registry"
 	"tofu/internal/tools/shell/process"
 	"tofu/internal/tools/web"
@@ -142,7 +144,7 @@ func setupScreen(t *testing.T, required []tui.Requirement) string {
 }
 
 func TestSetupAsksForBothLoginsAndTheSecondOneStoresTheKey(t *testing.T) {
-	emptyHome(t)
+	testkit.EmptyHome(t)
 	required := heldForTest(t).requirements()
 	if len(required) != 2 || required[0].Done != "" || required[1].Done != "" {
 		t.Fatalf("requirements %+v, want two steps, neither done", required)
@@ -181,7 +183,7 @@ func TestSetupAsksForBothLoginsAndTheSecondOneStoresTheKey(t *testing.T) {
 }
 
 func TestASignInWithNothingBoundAsksForTheOrchestratorAndBindingItClearsTheStep(t *testing.T) {
-	emptyHome(t)
+	testkit.EmptyHome(t)
 	storeCredential(t, cred.CodexSub)
 	asked := heldForTest(t).requirements()[0]
 	if asked.Done != "" || asked.What != models.RoleOrchestrator.Unset().Error() || asked.Fix != "tofu models bind orchestrator <provider/model>" {
@@ -221,7 +223,7 @@ func bindOrchestrator(t *testing.T, slug string) {
 }
 
 func TestAWireWithNoCredentialIsNeverOffered(t *testing.T) {
-	emptyHome(t)
+	testkit.EmptyHome(t)
 	if wires := heldForTest(t).wires(); len(wires) != 0 {
 		t.Fatalf("wires %+v with nothing signed in", wires)
 	}
@@ -345,7 +347,7 @@ func assertOnlyTheTail(t *testing.T, where, body, key string) {
 }
 
 func TestLoginTypeSafeStoresTheKeyInTheDatabaseAndPrintsNoMoreThanItsTail(t *testing.T) {
-	scratchProject(t)
+	testkit.ScratchProject(t)
 	home, err := sys.HomeConfigDir()
 	if err != nil {
 		t.Fatal(err)
@@ -382,7 +384,7 @@ func TestLoginTypeSafeStoresTheKeyInTheDatabaseAndPrintsNoMoreThanItsTail(t *tes
 }
 
 func TestLoginBraveStoresTheSearchKeyInTheDatabase(t *testing.T) {
-	scratchProject(t)
+	testkit.ScratchProject(t)
 	t.Setenv(sys.BraveSearchKeyName, "")
 	const key = "Xq2Lp9Rz4Tn8Vw3Ks6Gw1"
 	var out, errOut bytes.Buffer
@@ -420,14 +422,14 @@ func TestLoginBraveStoresTheSearchKeyInTheDatabase(t *testing.T) {
 }
 
 func TestAHomeDotEnvMovesIntoTheDatabaseOnStartAndIsRemoved(t *testing.T) {
-	scratchProject(t)
+	testkit.ScratchProject(t)
 	home, err := sys.HomeConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}
 	const key = "sk-or-v1-made-up-for-the-move-3Kd9"
 	dotEnv := filepath.Join(home, sys.CredentialFileName)
-	writeFile(t, home, sys.CredentialFileName, "# written by an older tofu\nOPENROUTER_KEY="+key+"\n")
+	testkit.WriteFile(t, home, sys.CredentialFileName, "# written by an older tofu\nOPENROUTER_KEY="+key+"\n")
 
 	var said bytes.Buffer
 	moveHomeKeys(&said)
@@ -452,12 +454,12 @@ func TestAHomeDotEnvMovesIntoTheDatabaseOnStartAndIsRemoved(t *testing.T) {
 }
 
 func TestAHomeDotEnvWithOtherNamesKeepsThemAndLosesOnlyTheKey(t *testing.T) {
-	scratchProject(t)
+	testkit.ScratchProject(t)
 	home, err := sys.HomeConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, home, sys.CredentialFileName, "OPENROUTER_KEY=sk-or-v1-made-up-kept-apart-9Zt1\nUNRELATED_SETTING=1\n")
+	testkit.WriteFile(t, home, sys.CredentialFileName, "OPENROUTER_KEY=sk-or-v1-made-up-kept-apart-9Zt1\nUNRELATED_SETTING=1\n")
 	var said bytes.Buffer
 	moveHomeKeys(&said)
 	body, err := os.ReadFile(filepath.Join(home, sys.CredentialFileName))
@@ -470,14 +472,14 @@ func TestAHomeDotEnvWithOtherNamesKeepsThemAndLosesOnlyTheKey(t *testing.T) {
 }
 
 func TestTheSearchKeyMovesWithTheGateKeyAndWebSearchReadsItFromTheStore(t *testing.T) {
-	scratchProject(t)
+	testkit.ScratchProject(t)
 	t.Setenv(sys.BraveSearchKeyName, "")
 	home, err := sys.HomeConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}
 	const search = "made-up-search-key-5Pv7"
-	writeFile(t, home, sys.CredentialFileName, "OPENROUTER_KEY=sk-or-v1-made-up-moved-too-1Lc4\nBRAVE_SEARCH_KEY="+search+"\n")
+	testkit.WriteFile(t, home, sys.CredentialFileName, "OPENROUTER_KEY=sk-or-v1-made-up-moved-too-1Lc4\nBRAVE_SEARCH_KEY="+search+"\n")
 	var said bytes.Buffer
 	moveHomeKeys(&said)
 	if _, err := os.Stat(filepath.Join(home, sys.CredentialFileName)); !os.IsNotExist(err) {
@@ -520,7 +522,7 @@ func openSettingsMenu(app *tui.App) {
 }
 
 func TestSettingsNamesEveryProviderAndTheSourceThatDecidedIt(t *testing.T) {
-	emptyHome(t)
+	testkit.EmptyHome(t)
 	storeCredential(t, cred.ClaudeSub)
 	storeCredential(t, cred.CodexSub)
 	storeGateKey(t, gateKeyForTests)
@@ -544,7 +546,7 @@ func TestSettingsNamesEveryProviderAndTheSourceThatDecidedIt(t *testing.T) {
 }
 
 func TestProvidersHoldNoMoreOfTheKeyThanItsTail(t *testing.T) {
-	emptyHome(t)
+	testkit.EmptyHome(t)
 	const key = gateKeyForTests
 	storeGateKey(t, key)
 
@@ -599,7 +601,7 @@ func driveAppOn(t *testing.T, store *settingspkg.Store) *appDriver {
 	app := tui.New(tui.Options{
 		Repo:     "scratch",
 		Branch:   "develop",
-		Wires:    func() []tui.Wire { return []tui.Wire{{Name: wireSubscription, Model: "stub-model"}} },
+		Wires:    func() []tui.Wire { return []tui.Wire{{Name: wiring.WireSubscription, Model: "stub-model"}} },
 		Settings: store,
 	})
 	app.Init()
@@ -634,7 +636,7 @@ func (d *appDriver) view(keys ...tea.Msg) string {
 	return d.app.View().Content
 }
 
-var onTheSubscription = tui.Pick{Wire: wireSubscription}
+var onTheSubscription = tui.Pick{Wire: wiring.WireSubscription}
 
 func stubbedTurn(dir string, model turn.Model, answers ...bool) tui.Turn {
 	var person chan tui.Answer
@@ -658,17 +660,9 @@ func wireOn(model turn.Model) appWire {
 }
 
 func resumedTurn(dir string, model turn.Model, person chan tui.Answer, resumed sessionResume) tui.Turn {
-	return newAppSession(dir, func(runOpts) (appWire, error) {
+	return newAppSession(dir, func(wiring.RunOpts) (appWire, error) {
 		return wireOn(model), nil
 	}, person, time.Now, resumed).run
-}
-
-func scratchProject(t *testing.T) string {
-	t.Helper()
-	dir := t.TempDir()
-	t.Chdir(dir)
-	emptyHome(t)
-	return dir
 }
 
 func disableReadBeforeEdit(t *testing.T) {
@@ -691,7 +685,7 @@ func noteThenStop() *queuedModel {
 }
 
 func TestAToolCallsVendorIDNeverReachesTheScreenAndTheCallStillPairsWithItsResult(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	driver := driveApp(t)
 	stubbedTurn(dir, &queuedModel{decisions: []llm.Decision{
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("toolu_01AbCdEfGhIjKlMn")}},
@@ -725,7 +719,7 @@ func (m *modelStoppingTheTurnWhileItAnswers) Ask(context.Context, llm.Request) (
 }
 
 func TestAToolResultThatArrivesAfterTheTurnIsStoppedStillReachesTheView(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	driver := driveApp(t)
 	ctx, stop := context.WithCancel(t.Context())
 	defer stop()
@@ -743,7 +737,7 @@ func TestAToolResultThatArrivesAfterTheTurnIsStoppedStillReachesTheView(t *testi
 }
 
 func TestEveryEventTheAppSendsHasTheStoredKeyMasked(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	const key = "sk-or-v1-made-up-Wq7Tn3Kd"
 	if err := sys.SaveKey(sys.OpenRouterKeyName, key); err != nil {
 		t.Fatalf("storing the key: %v", err)
@@ -813,7 +807,7 @@ func TestAShellStoppedPartWayThroughShowsWhatItPrintedAndSaysNoResultOnlyWhenItP
 }
 
 func TestATurnDrivenThroughTheAppFillsTheContextMeter(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	driver := driveApp(t)
 	stubbedTurn(dir, noteThenStop())(t.Context(), onTheSubscription, strings.Repeat("carry this task. ", 600), driver.emit)
 
@@ -837,7 +831,7 @@ func TestATurnDrivenThroughTheAppFillsTheContextMeter(t *testing.T) {
 }
 
 func TestADrivenTurnNamesTheSessionAndItsIDInTheHeader(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	driver := driveApp(t)
 	stubbedTurn(dir, noteThenStop())(t.Context(), onTheSubscription, "write a note", driver.emit)
 
@@ -884,7 +878,7 @@ func overBudgetNoteThenStop() *queuedModel {
 }
 
 func TestAForkLeavesALineOnTheScreenAPersonCanRead(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	driver := driveApp(t)
 	stubbedTurn(dir, overBudgetNoteThenStop())(t.Context(), onTheSubscription, "write the note", driver.emit)
 
@@ -924,7 +918,7 @@ func forkingStep(t *testing.T, store *sessionstore.Store) (string, turn.StepRow)
 }
 
 func TestTheBarShowsTheRequestAsSentAndTheForkDecidedOnWhatCameBackAfterIt(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	driver := driveApp(t)
 	stubbedTurn(dir, overBudgetNoteThenStop())(t.Context(), onTheSubscription, "write the note", driver.emit)
 
@@ -937,7 +931,7 @@ func TestTheBarShowsTheRequestAsSentAndTheForkDecidedOnWhatCameBackAfterIt(t *te
 	if err != nil {
 		t.Fatalf("read the recall library: %v", err)
 	}
-	onWire := cfg.OnWire(wireSubscription)
+	onWire := cfg.OnWire(wiring.WireSubscription)
 
 	asked, appended := "", 0
 	for _, call := range forking.ToolCalls {
@@ -979,7 +973,7 @@ func TestTheBarShowsTheRequestAsSentAndTheForkDecidedOnWhatCameBackAfterIt(t *te
 }
 
 func TestASpawnedSubAgentShowsInTheSubAgentViewWithTheGlobsItHolds(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	model := noteSubAgent(writeNote("call-2"))
 	driver := driveApp(t)
 	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "hand the note to a sub-agent", driver.emit)
@@ -1080,7 +1074,7 @@ func thinkingTurn(t *testing.T, dir string, store *settingspkg.Store) *appDriver
 }
 
 func TestASubAgentsThinkingIsDrawnInItsOwnFeedAndNeverInTheChat(t *testing.T) {
-	driver := thinkingTurn(t, scratchProject(t), nil)
+	driver := thinkingTurn(t, testkit.ScratchProject(t), nil)
 	for _, framed := range driver.frames {
 		for _, thought := range []string{leadThought, firstThought, secondThought, "thinking#"} {
 			if strings.Contains(ansi.Strip(framed), thought) {
@@ -1110,7 +1104,7 @@ func TestASubAgentsThinkingIsDrawnInItsOwnFeedAndNeverInTheChat(t *testing.T) {
 }
 
 func TestWithShowThinkingOffNoThoughtIsDrawnAndTheKeyBringsItBack(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	store, err := settingspkg.OpenFor(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -1146,7 +1140,7 @@ func (m *toolNamesCapture) Ask(_ context.Context, req llm.Request) (llm.Decision
 }
 
 func TestATurnStartedInTheAppOffersSpawnWhenTurnMaySpawnIsOn(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	driver := driveApp(t)
 	capture := &toolNamesCapture{}
 	stubbedTurn(dir, capture)(t.Context(), onTheSubscription, "say hello", driver.emit)
@@ -1156,7 +1150,7 @@ func TestATurnStartedInTheAppOffersSpawnWhenTurnMaySpawnIsOn(t *testing.T) {
 }
 
 func TestTheAppResolvesReadBeforeEditFromSettingsAndRefusesABlindEditByDefault(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("a note\n"+strings.Repeat("a longer line\n", 500)), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1175,7 +1169,7 @@ func TestTheAppResolvesReadBeforeEditFromSettingsAndRefusesABlindEditByDefault(t
 }
 
 func TestTheAppResolvesReadBeforeEditOffAndAllowsTheSameBlindEdit(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	disableReadBeforeEdit(t)
 	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("a note\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -1195,7 +1189,7 @@ func TestTheAppResolvesReadBeforeEditOffAndAllowsTheSameBlindEdit(t *testing.T) 
 }
 
 func TestATurnStartedInTheAppDoesNotOfferSpawnWhenTurnMaySpawnIsOff(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	var out, errOut bytes.Buffer
 	if code := settingsVerb([]string{"set", "turnMaySpawn", "false"}, &out, &errOut); code != output.ExitOK {
 		t.Fatalf("settings set exited %d: %s", code, errOut.String())
@@ -1254,7 +1248,7 @@ func (m *clockedModel) Ask(ctx context.Context, _ llm.Request) (llm.Decision, er
 }
 
 func TestASubAgentRunningForTenSecondsIsHandedToTheViewAsTenSeconds(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	spawnCall := llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}
 	model := clockedFrom(time.Date(2026, 9, 20, 9, 0, 0, 0, time.UTC),
 		[]clockedStep{
@@ -1265,7 +1259,7 @@ func TestASubAgentRunningForTenSecondsIsHandedToTheViewAsTenSeconds(t *testing.T
 		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent did it"}},
 	)
 	driver := driveApp(t)
-	newAppSession(dir, func(runOpts) (appWire, error) {
+	newAppSession(dir, func(wiring.RunOpts) (appWire, error) {
 		return wireOn(model), nil
 	}, nil, model.clock, sessionResume{}).run(t.Context(), onTheSubscription, "hand the note to a sub-agent", driver.emit)
 
@@ -1284,7 +1278,7 @@ const (
 
 func subAgentHeldInsideOneCall(t *testing.T) *appDriver {
 	t.Helper()
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	spawnCall := llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}
 	reply := func(text string) llm.Decision {
 		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: text}
@@ -1298,7 +1292,7 @@ func subAgentHeldInsideOneCall(t *testing.T) *appDriver {
 		clockedStep{waited: orchestratorHeldFor, holds: heldInsideOneCall, decision: reply("the sub-agent did it")},
 	)
 	driver := driveApp(t)
-	newAppSession(dir, func(runOpts) (appWire, error) {
+	newAppSession(dir, func(wiring.RunOpts) (appWire, error) {
 		return wireOn(model), nil
 	}, nil, model.clock, sessionResume{}).run(t.Context(), onTheSubscription, "hand the note to a sub-agent", driver.emit)
 	return driver
@@ -1369,7 +1363,7 @@ func TestAFullEventChannelDropsTheSnapshotsAndNeverBlocksTheTurn(t *testing.T) {
 	t.Cleanup(playing.Close)
 	app := tui.New(tui.Options{
 		Repo:  "scratch",
-		Wires: func() []tui.Wire { return []tui.Wire{{Name: wireSubscription, Model: "stub-model"}} },
+		Wires: func() []tui.Wire { return []tui.Wire{{Name: wiring.WireSubscription, Model: "stub-model"}} },
 		Host:  playing,
 	})
 	app.Init()
@@ -1408,7 +1402,7 @@ func TestAFullEventChannelDropsTheSnapshotsAndNeverBlocksTheTurn(t *testing.T) {
 }
 
 func TestATurnWithNoSubAgentsSendsNoSubAgentEventAtAll(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	driver := driveApp(t)
 	stubbedTurn(dir, noteThenStop())(t.Context(), onTheSubscription, "write the note yourself", driver.emit)
 
@@ -1457,7 +1451,7 @@ func TestEveryToolSaysWhetherItFailedAndHowBigItsResultWas(t *testing.T) {
 		},
 	} {
 		t.Run(one.tool, func(t *testing.T) {
-			dir := scratchProject(t)
+			dir := testkit.ScratchProject(t)
 			disableReadBeforeEdit(t)
 			if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte(note), 0o644); err != nil {
 				t.Fatal(err)
@@ -1492,7 +1486,7 @@ func TestEveryToolSaysWhetherItFailedAndHowBigItsResultWas(t *testing.T) {
 }
 
 func TestTheTurnLineOnADrivenTurnNamesTheCountNotTheSize(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	driver := driveApp(t)
 	model := &queuedModel{decisions: []llm.Decision{
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-1")}},
@@ -1545,7 +1539,7 @@ func readingTheEdit() []tea.Msg {
 }
 
 func TestARealEditReachesTheFileEditsViewAndLeavesOneRowBehind(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	disableReadBeforeEdit(t)
 	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("a note\nand another\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -1609,7 +1603,7 @@ func writeCall(t *testing.T, id, path, content string) llm.ToolCall {
 }
 
 func TestACreatedFileShowsEveryLineItWroteMarkedAsAdded(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	driver := driveApp(t)
 	model := &queuedModel{decisions: []llm.Decision{
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
@@ -1637,7 +1631,7 @@ func TestACreatedFileShowsEveryLineItWroteMarkedAsAdded(t *testing.T) {
 }
 
 func TestAWholeReplacementShowsItsDiffRatherThanItsContent(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	disableReadBeforeEdit(t)
 	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("a note\nand another\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -1669,7 +1663,7 @@ func TestAWholeReplacementShowsItsDiffRatherThanItsContent(t *testing.T) {
 }
 
 func TestAFailedWriteIsNotAnEdit(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	driver := driveApp(t)
 	model := &queuedModel{decisions: []llm.Decision{
 		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
@@ -1692,11 +1686,11 @@ func TestAFailedWriteIsNotAnEdit(t *testing.T) {
 
 func answeredByKeys(t *testing.T, dir string, model turn.Model, keys ...string) []tui.Event {
 	t.Helper()
-	live := newAppSession(dir, func(runOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
+	live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
 	t.Cleanup(live.Close)
 	app := tui.New(tui.Options{
 		Repo:  "scratch",
-		Wires: func() []tui.Wire { return []tui.Wire{{Name: wireSubscription, Model: "stub-model"}} },
+		Wires: func() []tui.Wire { return []tui.Wire{{Name: wiring.WireSubscription, Model: "stub-model"}} },
 		Host:  live.Host,
 	})
 	app.Init()
@@ -1741,7 +1735,7 @@ func (m refusingModel) Ask(context.Context, llm.Request) (llm.Decision, error) {
 }
 
 func TestACancelledTurnReportsStoppedAndCarriesNoGoError(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	cancelled := transport.Fail("anthropic.Ask", transport.KindProvider, context.Canceled,
 		"posting the request: Post %q", "https://api.anthropic.com/v1/messages?beta=true")
 	driver := driveApp(t)
@@ -1767,7 +1761,7 @@ func TestACancelledTurnReportsStoppedAndCarriesNoGoError(t *testing.T) {
 }
 
 func TestATurnThatFailsForAnotherReasonStillReportsTheError(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	broken := errors.New("the provider answered with no content")
 	driver := driveApp(t)
 	stubbedTurn(dir, refusingModel{err: broken})(t.Context(), onTheSubscription, "a task", driver.emit)
@@ -1873,7 +1867,7 @@ func TestAlwaysHereAnswersTheSamePlaceAndNothingElse(t *testing.T) {
 }
 
 func TestTheAppsBashToolResolvesThroughTheSameShellSettingAsTofuRun(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	bogus := filepath.Join(dir, "no-such-shell.exe")
 	var out, errOut bytes.Buffer
 	if code := settingsVerb([]string{"set", "shell", bogus}, &out, &errOut); code != output.ExitOK {
@@ -1917,7 +1911,7 @@ func TestTheAppResolvesTheShellOnceAndSharesItWithTheEnvironmentBlock(t *testing
 	if calls := strings.Count(body, "turn.ResolveRunShell("); calls != 1 {
 		t.Fatalf("appEngine.startTurn calls turn.ResolveRunShell %d times, want 1: a second call resolves the shell again instead of sharing the first", calls)
 	}
-	if !strings.Contains(body, "opts.shell = shell") {
+	if !strings.Contains(body, "opts.Shell = shell") {
 		t.Fatal("appEngine.startTurn resolves a shell but never carries it on opts, so buildRunToolsForRun and the environment block cannot share it")
 	}
 	if !strings.Contains(body, "buildRunToolsForRun(") {
@@ -2017,7 +2011,7 @@ func (m *modelStoppingTheTurnWhileTheSubAgentIsAnswering) Ask(context.Context, l
 
 func subAgentStoppedWhileItAnswered(t *testing.T) *appDriver {
 	t.Helper()
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	driver := driveApp(t)
 	ctx, stop := context.WithCancel(t.Context())
 	defer stop()
@@ -2154,13 +2148,13 @@ func TestEveryToolInTheRunRegistryRecordsACommandThatDoesNotRepeatItsName(t *tes
 }
 
 func TestTheFullToolSetPointsTheModelAtTheDocsAndTheNoDocsArmDropsBoth(t *testing.T) {
-	emptyHome(t)
+	testkit.EmptyHome(t)
 	for _, arm := range []struct {
 		args []string
 		docs bool
 	}{{nil, true}, {[]string{"--no-docs"}, false}, {[]string{"--tools", toolSetThree}, false}} {
 		opts := armOpts(t, arm.args...)
-		built, err := buildTestRunTools(opts.dir, opts.toolSet)
+		built, err := buildTestRunTools(opts.Dir, opts.ToolSet)
 		if err != nil {
 			t.Fatalf("building the run tools: %v", err)
 		}
@@ -2193,14 +2187,14 @@ func TestTofuDriveTakesNoDocsAndTheAppItDrivesOffersNoDocs(t *testing.T) {
 		args []string
 		docs bool
 	}{{nil, true}, {[]string{"--no-docs"}, false}} {
-		dir := scratchProject(t)
+		dir := testkit.ScratchProject(t)
 		var refused bytes.Buffer
 		plan, taken := driveArgs(arm.args, &refused)
 		if !taken {
 			t.Fatalf("tofu drive refused %v: %s", arm.args, strings.SplitN(refused.String(), "\n", 2)[0])
 		}
 		model := &offeredModel{}
-		live := newAppSession(dir, func(runOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
+		live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
 		live.engine.arms = plan.arms
 		driver := driveApp(t)
 		live.run(t.Context(), onTheSubscription, "say done", driver.emit)
@@ -2214,7 +2208,7 @@ func TestTofuDriveTakesNoDocsAndTheAppItDrivesOffersNoDocs(t *testing.T) {
 }
 
 func TestTheBrowserSettingsReachTheToolsARunIsGiven(t *testing.T) {
-	emptyHome(t)
+	testkit.EmptyHome(t)
 	for _, arm := range []struct {
 		mode, driver string
 		want         []string
@@ -2227,7 +2221,7 @@ func TestTheBrowserSettingsReachTheToolsARunIsGiven(t *testing.T) {
 		{settingspkg.BrowserDrive, "model", []string{"browser_tabs", "browser_observe", "browser_act", "browser_motion"}},
 	} {
 		opts := armOpts(t)
-		store, err := settingspkg.OpenFor(opts.dir)
+		store, err := settingspkg.OpenFor(opts.Dir)
 		if err == nil && arm.mode != "" {
 			err = store.SetText(settingspkg.Project, settingspkg.Browser, arm.mode)
 		}
@@ -2246,7 +2240,7 @@ func TestTheBrowserSettingsReachTheToolsARunIsGiven(t *testing.T) {
 }
 
 func TestAnOldBrowserChooserIsReadAsItsDriverAndTheNextSaveWritesTheNewKey(t *testing.T) {
-	emptyHome(t)
+	testkit.EmptyHome(t)
 	for old, arm := range map[string]struct {
 		driver string
 		want   []string
@@ -2255,7 +2249,7 @@ func TestAnOldBrowserChooserIsReadAsItsDriverAndTheNextSaveWritesTheNewKey(t *te
 		"jev":   {settingspkg.DriverGoal, []string{"browser_tabs", "browser_read", "browser_do", "browser_motion"}},
 	} {
 		opts := armOpts(t)
-		store, err := settingspkg.OpenFor(opts.dir)
+		store, err := settingspkg.OpenFor(opts.Dir)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2270,7 +2264,7 @@ func TestAnOldBrowserChooserIsReadAsItsDriverAndTheNextSaveWritesTheNewKey(t *te
 		if !slices.Equal(offered, arm.want) {
 			t.Fatalf("a file holding browserChooser %q offers %v, want %v", old, offered, arm.want)
 		}
-		if store, err = settingspkg.OpenFor(opts.dir); err == nil {
+		if store, err = settingspkg.OpenFor(opts.Dir); err == nil {
 			err = store.SetText(settingspkg.Project, settingspkg.Browser, settingspkg.BrowserDrive)
 		}
 		if err != nil {
@@ -2285,10 +2279,10 @@ func TestAnOldBrowserChooserIsReadAsItsDriverAndTheNextSaveWritesTheNewKey(t *te
 }
 
 func TestTheSubAgentDriverHandsTheBrowserToolsToASubAgentOnTheBrowserModel(t *testing.T) {
-	emptyHome(t)
+	testkit.EmptyHome(t)
 	for _, slug := range []string{"meta/muse-spark-1.3-contributor", "claude-sub/claude-sonnet-5-5", "claude-sub/claude-sonnet-5"} {
 		opts := armOpts(t)
-		store, err := settingspkg.OpenFor(opts.dir)
+		store, err := settingspkg.OpenFor(opts.Dir)
 		if err == nil {
 			err = store.SetText(settingspkg.Project, settingspkg.BrowserDriver, settingspkg.DriverSubagent)
 		}
@@ -2299,11 +2293,11 @@ func TestTheSubAgentDriverHandsTheBrowserToolsToASubAgentOnTheBrowserModel(t *te
 			t.Fatal(err)
 		}
 		offered := slices.DeleteFunc(toolNames(t, opts), func(name string) bool { return !strings.HasPrefix(name, "browser_") })
-		built, err := buildTestRunTools(opts.dir, opts.toolSet)
+		built, err := buildTestRunTools(opts.Dir, opts.ToolSet)
 		if err != nil {
 			t.Fatal(err)
 		}
-		found := scanSubAgents(opts.dir, built)
+		found := scanSubAgents(opts.Dir, built)
 		at := slices.IndexFunc(found.Definitions, func(d roster.Definition) bool { return d.Name == "browser" })
 		if at < 0 {
 			t.Fatalf("browserModel %s: no browser sub-agent is defined", slug)
@@ -2313,7 +2307,7 @@ func TestTheSubAgentDriverHandsTheBrowserToolsToASubAgentOnTheBrowserModel(t *te
 		if len(offered) != 0 {
 			t.Fatalf("browserModel %s: the orchestrator still holds %v", slug, offered)
 		}
-		if _, selectErr := mustLibrary(t, opts.dir).Select(slug); selectErr != nil {
+		if _, selectErr := mustLibrary(t, opts.Dir).Select(slug); selectErr != nil {
 			if agent.Runs != roster.RunsRefused || !strings.Contains(strings.Join(agent.Refused, " "), slug) {
 				t.Fatalf("browserModel %s is not in the library, and the sub-agent runs %s rather than being refused naming it", slug, agent.Runs)
 			}
@@ -2326,20 +2320,20 @@ func TestTheSubAgentDriverHandsTheBrowserToolsToASubAgentOnTheBrowserModel(t *te
 }
 
 func TestInReadModeTheBrowserSubAgentStartsWithTheReadTools(t *testing.T) {
-	emptyHome(t)
+	testkit.EmptyHome(t)
 	opts := armOpts(t)
-	store, err := settingspkg.OpenFor(opts.dir)
+	store, err := settingspkg.OpenFor(opts.Dir)
 	if err == nil {
 		err = store.SetText(settingspkg.Project, settingspkg.Browser, settingspkg.BrowserRead)
 	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	built, err := buildTestRunTools(opts.dir, opts.toolSet)
+	built, err := buildTestRunTools(opts.Dir, opts.ToolSet)
 	if err != nil {
 		t.Fatal(err)
 	}
-	found := scanSubAgents(opts.dir, built)
+	found := scanSubAgents(opts.Dir, built)
 	at := slices.IndexFunc(found.Definitions, func(d roster.Definition) bool { return d.Name == "browser" })
 	if at < 0 {
 		t.Fatalf("no browser sub-agent is defined: %+v", found.Broken)
@@ -2352,15 +2346,15 @@ func TestInReadModeTheBrowserSubAgentStartsWithTheReadTools(t *testing.T) {
 }
 
 func TestAFreshHomeHandsTheBrowserToTheSubAgent(t *testing.T) {
-	emptyHome(t)
+	testkit.EmptyHome(t)
 	opts := armOpts(t)
-	driver := settingspkg.TextSaying(opts.dir, settingspkg.BrowserDriver, nil)
-	built, err := buildTestRunTools(opts.dir, opts.toolSet)
+	driver := settingspkg.TextSaying(opts.Dir, settingspkg.BrowserDriver, nil)
+	built, err := buildTestRunTools(opts.Dir, opts.ToolSet)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var spawnable []string
-	for _, definition := range offeredToSpawn(opts.dir, scanSubAgents(opts.dir, built)).Definitions {
+	for _, definition := range offeredToSpawn(opts.Dir, scanSubAgents(opts.Dir, built)).Definitions {
 		spawnable = append(spawnable, definition.Name)
 	}
 	driving := slices.DeleteFunc(toolNames(t, opts), func(name string) bool { return !strings.HasPrefix(name, "browser_") })
@@ -2371,22 +2365,22 @@ func TestAFreshHomeHandsTheBrowserToTheSubAgent(t *testing.T) {
 }
 
 func TestOnlyTheSubAgentDriverOffersTheBrowserSubAgentToSpawn(t *testing.T) {
-	emptyHome(t)
+	testkit.EmptyHome(t)
 	for driver, offered := range map[string]bool{settingspkg.DriverSteps: false, settingspkg.DriverGoal: false, settingspkg.DriverSubagent: true} {
 		opts := armOpts(t)
-		store, err := settingspkg.OpenFor(opts.dir)
+		store, err := settingspkg.OpenFor(opts.Dir)
 		if err == nil {
 			err = store.SetText(settingspkg.Project, settingspkg.BrowserDriver, driver)
 		}
 		if err != nil {
 			t.Fatal(err)
 		}
-		built, err := buildTestRunTools(opts.dir, opts.toolSet)
+		built, err := buildTestRunTools(opts.Dir, opts.ToolSet)
 		if err != nil {
 			t.Fatal(err)
 		}
 		var spawnable []string
-		for _, definition := range offeredToSpawn(opts.dir, scanSubAgents(opts.dir, built)).Definitions {
+		for _, definition := range offeredToSpawn(opts.Dir, scanSubAgents(opts.Dir, built)).Definitions {
 			spawnable = append(spawnable, definition.Name)
 		}
 		t.Logf("browserDriver %s: the spawnable agents are %v", driver, spawnable)
@@ -2397,14 +2391,14 @@ func TestOnlyTheSubAgentDriverOffersTheBrowserSubAgentToSpawn(t *testing.T) {
 }
 
 func TestTheBrowserEffortSettingRunsTheSubAgentAtItOrAtTheModelsDefault(t *testing.T) {
-	emptyHome(t)
+	testkit.EmptyHome(t)
 	const slug = "claude-sub/claude-sonnet-5"
 	for effort, want := range map[string]func(offered []llm.Effort) llm.Effort{
 		"high": func([]llm.Effort) llm.Effort { return llm.EffortHigh },
-		"":     defaultEffort,
+		"":     wiring.DefaultEffort,
 	} {
 		opts := armOpts(t)
-		store, err := settingspkg.OpenFor(opts.dir)
+		store, err := settingspkg.OpenFor(opts.Dir)
 		for key, value := range map[string]string{settingspkg.BrowserDriver: settingspkg.DriverSubagent, settingspkg.BrowserModel: slug, "browserEffort": effort} {
 			if err == nil && value != "" {
 				err = store.SetText(settingspkg.Project, key, value)
@@ -2413,15 +2407,15 @@ func TestTheBrowserEffortSettingRunsTheSubAgentAtItOrAtTheModelsDefault(t *testi
 		if err != nil {
 			t.Fatal(err)
 		}
-		model, err := mustLibrary(t, opts.dir).Select(slug)
+		model, err := mustLibrary(t, opts.Dir).Select(slug)
 		if err != nil || !slices.Contains(model.Efforts, llm.EffortHigh) {
 			t.Fatalf("%s lists the efforts %v, %v; the test needs one that lists high", slug, model.Efforts, err)
 		}
-		built, err := buildTestRunTools(opts.dir, opts.toolSet)
+		built, err := buildTestRunTools(opts.Dir, opts.ToolSet)
 		if err != nil {
 			t.Fatal(err)
 		}
-		found := scanSubAgents(opts.dir, built)
+		found := scanSubAgents(opts.Dir, built)
 		at := slices.IndexFunc(found.Definitions, func(d roster.Definition) bool { return d.Name == "browser" })
 		if at < 0 {
 			t.Fatal("no browser sub-agent")
@@ -2435,7 +2429,7 @@ func TestTheBrowserEffortSettingRunsTheSubAgentAtItOrAtTheModelsDefault(t *testi
 
 func mustLibrary(t *testing.T, dir string) models.Library {
 	t.Helper()
-	library, err := modelLibrary(dir)
+	library, err := wiring.ModelLibrary(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2443,7 +2437,7 @@ func mustLibrary(t *testing.T, dir string) models.Library {
 }
 
 func TestBrowserModelResolvesFromTheSettingAndRefusesAnUnknownSlug(t *testing.T) {
-	emptyHome(t)
+	testkit.EmptyHome(t)
 	dumb, worker := roster.TierDumb.Setting(), roster.TierWorker.Setting()
 	for _, arm := range []struct {
 		set              map[string]string
@@ -2451,14 +2445,14 @@ func TestBrowserModelResolvesFromTheSettingAndRefusesAnUnknownSlug(t *testing.T)
 		refused          string
 	}{
 		{map[string]string{}, "", "", "the turn's own model", ""},
-		{map[string]string{worker: "claude-sub/claude-haiku-4-5-20251001"}, "claude-sub/claude-haiku-4-5-20251001", wireSubscription, worker, ""},
-		{map[string]string{dumb: "codex-sub/gpt-5.6-luna", worker: "claude-sub/claude-haiku-4-5-20251001"}, "codex-sub/gpt-5.6-luna", wireCodex, dumb, ""},
-		{map[string]string{settingspkg.BrowserModel: "claude-sub/claude-sonnet-5", dumb: "codex-sub/gpt-5.6-luna"}, "claude-sub/claude-sonnet-5", wireSubscription, settingspkg.BrowserModel, ""},
+		{map[string]string{worker: "claude-sub/claude-haiku-4-5-20251001"}, "claude-sub/claude-haiku-4-5-20251001", wiring.WireSubscription, worker, ""},
+		{map[string]string{dumb: "codex-sub/gpt-5.6-luna", worker: "claude-sub/claude-haiku-4-5-20251001"}, "codex-sub/gpt-5.6-luna", wiring.WireCodex, dumb, ""},
+		{map[string]string{settingspkg.BrowserModel: "claude-sub/claude-sonnet-5", dumb: "codex-sub/gpt-5.6-luna"}, "claude-sub/claude-sonnet-5", wiring.WireSubscription, settingspkg.BrowserModel, ""},
 		{map[string]string{settingspkg.BrowserModel: "claude-sub/claude-sonnet-9"}, "", "", "", "the model library has no claude-sub/claude-sonnet-9, it has "},
 		{map[string]string{dumb: "claude-sub/claude-nano-1"}, "", "", "", "the model library has no claude-sub/claude-nano-1, it has "},
 	} {
 		opts := armOpts(t)
-		store, err := settingspkg.OpenFor(opts.dir)
+		store, err := settingspkg.OpenFor(opts.Dir)
 		for key, slug := range arm.set {
 			if err == nil {
 				err = store.SetText(settingspkg.Project, key, slug)
@@ -2467,7 +2461,7 @@ func TestBrowserModelResolvesFromTheSettingAndRefusesAnUnknownSlug(t *testing.T)
 		if err != nil {
 			t.Fatal(err)
 		}
-		model, said, err := browserModel(opts.dir)
+		model, said, err := browserModel(opts.Dir)
 		t.Logf("%v resolves to %q, %v", arm.set, said, err)
 		var refusal *models.Refusal
 		switch {
@@ -2481,23 +2475,15 @@ func TestBrowserModelResolvesFromTheSettingAndRefusesAnUnknownSlug(t *testing.T)
 			}
 		default:
 			named, opened := model.(subscriptionModel)
-			if err != nil || !opened || named.opts.model != arm.slug || named.opts.wire != arm.wire || said != arm.slug+" from "+arm.from {
+			if err != nil || !opened || named.opts.Model != arm.slug || named.opts.Wire != arm.wire || said != arm.slug+" from "+arm.from {
 				t.Fatalf("%v resolves to %+v %q, %v, want %s on --wire %s from %s", arm.set, model, said, err, arm.slug, arm.wire, arm.from)
 			}
 		}
 	}
 }
 
-func emptyHome(t *testing.T) {
-	t.Helper()
-	home := t.TempDir()
-	t.Setenv("USERPROFILE", home)
-	t.Setenv("HOME", home)
-	t.Setenv(sys.TypeSafeKeyName, "")
-}
-
 func TestABrowserModelWhoseLowestEffortIsMinimalRunsAtLow(t *testing.T) {
-	emptyHome(t)
+	testkit.EmptyHome(t)
 	dir := t.TempDir()
 	store, err := settingspkg.OpenFor(dir)
 	if err != nil {
@@ -2563,18 +2549,18 @@ func (s *scriptedBrowserRuns) Ask(_ context.Context, request llm.Request) (llm.D
 }
 
 func TestABrowserRunTeachesItsHostARecipeTheNextRunIsGivenUntilItFailsTwice(t *testing.T) {
-	emptyHome(t)
+	testkit.EmptyHome(t)
 	opts := armOpts(t)
 	final := "https://www.fake.test/s/Atibaia/homes?adults=4&price_max=900&checkin=2026-10-10&ref_fsid=abc123"
 	page := "https://www.fake.test/s/Atibaia/homes?adults=4&checkin=2026-10-10&ref_fsid=abc123"
-	built, err := buildTestRunTools(opts.dir, opts.toolSet)
+	built, err := buildTestRunTools(opts.Dir, opts.ToolSet)
 	if err != nil {
 		t.Fatal(err)
 	}
 	built = append(slices.DeleteFunc(built, func(tool turn.Tool) bool { return strings.HasPrefix(tool.Name(), "browser_") }),
 		fakeBrowser{"browser_tabs", &page}, fakeBrowser{"browser_observe", &page}, fakeBrowser{"browser_act", &page}, fakeBrowser{"browser_motion", &page})
 	script := &scriptedBrowserRuns{}
-	noWire := func(runOpts) (appWire, error) {
+	noWire := func(wiring.RunOpts) (appWire, error) {
 		return appWire{}, errors.New("the browser sub-agent inherits the scripted model")
 	}
 	_, spawner := mustConfig(t, opts, built, runtime{model: script, spend: turn.SpendSubscription, open: noWire})
@@ -2651,7 +2637,7 @@ func toolCallDecisionFor(tool, args string) llm.Decision {
 }
 
 func TestFiftyStepsOnOneAccountPollItsQuotaAtMostTwice(t *testing.T) {
-	emptyHome(t)
+	testkit.EmptyHome(t)
 	var polls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		polls.Add(1)
@@ -2719,8 +2705,8 @@ data: {"type":"response.completed","response":{"id":"resp_1","model":"gpt-5.6-so
 	}
 	dir := t.TempDir()
 	opts := armOpts(t, "--tools", toolSetThree)
-	opts.dir, opts.task = dir, "go"
-	built, err := buildTestRunTools(dir, opts.toolSet)
+	opts.Dir, opts.Task = dir, "go"
+	built, err := buildTestRunTools(dir, opts.ToolSet)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2745,11 +2731,11 @@ data: {"type":"response.completed","response":{"id":"resp_1","model":"gpt-5.6-so
 func TestASubAgentAskingForAnEffortOnTheOpenrouterKeySpawnsWithoutItAndSaysSoOnce(t *testing.T) {
 	var said []string
 	orchestrator := models.Model{Provider: models.Anthropic, ID: "claude-opus-5"}
-	refuse := func(runOpts) (appWire, error) {
+	refuse := func(wiring.RunOpts) (appWire, error) {
 		return appWire{}, errors.New("the opener must not open a wire of its own")
 	}
 	run := runtime{orchestrator: orchestrator, notify: func(notice string) { said = append(said, notice) }, open: refuse}
-	open := run.subAgentOpener(runOpts{dir: t.TempDir(), wire: wireKey, model: orchestrator.Slug()})
+	open := run.subAgentOpener(wiring.RunOpts{Dir: t.TempDir(), Wire: wiring.WireKey, Model: orchestrator.Slug()})
 	for _, name := range []string{browserAgent, browserAgent, "research"} {
 		opened, err := open(roster.Definition{Name: name, Origin: "library", Runs: roster.RunsInherit, Effort: llm.EffortMedium}, "")
 		if err != nil {
@@ -2765,7 +2751,7 @@ func TestASubAgentAskingForAnEffortOnTheOpenrouterKeySpawnsWithoutItAndSaysSoOnc
 }
 
 func TestABrowserDefinitionsOwnEffortWinsWhenTheModelListsIt(t *testing.T) {
-	emptyHome(t)
+	testkit.EmptyHome(t)
 	dir := t.TempDir()
 	store, err := settingspkg.OpenFor(dir)
 	if err != nil {
@@ -2801,7 +2787,7 @@ func (m subAgentAfterTheLead) Ask(ctx context.Context, request llm.Request) (llm
 }
 
 func TestASubAgentsReportTurnDrawsNoRowAndTheNextLeadTurnIsANewBlock(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	driver := driveApp(t)
 	leadEnded := make(chan struct{})
 	var once sync.Once
@@ -2897,14 +2883,14 @@ func (m *leadStoppedWhileItsSubAgentWaits) Ask(ctx context.Context, request llm.
 }
 
 func TestStoppingTheLeadMidTurnLeavesItsSubAgentRunningToItsReport(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	driver := driveApp(t)
 	model := &leadStoppedWhileItsSubAgentWaits{queuedModel: noteSubAgent(writeNote("call-2")), asking: make(chan struct{}), subAgentGo: make(chan struct{})}
 	spawnAndRead := &model.decisions[0]
 	spawnAndRead.ToolCalls = append(spawnAndRead.ToolCalls, llm.ToolCall{ID: "call-read", Name: "read", Arguments: json.RawMessage(`{"path":"note.txt"}`)})
 	firstClose := make(chan struct{})
 	var once sync.Once
-	live := newAppSession(dir, func(runOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
+	live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
 	ran := make(chan struct{})
 	go func() {
 		defer close(ran)
@@ -2936,7 +2922,7 @@ func TestStoppingTheLeadMidTurnLeavesItsSubAgentRunningToItsReport(t *testing.T)
 }
 
 func TestEverySessionEventOfAContinuationForkCarriesTheRootOfItsLine(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	store, err := sessionstore.Open()
 	if err != nil {
 		t.Fatal(err)

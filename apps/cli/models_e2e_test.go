@@ -20,6 +20,7 @@ import (
 	"tofu/internal/models/llm/wire/codex"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
+	testkit "tofu/internal/testkit/cli"
 )
 
 const (
@@ -193,16 +194,16 @@ func modelsJSONLines(t *testing.T, printed string) string {
 
 func TestE2EModelsMergesTheProjectLayerOverTheBinaryAndReadsTheRegistryFromHome(t *testing.T) {
 	shipped := newProject(t, "shipped")
-	sameText(t, "a project that overrides nothing",
+	testkit.SameText(t, "a project that overrides nothing",
 		shipped.run(t, output.ExitOK, "models"), modelsFromTheBinaryAlone)
 
 	layered := newProject(t, "layered")
-	writeFile(t, layered.dir, ".tofu/models/anthropic/claude-opus-4-5-20251101.yaml", "use: allowed\n")
-	writeFile(t, layered.dir, ".tofu/roles/turn.yaml", "model: claude-sub/claude-sonnet-5\n")
-	writeFile(t, layered.home, ".tofu/model-windows.json", homeRegistryOfOneWindow)
-	sameText(t, "a project that allows one excluded model, binds the orchestrator through the legacy turn.yaml, and carries its own window table",
+	testkit.WriteFile(t, layered.dir, ".tofu/models/anthropic/claude-opus-4-5-20251101.yaml", "use: allowed\n")
+	testkit.WriteFile(t, layered.dir, ".tofu/roles/turn.yaml", "model: claude-sub/claude-sonnet-5\n")
+	testkit.WriteFile(t, layered.home, ".tofu/model-windows.json", homeRegistryOfOneWindow)
+	testkit.SameText(t, "a project that allows one excluded model, binds the orchestrator through the legacy turn.yaml, and carries its own window table",
 		layered.run(t, output.ExitOK, "models"), modelsWithAProjectLayerAndAHomeRegistry)
-	sameText(t, "the same project as one --json envelope",
+	testkit.SameText(t, "the same project as one --json envelope",
 		modelsJSONLines(t, layered.run(t, output.ExitOK, "models", "--json")), modelsJSONWithAProjectLayer)
 }
 
@@ -224,7 +225,7 @@ func npmClaudeCodeAbovePin() string {
 
 func stubbedHome(t *testing.T) {
 	t.Helper()
-	chdirTemp(t)
+	testkit.ChdirTemp(t)
 	t.Setenv(models.RegistryURLVariable, stubbed(t, http.StatusOK, registryOfTwoWindows))
 	npm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		version := codex.PinnedCodexClientVersion
@@ -271,7 +272,7 @@ func TestModelsReloadShowsANewModelAndARefusedAccountWithTheVendorBodyOnlyInJSON
 		t.Fatal(err)
 	}
 	shadowing := filepath.Join(catalog, "models", "anthropic", "claude-opus-5.yaml")
-	writeFile(t, catalog, "models/anthropic/claude-opus-5.yaml", "subscription: claude-sub\nuse: allowed\n")
+	testkit.WriteFile(t, catalog, "models/anthropic/claude-opus-5.yaml", "subscription: claude-sub\nuse: allowed\n")
 	token := func(context.Context) (string, error) { return "stub", nil }
 	accounts := []models.Account{
 		{Subscription: models.ClaudeSub, Token: token, BaseURL: stubbed(t, http.StatusOK, `{"data":[{"id":"claude-opus-5"},{"id":"claude-sonnet-5"},{"id":"claude-sonnet-5-5"}]}`)},
@@ -289,7 +290,7 @@ func TestModelsReloadShowsANewModelAndARefusedAccountWithTheVendorBodyOnlyInJSON
 	if err := (cli.Page{Width: 80}).Print(&text, reloadLines(cli.Page{Width: 80}, report)); err != nil {
 		t.Fatal(err)
 	}
-	sameText(t, "a reload where one account serves a new model and the other is refused", text.String(), reloadOfANewModelAndARefusedAccount)
+	testkit.SameText(t, "a reload where one account serves a new model and the other is refused", text.String(), reloadOfANewModelAndARefusedAccount)
 
 	var printed bytes.Buffer
 	if err := output.WriteJSON(&printed, report.envelope()); err != nil {
@@ -333,7 +334,7 @@ func TestModelsReloadWithNobodySignedInSaysSoInTextAndInJSON(t *testing.T) {
 		t.Fatalf("tofu models reload exited %d\n%s%s", code, text.String(), errOut.String())
 	}
 	npm := npmClaudeCodeAbovePin()
-	sameText(t, "a reload with no account signed in", text.String(), strings.NewReplacer("PIN", anthropic.PinnedClaudeCodeVersion, "NPM", npm).Replace(reloadWithNobodySignedIn))
+	testkit.SameText(t, "a reload with no account signed in", text.String(), strings.NewReplacer("PIN", anthropic.PinnedClaudeCodeVersion, "NPM", npm).Replace(reloadWithNobodySignedIn))
 	global, _ := settingspkg.Paths(".")
 	if written, _ := os.ReadFile(global); !strings.Contains(string(written), `"claudeCode": "`+npm+`"`) {
 		t.Fatalf("npm at %s did not raise the global file:\n%s", npm, written)

@@ -19,6 +19,7 @@ import (
 	"tofu/internal/models/llm/core"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
+	"tofu/internal/testkit/cli"
 	"tofu/internal/ui/tui/app"
 	library "tofu/library"
 )
@@ -127,7 +128,7 @@ func gateThresholdsAsDoctorReadsThem(point doctorRule) gate.Thresholds {
 
 func gateScratch(t *testing.T, lockBuild string) (string, gate.Thresholds, gate.Thresholds) {
 	t.Helper()
-	dir := chdirTemp(t)
+	dir := testkit.ChdirTemp(t)
 	t.Setenv(envVarName(), fakeSecret("gate"))
 	bindTypeSafe(t)
 	enableGateAsking(t)
@@ -189,7 +190,7 @@ func TestADecisionMadeNowCarriesTheFingerprintOfTheCallItJudged(t *testing.T) {
 }
 
 func TestTheGateReadsTheRuleInTheBinaryWhenTheProjectHasNoLibrary(t *testing.T) {
-	dir := chdirTemp(t)
+	dir := testkit.ChdirTemp(t)
 	t.Setenv(envVarName(), fakeSecret("gate"))
 	bindTypeSafe(t)
 	shipped, err := gate.LoadFS(library.Files(), runGatePoint)
@@ -274,7 +275,7 @@ func TestASettingsCallJevAllowsStillReachesThePersonAsAnAsk(t *testing.T) {
 
 func autoModeGate(t *testing.T) string {
 	t.Helper()
-	dir := chdirTemp(t)
+	dir := testkit.ChdirTemp(t)
 	writeGateRuleFixture(t)
 	writeGateLedgerRowFixture(t)
 	writeGateLockFixture(t, gateFixtureBuild)
@@ -333,28 +334,6 @@ func TestAWriteToTofusOwnSettingsAsksThePersonInAutoModeAndASubAgentsIsRefused(t
 func envVarName() string { return "TYPESAFE" + "_API_KEY" }
 
 func fakeSecret(tag string) string { return "fake-test-secret-" + tag }
-
-func isolateHome(t *testing.T) {
-	t.Helper()
-	dir := t.TempDir()
-	t.Setenv("HOME", dir)
-	t.Setenv("USERPROFILE", dir)
-}
-
-func chdirTemp(t *testing.T) string {
-	t.Helper()
-	isolateHome(t)
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	dir := t.TempDir()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("chdir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(wd) })
-	return dir
-}
 
 func doctorJSON(t *testing.T) doctorReport {
 	t.Helper()

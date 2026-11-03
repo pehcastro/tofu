@@ -26,6 +26,7 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/cli/output"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/catalog"
@@ -33,6 +34,7 @@ import (
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/testkit/cli"
 	"tofu/internal/tools/registry"
 	tuisession "tofu/internal/ui/tui/chat/session"
 )
@@ -89,8 +91,8 @@ func TestASecondIdenticalReadInOneTurnNeverReachesTheTool(t *testing.T) {
 		t.Fatal(err)
 	}
 	opts := armOpts(t)
-	opts.dir, opts.task = dir, "read the note twice"
-	built, err := buildTestRunTools(dir, opts.toolSet)
+	opts.Dir, opts.Task = dir, "read the note twice"
+	built, err := buildTestRunTools(dir, opts.ToolSet)
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
@@ -316,7 +318,7 @@ func TestASpawnedSubAgentsRequestsCarryTheEffortTheSpawnNames(t *testing.T) {
 		{"minimal", ""},
 	} {
 		t.Run(cmp.Or(spawned.effort, "inherited"), func(t *testing.T) {
-			emptyHome(t)
+			testkit.EmptyHome(t)
 			args, _ := json.Marshal(map[string]any{"task": "add the users route", "owns": []string{"src/**"}, "effort": spawned.effort})
 			spawnCall := `{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_1","name":"` + anthropic.EncodeToolName("spawn", true) + `","input":{}}}` + "\n" +
 				`{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":` + strconv.Quote(string(args)) + `}}` + "\n" +
@@ -333,11 +335,11 @@ func TestASpawnedSubAgentsRequestsCarryTheEffortTheSpawnNames(t *testing.T) {
 				}
 				return turn.Subscription{Wire: wire, Effort: effort}
 			}
-			open := func(opts runOpts) (appWire, error) {
-				return appWire{held: &accounts{fixed: subscription(opts.effort), now: time.Now}, spend: turn.SpendSubscription, selected: orchestrator}, nil
+			open := func(opts wiring.RunOpts) (appWire, error) {
+				return appWire{held: &accounts{fixed: subscription(opts.Effort), now: time.Now}, spend: turn.SpendSubscription, selected: orchestrator}, nil
 			}
 			dir := t.TempDir()
-			opener := runtime{orchestrator: orchestrator, open: open}.subAgentOpener(runOpts{dir: dir, wire: wireSubscription, model: orchestrator.Slug(), effort: llm.EffortMedium})
+			opener := runtime{orchestrator: orchestrator, open: open}.subAgentOpener(wiring.RunOpts{Dir: dir, Wire: wiring.WireSubscription, Model: orchestrator.Slug(), Effort: llm.EffortMedium})
 			base := turn.Config{Model: subscription(llm.EffortMedium), Spend: turn.SpendSubscription, Caps: turn.Caps{MaxSteps: 5}, ResultBytesCap: 4096,
 				ArtifactDir: t.TempDir(), NewID: func() string { return "turn-lead" }, Task: "hand the users route to a sub-agent"}
 			spawner := turn.NewSpawnTool("turn-lead", base, &subagent.Roster{})
@@ -375,7 +377,7 @@ func TestATsDevSpawnIsOfferedTypecheck(t *testing.T) {
 			{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"agent":"ts-dev","task":"check the project","owns":["src/**"]}`)}}},
 		reply("ts-dev is on it"), reply("done"),
 	}, subAgents: []llm.Decision{reply("checked")}}
-	stubbedTurn(scratchProject(t), model)(t.Context(), onTheSubscription, "have ts-dev check the project", driveAppOn(t, nil).emit)
+	stubbedTurn(testkit.ScratchProject(t), model)(t.Context(), onTheSubscription, "have ts-dev check the project", driveAppOn(t, nil).emit)
 	if len(model.subAgentAsked) == 0 {
 		t.Fatal("the ts-dev sub-agent never asked its model")
 	}
@@ -463,7 +465,7 @@ func TestARunAtACeilingUnderItsPromptIsRefusedAndJustAboveItCompactsAndRecordsTh
 		if err != nil {
 			t.Fatalf("parseRunArgs: %v", err)
 		}
-		built, err := buildTestRunTools(dir, opts.toolSet)
+		built, err := buildTestRunTools(dir, opts.ToolSet)
 		if err != nil {
 			t.Fatalf("buildTestRunTools: %v", err)
 		}
@@ -544,7 +546,7 @@ func TestARequestOverTheModelsWindowIsRefusedBeforeItIsSent(t *testing.T) {
 		t.Fatalf("budget: %v", err)
 	}
 	queued := &queuedModel{decisions: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "sent"}}}
-	guard, err := guarded(queued, budget)
+	guard, err := wiring.Guarded(queued, budget)
 	if err != nil {
 		t.Fatalf("guarded: %v", err)
 	}
@@ -588,7 +590,7 @@ func TestAModelWithNoRecordedWindowCompactsAtTheOperatingCeiling(t *testing.T) {
 		}})
 	}
 	decisions = append(decisions, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "read it all"})
-	built, err := buildTestRunTools(dir, opts.toolSet)
+	built, err := buildTestRunTools(dir, opts.ToolSet)
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
@@ -633,8 +635,8 @@ func TestTheSpawnToolIsGivenTheSessionStoreBeforeTheTurnStarts(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	opts := armOpts(t)
-	opts.dir, opts.task = dir, "hand the work to a sub-agent"
-	built, err := buildTestRunTools(dir, opts.toolSet)
+	opts.Dir, opts.Task = dir, "hand the work to a sub-agent"
+	built, err := buildTestRunTools(dir, opts.ToolSet)
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
@@ -755,8 +757,8 @@ func TestASubAgentLeavesItsRecordWhileTheOrchestratorsTurnIsStillRunning(t *test
 	dir := t.TempDir()
 	t.Chdir(dir)
 	opts := armOpts(t)
-	opts.dir, opts.task, opts.turnID = dir, "hand the work to a sub-agent", "turn-orchestrator"
-	built, err := buildTestRunTools(dir, opts.toolSet)
+	opts.Dir, opts.Task, opts.TurnID = dir, "hand the work to a sub-agent", "turn-orchestrator"
+	built, err := buildTestRunTools(dir, opts.ToolSet)
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
@@ -776,7 +778,7 @@ func TestASubAgentLeavesItsRecordWhileTheOrchestratorsTurnIsStillRunning(t *test
 
 func TestTheWebLibraryComesFromTheDirectoryTheRunNamesNotTheOneItWasStartedIn(t *testing.T) {
 	opts, plain := armOpts(t), t.TempDir()
-	off := filepath.Join(opts.dir, ".tofu", "web")
+	off := filepath.Join(opts.Dir, ".tofu", "web")
 	if err := os.MkdirAll(off, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -786,17 +788,17 @@ func TestTheWebLibraryComesFromTheDirectoryTheRunNamesNotTheOneItWasStartedIn(t 
 
 	t.Chdir(plain)
 	if named := toolNames(t, opts); slices.Contains(named, "fetch") {
-		t.Errorf("--dir %s says use: off and the run offered fetch anyway: %v", opts.dir, named)
+		t.Errorf("--dir %s says use: off and the run offered fetch anyway: %v", opts.Dir, named)
 	}
 
-	t.Chdir(opts.dir)
-	opts.dir = plain
+	t.Chdir(opts.Dir)
+	opts.Dir = plain
 	if standing := toolNames(t, opts); !slices.Contains(standing, "fetch") {
 		t.Errorf("--dir %s has no web library and the run obeyed the use: off of the directory it stood in: %v", plain, standing)
 	}
 }
 
-func armOpts(t *testing.T, args ...string) runOpts {
+func armOpts(t *testing.T, args ...string) wiring.RunOpts {
 	t.Helper()
 	opts, err := parseRunArgs(append([]string{"--dir", t.TempDir()}, append(args, "a task")...))
 	if err != nil {
@@ -805,7 +807,7 @@ func armOpts(t *testing.T, args ...string) runOpts {
 	return opts
 }
 
-func mustConfig(t *testing.T, opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool) {
+func mustConfig(t *testing.T, opts wiring.RunOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool) {
 	t.Helper()
 	places, err := sys.ResolvePlaces(".")
 	if err != nil {
@@ -819,11 +821,11 @@ func mustConfig(t *testing.T, opts runOpts, built []turn.Tool, run runtime) (tur
 	return config, spawner
 }
 
-func toolNames(t *testing.T, opts runOpts) []string {
+func toolNames(t *testing.T, opts wiring.RunOpts) []string {
 	t.Helper()
-	built, err := buildTestRunTools(opts.dir, opts.toolSet)
+	built, err := buildTestRunTools(opts.Dir, opts.ToolSet)
 	if err != nil {
-		t.Fatalf("buildTestRunTools %s: %v", opts.toolSet, err)
+		t.Fatalf("buildTestRunTools %s: %v", opts.ToolSet, err)
 	}
 	config, _ := mustConfig(t, opts, built, runtime{spend: turn.SpendSubscription})
 	var named []string
@@ -835,7 +837,7 @@ func toolNames(t *testing.T, opts runOpts) []string {
 
 func chosenFor(t *testing.T) models.Model {
 	t.Helper()
-	opts, err := parseRunArgs([]string{"--dir", t.TempDir(), "--wire", wireSubscription, "a task"})
+	opts, err := parseRunArgs([]string{"--dir", t.TempDir(), "--wire", wiring.WireSubscription, "a task"})
 	if err != nil {
 		t.Fatalf("parseRunArgs returned an error: %v", err)
 	}
@@ -893,7 +895,7 @@ func (m *leadRecording) Ask(ctx context.Context, request llm.Request) (llm.Decis
 }
 
 func TestOnAReactProjectTheLeadCarriesTheDesignRulesAndNoWritingRuleAndItsTsDevCarriesBoth(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"dependencies": {"react": "19"}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -955,7 +957,7 @@ func TestOnAReactProjectTheLeadCarriesTheDesignRulesAndNoWritingRuleAndItsTsDevC
 	if err != nil {
 		t.Fatal(err)
 	}
-	built, err := buildTestRunTools(dir, opts.toolSet)
+	built, err := buildTestRunTools(dir, opts.ToolSet)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1013,7 +1015,7 @@ func TestTheLeadTakesACleanReportUncheckedOnlyWithTheCheckOff(t *testing.T) {
 			}
 			t.Setenv(cassetteVariable, deck)
 			var out, errOut bytes.Buffer
-			if code := runVerb([]string{"--dir", dir, "--wire", wireSubscription, "--no-gate", "--sift", "free", "add Extra to package stats"}, &out, &errOut); code != output.ExitOK {
+			if code := runVerb([]string{"--dir", dir, "--wire", wiring.WireSubscription, "--no-gate", "--sift", "free", "add Extra to package stats"}, &out, &errOut); code != output.ExitOK {
 				t.Fatalf("tofu run exited %d: %s", code, errOut.String())
 			}
 			t.Logf("tofu run printed:\n%s", out.String())
@@ -1086,7 +1088,7 @@ func TestTheLeadAsksWhereToOverrideARuleAndOnlyAYesWritesTheFile(t *testing.T) {
 
 func TestAnOffOverrideLeavesOneLineInThePromptAndAStaleOneLeavesTheRule(t *testing.T) {
 	for _, version := range []int{1, 2} {
-		project := chdirTemp(t)
+		project := testkit.ChdirTemp(t)
 		data, err := rule.OverrideFile(overrideAsked, "", rule.Override{Of: overrideAsked, Version: version, Reason: "the SDK's unit tests are its contract", By: rule.ByAsked, At: "2026-10-05"})
 		if err != nil {
 			t.Fatal(err)
@@ -1094,7 +1096,7 @@ func TestAnOffOverrideLeavesOneLineInThePromptAndAStaleOneLeavesTheRule(t *testi
 		if err := sys.WriteFile(filepath.Join(project, ".tofu", "rules", overrideAsked+"@1.yaml"), data, 0o644); err != nil {
 			t.Fatal(err)
 		}
-		prompt, err := composeRun(runOpts{dir: project, task: "add unit tests to the parser"}, nil, runtime{open: openAppWire})
+		prompt, err := composeRun(wiring.RunOpts{Dir: project, Task: "add unit tests to the parser"}, nil, runtime{open: openAppWire})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1112,7 +1114,7 @@ func TestAnOffOverrideLeavesOneLineInThePromptAndAStaleOneLeavesTheRule(t *testi
 func TestTheLeadAloneHoldsTheCronToolAndAFiredTurnNeverPushes(t *testing.T) {
 	for _, arms := range [][]string{nil, {"--no-subagents"}, {"--tools", toolSetThree}} {
 		opts := armOpts(t, arms...)
-		built, err := buildTestRunTools(opts.dir, opts.toolSet)
+		built, err := buildTestRunTools(opts.Dir, opts.ToolSet)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1152,8 +1154,8 @@ func TestEveryLeadThatCanAskAPersonHoldsRuleOverrideAndTheThreeToolArmAloneStays
 		{[]string{"--tools", toolSetThree}, true, true},
 	} {
 		opts := armOpts(t, arm.args...)
-		opts.gateArm = gateOff
-		built, err := buildTestRunTools(opts.dir, opts.toolSet)
+		opts.GateArm = gateOff
+		built, err := buildTestRunTools(opts.Dir, opts.ToolSet)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1198,11 +1200,11 @@ func TestTheThinkingSummaryFlagWinsOverTheStoredSettingForThatRunOnly(t *testing
 		if err := sys.WriteFile(settingsFile, []byte(written), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		opts, err := parseRunArgs([]string{"--dir", dir, "--wire", wireCodex, "--thinking-summary", flag, "--dry-run", "a task"})
+		opts, err := parseRunArgs([]string{"--dir", dir, "--wire", wiring.WireCodex, "--thinking-summary", flag, "--dry-run", "a task"})
 		if err != nil {
 			t.Fatalf("parseRunArgs: %v", err)
 		}
-		body, err := dryRunBody(opts, models.Model{ID: "gpt-5.6-sol"}, turn.Config{Task: opts.task})
+		body, err := dryRunBody(opts, models.Model{ID: "gpt-5.6-sol"}, turn.Config{Task: opts.Task})
 		if err != nil {
 			t.Fatalf("dryRunBody: %v", err)
 		}

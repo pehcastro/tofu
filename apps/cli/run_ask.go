@@ -5,6 +5,7 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
@@ -45,7 +46,7 @@ func askJudge(dir, log string, keys jev.Keyring) (subagent.AskJudge, error) {
 	if err != nil {
 		return subagent.AskJudge{}, err
 	}
-	client, err := jevClientFrom(keys, oneCallAtATime)
+	client, err := wiring.JevClientFrom(keys, wiring.OneCallAtATime)
 	if err != nil {
 		return subagent.AskJudge{}, err
 	}

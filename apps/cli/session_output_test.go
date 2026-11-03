@@ -15,9 +15,11 @@ import (
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/loop"
 	"tofu/internal/cli/output"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/konst"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	testkit "tofu/internal/testkit/cli"
 	"tofu/internal/testkit/golden"
 	"tofu/internal/tools/shell/process"
 )
@@ -58,7 +60,7 @@ func rawJSON(t *testing.T, value any) json.RawMessage {
 
 func sessionOutputProject(t *testing.T) string {
 	t.Helper()
-	isolateHome(t)
+	testkit.IsolateHome(t)
 	home := os.Getenv("USERPROFILE")
 	project := filepath.Join(home, "project")
 	if err := os.MkdirAll(project, 0o755); err != nil {
@@ -74,7 +76,7 @@ func sessionOutputProject(t *testing.T) string {
 		Occupancy: &recall.Occupancy{Identity: 3300, Facts: 1200, WorkingSet: 9000, Recent: 4000, Target: 50000}}
 	storeWalk, olderTask := "store-walk", "older-task"
 	one := session.Header{ID: "turn-one", Name: &storeWalk, At: now.Add(-10 * time.Minute), Task: "explain the session store", Root: "turn-one",
-		Wire: wireSubscription, Model: "claude-opus-5", Outcome: "stopped", CostUSD: 0.0054,
+		Wire: wiring.WireSubscription, Model: "claude-opus-5", Outcome: "stopped", CostUSD: 0.0054,
 		Agents: []session.AgentRun{{Agent: "agent-1", Definition: "planner", Model: "claude-sub/claude-opus-5", SpawnCall: "call-2", SpawnTurn: "turn-one", Status: "done", CostUSD: 0.0012}}}
 	at := func(minutes int) time.Time { return now.Add(time.Duration(minutes-10) * time.Minute) }
 	events := []session.Event{

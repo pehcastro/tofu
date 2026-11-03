@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"sort"
 
+	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/questions"
@@ -56,7 +57,7 @@ type rowLedger struct {
 }
 
 func openRowLedger(log string) (rowLedger, error) {
-	classifier, err := boundClassifier()
+	classifier, err := wiring.BoundClassifier()
 	if jev.IsUnbound(err) {
 		err = nil
 	}
@@ -353,7 +354,7 @@ func memoryScopeJudge(dir, log string, keys jev.Keyring, say func(string)) *tool
 	}
 	var client *jev.Client
 	if err == nil {
-		client, err = jevClientFrom(keys, oneCallAtATime)
+		client, err = wiring.JevClientFrom(keys, wiring.OneCallAtATime)
 	}
 	if err != nil {
 		if say != nil {

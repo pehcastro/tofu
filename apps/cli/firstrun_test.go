@@ -19,6 +19,7 @@ import (
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
+	testkit "tofu/internal/testkit/cli"
 	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/chat/session"
 )
@@ -41,7 +42,7 @@ func firstRunApp(t *testing.T, width, height int) *tui.App {
 func plainFrame(app *tui.App) string { return ansi.Strip(app.View().Content) }
 
 func TestAFirstRunWithNothingStoredDrawsTheSetupAndNotAnError(t *testing.T) {
-	scratchProject(t)
+	testkit.ScratchProject(t)
 	narrow, wide := plainFrame(firstRunApp(t, 80, 24)), plainFrame(firstRunApp(t, 120, 36))
 	for _, want := range []string{noCredential, "1. " + modelStep, "2. " + classifierStep, "tofu login llm <source>"} {
 		if !strings.Contains(narrow, want) {
@@ -66,7 +67,7 @@ func TestAFirstRunWithNothingStoredDrawsTheSetupAndNotAnError(t *testing.T) {
 }
 
 func TestACredentialWithoutAKeyLeavesOnlyTheKeyStep(t *testing.T) {
-	scratchProject(t)
+	testkit.ScratchProject(t)
 	storeCredential(t, cred.ClaudeSub)
 	bindOrchestrator(t, "claude-sub/claude-opus-5")
 	frame := plainFrame(firstRunApp(t, 80, 24))
@@ -80,7 +81,7 @@ func TestACredentialWithoutAKeyLeavesOnlyTheKeyStep(t *testing.T) {
 }
 
 func TestWithBothStoredNoSetupIsDrawnAndTheComposerHasFocus(t *testing.T) {
-	scratchProject(t)
+	testkit.ScratchProject(t)
 	storeCredential(t, cred.ClaudeSub)
 	bindOrchestrator(t, "claude-sub/claude-opus-5")
 	storeGateKey(t, gateKeyForTests)
@@ -118,7 +119,7 @@ func drive(t *testing.T, app *tui.App, cmd tea.Cmd) {
 }
 
 func TestALoginRunInAnotherTerminalMovesTheAppOnWithoutARestart(t *testing.T) {
-	scratchProject(t)
+	testkit.ScratchProject(t)
 	held := heldForTest(t)
 	app := tui.New(tui.Options{Repo: "scratch", Requirements: held.requirements(), Recheck: held.requirements})
 	start := app.Init()
@@ -147,7 +148,7 @@ func TestALoginRunInAnotherTerminalMovesTheAppOnWithoutARestart(t *testing.T) {
 }
 
 func TestTheAppAndDoctorCallTheSameStateReady(t *testing.T) {
-	scratchProject(t)
+	testkit.ScratchProject(t)
 	for _, step := range []struct {
 		what  string
 		store func()
@@ -197,7 +198,7 @@ func filesUnder(t *testing.T, dir string) map[string]string {
 }
 
 func TestTheKeyIsNeverInAFrameALogOrARecordedSession(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	const key = "sk-or-v1-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd"
 	storeGateKey(t, key)
 	t.Setenv(sys.TypeSafeKeyName, key)

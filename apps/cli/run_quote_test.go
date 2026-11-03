@@ -36,8 +36,8 @@ func quotingTurn(t *testing.T, reference string) (turn.Config, turn.Row) {
 	t.Helper()
 	store, recorded := sessionCarryingOneTurn(t)
 	opts := armOpts(t)
-	opts.task, opts.turnID = "say what you meant in [quote"+reference+"]", recorded
-	built, err := buildTestRunTools(opts.dir, opts.toolSet)
+	opts.Task, opts.TurnID = "say what you meant in [quote"+reference+"]", recorded
+	built, err := buildTestRunTools(opts.Dir, opts.ToolSet)
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
@@ -92,8 +92,8 @@ func TestAnUnresolvableReferenceComesBackToTheModelAsAnErrorRatherThanATurn(t *t
 func TestTheThreeToolArmStaysThreeToolsWithNoQuoteInIt(t *testing.T) {
 	store, recorded := sessionCarryingOneTurn(t)
 	opts := armOpts(t, "--tools", toolSetThree)
-	opts.turnID = recorded
-	built, err := buildTestRunTools(opts.dir, opts.toolSet)
+	opts.TurnID = recorded
+	built, err := buildTestRunTools(opts.Dir, opts.ToolSet)
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}

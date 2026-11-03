@@ -16,6 +16,7 @@ import (
 
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/gate"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
@@ -122,9 +123,9 @@ func calibrateVerb(args []string, out, errOut io.Writer) int {
 		return o.Fail(err)
 	}
 	set.Rule, set.Mode, set.ModeReason = &resolved.Rule, resolved.Mode, resolved.Reason
-	client, err := newJevClient()
+	client, err := wiring.NewJevClient()
 	if err != nil {
-		return failed(o, err)
+		return wiring.Failed(o, err)
 	}
 	ask := func(ctx context.Context, c calibrationCase) (askedCase, error) {
 		report.Calls++
@@ -137,7 +138,7 @@ func calibrateVerb(args []string, out, errOut io.Writer) int {
 		return o.Fail(fmt.Errorf("%s; refused after %d jev calls, no lock written", refused, report.Calls))
 	}
 	if err != nil {
-		return failed(o, err)
+		return wiring.Failed(o, err)
 	}
 	dir, err := sys.CalibrationDir()
 	if err != nil {

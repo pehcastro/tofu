@@ -6,17 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strconv"
 	"time"
 
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/models/transport"
 )
 
 const judgeUsage = "tofu judge [--dry-run] [--no-cache] [--no-rule] [--json] < request.json, or tofu judge --lint file [--json]"
@@ -63,28 +62,28 @@ func judgeVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 
 	raw, err := io.ReadAll(in)
 	if err != nil {
-		return failed(o, fmt.Errorf("reading standard input: %w", err))
+		return wiring.Failed(o, fmt.Errorf("reading standard input: %w", err))
 	}
 	var input judgeInput
 	if err := json.Unmarshal(raw, &input); err != nil {
-		return failed(o, fmt.Errorf("the request body is not valid JSON: %w", err))
+		return wiring.Failed(o, fmt.Errorf("the request body is not valid JSON: %w", err))
 	}
 	if input.State == nil {
-		return failed(o, errors.New("the request carries no state"))
+		return wiring.Failed(o, errors.New("the request carries no state"))
 	}
 
 	set, err := resolveQuestions(input)
 	if err != nil {
-		return failed(o, err)
+		return wiring.Failed(o, err)
 	}
 	if !opts.noRule && input.Rule != "" {
 		pol, err := resolveRule(input.Rule, set)
 		if err != nil {
-			return failed(o, err)
+			return wiring.Failed(o, err)
 		}
 		res, err := resolveRuleMode(pol)
 		if err != nil {
-			return failed(o, err)
+			return wiring.Failed(o, err)
 		}
 		set.Rule = &res.Rule
 		set.Mode = res.Mode
@@ -93,33 +92,33 @@ func judgeVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	jevRequest := jev.Request{State: input.State, Questions: set.Questions}
 
 	if opts.dryRun {
-		bound, err := boundClassifier()
+		bound, err := wiring.BoundClassifier()
 		if err != nil {
-			return failed(o, err)
+			return wiring.Failed(o, err)
 		}
 		model, err := classifier.Route{Model: bound}.Alias()
 		if err != nil {
-			return failed(o, err)
+			return wiring.Failed(o, err)
 		}
 		body, err := jevRequest.Encode(model)
 		if err != nil {
-			return failed(o, err)
+			return wiring.Failed(o, err)
 		}
 		return protocol(o, output.ExitOK, json.RawMessage(body), string(body)+"\n")
 	}
 
-	client, err := newJevClient()
+	client, err := wiring.NewJevClient()
 	if err != nil {
-		return failed(o, err)
+		return wiring.Failed(o, err)
 	}
 	outcome, err := runJudge(context.Background(), client, jevRequest, set, opts.noCache)
 	if err != nil {
-		return failed(o, err)
+		return wiring.Failed(o, err)
 	}
 	answers := outcome.output(set.Kinds)
 	body, err := json.Marshal(answers)
 	if err != nil {
-		return failed(o, err)
+		return wiring.Failed(o, err)
 	}
 	return protocol(o, judgeExitCode(outcome), judgeReport{answers, outcome.verdict, outcome.mode}, string(body)+"\n")
 }
@@ -161,7 +160,7 @@ func parseJudgeArgs(args []string) (judgeOpts, error) {
 func judgeLint(o output.Verb, path string) int {
 	findings, err := question.LintFile(path, question.DefaultCaps())
 	if err != nil {
-		return failed(o, err)
+		return wiring.Failed(o, err)
 	}
 	text := ""
 	listed := make([]questionFinding, len(findings))
@@ -189,28 +188,4 @@ func protocol(o output.Verb, code int, data any, text string) int {
 		return output.ExitVerdict
 	}
 	return code
-}
-
-func failed(o output.Verb, err error) int {
-	var refused *transport.Error
-	switch {
-	case !errors.As(err, &refused):
-	case refused.Kind == transport.KindMissingCredential:
-		err = output.ProblemError{What: refused.Detail, Hint: classifierLoginHint()}
-	case refused.Status == 0:
-	case refused.Kind == transport.KindAuth:
-		err = output.ProblemError{What: "jev refused the key (" + strconv.Itoa(refused.Status) + ")", Hint: classifierLoginHint()}
-	default:
-		err = output.ProblemError{What: "jev refused the call (" + strconv.Itoa(refused.Status) + " " + refused.Kind.String() + ")"}
-	}
-	_ = o.Fail(err)
-	return output.ExitUsage
-}
-
-func classifierLoginHint() string {
-	bound, err := boundClassifier()
-	if err != nil {
-		return ""
-	}
-	return commandFor("login", roleClassifier, string(bound.Provider))
 }

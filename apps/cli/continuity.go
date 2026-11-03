@@ -10,6 +10,7 @@ import (
 
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/loop"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/quota"
@@ -61,7 +62,7 @@ func (c continuing) move(ctx context.Context, left []string, conversationTokens 
 		}
 		return turn.Moved{}, errors.New("continuity is not set, so the work stops here: set " + fields + " in Settings > " + settingspkg.ModelsCategory)
 	}
-	library, err := modelLibrary(c.dir)
+	library, err := wiring.ModelLibrary(c.dir)
 	if err != nil {
 		return turn.Moved{}, err
 	}
@@ -108,7 +109,7 @@ func (c continuing) subscriptionProviders() int {
 	return len(sources)
 }
 
-func (a *accounts) wrapping(wrap func(turn.Model, recall.Budget) (turn.Model, error), budget recall.Budget, opts runOpts) {
+func (a *accounts) wrapping(wrap func(turn.Model, recall.Budget) (turn.Model, error), budget recall.Budget, opts wiring.RunOpts) {
 	a.wrap, a.budget = wrap, budget
 	a.budgetOf = func(model models.Model) (recall.Budget, error) { return contextBudget(opts, model) }
 }

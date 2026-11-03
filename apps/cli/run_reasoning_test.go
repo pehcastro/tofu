@@ -70,8 +70,8 @@ func TestAReasoningItemFromStepOneReachesTheStepTwoCodexRequestAndTheStoredRow(t
 
 	dir := t.TempDir()
 	opts := armOpts(t, "--tools", toolSetThree)
-	opts.dir, opts.task = dir, "write hello.txt"
-	built, err := buildTestRunTools(dir, opts.toolSet)
+	opts.Dir, opts.Task = dir, "write hello.txt"
+	built, err := buildTestRunTools(dir, opts.ToolSet)
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}

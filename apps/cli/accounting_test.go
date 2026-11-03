@@ -12,6 +12,7 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
+	"tofu/internal/testkit/cli"
 	"tofu/internal/ui/tui/app"
 )
 
@@ -221,7 +222,7 @@ func TestTheBottomBarIsGivenFreshTokensOnBothWires(t *testing.T) {
 			PromptAccounting: llm.PromptAccountingFor(each.wire),
 			CacheReadTokens:  5120,
 		}}
-		stubbedTurn(scratchProject(t), model)(t.Context(), onTheSubscription, "say what you hold", driver.emit)
+		stubbedTurn(testkit.ScratchProject(t), model)(t.Context(), onTheSubscription, "say what you hold", driver.emit)
 		stats := driver.of(tui.EventStats)
 		if len(stats) == 0 {
 			t.Fatalf("%s: no stats event reached the bar", each.wire)

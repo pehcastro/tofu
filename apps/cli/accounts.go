@@ -15,6 +15,7 @@ import (
 
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/loop"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
@@ -468,15 +469,15 @@ func tallyMetaCall(model string, price models.Price, result codex.Result, header
 	_ = ledger.Tally(use)
 }
 
-func openAccounts(opts runOpts, selected models.Model) (*accounts, turn.Spend, error) {
+func openAccounts(opts wiring.RunOpts, selected models.Model) (*accounts, turn.Spend, error) {
 	modelID := selected.ID
-	spend := wireSpend(opts.wire)
-	if opts.wire == wireKey {
+	spend := wireSpend(opts.Wire)
+	if opts.Wire == wiring.WireKey {
 		model, err := keyModel(modelID)
 		return &accounts{modelID: modelID, now: time.Now, fixed: model}, spend, err
 	}
-	if opts.wire == wireMeta {
-		model, err := metaModel(selected, opts.effort)
+	if opts.Wire == wiring.WireMeta {
+		model, err := metaModel(selected, opts.Effort)
 		return &accounts{modelID: modelID, now: time.Now, fixed: model}, spend, err
 	}
 	provider := cred.Provider(selected.Subscription)
@@ -492,6 +493,6 @@ func openAccounts(opts runOpts, selected models.Model) (*accounts, turn.Spend, e
 	if err != nil {
 		return nil, spend, err
 	}
-	return &accounts{dir: opts.dir, provider: provider, spec: spec, store: store, modelID: modelID, spends: selected.Windows, effort: opts.effort, now: time.Now,
+	return &accounts{dir: opts.Dir, provider: provider, spec: spec, store: store, modelID: modelID, spends: selected.Windows, effort: opts.Effort, now: time.Now,
 		verbosity: selected.Verbosity, reasoningContext: selected.ReasoningContext}, spend, nil
 }

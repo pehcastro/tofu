@@ -14,6 +14,7 @@ import (
 	"tofu/internal/cli/output"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
+	"tofu/internal/testkit/cli"
 	"tofu/internal/testkit/golden"
 )
 
@@ -49,7 +50,7 @@ func outputCases() []outputCase {
 
 func outputProject(t *testing.T) string {
 	t.Helper()
-	isolateHome(t)
+	testkit.IsolateHome(t)
 	home := os.Getenv("USERPROFILE")
 	project := filepath.Join(home, "project")
 	dash := string(rune(0x2014))

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"tofu/internal/cli/output"
+	"tofu/internal/testkit/cli"
 )
 
 func tofuAgents(t *testing.T, args ...string) (int, string, string) {
@@ -30,7 +31,7 @@ func agentsLine(t *testing.T, name string) string {
 }
 
 func TestAgentsAddSetAndRemoveWriteTheHomeAndTheProjectLayers(t *testing.T) {
-	project := chdirTemp(t)
+	project := testkit.ChdirTemp(t)
 	home := os.Getenv("USERPROFILE")
 	added := map[string]string{"planner": "claude-sub/claude-opus-5", "coder": "claude-sub/claude-sonnet-5", "checker": "codex-sub/gpt-5.6-sol"}
 	for name, model := range added {
@@ -125,7 +126,7 @@ func TestAgentsAddSetAndRemoveWriteTheHomeAndTheProjectLayers(t *testing.T) {
 }
 
 func TestAgentsAddWithDirWritesThatProjectFromAnotherDirectory(t *testing.T) {
-	project := chdirTemp(t)
+	project := testkit.ChdirTemp(t)
 	t.Chdir(t.TempDir())
 	if code, out, errOut := tofuAgents(t, "add", "--dir", project, "planner", "--description", "plans", "--model", "claude-sub/claude-opus-5"); code != output.ExitOK || !strings.Contains(out, "tofu agents remove --dir "+project+" planner") {
 		t.Fatalf("add --dir exited %d, out %q, err %q", code, out, errOut)

@@ -16,6 +16,7 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/cli/output"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/core"
@@ -104,7 +105,7 @@ func memoryTree(o output.Verb, store *memtree.Store, budget int) int {
 		return o.Fail(err)
 	}
 	var asked, hits, fresh, read, written, writtenForAnHour atomic.Int64
-	session, err := chooseModel(onTheBoundWire(runOpts{dir: dir}))
+	session, err := chooseModel(onTheBoundWire(wiring.RunOpts{Dir: dir}))
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -153,7 +154,7 @@ type memoryModel struct {
 
 func chooseMemoryModel(dir string, session models.Model) (memoryModel, models.Model) {
 	set := settingspkg.TextSaying(dir, settingspkg.MemoryModel, nil)
-	library, err := modelLibrary(dir)
+	library, err := wiring.ModelLibrary(dir)
 	var model models.Model
 	switch {
 	case err != nil:
@@ -163,7 +164,7 @@ func chooseMemoryModel(dir string, session models.Model) (memoryModel, models.Mo
 		model, err = sessionMemoryWriter(library, session)
 	}
 	chosen := memoryModel{slug: cmp.Or(set, model.Slug()), wire: library.WireOf(model), err: err}
-	if err == nil && chosen.wire == wireKey {
+	if err == nil && chosen.wire == wiring.WireKey {
 		chosen.err = fmt.Errorf("%s is reached through the OpenRouter key, which the memory tree never spends: set %s to a subscription model", chosen.slug, settingspkg.MemoryModel)
 	}
 	return chosen, model
@@ -183,9 +184,9 @@ func (m memoryModel) open(dir string, model models.Model) memoryModel {
 	if deck != nil {
 		open = driveWire(deck)
 	}
-	opts := runOpts{dir: dir, wire: m.wire, model: m.slug}
+	opts := wiring.RunOpts{Dir: dir, Wire: m.wire, Model: m.slug}
 	if len(model.Efforts) > 0 {
-		opts.effort = defaultEffort(model.Efforts)
+		opts.Effort = wiring.DefaultEffort(model.Efforts)
 	}
 	wire, err := open(opts)
 	m.held, m.err = wire.held, err

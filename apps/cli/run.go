@@ -24,9 +24,9 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/questions"
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/librarian/skills"
@@ -49,15 +49,9 @@ import (
 	"tofu/internal/tools/web/browser/loop"
 	"tofu/internal/tools/web/browser/recipe"
 	shipped "tofu/library"
-	"tofu/library/questions"
 )
 
 const (
-	wireSubscription = "anthropic"
-	wireCodex        = "codex"
-	wireKey          = openrouter.Name
-	wireMeta         = string(models.Meta)
-
 	toolSetFull         = "full"
 	toolSetThree        = "three"
 	toolPickRule        = "tool_pick"
@@ -71,55 +65,21 @@ const (
 	openRouterEndpointVariable = "TOFU_OPENROUTER_ENDPOINT"
 )
 
-func runWires() []string { return []string{wireSubscription, wireCodex, wireKey} }
-
 func wireEfforts(wire string) []llm.Effort {
 	switch wire {
-	case wireSubscription:
+	case wiring.WireSubscription:
 		return anthropic.ReasoningEfforts()
-	case wireCodex:
+	case wiring.WireCodex:
 		return llm.Efforts()
 	}
 	return nil
 }
 
 func wireSpend(wire string) turn.Spend {
-	if wire == wireKey || wire == wireMeta {
+	if wire == wiring.WireKey || wire == wiring.WireMeta {
 		return turn.SpendAPIKey
 	}
 	return turn.SpendSubscription
-}
-
-type runOpts struct {
-	dir              string
-	task             string
-	turnID           string
-	session          string
-	resume           string
-	wire             string
-	dryRun           bool
-	showPrompt       bool
-	agent            string
-	gateArm          string
-	noSubAgents      bool
-	readBeforeEdit   bool
-	planEveryStep    bool
-	doneArm          string
-	model            string
-	toolSet          string
-	effort           llm.Effort
-	maxSteps         int
-	loopGuardRepeats int
-	loopGuardWindow  int
-	contextCeiling   int
-	siftArm          string
-	thinkingSummary  string
-	noInstructions   bool
-	noDocs           bool
-	subAgentList     string
-	leadMayWorkAlone bool
-	leadAlone        bool
-	shell            turn.RunShell
 }
 
 type runtime struct {
@@ -136,7 +96,7 @@ type runtime struct {
 	roster       *subagent.Roster
 	inbox        *turn.Inbox
 	now          func() time.Time
-	open         func(runOpts) (appWire, error)
+	open         func(wiring.RunOpts) (appWire, error)
 	wrapSubAgent func(turn.Model, recall.Budget) (turn.Model, error)
 	orchestrator models.Model
 	tabs         *tools.BrowserTabs
@@ -173,11 +133,11 @@ func thinkingSummaries() []string {
 	return []string{settingspkg.ThinkingSummarized, settingspkg.ThinkingOmitted}
 }
 
-func thinkingSummaryOff(opts runOpts, say func(string)) bool {
-	if opts.thinkingSummary != "" {
-		return opts.thinkingSummary == settingspkg.ThinkingOmitted
+func thinkingSummaryOff(opts wiring.RunOpts, say func(string)) bool {
+	if opts.ThinkingSummary != "" {
+		return opts.ThinkingSummary == settingspkg.ThinkingOmitted
 	}
-	return settingspkg.TextSaying(cmp.Or(opts.dir, "."), settingspkg.ThinkingSummary, say) == settingspkg.ThinkingOmitted
+	return settingspkg.TextSaying(cmp.Or(opts.Dir, "."), settingspkg.ThinkingSummary, say) == settingspkg.ThinkingOmitted
 }
 
 func (r runtime) applyThinkingSummary(accounts turn.Accounts) turn.Accounts {
@@ -217,82 +177,70 @@ func (r runtime) applyThinkingSummary(accounts turn.Accounts) turn.Accounts {
 	return omitting
 }
 
-func boundRoles(wire, dir string) (models.Bindings, error) {
-	library, err := modelLibrary(dir)
-	if err != nil {
-		return nil, err
-	}
-	spec, carried := library.ForWire(wire)
-	if !carried {
-		return nil, outsideTheLibrary(library, wire)
-	}
-	return library.Bind(spec.ID)
-}
-
-func chooseModel(opts runOpts) (models.Model, error) {
-	switch opts.wire {
+func chooseModel(opts wiring.RunOpts) (models.Model, error) {
+	switch opts.Wire {
 	case "":
 		return models.Model{}, models.RoleOrchestrator.Unset()
-	case wireKey:
-		if opts.model == "" {
+	case wiring.WireKey:
+		if opts.Model == "" {
 			return models.Model{}, errors.New("--wire openrouter names no model: pass --model, or bind the orchestrator to an openrouter model")
 		}
-		library, err := modelLibrary(opts.dir)
+		library, err := wiring.ModelLibrary(opts.Dir)
 		if err != nil {
 			return models.Model{}, err
 		}
-		if listed, known := library.Resolve(opts.model); known && listed.Provider == models.OpenRouter {
+		if listed, known := library.Resolve(opts.Model); known && listed.Provider == models.OpenRouter {
 			return library.Select(listed.Slug())
 		}
-		return models.Model{ID: opts.model}, nil
-	case wireMeta:
-		library, err := modelLibrary(opts.dir)
+		return models.Model{ID: opts.Model}, nil
+	case wiring.WireMeta:
+		library, err := wiring.ModelLibrary(opts.Dir)
 		if err != nil {
 			return models.Model{}, err
 		}
-		if opts.model == "" {
+		if opts.Model == "" {
 			return library.Default(models.Subscription(models.Meta))
 		}
-		return library.Select(opts.model)
+		return library.Select(opts.Model)
 	}
-	if opts.model != "" {
-		return selectModel(opts.wire, opts.model)
+	if opts.Model != "" {
+		return wiring.SelectModel(opts.Wire, opts.Model)
 	}
-	bound, err := boundRoles(opts.wire, opts.dir)
+	bound, err := wiring.BoundRoles(opts.Wire, opts.Dir)
 	if err != nil {
 		return models.Model{}, err
 	}
 	orchestrator := bound[models.RoleOrchestrator]
-	if orchestrator.Wire != opts.wire {
+	if orchestrator.Wire != opts.Wire {
 		return models.Model{}, fmt.Errorf(
 			"%s, and --wire %s reaches another subscription: run --wire %s instead, or bind the orchestrator role to a model --wire %s serves",
-			orchestrator.Says(), opts.wire, orchestrator.Wire, opts.wire)
+			orchestrator.Says(), opts.Wire, orchestrator.Wire, opts.Wire)
 	}
 	return orchestrator.Model, nil
 }
 
-func onTheBoundWire(opts runOpts) runOpts {
-	if opts.wire != "" && opts.model != "" {
+func onTheBoundWire(opts wiring.RunOpts) wiring.RunOpts {
+	if opts.Wire != "" && opts.Model != "" {
 		return opts
 	}
-	library, err := modelLibrary(opts.dir)
+	library, err := wiring.ModelLibrary(opts.Dir)
 	if err != nil {
 		return opts
 	}
-	if opts.model != "" {
-		if named, err := library.Select(opts.model); err == nil {
-			opts.wire = library.WireOf(named)
+	if opts.Model != "" {
+		if named, err := library.Select(opts.Model); err == nil {
+			opts.Wire = library.WireOf(named)
 		}
 		return opts
 	}
-	if orchestrator, bound := library.Bound(models.RoleOrchestrator); bound && (opts.wire == "" || opts.wire == library.WireOf(orchestrator)) {
-		opts.wire, opts.model = library.WireOf(orchestrator), orchestrator.Slug()
+	if orchestrator, bound := library.Bound(models.RoleOrchestrator); bound && (opts.Wire == "" || opts.Wire == library.WireOf(orchestrator)) {
+		opts.Wire, opts.Model = library.WireOf(orchestrator), orchestrator.Slug()
 	}
 	return opts
 }
 
-func boundSubAgent(opts runOpts) (string, error) {
-	library, err := modelLibrary(opts.dir)
+func boundSubAgent(opts wiring.RunOpts) (string, error) {
+	library, err := wiring.ModelLibrary(opts.Dir)
 	if err != nil {
 		return "", err
 	}
@@ -308,11 +256,11 @@ type subAgentTarget struct {
 	offered []llm.Effort
 }
 
-func (r runtime) subAgentTarget(opts runOpts, definition subagent.Definition) (subAgentTarget, error) {
+func (r runtime) subAgentTarget(opts wiring.RunOpts, definition subagent.Definition) (subAgentTarget, error) {
 	if r.current != nil {
 		definition = r.current(definition)
 	}
-	target := subAgentTarget{named: definition.Model, wire: opts.wire, offered: r.orchestrator.Efforts}
+	target := subAgentTarget{named: definition.Model, wire: opts.Wire, offered: r.orchestrator.Efforts}
 	if definition.Model == "" {
 		bound, err := boundSubAgent(opts)
 		if err != nil {
@@ -321,7 +269,7 @@ func (r runtime) subAgentTarget(opts runOpts, definition subagent.Definition) (s
 		target.named = bound
 	}
 	if target.named != "" {
-		library, err := modelLibrary(opts.dir)
+		library, err := wiring.ModelLibrary(opts.Dir)
 		if err != nil {
 			return subAgentTarget{}, err
 		}
@@ -331,13 +279,13 @@ func (r runtime) subAgentTarget(opts runOpts, definition subagent.Definition) (s
 		}
 		target.wire, target.offered = library.WireOf(model), model.Efforts
 	}
-	if target.wire == wireKey {
+	if target.wire == wiring.WireKey {
 		target.offered = nil
 	}
 	return target, nil
 }
 
-func (r runtime) subAgentTakes(opts runOpts) func(subagent.Definition) ([]llm.Effort, error) {
+func (r runtime) subAgentTakes(opts wiring.RunOpts) func(subagent.Definition) ([]llm.Effort, error) {
 	if r.open == nil {
 		return nil
 	}
@@ -347,7 +295,7 @@ func (r runtime) subAgentTakes(opts runOpts) func(subagent.Definition) ([]llm.Ef
 	}
 }
 
-func (r runtime) subAgentOpener(opts runOpts) func(subagent.Definition, llm.Effort) (turn.SubAgentModel, error) {
+func (r runtime) subAgentOpener(opts wiring.RunOpts) func(subagent.Definition, llm.Effort) (turn.SubAgentModel, error) {
 	if r.open == nil {
 		return nil
 	}
@@ -358,7 +306,7 @@ func (r runtime) subAgentOpener(opts runOpts) func(subagent.Definition, llm.Effo
 			return turn.SubAgentModel{}, err
 		}
 		subAgent := opts
-		subAgent.model, subAgent.wire = cmp.Or(target.named, opts.model), target.wire
+		subAgent.Model, subAgent.Wire = cmp.Or(target.named, opts.Model), target.wire
 		named, offered, asked := target.named, target.offered, cmp.Or(target.named, r.orchestrator.Slug())
 		switch {
 		case wanted != "" && len(offered) == 0:
@@ -366,18 +314,18 @@ func (r runtime) subAgentOpener(opts runOpts) func(subagent.Definition, llm.Effo
 		case wanted != "" && !slices.Contains(offered, wanted):
 			return turn.SubAgentModel{}, fmt.Errorf("effort %s for %s: it takes %s, so the level would be changed without a word", wanted, asked, llm.EffortList(offered))
 		}
-		subAgent.effort = cmp.Or(wanted, definition.Effort, opts.effort)
+		subAgent.Effort = cmp.Or(wanted, definition.Effort, opts.Effort)
 		if wanted == "" && definition.Effort != "" && !slices.Contains(offered, definition.Effort) {
-			subAgent.effort = ""
+			subAgent.Effort = ""
 			if len(offered) > 0 {
-				subAgent.effort = defaultEffort(offered)
+				subAgent.Effort = wiring.DefaultEffort(offered)
 			}
 			if _, said := told.LoadOrStore(definition.Name, true); !said && r.notify != nil {
-				r.notify(fmt.Sprintf("%s asks for effort %s, which %s does not take, so it runs at %s", definition.Name, definition.Effort, asked, cmp.Or(string(subAgent.effort), "no effort")))
+				r.notify(fmt.Sprintf("%s asks for effort %s, which %s does not take, so it runs at %s", definition.Name, definition.Effort, asked, cmp.Or(string(subAgent.Effort), "no effort")))
 			}
 		}
-		if named == "" && subAgent.effort == opts.effort {
-			return turn.SubAgentModel{Slug: asked, Windows: r.orchestrator.WindowText(), Effort: subAgent.effort}, nil
+		if named == "" && subAgent.Effort == opts.Effort {
+			return turn.SubAgentModel{Slug: asked, Windows: r.orchestrator.WindowText(), Effort: subAgent.Effort}, nil
 		}
 		opened, err := r.open(subAgent)
 		if err != nil {
@@ -387,7 +335,7 @@ func (r runtime) subAgentOpener(opts runOpts) func(subagent.Definition, llm.Effo
 			return turn.SubAgentModel{}, err
 		}
 		opened.held.wrapping(r.wrapSubAgent, r.budget, subAgent)
-		return turn.SubAgentModel{Slug: asked, Windows: opened.selected.WindowText(), Wire: subAgent.wire, Cache: opened.selected.PromptCache, Effort: subAgent.effort, Spend: opened.spend, Accounts: r.applyThinkingSummary(opened.held.forTurn()), Close: opened.held.close}, nil
+		return turn.SubAgentModel{Slug: asked, Windows: opened.selected.WindowText(), Wire: subAgent.Wire, Cache: opened.selected.PromptCache, Effort: subAgent.Effort, Spend: opened.spend, Accounts: r.applyThinkingSummary(opened.held.forTurn()), Close: opened.held.close}, nil
 	}
 }
 
@@ -464,7 +412,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return runFail(errOut, err)
 	}
-	resumed, err := resumeRun(opts.dir, opts.resume, writeNotice(errOut))
+	resumed, err := resumeRun(opts.Dir, opts.Resume, writeNotice(errOut))
 	if err != nil {
 		hinted := output.ProblemError{What: err.Error()}
 		errors.As(err, &hinted)
@@ -474,21 +422,21 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	opts, modelFrom := resumed.onItsModel(opts)
 	opts = onTheBoundWire(opts)
 	clock.step("model roles")
-	dir := cmp.Or(opts.dir, ".")
+	dir := cmp.Or(opts.Dir, ".")
 	say := func(unreadable string) { _, _ = fmt.Fprintln(errOut, "tofu run: "+unreadable) }
-	if library, err := modelLibrary(opts.dir); err == nil {
+	if library, err := wiring.ModelLibrary(opts.Dir); err == nil {
 		for _, refused := range library.Broken {
 			say("refused " + refused.Error())
 		}
 	}
 	opts = settled(opts, say)
-	if opts.noSubAgents && opts.doneArm != settingspkg.DoneReviewOff {
+	if opts.NoSubAgents && opts.DoneArm != settingspkg.DoneReviewOff {
 		return runFail(errOut, fmt.Errorf(
 			"--done-review %s with the %s setting off: that arm has no spawn tool, so no sub-agent is ever reviewed and the flag would say a check is running that is not",
-			opts.doneArm, settingspkg.TurnMaySpawn))
+			opts.DoneArm, settingspkg.TurnMaySpawn))
 	}
-	opts.leadMayWorkAlone = true
-	if opts.showPrompt {
+	opts.LeadMayWorkAlone = true
+	if opts.ShowPrompt {
 		return showPrompt(opts, out, errOut)
 	}
 	clock.step("settings")
@@ -501,22 +449,22 @@ func runVerb(args []string, out, errOut io.Writer) int {
 		_, _ = fmt.Fprintf(out, "session %s runs on %s, from %s\n", resumed.carry.Handle, selected.Slug(), modelFrom)
 	}
 	clock.step("model choice")
-	if opts.dryRun {
+	if opts.DryRun {
 		return dryRun(opts, selected, dir, say, out, errOut)
 	}
 	return runTurn(opts, resumed, selected, clock, out, errOut)
 }
 
-func dryRun(opts runOpts, selected models.Model, dir string, say func(string), out, errOut io.Writer) int {
+func dryRun(opts wiring.RunOpts, selected models.Model, dir string, say func(string), out, errOut io.Writer) int {
 	shell, err := turn.ResolveRunShell(settingspkg.TextSaying(dir, settingspkg.Shell, say))
 	if err != nil {
 		return runFail(errOut, err)
 	}
-	opts.shell = shell
+	opts.Shell = shell
 	home, _ := os.UserHomeDir()
 	warm := newWarmProcesses(tools.NewBrowserTabs(home))
 	defer warm.Close()
-	built, plan, err := buildRunToolsForRun(opts.dir, opts.toolSet, readsWhen(opts.readBeforeEdit, turn.NewReadLedger()), warm, shell)
+	built, plan, err := buildRunToolsForRun(opts.Dir, opts.ToolSet, readsWhen(opts.ReadBeforeEdit, turn.NewReadLedger()), warm, shell)
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -525,7 +473,7 @@ func dryRun(opts runOpts, selected models.Model, dir string, say func(string), o
 	if err != nil {
 		return runFail(errOut, err)
 	}
-	opts.effort = selected.EffortTaken(opts.effort)
+	opts.Effort = selected.EffortTaken(opts.Effort)
 	config, _, err := runConfig(opts, built, runtime{spend: turn.SpendSubscription, budget: budget, notify: writeNotice(errOut), open: openAppWire, orchestrator: selected})
 	if err != nil {
 		return runFail(errOut, err)
@@ -539,50 +487,25 @@ func dryRun(opts runOpts, selected models.Model, dir string, say func(string), o
 	return output.ExitOK
 }
 
-func contextBudget(opts runOpts, model models.Model) (recall.Budget, error) {
+func contextBudget(opts wiring.RunOpts, model models.Model) (recall.Budget, error) {
 	registry, err := modelRegistry()
 	if err != nil {
 		return recall.Budget{}, err
 	}
 	windowTokens, windowSource := models.WindowFor(model, registry, models.Served{})
-	budget, err := recall.BudgetUnder(model.ID, windowTokens, settingspkg.IntSaying(opts.dir, settingspkg.ContextCeiling, nil))
+	budget, err := recall.BudgetUnder(model.ID, windowTokens, settingspkg.IntSaying(opts.Dir, settingspkg.ContextCeiling, nil))
 	if err != nil {
 		return recall.Budget{}, err
 	}
 	budget.WindowSource = windowSource
-	if opts.contextCeiling <= 0 {
+	if opts.ContextCeiling <= 0 {
 		return budget, nil
 	}
-	return budget.At(opts.contextCeiling, fmt.Sprintf("--context-ceiling %d, which is read before %s and wins when both are set",
-		opts.contextCeiling, recall.CeilingVariable)), nil
+	return budget.At(opts.ContextCeiling, fmt.Sprintf("--context-ceiling %d, which is read before %s and wins when both are set",
+		opts.ContextCeiling, recall.CeilingVariable)), nil
 }
 
-type windowGuard struct {
-	inner  turn.Model
-	budget recall.Budget
-	cfg    recall.Config
-}
-
-func (g windowGuard) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
-	tokens := 0
-	for _, message := range request.Messages {
-		tokens += g.cfg.MessageTokens(message.Content)
-	}
-	if err := g.budget.RefuseOverWindow(tokens); err != nil {
-		return llm.Decision{}, err
-	}
-	return g.inner.Ask(ctx, request)
-}
-
-func guarded(model turn.Model, budget recall.Budget) (turn.Model, error) {
-	cfg, err := recall.LoadConfig()
-	if err != nil {
-		return nil, err
-	}
-	return windowGuard{inner: model, budget: budget, cfg: cfg}, nil
-}
-
-func runTurn(opts runOpts, resumed runResumed, selected models.Model, clock *startupClock, out, errOut io.Writer) int {
+func runTurn(opts wiring.RunOpts, resumed runResumed, selected models.Model, clock *startupClock, out, errOut io.Writer) int {
 	open := openAppWire
 	deck, err := readCassette(os.Getenv(cassetteVariable))
 	if err != nil {
@@ -599,10 +522,10 @@ func runTurn(opts runOpts, resumed runResumed, selected models.Model, clock *sta
 	warm := newWarmProcesses(tools.NewBrowserTabs(home))
 	defer warm.Close()
 	missing := missingJudgeRefuses
-	if opts.gateArm == gateOff {
+	if opts.GateArm == gateOff {
 		missing = missingJudgeRunsWithout
 	}
-	engine := &appEngine{dir: opts.dir, open: open, tabs: warm.tabs, warm: warm, places: places, missingJudge: missing}
+	engine := &appEngine{dir: opts.Dir, open: open, tabs: warm.tabs, warm: warm, places: places, missingJudge: missing}
 	same := func(model turn.Model) turn.Model { return model }
 	started, err := engine.startTurn(opts, host.Turn{}, host.Hooks{Lead: same, SubAgent: same, Say: writeNotice(errOut), Reads: turn.NewReadLedger()}, clock)
 	if started.Close != nil {
@@ -614,7 +537,7 @@ func runTurn(opts runOpts, resumed runResumed, selected models.Model, clock *sta
 	config, spawner, sessions, gate, scorer := started.Config, started.Spawner, started.Sessions, started.gate, started.scorer
 	resumed.into(&config)
 	_, _ = fmt.Fprintln(out, "context budget "+started.budget.Record())
-	registry, registryErr := launchShellRegistry(opts.dir)
+	registry, registryErr := launchShellRegistry(opts.Dir)
 	if registryErr == nil {
 		_ = registry.Prune()
 	}
@@ -631,7 +554,7 @@ func runTurn(opts runOpts, resumed runResumed, selected models.Model, clock *sta
 		printRunRow(out, row, selected.Slug(), selected.WindowText())
 		head, rows = cmp.Or(row.Session, head), append(rows, row)
 	})
-	for _, warning := range turn.EndSession(context.Background(), cmp.Or(opts.dir, "."), head, sessionEndOther) {
+	for _, warning := range turn.EndSession(context.Background(), cmp.Or(opts.Dir, "."), head, sessionEndOther) {
 		_, _ = fmt.Fprintln(errOut, "tofu run: "+warning)
 	}
 	leaveShells(registry)
@@ -663,23 +586,23 @@ func runTurn(opts runOpts, resumed runResumed, selected models.Model, clock *sta
 	return output.ExitOK
 }
 
-func runEnvironment(opts runOpts, now func() time.Time) (environment, written, instructions, notice string) {
+func runEnvironment(opts wiring.RunOpts, now func() time.Time) (environment, written, instructions, notice string) {
 	today := time.Now()
 	if now != nil {
 		today = now()
 	}
-	if opts.shell.Resolved() {
-		environment = turn.EnvironmentFromShell(opts.dir, today, opts.shell)
+	if opts.Shell.Resolved() {
+		environment = turn.EnvironmentFromShell(opts.Dir, today, opts.Shell)
 	} else {
-		environment = turn.Environment(opts.dir, today)
+		environment = turn.Environment(opts.Dir, today)
 	}
-	if opts.noInstructions {
+	if opts.NoInstructions {
 		return environment, "", "off by request, and " + turn.InstructionsOff, ""
 	}
 	home, _ := os.UserHomeDir()
-	setting, unreadable := settingspkg.IntFor(opts.dir, settingspkg.ProjectInstructionsCap)
+	setting, unreadable := settingspkg.IntFor(opts.Dir, settingspkg.ProjectInstructionsCap)
 	capBytes := turn.InstructionCap(setting)
-	written, cut, skipped := turn.ProjectInstructionsInOrder(opts.dir, home, capBytes, settingspkg.TextSaying(opts.dir, settingspkg.InstructionSources, nil))
+	written, cut, skipped := turn.ProjectInstructionsInOrder(opts.Dir, home, capBytes, settingspkg.TextSaying(opts.Dir, settingspkg.InstructionSources, nil))
 	instructions = "on, and neither an AGENTS.md nor a CLAUDE.md was found to send"
 	if written != "" {
 		instructions = fmt.Sprintf("on, %d bytes", len(written))
@@ -704,7 +627,7 @@ func writeNotice(w io.Writer) func(string) {
 }
 
 type composedRun struct {
-	opts         runOpts
+	opts         wiring.RunOpts
 	environment  string
 	files        string
 	memory       string
@@ -717,7 +640,7 @@ type composedRun struct {
 	checksWork   bool
 }
 
-func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, error) {
+func composeRun(opts wiring.RunOpts, built []turn.Tool, run runtime) (composedRun, error) {
 	if run.composed != nil {
 		return *run.composed, nil
 	}
@@ -727,12 +650,12 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 		}
 	}
 	found := make(chan subagent.Found, 1)
-	if !opts.noSubAgents && opts.toolSet != toolSetThree && run.open != nil {
-		scanned := crashTold(cmp.Or(opts.dir, "."), func(said string) {
+	if !opts.NoSubAgents && opts.ToolSet != toolSetThree && run.open != nil {
+		scanned := crashTold(cmp.Or(opts.Dir, "."), func(said string) {
 			say(said)
 			found <- subagent.Found{}
 		})
-		safe.Go(scanned, "sub-agent scan", func() { found <- offeredToSpawn(cmp.Or(opts.dir, "."), scanSubAgents(opts.dir, built)) })
+		safe.Go(scanned, "sub-agent scan", func() { found <- offeredToSpawn(cmp.Or(opts.Dir, "."), scanSubAgents(opts.Dir, built)) })
 	} else {
 		found <- subagent.Found{}
 	}
@@ -740,8 +663,8 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 	say(notice)
 	run.startup.step("instructions and environment")
 	remembered := ""
-	if opts.agent == "" && memoryOn(cmp.Or(opts.dir, ".")) {
-		block, unread := memory.Block(cmp.Or(opts.dir, "."))
+	if opts.Agent == "" && memoryOn(cmp.Or(opts.Dir, ".")) {
+		block, unread := memory.Block(cmp.Or(opts.Dir, "."))
 		if unread != nil {
 			say("your memory is not sent this turn: " + unread.Error())
 		}
@@ -749,12 +672,12 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 	}
 	run.startup.step("memory")
 	discovered := <-found
-	opts.leadAlone = opts.leadMayWorkAlone && opts.agent == "" && !opts.noSubAgents && opts.toolSet != toolSetThree &&
-		turn.LeadWorksAlone(cmp.Or(opts.dir, "."), opts.task, discovered.Definitions)
-	if opts.leadAlone {
+	opts.LeadAlone = opts.LeadMayWorkAlone && opts.Agent == "" && !opts.NoSubAgents && opts.ToolSet != toolSetThree &&
+		turn.LeadWorksAlone(cmp.Or(opts.Dir, "."), opts.Task, discovered.Definitions)
+	if opts.LeadAlone {
 		say(fmt.Sprintf("the lead works alone: the task names %d or fewer files in one folder and asks for no sub-agent, so the spawn text and the spawn rules are not sent", turn.LeadAloneMostNamedFiles))
 	} else {
-		opts.subAgentList = turn.SubAgentList(discovered.Definitions)
+		opts.SubAgentList = turn.SubAgentList(discovered.Definitions)
 	}
 	var brokenAgents []turn.PromptPart
 	for _, broken := range discovered.Broken {
@@ -762,7 +685,7 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 		brokenAgents = append(brokenAgents, turn.PromptPart{Concern: rule.ConcernIdentity, File: filepath.ToSlash(broken.Path), Why: broken.Reason, State: session.PartDropped})
 	}
 	run.startup.step("sub-agent definitions")
-	stack, err := stackRules("", cmp.Or(opts.dir, "."))
+	stack, err := stackRules("", cmp.Or(opts.Dir, "."))
 	if err != nil {
 		return composedRun{}, err
 	}
@@ -774,15 +697,15 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 			switchedOff = append(switchedOff, applied.Overriding)
 		}
 	}
-	if opts.toolSet == toolSetThree {
+	if opts.ToolSet == toolSetThree {
 		rules = slices.DeleteFunc(rules, func(loaded rule.Rule) bool { return loaded.ID == toolPickRule })
 	}
 	var skills []skill.Skill
 	var unloaded []turn.PromptPart
-	skillsOff := settingspkg.TextSaying(cmp.Or(opts.dir, "."), settingspkg.Skills, run.notify) == settingspkg.SkillsOff
-	if opts.toolSet != toolSetThree && !skillsOff {
+	skillsOff := settingspkg.TextSaying(cmp.Or(opts.Dir, "."), settingspkg.Skills, run.notify) == settingspkg.SkillsOff
+	if opts.ToolSet != toolSetThree && !skillsOff {
 		home, _ := os.UserHomeDir()
-		offered := skill.Discover(cmp.Or(opts.dir, "."), home)
+		offered := skill.Discover(cmp.Or(opts.Dir, "."), home)
 		for _, warning := range offered.Warnings {
 			say(warning)
 		}
@@ -799,20 +722,20 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 		slices.SortFunc(skills, func(a, b skill.Skill) int { return strings.Compare(a.Name, b.Name) })
 	}
 	run.startup.step("skills")
-	subAgents := turn.SubAgents{Defined: discovered.Definitions, Root: cmp.Or(opts.dir, "."), Prompt: turn.ComposeSpec{Environment: strings.TrimSpace(environment + "\n\n" + files),
+	subAgents := turn.SubAgents{Defined: discovered.Definitions, Root: cmp.Or(opts.Dir, "."), Prompt: turn.ComposeSpec{Environment: strings.TrimSpace(environment + "\n\n" + files),
 		ToolGuidance: turn.EveryToolIsRelativeToTheWorkingDirectory + turn.ContractAddendum, Rules: rules, SwitchedOff: switchedOff, Skills: skills, SkillsOff: skillsOff, WindowTokens: run.budget.WindowTokens,
-		Kinds: turn.NewKindJudge(cmp.Or(opts.dir, ".")), Applies: turn.NewRuleJudge(cmp.Or(opts.dir, "."))}}
+		Kinds: turn.NewKindJudge(cmp.Or(opts.Dir, ".")), Applies: turn.NewRuleJudge(cmp.Or(opts.Dir, "."))}}
 	spec := subAgents.Prompt
 	spec.ToolGuidance = runSystem(opts)
-	if opts.agent != "" {
-		if spec.Agent, err = subAgents.Named(opts.agent); err != nil {
+	if opts.Agent != "" {
+		if spec.Agent, err = subAgents.Named(opts.Agent); err != nil {
 			return composedRun{}, err
 		}
 		spec.Role, spec.ToolGuidance = rule.RoleSubAgent, subAgents.Prompt.ToolGuidance
-	} else if !opts.noSubAgents && opts.toolSet != toolSetThree {
+	} else if !opts.NoSubAgents && opts.ToolSet != toolSetThree {
 		spec.Role = rule.RoleOrchestrator
 	}
-	if opts.leadAlone {
+	if opts.LeadAlone {
 		spec.Rules = slices.DeleteFunc(slices.Clone(rules), func(loaded rule.Rule) bool {
 			return slices.Contains([]string{"orchestrate", verifySubAgentsRule, "plan_before_spawn", "spawn_effort", "research_fan_out", "brief_from_references", "announce_spawn"}, loaded.ID)
 		})
@@ -821,10 +744,10 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 	subAgents.Prompt.Dropped = slices.Concat(brokenAgents, unloaded, droppedRules(stack, rules, switchedOff, opts))
 	spec.Dropped = slices.Concat(brokenAgents, unloaded, droppedRules(stack, spec.Rules, switchedOff, opts))
 	composeTask := func(task string) (turn.Composed, error) {
-		return turn.Compose(taskSpec(spec, cmp.Or(opts.dir, "."), task, say))
+		return turn.Compose(taskSpec(spec, cmp.Or(opts.Dir, "."), task, say))
 	}
-	first := taskSpec(spec, cmp.Or(opts.dir, "."), opts.task, say)
-	if subAgents.Prompt.Frameworks, err = rule.Frameworks(cmp.Or(opts.dir, "."), nil); err != nil {
+	first := taskSpec(spec, cmp.Or(opts.Dir, "."), opts.Task, say)
+	if subAgents.Prompt.Frameworks, err = rule.Frameworks(cmp.Or(opts.Dir, "."), nil); err != nil {
 		say("no framework rule fires for a sub-agent from the project's own manifests: " + err.Error())
 	}
 	composed, err := turn.Compose(first)
@@ -852,7 +775,7 @@ func taskSpec(spec turn.ComposeSpec, dir, task string, say func(string)) turn.Co
 	return spec
 }
 
-func droppedRules(stack ruleStack, kept []rule.Rule, switchedOff []rule.Overriding, opts runOpts) []turn.PromptPart {
+func droppedRules(stack ruleStack, kept []rule.Rule, switchedOff []rule.Overriding, opts wiring.RunOpts) []turn.PromptPart {
 	var dropped []turn.PromptPart
 	for _, one := range slices.Concat(stack.rules, stack.shippedOff) {
 		if slices.ContainsFunc(kept, func(r rule.Rule) bool { return r.ID == one.ID }) || slices.ContainsFunc(switchedOff, func(off rule.Overriding) bool { return off.Base.ID == one.ID }) {
@@ -861,10 +784,10 @@ func droppedRules(stack ruleStack, kept []rule.Rule, switchedOff []rule.Overridi
 		reason, why := rule.ReasonSetting, "the run's setting --tools three sends no "+one.ID
 		switch {
 		case one.Mode == rule.ModeOff && ruleSetting(one.ID) == "":
-			reason, why = rule.ReasonMode, stack.switchOn(one.ID, cmp.Or(opts.dir, "."))
+			reason, why = rule.ReasonMode, stack.switchOn(one.ID, cmp.Or(opts.Dir, "."))
 		case one.Mode == rule.ModeOff:
-			why = stack.switchOn(one.ID, cmp.Or(opts.dir, "."))
-		case opts.leadAlone:
+			why = stack.switchOn(one.ID, cmp.Or(opts.Dir, "."))
+		case opts.LeadAlone:
 			why = "the run's lead alone setting: the task names few files in one folder, so the spawn rules are not sent"
 		}
 		dropped = append(dropped, turn.PromptPart{Concern: one.Concern, RuleID: one.ID, File: filepath.ToSlash(one.File), Why: why, Reason: reason, Mode: one.Mode, State: session.PartDropped})
@@ -872,15 +795,15 @@ func droppedRules(stack ruleStack, kept []rule.Rule, switchedOff []rule.Overridi
 	return dropped
 }
 
-func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool, error) {
-	orchestratorID, sessionID := cmp.Or(opts.turnID, turn.NewID(time.Now())), cmp.Or(opts.session, opts.turnID, session.NewEventID())
-	if opts.noDocs {
+func runConfig(opts wiring.RunOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool, error) {
+	orchestratorID, sessionID := cmp.Or(opts.TurnID, turn.NewID(time.Now())), cmp.Or(opts.Session, opts.TurnID, session.NewEventID())
+	if opts.NoDocs {
 		built = slices.DeleteFunc(slices.Clone(built), func(tool turn.Tool) bool { return tool.Name() == tools.DocsToolName })
 	}
-	if run.sessions != nil && opts.toolSet != toolSetThree {
+	if run.sessions != nil && opts.ToolSet != toolSetThree {
 		built = append(slices.Clone(built), tools.NewQuote(run.sessions, sessionID))
 	}
-	if opts.toolSet != toolSetThree {
+	if opts.ToolSet != toolSetThree {
 		built = append(slices.Clone(built), tools.ScratchTools(run.leadAsks)...)
 	}
 	prompt, err := composeRun(opts, built, run)
@@ -891,7 +814,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		built = append(slices.Clone(built), tools.NewSkill(prompt.skills))
 	}
 	opts, environment, composed := prompt.opts, prompt.environment, prompt.composed
-	dir := cmp.Or(opts.dir, ".")
+	dir := cmp.Or(opts.Dir, ".")
 	run.omitThinkingSummary = thinkingSummaryOff(opts, run.notify)
 	references := map[string]string{}
 	for _, reference := range composed.References {
@@ -912,8 +835,8 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		Tools:         turn.NewRegistry(built...),
 		Project:       dir,
 		SessionSource: hook.SessionStartup,
-		Task:          opts.task,
-		Wire:          opts.wire,
+		Task:          opts.Task,
+		Wire:          opts.Wire,
 		Slug:          run.orchestrator.Slug(),
 		PromptCache:   run.orchestrator.PromptCache,
 		System:        composed.Head(),
@@ -922,9 +845,9 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		Instructions:  prompt.files,
 		Memory:        prompt.memory,
 		Caps: turn.Caps{
-			MaxSteps:         opts.maxSteps,
-			LoopGuardRepeats: opts.loopGuardRepeats,
-			LoopGuardWindow:  opts.loopGuardWindow,
+			MaxSteps:         opts.MaxSteps,
+			LoopGuardRepeats: opts.LoopGuardRepeats,
+			LoopGuardWindow:  opts.LoopGuardWindow,
 		},
 		ResultBytesCap: konst.TurnResultBytesCap,
 		NoFork:         settingspkg.TextSaying(dir, settingspkg.Fork, run.notify) == settingspkg.Off,
@@ -934,7 +857,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		Session:        sessionID,
 		Drops:          run.drops,
 		Sift:           run.sift,
-		Proxy:          loadProxySetting(opts.dir).proxy,
+		Proxy:          loadProxySetting(opts.Dir).proxy,
 		Inbox:          cmp.Or(run.inbox, turn.NewInbox()),
 		Notify:         run.notify,
 		GatePromptAsks: func() bool {
@@ -942,18 +865,18 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		},
 	}
 	config.Inbox.ComposesEachTask(environment, prompt.composeTask)
-	if run.plan != nil && opts.planEveryStep {
+	if run.plan != nil && opts.PlanEveryStep {
 		config.Plan = run.plan.Shown
 	}
 	if run.gate != nil {
 		config.Gate = run.gate
-		config.GateMode = gateMode(opts.gateArm)
+		config.GateMode = gateMode(opts.GateArm)
 	}
 	config.NewID = func() string { return orchestratorID }
 	if run.scorer != nil {
 		run.scorer.turnID = orchestratorID
 	}
-	if opts.toolSet == toolSetThree && run.leadAsks == nil {
+	if opts.ToolSet == toolSetThree && run.leadAsks == nil {
 		config.Tools = turn.NewRegistry(built...)
 		if run.cron != nil {
 			config.Tools = run.leadTools(built)
@@ -995,7 +918,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 			config.Inbox.FramesFirstRequest(leadAttached(board, sessionID, run))
 		}
 	}
-	if opts.agent == "" && episodesOn(dir) {
+	if opts.Agent == "" && episodesOn(dir) {
 		zoom := &tools.Zoom{Project: dir, Compactor: func(ask turn.RecordedAsk) (memtree.Compact, memtree.CompactAll, func()) {
 			if run.memory == nil {
 				opened := openMemoryModel(dir, run.orchestrator)
@@ -1007,7 +930,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		}}
 		asking = append(asking, zoom, tools.Recall{Zoom: zoom, Sessions: run.sessions, Session: sessionID})
 	}
-	if opts.noSubAgents || opts.toolSet == toolSetThree {
+	if opts.NoSubAgents || opts.ToolSet == toolSetThree {
 		config.Tools = run.leadTools(append(slices.Clone(built), asking...))
 		return config, nil, nil
 	}
@@ -1029,7 +952,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	if run.plan != nil && settingspkg.TextSaying(dir, settingspkg.PlanAdvisor, run.notify) == settingspkg.AdvisorShadow {
 		run.plan.Advise = spawner.Advise
 	}
-	if opts.agent == "" && memoryOn(dir) {
+	if opts.Agent == "" && memoryOn(dir) {
 		spawner.Remembered = func() (map[string]string, error) {
 			shelves, err := memory.Open(dir)
 			lines := map[string]string{}
@@ -1143,7 +1066,7 @@ func scanSubAgents(dir string, built []turn.Tool) subagent.Found {
 		}
 	}
 	dir = cmp.Or(dir, ".")
-	catalog, _ := modelLibrary(dir)
+	catalog, _ := wiring.ModelLibrary(dir)
 	home, _ := os.UserHomeDir()
 	library, _, _ := librarySource()
 	sources, tiers := settingspkg.DeclaredDefaultText(settingspkg.AgentSources), map[subagent.Tier]string{}
@@ -1177,10 +1100,10 @@ func gateMode(arm string) turn.GateMode {
 	panic("tofu run: unknown gate arm " + arm)
 }
 
-func dryRunBody(opts runOpts, selected models.Model, config turn.Config) ([]byte, error) {
+func dryRunBody(opts wiring.RunOpts, selected models.Model, config turn.Config) ([]byte, error) {
 	tools := config.Tools.Definitions()
 	messages := config.MemoryMessage()
-	if dir := cmp.Or(opts.dir, "."); opts.agent == "" && episodesOn(dir) {
+	if dir := cmp.Or(opts.Dir, "."); opts.Agent == "" && episodesOn(dir) {
 		view, _, err := memory.EpisodeView(dir, konst.MemtreeViewBytes, nil, nil)
 		if err != nil {
 			return nil, err
@@ -1191,16 +1114,16 @@ func dryRunBody(opts runOpts, selected models.Model, config turn.Config) ([]byte
 	}
 	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: config.FirstUserMessage()})
 	summaryOff := thinkingSummaryOff(opts, nil)
-	switch opts.wire {
-	case wireKey:
+	switch opts.Wire {
+	case wiring.WireKey:
 		system := append([]llm.Message{{Role: llm.RoleSystem, Content: config.SystemMessage()}}, messages...)
 		return llm.Request{Messages: system, Tools: tools}.Encode(selected.ID)
-	case wireCodex, wireMeta:
-		return codex.Request{Model: selected.ID, Instructions: config.SystemMessage(), Messages: messages, Tools: tools, Effort: opts.effort, SummaryOff: summaryOff,
+	case wiring.WireCodex, wiring.WireMeta:
+		return codex.Request{Model: selected.ID, Instructions: config.SystemMessage(), Messages: messages, Tools: tools, Effort: opts.Effort, SummaryOff: summaryOff,
 			Verbosity: string(selected.Verbosity), ReasoningContext: string(selected.ReasoningContext)}.Encode(nil)
 	}
-	versions, _ := subFingerprint(opts.dir)
-	return anthropic.Request{Model: selected.ID, System: []string{config.SystemMessage()}, Messages: messages, Tools: tools, Effort: opts.effort, ClaudeCodeVersion: versions.ClaudeCode, OmitThinkingSummary: summaryOff}.Encode(true)
+	versions, _ := subFingerprint(opts.Dir)
+	return anthropic.Request{Model: selected.ID, System: []string{config.SystemMessage()}, Messages: messages, Tools: tools, Effort: opts.Effort, ClaudeCodeVersion: versions.ClaudeCode, OmitThinkingSummary: summaryOff}.Encode(true)
 }
 
 func turnTransportConfig() transport.Config {
@@ -1304,22 +1227,22 @@ func sessionID() (string, error) {
 const docsSentence = "for a question about tofu itself, or a request to change its settings, rules, sub-agents or models, call " +
 	tools.DocsToolName + " first, and change tofu only with the tofu command it names."
 
-func runSystem(opts runOpts) string {
-	if opts.toolSet == toolSetThree {
+func runSystem(opts wiring.RunOpts) string {
+	if opts.ToolSet == toolSetThree {
 		return turn.EveryToolIsRelativeToTheWorkingDirectory +
 			"read reads a whole file, write creates one or replaces it whole, and bash runs anything else, " +
 			"including finding a file, searching text and changing part of a file."
 	}
 	system := strings.TrimSpace(turn.EveryToolIsRelativeToTheWorkingDirectory)
-	if !opts.noDocs {
+	if !opts.NoDocs {
 		system += " " + docsSentence
 	}
-	if opts.noSubAgents || opts.leadAlone {
+	if opts.NoSubAgents || opts.LeadAlone {
 		return system
 	}
 	system += " " + turn.SpawnAddendum
-	if opts.subAgentList != "" {
-		system += "\n\n" + opts.subAgentList
+	if opts.SubAgentList != "" {
+		system += "\n\n" + opts.SubAgentList
 	}
 	return system
 }
@@ -1454,7 +1377,7 @@ func assembleRunTools(dir, set string, ledger *turn.ReadLedger, warm *warmProces
 		Mode:     settingspkg.TextSaying(settingsDir, settingspkg.Browser, nil),
 		Driver:   settingspkg.TextSaying(settingsDir, settingspkg.BrowserDriver, nil),
 		Steps:    settingspkg.IntSaying(settingsDir, settingspkg.BrowserSteps, nil),
-		Judge:    func() (jevloop.Jev, error) { return browserJudge(dir) },
+		Judge:    func() (jevloop.Jev, error) { return wiring.BrowserJudge(dir) },
 		Model:    func() (turn.Model, string, error) { return browserModel(settingsDir) },
 		Tabs:     warm.tabs,
 	})
@@ -1473,7 +1396,7 @@ func planAsOffered(model models.Model, built []turn.Tool, plan *tools.Plan) ([]t
 	return slices.DeleteFunc(built, func(tool turn.Tool) bool { return tool.Name() == tools.PlanToolName }), nil
 }
 
-type subscriptionModel struct{ opts runOpts }
+type subscriptionModel struct{ opts wiring.RunOpts }
 
 func (s subscriptionModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
 	opened, err := openAppWire(s.opts)
@@ -1504,7 +1427,7 @@ func browserModel(dir string) (turn.Model, string, error) {
 	if slug == "" {
 		return turn.RunningModel{}, "the turn's own model, as none of " + settingspkg.BrowserModel + ", " + subagent.TierDumb.Setting() + " and " + subagent.TierWorker.Setting() + " is set", nil
 	}
-	library, err := modelLibrary(dir)
+	library, err := wiring.ModelLibrary(dir)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1512,9 +1435,9 @@ func browserModel(dir string) (turn.Model, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	opts := runOpts{dir: dir, wire: library.WireOf(model), model: slug}
+	opts := wiring.RunOpts{Dir: dir, Wire: library.WireOf(model), Model: slug}
 	if len(model.Efforts) > 0 {
-		opts.effort = defaultEffort(model.Efforts)
+		opts.Effort = wiring.DefaultEffort(model.Efforts)
 	}
 	return subscriptionModel{opts}, slug + " from " + key, nil
 }
@@ -1600,7 +1523,7 @@ func onBrowserModel(dir string, found subagent.Found, catalog models.Library) su
 	written := agent.Effort
 	agent.Runs, agent.Model, agent.From, agent.Effort = subagent.RunsModel, model.Slug(), key, ""
 	if len(model.Efforts) > 0 {
-		agent.Effort = defaultEffort(model.Efforts)
+		agent.Effort = wiring.DefaultEffort(model.Efforts)
 	}
 	for _, effort := range []llm.Effort{written, wanted} {
 		if slices.Contains(model.Efforts, effort) {
@@ -1610,36 +1533,7 @@ func onBrowserModel(dir string, found subagent.Found, catalog models.Library) su
 	return found
 }
 
-func defaultEffort(offered []llm.Effort) llm.Effort {
-	floor := slices.Index(llm.Efforts(), llm.EffortLow)
-	at := slices.IndexFunc(offered, func(effort llm.Effort) bool { return slices.Index(llm.Efforts(), effort) >= floor })
-	return offered[max(at, 0)]
-}
-
-const (
-	browserStepPoint = "browser_step@1"
-	browserAgent     = "browser"
-)
-
-func browserJudge(dir string) (jevloop.Jev, error) {
-	layers, err := question.Layers(questions.Files(), dir)
-	if err != nil {
-		return jevloop.Jev{}, err
-	}
-	set, _, err := question.Resolve(browserStepPoint, layers)
-	if err != nil {
-		return jevloop.Jev{}, err
-	}
-	client, err := newJevClient()
-	if err != nil {
-		return jevloop.Jev{}, err
-	}
-	logDir, err := sys.LogDir()
-	if err != nil {
-		return jevloop.Jev{}, err
-	}
-	return jevloop.Jev{Client: client, Set: set, Ledger: ledger.NewWriter(logDir)}, nil
-}
+const browserAgent = "browser"
 
 func buildWebTools(dir string, keys jev.Keyring) ([]turn.Tool, error) {
 	layers, err := web.Layers(shipped.Files(), dir)
@@ -1744,148 +1638,148 @@ func runFail(errOut io.Writer, err error) int {
 	return output.ExitUsage
 }
 
-func parseRunArgs(args []string) (runOpts, error) {
-	opts := runOpts{
-		toolSet:          toolSetFull,
-		loopGuardRepeats: konst.TurnLoopGuardRepeats,
-		loopGuardWindow:  konst.TurnLoopGuardWindow,
+func parseRunArgs(args []string) (wiring.RunOpts, error) {
+	opts := wiring.RunOpts{
+		ToolSet:          toolSetFull,
+		LoopGuardRepeats: konst.TurnLoopGuardRepeats,
+		LoopGuardWindow:  konst.TurnLoopGuardWindow,
 	}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		var err error
 		switch arg {
 		case "--dir":
-			opts.dir, err = output.NextArg(args, &i, arg)
+			opts.Dir, err = output.NextArg(args, &i, arg)
 		case "--session":
-			opts.resume, err = output.NextArg(args, &i, arg)
+			opts.Resume, err = output.NextArg(args, &i, arg)
 		case "--dry-run":
-			opts.dryRun = true
+			opts.DryRun = true
 		case "--show-prompt":
-			opts.showPrompt = true
+			opts.ShowPrompt = true
 		case "--agent":
-			opts.agent, err = output.NextArg(args, &i, arg)
+			opts.Agent, err = output.NextArg(args, &i, arg)
 		case "--no-gate":
-			opts.gateArm = gateOff
+			opts.GateArm = gateOff
 		case "--gate":
-			opts.gateArm, err = output.NextArg(args, &i, arg)
+			opts.GateArm, err = output.NextArg(args, &i, arg)
 		case "--sift":
-			opts.siftArm, err = output.NextArg(args, &i, arg)
+			opts.SiftArm, err = output.NextArg(args, &i, arg)
 		case "--no-subagents":
-			opts.noSubAgents = true
+			opts.NoSubAgents = true
 		case "--no-instructions":
-			opts.noInstructions = true
+			opts.NoInstructions = true
 		case "--no-docs":
-			opts.noDocs = true
+			opts.NoDocs = true
 		case "--wire":
-			opts.wire, err = output.NextArg(args, &i, arg)
+			opts.Wire, err = output.NextArg(args, &i, arg)
 		case "--tools":
-			opts.toolSet, err = output.NextArg(args, &i, arg)
+			opts.ToolSet, err = output.NextArg(args, &i, arg)
 		case "--done-review":
-			opts.doneArm, err = output.NextArg(args, &i, arg)
+			opts.DoneArm, err = output.NextArg(args, &i, arg)
 		case "--model":
-			if opts.model, err = output.NextArg(args, &i, arg); err == nil && strings.TrimSpace(opts.model) == "" {
+			if opts.Model, err = output.NextArg(args, &i, arg); err == nil && strings.TrimSpace(opts.Model) == "" {
 				err = errors.New("--model needs a model id")
 			}
 		case "--effort":
 			var raw string
 			if raw, err = output.NextArg(args, &i, arg); err == nil {
-				opts.effort, err = llm.ParseEffort(raw)
+				opts.Effort, err = llm.ParseEffort(raw)
 			}
 		case "--thinking-summary":
-			if opts.thinkingSummary, err = output.NextArg(args, &i, arg); err == nil && !slices.Contains(thinkingSummaries(), opts.thinkingSummary) {
-				err = fmt.Errorf("--thinking-summary %q is none of %s", opts.thinkingSummary, strings.Join(thinkingSummaries(), ", "))
+			if opts.ThinkingSummary, err = output.NextArg(args, &i, arg); err == nil && !slices.Contains(thinkingSummaries(), opts.ThinkingSummary) {
+				err = fmt.Errorf("--thinking-summary %q is none of %s", opts.ThinkingSummary, strings.Join(thinkingSummaries(), ", "))
 			}
 		case "--max-steps":
-			opts.maxSteps, err = nextInt(args, &i, arg)
+			opts.MaxSteps, err = nextInt(args, &i, arg)
 		case "--loop-guard-repeats":
-			opts.loopGuardRepeats, err = nextInt(args, &i, arg)
+			opts.LoopGuardRepeats, err = nextInt(args, &i, arg)
 		case "--loop-guard-window":
-			opts.loopGuardWindow, err = nextInt(args, &i, arg)
+			opts.LoopGuardWindow, err = nextInt(args, &i, arg)
 		case "--context-ceiling":
-			if opts.contextCeiling, err = nextInt(args, &i, arg); err == nil && opts.contextCeiling <= 0 {
-				err = fmt.Errorf("--context-ceiling %d takes a count of tokens above zero, as in --context-ceiling 20000", opts.contextCeiling)
+			if opts.ContextCeiling, err = nextInt(args, &i, arg); err == nil && opts.ContextCeiling <= 0 {
+				err = fmt.Errorf("--context-ceiling %d takes a count of tokens above zero, as in --context-ceiling 20000", opts.ContextCeiling)
 			}
 		default:
 			switch {
 			case strings.HasPrefix(arg, "--"):
 				err = fmt.Errorf("unknown argument %q", arg)
-			case opts.task != "":
-				err = fmt.Errorf("tofu run takes one task, got %q and %q", opts.task, arg)
+			case opts.Task != "":
+				err = fmt.Errorf("tofu run takes one task, got %q and %q", opts.Task, arg)
 			default:
-				opts.task = arg
+				opts.Task = arg
 			}
 		}
 		if err != nil {
-			return runOpts{}, err
+			return wiring.RunOpts{}, err
 		}
 	}
-	if opts.dir == "" {
-		return runOpts{}, errors.New("--dir is required: tofu run never defaults to the current directory, because its bash tool is not sandboxed")
+	if opts.Dir == "" {
+		return wiring.RunOpts{}, errors.New("--dir is required: tofu run never defaults to the current directory, because its bash tool is not sandboxed")
 	}
-	if strings.TrimSpace(opts.task) == "" {
-		return runOpts{}, errors.New("tofu run needs a task")
+	if strings.TrimSpace(opts.Task) == "" {
+		return wiring.RunOpts{}, errors.New("tofu run needs a task")
 	}
-	if opts.resume != "" && (opts.dryRun || opts.showPrompt) {
-		return runOpts{}, errors.New("--session sends the next turn of a session, and --dry-run and --show-prompt send nothing")
+	if opts.Resume != "" && (opts.DryRun || opts.ShowPrompt) {
+		return wiring.RunOpts{}, errors.New("--session sends the next turn of a session, and --dry-run and --show-prompt send nothing")
 	}
-	if opts.agent != "" && !opts.showPrompt {
-		return runOpts{}, errors.New("--agent prints the prompt a spawn of that sub-agent composes and runs nothing, so it needs --show-prompt")
+	if opts.Agent != "" && !opts.ShowPrompt {
+		return wiring.RunOpts{}, errors.New("--agent prints the prompt a spawn of that sub-agent composes and runs nothing, so it needs --show-prompt")
 	}
-	if opts.wire != "" && !slices.Contains(runWires(), opts.wire) {
-		return runOpts{}, fmt.Errorf("--wire %q is none of %s", opts.wire, strings.Join(runWires(), ", "))
+	if opts.Wire != "" && !slices.Contains(wiring.RunWires(), opts.Wire) {
+		return wiring.RunOpts{}, fmt.Errorf("--wire %q is none of %s", opts.Wire, strings.Join(wiring.RunWires(), ", "))
 	}
-	source, _, _ := strings.Cut(opts.model, "/")
-	if source == wireMeta {
+	source, _, _ := strings.Cut(opts.Model, "/")
+	if source == wiring.WireMeta {
 		if slices.Contains(args, "--wire") {
-			return runOpts{}, fmt.Errorf("--model %s is paid by the %s key and reaches its own wire, so it takes no --wire", opts.model, wireMeta)
+			return wiring.RunOpts{}, fmt.Errorf("--model %s is paid by the %s key and reaches its own wire, so it takes no --wire", opts.Model, wiring.WireMeta)
 		}
-		opts.wire = wireMeta
+		opts.Wire = wiring.WireMeta
 	}
-	if opts.model != "" && !slices.Contains(args, "--wire") {
-		if library, err := modelLibrary(""); err == nil {
-			opts.wire = cmp.Or(library.WireFor(models.Subscription(source)), opts.wire)
+	if opts.Model != "" && !slices.Contains(args, "--wire") {
+		if library, err := wiring.ModelLibrary(""); err == nil {
+			opts.Wire = cmp.Or(library.WireFor(models.Subscription(source)), opts.Wire)
 		}
 	}
-	if opts.wire == wireKey && opts.effort != "" {
-		return runOpts{}, fmt.Errorf("--effort %s with --wire %s: the openrouter wire sends no reasoning effort, so the level would be dropped without a word",
-			opts.effort, wireKey)
+	if opts.Wire == wiring.WireKey && opts.Effort != "" {
+		return wiring.RunOpts{}, fmt.Errorf("--effort %s with --wire %s: the openrouter wire sends no reasoning effort, so the level would be dropped without a word",
+			opts.Effort, wiring.WireKey)
 	}
-	if opts.wire != wireKey {
-		opts.effort = cmp.Or(opts.effort, llm.EffortDefault)
+	if opts.Wire != wiring.WireKey {
+		opts.Effort = cmp.Or(opts.Effort, llm.EffortDefault)
 	}
-	if opts.gateArm != gateFollowsTheRule && !slices.Contains(gateArms(), opts.gateArm) {
-		return runOpts{}, fmt.Errorf("--gate %q is none of %s: with no --gate jev's verdict is enforced",
-			opts.gateArm, strings.Join(gateArms(), ", "))
+	if opts.GateArm != gateFollowsTheRule && !slices.Contains(gateArms(), opts.GateArm) {
+		return wiring.RunOpts{}, fmt.Errorf("--gate %q is none of %s: with no --gate jev's verdict is enforced",
+			opts.GateArm, strings.Join(gateArms(), ", "))
 	}
-	if opts.siftArm != siftFollowsTheTable && !slices.Contains(siftArms(), opts.siftArm) {
-		return runOpts{}, fmt.Errorf("--sift %q is none of %s: with no --sift the method table decides",
-			opts.siftArm, strings.Join(siftArms(), ", "))
+	if opts.SiftArm != siftFollowsTheTable && !slices.Contains(siftArms(), opts.SiftArm) {
+		return wiring.RunOpts{}, fmt.Errorf("--sift %q is none of %s: with no --sift the method table decides",
+			opts.SiftArm, strings.Join(siftArms(), ", "))
 	}
-	if opts.doneArm != "" && !slices.Contains(settingspkg.DoneReviews(), opts.doneArm) {
-		return runOpts{}, fmt.Errorf("--done-review %q is none of %s: with no --done-review the %s setting decides", opts.doneArm, strings.Join(settingspkg.DoneReviews(), ", "), settingspkg.DoneReview)
+	if opts.DoneArm != "" && !slices.Contains(settingspkg.DoneReviews(), opts.DoneArm) {
+		return wiring.RunOpts{}, fmt.Errorf("--done-review %q is none of %s: with no --done-review the %s setting decides", opts.DoneArm, strings.Join(settingspkg.DoneReviews(), ", "), settingspkg.DoneReview)
 	}
-	switch opts.toolSet {
+	switch opts.ToolSet {
 	case toolSetFull, toolSetThree:
 	default:
-		return runOpts{}, fmt.Errorf("--tools %q is neither %s nor %s, the arm that offers read, write and bash alone",
-			opts.toolSet, toolSetFull, toolSetThree)
+		return wiring.RunOpts{}, fmt.Errorf("--tools %q is neither %s nor %s, the arm that offers read, write and bash alone",
+			opts.ToolSet, toolSetFull, toolSetThree)
 	}
 	without := spawnlessFlag(opts)
-	if opts.doneArm != "" && opts.doneArm != settingspkg.DoneReviewOff && without != "" {
-		return runOpts{}, fmt.Errorf("--done-review %s with %s: that arm has no spawn tool, so no sub-agent is ever reviewed and the flag would say a check is running that is not",
-			opts.doneArm, without)
+	if opts.DoneArm != "" && opts.DoneArm != settingspkg.DoneReviewOff && without != "" {
+		return wiring.RunOpts{}, fmt.Errorf("--done-review %s with %s: that arm has no spawn tool, so no sub-agent is ever reviewed and the flag would say a check is running that is not",
+			opts.DoneArm, without)
 	}
-	if opts.agent != "" && without != "" {
-		return runOpts{}, fmt.Errorf("--agent %s with %s: that arm spawns no sub-agent, so there is no spawn prompt to show", opts.agent, without)
+	if opts.Agent != "" && without != "" {
+		return wiring.RunOpts{}, fmt.Errorf("--agent %s with %s: that arm spawns no sub-agent, so there is no spawn prompt to show", opts.Agent, without)
 	}
 	return opts, nil
 }
 
-func spawnlessFlag(opts runOpts) string {
-	if opts.noSubAgents {
+func spawnlessFlag(opts wiring.RunOpts) string {
+	if opts.NoSubAgents {
 		return "--no-subagents"
 	}
-	if opts.toolSet == toolSetThree {
+	if opts.ToolSet == toolSetThree {
 		return "--tools " + toolSetThree
 	}
 	return ""

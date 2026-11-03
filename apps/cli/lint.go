@@ -8,6 +8,7 @@ import (
 
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/sys"
 )
 
@@ -40,7 +41,7 @@ func lintVerb(args []string, out, errOut io.Writer) int {
 	}
 	report, err := lintComments(targets)
 	if err != nil {
-		return failed(o, err)
+		return wiring.Failed(o, err)
 	}
 	if len(report.Findings) == 0 {
 		return o.Done(true, report, func(page cli.Page) []string {

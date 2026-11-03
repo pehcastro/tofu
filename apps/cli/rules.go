@@ -16,6 +16,7 @@ import (
 
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
 	"tofu/internal/librarian/rules"
@@ -564,7 +565,7 @@ func patternFiles(rules []rule.Rule, root string) ([]string, error) {
 }
 
 func (report ruleCheckReport) lines(page cli.Page) []string {
-	lines := page.Title("Rules check", []string{"from " + page.Path(report.Origin)}, firesVerdict(len(report.Fires), report.Blocked))
+	lines := page.Title("Rules check", []string{"from " + page.Path(report.Origin)}, wiring.FiresVerdict(len(report.Fires), report.Blocked))
 	rows := make([]cli.Row, len(report.Fires))
 	for i, f := range report.Fires {
 		rows[i] = f.row(page, output.Plural(f.Findings, "finding"))
@@ -573,16 +574,6 @@ func (report ruleCheckReport) lines(page cli.Page) []string {
 		lines = append(append(lines, ""), page.Rows(rows)...)
 	}
 	return lines
-}
-
-func firesVerdict(fired, blocked int) cli.Verdict {
-	switch {
-	case fired == 0:
-		return cli.Verdict{Mark: cli.Done, Text: "nothing fired"}
-	case blocked == 0:
-		return cli.Verdict{Mark: cli.Warn, Text: strconv.Itoa(fired) + " fired"}
-	}
-	return cli.Verdict{Mark: cli.Fail, Text: strconv.Itoa(fired) + " fired · " + strconv.Itoa(blocked) + " blocked"}
 }
 
 func (f ruleFireListing) row(page cli.Page, detail string) cli.Row {

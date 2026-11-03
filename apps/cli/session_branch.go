@@ -9,6 +9,7 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
@@ -99,7 +100,7 @@ func sessionBranch(store *session.Store, ask sessionBranchAsk) (sessionBranchRep
 	}
 	var chosen *session.Chosen
 	if ask.model != "" {
-		library, err := modelLibrary(".")
+		library, err := wiring.ModelLibrary(".")
 		if err != nil {
 			return sessionBranchReport{}, err
 		}

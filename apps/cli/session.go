@@ -21,6 +21,7 @@ import (
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
 	"tofu/internal/cli/render"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/llm/core"
@@ -410,7 +411,7 @@ func sessionSetModel(store *session.Store, handle, slug string) (sessionSetRepor
 	if err != nil {
 		return sessionSetReport{}, err
 	}
-	library, err := modelLibrary(".")
+	library, err := wiring.ModelLibrary(".")
 	if err != nil {
 		return sessionSetReport{}, err
 	}
@@ -1587,7 +1588,7 @@ func breakpointBody(view session.RequestView, attempts []requestAttempt) (json.R
 	if len(attempts) > 0 && len(attempts[len(attempts)-1].Body) > 0 {
 		return attempts[len(attempts)-1].Body, breakpointsSent, nil
 	}
-	if view.Wire != wireSubscription {
+	if view.Wire != wiring.WireSubscription {
 		return nil, breakpointsNone, nil
 	}
 	reading := session.Reading{Messages: make([]session.Message, len(view.Messages))}

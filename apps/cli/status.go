@@ -11,6 +11,7 @@ import (
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
 	"tofu/internal/cli/render"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
@@ -61,7 +62,7 @@ const (
 	metaReports       = "Meta reports tokens per call and team rate limits; it has no spend or balance API, so cost is estimated from list price"
 )
 
-func (f keyFacts) hint() string { return commandFor("login", f.role, f.provider) }
+func (f keyFacts) hint() string { return wiring.CommandFor("login", f.role, f.provider) }
 
 func classifierKeyUse(bound models.Model, err error, provider models.Provider) string {
 	switch {
@@ -80,7 +81,7 @@ func classifierKeyUse(bound models.Model, err error, provider models.Provider) s
 }
 
 func keyTable() []keyFacts {
-	bound, err := boundClassifier()
+	bound, err := wiring.BoundClassifier()
 	boundOn := func(provider models.Provider) string {
 		if err != nil || bound.Provider != provider {
 			return ""
@@ -163,7 +164,7 @@ func credentialStatus(now time.Time, redact bool, urls map[quota.Provider]string
 	if err != nil {
 		return data, nil, err
 	}
-	library, libraryErr := modelLibrary("")
+	library, libraryErr := wiring.ModelLibrary("")
 	var problems []cli.Problem
 	if libraryErr != nil {
 		problems = append(problems, cli.Problem{What: "the model library did not load, so scoped windows name no model", Hint: "tofu doctor"})

@@ -16,9 +16,11 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/cli/output"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/sys"
+	testkit "tofu/internal/testkit/cli"
 )
 
 const (
@@ -221,11 +223,11 @@ func TestABoundMetaOrchestratorRunsOnMetaWithNoModelAndTheAppListsItsWire(t *tes
 	if len(*heard) == 0 || !strings.Contains((*heard)[0].body, `"model":"muse-spark-1.3-contributor"`) {
 		t.Errorf("the bound meta model was not what the run asked for: %d requests", len(*heard))
 	}
-	if opts := pickedOpts(project, host.Turn{Task: "say ok"}, 1); opts.wire != wireMeta || opts.model != "meta/muse-spark-1.3-contributor" {
-		t.Errorf("the app runs a bound meta orchestrator on wire %q model %q", opts.wire, opts.model)
+	if opts := pickedOpts(project, host.Turn{Task: "say ok"}, 1); opts.Wire != wiring.WireMeta || opts.Model != "meta/muse-spark-1.3-contributor" {
+		t.Errorf("the app runs a bound meta orchestrator on wire %q model %q", opts.Wire, opts.Model)
 	}
 	wires := heldForTest(t).wires()
-	if len(wires) != 1 || wires[0].Name != wireMeta || wires[0].Model != "muse-spark-1.3" {
+	if len(wires) != 1 || wires[0].Name != wiring.WireMeta || wires[0].Model != "muse-spark-1.3" {
 		t.Errorf("with a meta key the app lists %+v, want the meta wire on muse-spark-1.3", wires)
 	}
 }
@@ -242,21 +244,21 @@ func TestAMetaTurnWithNoKeySaysHowToStoreOne(t *testing.T) {
 
 func TestAMetaSlugPicksItsOwnWireAndRefusesAnother(t *testing.T) {
 	opts, err := parseRunArgs([]string{"--dir", ".", "--model", "meta/muse-spark-1.3-contributor", "task"})
-	if err != nil || opts.wire != wireMeta || wireSpend(opts.wire) != turn.SpendAPIKey {
-		t.Fatalf("meta/muse-spark-1.3-contributor parsed to wire %q spend %q (%v)", opts.wire, wireSpend(opts.wire), err)
+	if err != nil || opts.Wire != wiring.WireMeta || wireSpend(opts.Wire) != turn.SpendAPIKey {
+		t.Fatalf("meta/muse-spark-1.3-contributor parsed to wire %q spend %q (%v)", opts.Wire, wireSpend(opts.Wire), err)
 	}
 	if bound, err := boundSubAgent(opts); bound != "" || err != nil {
 		t.Errorf("an unnamed sub-agent under a meta orchestrator bound %q (%v)", bound, err)
 	}
-	if _, err := parseRunArgs([]string{"--dir", ".", "--wire", wireSubscription, "--model", "meta/muse-spark-1.3", "task"}); err == nil {
+	if _, err := parseRunArgs([]string{"--dir", ".", "--wire", wiring.WireSubscription, "--model", "meta/muse-spark-1.3", "task"}); err == nil {
 		t.Errorf("--wire anthropic with a meta model was taken")
 	}
-	library, err := modelLibrary("")
+	library, err := wiring.ModelLibrary("")
 	if err != nil {
 		t.Fatal(err)
 	}
 	model, err := library.Select("meta/muse-spark-1.2")
-	if err != nil || library.WireOf(model) != wireMeta {
+	if err != nil || library.WireOf(model) != wiring.WireMeta {
 		t.Errorf("a sub-agent named meta/muse-spark-1.2 opens the %q wire (%v)", library.WireOf(model), err)
 	}
 }
@@ -350,6 +352,6 @@ func TestModelsListsTheFiveMetaModelsWithTheirWindowAndTheContributorNotice(t *t
 		}
 	}
 	check("with the shipped table")
-	writeFile(t, home, ".tofu/model-windows.json", homeRegistryOfOneWindow)
+	testkit.WriteFile(t, home, ".tofu/model-windows.json", homeRegistryOfOneWindow)
 	check("after a reload wrote a table with no meta row")
 }

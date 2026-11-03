@@ -12,6 +12,7 @@ import (
 
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	"tofu/internal/cli/wiring"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
 	"tofu/internal/tools/shell/process"
@@ -112,7 +113,7 @@ func shellsLines(page cli.Page, shells []shellReading, now time.Time) []string {
 		case one.HeldByPerson():
 			state = "running, held by a person"
 		}
-		rows[i] = cli.Row{Mark: mark, Cells: []string{one.Name, state, "pid " + strconv.Itoa(one.PID), ownerName(one.Owner)}, Detail: one.Command + " · " + page.Path(one.Dir) + " · " + one.timing.Words(now)}
+		rows[i] = cli.Row{Mark: mark, Cells: []string{one.Name, state, "pid " + strconv.Itoa(one.PID), wiring.OwnerName(one.Owner)}, Detail: one.Command + " · " + page.Path(one.Dir) + " · " + one.timing.Words(now)}
 	}
 	return append(append(page.Title("Shells", []string{output.Plural(len(shells), "shell") + " running"}, cli.Verdict{}), ""), cli.Indent(page.Rows(rows)...)...)
 }

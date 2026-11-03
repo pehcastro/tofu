@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"tofu/internal/agent/loop"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/models/llm/core"
 	sessionstore "tofu/internal/store/session"
+	"tofu/internal/testkit/cli"
 )
 
 type scriptedModel struct {
@@ -37,7 +39,7 @@ func (d *appDriver) hashesDrawn() []string {
 }
 
 func TestTheHashChatDrawsIsTheIDOfTheCallInTheRecord(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("a note"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +50,7 @@ func TestTheHashChatDrawsIsTheIDOfTheCallInTheRecord(t *testing.T) {
 		}},
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "read it"},
 	}}
-	live := newAppSession(dir, func(runOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
+	live := newAppSession(dir, func(wiring.RunOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
 	live.run(t.Context(), onTheSubscription, "read the note", driver.emit)
 	sessions, err := sessionstore.Open()
 	if err != nil {

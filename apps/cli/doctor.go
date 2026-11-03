@@ -13,6 +13,7 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/method"
@@ -110,7 +111,7 @@ func doctorState(now time.Time) doctorReport {
 	if err != nil {
 		root = "."
 	}
-	located, _ := locateGateKey(jev.ReadKeyring())
+	located, _ := wiring.LocateGateKey(jev.ReadKeyring())
 	library, rules := readLibrary()
 	for i, point := range rules {
 		if point.Point == shellSiftPoint {
@@ -249,7 +250,7 @@ func doctorBlockers() []doctorBlocker {
 }
 
 func doctorWires(keyName string) []doctorWire {
-	names := runWires()
+	names := wiring.RunWires()
 	wires := make([]doctorWire, 0, len(names))
 	for _, name := range names {
 		spend := "the " + name + " subscription quota, no money"

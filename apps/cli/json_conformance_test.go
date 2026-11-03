@@ -12,6 +12,7 @@ import (
 
 	"tofu/internal/cli/output"
 	"tofu/internal/sys"
+	testkit "tofu/internal/testkit/cli"
 )
 
 type conformanceCase struct {
@@ -28,7 +29,7 @@ type conformanceGroup struct {
 func inProcess(_ *testing.T, args []string) (int, string, string) { return runOutput(args) }
 
 func conformanceHome(t *testing.T) {
-	isolateHome(t)
+	testkit.IsolateHome(t)
 	for _, name := range sys.KeyNames() {
 		t.Setenv(name, "")
 	}

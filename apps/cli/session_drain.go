@@ -15,6 +15,7 @@ import (
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/store/session"
@@ -60,7 +61,7 @@ func sessionDrainVerb(o output.Verb, args []string) int {
 }
 
 func pricedByProvider(registry models.Registry) (func(slug string) drain.Weights, error) {
-	library, err := modelLibrary("")
+	library, err := wiring.ModelLibrary("")
 	weights := drain.WeightsFrom(registry)
 	return func(slug string) drain.Weights {
 		wire, model, wired := strings.Cut(slug, "/")

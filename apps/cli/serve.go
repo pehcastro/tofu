@@ -17,6 +17,7 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/cli/output"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/quota"
@@ -132,7 +133,7 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	open, wires := openAppWire, signedInWires
 	if deck != nil {
 		_ = os.Setenv(cassetteVariable, plan.cassette)
-		open, wires = driveWire(deck), func() []string { return append(runWires(), wireMeta) }
+		open, wires = driveWire(deck), func() []string { return append(wiring.RunWires(), wiring.WireMeta) }
 		if os.Getenv(quota.ClaudeUsageURLVariable) == "" && os.Getenv(quota.CodexUsageURLVariable) == "" {
 			polled = nil
 		}
@@ -364,7 +365,7 @@ func serveLogout(p host.LogoutParams) (string, error) {
 }
 
 func wireSources() map[string]string {
-	return map[string]string{wireSubscription: string(models.ClaudeSub), wireCodex: string(models.CodexSub), wireKey: string(models.OpenRouter), wireMeta: string(models.Meta)}
+	return map[string]string{wiring.WireSubscription: string(models.ClaudeSub), wiring.WireCodex: string(models.CodexSub), wiring.WireKey: string(models.OpenRouter), wiring.WireMeta: string(models.Meta)}
 }
 
 func signedInWires() []string {

@@ -17,6 +17,7 @@ import (
 
 	"tofu/internal/cli/output"
 	settingspkg "tofu/internal/store/settings"
+	testkit "tofu/internal/testkit/cli"
 	"tofu/internal/tools/shell/process"
 	"tofu/internal/ui/tui/panels/shells"
 )
@@ -121,7 +122,7 @@ func runShellsHelperIfAsked() {
 
 func shellsProject(t *testing.T, keep bool) string {
 	t.Helper()
-	emptyHome(t)
+	testkit.EmptyHome(t)
 	dir := t.TempDir()
 	if keep {
 		store, err := settingspkg.OpenFor(dir)

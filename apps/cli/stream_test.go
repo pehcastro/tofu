@@ -13,6 +13,7 @@ import (
 	"tofu/internal/models/llm/core"
 	sessionstore "tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
+	testkit "tofu/internal/testkit/cli"
 	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/frame/frame"
 )
@@ -37,7 +38,7 @@ func (m *streamingModel) Ask(ctx context.Context, request llm.Request) (llm.Deci
 }
 
 func TestAStreamedResponseDrawsEveryDeltaAndNoDuplicateFinalText(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	model := &streamingModel{deltas: []string{"the gate reads ", "toolgate.go "}, content: "the gate reads toolgate.go"}
 	driver := driveApp(t)
 	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "explain the gate", driver.emit)
@@ -55,7 +56,7 @@ func TestAStreamedResponseDrawsEveryDeltaAndNoDuplicateFinalText(t *testing.T) {
 }
 
 func TestAWireThatDoesNotStreamDrawsNoDeltaAndBehavesAsBefore(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the whole answer at once"}}}
 	driver := driveApp(t)
 	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "explain the gate", driver.emit)
@@ -70,7 +71,7 @@ func TestAWireThatDoesNotStreamDrawsNoDeltaAndBehavesAsBefore(t *testing.T) {
 }
 
 func TestACancelledStreamSealsTheEntryItWasWriting(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	model := &streamingModel{deltas: []string{"The **gate** reads ", "`toolgate.go` before the policy."}, cancel: cancel}
 	driver := driveApp(t)
@@ -89,7 +90,7 @@ func TestACancelledStreamSealsTheEntryItWasWriting(t *testing.T) {
 }
 
 func TestACacheHitCarriesTheReadSeparatelyFromTheFreshInput(t *testing.T) {
-	cached := scratchProject(t)
+	cached := testkit.ScratchProject(t)
 	cachedModel := &sendModel{queued: []llm.Decision{{
 		Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the answer",
 		Usage: llm.Usage{InputTokens: 400}, CacheReadTokens: 9603,
@@ -104,7 +105,7 @@ func TestACacheHitCarriesTheReadSeparatelyFromTheFreshInput(t *testing.T) {
 	cachedDriver := driveAppOn(t, detailed)
 	stubbedTurn(cached, cachedModel)(t.Context(), onTheSubscription, "explain the gate", cachedDriver.emit)
 
-	fresh := scratchProject(t)
+	fresh := testkit.ScratchProject(t)
 	freshModel := &sendModel{queued: []llm.Decision{{
 		Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the answer",
 		Usage: llm.Usage{InputTokens: 400},
@@ -158,12 +159,12 @@ func recordedEventKinds(t *testing.T, dir string) []sessionstore.EventKind {
 }
 
 func TestAStreamedTurnRecordsTheSameEventKindsAsAnUnstreamedOne(t *testing.T) {
-	without := scratchProject(t)
+	without := testkit.ScratchProject(t)
 	stubbedTurn(without, &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the answer"}}})(
 		t.Context(), onTheSubscription, "explain the gate", func(tui.Event) {})
 	withoutKinds := recordedEventKinds(t, without)
 
-	streamed := scratchProject(t)
+	streamed := testkit.ScratchProject(t)
 	stubbedTurn(streamed, &streamingModel{deltas: []string{"the ", "answer"}, content: "the answer"})(
 		t.Context(), onTheSubscription, "explain the gate", func(tui.Event) {})
 	streamedKinds := recordedEventKinds(t, streamed)

@@ -23,6 +23,7 @@ import (
 	"tofu/internal/models/llm/core"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
+	"tofu/internal/testkit/cli"
 )
 
 func panicOf(call func()) (message string) {
@@ -163,7 +164,7 @@ func TestAJevErrorStillReopensAnOpenLine(t *testing.T) {
 }
 
 func TestTheDoneReviewIsScreenUnlessTheSettingOrTheCommandLineSaysOtherwise(t *testing.T) {
-	emptyHome(t)
+	testkit.EmptyHome(t)
 	dir := t.TempDir()
 	reviewOf := func(args ...string) turn.DoneReview {
 		t.Helper()
@@ -171,7 +172,7 @@ func TestTheDoneReviewIsScreenUnlessTheSettingOrTheCommandLineSaysOtherwise(t *t
 		if err != nil {
 			t.Fatalf("tofu run %v: %v", args, err)
 		}
-		return newDoneReview(settled(opts, nil).doneArm, func(note string) { t.Errorf("tofu run %v said %q", args, note) })
+		return newDoneReview(settled(opts, nil).DoneArm, func(note string) { t.Errorf("tofu run %v said %q", args, note) })
 	}
 	if review := reviewOf(); review != turn.DoneReview(turn.ContractDoneReview{}) {
 		t.Fatalf("with no setting and no flag the done review is %#v, want the screen", review)
@@ -200,7 +201,7 @@ func TestTheDoneReviewIsScreenUnlessTheSettingOrTheCommandLineSaysOtherwise(t *t
 }
 
 func TestATypedDoneReviewWithNoJevKeyFallsBackToTheScreenAndSaysSo(t *testing.T) {
-	emptyHome(t)
+	testkit.EmptyHome(t)
 	t.Setenv(sys.OpenRouterClassifierKeyName, "")
 	t.Chdir(t.TempDir())
 	var said []string
@@ -234,10 +235,10 @@ func TestTheCheapDoneReviewArmReopensASubAgentThatRanNoTool(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseRunArgs: %v", err)
 	}
-	if opts.doneArm != settingspkg.DoneReviewCheap {
-		t.Fatalf("--done-review cheap parsed as %q", opts.doneArm)
+	if opts.DoneArm != settingspkg.DoneReviewCheap {
+		t.Fatalf("--done-review cheap parsed as %q", opts.DoneArm)
 	}
-	decision, err := newDoneReview(opts.doneArm, nil).Review(context.Background(), claimedDoneWithNothing())
+	decision, err := newDoneReview(opts.DoneArm, nil).Review(context.Background(), claimedDoneWithNothing())
 	if err != nil {
 		t.Fatalf("the cheap arm failed: %v", err)
 	}
@@ -255,10 +256,10 @@ func TestTheTypedDoneReviewArmReopensASubAgentAndLogsTheDecision(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseRunArgs: %v", err)
 	}
-	if opts.doneArm != settingspkg.DoneReviewTyped {
-		t.Fatalf("--done-review typed parsed as %q", opts.doneArm)
+	if opts.DoneArm != settingspkg.DoneReviewTyped {
+		t.Fatalf("--done-review typed parsed as %q", opts.DoneArm)
 	}
-	if review := newDoneReview(opts.doneArm, func(note string) { t.Fatalf("the typed arm fell back with a Jev stub bound: %s", note) }); review == nil {
+	if review := newDoneReview(opts.DoneArm, func(note string) { t.Fatalf("the typed arm fell back with a Jev stub bound: %s", note) }); review == nil {
 		t.Fatal("--done-review typed built no review")
 	}
 
@@ -411,8 +412,8 @@ func spawnOneSubAgent(t *testing.T, review turn.DoneReview, subAgent []llm.Decis
 	t.Helper()
 	dir := t.TempDir()
 	opts := armOpts(t)
-	opts.dir, opts.task, opts.gateArm = dir, "hand the note to a sub-agent", gateOff
-	built, err := buildTestRunTools(dir, opts.toolSet)
+	opts.Dir, opts.Task, opts.GateArm = dir, "hand the note to a sub-agent", gateOff
+	built, err := buildTestRunTools(dir, opts.ToolSet)
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
@@ -504,12 +505,12 @@ func TestDoneVerdictNamesEveryLedgerVerdict(t *testing.T) {
 
 func TestTheSpawnerTofuBuildsKnowsTheProjectItsGateLooksIn(t *testing.T) {
 	opts := armOpts(t)
-	built, err := buildTestRunTools(opts.dir, opts.toolSet)
+	built, err := buildTestRunTools(opts.Dir, opts.ToolSet)
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
 	_, spawner := mustConfig(t, opts, built, runtime{spend: turn.SpendSubscription})
-	if spawner == nil || spawner.Project != opts.dir {
-		t.Fatalf("the spawner runConfig builds, for tofu run and the interface alike, looks for tests in %q, want the run directory %q", spawner.Project, opts.dir)
+	if spawner == nil || spawner.Project != opts.Dir {
+		t.Fatalf("the spawner runConfig builds, for tofu run and the interface alike, looks for tests in %q, want the run directory %q", spawner.Project, opts.Dir)
 	}
 }

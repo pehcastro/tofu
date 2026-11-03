@@ -9,9 +9,11 @@ import (
 	"testing"
 
 	"tofu/internal/agent/loop"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
+	"tofu/internal/testkit/cli"
 	"tofu/internal/ui/tui/app"
 )
 
@@ -36,8 +38,8 @@ func TestGateOffAndNoGateAreTheSameArm(t *testing.T) {
 	if flagged != legacy {
 		t.Fatalf("--gate off parses as %+v and --no-gate as %+v", flagged, legacy)
 	}
-	if flagged.gateArm != gateOff {
-		t.Fatalf("both arms parse as %q, want %q", flagged.gateArm, gateOff)
+	if flagged.GateArm != gateOff {
+		t.Fatalf("both arms parse as %q, want %q", flagged.GateArm, gateOff)
 	}
 	t.Logf("both arms: %+v", flagged)
 }
@@ -51,7 +53,7 @@ func TestGateTakesOnlyItsThreeArms(t *testing.T) {
 }
 
 func TestTofuRunUnderEnforceDoesNotWriteTheDeniedFile(t *testing.T) {
-	dir := chdirTemp(t)
+	dir := testkit.ChdirTemp(t)
 	stubJev(t, 200, untrustedDenyReply)
 
 	gate, err := toolGateOn(dir, logHere(t), jev.ReadKeyring())
@@ -62,12 +64,12 @@ func TestTofuRunUnderEnforceDoesNotWriteTheDeniedFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
-	opts := runOpts{
-		dir:              dir,
-		task:             "write the note the README asked for",
-		gateArm:          gateEnforce,
-		loopGuardRepeats: konst.TurnLoopGuardRepeats,
-		loopGuardWindow:  konst.TurnLoopGuardWindow,
+	opts := wiring.RunOpts{
+		Dir:              dir,
+		Task:             "write the note the README asked for",
+		GateArm:          gateEnforce,
+		LoopGuardRepeats: konst.TurnLoopGuardRepeats,
+		LoopGuardWindow:  konst.TurnLoopGuardWindow,
 	}
 	config, _ := mustConfig(t, opts, built, runtime{model: noteThenStop(), spend: turn.SpendSubscription, gate: gate})
 	if config.GateMode != turn.GateEnforce {

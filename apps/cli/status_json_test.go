@@ -9,13 +9,14 @@ import (
 	"tofu/internal/cli/output"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
+	testkit "tofu/internal/testkit/cli"
 	"tofu/internal/testkit/golden"
 )
 
 func TestLoginStatusJSONIsOneEnvelopeOfCodes(t *testing.T) {
 	var out bytes.Buffer
 	t.Run("in a scratch home", func(t *testing.T) {
-		scratchProject(t)
+		testkit.ScratchProject(t)
 		for _, variable := range sys.KeyNames() {
 			t.Setenv(variable, "")
 		}
@@ -30,7 +31,7 @@ func TestLoginStatusJSONIsOneEnvelopeOfCodes(t *testing.T) {
 }
 
 func TestDisableJSONIsOneEnvelope(t *testing.T) {
-	scratchProject(t)
+	testkit.ScratchProject(t)
 	savedAccount(t)
 	var out, errOut bytes.Buffer
 	if code := loginVerb([]string{"--disable", "1", output.JSONFlag}, nil, &out, &errOut); code != output.ExitOK {

@@ -24,6 +24,7 @@ import (
 	"tofu/internal/judge/method"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
+	"tofu/internal/testkit/cli"
 	"tofu/internal/tools/shell/sift"
 	shipped "tofu/library"
 )
@@ -134,7 +135,7 @@ func siftedShell() sift.Shell {
 
 func TestTheRunAttachesAScorerBuiltOverTheJevClient(t *testing.T) {
 	assumesTheRuleIsOutOfShadow(t)
-	chdirTemp(t)
+	testkit.ChdirTemp(t)
 	stubRecordedJudgedReplies(t)
 	bindTypeSafe(t)
 
@@ -180,7 +181,7 @@ func (m *bashingModel) Ask(context.Context, llm.Request) (llm.Decision, error) {
 
 func TestABashResultReachesTheModelSmallerThanTheOutputItRan(t *testing.T) {
 	assumesTheRuleIsOutOfShadow(t)
-	dir := chdirTemp(t)
+	dir := testkit.ChdirTemp(t)
 	stubRecordedJudgedReplies(t)
 	bindTypeSafe(t)
 
@@ -190,8 +191,8 @@ func TestABashResultReachesTheModelSmallerThanTheOutputItRan(t *testing.T) {
 	}
 
 	opts := armOpts(t)
-	opts.dir, opts.task = dir, "find the line that says what failed"
-	built, err := buildTestRunTools(dir, opts.toolSet)
+	opts.Dir, opts.Task = dir, "find the line that says what failed"
+	built, err := buildTestRunTools(dir, opts.ToolSet)
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
@@ -239,7 +240,7 @@ func lastLine(message string) string {
 
 func TestTheThreeStatesOfTheShellSiftCountedInBytes(t *testing.T) {
 	assumesTheRuleIsOutOfShadow(t)
-	chdirTemp(t)
+	testkit.ChdirTemp(t)
 	stubRecordedJudgedReplies(t)
 	bindTypeSafe(t)
 	shell := siftedShell()
@@ -315,8 +316,8 @@ func TestAnArmThatIsNeitherFreeNorJudgedIsRefused(t *testing.T) {
 	}
 	for _, arm := range siftArms() {
 		opts, err := parseRunArgs([]string{"--dir", t.TempDir(), "--sift", arm, "a task"})
-		if err != nil || opts.siftArm != arm {
-			t.Fatalf("--sift %s parsed as %q: %v", arm, opts.siftArm, err)
+		if err != nil || opts.SiftArm != arm {
+			t.Fatalf("--sift %s parsed as %q: %v", arm, opts.SiftArm, err)
 		}
 	}
 }
@@ -398,7 +399,7 @@ func TestWhatTheJudgedSiftSavesAndCostsOverEveryRecordedSession(t *testing.T) {
 		t.Skip("skipped, and counted: no recorded session carries a bash result")
 	}
 	assumesTheRuleIsOutOfShadow(t)
-	chdirTemp(t)
+	testkit.ChdirTemp(t)
 	stubRecordedJudgedReplies(t)
 	bindTypeSafe(t)
 
@@ -473,7 +474,7 @@ func logHere(t *testing.T) string {
 
 func TestEveryShellSiftDecisionIsWrittenToTheLedger(t *testing.T) {
 	assumesTheRuleIsOutOfShadow(t)
-	chdirTemp(t)
+	testkit.ChdirTemp(t)
 	stubRecordedJudgedReplies(t)
 	bindTypeSafe(t)
 	sifter, scorer, err := buildShellSift(siftFollowsTheTable, logHere(t))

@@ -20,6 +20,7 @@ import (
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
 	"tofu/internal/cli/render"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/konst"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
@@ -315,7 +316,7 @@ func (o browserOutput) bench(args []string) int {
 	var judge *jevloop.Jev
 	if err == nil && *withJev {
 		report.Chooser, judge = "jev", &jevloop.Jev{}
-		*judge, err = browserJudge(".")
+		*judge, err = wiring.BrowserJudge(".")
 	}
 	var address string
 	stop := func() error { return nil }

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"tofu/internal/agent/subagents"
+	"tofu/internal/cli/wiring"
 )
 
 func TestAnUnsetTierStaysOutOfTheChatAndARefusedDefinitionStillShows(t *testing.T) {
@@ -28,7 +29,7 @@ func TestAnUnsetTierStaysOutOfTheChatAndARefusedDefinitionStillShows(t *testing.
 		t.Fatal("no definition carries an unset tier notice in a fresh home, so the test proves nothing")
 	}
 	var chat []string
-	if _, err := composeRun(runOpts{dir: project}, nil, runtime{notify: func(notice string) { chat = append(chat, notice) }, open: openAppWire}); err != nil {
+	if _, err := composeRun(wiring.RunOpts{Dir: project}, nil, runtime{notify: func(notice string) { chat = append(chat, notice) }, open: openAppWire}); err != nil {
 		t.Fatal(err)
 	}
 	said := strings.Join(chat, "\n")

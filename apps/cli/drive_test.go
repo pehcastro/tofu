@@ -16,10 +16,12 @@ import (
 	"time"
 
 	"tofu/internal/cli/output"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
+	testkit "tofu/internal/testkit/cli"
 	"tofu/internal/ui/tui/chat/session"
 	"tofu/internal/ui/tui/panels/progress"
 )
@@ -32,7 +34,7 @@ func TestADrivenStepSettlesInsideOneProgressTick(t *testing.T) {
 
 func drivenProject(t *testing.T) string {
 	t.Helper()
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	t.Setenv(cassetteVariable, "")
 	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("the note says a note"), 0o600); err != nil {
 		t.Fatal(err)
@@ -564,7 +566,7 @@ func TestDriveTakesTheRunArmsThatChangeWhatATurnDoes(t *testing.T) {
 	if !taken {
 		t.Fatal("tofu drive refused the arms tofu run takes")
 	}
-	want := runOpts{siftArm: siftFree, gateArm: gateShadow, toolSet: toolSetThree, noSubAgents: true, noInstructions: true, maxSteps: 7, contextCeiling: 20000}
+	want := wiring.RunOpts{SiftArm: siftFree, GateArm: gateShadow, ToolSet: toolSetThree, NoSubAgents: true, NoInstructions: true, MaxSteps: 7, ContextCeiling: 20000}
 	if plan.arms != want {
 		t.Fatalf("drive parsed %+v, want %+v", plan.arms, want)
 	}

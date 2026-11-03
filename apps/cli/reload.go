@@ -18,6 +18,7 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/librarian/skills"
 	"tofu/internal/models/llm/catalog"
@@ -55,7 +56,7 @@ func takeInventory(dir string) ([]reloadPart, error) {
 	if err != nil {
 		return nil, err
 	}
-	library, err := modelLibrary(dir)
+	library, err := wiring.ModelLibrary(dir)
 	var broken *models.BrokenLibrary
 	if err != nil && !errors.As(err, &broken) {
 		return nil, err

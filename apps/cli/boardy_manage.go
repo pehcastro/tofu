@@ -12,6 +12,7 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/project/boardy"
 )
@@ -236,7 +237,7 @@ func (c boardyCall) check() int {
 			}
 			rows = append(rows, cli.Row{Mark: mark, Cells: []string{f.RuleID, string(f.Mode)}, Detail: f.Text()})
 		}
-		verdict := firesVerdict(len(fired), blocked)
+		verdict := wiring.FiresVerdict(len(fired), blocked)
 		if err != nil {
 			verdict = cli.Verdict{Mark: cli.Fail, Text: "refused"}
 			rows = append(rows, cli.Row{Mark: cli.Fail, Cells: []string{answer.Refused}})

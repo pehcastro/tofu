@@ -11,6 +11,7 @@ import (
 
 	"tofu/internal/agent/subagents"
 	"tofu/internal/cli/output"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/sys"
 )
@@ -85,7 +86,7 @@ func knownModel(dir, model string) error {
 	if model == string(subagent.RunsInherit) {
 		return nil
 	}
-	catalog, err := modelLibrary(dir)
+	catalog, err := wiring.ModelLibrary(dir)
 	if err == nil {
 		_, err = catalog.Select(model)
 	}

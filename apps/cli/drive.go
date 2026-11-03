@@ -20,6 +20,7 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/render"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/catalog"
@@ -631,15 +632,15 @@ func (c *cassette) images() string {
 	return noRequest
 }
 
-func driveWire(deck *cassette) func(runOpts) (appWire, error) {
-	return func(opts runOpts) (appWire, error) {
+func driveWire(deck *cassette) func(wiring.RunOpts) (appWire, error) {
+	return func(opts wiring.RunOpts) (appWire, error) {
 		if deck == nil {
 			return appWire{}, errors.New("tofu drive opens no live wire: name a recorded one with --cassette or " + cassetteVariable)
 		}
 		standingIn := models.Model{ID: cassetteBuild, Windows: []string{cassetteBuild}}
 		if chosen, err := chooseModel(opts); err == nil {
 			standingIn.Subscription, standingIn.Vision, standingIn.PromptCache = chosen.Subscription, chosen.Vision, chosen.PromptCache
-			if opts.model != "" {
+			if opts.Model != "" {
 				deck.mutex.Lock()
 				deck.askedFor = chosen.ID
 				deck.mutex.Unlock()
@@ -703,7 +704,7 @@ func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePla
 			if plan.setup {
 				return held.wires()
 			}
-			library, _ := modelLibrary(dir)
+			library, _ := wiring.ModelLibrary(dir)
 			listed := []tui.Wire{{Name: library.WireFor(models.Subscription(plan.source)), Model: shown, Provider: cmp.Or(plan.source, cassetteBuild)}}
 			if plan.quota == "" {
 				return listed
@@ -765,7 +766,7 @@ type drivePlan struct {
 	resume    bool
 	host      bool
 	setup     bool
-	arms      runOpts
+	arms      wiring.RunOpts
 }
 
 func armIsKnown(flag, taken string, arms []string) error {
@@ -806,16 +807,16 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 			plan.setup = true
 			continue
 		case "--no-gate":
-			plan.arms.gateArm = gateOff
+			plan.arms.GateArm = gateOff
 			continue
 		case "--no-subagents":
-			plan.arms.noSubAgents = true
+			plan.arms.NoSubAgents = true
 			continue
 		case "--no-instructions":
-			plan.arms.noInstructions = true
+			plan.arms.NoInstructions = true
 			continue
 		case "--no-docs":
-			plan.arms.noDocs = true
+			plan.arms.NoDocs = true
 			continue
 		}
 		if !strings.HasPrefix(flag, "--") {
@@ -848,17 +849,17 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 		case "--timeout":
 			plan.timeout, err = time.ParseDuration(taken)
 		case "--gate":
-			plan.arms.gateArm = taken
+			plan.arms.GateArm = taken
 		case "--sift":
-			plan.arms.siftArm = taken
+			plan.arms.SiftArm = taken
 		case "--done-review":
-			plan.arms.doneArm = taken
+			plan.arms.DoneArm = taken
 		case "--tools":
-			plan.arms.toolSet = taken
+			plan.arms.ToolSet = taken
 		case "--max-steps":
-			plan.arms.maxSteps, err = strconv.Atoi(taken)
+			plan.arms.MaxSteps, err = strconv.Atoi(taken)
 		case "--context-ceiling":
-			plan.arms.contextCeiling, err = strconv.Atoi(taken)
+			plan.arms.ContextCeiling, err = strconv.Atoi(taken)
 		default:
 			err = errors.New("no such flag")
 		}
@@ -867,10 +868,10 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 		}
 	}
 	if err := cmp.Or(
-		armIsKnown("--gate", plan.arms.gateArm, gateArms()),
-		armIsKnown("--sift", plan.arms.siftArm, siftArms()),
-		armIsKnown("--done-review", plan.arms.doneArm, settingspkg.DoneReviews()),
-		armIsKnown("--tools", plan.arms.toolSet, []string{toolSetFull, toolSetThree}),
+		armIsKnown("--gate", plan.arms.GateArm, gateArms()),
+		armIsKnown("--sift", plan.arms.SiftArm, siftArms()),
+		armIsKnown("--done-review", plan.arms.DoneArm, settingspkg.DoneReviews()),
+		armIsKnown("--tools", plan.arms.ToolSet, []string{toolSetFull, toolSetThree}),
 		armIsKnown("--source", plan.source, []string{string(cred.ClaudeSub), string(cred.CodexSub)}),
 	); err != nil {
 		return refuse("", err)
@@ -1003,7 +1004,7 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		_ = os.Setenv(cassetteVariable, plan.cassette)
 	}
 	if plan.host {
-		_ = os.Setenv(doneReviewVariable, plan.arms.doneArm)
+		_ = os.Setenv(doneReviewVariable, plan.arms.DoneArm)
 	}
 	clock, err := driveClock(deck)
 	if err != nil {

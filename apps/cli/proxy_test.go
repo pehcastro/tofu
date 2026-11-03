@@ -19,6 +19,7 @@ import (
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
 	"tofu/internal/models/llm/core"
+	testkit "tofu/internal/testkit/cli"
 )
 
 const standInProxySource = `package main
@@ -157,7 +158,7 @@ func runOneBashCall(t *testing.T, project string) turn.ToolCallRow {
 	if err != nil {
 		t.Fatalf("parseRunArgs: %v", err)
 	}
-	built, err := buildTestRunTools(project, opts.toolSet)
+	built, err := buildTestRunTools(project, opts.ToolSet)
 	if err != nil {
 		t.Skipf("this machine cannot build the run tools, so no command can be run at all: %v", err)
 	}
@@ -197,7 +198,7 @@ func TestAProjectTurningTheProxyOnRewritesTheCommandARunActuallyExecutes(t *test
 }
 
 func TestTheShippedDefaultRewritesTheCommandThroughRtk(t *testing.T) {
-	isolateHome(t)
+	testkit.IsolateHome(t)
 	log := standInProxyOnPath(t)
 	project := projectWithProxySheet(t, "")
 
@@ -212,7 +213,7 @@ func TestTheShippedDefaultRewritesTheCommandThroughRtk(t *testing.T) {
 }
 
 func TestWithRtkMissingTheShippedDefaultRunsTheCommandAsAskedAndSaysWhy(t *testing.T) {
-	isolateHome(t)
+	testkit.IsolateHome(t)
 	project := projectWithProxySheet(t, "")
 	t.Setenv("PATH", t.TempDir())
 
@@ -227,7 +228,7 @@ func TestWithRtkMissingTheShippedDefaultRunsTheCommandAsAskedAndSaysWhy(t *testi
 }
 
 func TestOneLineInAProjectTurnsTheShippedProxyOff(t *testing.T) {
-	isolateHome(t)
+	testkit.IsolateHome(t)
 	log := standInProxyOnPath(t)
 	project := projectWithProxySheet(t, "use: off\n")
 
@@ -242,7 +243,7 @@ func TestOneLineInAProjectTurnsTheShippedProxyOff(t *testing.T) {
 }
 
 func TestLibraryNamesTheProxySettingAndTheLayerItCameFrom(t *testing.T) {
-	isolateHome(t)
+	testkit.IsolateHome(t)
 	project := projectWithProxySheet(t, "use: rtk\ntimeout_ms: 5000\n")
 
 	code, report, text := libraryJSON(t)
@@ -256,7 +257,7 @@ func TestLibraryNamesTheProxySettingAndTheLayerItCameFrom(t *testing.T) {
 }
 
 func TestLibraryNamesARefusedProxyFileAndTheFieldThatFailed(t *testing.T) {
-	isolateHome(t)
+	testkit.IsolateHome(t)
 	projectWithProxySheet(t, "use: maybe\ntimeout_ms: 5000\n")
 
 	code, report, text := libraryJSON(t)

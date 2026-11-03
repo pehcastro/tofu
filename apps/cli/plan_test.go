@@ -8,8 +8,10 @@ import (
 	"testing"
 
 	"tofu/internal/cli/output"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
+	testkit "tofu/internal/testkit/cli"
 	"tofu/internal/tools/registry"
 	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/chat/session"
@@ -18,7 +20,7 @@ import (
 func TestADryRunListsThePlanToolAndTheOffArmDoesNot(t *testing.T) {
 	t.Setenv("TYPESAFE_API_KEY", "")
 	var out, errOut bytes.Buffer
-	if code := runVerb([]string{"--dir", t.TempDir(), "--wire", wireSubscription, "--dry-run", "write hello.txt"}, &out, &errOut); code != output.ExitOK {
+	if code := runVerb([]string{"--dir", t.TempDir(), "--wire", wiring.WireSubscription, "--dry-run", "write hello.txt"}, &out, &errOut); code != output.ExitOK {
 		t.Fatalf("tofu run --dry-run exited %d: %s", code, errOut.String())
 	}
 	var body struct {
@@ -71,7 +73,7 @@ func lastPlan(events []tui.Event) ([]session.PlanItem, int) {
 }
 
 func TestAPlanStatedDuringATurnReachesTheView(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	model := &sendModel{queued: []llm.Decision{
 		planCall("call-1", `{"op":"set","items":[{"phase":"read","text":"read the gate"},{"phase":"write","text":"wire the plan tool"}]}`),
 		planCall("call-2", `{"op":"start","item":"read the gate"}`),
@@ -95,7 +97,7 @@ func TestAPlanStatedDuringATurnReachesTheView(t *testing.T) {
 }
 
 func TestATurnThatStatesNoPlanHandsTheViewNothingToDraw(t *testing.T) {
-	dir := scratchProject(t)
+	dir := testkit.ScratchProject(t)
 	var events eventLog
 	stubbedTurn(dir, noteThenStop())(t.Context(), onTheSubscription, "write the note", events.add)
 

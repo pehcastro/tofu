@@ -12,8 +12,10 @@ import (
 	"testing"
 
 	"tofu/internal/cli/output"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/sys"
+	testkit "tofu/internal/testkit/cli"
 )
 
 var builtTofu struct {
@@ -65,17 +67,6 @@ func newProject(t *testing.T, name string) project {
 	return made
 }
 
-func writeFile(t *testing.T, root, name, body string) {
-	t.Helper()
-	path := filepath.Join(root, filepath.FromSlash(name))
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func runBinary(t *testing.T, dir string, env []string, args ...string) (string, int) {
 	t.Helper()
 	command := exec.Command(tofuBinary(t), args...)
@@ -113,8 +104,8 @@ func TestE2ETheCredentialGuardRefusesAPlantedFileWithNoUSERPROFILE(t *testing.T)
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(plant) })
-	writeFile(t, plant, ".env", sys.TypeSafeKeyName+"=planted-not-real\n")
-	writeFile(t, plant, ".tofu/roles/classifier.yaml", "model: typesafe/jev-latest\n")
+	testkit.WriteFile(t, plant, ".env", sys.TypeSafeKeyName+"=planted-not-real\n")
+	testkit.WriteFile(t, plant, ".tofu/roles/classifier.yaml", "model: typesafe/jev-latest\n")
 	plantedEnv, err := filepath.Abs(filepath.Join(plant, ".env"))
 	if err != nil {
 		t.Fatal(err)
@@ -135,23 +126,15 @@ func TestE2ETheCredentialGuardRefusesAPlantedFileWithNoUSERPROFILE(t *testing.T)
 
 func TestModelsLoadAndBindAClassifierWithNoHome(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, dir, ".tofu/roles/classifier.yaml", "model: typesafe/jev-latest\n")
+	testkit.WriteFile(t, dir, ".tofu/roles/classifier.yaml", "model: typesafe/jev-latest\n")
 	t.Chdir(dir)
 	t.Setenv("USERPROFILE", "")
 	t.Setenv("HOME", "")
-	bound, err := boundClassifier()
+	bound, err := wiring.BoundClassifier()
 	if err != nil {
 		t.Fatalf("with no home the model library did not load: %v", err)
 	}
 	if classifier.KeyName(bound.Provider) == "" {
 		t.Fatalf("with no home the classifier %q names no key", bound.Slug())
 	}
-}
-
-func sameText(t *testing.T, what, got, want string) {
-	t.Helper()
-	if got == want {
-		return
-	}
-	t.Fatalf("%s\n--- tofu printed ---\n%s\n--- the state says it should print ---\n%s", what, got, want)
 }
