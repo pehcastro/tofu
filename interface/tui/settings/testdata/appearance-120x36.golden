@@ -9,7 +9,7 @@
     Context         17      Spacing across lists and panels                               tofu dusk                     
     Files           03                                                                                                  
     Shell           04      Animations                                     subtle  ▾     HOW IT WORKS                   
-    Turn            18      Motion for conversational states                             Enter opens a focused          
+    Turn            19      Motion for conversational states                             Enter opens a focused          
     Projects        06                                                                   choice. Changes preview        
     Browser         09      Status bar                                    compact  ▾     immediately; Esc keeps the     
                             Context, quotas, and runtime counters                        prior value.                   
