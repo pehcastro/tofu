@@ -57,7 +57,7 @@ func offered(options Options, needs command.Needs) bool {
 		return options.BranchAt != nil
 	case command.Undo:
 		return options.Undo != nil
-	case command.Cron, command.Turn, command.DiffTurn:
+	case command.Cron, command.Turn, command.DiffTurn, command.Standing:
 		return options.Host != nil
 	}
 	panic("tui: unknown command need " + string(needs))
@@ -125,6 +125,8 @@ func (a *App) runCommand(name string) tea.Cmd {
 		return a.push(a.memoryDialog())
 	case "remember":
 		a.view.Append(session.Entry{Kind: session.Note, Body: rememberUsage})
+	case "permissions":
+		a.listStanding()
 	case "reload":
 		a.reload()
 	case "resume":
@@ -364,6 +366,11 @@ func (a *App) carryHeld() {
 
 func (a *App) commandWithArgument() bool {
 	draft := a.view.Draft()
+	if which, asked := strings.CutPrefix(draft, permissionsRevoke); asked && a.options.Host != nil {
+		a.view.Reset()
+		a.revokeStanding(strings.TrimSpace(which))
+		return true
+	}
 	var change func() string
 	if count, asked := strings.CutPrefix(draft, undoWithCount); asked && a.options.Undo != nil {
 		change = func() string { return a.options.Undo(strings.TrimSpace(count)) }

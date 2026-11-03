@@ -73,20 +73,23 @@ func (in standingIn) carried() ([]byte, error) {
 	return nil, err
 }
 
-func (in standingIn) read() (map[string]Answer, map[string]time.Time, error) {
-	standing, until := map[string]Answer{}, map[string]time.Time{}
+func (in standingIn) read() (standing map[string]Answer, until, given map[string]time.Time, err error) {
+	standing, until, given = map[string]Answer{}, map[string]time.Time{}, map[string]time.Time{}
 	if in.id == "" {
-		return standing, until, nil
+		return standing, until, given, nil
 	}
 	body, err := in.carried()
 	if err != nil {
-		return standing, until, err
+		return standing, until, given, err
 	}
 	var kept []StandingAnswer
 	if json.Unmarshal(body, &kept) != nil {
-		return standing, until, nil
+		return standing, until, given, nil
 	}
 	for _, one := range slices.DeleteFunc(kept, heldInMemoryOnly) {
+		if !one.Given.IsZero() {
+			given[one.Target] = one.Given
+		}
 		switch one.Decision {
 		case AllowAlways:
 			standing[one.Target] = AlwaysHere
@@ -98,14 +101,14 @@ func (in standingIn) read() (map[string]Answer, map[string]time.Time, error) {
 			}
 		}
 	}
-	return standing, until, nil
+	return standing, until, given, nil
 }
 
-func (in standingIn) keep(standing map[string]Answer, until map[string]time.Time) error {
+func (in standingIn) keep(standing map[string]Answer, until, given map[string]time.Time) error {
 	if in.id == "" {
 		return nil
 	}
-	body, err := json.MarshalIndent(slices.DeleteFunc(listed(standing, until), heldInMemoryOnly), "", "  ")
+	body, err := json.MarshalIndent(slices.DeleteFunc(listed(standing, until, given), heldInMemoryOnly), "", "  ")
 	if err != nil {
 		return err
 	}
@@ -123,17 +126,17 @@ func heldInMemoryOnly(one StandingAnswer) bool {
 	return one.Decision != RejectAlways && turn.PlacesCode(one.Target)
 }
 
-func listed(standing map[string]Answer, until map[string]time.Time) []StandingAnswer {
+func listed(standing map[string]Answer, until, given map[string]time.Time) []StandingAnswer {
 	now := []StandingAnswer{}
 	for _, place := range slices.Sorted(maps.Keys(standing)) {
 		switch standing[place] {
 		case AlwaysHere:
-			now = append(now, StandingAnswer{Target: place, Decision: AllowAlways})
+			now = append(now, StandingAnswer{Target: place, Decision: AllowAlways, Given: given[place]})
 		case NeverHere:
-			now = append(now, StandingAnswer{Target: place, Decision: RejectAlways})
+			now = append(now, StandingAnswer{Target: place, Decision: RejectAlways, Given: given[place]})
 		case AllowedAWhile:
 			if time.Now().Before(until[place]) {
-				now = append(now, StandingAnswer{Target: place, Decision: AllowFor, Until: until[place]})
+				now = append(now, StandingAnswer{Target: place, Decision: AllowFor, Given: given[place], Until: until[place]})
 			}
 		}
 	}

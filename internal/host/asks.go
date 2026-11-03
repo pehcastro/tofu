@@ -17,6 +17,7 @@ type asks struct {
 	waiting  []waitingAsk
 	standing map[string]Answer
 	until    map[string]time.Time
+	given    map[string]time.Time
 	held     standingIn
 	session  func() standingIn
 	unkept   func(error)
@@ -37,9 +38,9 @@ func (a *asks) follow() {
 	a.held = now
 	var keepErr error
 	if now.unwrittenForkOf(before) {
-		keepErr = now.keep(a.standing, a.until)
+		keepErr = now.keep(a.standing, a.until, a.given)
 	} else {
-		a.standing, a.until, _ = now.read()
+		a.standing, a.until, a.given, _ = now.read()
 	}
 	a.mu.Unlock()
 	a.report(keepErr)
@@ -66,7 +67,7 @@ func (a *asks) standingNow() []StandingAnswer {
 	a.follow()
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return listed(a.standing, a.until)
+	return listed(a.standing, a.until, a.given)
 }
 
 func (a *asks) wait(id, standsAt string) (<-chan Answer, func()) {
@@ -106,11 +107,11 @@ func (a *asks) grant(id string, given Answer, until time.Time, said *Resolution)
 	stands = asked.place != "" && (given == AlwaysHere || given == NeverHere || given == AllowedAWhile)
 	var keepErr error
 	if stands {
-		a.standing[asked.place] = given
+		a.standing[asked.place], a.given[asked.place] = given, time.Now().UTC()
 		if given == AllowedAWhile {
 			a.until[asked.place] = until
 		}
-		keepErr = a.held.keep(a.standing, a.until)
+		keepErr = a.held.keep(a.standing, a.until, a.given)
 	}
 	if said != nil {
 		bound := *said
@@ -126,7 +127,7 @@ func (a *asks) grant(id string, given Answer, until time.Time, said *Resolution)
 func (a *asks) revoke(place string) (StandingAnswer, bool) {
 	a.follow()
 	a.mu.Lock()
-	now := listed(a.standing, a.until)
+	now := listed(a.standing, a.until, a.given)
 	at := slices.IndexFunc(now, func(one StandingAnswer) bool { return one.Target == place })
 	if at < 0 {
 		a.mu.Unlock()
@@ -135,7 +136,8 @@ func (a *asks) revoke(place string) (StandingAnswer, bool) {
 	gone := now[at]
 	delete(a.standing, place)
 	delete(a.until, place)
-	keepErr := a.held.keep(a.standing, a.until)
+	delete(a.given, place)
+	keepErr := a.held.keep(a.standing, a.until, a.given)
 	a.mu.Unlock()
 	a.report(keepErr)
 	return gone, true

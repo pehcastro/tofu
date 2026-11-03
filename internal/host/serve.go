@@ -314,6 +314,11 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 		return handle(raw, func(NoParams) (any, error) { return s.state(), nil })
 	case "session.set":
 		return handle(raw, s.set)
+	case "approval.list":
+		return handle(raw, func(NoParams) (any, error) {
+			focus := s.focus().host
+			return ApprovalList{Session: focus.ID(), Standing: focus.Standing()}, nil
+		})
 	case "approval.revoke":
 		return handle(raw, s.revoke)
 	case "session.open":

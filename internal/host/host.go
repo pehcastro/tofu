@@ -177,7 +177,7 @@ func New(cfg Config) (*Host, []string) {
 		member:      MemberTUI,
 		id:          cfg.Resumed.Session,
 		started:     hook.SessionStartup,
-		asks:        &asks{standing: map[string]Answer{}, until: map[string]time.Time{}},
+		asks:        &asks{standing: map[string]Answer{}, until: map[string]time.Time{}, given: map[string]time.Time{}},
 		questions:   &replies[answeredQuestion]{},
 		memoryPicks: &replies[memory.Scope]{},
 		bus:         bus{heard: map[string]Resolution{}, noted: map[string]Resolution{}},
@@ -541,14 +541,30 @@ func (h *Host) Revoke(target string) (StandingAnswer, bool) {
 		}
 		return reply.Standing[0], true
 	}
-	return h.asks.revoke(target)
+	gone, revoked := h.asks.revoke(target)
+	if revoked {
+		gone = withKept(gone)
+	}
+	return gone, revoked
 }
 
 func (h *Host) Standing() []StandingAnswer {
 	if f := h.following.Load(); f != nil {
 		return append([]StandingAnswer{}, f.ask(followAsk{Op: followStanding}).Standing...)
 	}
-	return h.asks.standingNow()
+	now := h.asks.standingNow()
+	for at := range now {
+		now[at] = withKept(now[at])
+	}
+	return now
+}
+
+func withKept(one StandingAnswer) StandingAnswer {
+	one.Kept = KeptBesideSession
+	if heldInMemoryOnly(one) {
+		one.Kept = KeptUntilRestart
+	}
+	return one
 }
 
 func (h *Host) ClosingBy(by string) { h.endedBy(by, "process "+strconv.Itoa(os.Getpid())+" quit") }

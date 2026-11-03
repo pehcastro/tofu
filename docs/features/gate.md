@@ -2,7 +2,7 @@
 title: The gate
 description: Jev judges every tool call before it runs, and a call that waits for you waits a few minutes at most, then is decided so the turn and its cron jobs go on.
 order: 21
-updated: 2026-10-28
+updated: 2026-11-03
 ---
 
 Before a tool call runs, such as a shell command or a file write, Jev, a
@@ -76,6 +76,22 @@ tofu settings set gatePrompt ask
 ```
 
 The next ask reads a new value, so a change needs no restart.
+
+See every always here and never here answer standing in this session, what
+it allows or refuses, where it holds, when it was given and until when:
+
+```text
+/permissions
+```
+
+Take one back by its number, so the next call on its target asks you again:
+
+```text
+/permissions revoke 1
+```
+
+A frontend over `tofu serve` reads the same list with `approval.list` and
+takes one back with `approval.revoke`.
 
 ## Settings
 

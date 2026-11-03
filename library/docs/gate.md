@@ -19,6 +19,8 @@ A call on a shell tofu itself started is allowed without asking jev. The `gatePr
   by the person`. Always here and never here decide each later call on that
   target unasked, as a `standing` ledger row. They are kept beside the
   session and read back after a restart or `--continue`, never in another.
+  `/permissions` lists each one standing, numbered: what it allows or
+  refuses, where it holds, when it was given and until when.
 
 A call that changes tofu's settings, hooks or hook trust files waits for you in both modes unless jev denies it: through `settings`, `write`,
 `edit`, or `bash` (including `tofu settings set` and `tofu hooks trust`).
@@ -93,7 +95,13 @@ lists each done move's stored `open` reading with its verdict at the threshold i
 
     tofu settings set gatePrompt run
 
-goes back to recording without waiting. When a verdict was wrong, write what it should have been onto its row in the ledger:
+goes back to recording without waiting. To take back an always here or a
+never here answer, so the next call on its target asks you again:
+
+    /permissions revoke 1
+
+`tofu serve` answers the same list as `approval.list`, and `approval.revoke`
+takes one back by its `target`. When a verdict was wrong, write what it should have been onto its row in the ledger:
 
     tofu label --last allow
     tofu label <id> deny

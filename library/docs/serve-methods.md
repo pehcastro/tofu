@@ -30,9 +30,9 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
   a request with no `session` means the one opened last. `session.close` takes `session` and `stop`, and
   errs while that session's turn runs unless `stop` is true, and on the only session open
 - `session.state`, the answer to `resync`: `running` and its `turn`, `asking`, the `pick`, waiting approvals,
-  `standing` answers (`target`, `decision`; kept beside the session, read back when it reopens, carried into
-  its compaction and never into another session), open `questions`, sub-agents, kept shells (each with `port`
-  once tofu learns it and `ref`, the quote of the call that started it), the context and the cron jobs
+  `standing` answers (`target`, `decision`, `given`, `until`, `kept`: `session`, beside the session, read back when it reopens, carried into
+  its compaction and never into another session, or `process`, held until tofu restarts), open `questions`, sub-agents, kept shells (each with `port` once tofu learns it and `ref`, the quote of the call that started it), the context and the cron jobs
+- `approval.list` (capability `standing`): answers `session` and `standing`, every answer standing there, as `session.state` does, and `/permissions` shows; `approval.revoke` takes `target` and answers the one it took back, or errs when none stands there
 - `session.set`: takes `asking`, `wire`, `model` and `effort`, held for later turns and cron fires; `session.settings` tells every client
 - `session.rename`: takes `session` and `name`, and names the whole family
 - `session.compact` (capability `compact`): takes `session` and `focus`, kept whole in every old tool result that names it; answers `kind`, `results`, `focus`, `focused`, `tokensBefore`, `tokensAfter`, `into`, and errs on a session opened beside the first. `session.fork` (capability `fork`): takes `session`; opens a new line carrying what `session.compact` carries, even with nothing to shrink, and answers the same with `kind: "fork"`, or errs with nothing to fork. `session.branch` with `kind: "main"` (capability `branch`) takes `session` and `message`, the Nth message from the person; answers `session`, `handle`, `parent`, `carried`, the messages before it, and `words`, that message's text, keeping the old line open; with no `message` it errs listing the messages by number. `session.history`: takes `session`, `limit` and `before`; answers `lines`, each

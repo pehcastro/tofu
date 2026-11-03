@@ -731,7 +731,25 @@ type ApprovalRequest struct {
 type StandingAnswer struct {
 	Target   string           `json:"target"`
 	Decision ApprovalDecision `json:"decision"`
+	Given    time.Time        `json:"given,omitzero"`
 	Until    time.Time        `json:"until,omitzero"`
+	Kept     StandingKept     `json:"kept,omitempty"`
+}
+
+type StandingKept string
+
+const (
+	KeptBesideSession StandingKept = "session"
+	KeptUntilRestart  StandingKept = "process"
+)
+
+func (StandingKept) enum() []string {
+	return []string{string(KeptBesideSession), string(KeptUntilRestart)}
+}
+
+type ApprovalList struct {
+	Session  string           `json:"session"`
+	Standing []StandingAnswer `json:"standing"`
 }
 
 type ApprovalAnswer struct {
@@ -1326,6 +1344,7 @@ func requests() []method {
 		{name: "session.open", params: SessionOpenParams{}, result: SessionOpenResult{}},
 		{name: "session.close", params: SessionCloseParams{}, result: Ack{}},
 		{name: "session.state", params: NoParams{}, result: SessionState{}},
+		{name: "approval.list", params: NoParams{}, result: ApprovalList{}},
 		{name: "approval.revoke", params: ApprovalRevokeParams{}, result: StandingAnswer{}},
 		{name: "session.set", params: SessionSetParams{}, result: Ack{}},
 		{name: "session.rename", params: SessionRenameParams{}, result: Ack{}},
@@ -1410,7 +1429,7 @@ func requests() []method {
 }
 
 func capabilities() []string {
-	return []string{"approvals", "revoke", "questions", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "sendNow", "run", "compact", "fork", "branch", "history", "ledger",
+	return []string{"approvals", "revoke", "standing", "questions", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "sendNow", "run", "compact", "fork", "branch", "history", "ledger",
 		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "drain", "accounts", "writes", "status", "mention", "boards", "side", "commands", "boardy", "scratch", "sessions", "takeover"}
 }
 
