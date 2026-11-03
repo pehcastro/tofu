@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -19,6 +20,7 @@ import (
 	"tofu/interface/cli"
 	"tofu/internal/drain"
 	"tofu/internal/host"
+	"tofu/internal/judge/ledger"
 	"tofu/internal/llm/quota"
 	"tofu/internal/session"
 	"tofu/internal/sys"
@@ -51,11 +53,65 @@ func usageVerb(args []string, out, errOut io.Writer) int {
 		return usageHistoryVerb(out, errOut, o.asJSON)
 	}
 	now := time.Now()
-	answer, err := readUsage(now)
+	report, err := readUsage(now)
 	if err != nil {
 		return o.fail(err)
 	}
-	return o.done(true, answer, func(page cli.Page) []string { return usagePage(page, answer, now) })
+	classifier, err := readClassifierSpend(now)
+	if err != nil {
+		return o.fail(err)
+	}
+	answer := usageAnswer{UsageReport: report, Classifier: classifier}
+	return o.done(true, answer, func(page cli.Page) []string {
+		lines := append(usagePage(page, report, now), "", page.Section("classifier", cli.Verdict{}))
+		return append(lines, cli.Indent(page.Facts([]cli.Fact{
+			{Label: "calls", Text: strconv.Itoa(classifier.Calls) + " in the last " + classifier.Window},
+			{Label: "spend", Text: fmt.Sprintf("USD %.5f charged, USD %.5f at list price, %d unpriced", classifier.ChargedUSD, classifier.ListUSD, classifier.Unpriced)},
+		})...)...)
+	})
+}
+
+type classifierSpend struct {
+	Window     string  `json:"window"`
+	Calls      int     `json:"calls"`
+	ChargedUSD float64 `json:"charged_usd"`
+	ListUSD    float64 `json:"list_usd"`
+	Unpriced   int     `json:"unpriced_calls"`
+}
+
+type usageAnswer struct {
+	host.UsageReport
+	Classifier classifierSpend `json:"classifier"`
+}
+
+func readClassifierSpend(now time.Time) (classifierSpend, error) {
+	dir, err := sys.LogDir()
+	if err != nil {
+		return classifierSpend{}, err
+	}
+	spend := classifierSpend{Window: strconv.Itoa(int(usageDay.Hours())) + "h"}
+	_, err = ledger.NewReader(dir).Each(ledger.Filter{Since: now.Add(-usageDay), Until: now}, func(row ledger.Row) error {
+		if row.ReplayOf != "" {
+			return nil
+		}
+		spend.Calls++
+		if row.Charge == nil {
+			spend.Unpriced++
+			return nil
+		}
+		switch row.Charge.Source {
+		case ledger.ChargeProvider:
+			spend.ChargedUSD += row.Charge.USD
+		case ledger.ChargeList:
+			spend.ListUSD += row.Charge.USD
+		case ledger.ChargeNone:
+			spend.Unpriced++
+		default:
+			return fmt.Errorf("ledger row %s carries the unknown charge source %q", row.ID, row.Charge.Source)
+		}
+		return nil
+	})
+	return spend, err
 }
 
 func usageFail(errOut io.Writer, err error) int {

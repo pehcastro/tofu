@@ -96,6 +96,12 @@ const (
 
 	ThresholdDeadBand = 0.06
 
+	CalibrateCutCeiling   = 3.0
+	CalibrateCutSteps     = 24
+	CalibrateGapTolerance = 0.02
+	CalibrateSignificance = 0.05
+	CalibrateErrorBins    = 10
+
 	TransportErrorDetailBytes = 512
 	TransportRequestIDBytes   = 8
 

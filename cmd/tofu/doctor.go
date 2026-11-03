@@ -114,7 +114,9 @@ func doctorState(now time.Time) doctorReport {
 	for i, point := range rules {
 		if point.Point == shellSiftPoint {
 			rules[i] = shellSiftRule(point)
+			continue
 		}
+		rules[i] = withLockStanding(point)
 	}
 	home, _ := os.UserHomeDir()
 	report := doctorReport{
@@ -147,6 +149,27 @@ func doctorState(now time.Time) doctorReport {
 		report.Verdict = doctorNotReady
 	}
 	return report
+}
+
+func withLockStanding(point doctorRule) doctorRule {
+	if point.Fallback != "" || point.Unusable != "" {
+		return point
+	}
+	r, _, err := loadRulePoint(point.Point, "")
+	dir, dirErr := sys.CalibrationDir()
+	if err != nil || dirErr != nil {
+		return point
+	}
+	if present, _ := sys.Exists(gate.LockPath(dir, r)); !present {
+		return point
+	}
+	res, err := resolveRuleMode(r)
+	if err != nil {
+		point.Unusable = err.Error()
+		return point
+	}
+	point.Fallback = res.Reason
+	return point
 }
 
 func shellSiftRule(point doctorRule) doctorRule {

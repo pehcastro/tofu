@@ -1,6 +1,9 @@
 package gate
 
-import "fmt"
+import (
+	"fmt"
+	"path/filepath"
+)
 
 type Current struct {
 	Build            string
@@ -31,44 +34,54 @@ func Resolve(r Rule, lookup LockLookup, current Current) Resolution {
 }
 
 func resolveMode(r Rule, lookup LockLookup, current Current) (Mode, string) {
-	point := fmt.Sprintf("%s@%d", r.Name, r.RuleVersion)
 	if !r.ModeDeclared {
 		return ModeShadow, "the rule declares no mode"
 	}
-	if r.Mode == ModeShadow {
+	held := lockHeldBack(r, lookup, current)
+	switch {
+	case r.Mode != ModeShadow && held != "":
+		return ModeShadow, held
+	case r.Mode != ModeShadow:
+		return ModeEnforced, ""
+	case !lookup.Present:
 		return ModeShadow, "declared shadow in " + r.File
+	case lookup.Err != nil:
+		return ModeShadow, "declared shadow in " + r.File + "; " + held
+	case held != "":
+		return ModeShadow, fmt.Sprintf("declared shadow in %s; the lock %s fits risk_ask_at %g and would still hold it in shadow: %s", r.File, filepath.Base(lookup.Lock.File), lookup.Lock.Thresholds.RiskAskAt, held)
 	}
+	return ModeShadow, fmt.Sprintf("declared shadow in %s; the lock %s fits risk_ask_at %g and holds, so declaring enforced would enforce it", r.File, filepath.Base(lookup.Lock.File), lookup.Lock.Thresholds.RiskAskAt)
+}
+
+func lockHeldBack(r Rule, lookup LockLookup, current Current) string {
+	point := fmt.Sprintf("%s@%d", r.Name, r.RuleVersion)
 	if !lookup.Present {
 		reason := "no lock file for " + point
 		if current.Known {
 			reason += " at build " + current.Build
 		}
-		return ModeShadow, reason
+		return reason
 	}
 	if lookup.Err != nil {
-		return ModeShadow, fmt.Sprintf("lock file for %s is unreadable: %v", point, lookup.Err)
+		return fmt.Sprintf("lock file for %s is unreadable: %v", point, lookup.Err)
 	}
 	if !current.Known {
-		return ModeShadow, fmt.Sprintf("no rows recorded for %s yet, the current build is unknown", point)
+		return fmt.Sprintf("no rows recorded for %s yet, the current build is unknown", point)
 	}
 	lock := lookup.Lock
 	if lock.Rule != r.Name || lock.RuleVersion != r.RuleVersion || lock.Questions != r.Questions {
-		return ModeShadow, fmt.Sprintf("lock names %s@%d over %s, not %s", lock.Rule, lock.RuleVersion, lock.Questions, point)
+		return fmt.Sprintf("lock names %s@%d over %s, not %s", lock.Rule, lock.RuleVersion, lock.Questions, point)
 	}
 	if lock.Build != current.Build {
-		return ModeShadow, fmt.Sprintf("lock build %s does not match current build %s", lock.Build, current.Build)
+		return fmt.Sprintf("lock build %s does not match current build %s", lock.Build, current.Build)
 	}
 	if lock.QuestionsVersion != current.QuestionsVersion {
-		return ModeShadow, fmt.Sprintf("lock questions_version %d does not match current questions_version %d", lock.QuestionsVersion, current.QuestionsVersion)
+		return fmt.Sprintf("lock questions_version %d does not match current questions_version %d", lock.QuestionsVersion, current.QuestionsVersion)
 	}
-	n := lock.NFit
-	if lock.NVerify < n {
-		n = lock.NVerify
+	if n := min(lock.NFit, lock.NVerify); n < r.SampleFloor {
+		return fmt.Sprintf("sample size %d is below the floor %d, see tofu docs calibration", n, r.SampleFloor)
 	}
-	if n < r.SampleFloor {
-		return ModeShadow, fmt.Sprintf("sample size %d is below the floor %d, .local/research/calibration-design.md §3", n, r.SampleFloor)
-	}
-	return ModeEnforced, ""
+	return ""
 }
 
 func ExitCode(mode Mode, verdict Verdict) int {

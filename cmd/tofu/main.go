@@ -75,6 +75,7 @@ Verbs:
   sift      mark what is worth reading in a message and elide the rest
   label     attach an outcome to a ledger row, by id or the last one
   replay    re-score ledger rows against changed thresholds, no network
+  calibrate fit a decision point's cut on labelled cases and write its lock
   library   resolve a library entry and show the origin of each field
   lint      run a house-rule check over the tree
   rules     list the rule library, run it, read back what fired, or index a task
@@ -361,6 +362,8 @@ func verbNamed(name string) verb {
 		return verb{run: siftVerb}
 	case "label":
 		return verb{withClock(labelVerb), labelUsage}
+	case "calibrate":
+		return verb{withoutIn(calibrateVerb), calibrateUsage}
 	case "replay":
 		return verb{withClock(replayVerb), replayUsage}
 	case "library":

@@ -13,12 +13,20 @@ const (
   ✗ jev           the gate is off because no classifier is bound: store its
     key with tofu login classifier and pick it in Models
     → tofu models bind classifier <provider/model>
+
+classifier
+  calls     0 in the last 24h
+  spend     USD 0.00000 charged, USD 0.00000 at list price, 0 unpriced
 `
 
 	usageWithAKeyAndNothingSignedIn = `Usage                                                           ○ none signed in
 
   ✗ orchestrator  no subscription is signed in, so no model can answer
     → tofu login llm <source>
+
+classifier
+  calls     0 in the last 24h
+  spend     USD 0.00000 charged, USD 0.00000 at list price, 0 unpriced
 `
 
 	usageEnvelopeWithAKeyAndNothingSignedIn = `{
@@ -36,7 +44,14 @@ const (
         "what": "no subscription is signed in, so no model can answer",
         "command": "tofu login llm <source>"
       }
-    ]
+    ],
+    "classifier": {
+      "window": "24h",
+      "calls": 0,
+      "charged_usd": 0,
+      "list_usd": 0,
+      "unpriced_calls": 0
+    }
   },
   "problems": []
 }
