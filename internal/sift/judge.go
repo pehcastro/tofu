@@ -3,13 +3,14 @@ package sift
 import (
 	"fmt"
 	"strings"
-
-	"tofu/internal/judge/thrift/unit"
 )
 
-const NeededQuestion = unit.NeededQuestion
+const NeededQuestion = "still_needed"
 
-type Mark = unit.Mark
+type Mark struct {
+	Keep   bool
+	Reason string
+}
 
 type State struct {
 	Paragraph   string `json:"paragraph"`
@@ -28,8 +29,18 @@ func BuildState(parts []Part, index int, task string) State {
 		Paragraph:   parts[index].Text,
 		Task:        task,
 		AlreadySaid: said.String(),
-		Position:    unit.Position(index, len(parts)),
+		Position:    position(index, len(parts)),
 	}
+}
+
+func position(index, total int) string {
+	switch index {
+	case 0:
+		return "opening"
+	case total - 1:
+		return "closing"
+	}
+	return "middle"
 }
 
 const answerQuestion = "answers_the_task"

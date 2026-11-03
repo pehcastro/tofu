@@ -2,7 +2,7 @@ package calibration
 
 import (
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/thrift/unit"
+	"tofu/internal/sift"
 )
 
 type Threshold struct {
@@ -47,7 +47,7 @@ func Points() []Point {
 		},
 		{
 			Name:     "shell_sift",
-			Question: unit.NeededQuestion,
+			Question: sift.NeededQuestion,
 			Rule:     "library/tools/shell/rules/shell_sift@1.yaml",
 			Thresholds: []Threshold{
 				{Name: "keep_at", Value: 0.5},
