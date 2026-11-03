@@ -159,7 +159,7 @@ func TestEveryListedCommandRunsAndNoneIsAName(t *testing.T) {
 			if content := ansi.Strip(app.View().Content); strings.Contains(content, "there is no /") {
 				t.Fatalf("/%s is listed and does nothing\n%s", known.Name, content)
 			}
-			if !slices.ContainsFunc(command.Table(), func(one command.Command) bool { return one.Name == known.Name && one.Starts() }) {
+			if !slices.ContainsFunc(commands.Table(), func(one commands.Command) bool { return one.Name == known.Name && one.Starts() }) {
 				nothingEntered(t, entered)
 			}
 		})

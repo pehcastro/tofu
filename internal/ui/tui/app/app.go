@@ -401,7 +401,7 @@ func New(options Options) *App {
 	}
 	app.status.Note = options.Note
 	app.status.Fresh = options.Fresh
-	app.view.Commands = commands(options)
+	app.view.Commands = commandList(options)
 	app.settings.SetSearchKey(app.shortcuts[searchAction])
 	app.settings.SetBranch(options.Branch)
 	app.intro = newIntro(options.Fresh, app.text(isettings.Animations) != animationsOff, options.Pose)
@@ -508,7 +508,7 @@ func Run(options Options) error {
 	_, err := program.Run()
 	signal.Stop(hangup)
 	close(hangup)
-	_, _ = io.WriteString(os.Stdout, exitReset+status.Encode(status.Record{State: status.Clear}))
+	_, _ = io.WriteString(os.Stdout, exitReset+statusline.Encode(statusline.Record{State: statusline.Clear}))
 	return err
 }
 

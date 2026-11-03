@@ -187,7 +187,7 @@ func (l *lane) replace(with *replay) {
 
 func newLane(h *Host, release func()) *lane {
 	fresh := newItems(h.ID())
-	return &lane{host: h, release: release, items: &fresh, status: &statusFeed{board: status.Board{Now: time.Now}, acked: map[string]bool{}}, stop: make(chan struct{}), pumped: make(chan struct{})}
+	return &lane{host: h, release: release, items: &fresh, status: &statusFeed{board: statusline.Board{Now: time.Now}, acked: map[string]bool{}}, stop: make(chan struct{}), pumped: make(chan struct{})}
 }
 
 func (l *lane) running() bool {

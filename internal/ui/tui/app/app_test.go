@@ -902,7 +902,7 @@ func TestReloadAppearsInTheCommandMenuAndCallsTheVerb(t *testing.T) {
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 
 	found := false
-	for _, command := range commands(app.options) {
+	for _, command := range commandList(app.options) {
 		if command.Name == "reload" {
 			found = true
 		}

@@ -97,13 +97,13 @@ func TestServeKeepsASessionRunningWhileAnotherOpens(t *testing.T) {
 	var all StatusList
 	c.ask("8", "status.list", `{}`)
 	c.answer("8", &all)
-	leads := map[string]status.State{}
+	leads := map[string]statusline.State{}
 	for _, record := range all.Records {
 		if record.ID == statusApp {
 			leads[record.Session] = record.State
 		}
 	}
-	if leads[a.Session] != status.Blocked || leads[b.Session] != status.Done {
+	if leads[a.Session] != statusline.Blocked || leads[b.Session] != statusline.Done {
 		t.Errorf("status.list {} leads by session = %v, want A blocked and B done", leads)
 	}
 	var onlyA StatusList

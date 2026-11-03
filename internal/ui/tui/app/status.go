@@ -24,8 +24,8 @@ const (
 )
 
 type statusWatch struct {
-	shown   status.Board
-	after   status.State
+	shown   statusline.Board
+	after   statusline.State
 	failure string
 	failed  string
 	cron    string
@@ -33,8 +33,8 @@ type statusWatch struct {
 	asks    []Event
 	seen    map[string]time.Time
 	rows    []host.SubAgentRow
-	agents  []status.Record
-	records []status.Record
+	agents  []statusline.Record
+	records []statusline.Record
 }
 
 func (w *statusWatch) askOf(agent string) (Event, bool) {
@@ -50,10 +50,10 @@ func sameForStatus(a, b host.SubAgentRow) bool {
 	return a.Name == b.Name && a.Parent == b.Parent && a.Doing == b.Doing && a.State == b.State
 }
 
-func (a *App) agentRecords() []status.Record {
+func (a *App) agentRecords() []statusline.Record {
 	watch := &a.statusWatch
 	if !slices.EqualFunc(watch.rows, a.subAgents, sameForStatus) {
-		watch.rows, watch.agents = slices.Clone(a.subAgents), make([]status.Record, len(a.subAgents))
+		watch.rows, watch.agents = slices.Clone(a.subAgents), make([]statusline.Record, len(a.subAgents))
 		for index, row := range a.subAgents {
 			watch.agents[index] = host.AgentStatus(row, a.subAgents)
 		}
@@ -85,13 +85,13 @@ func (a *App) followStatus(msg tea.Msg) {
 			watch.cron = msg.Origin.Job
 		}
 	case Closed:
-		watch.after = status.Done
+		watch.after = statusline.Done
 		watch.asks = slices.DeleteFunc(watch.asks, func(asked Event) bool { return asked.Questions == nil })
 		switch {
 		case watch.failure != "":
-			watch.after = status.Errored
+			watch.after = statusline.Errored
 		case a.view.Stopping || watch.focus == focusIn:
-			watch.after = status.Idle
+			watch.after = statusline.Idle
 		}
 		watch.failed, watch.failure = watch.failure, ""
 	}
@@ -99,14 +99,14 @@ func (a *App) followStatus(msg tea.Msg) {
 
 func (a *App) leadSeen() {
 	if !a.busy {
-		a.statusWatch.after, a.statusWatch.cron = status.Idle, ""
+		a.statusWatch.after, a.statusWatch.cron = statusline.Idle, ""
 	}
 }
 
 func (a *App) reportStatus() tea.Cmd {
 	var reports strings.Builder
 	for _, record := range a.statusWatch.shown.Sync(a.statusRecords()) {
-		reports.WriteString(status.Encode(record))
+		reports.WriteString(statusline.Encode(record))
 	}
 	if reports.Len() == 0 {
 		return nil
@@ -114,31 +114,31 @@ func (a *App) reportStatus() tea.Cmd {
 	return tea.Raw(reports.String())
 }
 
-func (a *App) statusRecords() []status.Record {
+func (a *App) statusRecords() []statusline.Record {
 	watch := &a.statusWatch
-	lead := status.Record{State: status.Idle, App: statusApp, Title: a.sessionName}
+	lead := statusline.Record{State: statusline.Idle, App: statusApp, Title: a.sessionName}
 	if a.busy {
-		lead.State = status.Working
+		lead.State = statusline.Working
 	} else if watch.after != "" {
 		lead.State = watch.after
 	}
-	if lead.State == status.Errored {
+	if lead.State == statusline.Errored {
 		lead.Msg = watch.failed
 	}
 	if ask, blocked := watch.askOf(""); blocked {
-		lead.State = status.Blocked
+		lead.State = statusline.Blocked
 		lead.Kind, lead.Msg = host.AskStatus(ask)
 	}
 	records := watch.records[:0]
 	records = append(records, lead)
 	if watch.cron != "" {
-		records = append(records, status.Record{ID: status.Path("cron", watch.cron), State: lead.State, Kind: lead.Kind, Title: watch.cron, Msg: lead.Msg})
+		records = append(records, statusline.Record{ID: statusline.Path("cron", watch.cron), State: lead.State, Kind: lead.Kind, Title: watch.cron, Msg: lead.Msg})
 	}
 	agents := a.agentRecords()
 	for index, row := range a.subAgents {
 		record := agents[index]
 		if ask, blocked := watch.askOf(row.Name); blocked {
-			record.State = status.Blocked
+			record.State = statusline.Blocked
 			record.Kind, record.Msg = host.AskStatus(ask)
 		}
 		if a.unseen(record, row.Ended, a.current == screenAgents) {
@@ -147,7 +147,7 @@ func (a *App) statusRecords() []status.Record {
 	}
 	for _, entry := range slices.Backward(a.shells.Entries) {
 		record, ended := shellRecord(entry)
-		if record.State != status.Clear && a.unseen(record, ended, a.current == screenShells) {
+		if record.State != statusline.Clear && a.unseen(record, ended, a.current == screenShells) {
 			records = append(records, record)
 		}
 	}
@@ -155,8 +155,8 @@ func (a *App) statusRecords() []status.Record {
 	return records
 }
 
-func (a *App) unseen(record status.Record, ended time.Time, viewed bool) bool {
-	if record.State != status.Done && record.State != status.Errored {
+func (a *App) unseen(record statusline.Record, ended time.Time, viewed bool) bool {
+	if record.State != statusline.Done && record.State != statusline.Errored {
 		return true
 	}
 	if a.statusWatch.seen == nil {
@@ -168,22 +168,22 @@ func (a *App) unseen(record status.Record, ended time.Time, viewed bool) bool {
 	return !a.statusWatch.seen[record.ID].Equal(ended)
 }
 
-func shellRecord(entry shells.Entry) (status.Record, time.Time) {
-	record := status.Record{ID: status.Path("shells", entry.Name), Title: entry.Name, Msg: entry.Command}
+func shellRecord(entry shells.Entry) (statusline.Record, time.Time) {
+	record := statusline.Record{ID: statusline.Path("shells", entry.Name), Title: entry.Name, Msg: entry.Command}
 	var ended time.Time
 	if entry.Ended != nil {
 		ended = *entry.Ended
 	}
 	switch entry.State {
 	case shells.Running, shells.LeftOver:
-		record.State = status.Working
+		record.State = statusline.Working
 	case shells.Exited:
-		record.State = status.Done
+		record.State = statusline.Done
 		if entry.ExitCode != nil && *entry.ExitCode != 0 {
-			record.State, record.Msg = status.Errored, "exit "+strconv.Itoa(*entry.ExitCode)+": "+entry.Command
+			record.State, record.Msg = statusline.Errored, "exit "+strconv.Itoa(*entry.ExitCode)+": "+entry.Command
 		}
 	case shells.Killed:
-		record.State = status.Clear
+		record.State = statusline.Clear
 	default:
 		panic("tui: unknown shell state " + string(entry.State))
 	}

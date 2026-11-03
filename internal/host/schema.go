@@ -54,7 +54,7 @@ func pinnedNames() map[reflect.Type]string {
 			boardy.TriageRequest{}, boardy.Unacted{}, boardy.View{}, boardy.Words{},
 		},
 		"browser": {browser.NativeHost{}},
-		"command": {command.Command{}},
+		"command": {commands.Command{}},
 		"drain": {
 			drain.Agent{}, drain.Finding{}, drain.Line{}, drain.Rebuild{}, drain.Resident{}, drain.Spend{},
 			drain.Tokens{}, drain.Weights{},

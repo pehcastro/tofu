@@ -1,4 +1,4 @@
-package status
+package statusline
 
 import (
 	"encoding/base64"

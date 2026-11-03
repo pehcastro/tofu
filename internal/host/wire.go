@@ -1436,5 +1436,5 @@ func capabilities() []string {
 const queryPrefix = "query."
 
 type CommandList struct {
-	Commands []command.Command `json:"commands"`
+	Commands []commands.Command `json:"commands"`
 }

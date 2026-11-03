@@ -125,7 +125,7 @@ func (a *App) send() tea.Cmd {
 		return nil
 	}
 	a.rememberPrompt(whole)
-	whole, refused := command.Expand(whole, cmp.Or(a.options.Root, "."))
+	whole, refused := commands.Expand(whole, cmp.Or(a.options.Root, "."))
 	if refused != nil {
 		a.view.Append(session.Entry{Kind: session.Note, Body: refused.Error()})
 		return nil

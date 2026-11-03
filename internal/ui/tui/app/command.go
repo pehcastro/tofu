@@ -29,9 +29,9 @@ const (
 	noSideOpened          = "no side chat was opened: "
 )
 
-func commands(options Options) []session.Command {
+func commandList(options Options) []session.Command {
 	var listed []session.Command
-	for _, one := range command.Table() {
+	for _, one := range commands.Table() {
 		if offered(options, one.Needs) {
 			listed = append(listed, session.Command{Name: one.Name, What: one.Summary})
 		}
@@ -39,25 +39,25 @@ func commands(options Options) []session.Command {
 	return listed
 }
 
-func offered(options Options, needs command.Needs) bool {
+func offered(options Options, needs commands.Needs) bool {
 	switch needs {
-	case command.Always:
+	case commands.Always:
 		return true
-	case command.Reload:
+	case commands.Reload:
 		return options.Reload != nil
-	case command.Resume:
+	case commands.Resume:
 		return options.Resume != nil
-	case command.Fresh:
+	case commands.Fresh:
 		return options.NewSession != nil
-	case command.Compact:
+	case commands.Compact:
 		return options.Compact != nil
-	case command.Fork:
+	case commands.Fork:
 		return options.Fork != nil
-	case command.Branch:
+	case commands.Branch:
 		return options.BranchAt != nil
-	case command.Undo:
+	case commands.Undo:
 		return options.Undo != nil
-	case command.Cron, command.Turn, command.DiffTurn, command.Standing:
+	case commands.Cron, commands.Turn, commands.DiffTurn, commands.Standing:
 		return options.Host != nil
 	}
 	panic("tui: unknown command need " + string(needs))
@@ -150,7 +150,7 @@ func (a *App) runCommand(name string) tea.Cmd {
 		return a.send()
 	case "help":
 		var lines []string
-		for _, one := range command.Table() {
+		for _, one := range commands.Table() {
 			if offered(a.options, one.Needs) {
 				lines = append(lines, strings.TrimSpace("/"+one.Name+" "+one.Args)+"  "+one.Summary)
 			}

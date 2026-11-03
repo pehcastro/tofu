@@ -154,7 +154,7 @@ func (w *historyWalk) linesOf(carry Carry, dir string) []outgoing {
 
 func Serve(cfg ServeConfig) error {
 	s := &server{ServeConfig: cfg, box: newOutbox(), shells: map[string]*watchedShell{}, items: newItems(cfg.Host.ID()),
-		status: statusFeed{board: status.Board{Now: time.Now}, acked: map[string]bool{}}, requota: make(chan struct{}, 1), accounts: map[string]AccountCondition{}, labels: map[string]string{}}
+		status: statusFeed{board: statusline.Board{Now: time.Now}, acked: map[string]bool{}}, requota: make(chan struct{}, 1), accounts: map[string]AccountCondition{}, labels: map[string]string{}}
 	s.seen.files = readSettingsFiles(cfg.Dir)
 	if state, err := sys.ProjectStateDirAt(cfg.Dir); err == nil {
 		s.replays = filepath.Join(state, replayDir)
@@ -1345,7 +1345,7 @@ func (s *server) scanShells(first bool) {
 			continue
 		}
 		watched.stream, watched.base, watched.cursor = "", watched.next(), shell.Cursor{}
-		if !slices.ContainsFunc(watched.records(name), func(record status.Record) bool { return !focus.status.acked[record.ID] }) {
+		if !slices.ContainsFunc(watched.records(name), func(record statusline.Record) bool { return !focus.status.acked[record.ID] }) {
 			delete(s.shells, name)
 		}
 	}

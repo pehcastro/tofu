@@ -71,7 +71,7 @@ func (s *server) data(method string, raw json.RawMessage) (any, error) {
 	case queryPrefix + "settings":
 		return typedVerb[SettingsReport](s, raw, "settings")
 	case queryPrefix + "commands":
-		return handle(raw, func(NoParams) (any, error) { return CommandList{Commands: command.Table()}, nil })
+		return handle(raw, func(NoParams) (any, error) { return CommandList{Commands: commands.Table()}, nil })
 	case queryPrefix + "rules":
 		return handle(raw, func(NoParams) (any, error) {
 			report, err := verbAs[RuleListReport](s, "rules", "list")
