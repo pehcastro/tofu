@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -15,6 +16,7 @@ import (
 	"tofu/internal/judge/jev"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/sys"
 	"tofu/internal/transport"
 )
 
@@ -157,7 +159,7 @@ func liveClient(t *testing.T) *llm.Client {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to call the real route")
 	}
-	key, err := jev.Key("../../../../.env")
+	key, err := jev.KeyFor(filepath.Join(sys.SourceRoot(), ".env"), jev.OpenRouterVariable)
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
@@ -250,7 +252,7 @@ func TestLiveMarkingChangesTheProvidersReportedCacheTokens(t *testing.T) {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to call the real route")
 	}
-	key, err := jev.Key("../../../../.env")
+	key, err := jev.KeyFor(filepath.Join(sys.SourceRoot(), ".env"), jev.OpenRouterVariable)
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}

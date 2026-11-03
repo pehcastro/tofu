@@ -43,20 +43,12 @@ func ReadKeyring() Keyring {
 	return Keyring{Stored: stored, Path: path, ReadErr: err}
 }
 
-func Key(envPath string) (string, error) {
-	return KeyFor(envPath, OpenRouterVariable)
-}
-
 func TypeSafeKey(envPath string) (string, error) {
 	return KeyFor(envPath, TypeSafeVariable)
 }
 
 func KeyFor(envPath, variable string) (string, error) {
 	return ReadKeyring().KeyFor(envPath, variable)
-}
-
-func Locate(envPath string) (Located, error) {
-	return ReadKeyring().LocateFor(envPath, OpenRouterVariable)
 }
 
 func (k Keyring) KeyFor(envPath, variable string) (string, error) {

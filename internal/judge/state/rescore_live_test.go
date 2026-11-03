@@ -228,7 +228,7 @@ func TestLiveCompareTheTwoNewestQuestionSets(t *testing.T) {
 	}
 	pol := gateTheBenchReportDecidesThrough(t)
 	sys.AllowLiveCredential(t)
-	key, err := jev.Key("../../../.env")
+	key, err := jev.KeyFor(filepath.Join(sys.SourceRoot(), ".env"), jev.OpenRouterVariable)
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
@@ -304,7 +304,7 @@ func TestLiveReadEveryAnswerOnTheDisagreementCase(t *testing.T) {
 	if !ok {
 		t.Fatalf("%s is not in the gate corpus", disagreement)
 	}
-	key, err := jev.Key("../../../.env")
+	key, err := jev.KeyFor(filepath.Join(sys.SourceRoot(), ".env"), jev.OpenRouterVariable)
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}

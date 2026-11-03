@@ -82,10 +82,6 @@ func (a *asks) wait(id, standsAt string) (<-chan Answer, func()) {
 	}
 }
 
-func (a *asks) answer(id string, given Answer) (answered, stands bool) {
-	return a.grant(id, given, time.Time{}, nil)
-}
-
 func (a *asks) holding(id string, do func()) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()

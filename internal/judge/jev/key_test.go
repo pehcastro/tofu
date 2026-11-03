@@ -28,7 +28,7 @@ func mustAbs(t *testing.T, path string) string {
 
 func TestKeyPrefersTheEnvironment(t *testing.T) {
 	t.Setenv(keyName(), "from-the-environment")
-	got, err := Key("")
+	got, err := KeyFor("", OpenRouterVariable)
 	if err != nil {
 		t.Fatalf("reading the key: %v", err)
 	}
@@ -55,11 +55,11 @@ func TestKeyFindsTheDatabaseBeforeTheEnvironmentAndTheFile(t *testing.T) {
 	if err := sys.SaveKey(keyName(), "from-the-database"); err != nil {
 		t.Fatalf("storing the key: %v", err)
 	}
-	got, err := Key(path)
+	got, err := KeyFor(path, OpenRouterVariable)
 	if err != nil || got != "from-the-database" {
 		t.Fatalf("expected the database value, got a value of length %d and %v", len(got), err)
 	}
-	located, err := Locate(path)
+	located, err := ReadKeyring().LocateFor(path, OpenRouterVariable)
 	if err != nil || located.Source != SourceDatabase {
 		t.Fatalf("expected SourceDatabase, got %v and %v", located.Source, err)
 	}
@@ -68,7 +68,7 @@ func TestKeyFindsTheDatabaseBeforeTheEnvironmentAndTheFile(t *testing.T) {
 func TestReadingTheKeyCreatesNoDatabase(t *testing.T) {
 	home := freshHome(t)
 	t.Setenv(keyName(), "from-the-environment")
-	if _, err := Key(""); err != nil {
+	if _, err := KeyFor("", OpenRouterVariable); err != nil {
 		t.Fatal(err)
 	}
 	stored := filepath.Join(sys.StateDir(home), sys.CredentialStoreName)
@@ -84,7 +84,7 @@ func TestWithNoHomeTheEnvironmentKeyIsFoundAndNoDatabaseIsOpened(t *testing.T) {
 	t.Setenv("USERPROFILE", "")
 	t.Setenv("HOME", "")
 	t.Setenv(keyName(), "made-up-environment-key")
-	located, err := Locate("")
+	located, err := ReadKeyring().LocateFor("", OpenRouterVariable)
 	if err != nil || located.Source != SourceEnvironment {
 		t.Fatalf("expected SourceEnvironment with no home, got %v and %v", located.Source, err)
 	}
@@ -106,7 +106,7 @@ func TestKeyFallsBackToTheEnvFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("writing the fixture: %v", err)
 	}
-	got, err := Key(path)
+	got, err := KeyFor(path, OpenRouterVariable)
 	if err != nil {
 		t.Fatalf("reading the key: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestKeyFailsWhenThereIsNone(t *testing.T) {
 	if err := os.WriteFile(path, []byte("OTHER=1\n"), 0o600); err != nil {
 		t.Fatalf("writing the fixture: %v", err)
 	}
-	_, err := Key(path)
+	_, err := KeyFor(path, OpenRouterVariable)
 	if transport.KindOf(err) != transport.KindMissingCredential {
 		t.Fatalf("expected kind missing_credential, got %v", err)
 	}
@@ -133,7 +133,7 @@ func TestKeyFailsWhenThereIsNone(t *testing.T) {
 
 func TestLocateFromTheEnvironment(t *testing.T) {
 	t.Setenv(keyName(), "from-the-environment")
-	got, err := Locate("")
+	got, err := ReadKeyring().LocateFor("", OpenRouterVariable)
 	if err != nil {
 		t.Fatalf("locating the key: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestLocateFromTheEnvFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("writing the fixture: %v", err)
 	}
-	got, err := Locate(path)
+	got, err := ReadKeyring().LocateFor(path, OpenRouterVariable)
 	if err != nil {
 		t.Fatalf("locating the key: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestLocateWhenThereIsNone(t *testing.T) {
 	if err := os.WriteFile(path, []byte("OTHER=1\n"), 0o600); err != nil {
 		t.Fatalf("writing the fixture: %v", err)
 	}
-	got, err := Locate(path)
+	got, err := ReadKeyring().LocateFor(path, OpenRouterVariable)
 	if err == nil {
 		t.Fatal("expected the missing key to be refused")
 	}
@@ -192,7 +192,7 @@ func TestLocateWhenThereIsNone(t *testing.T) {
 func TestATestThatDoesNotOptInReachesNoCredentialInTheSourceTree(t *testing.T) {
 	t.Setenv(keyName(), "")
 	t.Chdir(sys.SourceRoot())
-	key, err := Key(".env")
+	key, err := KeyFor(".env", OpenRouterVariable)
 	if key != "" {
 		t.Fatalf("a test read a credential of length %d out of the source tree", len(key))
 	}
@@ -211,7 +211,7 @@ func TestATestThatDoesNotOptInReachesNoCredentialInTheHomeStateDirectory(t *test
 		t.Skipf("skipped, not counted as a pass: the home directory %s is a temporary one, so it is nobody's credential store", home)
 	}
 	path := filepath.Join(sys.StateDir(home), ".env")
-	key, keyErr := Key(path)
+	key, keyErr := KeyFor(path, OpenRouterVariable)
 	if key != "" {
 		t.Fatalf("a test read a credential of length %d out of the home state directory", len(key))
 	}
@@ -224,7 +224,7 @@ func TestATestThatDoesNotOptInReachesNoCredentialItPlantedFromTheOwnersOwn(t *te
 	if !sys.PlantOwnerCredential(t, keyName()) {
 		t.Skipf("skipped, not counted as a pass: this machine carries no %s in the source tree .env", keyName())
 	}
-	key, err := Key("")
+	key, err := KeyFor("", OpenRouterVariable)
 	if key != "" {
 		t.Fatalf("a test read the owner credential of length %d out of the environment", len(key))
 	}
@@ -241,7 +241,7 @@ func TestATestThatOptsInByNameReachesTheCredentialAgain(t *testing.T) {
 		t.Skipf("skipped, not counted as a pass: this machine has no .env at %s (%v)", root, err)
 	}
 	t.Chdir(root)
-	key, err := Key(".env")
+	key, err := KeyFor(".env", OpenRouterVariable)
 	if err != nil {
 		t.Fatalf("an opted-in test was refused: %v", err)
 	}
@@ -267,7 +267,7 @@ func keyErrorLines(t *testing.T) (paths, lines []string) {
 	}
 	paths = []string{filepath.Join(dir, "gone", ".env"), unnamed, unreadable}
 	for _, path := range paths {
-		_, err := Key(path)
+		_, err := KeyFor(path, OpenRouterVariable)
 		if err == nil {
 			t.Fatalf("%s was accepted as a key", path)
 		}
@@ -371,7 +371,7 @@ func TestKeyNeverPutsTheValueInAnError(t *testing.T) {
 	if err := os.WriteFile(path, []byte(keyName()+"=\n"), 0o600); err != nil {
 		t.Fatalf("writing the fixture: %v", err)
 	}
-	_, err := Key(path)
+	_, err := KeyFor(path, OpenRouterVariable)
 	if err == nil {
 		t.Fatal("expected an empty value to be refused")
 	}

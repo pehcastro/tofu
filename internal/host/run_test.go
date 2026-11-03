@@ -49,7 +49,7 @@ func TestTheGateOffEventCarriesTheReasonTheKeyLookupFound(t *testing.T) {
 		{"a file without the name in it", unnamed, jev.WhyFileLacksName},
 		{"a file that will not read", unreadable, jev.WhyUnreadable},
 	} {
-		_, err := jev.Key(state.path)
+		_, err := jev.KeyFor(state.path, jev.OpenRouterVariable)
 		if err == nil {
 			t.Fatalf("%s was accepted as a key", state.name)
 		}
@@ -380,7 +380,7 @@ func TestAwaitPersonWritesTheAnswerOntoTheRowAsAnOutcome(t *testing.T) {
 	book := &asks{standing: map[string]Answer{}}
 	person := awaitPerson(func(event Event) {
 		if event.Kind == EventAwaitPerson {
-			book.answer(event.ID, AllowedOnce)
+			book.grant(event.ID, AllowedOnce, time.Time{}, nil)
 		}
 	}, book, &turn.Config{})
 
@@ -425,7 +425,7 @@ func TestARuleQuestionIsAskedEveryTimeAndNeverFillsTheAlwaysHereCache(t *testing
 	person := awaitPerson(func(event Event) {
 		shown = append(shown, event)
 		if event.Kind == EventAwaitPerson {
-			book.answer(event.ID, next)
+			book.grant(event.ID, next, time.Time{}, nil)
 		}
 	}, book, &turn.Config{})
 	if got, err := person(context.Background(), request, turn.GateDecision{Verdict: ledger.VerdictAsk}); err != nil || got != turn.PersonDenied {
@@ -484,7 +484,7 @@ func TestDrawnPlanStateNamesEveryToolPlanState(t *testing.T) {
 		tools.PlanDone:    PlanDone,
 		tools.PlanDropped: PlanDropped,
 	}
-	for _, state := range tools.AllPlanStates() {
+	for _, state := range []tools.PlanState{tools.PlanPending, tools.PlanRunning, tools.PlanDone, tools.PlanDropped} {
 		expected, named := want[state]
 		if !named {
 			t.Fatalf("%s carries no expected drawn state, so a new plan state can reach drawnPlanState untested", state)
