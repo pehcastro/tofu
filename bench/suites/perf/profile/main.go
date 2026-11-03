@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/sys"
+	"tofu/internal/dummy"
 )
 
 const (
@@ -164,9 +164,9 @@ func here() string {
 
 func stage(args []string) error {
 	if len(args) != 1 {
-		return errors.New("stage needs the directory the bench/suites/agent/rivals seed is copied into")
+		return errors.New("stage needs the directory the cart project is copied into")
 	}
-	seed := filepath.Join(sys.SourceRoot(), "bench", "suites", "agent", "rivals", "testdata", "seed")
+	seed := dummy.Path("projects", "cart")
 	entries, err := os.ReadDir(seed)
 	if err != nil {
 		return err

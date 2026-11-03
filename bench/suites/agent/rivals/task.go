@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"tofu/internal/dummy"
 )
 
 type hiddenTest struct {
@@ -48,6 +50,13 @@ func (t task) dir() string {
 		return filepath.Join(here(), "testdata")
 	}
 	return filepath.Join(here(), "testdata", "tasks", t.Name)
+}
+
+func (t task) seed() string {
+	if t.Name == "" {
+		return dummy.Path("projects", "cart")
+	}
+	return filepath.Join(t.dir(), "seed")
 }
 
 func taskNames() ([]string, error) {

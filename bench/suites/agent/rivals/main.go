@@ -161,7 +161,7 @@ func stage(dir string, t task, withReference bool) (runDirs, error) {
 		return runDirs{}, err
 	}
 	dirs := runDirs{repo: filepath.Join(dir, "repo"), goDir: filepath.Join(dir, "go"), sessions: filepath.Join(dir, "sessions")}
-	sources := []string{filepath.Join(t.dir(), "seed")}
+	sources := []string{t.seed()}
 	if withReference {
 		sources = append(sources, filepath.Join(t.dir(), "reference"))
 	}
