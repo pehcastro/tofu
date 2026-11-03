@@ -1,6 +1,6 @@
 # Map
 
-Go code lives in four roots: `apps/` for the programs a person runs; `internal/` for the packages they share, grouped as `internal/<area>/<part>/`; `library/` for data embedded in the binary; `bench/` for one folder per measurement; everything else at the root is docs, scripts and vendored modules.
+Go code lives in four roots: `apps/` for the programs a person runs; `internal/` for the packages they share, grouped as `internal/<area>/<part>/`; `library/` for data embedded in the binary; `bench/` for measurements, one folder per suite under `bench/suites/<area>/`; everything else at the root is docs, scripts and vendored modules.
 
 ## Top folders
 
@@ -9,7 +9,7 @@ Go code lives in four roots: `apps/` for the programs a person runs; `internal/`
 | `apps/` | every program a person runs: `cli/` is the `tofu` binary and its verbs, `desk/` is the desktop app in Rust and gpui | code another app or package imports |
 | `internal/` | every Go package the apps share, one folder per area: agent, tools, models, judge, librarian, store, project, host, cli, ui, platform, sys, konst, testkit | a `main` package, data a person edits |
 | `library/` | data a person can change, embedded in the binary: rules, references, agents, skills, questions, models, subscriptions, decisions, in-app docs, changelog | logic beyond the embed and the tests that read it |
-| `bench/` | one folder per measurement, the parity harness, the shared harness and the report | product code another root imports |
+| `bench/` | suites by area in `suites/`, the dispatcher in `cmd/`, shared data in `corpus/`, libraries in `kit/`, build gates and parity in `gates/`; the contract is `bench/README.md` | product code, or anything another root imports or needs to run |
 | `docs/` | the public documentation site, built with Petit | the in-app pages, which are `library/docs/` |
 | `third_party/` | forked Go modules wired by `replace` in `go.mod` | tofu code |
 | `scripts/` | the install scripts | build or check steps the binary runs |
@@ -38,8 +38,8 @@ Not in git: `.local/`, `.tofu/`, `.claude/`, `.agents/`, `.playground/`, `.zed/`
 | interface panel | `internal/ui/tui/panels/<name>/` | `internal/ui/tui/panels/shells/` |
 | limit or constant | `internal/konst/` | `internal/konst/` |
 | operating system call | `internal/sys/`, one file per OS | `internal/sys/` |
-| bench | `bench/<name>/` | `bench/search/` |
-| parity case | `bench/parity/cases/<area>.cases` | `bench/parity/cases/` |
+| bench suite | `bench/suites/<area>/<suite>/`, area one of judge, rules, context, tools, agent, perf | `bench/suites/tools/search/` |
+| parity case | `bench/gates/parity/cases/<area>.cases` | `bench/gates/parity/cases/` |
 | public docs page | `docs/<section>/` | `docs/tools/` |
 
 ## When two folders both seem to fit
@@ -51,21 +51,23 @@ Not in git: `.local/`, `.tofu/`, `.claude/`, `.agents/`, `.playground/`, `.zed/`
 - `internal/sys/` or `internal/platform/`: new operating system code goes in `sys/`; `platform/` holds only `credential/` and `recover/` for now.
 - `docs/` or `library/docs/`: both. A feature gets a public page in `docs/` and an in-app page in `library/docs/`.
 - `CHANGELOG.md` or `library/changelog/`: both, byte for byte; a test compares them.
-- `bench/` or a `_test.go`: a number that is measured and compared goes in `bench/`.
+- `bench/` or a `_test.go`: a number that is measured and compared goes in `bench/suites/<area>/`, following `bench/README.md`.
 
 ## Import rules
 
-`tofu doctor --imports` checks these, from `apps/cli/imports.go`, and also fails when a rule matches no package:
+`tofu doctor --imports` checks these, from `apps/cli/verbs/doctor/imports.go`, and also fails when a rule matches no package:
 
 - nothing under `apps/` or `internal/` imports `bench/`
 - nothing under `internal/` imports `apps/`
+- nothing under `apps/cli/wiring` imports `apps/cli/verbs`
+- each package under `apps/cli/verbs` imports no other one under it
 - `library/` imports no tofu package
 - `internal/sys`, `internal/konst` and `internal/platform/recover` import only each other
 - under `internal/`, a package in `internal/judge` imports only `internal/judge`, those three, `internal/models/transport`, `internal/models/classifiers/core` and `internal/models/classifiers/providers`
 
 ## The tree
 
-Drawn from git: three levels, two for `bench/` and `third_party/`, no `testdata/` folders, and not the inside of `apps/desk/`.
+Drawn from git: three levels, four for `bench/` with each area's suites on its row, two for `third_party/`, no `testdata/` folders, and not the inside of `apps/desk/`.
 
 ```
 tofu/
@@ -81,16 +83,21 @@ tofu/
 │   │   └── wiring/
 │   └── desk/
 ├── bench/
-│   ├── api/  ask/  boardy/  browser/  cache/  calibration/  cli/
-│   ├── cmd/  corpus/  cost/  drain/  enforce/  fanin/  flows/
-│   ├── forkcache/  harness/  instruction/  judge/  learn/  linenumbers/  longsession/
-│   ├── memory/  memtree/  minimal/  mutate/  nativetools/  orchestrator/  parity/
-│   ├── phase/  picker/  planspawn/  prefix/  profile/  promote/  reach/  readworth/
-│   ├── recall/  report/  review/  rivals/  rules/  scale/  schemas/
-│   ├── search/  searchlarge/  serve/  sessiontime/  shortlist/  sift/  skills/
-│   ├── startup/  stopcheck/  sweep/  symbols/  testquality/  thread/
-│   ├── thrift/  tokencount/  tokens/  toolerrors/  tools/  transform/  treewide/
-│   └── tui/  turn/  websift/  wording/  wrongpath/
+│   ├── README.md
+│   ├── cmd/
+│   ├── corpus/
+│   ├── gates/
+│   │   └── flows/  parity/  treewide/
+│   ├── kit/
+│   │   └── api/  harness/  report/
+│   ├── stopcheck/
+│   └── suites/
+│       ├── agent/    drain/  fanin/  longsession/  orchestrator/  phase/  rivals/  sessiontime/  thread/  turn/
+│       ├── context/  cache/  forkcache/  learn/  linenumbers/  memory/  memtree/  prefix/  recall/  schemas/  thrift/  tokencount/  tokens/  toolerrors/  transform/
+│       ├── judge/    ask/  calibration/  cost/  instruction/  judge/  picker/  promote/  readworth/  sift/  wording/
+│       ├── perf/     boardy/  cli/  minimal/  profile/  scale/  serve/  startup/  tui/
+│       ├── rules/    enforce/  mutate/  planspawn/  reach/  review/  rules/  skills/  testquality/
+│       └── tools/    browser/  nativetools/  search/  searchlarge/  shortlist/  sweep/  symbols/  tools/  websift/  wrongpath/
 ├── docs/
 │   ├── automation/
 │   ├── classifiers/
