@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/cron"
+	"tofu/internal/agent/cron"
 )
 
 func TestCronToolChangesAJobAsTheAgent(t *testing.T) {

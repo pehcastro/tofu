@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/agent/cron"
 	"tofu/internal/boardy"
-	"tofu/internal/cron"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/session"

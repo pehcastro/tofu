@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	"tofu/internal/cron"
+	"tofu/internal/agent/cron"
 	"tofu/internal/konst"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/sys"

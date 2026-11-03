@@ -22,7 +22,7 @@ import (
 	"time"
 
 	tuisession "tofu/interface/tui/session"
-	"tofu/internal/cron"
+	"tofu/internal/agent/cron"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/models"

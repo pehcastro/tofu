@@ -18,8 +18,8 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/agent/cron"
 	"tofu/internal/boardy"
-	"tofu/internal/cron"
 	"tofu/internal/hook"
 	"tofu/internal/host"
 	"tofu/internal/judge/jev"

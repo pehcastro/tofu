@@ -18,7 +18,7 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/interface/tui/trace"
-	"tofu/internal/cron"
+	"tofu/internal/agent/cron"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/llm"

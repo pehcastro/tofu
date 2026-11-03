@@ -7,7 +7,7 @@ import (
 	"slices"
 	"time"
 
-	"tofu/internal/cron"
+	"tofu/internal/agent/cron"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/safe"

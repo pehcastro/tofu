@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/cron"
+	"tofu/internal/agent/cron"
 	"tofu/internal/llm"
 	"tofu/internal/session"
 	roster "tofu/internal/subagent"

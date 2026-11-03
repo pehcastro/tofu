@@ -9,7 +9,7 @@ import (
 
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/session"
-	"tofu/internal/cron"
+	"tofu/internal/agent/cron"
 )
 
 const (
