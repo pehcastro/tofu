@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/secret"
+	"tofu/internal/platform/credential"
 )
 
 const valueCharacters = "-_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"

@@ -1,7 +1,7 @@
 ---
 id: what-reaches-a-screen
 domain: general
-document: internal/turn, cmd/tofu and internal/secret, read in this repository
+document: internal/turn, cmd/tofu and internal/platform/credential, read in this repository
 ---
 
 # What reaches a screen
@@ -22,7 +22,7 @@ So the one string on a screen that can carry what a person typed is a bash label
 
 ## Scrub does not redact
 
-`internal/secret.Scrub` replaces a marker prefix and keeps every value byte behind it. An Anthropic OAuth token prefix becomes the words `redacted-anthropic-oauth-token` and the token itself is untouched, twenty bytes longer and just as readable.
+`internal/platform/credential.Scrub` replaces a marker prefix and keeps every value byte behind it. An Anthropic OAuth token prefix becomes the words `redacted-anthropic-oauth-token` and the token itself is untouched, twenty bytes longer and just as readable.
 
 It is a fixture anonymiser. It exists so a recorded session can be checked in, by turning one machine's home directory and one person's name into neutral ones. Anyone reaching for it to keep a key off a screen gets nothing.
 

@@ -1,6 +1,6 @@
 package corpus
 
-import "tofu/internal/secret"
+import "tofu/internal/platform/credential"
 
 func Scrub(text string) string { return secret.Machine().Scrub(text) }
 

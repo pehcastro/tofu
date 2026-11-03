@@ -10,8 +10,8 @@ import (
 	"sort"
 	"time"
 
+	"tofu/internal/platform/credential"
 	"tofu/internal/recall"
-	"tofu/internal/secret"
 	"tofu/internal/session"
 )
 
