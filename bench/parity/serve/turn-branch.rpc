@@ -9,4 +9,4 @@ wait session.updated
 wait session.updated
 wait session.updated
 wait session.updated
-wait session.updated
+wait session.updated "name":"parity-side"

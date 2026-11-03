@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -19,12 +20,14 @@ const (
 	exitWithin       = 30 * time.Second
 	notificationMark = "~ "
 	timedSnapshot    = "session.listed"
+	labelBroadcast   = "session.updated"
 )
 
 var (
 	earlier        = regexp.MustCompile(`\$\{(\d+)\.([^}]+)\}`)
 	racingFields   = []string{"seq", "session"}
 	racingByMethod = map[string]string{"turn.steered": "turn"}
+	polledMethods  = []string{"memory.changed"}
 )
 
 type wireLine struct {
@@ -76,7 +79,8 @@ func (w work) serve(exe string, args, env []string) (string, error) {
 		case line == "":
 		case strings.HasPrefix(line, "wait "):
 			x.talk.WriteString(line + "\n")
-			if err := x.await("", strings.TrimPrefix(line, "wait ")); err != nil {
+			method, needle, _ := strings.Cut(strings.TrimPrefix(line, "wait "), " ")
+			if err := x.await("", method, needle); err != nil {
 				return x.String(), err
 			}
 		default:
@@ -92,7 +96,7 @@ func (w work) serve(exe string, args, env []string) (string, error) {
 			if _, err := io.WriteString(stdin, sent+"\n"); err != nil {
 				return x.String(), err
 			}
-			if err := x.await(string(request.ID), ""); err != nil {
+			if err := x.await(string(request.ID), "", ""); err != nil {
 				return x.String(), err
 			}
 		}
@@ -127,6 +131,7 @@ func (x *exchange) take(line string) wireLine {
 	if got.Method == timedSnapshot {
 		return got
 	}
+	relabelled := ""
 	var whole map[string]any
 	if json.Unmarshal([]byte(line), &whole) == nil {
 		if params, ok := whole["params"].(map[string]any); ok {
@@ -134,19 +139,43 @@ func (x *exchange) take(line string) wireLine {
 				delete(params, field)
 			}
 			delete(params, racingByMethod[got.Method])
+			if got.Method == labelBroadcast && params["turn"] == "" {
+				relabelled = fmt.Sprint(params["item"])
+			}
 		}
 		canonical, _ := json.Marshal(whole)
 		line = string(canonical)
 	}
-	x.notes = append(x.notes, notificationMark+line+"\n")
+	note := notificationMark + line + "\n"
+	if slices.Contains(polledMethods, got.Method) && slices.Contains(x.notes, note) {
+		return got
+	}
+	if relabelled != "" {
+		x.notes = slices.DeleteFunc(x.notes, func(earlier string) bool {
+			return strings.Contains(earlier, `"method":"`+labelBroadcast+`"`) && strings.Contains(earlier, `"item":"`+relabelled+`"`) && strings.Contains(earlier, `"turn":""`)
+		})
+	}
+	x.notes = append(x.notes, note)
 	return got
 }
 
-func (x *exchange) await(id, method string) error {
+func (x *exchange) met(method, needle string) bool {
+	if needle != "" {
+		return slices.ContainsFunc(x.notes, func(note string) bool {
+			return strings.Contains(note, `"method":"`+method+`"`) && strings.Contains(note, needle)
+		})
+	}
+	if x.unmet[method] > 0 {
+		x.unmet[method]--
+		return true
+	}
+	return false
+}
+
+func (x *exchange) await(id, method, needle string) error {
 	deadline := time.After(answerWithin)
 	for {
-		if method != "" && x.unmet[method] > 0 {
-			x.unmet[method]--
+		if method != "" && x.met(method, needle) {
 			return nil
 		}
 		select {

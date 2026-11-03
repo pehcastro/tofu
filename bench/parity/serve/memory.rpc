@@ -9,3 +9,4 @@
 {"jsonrpc": "2.0", "id": 9, "method": "memory.zoom", "params": {"store": "nope", "id": 1, "n": 1}}
 {"jsonrpc": "2.0", "id": 10, "method": "memory.recall", "params": {"store": "nope", "regex": "x"}}
 {"jsonrpc": "2.0", "id": 11, "method": "memory.add", "params": {"text": "", "scope": "nope"}}
+wait memory.changed

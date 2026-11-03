@@ -3,3 +3,4 @@
 {"jsonrpc": "2.0", "id": 3, "method": "turn.send", "params": {"session": "${2.result.session}", "text": "say hello"}}
 wait turn.completed
 {"jsonrpc": "2.0", "id": 4, "method": "session.compact", "params": {"session": "${2.result.session}", "focus": "hello"}}
+wait session.turns.updated
