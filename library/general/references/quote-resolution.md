@@ -1,7 +1,7 @@
 ---
 id: quote-resolution
 domain: general
-document: interface/tui/quote, internal/turn/tools and internal/session, read in this repository
+document: interface/tui/quote, internal/turn/tools and internal/store/session, read in this repository
 also: library/general/references/what-reaches-a-screen.md
 ---
 

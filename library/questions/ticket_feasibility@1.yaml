@@ -3,7 +3,7 @@ domain: general
 questions_version: 1
 mode: enforced
 notes: >-
-  asked by internal/boardy when a ticket is made without a Feasibility
+  asked by internal/project/boardy when a ticket is made without a Feasibility
   section. state.ticket is the new ticket. the ticket is refused when platform
   is at or above platform_at, and the refusal asks for the section: what the
   platform gives, what it does not, and the source. a ticket that carries the

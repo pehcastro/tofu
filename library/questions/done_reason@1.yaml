@@ -3,7 +3,7 @@ domain: general
 questions_version: 1
 mode: enforced
 notes: >-
-  asked by internal/boardy when a ticket moves to done with a reason that is
+  asked by internal/project/boardy when a ticket moves to done with a reason that is
   not blank. state.ticket is the ticket, state.reason the reason as written,
   and state.parts the reason cut at commas, semicolons, sentence ends and line
   breaks. boardy adds one option to part for each entry of parts, named part_1

@@ -5,7 +5,7 @@ mode: enforced
 notes: >-
   asked by a board hook that sets a ticket's epic from Jev's answer, written
   do: set epic jev board_epic@1. state.ticket is the ticket being made or
-  changed and state.epics holds the board's open epics. internal/boardy adds
+  changed and state.epics holds the board's open epics. internal/project/boardy adds
   one option per open epic after none, named by the epic's id, with its title
   and text as the criteria. the hook sets the epic when Jev chooses an epic at
   or above epic_at, and leaves it empty on none, below it, or on any failure,
