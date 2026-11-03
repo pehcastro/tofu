@@ -14,12 +14,12 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"tofu/internal/classifier"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/models/classifiers"
 	"tofu/internal/recall"
 	"tofu/internal/session"
 	"tofu/internal/sys"

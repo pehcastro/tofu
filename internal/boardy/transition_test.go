@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/classifier"
 	"tofu/internal/llm/models"
+	"tofu/internal/models/classifiers"
 	"tofu/internal/sys"
 )
 

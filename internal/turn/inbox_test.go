@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/classifier"
 	"tofu/internal/llm"
 	"tofu/internal/llm/models"
+	"tofu/internal/models/classifiers"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
 )

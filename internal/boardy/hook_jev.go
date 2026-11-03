@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/internal/classifier"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
+	"tofu/internal/models/classifiers"
 	"tofu/internal/sys"
 	"tofu/library/questions"
 )

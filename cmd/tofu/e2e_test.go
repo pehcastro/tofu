@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"tofu/internal/classifier"
+	"tofu/internal/models/classifiers"
 	"tofu/internal/sys"
 )
 

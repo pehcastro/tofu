@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"sync"
 
-	"tofu/internal/classifier"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
 	"tofu/internal/konst"
+	"tofu/internal/models/classifiers"
 	"tofu/internal/recall"
 	"tofu/library/questions"
 )

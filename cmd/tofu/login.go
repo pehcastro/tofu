@@ -19,11 +19,11 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/interface/tui/keyfield"
-	"tofu/internal/classifier"
 	"tofu/internal/host"
 	"tofu/internal/judge/jev"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
+	"tofu/internal/models/classifiers"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
 	"tofu/internal/widget"

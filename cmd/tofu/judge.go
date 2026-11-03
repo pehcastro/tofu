@@ -10,11 +10,11 @@ import (
 	"time"
 
 	"tofu/interface/cli"
-	"tofu/internal/classifier"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
+	"tofu/internal/models/classifiers"
 	"tofu/internal/transport"
 )
 
