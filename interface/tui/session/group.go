@@ -11,7 +11,7 @@ import (
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/progress"
 	"tofu/internal/host"
-	"tofu/internal/toolcard"
+	"tofu/internal/ui/toolcard"
 	"tofu/internal/widget"
 )
 

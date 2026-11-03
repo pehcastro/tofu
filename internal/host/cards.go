@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"tofu/internal/llm"
-	"tofu/internal/toolcard"
+	"tofu/internal/ui/toolcard"
 )
 
 type ToolCard struct {

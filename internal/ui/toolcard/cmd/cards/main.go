@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"tofu/internal/toolcard"
+	"tofu/internal/ui/toolcard"
 )
 
 //go:embed fixture.json

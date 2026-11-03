@@ -20,8 +20,8 @@ import (
 	"tofu/internal/safe"
 	"tofu/internal/session"
 	roster "tofu/internal/subagent"
-	"tofu/internal/toolcard"
 	"tofu/internal/turn"
+	"tofu/internal/ui/toolcard"
 )
 
 const (
