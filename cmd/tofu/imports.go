@@ -133,9 +133,10 @@ func readImports(dir string) (importsReport, error) {
 	}
 	report := importsReport{Packages: len(pkgs), Violations: []importViolation{}}
 	rules := importRules()
+	tofuTree := slices.ContainsFunc(pkgs, func(pkg packageImports) bool { return under(pkg.ImportPath, "tofu") })
 	for _, rule := range rules {
 		report.Rules = append(report.Rules, rule.String())
-		if dead, ok := deadRule(rule, pkgs); ok {
+		if dead, ok := deadRule(rule, pkgs); ok && tofuTree {
 			report.Violations = append(report.Violations, dead)
 		}
 	}
