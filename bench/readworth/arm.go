@@ -8,7 +8,7 @@ import (
 
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/question"
-	"tofu/internal/sift"
+	"tofu/internal/tools/shell/sift"
 )
 
 const Point = "read_worth@1"

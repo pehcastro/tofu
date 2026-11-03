@@ -15,8 +15,8 @@ import (
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
-	"tofu/internal/sift"
 	"tofu/internal/sys"
+	"tofu/internal/tools/shell/sift"
 )
 
 func liveClient(t *testing.T) Asker {

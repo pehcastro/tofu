@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"tofu/internal/sift"
+	"tofu/internal/tools/shell/sift"
 )
 
 const (

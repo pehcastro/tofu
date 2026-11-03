@@ -14,7 +14,7 @@ import (
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/konst"
-	"tofu/internal/sift"
+	"tofu/internal/tools/shell/sift"
 )
 
 type Arm string

@@ -13,8 +13,8 @@ import (
 	"tofu/bench/api"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/question"
-	"tofu/internal/sift"
 	"tofu/internal/sys"
+	"tofu/internal/tools/shell/sift"
 	libraryquestions "tofu/library/questions"
 )
 

@@ -14,7 +14,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
 	"tofu/internal/konst"
-	"tofu/internal/sift"
+	"tofu/internal/tools/shell/sift"
 	libraryquestions "tofu/library/questions"
 )
 

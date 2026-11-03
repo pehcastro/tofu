@@ -11,8 +11,8 @@ import (
 	"testing"
 
 	"tofu/internal/judge/method"
-	"tofu/internal/sift"
 	"tofu/internal/sys"
+	"tofu/internal/tools/shell/sift"
 )
 
 const recordedSessionFloor = 20

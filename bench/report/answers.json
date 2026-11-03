@@ -45,7 +45,7 @@
       "free_arm": {
         "name": "regex on error lines",
         "does": "keeps the head and the tail of the output, keeps any line matching an error pattern, and drops the middle",
-        "does_from": "internal/sift/shellarm.go",
+        "does_from": "internal/tools/shell/sift/shellarm.go",
         "percent": 52.9,
         "hits": 18,
         "out_of": 34,
@@ -148,7 +148,7 @@
       "judged_arm": {
         "name": "Jev",
         "does": "scores each paragraph for whether it answers the task and how much of it is padding, then drops it under the shipped cut",
-        "does_from": "internal/sift/judge.go",
+        "does_from": "internal/tools/shell/sift/judge.go",
         "percent": 87.1,
         "evidence": "| jev, shipped rule | 88.6% | 9.4% | 87.1% | 9.3% |"
       },

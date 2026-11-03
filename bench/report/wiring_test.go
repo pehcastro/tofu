@@ -69,7 +69,7 @@ func TestTheBuildRefusesAPageThatContradictsTheMethodTable(t *testing.T) {
 	claimed := Placement{
 		Point: "shell_sift", Question: "how much of a shell result to keep", Decides: "shell_sift", InUse: method.Unwired,
 		Axis:       Axis{Name: "planted needles kept", Unit: "percent of results", BetterWhen: BetterHigher},
-		Free:       Method{Name: "regex on error lines", Does: "keeps the head and the tail", DoesFrom: "internal/sift/shellarm.go", Percent: 52.9, Hits: 18, OutOf: 34, Evidence: "18 of 34"},
+		Free:       Method{Name: "regex on error lines", Does: "keeps the head and the tail", DoesFrom: "internal/tools/shell/sift/shellarm.go", Percent: 52.9, Hits: 18, OutOf: 34, Evidence: "18 of 34"},
 		Judged:     Method{Name: "Jev", Does: "scores each chunk", DoesFrom: "bench/sift/arm.go", Percent: 79.4, Hits: 27, OutOf: 34, Evidence: "27 of 34"},
 		SampleSize: 34, SampleOf: "recorded shell results",
 		Source: "bench/sift/report-2026-09-21.md",

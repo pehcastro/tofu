@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"tofu/internal/judge/method"
-	"tofu/internal/sift"
+	"tofu/internal/tools/shell/sift"
 	shipped "tofu/library"
 )
 

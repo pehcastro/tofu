@@ -2,7 +2,7 @@ package calibration
 
 import (
 	"tofu/internal/judge/ledger"
-	"tofu/internal/sift"
+	"tofu/internal/tools/shell/sift"
 )
 
 type Threshold struct {

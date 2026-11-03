@@ -9,7 +9,7 @@ import (
 
 	benchcorpus "tofu/bench/corpus"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/sift"
+	"tofu/internal/tools/shell/sift"
 )
 
 type LedgerRead struct {

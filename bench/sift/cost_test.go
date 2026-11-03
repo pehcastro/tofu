@@ -7,8 +7,8 @@ import (
 
 	"tofu/bench/stat"
 	"tofu/internal/konst"
-	"tofu/internal/sift"
 	"tofu/internal/sys"
+	"tofu/internal/tools/shell/sift"
 )
 
 const (

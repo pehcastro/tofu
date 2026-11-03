@@ -14,7 +14,7 @@ import (
 	"tofu/internal/judge/jev"
 	"tofu/internal/konst"
 	"tofu/internal/safe"
-	"tofu/internal/sift"
+	"tofu/internal/tools/shell/sift"
 )
 
 const siftPoint = "read_worth@1"

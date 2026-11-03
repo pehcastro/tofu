@@ -12,7 +12,7 @@ import (
 	"tofu/internal/judge/method"
 	"tofu/internal/konst"
 	"tofu/internal/safe"
-	"tofu/internal/sift"
+	"tofu/internal/tools/shell/sift"
 	"tofu/internal/turn"
 	shipped "tofu/library"
 )

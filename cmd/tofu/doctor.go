@@ -19,8 +19,8 @@ import (
 	"tofu/internal/judge/method"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/quota"
-	"tofu/internal/sift"
 	"tofu/internal/sys"
+	"tofu/internal/tools/shell/sift"
 	"tofu/internal/tools/web/browser/driver"
 	"tofu/internal/turn"
 )

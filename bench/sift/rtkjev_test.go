@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/sift"
+	"tofu/internal/tools/shell/sift"
 )
 
 type armTotal struct {

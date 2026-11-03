@@ -290,7 +290,7 @@ func TestAnAxisIsDeclaredByTheBenchAndNotFixedByTheViewer(t *testing.T) {
 	added := Placement{
 		Point: "shell_sift", Question: "how long did the tools take",
 		Axis:       Axis{Name: "tool calls per turn", Unit: "percent of the cheaper method's calls", BetterWhen: BetterLower},
-		Free:       Method{Name: "regex on error lines", Does: "keeps the head and the tail", DoesFrom: "internal/sift/shellarm.go", Percent: 100, Hits: 34, OutOf: 34, Evidence: "34 shell results this harness really returned to a model"},
+		Free:       Method{Name: "regex on error lines", Does: "keeps the head and the tail", DoesFrom: "internal/tools/shell/sift/shellarm.go", Percent: 100, Hits: 34, OutOf: 34, Evidence: "34 shell results this harness really returned to a model"},
 		Judged:     Method{Name: "Jev", Does: "scores each chunk", DoesFrom: "bench/sift/arm.go", Percent: 50, Hits: 17, OutOf: 34, Evidence: "34 shell results this harness really returned to a model"},
 		SampleSize: 34, SampleOf: "recorded shell results", Decides: "shell_sift", InUse: method.Judged,
 		Source: "bench/sift/report-2026-09-21.md",

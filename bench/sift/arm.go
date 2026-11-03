@@ -13,7 +13,7 @@ import (
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
-	"tofu/internal/sift"
+	"tofu/internal/tools/shell/sift"
 )
 
 const Point = "shell_sift@1"

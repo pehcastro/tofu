@@ -15,9 +15,9 @@ import (
 	"tofu/internal/recall"
 	"tofu/internal/rule"
 	"tofu/internal/session"
-	"tofu/internal/sift"
 	"tofu/internal/skill"
 	"tofu/internal/sys"
+	"tofu/internal/tools/shell/sift"
 	"tofu/internal/turn"
 	"tofu/library"
 )
