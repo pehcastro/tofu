@@ -17,6 +17,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 )
 
@@ -33,9 +34,9 @@ type scratchTool struct {
 	reads *crossProjectReads
 }
 
-func ScratchTools(ask turn.Person) []turn.Tool {
+func ScratchTools(ask turn.Person) []contract.Tool {
 	reads := &crossProjectReads{ask: ask}
-	return []turn.Tool{scratchTool{turn.ScratchPathToolName, reads}, scratchTool{turn.ScratchShareToolName, reads}, scratchTool{turn.ScratchListToolName, reads}, scratchTool{turn.ScratchReadToolName, reads}}
+	return []contract.Tool{scratchTool{turn.ScratchPathToolName, reads}, scratchTool{turn.ScratchShareToolName, reads}, scratchTool{turn.ScratchListToolName, reads}, scratchTool{turn.ScratchReadToolName, reads}}
 }
 
 func (t scratchTool) Name() string { return t.name }
@@ -62,14 +63,14 @@ func (t scratchTool) Definition() llm.Tool {
 		Parameters: object([]string{"path"}, map[string]any{"path": text("the path relative to the session folder, or to the other project's shared folder"), "project": text("another project's directory, to read its shared folder")})}
 }
 
-func (t scratchTool) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
+func (t scratchTool) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct{ Kind, Path, Note, Scope, Project string }
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.name, err)
+		return contract.Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.name, err)
 	}
 	place, found := sys.ScratchOf(ctx)
 	if !found {
-		return turn.Result{}, fmt.Errorf("%s: this run has no scratchpad", t.name)
+		return contract.Result{}, fmt.Errorf("%s: this run has no scratchpad", t.name)
 	}
 	switch t.name {
 	case turn.ScratchPathToolName:
@@ -82,41 +83,41 @@ func (t scratchTool) Run(ctx context.Context, raw json.RawMessage) (turn.Result,
 	return t.reads.read(ctx, place, args.Project, args.Path)
 }
 
-func scratchPath(place sys.ScratchPlace, kind string) (turn.Result, error) {
+func scratchPath(place sys.ScratchPlace, kind string) (contract.Result, error) {
 	folder := map[string]string{"tmp": place.Tmp(), "out": filepath.Join(place.Dir(), "out"), "logs": filepath.Join(place.Dir(), "logs"), "shared": place.Shared(), "cache": place.Cache()}[kind]
 	if folder == "" {
-		return turn.Result{}, fmt.Errorf("scratch_path: kind %q is none of tmp, out, logs, shared or cache", kind)
+		return contract.Result{}, fmt.Errorf("scratch_path: kind %q is none of tmp, out, logs, shared or cache", kind)
 	}
-	return turn.Result{Content: folder, Command: "scratch path " + kind}, nil
+	return contract.Result{Content: folder, Command: "scratch path " + kind}, nil
 }
 
-func scratchShare(ctx context.Context, place sys.ScratchPlace, path, note string) (turn.Result, error) {
+func scratchShare(ctx context.Context, place sys.ScratchPlace, path, note string) (contract.Result, error) {
 	if turn.SubAgentAsking(ctx) != "" {
-		return turn.Result{}, errors.New("scratch_share: only the lead shares: name the file and what it is in your report, and the lead shares it")
+		return contract.Result{}, errors.New("scratch_share: only the lead shares: name the file and what it is in your report, and the lead shares it")
 	}
 	if !under(place.Dir(), path) || strings.TrimSpace(note) == "" {
-		return turn.Result{}, fmt.Errorf("scratch_share: path must be a file inside %s, and note one line on what it is", place.Dir())
+		return contract.Result{}, fmt.Errorf("scratch_share: path must be a file inside %s, and note one line on what it is", place.Dir())
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("scratch_share: %w", err)
+		return contract.Result{}, fmt.Errorf("scratch_share: %w", err)
 	}
 	shared := filepath.Join(place.Shared(), filepath.Base(path))
 	if err := os.WriteFile(shared, data, 0o644); err != nil {
-		return turn.Result{}, fmt.Errorf("scratch_share: %w", err)
+		return contract.Result{}, fmt.Errorf("scratch_share: %w", err)
 	}
 	index, err := os.OpenFile(filepath.Join(place.Shared(), scratchIndex), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err == nil {
 		_, err = fmt.Fprintf(index, "%s: %s\n", filepath.Base(path), strings.ReplaceAll(note, "\n", " "))
 		err = errors.Join(err, index.Close())
 	}
-	return turn.Result{Content: "shared as " + shared, Command: "scratch share " + filepath.Base(path)}, err
+	return contract.Result{Content: "shared as " + shared, Command: "scratch share " + filepath.Base(path)}, err
 }
 
-func scratchList(place sys.ScratchPlace, scope string) (turn.Result, error) {
+func scratchList(place sys.ScratchPlace, scope string) (contract.Result, error) {
 	from := map[string]string{"mine": place.Dir(), "session": place.SessionDir(), "shared": place.Shared()}[scope]
 	if from == "" {
-		return turn.Result{}, fmt.Errorf("scratch_list: scope %q is none of mine, session or shared", scope)
+		return contract.Result{}, fmt.Errorf("scratch_list: scope %q is none of mine, session or shared", scope)
 	}
 	var lines []string
 	err := filepath.WalkDir(from, func(path string, entry fs.DirEntry, err error) error {
@@ -136,35 +137,35 @@ func scratchList(place sys.ScratchPlace, scope string) (turn.Result, error) {
 		return nil
 	})
 	if errors.Is(err, fs.ErrNotExist) || err == nil && len(lines) == 0 {
-		return turn.Result{Content: from + " holds no files", Command: "scratch list " + scope}, nil
+		return contract.Result{Content: from + " holds no files", Command: "scratch list " + scope}, nil
 	}
-	return turn.Result{Content: from + "\n" + strings.Join(lines, "\n"), Command: "scratch list " + scope}, err
+	return contract.Result{Content: from + "\n" + strings.Join(lines, "\n"), Command: "scratch list " + scope}, err
 }
 
-func (c *crossProjectReads) read(ctx context.Context, place sys.ScratchPlace, project, path string) (turn.Result, error) {
+func (c *crossProjectReads) read(ctx context.Context, place sys.ScratchPlace, project, path string) (contract.Result, error) {
 	from := place.SessionDir()
 	if project != "" {
 		root, err := sys.ScratchRootAt(project)
 		if err != nil {
-			return turn.Result{}, fmt.Errorf("scratch_read: %w", err)
+			return contract.Result{}, fmt.Errorf("scratch_read: %w", err)
 		}
 		if from = filepath.Join(root, sys.ScratchShared); from != place.Shared() {
 			if err := c.allow(ctx, project); err != nil {
-				return turn.Result{Content: err.Error() + ", so nothing was read", Command: "scratch read " + project}, nil
+				return contract.Result{Content: err.Error() + ", so nothing was read", Command: "scratch read " + project}, nil
 			}
 		}
 	}
 	full := filepath.Join(from, path)
 	if !under(from, full) || filepath.IsAbs(path) {
-		return turn.Result{}, fmt.Errorf("scratch_read: %q is not a path inside %s", path, from)
+		return contract.Result{}, fmt.Errorf("scratch_read: %q is not a path inside %s", path, from)
 	}
 	file, err := os.Open(full)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("scratch_read: %w", err)
+		return contract.Result{}, fmt.Errorf("scratch_read: %w", err)
 	}
 	defer func() { _ = file.Close() }()
 	data, err := io.ReadAll(io.LimitReader(file, konst.ScratchReadBytes))
-	return turn.Result{Content: string(data), Command: "scratch read " + full}, err
+	return contract.Result{Content: string(data), Command: "scratch read " + full}, err
 }
 
 func (c *crossProjectReads) allow(ctx context.Context, project string) error {

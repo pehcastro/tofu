@@ -7,6 +7,7 @@ import (
 
 	"tofu/internal/llm"
 	"tofu/internal/settings"
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 )
 
@@ -36,23 +37,23 @@ func (Settings) Definition() llm.Tool {
 	}
 }
 
-func (s Settings) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
+func (s Settings) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		Key   string `json:"key"`
 		Value int    `json:"value"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("settings: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("settings: arguments are not the expected shape: %w", err)
 	}
 	if args.Key != settings.SubAgentsPerTurn && args.Key != settings.SubAgentDepth {
-		return turn.Result{}, fmt.Errorf("settings: %q is not a setting this tool changes; it changes %s and %s only", args.Key, settings.SubAgentsPerTurn, settings.SubAgentDepth)
+		return contract.Result{}, fmt.Errorf("settings: %q is not a setting this tool changes; it changes %s and %s only", args.Key, settings.SubAgentsPerTurn, settings.SubAgentDepth)
 	}
 	store, err := settings.Open(s.global, s.project)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("settings: %w", err)
+		return contract.Result{}, fmt.Errorf("settings: %w", err)
 	}
 	if err := store.Set(settings.Global, args.Key, args.Value); err != nil {
-		return turn.Result{}, fmt.Errorf("settings: %w", err)
+		return contract.Result{}, fmt.Errorf("settings: %w", err)
 	}
-	return turn.Result{Content: fmt.Sprintf("%s set to %d in %s; the next spawn reads %d", args.Key, args.Value, s.global, store.Int(args.Key))}, nil
+	return contract.Result{Content: fmt.Sprintf("%s set to %d in %s; the next spawn reads %d", args.Key, args.Value, s.global, store.Int(args.Key))}, nil
 }

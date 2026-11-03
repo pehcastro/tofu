@@ -16,6 +16,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/session"
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 )
 
@@ -70,7 +71,7 @@ type ticketTool struct {
 	manager bool
 }
 
-func TicketTools(board boardy.Managed, actor string) ([]turn.Tool, error) {
+func TicketTools(board boardy.Managed, actor string) ([]contract.Tool, error) {
 	boards, err := board.Store.Boards()
 	if err != nil {
 		return nil, err
@@ -82,7 +83,7 @@ func TicketTools(board boardy.Managed, actor string) ([]turn.Tool, error) {
 	} else {
 		verbs = append(verbs, ticketNotPossible)
 	}
-	list := make([]turn.Tool, len(verbs))
+	list := make([]contract.Tool, len(verbs))
 	for i, verb := range verbs {
 		list[i] = ticketTool{verb: verb, board: board, actor: actor, manager: manager}
 	}
@@ -206,7 +207,7 @@ func (t ticketTool) Definition() llm.Tool {
 	return llm.Tool{Name: string(t.verb), Description: describe, Parameters: map[string]any{"type": "object", "properties": properties, "required": required}}
 }
 
-func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
+func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		ID, Text, Question, ELI5, Why, Board, Title, Problem, Scope, Acceptance, To, Reason, Parent, Epic, Sprint, Status string
 		Before, Driven, Feasibility, Bypass                                                                               string
@@ -219,10 +220,10 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 		Leave                                                                                                             []int
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.verb, err)
+		return contract.Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.verb, err)
 	}
 	t.board = t.spokenBoard()
-	return nudged(t.board.Store, string(t.verb), func() (turn.Result, error) {
+	return nudged(t.board.Store, string(t.verb), func() (contract.Result, error) {
 		command := string(t.verb) + " " + args.ID
 		var ticket boardy.Ticket
 		var err error
@@ -314,6 +315,6 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 				said += fmt.Sprintf("; and %d more", more)
 			}
 		}
-		return turn.Result{Content: said, Command: command}, err
+		return contract.Result{Content: said, Command: command}, err
 	})
 }

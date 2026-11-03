@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"tofu/internal/shell"
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 )
@@ -55,7 +56,7 @@ func serving(t *testing.T) (*shell.Registry, context.Context, shell.Shell, int) 
 	return registry, turn.WithShellRegistry(context.Background(), registry), started, port
 }
 
-func runShell(t *testing.T, ctx context.Context, op, name string) turn.Result {
+func runShell(t *testing.T, ctx context.Context, op, name string) contract.Result {
 	t.Helper()
 	raw, _ := json.Marshal(map[string]string{"op": op, "name": name})
 	result, err := tools.Shells{}.Run(ctx, raw)

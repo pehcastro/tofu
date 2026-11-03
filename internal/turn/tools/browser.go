@@ -24,6 +24,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/settings"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 	"tofu/internal/web"
 )
@@ -112,14 +113,14 @@ func (t *BrowserTabs) closeWhere(openedBy func(string) bool) {
 	})
 }
 
-func NewBrowser(config BrowserSettings) ([]turn.Tool, error) {
+func NewBrowser(config BrowserSettings) ([]contract.Tool, error) {
 	if config.Mode == settings.BrowserOff {
 		return nil, nil
 	}
 	at := browser.Endpoint{Home: config.Home, Profile: config.Profile, Headless: config.Headless}
 	config.Tabs.reach(at)
 	session := &browserSession{at: at, hosts: map[string]int{}, ownOnly: config.Driver == settings.DriverSubagent, tabs: config.Tabs}
-	var reads, acts turn.Tool
+	var reads, acts contract.Tool
 	switch config.Driver {
 	case settings.DriverSteps, settings.DriverSubagent:
 		reads, acts = browserObserve{session}, browserAct{session}
@@ -130,9 +131,9 @@ func NewBrowser(config BrowserSettings) ([]turn.Tool, error) {
 	}
 	switch config.Mode {
 	case settings.BrowserRead:
-		return []turn.Tool{browserTabs{session}, reads}, nil
+		return []contract.Tool{browserTabs{session}, reads}, nil
 	case settings.BrowserDrive:
-		return []turn.Tool{browserTabs{session}, reads, acts, browserMotion{session}}, nil
+		return []contract.Tool{browserTabs{session}, reads, acts, browserMotion{session}}, nil
 	}
 	return nil, fmt.Errorf("the browser setting is %q, and it takes %s, %s or %s", config.Mode, settings.BrowserOff, settings.BrowserRead, settings.BrowserDrive)
 }
@@ -230,29 +231,29 @@ func (browserTabs) Definition() llm.Tool {
 	}
 }
 
-func (t browserTabs) Run(context.Context, json.RawMessage) (turn.Result, error) {
+func (t browserTabs) Run(context.Context, json.RawMessage) (contract.Result, error) {
 	var tabs []browser.Tab
 	err := t.session.with(func(client *browser.Client) (err error) {
 		tabs, err = client.Tabs()
 		return err
 	})
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("browser_tabs: %w", err)
+		return contract.Result{}, fmt.Errorf("browser_tabs: %w", err)
 	}
 	if t.session.ownOnly {
 		tabs = slices.DeleteFunc(tabs, func(tab browser.Tab) bool { return !tab.Opened })
 		if len(tabs) == 0 {
-			return turn.Result{Content: noTabYet + "; the person's own tabs are not listed, and the browser sub-agent never uses them", Command: "open tabs"}, nil
+			return contract.Result{Content: noTabYet + "; the person's own tabs are not listed, and the browser sub-agent never uses them", Command: "open tabs"}, nil
 		}
 	}
 	if len(tabs) == 0 {
-		return turn.Result{Content: "Chrome has no tab tofu can reach: every open tab is a chrome:// page, DevTools, an extension or the web store", Command: "open tabs"}, nil
+		return contract.Result{Content: "Chrome has no tab tofu can reach: every open tab is a chrome:// page, DevTools, an extension or the web store", Command: "open tabs"}, nil
 	}
 	lines := make([]string, len(tabs))
 	for i, tab := range tabs {
 		lines[i] = fmt.Sprintf("%d %s %s", tab.ID, tab.Title, tab.URL)
 	}
-	return turn.Result{
+	return contract.Result{
 		Content: fmt.Sprintf("%d open tabs\n%s", len(tabs), web.Untrusted("the titles of the open Chrome tabs", strings.Join(lines, "\n"))),
 		Command: "open tabs",
 	}, nil
@@ -276,12 +277,12 @@ func (browserRead) Definition() llm.Tool {
 	}
 }
 
-func (t browserRead) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
+func (t browserRead) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		Tab int `json:"tab"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("browser_read: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("browser_read: arguments are not the expected shape: %w", err)
 	}
 	var page browser.Page
 	err := t.session.with(func(client *browser.Client) (err error) {
@@ -289,9 +290,9 @@ func (t browserRead) Run(ctx context.Context, raw json.RawMessage) (turn.Result,
 		return err
 	})
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("browser_read: %w", err)
+		return contract.Result{}, fmt.Errorf("browser_read: %w", err)
 	}
-	return turn.Result{Content: readOut(args.Tab, page), Command: fmt.Sprintf("tab %d %s", args.Tab, page.URL)}, nil
+	return contract.Result{Content: readOut(args.Tab, page), Command: fmt.Sprintf("tab %d %s", args.Tab, page.URL)}, nil
 }
 
 func readOut(tab int, page browser.Page) string {
@@ -380,7 +381,7 @@ func (browserObserve) Definition() llm.Tool {
 	}
 }
 
-func (t browserObserve) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
+func (t browserObserve) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		Tab         int    `json:"tab"`
 		Interactive *bool  `json:"interactive"`
@@ -388,10 +389,10 @@ func (t browserObserve) Run(_ context.Context, raw json.RawMessage) (turn.Result
 		Note        string `json:"note"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("browser_observe: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("browser_observe: arguments are not the expected shape: %w", err)
 	}
 	if err := noted("browser_observe", args.Note); err != nil {
-		return turn.Result{}, err
+		return contract.Result{}, err
 	}
 	interactive := args.From == 0
 	if args.Interactive != nil {
@@ -409,9 +410,9 @@ func (t browserObserve) Run(_ context.Context, raw json.RawMessage) (turn.Result
 		return err
 	})
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("browser_observe: %w", err)
+		return contract.Result{}, fmt.Errorf("browser_observe: %w", err)
 	}
-	return turn.Result{Content: changes + web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), window(snapshot, args.From, interactive)), Command: fmt.Sprintf("tab %d observe", args.Tab)}, nil
+	return contract.Result{Content: changes + web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), window(snapshot, args.From, interactive)), Command: fmt.Sprintf("tab %d observe", args.Tab)}, nil
 }
 
 func sinceLastRead(driver *browser.Driver) (string, error) {
@@ -835,17 +836,17 @@ func (s browserStep) String() string {
 	return said
 }
 
-func (t browserAct) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
+func (t browserAct) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		Tab     int           `json:"tab"`
 		Actions []browserStep `json:"actions"`
 		Note    string        `json:"note"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("browser_act: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("browser_act: arguments are not the expected shape: %w", err)
 	}
 	if err := noted("browser_act", args.Note); err != nil {
-		return turn.Result{}, err
+		return contract.Result{}, err
 	}
 	if len(args.Actions) == 0 {
 		var snapshot string
@@ -855,21 +856,21 @@ func (t browserAct) Run(ctx context.Context, raw json.RawMessage) (turn.Result, 
 			return err
 		})
 		if err != nil {
-			return turn.Result{}, fmt.Errorf("browser_act: refused, it carried no action, and %w", err)
+			return contract.Result{}, fmt.Errorf("browser_act: refused, it carried no action, and %w", err)
 		}
 		content := fmt.Sprintf("refused: browser_act carried no action, and nothing ran. give 1 to %d actions on the page below\n\n", konst.BrowserBatchMax)
-		return turn.Result{Content: content + web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), window(snapshot, 1, true)), Command: fmt.Sprintf("tab %d act refused empty", args.Tab)}, nil
+		return contract.Result{Content: content + web.Untrusted(fmt.Sprintf("Chrome tab %d", args.Tab), window(snapshot, 1, true)), Command: fmt.Sprintf("tab %d act refused empty", args.Tab)}, nil
 	}
 	result, _, err := t.session.batch(ctx, args.Tab, args.Actions)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("browser_act: %w", err)
+		return contract.Result{}, fmt.Errorf("browser_act: %w", err)
 	}
 	return result, nil
 }
 
-func (s *browserSession) batch(ctx context.Context, tab int, steps []browserStep) (turn.Result, int, error) {
+func (s *browserSession) batch(ctx context.Context, tab int, steps []browserStep) (contract.Result, int, error) {
 	if len(steps) == 0 || len(steps) > konst.BrowserBatchMax {
-		return turn.Result{}, 0, fmt.Errorf("give 1 to %d actions, not %d", konst.BrowserBatchMax, len(steps))
+		return contract.Result{}, 0, fmt.Errorf("give 1 to %d actions, not %d", konst.BrowserBatchMax, len(steps))
 	}
 	var report strings.Builder
 	var snapshot, changes string
@@ -881,7 +882,7 @@ func (s *browserSession) batch(ctx context.Context, tab int, steps []browserStep
 	if first := actions[0]; tab == 0 && first.Action == "navigate" {
 		opened, err := s.start(ctx, first.Value)
 		if err != nil {
-			return turn.Result{}, 0, err
+			return contract.Result{}, 0, err
 		}
 		if opened != 0 {
 			fmt.Fprintf(&report, "1. %s: opened tofu's own tab %d on it, the tab this task works in\n", first, opened)
@@ -990,7 +991,7 @@ func (s *browserSession) batch(ctx context.Context, tab int, steps []browserStep
 		return err
 	})
 	if err != nil {
-		return turn.Result{}, 0, err
+		return contract.Result{}, 0, err
 	}
 	fmt.Fprintf(&report, "ran %d of %d", ran, len(steps))
 	tested := checks.held + checks.failed
@@ -1004,7 +1005,7 @@ func (s *browserSession) batch(ctx context.Context, tab int, steps []browserStep
 		report.WriteString("\nnext: this page shows a form. fill every field and submit it in one guarded batch, by role and name, with an expect_after on the result")
 	}
 	report.WriteString("\n\n")
-	return turn.Result{Content: changes + report.String() + web.Untrusted(fmt.Sprintf("Chrome tab %d", tab), window(snapshot, 1, !loads)), Command: fmt.Sprintf("tab %d act %d", tab, ran)}, checks.failed, nil
+	return contract.Result{Content: changes + report.String() + web.Untrusted(fmt.Sprintf("Chrome tab %d", tab), window(snapshot, 1, !loads)), Command: fmt.Sprintf("tab %d act %d", tab, ran)}, checks.failed, nil
 }
 
 func BrowserBatch(ctx context.Context, at browser.Endpoint, tabs *BrowserTabs, tab int, steps []byte) (string, int, error) {
@@ -1053,7 +1054,7 @@ func (browserMotion) Definition() llm.Tool {
 	}
 }
 
-func (t browserMotion) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
+func (t browserMotion) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		Action   string       `json:"action"`
 		Scenario string       `json:"scenario"`
@@ -1068,7 +1069,7 @@ func (t browserMotion) Run(ctx context.Context, raw json.RawMessage) (turn.Resul
 		Crop     *motion.Crop `json:"crop"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("browser_motion: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("browser_motion: arguments are not the expected shape: %w", err)
 	}
 	root := filepath.Join(t.session.at.Home, sys.StateDirName, "motion")
 	if place, found := sys.ScratchOf(ctx); found {
@@ -1087,9 +1088,9 @@ func (t browserMotion) Run(ctx context.Context, raw json.RawMessage) (turn.Resul
 		err = fmt.Errorf("action is %q, and it takes capture, inspect or compare", args.Action)
 	}
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("browser_motion: %w", err)
+		return contract.Result{}, fmt.Errorf("browser_motion: %w", err)
 	}
-	return turn.Result{Content: strings.Join(said, "\n"), Command: "motion " + args.Action}, nil
+	return contract.Result{Content: strings.Join(said, "\n"), Command: "motion " + args.Action}, nil
 }
 
 func (s *browserSession) capture(ctx context.Context, root, path string, takes int, label string, asked int) ([]string, error) {
@@ -1283,7 +1284,7 @@ func (t browserDo) Definition() llm.Tool {
 	}
 }
 
-func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
+func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		Goal   string        `json:"goal"`
 		URL    string        `json:"url"`
@@ -1292,10 +1293,10 @@ func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 		Steps  []browserStep `json:"steps"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("browser_do: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("browser_do: arguments are not the expected shape: %w", err)
 	}
 	if args.Tab == 0 && args.URL == "" {
-		return turn.Result{}, errors.New("browser_do: give a url to open, the tab to work in, or both to send a tab tofu opened to the url")
+		return contract.Result{}, errors.New("browser_do: give a url to open, the tab to work in, or both to send a tab tofu opened to the url")
 	}
 	if len(args.Steps) > 0 {
 		if args.URL != "" {
@@ -1303,13 +1304,13 @@ func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 		}
 		result, _, err := t.session.batch(ctx, args.Tab, args.Steps)
 		if err != nil {
-			return turn.Result{}, fmt.Errorf("browser_do: %w", err)
+			return contract.Result{}, fmt.Errorf("browser_do: %w", err)
 		}
 		return result, nil
 	}
 	model, chosen, err := t.model()
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("browser_do: no action ran, the %s setting names no model tofu can ask: %w", settings.BrowserModel, err)
+		return contract.Result{}, fmt.Errorf("browser_do: no action ran, the %s setting names no model tofu can ask: %w", settings.BrowserModel, err)
 	}
 	var result jevloop.Result
 	closed := false
@@ -1357,7 +1358,7 @@ func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 		return nil
 	})
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("browser_do: %w", err)
+		return contract.Result{}, fmt.Errorf("browser_do: %w", err)
 	}
 	var earlier strings.Builder
 	for _, page := range result.Pages {
@@ -1400,7 +1401,7 @@ func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 	if closed {
 		fmt.Fprintf(&body, "tab %d is closed: tofu opened it and no step ran there\n", args.Tab)
 	}
-	return turn.Result{
+	return contract.Result{
 		Content: fmt.Sprintf("%s\n\ntab %d %s after %d jev decisions and %d steps; the browser model is %s\n%s", answer, args.Tab, result.Status, result.Decisions, len(result.Steps), chosen,
 			web.Untrusted("the reason and the steps, named by the page's own labels", strings.TrimSuffix(body.String(), "\n"))),
 		Command: fmt.Sprintf("tab %d goal %q", args.Tab, args.Goal),

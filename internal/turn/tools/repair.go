@@ -7,10 +7,11 @@ import (
 	"slices"
 	"strings"
 
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 )
 
-func lookalikes(root turn.Root, requested string, withDirectories bool) ([]string, error) {
+func lookalikes(root contract.Root, requested string, withDirectories bool) ([]string, error) {
 	listed, err := filesUnder(root, ".", false)
 	if err != nil {
 		return nil, err
@@ -46,7 +47,7 @@ func directoriesOf(files []string) []string {
 	return dirs
 }
 
-func repairPath(root turn.Root, requested string, withDirectories bool) (string, string, error) {
+func repairPath(root contract.Root, requested string, withDirectories bool) (string, string, error) {
 	noun := "file"
 	if withDirectories {
 		noun = "path"

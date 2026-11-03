@@ -19,6 +19,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 )
@@ -98,7 +99,7 @@ func (m *recordingModel) toolResults() string {
 	return strings.Join(results, "\n")
 }
 
-func verbTool(t *testing.T, root, name string) turn.Tool {
+func verbTool(t *testing.T, root, name string) contract.Tool {
 	t.Helper()
 	verbs, err := tools.NewVerbs(root)
 	if err != nil {

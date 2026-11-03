@@ -14,13 +14,13 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
+	"tofu/internal/tools/contract"
 	"tofu/internal/web"
 )
 
-func NewWeb(config web.Config) []turn.Tool {
+func NewWeb(config web.Config) []contract.Tool {
 	client := web.NewClient(config)
-	var list []turn.Tool
+	var list []contract.Tool
 	if config.HasFetch() {
 		list = append(list, webFetch{client: client})
 	}
@@ -61,21 +61,21 @@ func (webFetch) Definition() llm.Tool {
 	}
 }
 
-func (t webFetch) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
+func (t webFetch) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		URL    string `json:"url"`
 		Offset int    `json:"offset"`
 		Limit  int    `json:"limit"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("fetch: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("fetch: arguments are not the expected shape: %w", err)
 	}
 	if args.Offset < 0 || args.Limit < 0 {
-		return turn.Result{}, fmt.Errorf("fetch: offset %d and limit %d are not a window, both count lines from 1", args.Offset, args.Limit)
+		return contract.Result{}, fmt.Errorf("fetch: offset %d and limit %d are not a window, both count lines from 1", args.Offset, args.Limit)
 	}
 	page, err := t.client.Get(ctx, args.URL)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("fetch: %w", err)
+		return contract.Result{}, fmt.Errorf("fetch: %w", err)
 	}
 	kept, cut := web.Reduce(page.Units)
 	body := web.Render(kept)
@@ -87,7 +87,7 @@ func (t webFetch) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 	lines := strings.Split(body, "\n")
 	first := max(args.Offset, 1)
 	if first > len(lines) {
-		return turn.Result{}, fmt.Errorf("fetch: offset %d is past the end of %s, which is %d lines", args.Offset, page.URL, len(lines))
+		return contract.Result{}, fmt.Errorf("fetch: offset %d is past the end of %s, which is %d lines", args.Offset, page.URL, len(lines))
 	}
 	last := min(first-1+cmp.Or(args.Limit, konst.FetchLineWindow), len(lines))
 	switch {
@@ -99,7 +99,7 @@ func (t webFetch) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 		message += fmt.Sprintf(". lines %d to %d of %d follow: call fetch with this url and offset %d to read on, "+
 			"and the page is read from what was already fetched rather than fetched again", first, last, len(lines), last+1)
 	}
-	return turn.Result{
+	return contract.Result{
 		Content: message + "\n" + web.Untrusted("the web page "+page.URL, strings.Join(lines[first-1:last], "\n")),
 		Command: page.URL,
 	}, nil
@@ -129,13 +129,13 @@ func (t webSearch) Definition() llm.Tool {
 	}
 }
 
-func (t webSearch) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
+func (t webSearch) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		Query string `json:"query"`
 		Count int    `json:"count"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("web_search: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("web_search: arguments are not the expected shape: %w", err)
 	}
 	results, header, err := t.client.Search(ctx, t.config, args.Query, args.Count)
 	if provider := t.config.Provider; provider.KeyVariable != "" && header != nil {
@@ -150,16 +150,16 @@ func (t webSearch) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 		_ = ledger.Tally(use)
 	}
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("web_search: %w", err)
+		return contract.Result{}, fmt.Errorf("web_search: %w", err)
 	}
 	command := args.Query
 	if len(results) == 0 {
-		return turn.Result{
+		return contract.Result{
 			Content: t.config.Provider.Name + " found nothing for " + args.Query + ": ask it something else, or look in the working directory",
 			Command: command,
 		}, nil
 	}
-	return turn.Result{
+	return contract.Result{
 		Content: fmt.Sprintf("%s returned %d results for %s\n%s", t.config.Provider.Name, len(results), args.Query,
 			web.Untrusted("search results from "+t.config.Provider.Name, web.Render(web.SearchUnits(results)))),
 		Command: command,

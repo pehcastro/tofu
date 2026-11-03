@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"tofu/internal/llm"
-	"tofu/internal/turn"
+	"tofu/internal/tools/contract"
 )
 
 func SideEffectFree(name string) bool {
@@ -70,29 +70,29 @@ func CallKey(name string, raw json.RawMessage) (string, bool) {
 
 type Memo struct {
 	mutex   sync.Mutex
-	answers map[string]turn.Result
+	answers map[string]contract.Result
 }
 
 func NewMemo() *Memo {
-	return &Memo{answers: map[string]turn.Result{}}
+	return &Memo{answers: map[string]contract.Result{}}
 }
 
-func (m *Memo) Wrap(list []turn.Tool) []turn.Tool {
-	wrapped := make([]turn.Tool, len(list))
+func (m *Memo) Wrap(list []contract.Tool) []contract.Tool {
+	wrapped := make([]contract.Tool, len(list))
 	for i, tool := range list {
 		wrapped[i] = memoTool{memo: m, tool: tool}
 	}
 	return wrapped
 }
 
-func (m *Memo) recall(key string) (turn.Result, bool) {
+func (m *Memo) recall(key string) (contract.Result, bool) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	held, ok := m.answers[key]
 	return held, ok
 }
 
-func (m *Memo) keep(key string, result turn.Result) {
+func (m *Memo) keep(key string, result contract.Result) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.answers[key] = result
@@ -106,16 +106,16 @@ func (m *Memo) forget() {
 
 type memoTool struct {
 	memo *Memo
-	tool turn.Tool
+	tool contract.Tool
 }
 
 func (t memoTool) Name() string { return t.tool.Name() }
 
 func (t memoTool) Definition() llm.Tool { return t.tool.Definition() }
 
-func (t memoTool) Uncached() turn.Tool { return t.tool }
+func (t memoTool) Uncached() contract.Tool { return t.tool }
 
-func (t memoTool) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
+func (t memoTool) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	if !SideEffectFree(t.tool.Name()) {
 		result, err := t.tool.Run(ctx, raw)
 		t.memo.forget()

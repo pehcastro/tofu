@@ -14,15 +14,15 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/search"
-	"tofu/internal/turn"
+	"tofu/internal/tools/contract"
 )
 
 type Project struct {
-	root turn.Root
+	root contract.Root
 }
 
 func NewProject(dir string) (Project, error) {
-	root, err := turn.NewRoot(dir)
+	root, err := contract.NewRoot(dir)
 	return Project{root: root}, err
 }
 
@@ -52,20 +52,20 @@ type projectArgs struct {
 	IncludeIgnored bool `json:"include_ignored"`
 }
 
-func (p Project) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
+func (p Project) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args projectArgs
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &args); err != nil {
-			return turn.Result{}, fmt.Errorf("project_report: arguments are not the expected shape: %w", err)
+			return contract.Result{}, fmt.Errorf("project_report: arguments are not the expected shape: %w", err)
 		}
 	}
 	if args.Limit < 0 {
-		return turn.Result{}, fmt.Errorf("project_report: limit is %d and a section lists at least one line", args.Limit)
+		return contract.Result{}, fmt.Errorf("project_report: limit is %d and a section lists at least one line", args.Limit)
 	}
 	limit := cmp.Or(args.Limit, konst.ProjectSectionCap)
 	listed, err := filesUnder(p.root, ".", args.IncludeIgnored)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("project_report: %w", err)
+		return contract.Result{}, fmt.Errorf("project_report: %w", err)
 	}
 
 	languages, roots := map[string]int{}, map[string]int{}
@@ -112,7 +112,7 @@ func (p Project) Run(_ context.Context, raw json.RawMessage) (turn.Result, error
 		note = strings.TrimSpace(note + " " + search.Note(search.Truncated,
 			"limit is "+strconv.Itoa(limit)+" and "+strings.Join(cut, ", ")+": raise limit, or glob the one you want in full"))
 	}
-	return turn.Result{Content: withNote(out.String(), note), Command: strconv.Itoa(len(listed.files)) + " files"}, nil
+	return contract.Result{Content: withNote(out.String(), note), Command: strconv.Itoa(len(listed.files)) + " files"}, nil
 }
 
 func shallowestFirst(left, right string) int {

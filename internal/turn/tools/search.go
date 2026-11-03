@@ -12,15 +12,15 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/search"
-	"tofu/internal/turn"
+	"tofu/internal/tools/contract"
 )
 
 type Search struct {
-	root turn.Root
+	root contract.Root
 }
 
 func NewSearch(dir string) (Search, error) {
-	root, err := turn.NewRoot(dir)
+	root, err := contract.NewRoot(dir)
 	return Search{root: root}, err
 }
 
@@ -57,25 +57,25 @@ type searchArgs struct {
 	IncludeIgnored bool   `json:"include_ignored"`
 }
 
-func (s Search) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
+func (s Search) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args searchArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("search: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("search: arguments are not the expected shape: %w", err)
 	}
 	if strings.TrimSpace(args.Pattern) == "" {
-		return turn.Result{}, errors.New("search: pattern is required")
+		return contract.Result{}, errors.New("search: pattern is required")
 	}
 	if args.Skip < 0 {
-		return turn.Result{}, fmt.Errorf("search: skip is a count of files to pass over and cannot be %d", args.Skip)
+		return contract.Result{}, fmt.Errorf("search: skip is a count of files to pass over and cannot be %d", args.Skip)
 	}
 	expression, err := regexp.Compile(args.Pattern)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("search: %q is not a regular expression: %w", args.Pattern, err)
+		return contract.Result{}, fmt.Errorf("search: %q is not a regular expression: %w", args.Pattern, err)
 	}
 	under := cmp.Or(args.Path, ".")
 	listed, err := filesUnder(s.root, under, args.IncludeIgnored)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("search: %w", err)
+		return contract.Result{}, fmt.Errorf("search: %w", err)
 	}
 	under = listed.under
 	result, err := search.Find(search.Request{
@@ -86,7 +86,7 @@ func (s Search) Run(_ context.Context, raw json.RawMessage) (turn.Result, error)
 		MaxTokens: search.Unbudgeted,
 	})
 	if err != nil {
-		return turn.Result{}, err
+		return contract.Result{}, err
 	}
 	budget := args.MaxTokens
 	if budget <= 0 {
@@ -94,13 +94,13 @@ func (s Search) Run(_ context.Context, raw json.RawMessage) (turn.Result, error)
 	}
 	page, err := result.Page(args.Skip, budget)
 	if err != nil {
-		return turn.Result{}, err
+		return contract.Result{}, err
 	}
 	hits := 0
 	for _, unit := range result.Units {
 		hits += len(unit.Matches)
 	}
-	return turn.Result{
+	return contract.Result{
 		Content: withNote(fmt.Sprintf("search %s under %s\n%s", args.Pattern, under, page), listed.note),
 		Command: args.Pattern + " under " + under,
 		Hits:    &hits,

@@ -12,7 +12,7 @@ import (
 	"tofu/internal/memory"
 	"tofu/internal/memtree"
 	"tofu/internal/session"
-	"tofu/internal/turn"
+	"tofu/internal/tools/contract"
 )
 
 type Recall struct {
@@ -40,26 +40,26 @@ func (Recall) Definition() llm.Tool {
 	}
 }
 
-func (r Recall) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
+func (r Recall) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		Store string `json:"store"`
 		Regex string `json:"regex"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("recall: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("recall: arguments are not the expected shape: %w", err)
 	}
 	hash, named := quoteHash(args.Regex)
 	if strings.Trim(hash, "# ") == "" {
-		return turn.Result{}, errors.New("recall: give a regex to search the memory stores, or a reference such as [tool#abc12] or a call id to read that call")
+		return contract.Result{}, errors.New("recall: give a regex to search the memory stores, or a reference such as [tool#abc12] or a call id to read that call")
 	}
 	wireID := !named && !strings.ContainsAny(hash, " .*+?()[]{}|^$\\") && strings.Contains(hash, "_")
 	noCall := ""
 	if (named || wireID) && r.Sessions != nil {
 		found, err := ResolveQuote(r.Sessions, r.Session, args.Regex)
 		if err != nil {
-			return turn.Result{}, fmt.Errorf("recall: %w", err)
+			return contract.Result{}, fmt.Errorf("recall: %w", err)
 		}
-		said := turn.Result{Command: "recall " + hash}
+		said := contract.Result{Command: "recall " + hash}
 		switch found.Outcome {
 		case QuoteNotFound:
 			noCall = "no call or turn ends with " + hash + " in this session or any it was forked from"
@@ -78,7 +78,7 @@ func (r Recall) Run(_ context.Context, raw json.RawMessage) (turn.Result, error)
 	}
 	logs, err := memory.Trees(r.Zoom.Project)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("recall: %w", err)
+		return contract.Result{}, fmt.Errorf("recall: %w", err)
 	}
 	searched := memoryStores()
 	if args.Store != "" {
@@ -92,7 +92,7 @@ func (r Recall) Run(_ context.Context, raw json.RawMessage) (turn.Result, error)
 		}
 		lines, err := r.Zoom.open(log, func(store *memtree.Store) ([]string, error) { return store.Recall(args.Regex) })
 		if err != nil {
-			return turn.Result{}, fmt.Errorf("recall: %s: %w", name, err)
+			return contract.Result{}, fmt.Errorf("recall: %s: %w", name, err)
 		}
 		for _, line := range lines {
 			found = append(found, name+" "+line)
@@ -104,7 +104,7 @@ func (r Recall) Run(_ context.Context, raw json.RawMessage) (turn.Result, error)
 		if noCall != "" {
 			missing = noCall + ", and " + missing
 		}
-		return turn.Result{Content: missing, Command: command}, nil
+		return contract.Result{Content: missing, Command: command}, nil
 	}
-	return turn.Result{Content: strings.Join(found, "\n"), Command: command}, nil
+	return contract.Result{Content: strings.Join(found, "\n"), Command: command}, nil
 }

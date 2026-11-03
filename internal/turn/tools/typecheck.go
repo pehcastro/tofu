@@ -7,16 +7,17 @@ import (
 	"fmt"
 
 	"tofu/internal/llm"
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 )
 
 type Typecheck struct {
-	root     turn.Root
+	root     contract.Root
 	checkers *turn.Typecheckers
 }
 
 func NewTypecheck(dir string, checkers *turn.Typecheckers) (Typecheck, error) {
-	root, err := turn.NewRoot(dir)
+	root, err := contract.NewRoot(dir)
 	return Typecheck{root: root, checkers: checkers}, err
 }
 
@@ -38,23 +39,23 @@ func (Typecheck) Definition() llm.Tool {
 	}
 }
 
-func (t Typecheck) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
+func (t Typecheck) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		Path string `json:"path"`
 	}
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &args); err != nil {
-			return turn.Result{}, fmt.Errorf("typecheck: arguments are not the expected shape: %w", err)
+			return contract.Result{}, fmt.Errorf("typecheck: arguments are not the expected shape: %w", err)
 		}
 	}
 	path := cmp.Or(args.Path, ".")
 	resolved, err := t.root.Resolve(path)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("typecheck: %w", err)
+		return contract.Result{}, fmt.Errorf("typecheck: %w", err)
 	}
 	result, err := t.checkers.Check(ctx, resolved)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("typecheck: %w", err)
+		return contract.Result{}, fmt.Errorf("typecheck: %w", err)
 	}
 	result.Command = path
 	return result, nil

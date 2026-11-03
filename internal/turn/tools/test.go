@@ -6,16 +6,17 @@ import (
 	"fmt"
 
 	"tofu/internal/llm"
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 )
 
 type Test struct {
-	root    turn.Root
+	root    contract.Root
 	runners *turn.TestRunners
 }
 
 func NewTest(dir string, runners *turn.TestRunners) (Test, error) {
-	root, err := turn.NewRoot(dir)
+	root, err := contract.NewRoot(dir)
 	return Test{root: root, runners: runners}, err
 }
 
@@ -36,20 +37,20 @@ func (Test) Definition() llm.Tool {
 	}
 }
 
-func (t Test) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
+func (t Test) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		Path string `json:"path"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("test: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("test: arguments are not the expected shape: %w", err)
 	}
 	resolved, err := t.root.Resolve(args.Path)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("test: %w", err)
+		return contract.Result{}, fmt.Errorf("test: %w", err)
 	}
 	result, err := t.runners.Test(ctx, resolved)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("test: %w", err)
+		return contract.Result{}, fmt.Errorf("test: %w", err)
 	}
 	result.Command = args.Path
 	return result, nil

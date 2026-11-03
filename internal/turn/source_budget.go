@@ -174,7 +174,7 @@ func runsScript(step subagent.ShellStep) bool {
 	return scriptRunner(step.Program) || launched || step.Program == "go" && len(step.Args) > 0 && step.Args[0] == "run"
 }
 
-func (r Root) scriptsOutsideSource(steps []subagent.ShellStep) bool {
+func scriptsOutsideSource(r Root, steps []subagent.ShellStep) bool {
 	for _, step := range steps {
 		if !runsScript(step) {
 			continue
@@ -212,10 +212,10 @@ func generatedFiles(steps []subagent.ShellStep) []string {
 	return generated
 }
 
-func (r Root) sources() map[string]string {
-	listed, err := r.gitListing()
+func sources(r Root) map[string]string {
+	listed, err := gitListing(r)
 	if err != nil {
-		listed, _ = r.walkListing()
+		listed, _ = walkListing(r)
 	}
 	held := map[string]string{}
 	for _, file := range listed {
@@ -455,13 +455,13 @@ func (t budgetedTool) runShell(ctx context.Context, raw json.RawMessage, command
 		return result, err
 	}
 	root := t.budget.files.root
-	if t.budget.spent >= konst.OrchestratorSourceLinesPerTurn && !root.scriptsOutsideSource(steps) {
+	if t.budget.spent >= konst.OrchestratorSourceLinesPerTurn && !scriptsOutsideSource(root, steps) {
 		return Result{}, t.refuse(SourceBudgetError{Reason: RefusedSpentScript})
 	}
 	mark, held := t.budget.writes.Begin(), t.budget.heldBySubAgents()
-	before := root.sources()
+	before := sources(root)
 	result, err := t.tool.Run(ctx, raw)
-	after := root.sources()
+	after := sources(root)
 	held = append(held, t.budget.heldBySubAgents()...)
 	uncounted := append(generatedFiles(steps), t.budget.writtenBySubAgents(t.budget.writes.End(mark))...)
 	result.Content += t.budget.spendScript(command, changedSince(before, after, func(file string) bool {

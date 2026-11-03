@@ -10,15 +10,15 @@ import (
 
 	"tofu/internal/llm"
 	"tofu/internal/search"
-	"tofu/internal/turn"
+	"tofu/internal/tools/contract"
 )
 
 type Symbols struct {
-	root turn.Root
+	root contract.Root
 }
 
 func NewSymbols(dir string) (Symbols, error) {
-	root, err := turn.NewRoot(dir)
+	root, err := contract.NewRoot(dir)
 	return Symbols{root: root}, err
 }
 
@@ -51,25 +51,25 @@ type symbolsArgs struct {
 	IncludeIgnored bool   `json:"include_ignored"`
 }
 
-func (s Symbols) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
+func (s Symbols) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args symbolsArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("symbols: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("symbols: arguments are not the expected shape: %w", err)
 	}
 	if strings.TrimSpace(args.Name) == "" {
-		return turn.Result{}, errors.New("symbols: name is required, and it is one identifier rather than a pattern")
+		return contract.Result{}, errors.New("symbols: name is required, and it is one identifier rather than a pattern")
 	}
 	under := cmp.Or(args.Path, ".")
 	listed, err := filesUnder(s.root, under, args.IncludeIgnored)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("symbols: %w", err)
+		return contract.Result{}, fmt.Errorf("symbols: %w", err)
 	}
 	under = listed.under
 	graph, err := search.Symbols(string(s.root), listed.files, args.Name)
 	if err != nil {
-		return turn.Result{}, err
+		return contract.Result{}, err
 	}
-	return turn.Result{
+	return contract.Result{
 		Content: withNote("symbols "+args.Name+" under "+under+"\n"+graph.Text, listed.note),
 		Command: args.Name + " under " + under,
 	}, nil

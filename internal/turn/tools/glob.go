@@ -23,15 +23,15 @@ import (
 	"tofu/internal/safe"
 	"tofu/internal/search"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
+	"tofu/internal/tools/contract"
 )
 
 type Glob struct {
-	root turn.Root
+	root contract.Root
 }
 
 func NewGlob(dir string) (Glob, error) {
-	root, err := turn.NewRoot(dir)
+	root, err := contract.NewRoot(dir)
 	return Glob{root: root}, err
 }
 
@@ -70,25 +70,25 @@ type globArgs struct {
 	IncludeIgnored bool   `json:"include_ignored"`
 }
 
-func (g Glob) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
+func (g Glob) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args globArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("glob: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("glob: arguments are not the expected shape: %w", err)
 	}
 	if strings.TrimSpace(args.Pattern) == "" {
-		return turn.Result{}, errors.New("glob: pattern is required")
+		return contract.Result{}, errors.New("glob: pattern is required")
 	}
 	if args.Skip < 0 {
-		return turn.Result{}, fmt.Errorf("glob: skip is a count of paths to pass over and cannot be %d", args.Skip)
+		return contract.Result{}, fmt.Errorf("glob: skip is a count of paths to pass over and cannot be %d", args.Skip)
 	}
 	glob, err := globExpression(args.Pattern)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("glob: %q is not a shell pattern: %w", args.Pattern, err)
+		return contract.Result{}, fmt.Errorf("glob: %q is not a shell pattern: %w", args.Pattern, err)
 	}
 	under := cmp.Or(args.Path, ".")
 	listed, err := filesUnder(g.root, under, args.IncludeIgnored)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("glob: %w", err)
+		return contract.Result{}, fmt.Errorf("glob: %w", err)
 	}
 	under = listed.under
 
@@ -101,7 +101,7 @@ func (g Glob) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 
 	command, matched := args.Pattern+" under "+under, len(found)
 	if matched == 0 {
-		return turn.Result{
+		return contract.Result{
 			Content: withNote(fmt.Sprintf("no file under %s matches %q, out of %d files searched. the directory exists and was read: this is an answer, not a failure",
 				under, args.Pattern, len(listed.files)), listed.note),
 			Command: command,
@@ -124,7 +124,7 @@ func (g Glob) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 		note = strings.TrimSpace(note + " " + search.Note(search.Truncated,
 			fmt.Sprintf("%d files matched and %d a page are shown: %s", matched, konst.GlobPathsResultCap, next)))
 	}
-	return turn.Result{
+	return contract.Result{
 		Content: withNote(header+"\n"+strings.Join(found, "\n")+"\n", note),
 		Command: command,
 		Hits:    &matched,
@@ -132,7 +132,7 @@ func (g Glob) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 }
 
 func ListPaths(dir string) ([]string, error) {
-	root, err := turn.NewRoot(dir)
+	root, err := contract.NewRoot(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -283,7 +283,7 @@ type ignoreScope struct {
 }
 
 type walk struct {
-	root        turn.Root
+	root        contract.Root
 	from        string
 	unfiltered  bool
 	ahead       map[string]chan dirListing
@@ -297,7 +297,7 @@ type walk struct {
 	notFollowed int
 }
 
-func filesUnder(root turn.Root, under string, includeIgnored bool) (listing, error) {
+func filesUnder(root contract.Root, under string, includeIgnored bool) (listing, error) {
 	from, err := root.Resolve(under)
 	if err != nil {
 		return listing{}, err

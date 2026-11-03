@@ -14,6 +14,7 @@ import (
 
 	"tofu/internal/judge/state"
 	"tofu/internal/rule"
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 )
 
@@ -324,7 +325,7 @@ func TestEveryCheckOnAnEditCallReadsFileTwo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	budgeted := turn.WithSourceBudget([]turn.Tool{editor.Reading(ledger)}, nil)[0]
+	budgeted := turn.WithSourceBudget([]contract.Tool{editor.Reading(ledger)}, nil)[0]
 	_, err = budgeted.Run(context.Background(), editCall(change("a.go", "A = 1", "A = 10"), change("b.go", "B = 2", strings.Repeat("// x\n", 250))))
 	var over turn.SourceBudgetError
 	if !errors.As(err, &over) || over.Path != "b.go" {

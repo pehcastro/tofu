@@ -11,7 +11,7 @@ import (
 	"sync"
 
 	"tofu/internal/llm"
-	"tofu/internal/turn"
+	"tofu/internal/tools/contract"
 )
 
 const PlanToolName = "plan"
@@ -39,7 +39,7 @@ type Plan struct {
 
 func NewPlan() *Plan { return &Plan{} }
 
-func (p *Plan) ForAnotherAgent() (turn.Tool, func() string) {
+func (p *Plan) ForAnotherAgent() (contract.Tool, func() string) {
 	own := NewPlan()
 	return own, own.Shown
 }
@@ -90,23 +90,23 @@ type planArgs struct {
 	Item  string      `json:"item"`
 }
 
-func (p *Plan) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
+func (p *Plan) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	args, err := parsePlanArgs(raw)
 	if err != nil {
-		return turn.Result{}, err
+		return contract.Result{}, err
 	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 	next, err := applyPlan(p.items, args)
 	if err != nil {
-		return turn.Result{}, err
+		return contract.Result{}, err
 	}
 	p.items = next
 	shown := planText(p.items)
 	if args.Op == "set" && p.Advise != nil {
 		p.Advise(ctx, shown)
 	}
-	return turn.Result{Content: shown, Command: args.Op}, nil
+	return contract.Result{Content: shown, Command: args.Op}, nil
 }
 
 func (p *Plan) Items() []PlanItem {

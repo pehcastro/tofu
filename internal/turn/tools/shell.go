@@ -11,6 +11,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/shell"
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 )
 
@@ -44,25 +45,25 @@ type shellArgs struct {
 	Until string `json:"until"`
 }
 
-func (Shells) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
+func (Shells) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args shellArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("shell: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("shell: arguments are not the expected shape: %w", err)
 	}
 	registry := turn.ShellRegistryFrom(ctx)
 	if registry == nil {
-		return turn.Result{}, errors.New("shell: no shell registry is attached to this turn")
+		return contract.Result{}, errors.New("shell: no shell registry is attached to this turn")
 	}
 	command := args.Op + " " + args.Name
 	content, exitCode, err := runShellOp(ctx, registry, args)
 	var held shell.HeldError
 	switch {
 	case errors.As(err, &held):
-		return turn.Result{Content: held.Error(), Command: command}, nil
+		return contract.Result{Content: held.Error(), Command: command}, nil
 	case err != nil:
-		return turn.Result{}, fmt.Errorf("shell: %w", err)
+		return contract.Result{}, fmt.Errorf("shell: %w", err)
 	}
-	return turn.Result{Content: content, Command: command, ExitCode: exitCode}, nil
+	return contract.Result{Content: content, Command: command, ExitCode: exitCode}, nil
 }
 
 func runShellOp(ctx context.Context, registry *shell.Registry, args shellArgs) (string, *int, error) {

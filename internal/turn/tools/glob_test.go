@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/turn"
+	"tofu/internal/tools/contract"
 )
 
 func linkTo(t *testing.T, name, target string) {
@@ -67,9 +67,9 @@ func TestWalkNeverFollowsALinkOutsideTheProject(t *testing.T) {
 		}
 	}
 	const counted = "links not followed: 2,"
-	glob, search := Glob{root: turn.Root(project)}, Search{root: turn.Root(project)}
+	glob, search := Glob{root: contract.Root(project)}, Search{root: contract.Root(project)}
 	rows := []struct {
-		tool turn.Tool
+		tool contract.Tool
 		args string
 		want []string
 	}{

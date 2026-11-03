@@ -18,7 +18,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/search"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
+	"tofu/internal/tools/contract"
 	"tofu/library/docs"
 )
 
@@ -149,17 +149,17 @@ func judgeBody(state, battery string) (string, error) {
 }
 
 type Verb struct {
-	root turn.Root
+	root contract.Root
 	spec verbSpec
 }
 
-func NewVerbs(dir string) ([]turn.Tool, error) {
-	root, err := turn.NewRoot(dir)
+func NewVerbs(dir string) ([]contract.Tool, error) {
+	root, err := contract.NewRoot(dir)
 	if err != nil {
 		return nil, err
 	}
 	specs := verbSpecs()
-	verbs := make([]turn.Tool, len(specs))
+	verbs := make([]contract.Tool, len(specs))
 	for i, spec := range specs {
 		verbs[i] = Verb{root: root, spec: spec}
 	}
@@ -185,11 +185,11 @@ func (v Verb) Definition() llm.Tool {
 	}
 }
 
-func (v Verb) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
+func (v Verb) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	args := map[string]string{}
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &args); err != nil {
-			return turn.Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", v.spec.tool, err)
+			return contract.Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", v.spec.tool, err)
 		}
 	}
 	values := make(map[verbParam]string, len(v.spec.params))
@@ -200,7 +200,7 @@ func (v Verb) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 		delete(args, names[i])
 	}
 	if len(args) > 0 {
-		return turn.Result{}, fmt.Errorf("%s: it has no argument named %s: its arguments are %s",
+		return contract.Result{}, fmt.Errorf("%s: it has no argument named %s: its arguments are %s",
 			v.spec.tool, strings.Join(slices.Sorted(maps.Keys(args)), ", "), strings.Join(names, " and "))
 	}
 
@@ -211,14 +211,14 @@ func (v Verb) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 		value := values[param]
 		if value == "" {
 			if must {
-				return turn.Result{}, fmt.Errorf("%s: %s is required: %s", v.spec.tool, name, describe)
+				return contract.Result{}, fmt.Errorf("%s: %s is required: %s", v.spec.tool, name, describe)
 			}
 			continue
 		}
 		switch param {
 		case verbParamPath:
 			if _, err := v.root.Resolve(value); err != nil {
-				return turn.Result{}, fmt.Errorf("%s: %w", v.spec.tool, err)
+				return contract.Result{}, fmt.Errorf("%s: %w", v.spec.tool, err)
 			}
 			words = append(words, value)
 		case verbParamState:
@@ -240,23 +240,23 @@ func (v Verb) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 	}
 	body, err := judgeBody(state, battery)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("%s: %w", v.spec.tool, err)
+		return contract.Result{}, fmt.Errorf("%s: %w", v.spec.tool, err)
 	}
 	return v.spawn(ctx, words, body)
 }
 
-func (v Verb) spawn(ctx context.Context, words []string, body string) (turn.Result, error) {
+func (v Verb) spawn(ctx context.Context, words []string, body string) (contract.Result, error) {
 	depth, err := verbDepth()
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("%s: %w", v.spec.tool, err)
+		return contract.Result{}, fmt.Errorf("%s: %w", v.spec.tool, err)
 	}
 	if depth >= konst.VerbMaxDepth {
-		return turn.Result{}, fmt.Errorf("%s: this tofu is already nested %d deep and the bound is %d: a further nested run is refused",
+		return contract.Result{}, fmt.Errorf("%s: this tofu is already nested %d deep and the bound is %d: a further nested run is refused",
 			v.spec.tool, depth, konst.VerbMaxDepth)
 	}
 	running, err := os.Executable()
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("%s: finding the running tofu: %w", v.spec.tool, err)
+		return contract.Result{}, fmt.Errorf("%s: finding the running tofu: %w", v.spec.tool, err)
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(konst.VerbTimeoutMillis)*time.Millisecond)
 	defer cancel()
@@ -271,18 +271,18 @@ func (v Verb) spawn(ctx context.Context, words []string, body string) (turn.Resu
 	output, runErr := cmd.CombinedOutput()
 	command := "tofu " + strings.Join(words, " ")
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return turn.Result{}, errors.New(v.spec.tool + ": " + search.Note(search.Stopped,
+		return contract.Result{}, errors.New(v.spec.tool + ": " + search.Note(search.Stopped,
 			fmt.Sprintf("%s ran past the %d ms deadline and was killed", command, konst.VerbTimeoutMillis)))
 	}
 	if cmd.ProcessState == nil {
-		return turn.Result{}, fmt.Errorf("%s: %s did not run: %w", v.spec.tool, command, runErr)
+		return contract.Result{}, fmt.Errorf("%s: %s did not run: %w", v.spec.tool, command, runErr)
 	}
 	code := cmd.ProcessState.ExitCode()
 	content := string(output)
 	if strings.TrimSpace(content) == "" {
 		content = fmt.Sprintf("%s exited %d and printed nothing", command, code)
 	}
-	return turn.Result{Content: content, Command: command, ExitCode: &code}, nil
+	return contract.Result{Content: content, Command: command, ExitCode: &code}, nil
 }
 
 func verbDepth() (int, error) {

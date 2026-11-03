@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"tofu/internal/search"
-	"tofu/internal/turn"
+	"tofu/internal/tools/contract"
 )
 
 const searchProfileEnvar = "TOFU_SEARCH_PROFILE"
@@ -68,7 +68,7 @@ func TestSearchProfileOverATree(t *testing.T) {
 	}
 }
 
-func profiledFiles(root turn.Root, under, half string) ([]string, error) {
+func profiledFiles(root contract.Root, under, half string) ([]string, error) {
 	if under == "" {
 		listed, err := filesUnder(root, ".", false)
 		return listed.files, err

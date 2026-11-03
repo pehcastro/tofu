@@ -11,15 +11,15 @@ import (
 
 	"tofu/internal/llm"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
+	"tofu/internal/tools/contract"
 )
 
 type GitHubPRDiff struct {
-	root turn.Root
+	root contract.Root
 }
 
 func NewGitHubPRDiff(dir string) (GitHubPRDiff, error) {
-	root, err := turn.NewRoot(dir)
+	root, err := contract.NewRoot(dir)
 	return GitHubPRDiff{root: root}, err
 }
 
@@ -45,17 +45,17 @@ func (GitHubPRDiff) Definition() llm.Tool {
 	}
 }
 
-func (t GitHubPRDiff) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
+func (t GitHubPRDiff) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		PR string `json:"pr"`
 	}
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &args); err != nil {
-			return turn.Result{}, fmt.Errorf("github_pr_diff: arguments are not the expected shape: %w", err)
+			return contract.Result{}, fmt.Errorf("github_pr_diff: arguments are not the expected shape: %w", err)
 		}
 	}
 	if _, err := exec.LookPath("gh"); err != nil {
-		return turn.Result{}, errors.New("github_pr_diff: gh is not installed: install the GitHub CLI, github.com/cli/cli, so this tool can shell out to it")
+		return contract.Result{}, errors.New("github_pr_diff: gh is not installed: install the GitHub CLI, github.com/cli/cli, so this tool can shell out to it")
 	}
 
 	pr := strings.TrimSpace(args.PR)
@@ -76,19 +76,19 @@ func (t GitHubPRDiff) Run(ctx context.Context, raw json.RawMessage) (turn.Result
 			message = strings.TrimSpace(stdout.String())
 		}
 		if strings.Contains(message, "gh auth login") || strings.Contains(message, "not logged into any GitHub hosts") {
-			return turn.Result{}, errors.New("github_pr_diff: gh is not authenticated: run gh auth login")
+			return contract.Result{}, errors.New("github_pr_diff: gh is not authenticated: run gh auth login")
 		}
 		if message == "" {
 			message = runErr.Error()
 		}
-		return turn.Result{}, fmt.Errorf("github_pr_diff: %s failed: %s", command, message)
+		return contract.Result{}, fmt.Errorf("github_pr_diff: %s failed: %s", command, message)
 	}
 
 	diff := stdout.String()
 	if strings.TrimSpace(diff) == "" {
-		return turn.Result{Content: command + " printed no diff", Command: command}, nil
+		return contract.Result{Content: command + " printed no diff", Command: command}, nil
 	}
-	return turn.Result{
+	return contract.Result{
 		Content: fmt.Sprintf("%s printed a %d byte diff\n\n%s", command, len(diff), diff),
 		Command: command,
 	}, nil

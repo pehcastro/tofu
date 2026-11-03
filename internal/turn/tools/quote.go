@@ -17,6 +17,7 @@ import (
 	"tofu/internal/search"
 	"tofu/internal/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 )
 
@@ -95,24 +96,24 @@ type quoteArgs struct {
 	ID string `json:"id"`
 }
 
-func (q Quote) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
+func (q Quote) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args quoteArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("quote: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("quote: arguments are not the expected shape: %w", err)
 	}
 	found, err := ResolveQuote(q.store, q.session, args.ID)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("quote: %w", err)
+		return contract.Result{}, fmt.Errorf("quote: %w", err)
 	}
 	switch found.Outcome {
 	case QuoteNotFound:
-		return turn.Result{}, fmt.Errorf("quote: %w in this session or any it was forked from: %q: ask for the reference again rather than quoting the nearest item", session.ErrEventHashNotFound, found.Hash)
+		return contract.Result{}, fmt.Errorf("quote: %w in this session or any it was forked from: %q: ask for the reference again rather than quoting the nearest item", session.ErrEventHashNotFound, found.Hash)
 	case QuoteAmbiguous:
-		return turn.Result{}, fmt.Errorf("quote: %w in %s: %q: ask for the reference again rather than quoting the nearest item", session.ErrEventHashAmbiguous, found.Session, found.Hash)
+		return contract.Result{}, fmt.Errorf("quote: %w in %s: %q: ask for the reference again rather than quoting the nearest item", session.ErrEventHashAmbiguous, found.Session, found.Hash)
 	case QuoteItem:
 		body, note := quoteCut(found.Noun, found.Words)
 		header := fmt.Sprintf("quote %s, %s, recorded in %s", found.Hash, found.Speaker, found.Session)
-		return turn.Result{Content: withNote(header+"\n"+body+"\n", note), Command: found.Hash}, nil
+		return contract.Result{Content: withNote(header+"\n"+body+"\n", note), Command: found.Hash}, nil
 	}
 	panic("quote: unknown outcome " + string(found.Outcome))
 }

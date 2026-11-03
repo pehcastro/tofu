@@ -19,6 +19,7 @@ import (
 	"tofu/internal/safe"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 )
 
@@ -120,7 +121,7 @@ func (AskPerson) Definition() llm.Tool {
 	}
 }
 
-func (a AskPerson) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
+func (a AskPerson) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		Questions []struct {
 			turn.PersonQuestion
@@ -128,14 +129,14 @@ func (a AskPerson) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 		} `json:"questions"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("ask_person: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("ask_person: arguments are not the expected shape: %w", err)
 	}
 	questions, reversible := make([]turn.PersonQuestion, len(args.Questions)), true
 	for i, q := range args.Questions {
 		questions[i], reversible = q.PersonQuestion, reversible && q.Reversible && q.Recommended != nil
 	}
 	if err := checkQuestions(questions); err != nil {
-		return turn.Result{}, fmt.Errorf("ask_person: %w", err)
+		return contract.Result{}, fmt.Errorf("ask_person: %w", err)
 	}
 	for i := range questions {
 		questions[i].Options = optionsOf(questions[i])
@@ -154,7 +155,7 @@ func (a AskPerson) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 			taken := resolved(askTakenInAuto, questions, "the ask judge said proceed and the recommended option can be undone, so gatePrompt auto took it without asking the person")
 			a.backfill(ids, taken.Outcome)
 			shown, err := json.Marshal(taken)
-			return turn.Result{Content: string(shown)}, err
+			return contract.Result{Content: string(shown)}, err
 		}
 		recorded <- ids
 	} else {
@@ -179,11 +180,11 @@ func (a AskPerson) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 		reply := answered(<-replied, questions)
 		a.backfill(<-recorded, reply.Outcome)
 		shown, err := json.Marshal(reply)
-		return turn.Result{Content: string(shown)}, err
+		return contract.Result{Content: string(shown)}, err
 	}
 	open := a.Inbox.Open(pollOf(questions))
 	safe.Go(report, "ask answer", func() { a.answerLater(open, replied, recorded, questions) })
-	return turn.Result{Content: askedAndWorking}, nil
+	return contract.Result{Content: askedAndWorking}, nil
 }
 
 func (a AskPerson) reply(ctx context.Context, raw json.RawMessage, questions []turn.PersonQuestion, auto bool) personReply {

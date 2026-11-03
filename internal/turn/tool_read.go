@@ -82,7 +82,7 @@ func (t *ReadTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	repair := ""
 	content, err := os.ReadFile(resolved)
 	if errors.Is(err, fs.ErrNotExist) {
-		found, listErr := t.root.lookalikes(args.Path)
+		found, listErr := lookalikes(t.root, args.Path)
 		if listErr != nil {
 			return Result{}, fmt.Errorf("read: %w", listErr)
 		}

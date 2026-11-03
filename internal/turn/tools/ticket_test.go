@@ -13,7 +13,7 @@ import (
 
 	"tofu/internal/boardy"
 	"tofu/internal/subagent"
-	"tofu/internal/turn"
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn/tools"
 )
 
@@ -40,20 +40,20 @@ func ticketBoard(t *testing.T) boardy.Managed {
 
 const drafted = `"before":"b","driven":"d","still_works":"w","error_case":"e","feasibility":"f",`
 
-func subAgentTool(t *testing.T, board boardy.Managed, name string) turn.Tool {
+func subAgentTool(t *testing.T, board boardy.Managed, name string) contract.Tool {
 	t.Helper()
 	list, err := tools.TicketTools(board, "go-dev-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	at := slices.IndexFunc(list, func(tool turn.Tool) bool { return tool.Name() == name })
+	at := slices.IndexFunc(list, func(tool contract.Tool) bool { return tool.Name() == name })
 	if at < 0 {
 		t.Fatalf("%s is not among a sub-agent's ticket tools", name)
 	}
 	return list[at]
 }
 
-func runTicket(tool turn.Tool, args string) (string, error) {
+func runTicket(tool contract.Tool, args string) (string, error) {
 	result, err := tool.Run(context.Background(), json.RawMessage(args))
 	return result.Content, err
 }
@@ -140,7 +140,7 @@ func TestTicketToolsSplitATicketAndThreadTheAsk(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	create := lead[slices.IndexFunc(lead, func(tool turn.Tool) bool { return tool.Name() == "ticket_create" })]
+	create := lead[slices.IndexFunc(lead, func(tool contract.Tool) bool { return tool.Name() == "ticket_create" })]
 	said, err := runTicket(create, `{"board":"DEMO",`+drafted+`"parent":"DEMO-2","title":"the parser half","acceptance":"- it parses","owns":["internal/a/parse.go"]}`)
 	if err != nil || !strings.Contains(said, "DEMO-2-1") {
 		t.Fatalf("ticket_create under DEMO-2 said %q, %v", said, err)
@@ -180,7 +180,7 @@ func TestANotPossibleReportHoldsTheTicketForThePerson(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if slices.ContainsFunc(lead, func(tool turn.Tool) bool { return tool.Name() == "ticket_not_possible" }) {
+	if slices.ContainsFunc(lead, func(tool contract.Tool) bool { return tool.Name() == "ticket_not_possible" }) {
 		t.Error("the lead is offered ticket_not_possible, which is the sub-agent's to say")
 	}
 	notPossible := subAgentTool(t, board, "ticket_not_possible")
@@ -264,7 +264,7 @@ func TestTicketToolsStateAndKeepTheirLimitsInWords(t *testing.T) {
 			t.Errorf("%s says %q, want %q in it", name, described[name], want)
 		}
 	}
-	create := lead[slices.IndexFunc(lead, func(tool turn.Tool) bool { return tool.Name() == "ticket_create" })]
+	create := lead[slices.IndexFunc(lead, func(tool contract.Tool) bool { return tool.Name() == "ticket_create" })]
 	schema, _ := create.Definition().Parameters.(map[string]any)
 	required, _ := schema["required"].([]string)
 	properties, _ := schema["properties"].(map[string]any)

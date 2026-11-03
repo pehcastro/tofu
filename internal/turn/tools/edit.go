@@ -16,12 +16,13 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/rule"
 	"tofu/internal/search"
+	"tofu/internal/tools/contract"
 	"tofu/internal/transform"
 	"tofu/internal/turn"
 )
 
 type Edit struct {
-	root     turn.Root
+	root     contract.Root
 	ledger   *turn.ReadLedger
 	checkers *turn.Typecheckers
 	rules    []rule.Rule
@@ -33,7 +34,7 @@ func (e Edit) Ruling(rules []rule.Rule) Edit {
 }
 
 func NewEdit(dir string) (Edit, error) {
-	root, err := turn.NewRoot(dir)
+	root, err := contract.NewRoot(dir)
 	return Edit{root: root}, err
 }
 
@@ -85,10 +86,10 @@ type plannedEdit struct {
 	fires    []rule.Fire
 }
 
-func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
+func (e Edit) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	changes, err := turn.EditChanges(raw)
 	if err != nil {
-		return turn.Result{}, err
+		return contract.Result{}, err
 	}
 	var files, skipped []string
 	byFile := map[string][]turn.EditChange{}
@@ -105,12 +106,12 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 		byFile[file] = append(byFile[file], change)
 	}
 	if len(files) == 0 {
-		return turn.Result{}, errors.New("edit: every change in this call has the same old_string and new_string, so there is nothing to change")
+		return contract.Result{}, errors.New("edit: every change in this call has the same old_string and new_string, so there is nothing to change")
 	}
 	plans := make([]plannedEdit, len(files))
 	for i, file := range files {
 		if plans[i], err = e.plan(ctx, byFile[file], len(files) > 1); err != nil {
-			return turn.Result{}, fmt.Errorf("%w%s", err, turn.NoneWritten(len(files)))
+			return contract.Result{}, fmt.Errorf("%w%s", err, turn.NoneWritten(len(files)))
 		}
 	}
 	for i, plan := range plans {
@@ -119,10 +120,10 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 				_ = transform.Commit(string(e.root), transform.Preview{Path: written.preview.Path, Before: written.preview.After, After: written.preview.Before})
 			}
 			if errors.Is(err, transform.ErrStale) {
-				return turn.Result{}, errors.New("edit: " + search.Note(search.Stale,
+				return contract.Result{}, errors.New("edit: " + search.Note(search.Stale,
 					plan.preview.Path+" is no longer the text edit read, so nothing was written: read it again and edit the text that is there now"))
 			}
-			return turn.Result{}, fmt.Errorf("edit: %w%s", err, turn.NoneWritten(len(files)))
+			return contract.Result{}, fmt.Errorf("edit: %w%s", err, turn.NoneWritten(len(files)))
 		}
 	}
 	shown, targets := make([]string, len(plans)), make([]string, len(plans))
@@ -133,7 +134,7 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 		targets[i] = plan.preview.Path
 		fires = append(fires, plan.fires...)
 	}
-	return turn.Result{Content: strings.Join(append(shown, skipped...), "\n"), Command: strings.Join(targets, " "), Rules: fires}, nil
+	return contract.Result{Content: strings.Join(append(shown, skipped...), "\n"), Command: strings.Join(targets, " "), Rules: fires}, nil
 }
 
 func refusedChange(change turn.EditChange, onFile int) error {

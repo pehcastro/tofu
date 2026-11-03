@@ -27,20 +27,20 @@ func RepairPath(requested, noun string, found []string) (string, string, error) 
 		requested, noun, len(found), base, strings.Join(found, ", "))
 }
 
-func (r Root) lookalikes(requested string) ([]string, error) {
-	if listed, err := r.gitListing(); err == nil {
-		if found := r.namedLike(listed, requested); len(found) > 0 {
+func lookalikes(r Root, requested string) ([]string, error) {
+	if listed, err := gitListing(r); err == nil {
+		if found := namedLike(r, listed, requested); len(found) > 0 {
 			return found, nil
 		}
 	}
-	walked, err := r.walkListing()
+	walked, err := walkListing(r)
 	if err != nil {
 		return nil, err
 	}
-	return r.namedLike(walked, requested), nil
+	return namedLike(r, walked, requested), nil
 }
 
-func (r Root) realPaths(candidates []string) []string {
+func realPaths(r Root, candidates []string) []string {
 	var real, listed []string
 	var listErr error
 	for _, candidate := range candidates {
@@ -51,18 +51,18 @@ func (r Root) realPaths(candidates []string) []string {
 			}
 		}
 		if listed == nil && listErr == nil {
-			if listed, listErr = r.gitListing(); listErr != nil {
-				listed, listErr = r.walkListing()
+			if listed, listErr = gitListing(r); listErr != nil {
+				listed, listErr = walkListing(r)
 			}
 		}
-		if len(r.namedLike(listed, candidate)) > 0 {
+		if len(namedLike(r, listed, candidate)) > 0 {
 			real = append(real, candidate)
 		}
 	}
 	return real
 }
 
-func (r Root) gitListing() ([]string, error) {
+func gitListing(r Root) ([]string, error) {
 	listed, err := exec.Command("git", "-C", string(r), "ls-files", "-z", "--cached", "--others", "--exclude-standard").Output()
 	if err != nil {
 		return nil, err
@@ -70,7 +70,7 @@ func (r Root) gitListing() ([]string, error) {
 	return strings.FieldsFunc(string(listed), func(c rune) bool { return c == 0 }), nil
 }
 
-func (r Root) walkListing() ([]string, error) {
+func walkListing(r Root) ([]string, error) {
 	var listed []string
 	err := filepath.WalkDir(string(r), func(full string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -97,7 +97,7 @@ func neverListed(directory string) bool {
 	return false
 }
 
-func (r Root) namedLike(listed []string, requested string) []string {
+func namedLike(r Root, listed []string, requested string) []string {
 	wanted := strings.ToLower(path.Clean(filepath.ToSlash(requested)))
 	base := path.Base(wanted)
 	var found []string

@@ -135,7 +135,7 @@ func (t *SpawnTool) briefFiles(ctx context.Context, args spawnArgs, lead []llm.M
 	}
 	named := briefPath.FindAllString(args.Task, -1)
 	if direct, isRead := read.(*ReadTool); isRead {
-		named = direct.root.realPaths(named)
+		named = realPaths(direct.root, named)
 	}
 	var candidates []briefCandidate
 	listed := map[string]bool{}

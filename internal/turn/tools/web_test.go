@@ -14,6 +14,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 	"tofu/internal/web"
@@ -57,7 +58,7 @@ func (m *watchingModel) toolResult(t *testing.T) string {
 	return ""
 }
 
-func runWeb(t *testing.T, model *watchingModel, list []turn.Tool, bytesCap int, gate turn.Gate) turn.Row {
+func runWeb(t *testing.T, model *watchingModel, list []contract.Tool, bytesCap int, gate turn.Gate) turn.Row {
 	t.Helper()
 	row, err := turn.Run(context.Background(), turn.Config{
 		Model:          model,

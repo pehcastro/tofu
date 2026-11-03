@@ -7,6 +7,7 @@ import (
 
 	"tofu/internal/llm"
 	"tofu/internal/skill"
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 	shipped "tofu/library"
 )
@@ -35,21 +36,21 @@ func (s Skill) Definition() llm.Tool {
 	}
 }
 
-func (s Skill) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
+func (s Skill) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		Name string `json:"name"`
 		Path string `json:"path"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("skill: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("skill: arguments are not the expected shape: %w", err)
 	}
 	body, err := skill.Load(s.skills, shipped.Files(), args.Name, args.Path)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("skill: %w", err)
+		return contract.Result{}, fmt.Errorf("skill: %w", err)
 	}
 	command := args.Name
 	if args.Path != "" {
 		command += "/" + args.Path
 	}
-	return turn.Result{Content: body, Command: command, Origin: llm.Origin{Source: llm.SourceSkillLoad, Name: args.Name, ID: args.Path}}, nil
+	return contract.Result{Content: body, Command: command, Origin: llm.Origin{Source: llm.SourceSkillLoad, Name: args.Name, ID: args.Path}}, nil
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 )
@@ -24,7 +25,7 @@ func sessionDir(t *testing.T) (string, *turn.ReadLedger) {
 	return dir, turn.NewReadLedger()
 }
 
-func call(t *testing.T, tool turn.Tool, args map[string]string) error {
+func call(t *testing.T, tool contract.Tool, args map[string]string) error {
 	t.Helper()
 	raw, err := json.Marshal(args)
 	if err != nil {
@@ -34,7 +35,7 @@ func call(t *testing.T, tool turn.Tool, args map[string]string) error {
 	return err
 }
 
-func turnTools(t *testing.T, dir string, ledger *turn.ReadLedger) (turn.Tool, turn.Tool, turn.Tool) {
+func turnTools(t *testing.T, dir string, ledger *turn.ReadLedger) (contract.Tool, contract.Tool, contract.Tool) {
 	t.Helper()
 	read, readErr := turn.NewReadTool(dir)
 	write, writeErr := turn.NewWriteTool(dir)
@@ -78,7 +79,7 @@ func TestAFileChangedOnDiskAfterTheReadIsRefused(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(changed), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			tool, args := turn.Tool(write), map[string]string{"path": "package.json", "content": "{}\n"}
+			tool, args := contract.Tool(write), map[string]string{"path": "package.json", "content": "{}\n"}
 			if name == "edit" {
 				tool, args = edit, map[string]string{"path": "package.json", "old_string": "moth", "new_string": "inky"}
 			}
@@ -180,7 +181,7 @@ func TestAnEditOrWriteReachingLinesNoReadShowedIsRefused(t *testing.T) {
 				t.Fatal(err)
 			}
 			read, write, edit := turnTools(t, dir, turn.NewReadLedger())
-			byName := map[string]turn.Tool{"read": read, "write": write, "edit": edit}
+			byName := map[string]contract.Tool{"read": read, "write": write, "edit": edit}
 			for i, step := range row.steps {
 				raw, _ := json.Marshal(step.args)
 				held, _ := os.ReadFile(target)
@@ -239,8 +240,8 @@ func TestARefusalOfALargeFileNamesTheReadThatLetsTheRetryThrough(t *testing.T) {
 				t.Fatal(err)
 			}
 			read, write, edit := turnTools(t, dir, turn.NewReadLedger())
-			tool := map[string]turn.Tool{"write": write, "edit": edit}[row.tool]
-			run := func(using turn.Tool, args map[string]any) error {
+			tool := map[string]contract.Tool{"write": write, "edit": edit}[row.tool]
+			run := func(using contract.Tool, args map[string]any) error {
 				raw, _ := json.Marshal(args)
 				_, err := using.Run(context.Background(), raw)
 				return err

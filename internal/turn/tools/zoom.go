@@ -12,6 +12,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/memory"
 	"tofu/internal/memtree"
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 )
 
@@ -47,28 +48,28 @@ func (*Zoom) Definition() llm.Tool {
 	}
 }
 
-func (z *Zoom) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
+func (z *Zoom) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		Store string `json:"store"`
 		ID    int    `json:"id"`
 		N     int    `json:"n"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("zoom: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("zoom: arguments are not the expected shape: %w", err)
 	}
 	logs, err := memory.Trees(z.Project)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("zoom: %w", err)
+		return contract.Result{}, fmt.Errorf("zoom: %w", err)
 	}
 	log, kept := logs[args.Store]
 	if !kept {
-		return turn.Result{}, fmt.Errorf("zoom: %s holds nothing in this project yet", args.Store)
+		return contract.Result{}, fmt.Errorf("zoom: %s holds nothing in this project yet", args.Store)
 	}
 	lines, err := z.open(log, func(store *memtree.Store) ([]string, error) { return store.Zoom(args.ID, args.N) })
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("zoom: %w", err)
+		return contract.Result{}, fmt.Errorf("zoom: %w", err)
 	}
-	return turn.Result{Content: strings.Join(lines, "\n"), Command: "zoom " + args.Store + " " + strconv.Itoa(args.ID) + "+" + strconv.Itoa(args.N)}, nil
+	return contract.Result{Content: strings.Join(lines, "\n"), Command: "zoom " + args.Store + " " + strconv.Itoa(args.ID) + "+" + strconv.Itoa(args.N)}, nil
 }
 
 func (z *Zoom) open(log string, reading func(*memtree.Store) ([]string, error)) ([]string, error) {

@@ -22,6 +22,7 @@ import (
 	"tofu/internal/memory"
 	"tofu/internal/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 	"tofu/library/questions"
 )
@@ -239,7 +240,7 @@ func quotes(message, quote string) bool {
 	return found
 }
 
-func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
+func (r Remember) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		Statement string       `json:"statement"`
 		Said      string       `json:"said"`
@@ -249,18 +250,18 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 		KeepBoth  bool         `json:"keep_both"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("remember: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("remember: arguments are not the expected shape: %w", err)
 	}
 	rule, err := memory.Rule(args.Statement)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("remember: %w", err)
+		return contract.Result{}, fmt.Errorf("remember: %w", err)
 	}
 	typed, err := r.Inbox.SaidInChain(r.Store, r.Session)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("remember: %w", err)
+		return contract.Result{}, fmt.Errorf("remember: %w", err)
 	}
 	if !slices.ContainsFunc(typed, func(said turn.PersonSaid) bool { return quotes(said.Words, args.Said) }) {
-		return turn.Result{}, fmt.Errorf("remember: %q is not in any message the person typed in this conversation, whole or as fragments of one message joined by ... in their order; copy their words exactly, or do not offer it", args.Said)
+		return contract.Result{}, fmt.Errorf("remember: %q is not in any message the person typed in this conversation, whole or as fragments of one message joined by ... in their order; copy their words exactly, or do not offer it", args.Said)
 	}
 	entry := memory.Entry{Scope: cmp.Or(args.Scope, args.Kind.Scope()), Kind: args.Kind, Text: rule, Said: args.Said, Session: r.Session, At: time.Now(), By: memory.ByLead}
 	if family, err := r.Store.Identity(r.Session); err == nil {
@@ -268,20 +269,20 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 	}
 	shelves, err := memory.Open(r.Project)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("remember: %w", err)
+		return contract.Result{}, fmt.Errorf("remember: %w", err)
 	}
 	kept := shelves.All()
 	replaced := slices.IndexFunc(kept, func(e memory.Entry) bool { return args.Replaces != "" && e.ID == args.Replaces })
 	unsure := false
 	switch {
 	case args.Replaces != "" && replaced < 0:
-		return turn.Result{}, fmt.Errorf("remember: no memory entry is %s, so nothing replaces it", args.Replaces)
+		return contract.Result{}, fmt.Errorf("remember: no memory entry is %s, so nothing replaces it", args.Replaces)
 	case replaced >= 0:
 		entry.Scope = kept[replaced].Scope
 	case !args.KeepBoth:
 		same, err := r.Judge.duplicate(ctx, rule, kept, r.Project)
 		if same >= 0 {
-			return turn.Result{Content: fmt.Sprintf("refused: this says the same as %s %q. call remember again with replaces %q to put this one in its place, or with keep_both true if the two differ", kept[same].Ref(), kept[same].Text, kept[same].ID)}, nil
+			return contract.Result{Content: fmt.Sprintf("refused: this says the same as %s %q. call remember again with replaces %q to put this one in its place, or with keep_both true if the two differ", kept[same].Ref(), kept[same].Text, kept[same].ID)}, nil
 		}
 		unsure = err != nil
 	}
@@ -301,14 +302,14 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 	}
 	row, err := r.Judge.record(judged, verdict)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("remember: the %s row did not write: %w", state.MemoryScopePoint, err)
+		return contract.Result{}, fmt.Errorf("remember: the %s row did not write: %w", state.MemoryScopePoint, err)
 	}
 	pick, _ := ctx.Value(memoryPickKey{}).(MemoryPick)
 	switch {
 	case refused:
-		return turn.Result{Content: refusedLocal}, nil
+		return contract.Result{Content: refusedLocal}, nil
 	case asks && pick == nil:
-		return turn.Result{Content: "no person is here to answer, so nothing was kept"}, nil
+		return contract.Result{Content: "no person is here to answer, so nothing was kept"}, nil
 	case asks:
 		scopes := []memory.Scope{memory.Global, memory.UserLocal, memory.Project, memory.ProjectLocal}
 		if judged.refusesLocal {
@@ -316,25 +317,25 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 		}
 		picked, err := pick(ctx, MemoryOffer{Statement: entry.Text, Said: args.Said, Scope: offered, Scopes: scopes})
 		if err != nil {
-			return turn.Result{Content: "the person could not be asked, so nothing was kept: " + err.Error()}, nil
+			return contract.Result{Content: "the person could not be asked, so nothing was kept: " + err.Error()}, nil
 		}
 		if err := r.Judge.label(row, cmp.Or(string(picked), state.MemoryScopeNone)); err != nil {
-			return turn.Result{}, fmt.Errorf("remember: the person's pick did not reach the ledger, so nothing was kept: %w", err)
+			return contract.Result{}, fmt.Errorf("remember: the person's pick did not reach the ledger, so nothing was kept: %w", err)
 		}
 		switch {
 		case picked == "":
-			return turn.Result{Content: "the person said no, and nothing was kept"}, nil
+			return contract.Result{Content: "the person said no, and nothing was kept"}, nil
 		case !slices.Contains(scopes, picked):
-			return turn.Result{Content: refusedLocal}, nil
+			return contract.Result{Content: refusedLocal}, nil
 		}
 		entry.Scope = picked
 	}
 	if entry, err = shelves.Add(entry, args.Replaces); err != nil {
-		return turn.Result{}, fmt.Errorf("remember: %w", err)
+		return contract.Result{}, fmt.Errorf("remember: %w", err)
 	}
 	if told, telling := ctx.Value(memoryKeptKey{}).(func(MemoryKept)); telling && !asks {
 		told(MemoryKept{Statement: entry.Text, Offered: offered, Kept: entry.Scope})
 	}
 	r.Inbox.Remembered(entry.ID, entry.Saved())
-	return turn.Result{Content: entry.Saved(), Command: entry.Ref()}, nil
+	return contract.Result{Content: entry.Saved(), Command: entry.Ref()}, nil
 }

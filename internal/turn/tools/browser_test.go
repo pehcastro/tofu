@@ -29,6 +29,7 @@ import (
 	"tofu/internal/rule"
 	"tofu/internal/settings"
 	"tofu/internal/subagent"
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 	"tofu/library"
@@ -181,7 +182,7 @@ func hostWithTwoTabs(t *testing.T, chrome *fakeChrome) string {
 	}
 }
 
-func browserTool(t *testing.T, list []turn.Tool, name string) turn.Tool {
+func browserTool(t *testing.T, list []contract.Tool, name string) contract.Tool {
 	t.Helper()
 	for _, tool := range list {
 		if tool.Name() == name {
@@ -192,7 +193,7 @@ func browserTool(t *testing.T, list []turn.Tool, name string) turn.Tool {
 	return nil
 }
 
-func names(list []turn.Tool) string {
+func names(list []contract.Tool) string {
 	var named []string
 	for _, tool := range list {
 		named = append(named, tool.Name())
@@ -269,7 +270,7 @@ func TestTheBrowserToolsAgainstAFakeHost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	run := func(name, args string) (turn.Result, error) {
+	run := func(name, args string) (contract.Result, error) {
 		return browserTool(t, offered, name).Run(context.Background(), json.RawMessage(args))
 	}
 
@@ -1249,7 +1250,7 @@ func jevOn(t *testing.T, wire *recordedJev, ledgerDir string) func() (jevloop.Je
 
 func TestBrowserDoRunsTheJevLoopOnADriveTab(t *testing.T) {
 	var current func() (jevloop.Jev, error)
-	browserDo := func(home string, steps int) turn.Tool {
+	browserDo := func(home string, steps int) contract.Tool {
 		config := drive(home, settings.DriverGoal)
 		config.Judge, config.Steps = func() (jevloop.Jev, error) { return current() }, steps
 		offered, err := tools.NewBrowser(config)
@@ -1261,7 +1262,7 @@ func TestBrowserDoRunsTheJevLoopOnADriveTab(t *testing.T) {
 	chrome := &fakeChrome{}
 	home := hostWithTwoTabs(t, chrome)
 	oneSession := browserDo(home, 30)
-	do := func(judge func() (jevloop.Jev, error), args string) (turn.Result, error) {
+	do := func(judge func() (jevloop.Jev, error), args string) (contract.Result, error) {
 		current = judge
 		return oneSession.Run(context.Background(), json.RawMessage(args))
 	}
@@ -1356,7 +1357,7 @@ func TestBrowserDoRunsTheJevLoopOnADriveTab(t *testing.T) {
 	}
 }
 
-func browserDoOn(t *testing.T, chrome *fakeChrome, wire *recordedJev, writer *writerStub) turn.Tool {
+func browserDoOn(t *testing.T, chrome *fakeChrome, wire *recordedJev, writer *writerStub) contract.Tool {
 	t.Helper()
 	config := drive(hostWithTwoTabs(t, chrome), settings.DriverGoal)
 	config.Judge = jevOn(t, wire, shortHome(t))
@@ -1496,7 +1497,7 @@ func TestBrowserDoWithAURLOpensATabAsksTheBrowserModelAndAnswersFirst(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	do := func(asked turn.Model, args string, answers ...[]byte) (turn.Result, error) {
+	do := func(asked turn.Model, args string, answers ...[]byte) (contract.Result, error) {
 		wire, writer = &recordedJev{answers: answers}, asked
 		return browserTool(t, offered, "browser_do").Run(context.Background(), json.RawMessage(args))
 	}

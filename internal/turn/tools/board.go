@@ -13,6 +13,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/rule"
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 )
 
@@ -42,12 +43,12 @@ func stringParam(about string) map[string]any {
 	return map[string]any{"type": "string", "description": about}
 }
 
-func nudged(store boardy.Store, name string, run func() (turn.Result, error)) (turn.Result, error) {
+func nudged(store boardy.Store, name string, run func() (contract.Result, error)) (contract.Result, error) {
 	sizes := store.EventSizes()
 	result, err := run()
 	note := turn.BoardNudges(store, sizes)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("%s: %w%s", name, err, note)
+		return contract.Result{}, fmt.Errorf("%s: %w%s", name, err, note)
 	}
 	result.Content += note
 	return result, nil
@@ -103,12 +104,12 @@ func (t boardTool) Definition() llm.Tool {
 	return llm.Tool{Name: string(t.verb), Description: describe, Parameters: map[string]any{"type": "object", "properties": properties, "required": []string{"board", "action"}}}
 }
 
-func (t boardTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
+func (t boardTool) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args boardArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.verb, err)
+		return contract.Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.verb, err)
 	}
-	return nudged(t.board.Store, string(t.verb), func() (turn.Result, error) {
+	return nudged(t.board.Store, string(t.verb), func() (contract.Result, error) {
 		var said string
 		var err error
 		switch t.verb {
@@ -125,7 +126,7 @@ func (t boardTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, err
 		case boardRequest:
 			said, err = t.request(args)
 		}
-		return turn.Result{Content: said, Command: strings.TrimSpace(string(t.verb) + " " + args.Action + " " + args.Board + " " + args.ID)}, err
+		return contract.Result{Content: said, Command: strings.TrimSpace(string(t.verb) + " " + args.Action + " " + args.Board + " " + args.ID)}, err
 	})
 }
 

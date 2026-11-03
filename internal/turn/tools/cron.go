@@ -10,7 +10,7 @@ import (
 
 	"tofu/internal/cron"
 	"tofu/internal/llm"
-	"tofu/internal/turn"
+	"tofu/internal/tools/contract"
 )
 
 const CronToolName = "cron"
@@ -57,15 +57,15 @@ func (c Cron) Definition() llm.Tool {
 	}
 }
 
-func (c Cron) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
+func (c Cron) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args cronArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return turn.Result{}, fmt.Errorf("cron: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("cron: arguments are not the expected shape: %w", err)
 	}
 	now := c.Now()
 	expires, err := cron.ExpiresIn(args.ExpiresIn, now)
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("cron: expires_in: %w", err)
+		return contract.Result{}, fmt.Errorf("cron: expires_in: %w", err)
 	}
 	paused, resumed := true, false
 	var job cron.Job
@@ -76,17 +76,17 @@ func (c Cron) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 			lines = append(lines, one.Line(now))
 		}
 		if len(lines) == 0 {
-			return turn.Result{Content: "no cron job is open", Command: args.Action}, nil
+			return contract.Result{Content: "no cron job is open", Command: args.Action}, nil
 		}
-		return turn.Result{Content: strings.Join(lines, "\n"), Command: args.Action}, nil
+		return contract.Result{Content: strings.Join(lines, "\n"), Command: args.Action}, nil
 	case "history":
 		if job, err = c.Book.Job(args.ID); err != nil {
-			return turn.Result{}, fmt.Errorf("cron: %w", err)
+			return contract.Result{}, fmt.Errorf("cron: %w", err)
 		}
-		return turn.Result{Content: strings.Join(job.History(), "\n"), Command: args.Action}, nil
+		return contract.Result{Content: strings.Join(job.History(), "\n"), Command: args.Action}, nil
 	case "delete":
 		if args.Reason == "" {
-			return turn.Result{}, fmt.Errorf("cron: %w", cron.ErrNoReason)
+			return contract.Result{}, fmt.Errorf("cron: %w", cron.ErrNoReason)
 		}
 		deleted := []string{args.ID}
 		if args.ID == cron.AllJobs {
@@ -95,11 +95,11 @@ func (c Cron) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 			err = c.Book.Delete(args.ID)
 		}
 		if err != nil {
-			return turn.Result{}, fmt.Errorf("cron: %w", err)
+			return contract.Result{}, fmt.Errorf("cron: %w", err)
 		}
 		said := cron.DeletedLine(deleted)
 		c.Told("the orchestrator " + said + ": " + args.Reason)
-		return turn.Result{Content: said, Command: args.Action}, nil
+		return contract.Result{Content: said, Command: args.Action}, nil
 	case "create":
 		job, err = c.Book.Create(cron.Spec{Schedule: args.Schedule, Prompt: args.Prompt, Expires: expires}, cron.Agent, args.Reason, now)
 	case "update":
@@ -112,8 +112,8 @@ func (c Cron) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 		err = errors.New(args.Action + " is no action this tool has, which are create, update, list, history, pause, resume and delete")
 	}
 	if err != nil {
-		return turn.Result{}, fmt.Errorf("cron: %w", err)
+		return contract.Result{}, fmt.Errorf("cron: %w", err)
 	}
 	c.Told("the orchestrator " + args.Action + "d " + job.Line(now) + ", by agent: " + args.Reason)
-	return turn.Result{Content: job.Line(now), Command: args.Action}, nil
+	return contract.Result{Content: job.Line(now), Command: args.Action}, nil
 }

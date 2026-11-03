@@ -8,20 +8,20 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/search"
 	"tofu/internal/shell"
-	"tofu/internal/turn"
+	"tofu/internal/tools/contract"
 )
 
 type cited struct {
-	root turn.Root
-	tool turn.Tool
+	root contract.Root
+	tool contract.Tool
 }
 
-func Checked(dir string, list []turn.Tool) ([]turn.Tool, error) {
-	root, err := turn.NewRoot(dir)
+func Checked(dir string, list []contract.Tool) ([]contract.Tool, error) {
+	root, err := contract.NewRoot(dir)
 	if err != nil {
 		return nil, err
 	}
-	checked := make([]turn.Tool, len(list))
+	checked := make([]contract.Tool, len(list))
 	for i, tool := range list {
 		checked[i] = cited{root: root, tool: tool}
 	}
@@ -32,9 +32,9 @@ func (c cited) Name() string { return c.tool.Name() }
 
 func (c cited) Definition() llm.Tool { return c.tool.Definition() }
 
-func (c cited) Uncached() turn.Tool { return c.tool }
+func (c cited) Uncached() contract.Tool { return c.tool }
 
-func (c cited) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
+func (c cited) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	result, err := c.tool.Run(ctx, raw)
 	if err != nil {
 		return result, err

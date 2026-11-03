@@ -9,6 +9,7 @@ import (
 
 	"tofu/internal/memory"
 	"tofu/internal/session"
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 )
@@ -59,7 +60,7 @@ func rememberChain(t *testing.T, answer memory.Scope) *chain {
 	return c
 }
 
-func (c *chain) remembered(t *testing.T, statement, quote, kind string) (turn.Result, error) {
+func (c *chain) remembered(t *testing.T, statement, quote, kind string) (contract.Result, error) {
 	t.Helper()
 	args, err := json.Marshal(map[string]string{"statement": statement, "said": quote, "kind": kind})
 	if err != nil {

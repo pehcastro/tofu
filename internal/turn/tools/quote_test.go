@@ -13,6 +13,7 @@ import (
 	"tofu/internal/rule"
 	"tofu/internal/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 	"tofu/library"
@@ -221,7 +222,7 @@ func shippedQuoteRule(t *testing.T) rule.Rule {
 }
 
 func TestTheShippedQuoteRuleNamesTheToolThatResolvesTheReference(t *testing.T) {
-	var registered turn.Tool = tools.NewQuote(nil, "")
+	var registered contract.Tool = tools.NewQuote(nil, "")
 	defined := registered.Definition()
 	if defined.Name != registered.Name() {
 		t.Fatalf("the registry keys the tool as %q and the model is told %q", registered.Name(), defined.Name)

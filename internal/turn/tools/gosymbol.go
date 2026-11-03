@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"tofu/internal/search"
-	"tofu/internal/turn"
+	"tofu/internal/tools/contract"
 )
 
 func goParse(shown, body string) error {
@@ -37,7 +37,7 @@ func declarations(found []search.Definition) string {
 	return strings.Join(named, " and ")
 }
 
-func replaceDeclaration(root turn.Root, shown, symbol, before, becomes string) (string, error) {
+func replaceDeclaration(root contract.Root, shown, symbol, before, becomes string) (string, error) {
 	if !strings.HasSuffix(shown, ".go") {
 		return "", fmt.Errorf("edit: symbol names a go declaration and %s is not a go file: replace a stretch of text in it with old_string instead", shown)
 	}
