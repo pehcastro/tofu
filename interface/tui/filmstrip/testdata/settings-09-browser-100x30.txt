@@ -9,7 +9,7 @@
     Context       17      Who takes the browser steps: subagent hands them to a browser sub-age…    
     Files         03                                                                                
     Shell         04      Browser steps                                                   30  ▾     
-    Turn          18      how many actions one browser task may take                                
+    Turn          19      how many actions one browser task may take                                
     Projects      06                                                                                
   › Browser       09      Browser model                                              default  ▾     
                           The model a browser task writes its text and answer with, as source/m…    

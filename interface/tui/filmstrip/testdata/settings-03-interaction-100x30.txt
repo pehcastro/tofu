@@ -9,7 +9,7 @@
     Context       17      Change shortcuts handled inside tofu                                      
     Files         03                                                                                
     Shell         04      Host integration                                       inspect Zed  ▾     
-    Turn          18      Detect host shortcut conflicts and available integrations                 
+    Turn          19      Detect host shortcut conflicts and available integrations                 
     Projects      06                                                                                
     Browser       09      Confirmations                                                 auto  ▾     
                           auto lets Jev decide at every gate, so work never stops for you. ask …    

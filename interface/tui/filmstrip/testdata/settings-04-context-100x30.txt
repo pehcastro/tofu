@@ -9,7 +9,7 @@
   › Context       17      full keeps every sub-agents event, summary the latest 200, off shows …    
     Files         03                                                                                
     Shell         04      Thinking                                                          ● on    
-    Turn          18      thinking shows in each agent's sub-agents feed; t there toggles it        
+    Turn          19      thinking shows in each agent's sub-agents feed; t there toggles it        
     Projects      06                                                                                
     Browser       09      Thinking summary                                        summarized  ▾     
                           summarized asks Claude for a summary of its thinking. omitted asks fo…    

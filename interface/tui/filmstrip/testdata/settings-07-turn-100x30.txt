@@ -9,22 +9,22 @@
     Context       17      a turn may spawn a sub-agent                                              
     Files         03                                                                                
     Shell         04      One working session per project                                   ● on    
-  › Turn          18      While one session in this project works, any other waits. off lets se…    
+  › Turn          19      While one session in this project works, any other waits. off lets se…    
     Projects      06                                                                                
     Browser       09      Plan every step                                                   ● on    
                           The lead sees its plan and each step's status before every step. off …    
   NAVIGATE                                                                                          
-  ↑↓ setting · ←→         Side chat access                                              read  ▾     
-  section                 What a new side chat may write: read, notes for .md and .html, files …    
+  ↑↓ setting · ←→         Plan advisor                                                shadow  ▾     
+  section                 shadow has the advisor sub-agent read each plan the lead sets against…    
   ctrl+k search ·                                                                                   
-  esc chat                Sub-agents running at once                                      10  ▾     
+  esc chat                Side chat access                                              read  ▾     
+                          What a new side chat may write: read, notes for .md and .html, files …    
+                                                                                                    
+                          Sub-agents running at once                                      10  ▾     
                           How many sub-agents may run at once. A spawn past it is refused until…    
                                                                                                     
                           Sub-agent depth                                                  2  ▾     
                           How deep a sub-agent may spawn its own sub-agents                         
-                                                                                                    
-                          Lead cache                                                      1h  ▾     
-                          How long the lead's prompt cache lives on a subscription. 5m costs le…    
                                                                                                     
                         enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     

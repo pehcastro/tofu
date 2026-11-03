@@ -9,7 +9,7 @@
     Context       17      Lines retained per shell                                                  
     Files         03                                                                                
   › Shell         04      Kill confirm                                                      ● on    
-    Turn          18      Confirm process termination                                               
+    Turn          19      Confirm process termination                                               
     Projects      06                                                                                
     Browser       09      Shell                                                      default  ▾     
                           The shell commands run in: wsl or a path. Empty finds your own shell      
