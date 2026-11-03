@@ -1,6 +1,6 @@
 id: before_on_time
 name: A before is captured on time
-description: A before capture is logged ahead of the first evidence entry and the ticket's first commit.
+description: A before capture is logged ahead of the first evidence entry and the ticket's first commit, unless it is logged late and names the pre-change build it ran on.
 when: before
 on: ticket.log
 do: check before_on_time

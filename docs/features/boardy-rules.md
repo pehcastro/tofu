@@ -80,7 +80,7 @@ below the three scopes, and show as scope `library` in
 | `decidable` | library | before a move to needs-decision | refuses a question without tldr, eli5, options and a pick | none |
 | `done_stamp` | library | before a close to done | refuses a flows-area ticket without a stamped tree | none |
 | `evidenced` | library | before a close to done | refuses while an acceptance line has no evidence | none |
-| `before_captured` | library | before a close to done | refuses a ticket with no before capture, except docs-only | none |
+| `before_captured` | library | before a close to done | refuses a ticket with no before capture, except docs-only; a late one naming its pre-change build passes when the done reason says the word after the check name, `late` | none |
 | `sub_tickets_done` | library | before a move to review or done | refuses while a sub-ticket is open | none |
 | `scope_cites` | library | before `ticket.create`, `ticket.widen` | refuses a Scope that names none of `scope_cites` | none |
 | `epic_ready` | library | before `ticket.create`, `ticket.set` of an epic | refuses a gated epic that is not researched and designed | none |
@@ -89,7 +89,7 @@ below the three scopes, and show as scope `library` in
 | `feasibility` | library | before `ticket.create`, `triage.request`, `ticket.move`, `ticket.close` | refuses a platform effect with no Feasibility | none |
 | `done_reason` | library | before a close to done | refuses a reason Jev reads as naming an open part | none |
 | `callers_owned` | library | before a move to doing | refuses while a caller outside the owns is not owned | the person or the lead, accepted by nobody |
-| `before_on_time` | library | before `ticket.log` | refuses evidence logged ahead of the before capture | none |
+| `before_on_time` | library | before `ticket.log` | refuses evidence logged ahead of the before capture, except a late one logged with `--late <commit or build>` | none |
 
 A bypass of `callers_owned` is
 `tofu boardy move DEMO-7 doing --bypass callers_owned --why "the caller is generated"`:

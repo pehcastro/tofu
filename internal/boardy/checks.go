@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"tofu/internal/judge/jev"
 	"tofu/internal/rule"
@@ -150,12 +151,22 @@ func (m Managed) evidenced(h rule.Hook, s subject, arg string) (checked, error) 
 	return checked{detail: strings.ReplaceAll(said, missingPlaceholder, missing), failed: missing != ""}, nil
 }
 
-func (m Managed) beforeCaptured(h rule.Hook, s subject, _ string) (checked, error) {
+func (m Managed) beforeCaptured(h rule.Hook, s subject, lateSays string) (checked, error) {
 	events, err := m.Store.ticketEvents(s.ticket.ID)
 	if err != nil || slices.ContainsFunc(events, func(e Event) bool { return e.Kind == Captured }) {
 		return checked{}, err
 	}
+	if lateSays != "" && slices.ContainsFunc(events, func(e Event) bool { return e.Kind == LateBefore }) {
+		said := slices.Contains(strings.FieldsFunc(strings.ToLower(s.reason), func(r rune) bool { return !unicode.IsLetter(r) }), lateSays)
+		return checked{
+			detail: fmt.Sprintf("its before is late, and a ticket with a late before reaches %s only with a reason that says %s: tofu boardy move %s %s --reason \"what was verified, before captured %s on the pre-change build\"", s.to, lateSays, s.ticket.ID, s.to, lateSays),
+			failed: !s.dry && !said,
+		}, nil
+	}
 	detail := fmt.Sprintf("it has no before capture, and a ticket reaches %s only with one, logged before its first evidence entry and its first commit: tofu boardy log %s --before \"what you ran and what it printed\", or ticket_log kind before", s.to, s.ticket.ID)
+	if lateSays != "" {
+		detail += fmt.Sprintf(". A before run on the pre-change build after that names it: tofu boardy log %s --before \"what it printed\" --late <commit or build>, and the done reason says %s", s.ticket.ID, lateSays)
+	}
 	if h.If.NotLabels != nil {
 		detail += fmt.Sprintf(". A ticket labelled %s is not asked for one", strings.Join(h.If.NotLabels, " or "))
 	}

@@ -24,6 +24,7 @@ const (
 	Commented   EventKind = "commented"
 	Evidence    EventKind = "evidence"
 	Captured    EventKind = "before"
+	LateBefore  EventKind = "late_before"
 	Spawned     EventKind = "spawned"
 	Messaged    EventKind = "messaged"
 	Reported    EventKind = "reported"
@@ -31,7 +32,7 @@ const (
 )
 
 func (EventKind) Enum() []string {
-	return enum(Created, Moved, Commented, Evidence, Captured, RuleFired, Waiting, Requested, Accepted, RequestDropped, Handed, Widened, ManagersChanged, Assigned, Asked, Answered, Spawned, Messaged, Reported, NotPossible, HookChanged, HookFailed)
+	return enum(Created, Moved, Commented, Evidence, Captured, LateBefore, RuleFired, Waiting, Requested, Accepted, RequestDropped, Handed, Widened, ManagersChanged, Assigned, Asked, Answered, Spawned, Messaged, Reported, NotPossible, HookChanged, HookFailed)
 }
 
 type Event struct {
@@ -56,6 +57,7 @@ type Event struct {
 	Effort     string           `json:"effort,omitempty"`
 	Revision   int              `json:"revision,omitempty"`
 	Line       int              `json:"line,omitempty"`
+	RanOn      string           `json:"ran_on,omitempty"`
 	Leave      []int            `json:"leave,omitempty"`
 	Verdict    Verdict          `json:"verdict,omitempty"`
 	Acceptance []AcceptanceLine `json:"acceptance,omitempty"`
@@ -88,6 +90,18 @@ func (LineState) Enum() []string { return enum(LineMet, LineUnmet, LineNotMine) 
 type AcceptanceLine struct {
 	Line  string    `json:"line"`
 	State LineState `json:"state"`
+}
+
+func (m Managed) CaptureLateBefore(id, text, ranOn, actor string) (Ticket, error) {
+	ticket, board, err := m.mayAppend(id, actor)
+	ranOn = strings.TrimSpace(ranOn)
+	if err == nil && ranOn == "" {
+		err = RefusedError{Ticket: id, Why: fmt.Sprintf("a late before names the pre-change build or commit it ran on: tofu boardy log %s --before \"what you ran and what it printed\" --late <commit or build>, or ticket_log kind before with late", id)}
+	}
+	if err != nil {
+		return ticket, err
+	}
+	return m.entry(board, ticket, Event{Kind: LateBefore, Text: "late before capture, ran on " + ranOn + ": " + text, RanOn: ranOn}, actor, 0)
 }
 
 func (s Store) Acceptance(ticket Ticket, leave []int) ([]AcceptanceLine, error) {

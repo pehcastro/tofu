@@ -142,6 +142,7 @@ func (t ticketTool) Definition() llm.Tool {
 		describe = fmt.Sprintf("adds one entry to your own ticket, under your name, so never start it with your name. kind say is you talking to the lead in the first person, at most %d sentences and %d words on one line and no command output: a decision and why, a finding that changes the plan, what stops you, what you need, or that you are done. kind evidence proves one acceptance line, named by line: the command exactly as you ran it and the output lines that matter; the lead reads it at review and it stays out of the conversation. kind before captures how things work now, before you change anything: the same steps as the driven path and what they printed; a ticket that changes behaviour reaches done only with one, and one logged after an evidence entry or after a commit touching the ticket's owns is refused as late. your last say entry is where you ended, and the lead reads it as your report: say it plainly, with no heading and no bold label. progress nobody acts on is not an entry", konst.BoardSaidSentencesMost, konst.BoardSaidWordsMost)
 		properties["kind"] = map[string]any{"type": "string", "enum": []logKind{logSay, logEvidence, logBefore}}
 		properties["line"] = map[string]any{"type": "integer", "description": "for kind evidence, the acceptance line in force it proves, counted from 1"}
+		properties["late"] = stringParam("for kind before logged after the change was proved: the pre-change build or commit it ran on; the ticket then reaches done only with a reason saying late")
 		properties["text"], required = stringParam("what you say, or the evidence"), append(required, "kind", "text")
 	case ticketAsk:
 		describe = "puts a question to the board's managers by writing it into your own ticket's Log; a manager answers there, so read the ticket again with ticket_read before you act on the answer"
@@ -209,6 +210,7 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 	var args struct {
 		ID, Text, Question, ELI5, Why, Board, Title, Problem, Scope, Acceptance, To, Reason, Parent, Epic, Sprint, Status string
 		Before, Driven, Feasibility, Bypass                                                                               string
+		Late                                                                                                              *string
 		StillWorks                                                                                                        string `json:"still_works"`
 		ErrorCase                                                                                                         string `json:"error_case"`
 		Kind                                                                                                              logKind
@@ -239,7 +241,11 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 			case logEvidence:
 				ticket, err = t.board.Evidence(args.ID, args.Text, t.actor, args.Line)
 			case logBefore:
-				ticket, err = t.board.CaptureBefore(args.ID, args.Text, t.actor)
+				if args.Late == nil {
+					ticket, err = t.board.CaptureBefore(args.ID, args.Text, t.actor)
+					break
+				}
+				ticket, err = t.board.CaptureLateBefore(args.ID, args.Text, *args.Late, t.actor)
 			default:
 				err = fmt.Errorf("kind is %s, %s or %s, not %q", logSay, logEvidence, logBefore, args.Kind)
 			}

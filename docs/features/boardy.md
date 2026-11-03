@@ -172,7 +172,19 @@ tofu boardy log DEMO-3 --before "tofu boardy list printed no priority column"
 
 A capture logged after the ticket's first evidence entry is refused as late,
 and so is one logged after a commit touching the ticket's owns, made since it
-entered doing, naming the commit. A ticket made with
+entered doing, naming the commit. A capture run on the pre-change build
+after that names the build or commit it ran on, and the ticket then closes
+only with a done reason that says late:
+
+```
+tofu boardy log DEMO-3 --before "tofu boardy list printed no priority column" --late 88350a64
+tofu boardy move DEMO-3 done --reason "the column shows, before captured late on 88350a64"
+```
+
+The Log shows it as `late before capture, ran on 88350a64:`. A `--late`
+with no build is refused, and so is a done reason without the word, each
+naming the command that fixes it. `ticket_log` kind before takes the build
+as `late`. A ticket made with
 `--labels docs-only` closes without one, and so does a ticket made before
 this check existed; either way its done reason says why no capture was
 asked.

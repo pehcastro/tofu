@@ -66,7 +66,7 @@ Library hooks, read from the binary, scope `library`:
 - `decidable`, A decision carries its question, on a move to needs-decision.
 - `done_stamp`, Done needs a stamped tree, on a close to done.
 - `evidenced`, Every line has evidence, on a close to done.
-- `before_captured`, Done needs a before capture, on a close to done, except a docs-only ticket or one made before the gate.
+- `before_captured`, Done needs a before capture, on a close to done, except a docs-only ticket or one made before the gate; a late capture naming its pre-change build passes when the done reason says `late`, the word after the check name.
 - `sub_tickets_done`, A parent waits for its sub-tickets, on a move to review or done.
 - `scope_cites`, Scope names a source, on `ticket.create` and `ticket.widen`.
 - `epic_ready`, An epic is researched and designed first, on `ticket.create` and on `ticket.set` of an epic.
@@ -75,7 +75,7 @@ Library hooks, read from the binary, scope `library`:
 - `feasibility`, A platform effect states its feasibility, on `ticket.create`, `triage.request`, `ticket.move` and `ticket.close`.
 - `done_reason`, Done says nothing is open, on a close to done.
 - `callers_owned`, Callers are owned, on a move to doing. The person or the lead bypasses it with `tofu boardy move <ticket> doing --bypass callers_owned --why <reason>`; nobody accepts it, the move passes, and the bypass is a `rule` line in `events.jsonl`.
-- `before_on_time`, A before is captured on time, on `ticket.log`.
+- `before_on_time`, A before is captured on time, on `ticket.log`, unless it is logged with `--late <commit or build>`.
 
 `tofu boardy init --mode empty` starts a board with none of the 23, and `--mode custom --hooks may_move,drafted` with only the named ones. Such a board keeps a `rules/.mode` file, so `tofu doctor` does not offer it the starter hooks again.
 

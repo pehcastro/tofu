@@ -37,7 +37,7 @@ func boardyUsageOf(subcommand string) string {
 	case "move":
 		return "tofu boardy move <ticket> <status> [--reason text] [--bypass <hook> --why text] [--as name] [--json]"
 	case "log":
-		return "tofu boardy log <ticket> [<text>] [--evidence [--line n] | --before <what you ran and what it printed>] [--as name] [--json]"
+		return "tofu boardy log <ticket> [<text>] [--evidence [--line n] | --before <what you ran and what it printed> [--late <commit or build>]] [--as name] [--json]"
 	case "lint":
 		return "tofu boardy lint [--board KEY] [--json]"
 	case "boards":
@@ -555,6 +555,10 @@ func (c boardyCall) move() int {
 
 func (c boardyCall) log() int {
 	before, capturing := c.flags["before"]
+	ranOn, late := c.flags["late"]
+	if strings.HasPrefix(ranOn, "--") {
+		ranOn = ""
+	}
 	if len(c.args) < 1 || len(c.args) < 2 && !capturing {
 		return c.o.usage(errors.New("name a " + c.words.Ticket + " and the text to log"))
 	}
@@ -570,6 +574,10 @@ func (c boardyCall) log() int {
 		return c.o.usage(errors.New("--line names the acceptance line an --evidence entry proves"))
 	case capturing && c.flags["evidence"] != "":
 		return c.o.usage(errors.New("an entry is a --before capture or --evidence, not both"))
+	case late && !capturing:
+		return c.o.usage(errors.New("--late names the pre-change build or commit a --before ran on: tofu boardy log " + c.args[0] + " --before <what it printed> --late <commit or build>"))
+	case late:
+		ticket, err = c.managed.CaptureLateBefore(c.args[0], strings.TrimSpace(before+" "+text), ranOn, c.actor)
 	case capturing:
 		ticket, err = c.managed.CaptureBefore(c.args[0], strings.TrimSpace(before+" "+text), c.actor)
 	case c.flags["evidence"] == "":
