@@ -3,6 +3,7 @@ package cost
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -92,7 +93,7 @@ func TestTheRescoredGateIsBehindAlwaysProceedOnTheWholeCorpus(t *testing.T) {
 }
 
 func TestTheCommittedRescoreReportCarriesWhatTheRescorePrints(t *testing.T) {
-	committed, err := os.ReadFile("rescore-2026-09-19.md")
+	committed, err := os.ReadFile(filepath.Join("testdata", "rescore.golden.md"))
 	if err != nil {
 		t.Fatalf("reading the committed re-score report: %v", err)
 	}

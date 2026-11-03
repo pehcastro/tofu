@@ -2,19 +2,16 @@ package cost
 
 import (
 	"bytes"
-	_ "embed"
 	"encoding/json"
 	"fmt"
 	"os"
 	"time"
 
+	"tofu/internal/dummy/toolgate"
 	"tofu/internal/judge/gate"
 )
 
-const recordedAnswersPath = "bench/suites/judge/cost/answers/heldout-2026-09-19.jsonl"
-
-//go:embed answers/heldout-2026-09-19.jsonl
-var recordedAnswersFile []byte
+const recordedAnswersPath = toolgate.Dir + "/" + toolgate.Heldout
 
 type AnswerRow struct {
 	Case          string   `json:"case"`
@@ -50,7 +47,11 @@ func parseAnswers(data []byte, path string) ([]AnswerRow, error) {
 }
 
 func RecordedAnswers() ([]AnswerRow, error) {
-	return parseAnswers(recordedAnswersFile, recordedAnswersPath)
+	data, err := toolgate.Files.ReadFile(toolgate.Heldout)
+	if err != nil {
+		return nil, err
+	}
+	return parseAnswers(data, recordedAnswersPath)
 }
 
 func answerRows(arms []ArmResult, pol gate.Rule, source string) []AnswerRow {

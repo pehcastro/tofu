@@ -63,7 +63,7 @@ func cutCommandSentence() string {
 			heldOutCut++
 		}
 	}
-	return fmt.Sprintf("%d of the %d cases carry a command cut at recording time, %d of the %d held out. The recorder stopped the command field at about 710 characters and wrote `%s`, so what the command was about to write is not in the case and no arm can read it. Every one of the %d was recovered whole from the transcript it was recorded from and written beside the originals in `bench/corpus/gate/cases-whole.jsonl`; every arm in this report read `bench/corpus/gate/cases.jsonl`, the cut one, so every agreement figure here is a floor rather than a measurement of what an arm can do on a whole command. %s",
+	return fmt.Sprintf("%d of the %d cases carry a command cut at recording time, %d of the %d held out. The recorder stopped the command field at about 710 characters and wrote `%s`, so what the command was about to write is not in the case and no arm can read it. Every one of the %d was recovered whole from the transcript it was recorded from and written beside the originals in `internal/dummy/toolgate/cases-whole.jsonl`; every arm in this report read `internal/dummy/toolgate/cases.jsonl`, the cut one, so every agreement figure here is a floor rather than a measurement of what an arm can do on a whole command. %s",
 		len(cut), len(records), heldOutCut, len(split.Heldout), corpus.TruncationMark, len(cut), cutCommandCeiling)
 }
 

@@ -64,7 +64,7 @@ func renderHazards(scores []hazardScore, first hazardRow, answersPath string) st
 		dollars(mean(hazards.USD)), ms(stat.Median(hazards.LatencyMS)),
 		armShipped, shipped.Correct, shipped.FalseBlocks, shipped.Caught, dollars(mean(shipped.USD)), ms(stat.Median(shipped.LatencyMS)),
 		regex.Correct, regex.FalseBlocks, regex.Caught)
-	fmt.Fprintf(b, "- conditions: %s, machine %s, credential kind %s, wire %s, build %s, %d held-out cases of bench/corpus/gate/split.json, one call at a time, arm order alternated per case, no call discarded as warm-up\n",
+	fmt.Fprintf(b, "- conditions: %s, machine %s, credential kind %s, wire %s, build %s, %d held-out cases of internal/dummy/toolgate/split.json, one call at a time, arm order alternated per case, no call discarded as warm-up\n",
 		first.Date, first.Machine, first.CredentialKind, first.Wire, buildsOf(shipped, hazards), regex.Cases)
 	calls := chargesOf(shipped, hazards)
 	fmt.Fprintf(b, "- dollars: %s\n", chargeLine(calls))

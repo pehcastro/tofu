@@ -3,12 +3,11 @@ package state
 import (
 	"bufio"
 	"encoding/json"
-	"os"
 	"strings"
 	"testing"
-)
 
-const gateCasesPath = "../../../bench/corpus/gate/cases.jsonl"
+	"tofu/internal/dummy/toolgate"
+)
 
 type recordedContext struct {
 	UserRecentMessages      []string         `json:"user_recent_messages"`
@@ -31,7 +30,7 @@ type recordedCase struct {
 
 func gateCases(t *testing.T) map[string]recordedCase {
 	t.Helper()
-	file, err := os.Open(gateCasesPath)
+	file, err := toolgate.Files.Open(toolgate.Cases)
 	if err != nil {
 		t.Fatalf("open the gate corpus: %v", err)
 	}

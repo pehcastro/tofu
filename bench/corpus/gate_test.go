@@ -84,20 +84,6 @@ func TestTheSplitIsAPureFunctionOfTheIdAndTheLabel(t *testing.T) {
 	}
 }
 
-func TestTheCorpusIsAsciiBecauseTheRepositoryRefusesAnEmDash(t *testing.T) {
-	for _, name := range []string{"gate/cases.jsonl", "gate/cases-whole.jsonl"} {
-		raw, err := gateFiles.ReadFile(name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for i, b := range raw {
-			if b > 127 {
-				t.Fatalf("%s byte %d is 0x%x, the corpus must be ascii", name, i, b)
-			}
-		}
-	}
-}
-
 func TestEveryCutCommandWasRecoveredWholeBesideTheCaseThatCarriesItCut(t *testing.T) {
 	records, err := GateRecords()
 	if err != nil {

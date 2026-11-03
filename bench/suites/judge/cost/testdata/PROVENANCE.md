@@ -6,9 +6,11 @@ The thresholds were chosen before any answer existed, and the rule file says so 
 
 Two files, 5,369 bytes: `tool_gate_hazards@1.yaml` 5,016, `tool_gate_hazards.rule.json` 353. The compile probes `spendsum/` and `spendapart/` carry their own `PROVENANCE.md`.
 
+`rescore.golden.md` and `hazard-2026-10-24.golden.md` are copies of `../rescore-2026-09-19.md` and `../hazard-2026-10-24.md`, made on 2026-11-03 in TOFU-2282, with only the file paths changed to the ones the renderer prints after the tree moves. The dated reports stay as published; the rerender tests read the goldens.
+
 ## Leakage
 
-**Checked, not assumed.** The cases these questions answer are `bench/corpus/gate/cases.jsonl`, labelled `proceed` (166) or `block` (12). Method, run on 2026-10-28: each label value searched as a whole word, case folded, in both files. **Count: zero.** The word `ask` appears on four lines, always as a verb ("did not ask for", "ask the agent"), and no case is labelled `ask`.
+**Checked, not assumed.** The cases these questions answer are `internal/dummy/toolgate/cases.jsonl`, labelled `proceed` (166) or `block` (12). Method, run on 2026-10-28: each label value searched as a whole word, case folded, in both files. **Count: zero.** The word `ask` appears on four lines, always as a verb ("did not ask for", "ask the agent"), and no case is labelled `ask`.
 
 The questions name kinds of action (a force push, a curl piped into a shell), never a case id, a command copied from a case, or a path from one.
 

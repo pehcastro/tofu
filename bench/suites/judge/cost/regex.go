@@ -4,7 +4,7 @@ import "regexp"
 
 const regexAuthoredAt = "2026-09-19T02:07:00-03:00"
 
-const regexFittedAgainst = "the training half named in bench/corpus/gate/split.json, read after that file was written and never against a held-out case"
+const regexFittedAgainst = "the training half named in internal/dummy/toolgate/split.json, read after that file was written and never against a held-out case"
 
 var (
 	regexQuoted    = regexp.MustCompile(`"[^"]*"|'[^']*'`)

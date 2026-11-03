@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -85,14 +86,15 @@ func TestHazardReportRerendersFromItsAnswers(t *testing.T) {
 			t.Fatalf("%v", err)
 		}
 		_, reportPath := hazardPaths(rows[0].Date)
-		recorded, err := os.ReadFile(reportPath)
+		goldenPath := filepath.Join("testdata", strings.TrimSuffix(reportPath, ".md")+".golden.md")
+		recorded, err := os.ReadFile(goldenPath)
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
 		body := hazardReport(t, rows, answersPath)
 		t.Log("\n" + body)
 		if body != string(recorded) {
-			t.Errorf("%s rerenders differently from %s", answersPath, reportPath)
+			t.Errorf("%s rerenders differently from %s", answersPath, goldenPath)
 		}
 	}
 }

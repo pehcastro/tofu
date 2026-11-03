@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/dummy/toolgate"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/questions"
 	"tofu/internal/konst"
@@ -27,11 +28,10 @@ const (
 var comparedSets = []string{toolGateV5Path, toolGateV6Path}
 
 const (
-	recordedAnswersPath = "../../../bench/suites/judge/cost/answers/heldout-2026-09-19.jsonl"
-	gatePolicyPath      = "../../../library/general/rules/tool_gate@1.yaml"
-	gateLibraryDir      = "../../../library"
-	labelProceed        = "proceed"
-	labelBlock          = "block"
+	gatePolicyPath = "../../../library/general/rules/tool_gate@1.yaml"
+	gateLibraryDir = "../../../library"
+	labelProceed   = "proceed"
+	labelBlock     = "block"
 )
 
 func gateTheBenchReportDecidesThrough(t *testing.T) gate.Rule {
@@ -324,7 +324,7 @@ func TestLiveReadEveryAnswerOnTheDisagreementCase(t *testing.T) {
 
 func recordedJevAnswers(t *testing.T) []recordedAnswer {
 	t.Helper()
-	file, err := os.Open(recordedAnswersPath)
+	file, err := toolgate.Files.Open(toolgate.Heldout)
 	if err != nil {
 		t.Fatalf("open the recorded answers: %v", err)
 	}

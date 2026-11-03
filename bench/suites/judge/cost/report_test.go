@@ -123,8 +123,8 @@ func TestTheSetSectionStatesHowManyCommandsWereCutAtRecordingTime(t *testing.T) 
 	for _, want := range []string{
 		"33 of the 178 cases carry a command cut at recording time",
 		"14 of the 89 held out",
-		"`bench/corpus/gate/cases-whole.jsonl`",
-		"every arm in this report read `bench/corpus/gate/cases.jsonl`",
+		"`internal/dummy/toolgate/cases-whole.jsonl`",
+		"every arm in this report read `internal/dummy/toolgate/cases.jsonl`",
 		"Cut: 12 of 14 correct, 1 false block, all three runs. Whole: 13 of 14 correct, 0 false blocks, all three runs.",
 	} {
 		if !strings.Contains(body, want) {
@@ -223,12 +223,13 @@ func TestTheRescoreReportNamesEveryCaseInsideTheDeadBand(t *testing.T) {
 }
 
 func TestTheGateSectionNamesTheLibraryFileAndTheAnswersFile(t *testing.T) {
-	body := Render(recordedResult(t, recordedJevArm()), conditions("key"))
+	result := recordedResult(t, recordedJevArm())
+	body := Render(result, conditions("key"))
 	for _, want := range []string{
 		"`library/general/rules/tool_gate@1.yaml`, loaded and linted by `gate.LintFile` and decided by `gate.Decide`",
 		"risk ask at 1.50 and deny at 2.50",
 		"resolves to shadow",
-		"Raw answers for every arm and every case are in `bench/suites/judge/cost/answers/heldout-2026-09-18.jsonl`.",
+		"Raw answers for every arm and every case are in `bench/suites/judge/cost/" + result.AnswersFile + "`.",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the rendered report is missing %q", want)

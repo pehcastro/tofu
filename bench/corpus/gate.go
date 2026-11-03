@@ -3,17 +3,14 @@ package corpus
 import (
 	"bufio"
 	"bytes"
-	"embed"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
+	"tofu/internal/dummy/toolgate"
 	"tofu/internal/judge/gate"
 )
-
-//go:embed gate/cases.jsonl gate/cases-whole.jsonl gate/split.json
-var gateFiles embed.FS
 
 const TruncationMark = " ...[truncated]"
 
@@ -76,11 +73,11 @@ func CutCommands(records []Record) map[string]bool {
 }
 
 func GateRecords() ([]Record, error) {
-	return gateRecordsIn("gate/cases.jsonl")
+	return gateRecordsIn(toolgate.Cases)
 }
 
 func GateWholeCommandRecords() ([]Record, error) {
-	return gateRecordsIn("gate/cases-whole.jsonl")
+	return gateRecordsIn(toolgate.CasesWhole)
 }
 
 func HomeGateRecords() ([]Record, error) {
@@ -104,7 +101,7 @@ func HomeGateRecords() ([]Record, error) {
 }
 
 func gateRecordsIn(path string) ([]Record, error) {
-	raw, err := gateFiles.ReadFile(path)
+	raw, err := toolgate.Files.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -139,13 +136,13 @@ func parseGateRecords(path string, raw []byte) ([]Record, error) {
 }
 
 func GateSplit() (Split, error) {
-	raw, err := gateFiles.ReadFile("gate/split.json")
+	raw, err := toolgate.Files.ReadFile(toolgate.Split)
 	if err != nil {
 		return Split{}, err
 	}
 	var split Split
 	if err := json.Unmarshal(raw, &split); err != nil {
-		return Split{}, fmt.Errorf("bench/corpus: gate/split.json: %w", err)
+		return Split{}, fmt.Errorf("bench/corpus: %s: %w", toolgate.Split, err)
 	}
 	return split, nil
 }

@@ -36,7 +36,7 @@ func TestLiveCalibrationPassOverBothHalves(t *testing.T) {
 		if arm.Stopped != "" {
 			t.Fatalf("the %s half is incomplete: %s", half.name, arm.Stopped)
 		}
-		source := fmt.Sprintf("the %s half of bench/corpus/gate/split.json, asked live on %s through %s, every question answer kept", half.name, day, pol.File)
+		source := fmt.Sprintf("the %s half of internal/dummy/toolgate/split.json, asked live on %s through %s, every question answer kept", half.name, day, pol.File)
 		path := filepath.Join("calibration", fmt.Sprintf("%s-%s.jsonl", half.name, day))
 		if err := writeAnswers(path, answerRows([]ArmResult{arm}, pol, source)); err != nil {
 			t.Fatalf("writing %s: %v", path, err)
