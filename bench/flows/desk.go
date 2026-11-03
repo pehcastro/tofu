@@ -7,13 +7,11 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 )
 
 const (
-	deskBinary     = "tofu-desktop"
 	deskPanicked   = "panicked at"
 	paintedColours = 16
 )
@@ -22,29 +20,6 @@ var deskFlows = []flow{
 	{12, "desk on a fresh home opens onboarding and speaks to the built tofu", false, deskOnboarding},
 	{13, "desk past onboarding opens a fresh project on work and a click closes the sidebar", false, deskWork},
 	{14, "desk opens the boardy screen on a fresh home", false, deskBoardy},
-}
-
-func deskBuild(src string) (string, time.Time, error) {
-	name := deskBinary
-	if runtime.GOOS == "windows" {
-		name += ".exe"
-	}
-	found, _ := filepath.Glob(filepath.Join(src, "apps", "desk", "target*", "*", name))
-	if target := os.Getenv("CARGO_TARGET_DIR"); target != "" {
-		shared, _ := filepath.Glob(filepath.Join(target, "*", name))
-		found = append(found, shared...)
-	}
-	var newest string
-	var built time.Time
-	for _, path := range found {
-		if info, err := os.Stat(path); err == nil && info.ModTime().After(built) {
-			newest, built = path, info.ModTime()
-		}
-	}
-	if newest == "" {
-		return "", built, fmt.Errorf("no %s under %s or $CARGO_TARGET_DIR/*: build the desk from HEAD", name, filepath.Join(src, "apps", "desk", "target*"))
-	}
-	return newest, built, nil
 }
 
 func deskStale(repo, desk string, built time.Time) (string, error) {

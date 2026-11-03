@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	goruntime "runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -53,7 +52,6 @@ cursor or keyboard. Windows only for now.
 `
 
 const (
-	deskBinary           = "tofu-desktop"
 	deskPaintedLine      = "desk: first paint"
 	deskFirstRunVariable = "DESK_FIRST_RUN"
 	deskFirstShot        = "open"
@@ -149,37 +147,6 @@ func parseDeskPlan(args []string) (deskPlan, error) {
 	return plan, nil
 }
 
-func newestDesk(named string) (string, time.Time, error) {
-	candidates := []string{named}
-	if named == "" {
-		file := deskBinary
-		if goruntime.GOOS == "windows" {
-			file += ".exe"
-		}
-		candidates, _ = filepath.Glob(filepath.Join("apps", "desk", "target*", "*", file))
-		if target := os.Getenv("CARGO_TARGET_DIR"); target != "" {
-			shared, _ := filepath.Glob(filepath.Join(target, "*", file))
-			candidates = append(candidates, shared...)
-		}
-	}
-	var newest string
-	var built time.Time
-	for _, candidate := range candidates {
-		info, err := os.Stat(candidate)
-		if err == nil && !info.IsDir() && info.ModTime().After(built) {
-			newest, built = candidate, info.ModTime()
-		}
-	}
-	switch {
-	case newest == "" && named != "":
-		return "", built, fmt.Errorf("--exe %s is not a file", named)
-	case newest == "":
-		return "", built, errors.New("no " + deskBinary + " build under $CARGO_TARGET_DIR/* or apps/desk/target*/*: build it, or name one with --exe")
-	}
-	absolute, err := filepath.Abs(newest)
-	return absolute, built, err
-}
-
 func deskFolder(named string) (string, error) {
 	if named == "" {
 		return os.MkdirTemp("", deskOutPrefix)
@@ -258,7 +225,7 @@ func driveDeskVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return fail(err)
 	}
-	exe, built, err := newestDesk(plan.exe)
+	exe, built, err := sys.NewestDesk("", plan.exe)
 	if err != nil {
 		return fail(err)
 	}
