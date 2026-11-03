@@ -17,14 +17,14 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 	shipped "tofu/library"
 )
 

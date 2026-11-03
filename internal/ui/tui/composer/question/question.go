@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/cli/render"
-	"tofu/internal/turn"
 	"tofu/internal/ui/tui/look/look"
 )
 

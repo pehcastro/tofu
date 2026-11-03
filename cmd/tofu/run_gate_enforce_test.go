@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/turn"
 	"tofu/internal/ui/tui/app"
 )
 

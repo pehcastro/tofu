@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/host"
-	"tofu/internal/turn"
 )
 
 const (

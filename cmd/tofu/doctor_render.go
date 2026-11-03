@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"strings"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/cli/page"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/tools/web/browser/driver"
-	"tofu/internal/turn"
 )
 
 const (

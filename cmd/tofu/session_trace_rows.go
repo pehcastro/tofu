@@ -11,6 +11,7 @@ import (
 
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/hooks"
+	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/cli/render"
 	"tofu/internal/judge/ledger"
@@ -18,7 +19,6 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 )
 
 func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow {

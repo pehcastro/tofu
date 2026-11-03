@@ -15,7 +15,7 @@ import (
 	library "tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/core"
 	isettings "tofu/internal/store/settings"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 	"tofu/internal/ui/keymap"
 	"tofu/internal/ui/tui/chat/feed"
 	"tofu/internal/ui/tui/composer/keyfield"

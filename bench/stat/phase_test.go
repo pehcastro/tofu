@@ -3,7 +3,7 @@ package stat
 import (
 	"testing"
 
-	"tofu/internal/turn"
+	"tofu/internal/agent/loop"
 )
 
 const leastPhaseAgreement = 0.8

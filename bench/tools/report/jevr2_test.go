@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	tofutools "tofu/internal/turn/tools"
+	tofutools "tofu/internal/tools/registry"
 )
 
 func TestSearchOverTheLargestTreeOnThisMachine(t *testing.T) {

@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/host"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/quota"
@@ -22,7 +23,6 @@ import (
 	sessionstore "tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 )
 
 const serveUsage = `usage: tofu serve --stdio [--dir PATH] [--cassette PATH] [--done-review off|cheap|screen|typed]

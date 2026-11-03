@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/transport"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
 )
 
 type subAccount struct {

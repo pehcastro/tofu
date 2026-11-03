@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/memory/tree"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 )
 
 const MemoryNone = "none"

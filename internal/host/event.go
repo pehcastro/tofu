@@ -7,13 +7,13 @@ import (
 	"strconv"
 	"time"
 
+	"tofu/internal/agent/loop"
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
 )
 
 type EventKind int

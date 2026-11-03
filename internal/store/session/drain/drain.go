@@ -6,10 +6,10 @@ import (
 	"slices"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
 )
 
 const (

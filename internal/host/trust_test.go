@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/turn"
+	"tofu/internal/agent/loop"
 )
 
 func TestAStandingAnswerNeverTrustsHooksThatChangedAfterIt(t *testing.T) {

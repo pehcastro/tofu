@@ -19,12 +19,12 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/method"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
 	"tofu/internal/tools/shell/sift"
-	"tofu/internal/turn"
 	shipped "tofu/library"
 )
 

@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
 )
 
 func answeredStanding(t *testing.T, h *Host, request turn.GateRequest, given Answer) turn.PersonAnswer {

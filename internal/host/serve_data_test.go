@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/store/memory/entries"
-	"tofu/internal/turn"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 )
 
 func TestServeDataQueriesAreTypedAndMemoryReachesTheLead(t *testing.T) {

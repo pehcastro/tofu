@@ -6,10 +6,10 @@ import (
 	"errors"
 
 	"tofu/internal/agent/cron"
+	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 )
 
 var gitPush = sys.LazyRegexp(`\bgit\b[^;&|\n]*\bpush\b`)

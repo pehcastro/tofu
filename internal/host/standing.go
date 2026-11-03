@@ -10,8 +10,8 @@ import (
 	"slices"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
 )
 
 type standingIn struct {

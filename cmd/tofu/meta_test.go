@@ -14,10 +14,10 @@ import (
 	"sync"
 	"testing"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/host"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 )
 
 const (

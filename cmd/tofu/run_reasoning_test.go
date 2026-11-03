@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/wire/codex"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
 )
 
 const codexStubStreamReasoningToolCall = `data: {"type":"response.output_item.added","output_index":0,"item":{"type":"reasoning"}}

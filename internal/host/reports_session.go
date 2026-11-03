@@ -6,9 +6,9 @@ import (
 
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/hooks"
+	"tofu/internal/agent/loop"
 	"tofu/internal/store/session"
 	"tofu/internal/store/session/drain"
-	"tofu/internal/turn"
 )
 
 type SessionSkip struct {

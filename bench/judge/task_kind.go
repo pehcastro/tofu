@@ -4,8 +4,8 @@ import (
 	"cmp"
 	"fmt"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/librarian/rules"
-	"tofu/internal/turn"
 )
 
 type KindCase struct {

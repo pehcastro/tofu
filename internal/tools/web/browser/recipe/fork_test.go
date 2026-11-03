@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"tofu/internal/agent/context/recall"
+	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/turn"
 )
 
 type searchPage struct{ acts *int }

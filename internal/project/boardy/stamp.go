@@ -230,7 +230,7 @@ func DoneRefusal(repo, id string, owns []string) string {
 }
 
 func flowsAreaList() []string {
-	return []string{"internal/turn", "internal/host", "internal/agent/subagents", "internal/store/session", "internal/ui/tui", "cmd/tofu", deskArea}
+	return []string{"internal/agent/loop", "internal/tools/registry", "internal/host", "internal/agent/subagents", "internal/store/session", "internal/ui/tui", "cmd/tofu", deskArea}
 }
 
 func flowsAreas(globs []string) []string {

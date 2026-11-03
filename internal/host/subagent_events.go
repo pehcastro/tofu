@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"slices"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 )
 
 func (h *Host) SubAgentEvents(names []string, visit func(Event) bool) error {

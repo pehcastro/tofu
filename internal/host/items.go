@@ -13,7 +13,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 )
 
 const (

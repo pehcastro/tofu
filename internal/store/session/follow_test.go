@@ -20,11 +20,11 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
 )
 
 const (

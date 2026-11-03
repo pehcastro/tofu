@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/agent/loop"
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 )
 
 type heldModel struct {

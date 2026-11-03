@@ -15,9 +15,9 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/cli/page"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/turn"
 )
 
 const standInProxySource = `package main

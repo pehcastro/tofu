@@ -15,11 +15,11 @@ import (
 
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/cron"
+	"tofu/internal/agent/loop"
 	"tofu/internal/host"
 	"tofu/internal/models/llm/core"
 	sessionstore "tofu/internal/store/session"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/composer/paste"
 )

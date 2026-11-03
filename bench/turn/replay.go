@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"tofu/bench/corpus"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 )
 
 type (

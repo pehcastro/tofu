@@ -9,10 +9,10 @@ import (
 	"strconv"
 	"strings"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/cli/page"
 	"tofu/internal/librarian/rules"
-	"tofu/internal/turn"
 )
 
 type ruleIndexListing struct {

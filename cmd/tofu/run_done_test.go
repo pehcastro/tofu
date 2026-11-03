@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
@@ -21,7 +22,6 @@ import (
 	"tofu/internal/models/llm/core"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 )
 
 func panicOf(call func()) (message string) {

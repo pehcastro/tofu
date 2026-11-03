@@ -1,9 +1,9 @@
 package prefix
 
 import (
+	"tofu/internal/agent/loop"
 	"tofu/internal/agent/prompt"
 	"tofu/internal/librarian/rules"
-	"tofu/internal/turn"
 	shipped "tofu/library"
 )
 

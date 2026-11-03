@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"tofu/internal/sys"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 )
 
 type emitter struct {

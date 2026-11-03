@@ -1,9 +1,9 @@
 package schemas
 
 import (
+	iturn "tofu/internal/agent/loop"
 	"tofu/internal/models/llm/core"
-	iturn "tofu/internal/turn"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 )
 
 func must[T any](v T, err error) T {

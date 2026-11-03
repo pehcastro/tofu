@@ -78,7 +78,7 @@ func TestTheFixtureRuleIsTheOneAPersonWouldPredict(t *testing.T) {
 	recorded := []string{
 		"bench/corpus/gate/cases.jsonl",
 		"bench/stopcheck/corpus/turn-18d68bcceb3d56e8.json",
-		"internal/turn/testdata/subscription-end-turn.sse",
+		"internal/agent/loop/testdata/subscription-end-turn.sse",
 		"bench/cost/answers/heldout-2026-09-19.jsonl",
 		"bench/cost/testdata/spendsum/main.go",
 		"internal/ui/tui/app/testdata/session-80x24.golden",
@@ -86,7 +86,7 @@ func TestTheFixtureRuleIsTheOneAPersonWouldPredict(t *testing.T) {
 	notRecorded := []string{
 		"bench/corpus/scrub.go",
 		"bench/corpus/gate.go",
-		"internal/turn/turn.go",
+		"internal/agent/loop/turn.go",
 		"bench/report/api-2026-09-18.md",
 		"CHANGELOG.md",
 	}

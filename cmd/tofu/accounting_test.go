@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 	"tofu/internal/ui/tui/app"
 )
 

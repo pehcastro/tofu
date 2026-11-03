@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
 )
 
 func pythonAsk(code string) turn.GateRequest {

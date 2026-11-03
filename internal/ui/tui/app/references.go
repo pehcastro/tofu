@@ -6,7 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 	"tofu/internal/ui/tui/chat/feed"
 	"tofu/internal/ui/tui/input/pointer"
 )

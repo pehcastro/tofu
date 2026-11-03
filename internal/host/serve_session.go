@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/registry"
 	"tofu/internal/tools/shell/process"
-	"tofu/internal/turn"
-	"tofu/internal/turn/tools"
 )
 
 const (

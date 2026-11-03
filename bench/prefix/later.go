@@ -14,9 +14,9 @@ import (
 	"strings"
 	"sync"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/wire/anthropic"
-	"tofu/internal/turn"
 )
 
 const laterEnvironment = "<env>\nworking directory: Q:\\code\\bench\nplatform: windows/amd64\n</env>"

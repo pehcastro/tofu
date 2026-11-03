@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"tofu/internal/store/session"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 )
 
 type MentionOutcome string

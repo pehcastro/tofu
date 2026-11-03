@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/agent/loop"
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 )
 
 type recordedCall struct {

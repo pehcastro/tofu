@@ -11,6 +11,7 @@ import (
 	"tofu/internal/agent/commands"
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/hooks"
+	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
@@ -25,7 +26,6 @@ import (
 	"tofu/internal/store/snapshot"
 	"tofu/internal/sys"
 	"tofu/internal/tools/web/browser/driver"
-	"tofu/internal/turn"
 )
 
 type schemaDefs struct {

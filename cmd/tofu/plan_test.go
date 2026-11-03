@@ -9,7 +9,7 @@ import (
 
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/chat/session"
 )

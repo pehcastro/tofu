@@ -9,11 +9,11 @@ import (
 	"strings"
 
 	"tofu/internal/agent/context/recall"
+	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/quota"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/turn"
 	"tofu/internal/ui/tui/frame/frame"
 )
 

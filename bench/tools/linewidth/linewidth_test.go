@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"tofu/bench/corpus"
+	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 )
 
 type recordedCall struct {

@@ -7,10 +7,10 @@ import (
 	"slices"
 	"strings"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/turn"
 )
 
 func showPrompt(opts runOpts, out, errOut io.Writer) int {

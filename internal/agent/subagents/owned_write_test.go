@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
-	"tofu/internal/turn"
 )
 
 func TestAWriteToolCallOnTmpCreatesNothingInTheProject(t *testing.T) {

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
 )
 
 const recordedSessionID = "turn-18d6a5df2caeac68"

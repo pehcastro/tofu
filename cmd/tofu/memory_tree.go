@@ -14,13 +14,13 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/store/memory/tree"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/turn"
 )
 
 const memoryTreeUsage = `tofu memory tree <log.jsonl> [--budget BYTES], tofu memory zoom <log.jsonl> <id> <n>, tofu memory recall <log.jsonl> <regex>`

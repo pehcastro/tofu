@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/platform/recover"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 )
 
 type startupStep struct {

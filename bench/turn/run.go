@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"tofu/bench/stat"
+	iturn "tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/openrouter"
 	"tofu/internal/models/transport"
-	iturn "tofu/internal/turn"
 )
 
 const (

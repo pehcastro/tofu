@@ -5422,7 +5422,7 @@
       "switched_on": "yes, through the judged method",
       "costs": "a median $0.000540 a session, p95 $0.005454, worst $0.011070 over 110 recorded sessions, and p50 361 ms, p95 524 ms, worst 722 ms on 13 real shell_sift ledger decisions",
       "why": "jev keeps 27 of 34 planted needles against the free arm's 18, 1.50x, at equal bytes saved",
-      "called_by": "internal/turn/shellsift.go"
+      "called_by": "internal/agent/loop/shellsift.go"
     },
     {
       "point": "board_epic",
@@ -5438,7 +5438,7 @@
       "switched_on": "yes, through the judged method",
       "costs": "one jev call per assistant text while a question is open, p50 about 240 ms",
       "why": "jev keeps 18 of 18 unanswered questions open with 0 of 12 false, against 5 of 18 with 3 false for the phrase list, on a 30-pair corpus",
-      "called_by": "internal/turn/loop.go"
+      "called_by": "internal/agent/loop/loop.go"
     },
     {
       "point": "person_repeat",
@@ -5446,7 +5446,7 @@
       "switched_on": "yes, through the judged method",
       "costs": "about $0.0069 for 42 requests over that corpus, p50 276 ms, worst 412 ms",
       "why": "jev catches 7 of 14 hand-labelled repeats with 2 false notes over 13 generations of one long session, against 1 of 14 with 3 false for the local stem matcher; the same request also asks whether a kept memory entry already covers the message, so the lead says it is in force rather than promising it again, citing the ledger row and score; at kept_at 0.9 every memory match was right over four runs of 45 mocked messages with 18 covered, 14 matches a run, recall 0.78, against one wrong match a run at the 0.5 prior, precision 0.93 to 0.94, recall 0.78 to 0.83, for $0.0021 a run",
-      "called_by": "internal/turn/inbox.go"
+      "called_by": "internal/agent/loop/inbox.go"
     },
     {
       "point": "standing_order",
@@ -5454,7 +5454,7 @@
       "switched_on": "yes, through the judged method",
       "costs": "one jev call per new sentence the person wrote, at each fork, p50 194 to 196 ms, worst 291 ms, cost reported 0",
       "why": "jev keeps 19 of 20 standing orders with 0 non-orders kept over two passes, against 9 of 20 with 11 non-orders kept for the word list konst.CarryStandingPhrases, on a 40-sentence corpus",
-      "called_by": "internal/turn/standing.go"
+      "called_by": "internal/agent/loop/standing.go"
     },
     {
       "point": "browser_step",
@@ -5462,7 +5462,7 @@
       "switched_on": "yes, through the judged method",
       "costs": "a median $0.000056 a decision, $0.000496 reported for 8 decisions, and p50 316 ms, p90 438 ms, worst 683 ms a decision. a task at the default 30 actions asks at most 60 decisions, about $0.0034 at the median",
       "why": "jev picks the right next action on 8 of 8 recorded pages, median 316 ms and 1340 input tokens a decision. it runs only under browserDriver goal. the default, browserDriver steps, where the turn's own model calls browser_observe and browser_act, is not measured against it",
-      "called_by": "internal/turn/tools/browser.go"
+      "called_by": "internal/tools/registry/browser.go"
     },
     {
       "point": "stop_check",
@@ -5494,7 +5494,7 @@
       "switched_on": "yes, through the judged method",
       "costs": "one jev request a remember call that is not a replace or keep_both, 239 to 297 ms on two entries in the driven run, cost reported 0",
       "why": "a word match cannot tell two rules that say one thing in other words from two that share a subject; on 8 hand-labelled pairs the same pairs shared 2 to 5 content words and the different ones 0 to 4, while jev gave the same pairs 0.27 to 0.56 and the different ones 0.05 to 0.16. same_at 0.25 is provisional on those 8 pairs",
-      "called_by": "internal/turn/tools/remember.go"
+      "called_by": "internal/tools/registry/remember.go"
     },
     {
       "point": "ask",
@@ -5530,7 +5530,7 @@
       "switched_on": "yes, through the judged method",
       "costs": "one jev call each time a prompt is composed for a task, the lead's and each spawn's, p50 192 ms, p95 226 ms, worst 302 ms and a mean $0.0000257 list charge over 80 calls",
       "why": "jev names the kind of 40 of 40 mocked tasks on two passes against the word list's 11 of 40, which reads a crash, a diff to look over or a question about a fault as no kind and an add a debug flag task as debug. the corpus and the question were written by one author, so 40 of 40 is a ceiling rather than a rate",
-      "called_by": "internal/turn/compose.go"
+      "called_by": "internal/agent/loop/compose.go"
     },
     {
       "point": "request_open",
@@ -5538,7 +5538,7 @@
       "switched_on": "yes, through the judged method",
       "costs": "one jev call per message the person types to the lead, p50 178 to 198 ms, p99 228 to 261 ms over those passes; the dollar cost is not measured",
       "why": "jev reads 37 and 36 of 40 mocked requests right on two passes, and 36 of 40 on a third, against 20 of 40 for the arm that always restates, which restates all 20 closed requests; jev restates 1 to 2 closed ones and misses 2 open ones a pass. the corpus is 40 requests written by one author, so this is a ceiling rather than a rate",
-      "called_by": "internal/turn/inbox.go"
+      "called_by": "internal/agent/loop/inbox.go"
     },
     {
       "point": "done_reason",
@@ -5562,7 +5562,7 @@
       "switched_on": "yes, through the judged method",
       "costs": "one jev request a result compaction could drop, asked once a turn; 29 requests a run, cost reported 0, p50 199 and 204 ms",
       "why": "on 6 mocked sessions with 29 tool results, 14 of them needed later, /compact under jev dropped 14 and 13 results with 2 and 1 of the needed ones among them over two runs, against the age rule's 29 dropped and 14 needed; jev kept 3 of 15 spent results, so it carried 16758 and 17620 tokens after against 6694",
-      "called_by": "internal/turn/loop.go"
+      "called_by": "internal/agent/loop/loop.go"
     },
     {
       "point": "rule_applies",

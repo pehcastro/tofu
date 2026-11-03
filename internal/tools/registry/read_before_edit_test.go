@@ -1,0 +1,293 @@
+package tools_test
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"tofu/internal/agent/loop"
+	"tofu/internal/tools/contract"
+	"tofu/internal/tools/registry"
+)
+
+const packageJSON = "{\n  \"name\": \"moth\"\n}\n"
+
+func sessionDir(t *testing.T) (string, *turn.ReadLedger) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(packageJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir, turn.NewReadLedger()
+}
+
+func call(t *testing.T, tool contract.Tool, args map[string]string) error {
+	t.Helper()
+	raw, err := json.Marshal(args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tool.Run(context.Background(), raw)
+	return err
+}
+
+func turnTools(t *testing.T, dir string, ledger *turn.ReadLedger) (contract.Tool, contract.Tool, contract.Tool) {
+	t.Helper()
+	read, readErr := turn.NewReadTool(dir)
+	write, writeErr := turn.NewWriteTool(dir)
+	edit, editErr := tools.NewEdit(dir)
+	for _, err := range []error{readErr, writeErr, editErr} {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	return read.Reading(ledger), write.Reading(ledger), edit.Reading(ledger)
+}
+
+func TestAFileReadInTurnOneAndUnchangedIsWrittenAndEditedInTurnTwo(t *testing.T) {
+	dir, ledger := sessionDir(t)
+	read, _, _ := turnTools(t, dir, ledger)
+	if err := call(t, read, map[string]string{"path": "package.json"}); err != nil {
+		t.Fatalf("turn 1 read: %v", err)
+	}
+	_, write, edit := turnTools(t, dir, ledger)
+	if err := call(t, write, map[string]string{"path": "package.json", "content": "{\n  \"name\": \"inky\"\n}\n"}); err != nil {
+		t.Fatalf("turn 2 write was refused: %v", err)
+	}
+	if err := call(t, edit, map[string]string{"path": "package.json", "old_string": "inky", "new_string": "quiet"}); err != nil {
+		t.Fatalf("turn 2 edit was refused: %v", err)
+	}
+	got, _ := os.ReadFile(filepath.Join(dir, "package.json"))
+	if string(got) != "{\n  \"name\": \"quiet\"\n}\n" {
+		t.Fatalf("package.json is %q", got)
+	}
+}
+
+func TestAFileChangedOnDiskAfterTheReadIsRefused(t *testing.T) {
+	changed := "{\n  \"name\": \"moth\",\n  \"private\": true\n}\n"
+	for _, name := range []string{"write", "edit"} {
+		t.Run(name, func(t *testing.T) {
+			dir, ledger := sessionDir(t)
+			read, write, edit := turnTools(t, dir, ledger)
+			if err := call(t, read, map[string]string{"path": "package.json"}); err != nil {
+				t.Fatalf("read: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(changed), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			tool, args := contract.Tool(write), map[string]string{"path": "package.json", "content": "{}\n"}
+			if name == "edit" {
+				tool, args = edit, map[string]string{"path": "package.json", "old_string": "moth", "new_string": "inky"}
+			}
+			if err := call(t, tool, args); err == nil {
+				t.Fatalf("%s of a file that changed since it was read was allowed", name)
+			}
+			got, _ := os.ReadFile(filepath.Join(dir, "package.json"))
+			if string(got) != changed {
+				t.Fatalf("a refused %s changed package.json to %q", name, got)
+			}
+		})
+	}
+}
+
+func TestAnExactEditOfASmallFileNeverReadIsApplied(t *testing.T) {
+	absent, absentLedger := sessionDir(t)
+	_, _, guessed := turnTools(t, absent, absentLedger)
+	if err := call(t, guessed, map[string]string{"path": "package.json", "old_string": "nothing like this", "new_string": "inky"}); err == nil {
+		t.Fatal("an edit of a file never read whose old_string is absent was allowed")
+	}
+	dir, ledger := sessionDir(t)
+	_, _, edit := turnTools(t, dir, ledger)
+	if err := call(t, edit, map[string]string{"path": "package.json", "old_string": "moth", "new_string": "inky"}); err != nil {
+		t.Fatalf("an exact edit of a small file never read was refused, a round trip the refusal would undo: %v", err)
+	}
+	got, _ := os.ReadFile(filepath.Join(dir, "package.json"))
+	if !strings.Contains(string(got), "inky") {
+		t.Fatalf("package.json is %q", got)
+	}
+}
+
+type rangeStep struct {
+	tool    string
+	args    map[string]any
+	refused string
+}
+
+func goFile(last int, ending string) string {
+	lines := []string{"package a", ""}
+	for n := 3; n <= last; n++ {
+		lines = append(lines, fmt.Sprintf("func f%d() int { return %d }", n, n))
+	}
+	return strings.Join(lines, ending) + ending
+}
+
+func readLines(first, last int) rangeStep {
+	return rangeStep{tool: "read", args: map[string]any{"path": "a.go", "start_line": first, "end_line": last}}
+}
+
+func editText(old, becomes, refused string) rangeStep {
+	return rangeStep{tool: "edit", args: map[string]any{"path": "a.go", "old_string": old, "new_string": becomes}, refused: refused}
+}
+
+func editSymbol(refused string) rangeStep {
+	return rangeStep{tool: "edit", args: map[string]any{"path": "a.go", "symbol": "f40", "new_string": "func f40() int { return 400 }"}, refused: refused}
+}
+
+func writeWhole(appending bool, refused string) rangeStep {
+	return rangeStep{tool: "write", args: map[string]any{"path": "a.go", "content": "func g() {}\n", "append": appending}, refused: refused}
+}
+
+func TestAnEditOrWriteReachingLinesNoReadShowedIsRefused(t *testing.T) {
+	readWhole := rangeStep{tool: "read", args: map[string]any{"path": "a.go"}}
+	rows := []struct {
+		name   string
+		ending string
+		steps  []rangeStep
+	}{
+		{"an edit at line 40 after reading 1-5 succeeds, its old text exact and unique in a file unchanged since the read", "\n", []rangeStep{readLines(1, 5), editText("return 40 }", "return 400 }", "")}},
+		{"an edit inside the range read", "\n", []rangeStep{readLines(1, 5), editText("return 4 }", "return 44 }", "")}},
+		{"an insertion right below the last line read", "\n", []rangeStep{readLines(1, 5), editText("return 5 }", "return 5 }\nfunc g() {}", ""), editText("func g() {}", "func h() {}", "")}},
+		{"an insertion right above the first line read", "\n", []rangeStep{readLines(6, 10), editText("func f6()", "func g() {}\nfunc f6()", "")}},
+		{"an insertion between two lines no read showed succeeds, anchored on exact unique old text in an unchanged file", "\n", []rangeStep{readLines(1, 5), editText("return 40 }", "return 40 }\nfunc g() {}", "")}},
+		{"a whole read after a range read", "\n", []rangeStep{readLines(1, 5), readWhole, editText("return 40 }", "return 400 }", "")}},
+		{"a range read after a whole read", "\n", []rangeStep{readWhole, readLines(1, 5), editText("return 40 }", "return 400 }", "")}},
+		{"an edit crossing the edge of two merged ranges succeeds, its old text exact and unique in an unchanged file", "\n", []rangeStep{readLines(1, 5), readLines(4, 10),
+			editText("return 10 }\nfunc f11() int { return 11 }", "return 10 }", "")}},
+		{"ranges shift with an edit that adds lines, and an edit past them succeeds, its old text exact and unique in a file only tofu changed", "\n", []rangeStep{readLines(38, 42),
+			editText("return 40 }", "return 40 }\nfunc g1() {}\nfunc g2() {}", ""),
+			editText("return 42 }", "return 420 }", ""),
+			editText("return 43 }", "return 430 }", "")}},
+		{"old text appearing twice outside the read is refused", "\n", []rangeStep{readLines(38, 42), editText("() int { return 5", "() int { return 6", "appears 2 times")}},
+		{"an edit whose whitespace was repaired onto line 40", "\n", []rangeStep{readLines(1, 5), editText("\tfunc f40() int { return 40 }", "func f40() int { return 400 }", "read only at lines 1-5")}},
+		{"a symbol edit outside the range", "\n", []rangeStep{readLines(1, 5), editSymbol("read only at lines 1-5")}},
+		{"a symbol edit inside the range", "\n", []rangeStep{readLines(38, 42), editSymbol("")}},
+		{"a crlf file, inside and outside the range, both succeed with exact unique old text in an unchanged file", "\r\n", []rangeStep{readLines(38, 42), editText("return 40 }", "return 400 }", ""), editText("return 10 }", "return 100 }", "")}},
+		{"a whole write after a range read", "\n", []rangeStep{readLines(1, 5), writeWhole(false, "read only at lines 1-5")}},
+		{"a whole write after a whole read", "\n", []rangeStep{readWhole, writeWhole(false, "")}},
+		{"an append after reading the last lines, then an edit above them succeeds, its old text exact and unique in a file only tofu changed", "\n", []rangeStep{readLines(48, 50), writeWhole(true, ""),
+			editText("func g() {}", "func h() {}", ""),
+			editText("return 47 }", "return 470 }", "")}},
+		{"an append after reading only the top", "\n", []rangeStep{readLines(1, 5), writeWhole(true, "read only at lines 1-5")}},
+	}
+	for _, row := range rows {
+		t.Run(row.name, func(t *testing.T) {
+			dir := t.TempDir()
+			target := filepath.Join(dir, "a.go")
+			if err := os.WriteFile(target, []byte(goFile(50, row.ending)), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			read, write, edit := turnTools(t, dir, turn.NewReadLedger())
+			byName := map[string]contract.Tool{"read": read, "write": write, "edit": edit}
+			for i, step := range row.steps {
+				raw, _ := json.Marshal(step.args)
+				held, _ := os.ReadFile(target)
+				_, err := byName[step.tool].Run(context.Background(), raw)
+				switch {
+				case step.refused == "" && err != nil:
+					t.Fatalf("step %d %s was refused: %v", i+1, step.tool, err)
+				case step.refused != "" && err == nil:
+					t.Fatalf("step %d %s was accepted, want it refused naming %q", i+1, step.tool, step.refused)
+				case step.refused != "" && !strings.Contains(err.Error(), step.refused):
+					t.Fatalf("step %d %s was refused without naming %q: %v", i+1, step.tool, step.refused, err)
+				}
+				if after, _ := os.ReadFile(target); step.refused != "" && string(after) != string(held) {
+					t.Fatalf("step %d: a refused %s changed a.go", i+1, step.tool)
+				}
+			}
+		})
+	}
+}
+
+func TestWithoutALedgerAnEditAnywhereIsAccepted(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte(goFile(50, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, _, edit := turnTools(t, dir, nil)
+	if err := call(t, edit, map[string]string{"path": "a.go", "old_string": "return 40 }", "new_string": "return 400 }"}); err != nil {
+		t.Fatalf("an edit with read-before-edit off was refused: %v", err)
+	}
+}
+
+func TestARefusalOfALargeFileNamesTheReadThatLetsTheRetryThrough(t *testing.T) {
+	rows := []struct {
+		name    string
+		ending  string
+		earlier map[string]any
+		tool    string
+		args    map[string]any
+		lines   string
+	}{
+		{"an edit at line 400", "\n", nil, "edit", map[string]any{"path": "a.go", "old_string": "return 400 }", "new_string": "return 4000 }"}, "lines 400-400"},
+		{"an edit whose whitespace was repaired onto line 400", "\n", nil, "edit", map[string]any{"path": "a.go", "old_string": "\tfunc f400() int { return 400 }", "new_string": "func f400() int { return 4000 }"}, "lines 400-400"},
+		{"a symbol edit", "\n", nil, "edit", map[string]any{"path": "a.go", "symbol": "f400", "new_string": "func f400() int { return 4000 }"}, "lines 400-400"},
+		{"an insertion below line 400", "\n", nil, "edit", map[string]any{"path": "a.go", "old_string": "return 400 }", "new_string": "return 400 }\nfunc g() {}"}, "lines 401-401"},
+		{"a crlf file", "\r\n", nil, "edit", map[string]any{"path": "a.go", "old_string": "return 400 }", "new_string": "return 4000 }"}, "lines 400-400"},
+		{"a file changed since a range read", "\n", map[string]any{"path": "a.go", "start_line": 1, "end_line": 5}, "edit", map[string]any{"path": "a.go", "old_string": "return 400 }", "new_string": "return 4000 }"}, "lines 400-400"},
+		{"an append", "\n", nil, "write", map[string]any{"path": "a.go", "content": "func g() {}\n", "append": true}, "lines 1500-1500"},
+		{"a whole write", "\n", nil, "write", map[string]any{"path": "a.go", "content": "package a\n"}, "lines 3-1500"},
+	}
+	for _, row := range rows {
+		t.Run(row.name, func(t *testing.T) {
+			dir := t.TempDir()
+			target := filepath.Join(dir, "a.go")
+			body := goFile(1500, row.ending)
+			if err := os.WriteFile(target, []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			read, write, edit := turnTools(t, dir, turn.NewReadLedger())
+			tool := map[string]contract.Tool{"write": write, "edit": edit}[row.tool]
+			run := func(using contract.Tool, args map[string]any) error {
+				raw, _ := json.Marshal(args)
+				_, err := using.Run(context.Background(), raw)
+				return err
+			}
+			if row.earlier != nil {
+				if err := run(read, row.earlier); err != nil {
+					t.Fatal(err)
+				}
+				body += "func late() {}" + row.ending
+				if err := os.WriteFile(target, []byte(body), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			refusal := run(tool, row.args)
+			if refusal == nil {
+				t.Fatalf("a %s to a %d-byte file never read was accepted", row.tool, len(body))
+			}
+			if size := len(refusal.Error()); size > 1024 || !strings.Contains(refusal.Error(), row.lines) {
+				t.Fatalf("the refusal is %d bytes, want under 1024 naming %q: %.600s", size, row.lines, refusal)
+			}
+			if after, _ := os.ReadFile(target); string(after) != body {
+				t.Fatalf("a refused %s changed a.go", row.tool)
+			}
+			var hint map[string]any
+			named := refusal.Error()[max(strings.Index(refusal.Error(), "{"), 0):]
+			if err := json.NewDecoder(strings.NewReader(named)).Decode(&hint); err != nil {
+				t.Fatalf("the refusal names no read call to copy: %v: %.600s", err, refusal)
+			}
+			if err := run(read, hint); err != nil {
+				t.Fatalf("the read the refusal named failed: %v", err)
+			}
+			if err := run(tool, row.args); err != nil {
+				t.Fatalf("the retry after the named read %v was refused: %v", hint, err)
+			}
+		})
+	}
+}
+
+func TestARefusalOfAnEditThatMatchesNothingStillSaysWhatToRead(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte(goFile(1500, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, _, edit := turnTools(t, dir, turn.NewReadLedger())
+	err := call(t, edit, map[string]string{"path": "a.go", "old_string": "return -1 }", "new_string": "return 1 }"})
+	if err == nil || len(err.Error()) > 1024 || !strings.Contains(err.Error(), "has 1500 lines") || !strings.Contains(err.Error(), "has not been read") {
+		t.Fatalf("want a refusal under 1024 bytes saying the file has 1500 lines, got %d bytes: %.600v", len(fmt.Sprint(err)), err)
+	}
+}

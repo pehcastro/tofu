@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"tofu/internal/agent/cron"
+	"tofu/internal/agent/loop"
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
 )
 
 type wireLine struct {

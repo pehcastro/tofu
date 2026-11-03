@@ -13,7 +13,7 @@ import (
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/sys"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 	"tofu/library/questions"
 )
 

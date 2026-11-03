@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
+	"tofu/internal/agent/loop"
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/tools/shell/process"
-	"tofu/internal/turn"
 	"tofu/internal/ui/statusline"
 )
 

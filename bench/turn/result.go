@@ -3,7 +3,7 @@ package turn
 import (
 	"time"
 
-	iturn "tofu/internal/turn"
+	iturn "tofu/internal/agent/loop"
 )
 
 const (

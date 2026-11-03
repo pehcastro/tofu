@@ -38,7 +38,7 @@ func TestEveryMoveToDoneNeedsTheFlowsStamp(t *testing.T) {
 	gitIn(t, repo, "commit", "-q", "-m", "work")
 	m := managedBoard(t, "DEMO")
 	m.Store.Root = repo
-	turn, err := m.Create("DEMO", ticketWith("turn", "internal/turn/**"), manager)
+	turn, err := m.Create("DEMO", ticketWith("turn", "internal/agent/loop/**"), manager)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestADeskTicketNeedsTheDeskStampOfItsTree(t *testing.T) {
 	}
 	_, err = m.Move(desk.ID, Done, closedReason, person)
 	refused(t, err, "apps/desk tree "+deskTree()+" has no passing desk stamp")
-	both, err := m.Create("DEMO", ticketWith("both", "internal/turn/**", "apps/desk/**"), manager)
+	both, err := m.Create("DEMO", ticketWith("both", "internal/agent/loop/**", "apps/desk/**"), manager)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,6 +183,9 @@ func TestADoneMoveInTofusTreeIsRefusedWhileAFlowsAreaIsNotAFolder(t *testing.T) 
 				t.Fatal(err)
 			}
 		}
+	}
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(repo, lost)), 0o755); err != nil {
+		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(repo, lost), nil, 0o644); err != nil {
 		t.Fatal(err)

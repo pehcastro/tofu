@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
@@ -15,7 +16,6 @@ import (
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 	"tofu/library/questions"
 )
 

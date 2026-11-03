@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 )
 
 func settingsAsk(value string) turn.GateRequest {

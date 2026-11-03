@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"tofu/internal/store/memory/entries"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 )
 
 func TestTheDeskReadsEveryScopeOfMemoryAndItsTree(t *testing.T) {

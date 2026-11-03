@@ -5,9 +5,9 @@ import (
 	"slices"
 
 	"tofu/internal/agent/hooks"
+	"tofu/internal/agent/loop"
 	"tofu/internal/host"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
 )
 
 type runResumed struct {

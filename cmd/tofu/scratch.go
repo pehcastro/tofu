@@ -11,13 +11,13 @@ import (
 	"slices"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/cli/page"
 	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 )
 
 const (

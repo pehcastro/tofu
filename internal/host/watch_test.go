@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/agent/loop"
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/konst"
-	"tofu/internal/turn"
 )
 
 func rosterHolding(t *testing.T, agents ...roster.SubAgent) *roster.Roster {

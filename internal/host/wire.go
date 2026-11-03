@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"tofu/internal/agent/commands"
+	"tofu/internal/agent/loop"
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
@@ -17,9 +18,8 @@ import (
 	"tofu/internal/store/session"
 	"tofu/internal/store/snapshot"
 	"tofu/internal/sys"
+	"tofu/internal/tools/registry"
 	"tofu/internal/tools/shell/process"
-	"tofu/internal/turn"
-	"tofu/internal/turn/tools"
 )
 
 const (

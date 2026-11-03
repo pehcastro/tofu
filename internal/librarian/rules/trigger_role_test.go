@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/librarian/rules"
-	"tofu/internal/turn"
 )
 
 func TestASubAgentRuleReachesTheSubAgentPromptAndNotTheOrchestrators(t *testing.T) {

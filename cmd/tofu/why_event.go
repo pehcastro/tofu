@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"strings"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/cli/page"
 	"tofu/internal/cli/render"
 	sessionstore "tofu/internal/store/session"
-	"tofu/internal/turn"
 )
 
 type recordedCall struct {

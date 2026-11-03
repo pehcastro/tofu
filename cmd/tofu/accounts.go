@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"tofu/internal/agent/context/recall"
+	"tofu/internal/agent/loop"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
@@ -28,7 +29,6 @@ import (
 	"tofu/internal/platform/recover"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 	"tofu/internal/ui/tui/frame/frame"
 )
 

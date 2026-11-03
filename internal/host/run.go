@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"tofu/internal/agent/cron"
+	"tofu/internal/agent/loop"
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
@@ -26,8 +27,7 @@ import (
 	"tofu/internal/store/session"
 	"tofu/internal/store/settings"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 )
 
 const (

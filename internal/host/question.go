@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
 )
 
 type answeredQuestion struct {

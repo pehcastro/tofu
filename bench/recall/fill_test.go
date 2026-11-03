@@ -9,9 +9,9 @@ import (
 	"time"
 
 	rc "tofu/internal/agent/context/recall"
+	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
 )
 
 const (

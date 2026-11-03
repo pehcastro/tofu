@@ -20,6 +20,7 @@ import (
 	"github.com/charmbracelet/x/term"
 
 	"tofu/internal/agent/context/recall"
+	"tofu/internal/agent/loop"
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
@@ -34,9 +35,8 @@ import (
 	sessionstore "tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
+	"tofu/internal/tools/registry"
 	"tofu/internal/tools/shell/process"
-	"tofu/internal/turn"
-	"tofu/internal/turn/tools"
 	"tofu/internal/ui/keymap"
 	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/composer/paste"

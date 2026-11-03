@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/host"
-	"tofu/internal/turn"
 	"tofu/internal/ui/tui/app"
 )
 

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"tofu/internal/agent/cron"
+	"tofu/internal/agent/loop"
 	"tofu/internal/cli/page"
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
@@ -26,7 +27,6 @@ import (
 	"tofu/internal/platform/recover"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 	"tofu/internal/ui/tui/panels/trace"
 )
 

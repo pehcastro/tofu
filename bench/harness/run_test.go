@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"tofu/bench/harness/task"
+	"tofu/internal/agent/loop"
 	sessionstore "tofu/internal/store/session"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 )
 
 const sleeperEnv = "TOFU_BENCH_SLEEPER"

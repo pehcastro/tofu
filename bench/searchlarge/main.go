@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"tofu/bench/stat"
+	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
-	"tofu/internal/turn"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 )
 
 type call struct {

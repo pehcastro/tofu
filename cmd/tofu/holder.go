@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 	"sync"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/host"
 	"tofu/internal/platform/recover"
 	sessionstore "tofu/internal/store/session"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 )
 
 func runHub(dir string, say func(string)) error {

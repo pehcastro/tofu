@@ -8,9 +8,9 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 )
 
 const (

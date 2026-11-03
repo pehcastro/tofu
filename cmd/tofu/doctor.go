@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/cli/page"
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
@@ -21,7 +22,6 @@ import (
 	"tofu/internal/sys"
 	"tofu/internal/tools/shell/sift"
 	"tofu/internal/tools/web/browser/driver"
-	"tofu/internal/turn"
 	"tofu/internal/ui/tui/frame/frame"
 )
 

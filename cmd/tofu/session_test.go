@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/cli/page"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
@@ -19,7 +20,6 @@ import (
 	"tofu/internal/models/transport"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 )
 
 func recorded(t *testing.T, store *session.Store, id, task string, at time.Time, messages ...llm.Message) {

@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/cli/render"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/accounts"
@@ -28,7 +29,6 @@ import (
 	sessionstore "tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/fixture"
 	"tofu/internal/ui/tui/frame/filmstrip"

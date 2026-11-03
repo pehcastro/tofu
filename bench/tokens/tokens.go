@@ -9,7 +9,7 @@ import (
 
 	"tofu/bench/corpus"
 	"tofu/internal/konst"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 )
 
 type ToolTotals struct {

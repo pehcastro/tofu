@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
 )
 
 func TestServeTurnsPageOneGenerationWithTypedPreviews(t *testing.T) {

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/turn"
+	"tofu/internal/agent/loop"
 )
 
 func TestTwoAsksWaitingAtOnceEachGetTheAnswerSentForThem(t *testing.T) {

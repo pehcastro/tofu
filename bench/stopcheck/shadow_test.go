@@ -9,12 +9,12 @@ import (
 	"sync"
 	"testing"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/turn"
 )
 
 type queuedModel struct {

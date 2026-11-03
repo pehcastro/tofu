@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/questions"
 	"tofu/internal/judge/state"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 )
 
 const forcePush = "git push --force origin main"

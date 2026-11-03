@@ -1,12 +1,12 @@
 [
   {
     "point": "shell_sift",
-    "file": "internal/turn/shellsift.go",
+    "file": "internal/agent/loop/shellsift.go",
     "symbol": "cutShellResult"
   },
   {
     "point": "browser_step",
-    "file": "internal/turn/tools/browser.go",
+    "file": "internal/tools/registry/browser.go",
     "symbol": "browserDo"
   },
   {
@@ -31,32 +31,32 @@
   },
   {
     "point": "steer_answered",
-    "file": "internal/turn/loop.go",
+    "file": "internal/agent/loop/loop.go",
     "symbol": "newSteerJudge"
   },
   {
     "point": "person_repeat",
-    "file": "internal/turn/inbox.go",
+    "file": "internal/agent/loop/inbox.go",
     "symbol": "openJudges"
   },
   {
     "point": "memory_same",
-    "file": "internal/turn/tools/remember.go",
+    "file": "internal/tools/registry/remember.go",
     "symbol": "duplicate"
   },
   {
     "point": "task_kind",
-    "file": "internal/turn/compose.go",
+    "file": "internal/agent/loop/compose.go",
     "symbol": "NewKindJudge"
   },
   {
     "point": "standing_order",
-    "file": "internal/turn/standing.go",
+    "file": "internal/agent/loop/standing.go",
     "symbol": "newStandingJudge"
   },
   {
     "point": "request_open",
-    "file": "internal/turn/inbox.go",
+    "file": "internal/agent/loop/inbox.go",
     "symbol": "newOpenJudge"
   },
   {
@@ -71,7 +71,7 @@
   },
   {
     "point": "keep_result",
-    "file": "internal/turn/loop.go",
+    "file": "internal/agent/loop/loop.go",
     "symbol": "newKeepJudge"
   },
   {

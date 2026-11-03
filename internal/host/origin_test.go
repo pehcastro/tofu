@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"tofu/internal/agent/cron"
+	"tofu/internal/agent/loop"
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
 )
 
 func TestATurnSaysWhetherThePersonOrACronJobStartedIt(t *testing.T) {

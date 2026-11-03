@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/cli/page"
 	"tofu/internal/cli/render"
-	"tofu/internal/turn"
 )
 
 const (

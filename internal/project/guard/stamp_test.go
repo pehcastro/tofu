@@ -39,9 +39,9 @@ func stampRepo(t *testing.T) string {
 	repo := t.TempDir()
 	gitRun(t, repo, "init", "-q")
 	put(t, repo, ".gitignore", ".local/\n")
-	put(t, repo, "internal/turn/turn.go", "package turn\n")
+	put(t, repo, "internal/agent/loop/turn.go", "package turn\n")
 	put(t, repo, "internal/konst/konst.go", "package konst\n")
-	put(t, repo, ".local/boji/tickets/review/TOFU-1.md", "---\nid: TOFU-1\nowns:\n  - internal/turn/**\n---\n")
+	put(t, repo, ".local/boji/tickets/review/TOFU-1.md", "---\nid: TOFU-1\nowns:\n  - internal/agent/loop/**\n---\n")
 	put(t, repo, ".local/boji/tickets/review/TOFU-2.md", "---\nid: TOFU-2\nowns:\n  - internal/guard/**\n  - docs/**\n---\n")
 	put(t, repo, ".local/boji/tickets/review/TOFU-3.md", "---\nid: TOFU-3\nowns:\n  - internal/**\n---\n")
 	put(t, repo, ".local/boji/tickets/review/TOFU-4.md", "---\nid: TOFU-4\nowns:\n  - cmd/tofu/guard.go\n---\n")
@@ -93,13 +93,13 @@ func TestDoneMoveNeedsAFlowsStampForHeadAndCommittedWork(t *testing.T) {
 		{name: "a treewide stamp is not a flows stamp", before: func() { stampHead(t, repo, "treewide") }, command: move, refused: true},
 		{name: "a stamp for HEAD", before: func() { stampHead(t, repo, "flows") }, command: move},
 		{name: "another ticket's uncommitted Go", before: func() { put(t, repo, "internal/guard/guard.go", "package guard\n") }, command: move},
-		{name: "an uncommitted edit in an owned path", before: func() { put(t, repo, "internal/turn/turn.go", "package turn\n\nconst X = 1\n") }, command: move, refused: true, want: "internal/turn/turn.go"},
+		{name: "an uncommitted edit in an owned path", before: func() { put(t, repo, "internal/agent/loop/turn.go", "package turn\n\nconst X = 1\n") }, command: move, refused: true, want: "internal/agent/loop/turn.go"},
 		{name: "committed but not stamped", before: func() { commitAll(t, repo) }, command: move, refused: true, want: "go run ./bench/flows"},
 		{name: "stamped after the commit", before: func() { stampHead(t, repo, "flows") }, command: move},
 		{name: "a commit under apps only", before: func() { put(t, repo, "apps/desk/main.rs", "fn main() {}\n"); commitAll(t, repo) }, command: move},
 		{name: "a commit under internal/apps", before: func() { put(t, repo, "internal/apps/apps.go", "package apps\n"); commitAll(t, repo) }, command: move, refused: true, want: "go run ./bench/flows"},
 		{name: "stamped after internal/apps", before: func() { stampHead(t, repo, "flows") }, command: move},
-		{name: "an untracked file in an owned path", before: func() { put(t, repo, "internal/turn/new.go", "package turn\n") }, command: move, refused: true, want: "internal/turn/new.go"},
+		{name: "an untracked file in an owned path", before: func() { put(t, repo, "internal/agent/loop/new.go", "package turn\n") }, command: move, refused: true, want: "internal/agent/loop/new.go"},
 	}
 	for _, step := range steps {
 		if step.before != nil {
@@ -131,7 +131,7 @@ func TestStampDirComesFromTheEnvironment(t *testing.T) {
 
 func TestDoneMoveOutsideAGitRepositoryIsRefused(t *testing.T) {
 	root := t.TempDir()
-	put(t, root, ".local/boji/tickets/review/TOFU-1.md", "---\nid: TOFU-1\nowns:\n  - internal/turn/**\n---\n")
+	put(t, root, ".local/boji/tickets/review/TOFU-1.md", "---\nid: TOFU-1\nowns:\n  - internal/agent/loop/**\n---\n")
 	if out := shellHook(t, root, "tofu boardy move TOFU-1 done"); !strings.Contains(out, `"deny"`) {
 		t.Fatalf("a tree that cannot be read was allowed: %q", out)
 	}
@@ -169,10 +169,10 @@ func TestReleaseCommitNeedsBothStampsOnHead(t *testing.T) {
 			put(t, repo, "internal/konst/konst.go", "package konst\n\nconst Version = \"9.9.9\"\n")
 			put(t, repo, "CHANGELOG.md", "# Changelog\n")
 			put(t, repo, "docs/x.md", "x\n")
-			put(t, repo, "internal/turn/turn.go", "package turn\n\nconst Unstaged = 1\n")
+			put(t, repo, "internal/agent/loop/turn.go", "package turn\n\nconst Unstaged = 1\n")
 			gitRun(t, repo, "add", "internal/konst", "CHANGELOG.md", "docs")
 		}, want: []string{"CHANGELOG.md has no entry"}, lack: []string{"bench/", "staged"}},
-		{name: "a staged Go change outside the release files", before: func() { gitRun(t, repo, "add", "internal/turn/turn.go") }, want: []string{"internal/turn/turn.go"}},
+		{name: "a staged Go change outside the release files", before: func() { gitRun(t, repo, "add", "internal/agent/loop/turn.go") }, want: []string{"internal/agent/loop/turn.go"}},
 	}
 	for _, step := range steps {
 		if step.before != nil {

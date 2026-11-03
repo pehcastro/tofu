@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
 )
 
 const singleFileSuffix = ".json"

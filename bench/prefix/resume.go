@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/librarian/skills"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 )
 
 const AddedSkill = "bench_added_skill"

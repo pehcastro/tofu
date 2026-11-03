@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"tofu/bench/corpus/recorded"
-	"tofu/internal/turn"
+	"tofu/internal/agent/loop"
 )
 
 var numberedLine = regexp.MustCompile(`(?m)^\d+[:\t\x{2192}]`)

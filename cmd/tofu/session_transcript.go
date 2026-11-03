@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/cli/page"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
 )
 
 const sessionTranscriptUsage = "tofu session transcript <name|id|head> [--from N] [--to N] [--md] [--json]"

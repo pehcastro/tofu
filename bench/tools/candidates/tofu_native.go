@@ -7,8 +7,8 @@ import (
 
 	"tofu/bench/tools"
 	toolscorpus "tofu/bench/tools/corpus"
-	"tofu/internal/turn"
-	tofutools "tofu/internal/turn/tools"
+	"tofu/internal/agent/loop"
+	tofutools "tofu/internal/tools/registry"
 )
 
 const nativeToolTimeout = 60 * time.Second

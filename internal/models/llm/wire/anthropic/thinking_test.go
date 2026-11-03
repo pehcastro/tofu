@@ -9,9 +9,9 @@ import (
 	"reflect"
 	"testing"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
-	"tofu/internal/turn"
 )
 
 func TestThinkingDeltasReachOnThinkingInOrderAndTheDecision(t *testing.T) {

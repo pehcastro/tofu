@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/librarian/rules"
-	"tofu/internal/turn"
 )
 
 func TestRulesIndexFiresAFrameworkRuleOnlyInItsOwnProject(t *testing.T) {

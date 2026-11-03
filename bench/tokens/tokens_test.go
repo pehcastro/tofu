@@ -10,7 +10,7 @@ import (
 	"tofu/bench/corpus/recorded"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 )
 
 var repoRoot = sys.SourceRoot()

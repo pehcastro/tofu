@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"tofu/internal/agent/context/recall"
+	"tofu/internal/agent/loop"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
 	"tofu/internal/konst"
@@ -18,7 +19,6 @@ import (
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/tools/shell/sift"
-	"tofu/internal/turn"
 	"tofu/library"
 )
 

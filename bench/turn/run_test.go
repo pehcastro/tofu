@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"testing"
 
+	iturn "tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
-	iturn "tofu/internal/turn"
 )
 
 type modelThatOnlyEverReadsTheSameMissingFile struct{}

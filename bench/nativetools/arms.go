@@ -12,9 +12,9 @@ import (
 	"slices"
 	"strings"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
-	"tofu/internal/turn"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 )
 
 type Outcome string

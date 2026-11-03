@@ -22,11 +22,11 @@ import (
 	"tofu/internal/konst"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
+	"tofu/internal/tools/registry"
 	"tofu/internal/tools/web/browser/driver"
 	"tofu/internal/tools/web/browser/loop"
 	"tofu/internal/tools/web/browser/motion"
 	"tofu/internal/tools/web/browser/recipe"
-	"tofu/internal/turn/tools"
 )
 
 type extension struct {

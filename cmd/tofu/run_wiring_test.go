@@ -23,6 +23,7 @@ import (
 
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/cron"
+	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
@@ -31,8 +32,7 @@ import (
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 	tuisession "tofu/internal/ui/tui/chat/session"
 )
 

@@ -42,7 +42,7 @@ func fixturePage(t *testing.T, rows string) string {
 		t.Fatalf("parsing the fixture table: %v", err)
 	}
 	callers := map[string]caller{
-		"shell_sift": {Point: "shell_sift", File: "internal/turn/shellsift.go", Symbol: "cutShellResult"},
+		"shell_sift": {Point: "shell_sift", File: "internal/agent/loop/shellsift.go", Symbol: "cutShellResult"},
 		"page_sift":  {Point: "page_sift", Nothing: "0 files outside bench/websift name it"},
 	}
 	data := Data{Wiring: wiringOf(table, callers), MethodTable: table.File}
@@ -143,7 +143,7 @@ func TestACallerNamedForAPointThatDoesNotCallItIsRefused(t *testing.T) {
 	if err := checkCallers(table, callers, tree); err != nil {
 		t.Fatalf("the callers on disk were refused: %v", err)
 	}
-	callers["shell_sift"] = caller{Point: "shell_sift", File: "internal/turn/shellsift.go", Symbol: "noSuchFunction"}
+	callers["shell_sift"] = caller{Point: "shell_sift", File: "internal/agent/loop/shellsift.go", Symbol: "noSuchFunction"}
 	if err := checkCallers(table, callers, tree); err == nil {
 		t.Error("a caller naming a function that file does not hold was accepted")
 	} else {

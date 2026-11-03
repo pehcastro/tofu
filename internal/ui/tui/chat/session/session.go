@@ -17,7 +17,7 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/konst"
 	isession "tofu/internal/store/session"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 	"tofu/internal/ui/tui/chat/markdown"
 	"tofu/internal/ui/tui/composer/paste"
 	"tofu/internal/ui/tui/look/look"

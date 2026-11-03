@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
 )
 
 const undoLedgerName = "undo-turns.jsonl"

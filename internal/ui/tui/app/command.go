@@ -7,10 +7,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"tofu/internal/agent/commands"
+	"tofu/internal/agent/loop"
 	isession "tofu/internal/store/session"
 	isettings "tofu/internal/store/settings"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 	"tofu/internal/ui/keymap"
 	"tofu/internal/ui/tui/chat/quote"
 	"tofu/internal/ui/tui/chat/session"

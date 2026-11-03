@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	isession "tofu/internal/store/session"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 )
 
 type Turn struct {

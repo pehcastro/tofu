@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/store/session"
-	"tofu/internal/turn"
 )
 
 var shellName = regexp.MustCompile(`\bbash-\d+\b`)

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/turn"
 )
 
 func TestSendNowTakesOnlyTheNamedMessageAndKeepsTheRestInOrder(t *testing.T) {

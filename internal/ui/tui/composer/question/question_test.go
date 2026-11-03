@@ -7,8 +7,8 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/testkit/golden"
-	"tofu/internal/turn"
 )
 
 func zero() *int { return new(int) }

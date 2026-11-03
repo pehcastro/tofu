@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
 )
 
 func tofuRules(t *testing.T, args ...string) (int, string, string) {

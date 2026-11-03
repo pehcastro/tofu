@@ -14,9 +14,9 @@ import (
 	"sync"
 	"testing"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
-	"tofu/internal/turn"
 )
 
 type sentBlock struct {

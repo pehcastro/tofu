@@ -10,7 +10,7 @@ import (
 	"tofu/bench/tools"
 	toolscorpus "tofu/bench/tools/corpus"
 	"tofu/internal/models/classifiers/core"
-	tofutools "tofu/internal/turn/tools"
+	tofutools "tofu/internal/tools/registry"
 )
 
 const repoFileBytesCap = 200_000

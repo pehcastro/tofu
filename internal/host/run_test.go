@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/agent/loop"
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
@@ -20,8 +21,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
-	"tofu/internal/turn"
-	"tofu/internal/turn/tools"
+	"tofu/internal/tools/registry"
 )
 
 const overrideAsked = "no_unit_test_after_code"

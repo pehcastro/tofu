@@ -3,8 +3,8 @@ package host
 import (
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/turn"
 )
 
 func (h *Host) keepCheckIn(armed *turn.LeadCheckIn) {

@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/core"
 	sessionstore "tofu/internal/store/session"
-	"tofu/internal/turn"
 )
 
 type scriptedModel struct {

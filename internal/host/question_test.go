@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/turn"
+	"tofu/internal/agent/loop"
 )
 
 func questionServer(t *testing.T, declared bool) (*server, turn.PersonForm, chan string) {
