@@ -18,8 +18,8 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/wire/anthropic"
-	"tofu/internal/memtree"
 	settingspkg "tofu/internal/settings"
+	"tofu/internal/store/memory/tree"
 	"tofu/internal/turn"
 )
 

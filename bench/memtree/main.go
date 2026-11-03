@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"tofu/internal/konst"
-	"tofu/internal/memtree"
+	"tofu/internal/store/memory/tree"
 )
 
 const items = 10_000

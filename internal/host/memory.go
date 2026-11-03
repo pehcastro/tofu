@@ -13,8 +13,8 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/memory"
-	"tofu/internal/memtree"
 	"tofu/internal/session"
+	"tofu/internal/store/memory/tree"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 )

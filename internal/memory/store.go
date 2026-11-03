@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/memtree"
+	"tofu/internal/store/memory/tree"
 )
 
 const (

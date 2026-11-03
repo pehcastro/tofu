@@ -11,7 +11,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/memory"
-	"tofu/internal/memtree"
+	"tofu/internal/store/memory/tree"
 	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 )

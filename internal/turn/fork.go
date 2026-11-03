@@ -10,9 +10,9 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
-	"tofu/internal/memtree"
 	"tofu/internal/recall"
 	"tofu/internal/session"
+	"tofu/internal/store/memory/tree"
 )
 
 const (

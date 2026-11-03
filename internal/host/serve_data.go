@@ -12,9 +12,9 @@ import (
 
 	"tofu/internal/agent/commands"
 	"tofu/internal/memory"
-	"tofu/internal/memtree"
 	"tofu/internal/session"
 	"tofu/internal/store/learn"
+	"tofu/internal/store/memory/tree"
 	roster "tofu/internal/subagent"
 )
 

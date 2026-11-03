@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"tofu/internal/memtree"
+	"tofu/internal/store/memory/tree"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
 )
