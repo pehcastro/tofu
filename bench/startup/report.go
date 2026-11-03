@@ -61,10 +61,10 @@ func (r Report) Render() string {
 		ms(r.NodeWarm.Median), ms(r.NodeWarm.Worst), len(r.NodeWarm.Samples), crosses(r.NodeWarm))
 
 	b.WriteString("## Threshold, read against what changed\n\n")
-	b.WriteString("The 100 ms line was written against `NewBashTool` timed directly, so `NodeProbe` is the figure to read it against, and it now stays under it. The realized figure, `NodeCold`, still crosses it by design: the wait is real work and this ticket overlaps it rather than removing it. Whether a person ever sees that wait depends on whether the environment block that needs it is built after something else has already run for 780 ms; wiring the same `turn.ToolchainCache` through `cmd/tofu/run.go` so the block built in `runEnvironment` reuses the probe already started when the bash tool is built in `buildRunToolsReading` is what would make that true in production, and it is outside this ticket's owns.\n\n")
+	b.WriteString("The 100 ms line was written against `NewBashTool` timed directly, so `NodeProbe` is the figure to read it against, and it now stays under it. The realized figure, `NodeCold`, still crosses it by design: the wait is real work and this ticket overlaps it rather than removing it. Whether a person ever sees that wait depends on whether the environment block that needs it is built after something else has already run for 780 ms; wiring the same `turn.ToolchainCache` through the tofu command's `run.go` so the block built in `runEnvironment` reuses the probe already started when the bash tool is built in `buildRunToolsReading` is what would make that true in production, and it is outside this ticket's owns.\n\n")
 
 	b.WriteString("## What this does not change\n\n")
-	b.WriteString("`cmd/tofu/run.go` is untouched by this ticket: it still builds the bash tool and the environment block through two independent calls, so today they still pay for two separate probes rather than sharing the one this ticket makes overlappable. Wiring them together is a separate ticket, flagged the same way TOFU-543 flagged the same file for the same reason.\n\n")
+	b.WriteString("The tofu command's `run.go` is untouched by this ticket: it still builds the bash tool and the environment block through two independent calls, so today they still pay for two separate probes rather than sharing the one this ticket makes overlappable. Wiring them together is a separate ticket, flagged the same way TOFU-543 flagged the same file for the same reason.\n\n")
 
 	return b.String()
 }

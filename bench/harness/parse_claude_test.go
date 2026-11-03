@@ -2,8 +2,11 @@ package harness
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"tofu/internal/sys"
 )
 
 func loadTestdata(t *testing.T, name string) []byte {
@@ -97,7 +100,7 @@ func TestParseClaudeOverTheFirstRealRunOfAFullTask(t *testing.T) {
 	}
 }
 
-const liveClaudeTranscript = "../../.playground/transcripts/claude-v1-20260919T061918Z.txt"
+var liveClaudeTranscript = filepath.Join(sys.SourceRoot(), ".playground", "transcripts", "claude-v1-20260919T061918Z.txt")
 
 func TestParseClaudeSubscriptionDollarsAreNullEvenWhenTheTranscriptReportsACost(t *testing.T) {
 	data := loadTestdata(t, "claude-p1.json")

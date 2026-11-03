@@ -12,7 +12,7 @@ results=$here/wall.jsonl
 native() { if command -v cygpath >/dev/null; then cygpath -w "$1"; else echo "$1"; fi; }
 
 mkdir -p "$work"
-(cd "$here/../.." && go build -o "$work/scale.exe" ./bench/scale) || exit 1
+(cd "$(git -C "$here" rev-parse --show-toplevel)" && go build -o "$work/scale.exe" ./bench/scale) || exit 1
 scale=$work/scale.exe
 
 ask() {

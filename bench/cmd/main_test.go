@@ -79,7 +79,7 @@ func TestParityLineNamesTheAxisAndTheArmWhenPostureDiffers(t *testing.T) {
 }
 
 func TestParityLineNamesAllThreeWhenNoMajorityAgreesOnPosture(t *testing.T) {
-	atRepositoryRoot(t)
+	t.Chdir(sys.SourceRoot())
 	var plans []harness.Plan
 	for _, arm := range []harness.Arm{harness.ArmTofu, harness.ArmClaude, harness.ArmCodex} {
 		plan, err := harness.BuildPlan(".", arm, "hono", 1)
@@ -97,20 +97,8 @@ func TestParityLineNamesAllThreeWhenNoMajorityAgreesOnPosture(t *testing.T) {
 	}
 }
 
-func atRepositoryRoot(t *testing.T) {
-	t.Helper()
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir("../.."); err != nil {
-		t.Fatalf("chdir to the repository root: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(wd) })
-}
-
 func TestHarnessOfflineDefaultTranscriptProducesARow(t *testing.T) {
-	atRepositoryRoot(t)
+	t.Chdir(sys.SourceRoot())
 	if _, err := os.Stat(filepath.Join(harnessTranscriptDir, "session.json")); err != nil {
 		t.Fatalf("the default --transcript is %q and it holds no readable session.json: %v", harnessTranscriptDir, err)
 	}
@@ -135,7 +123,7 @@ func TestHarnessOfflineNeedsNoTofuBinary(t *testing.T) {
 	if err := os.WriteFile(session, []byte(body), 0o644); err != nil {
 		t.Fatalf("writing the transcript: %v", err)
 	}
-	atRepositoryRoot(t)
+	t.Chdir(sys.SourceRoot())
 
 	out := &bytes.Buffer{}
 	errOut := &bytes.Buffer{}
@@ -160,7 +148,7 @@ func TestAPILive(t *testing.T) {
 		t.Skip("set TOFU_LIVE=1 to call the real route")
 	}
 	sys.AllowLiveCredential(t)
-	atRepositoryRoot(t)
+	t.Chdir(sys.SourceRoot())
 
 	out := &bytes.Buffer{}
 	errOut := &bytes.Buffer{}

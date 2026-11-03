@@ -14,7 +14,7 @@ import (
 	"tofu/internal/sys"
 )
 
-const repoRoot = "../.."
+var repoRoot = sys.SourceRoot()
 
 func liveKey(t *testing.T, gate string) string {
 	t.Helper()

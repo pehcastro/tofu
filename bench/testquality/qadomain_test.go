@@ -2,16 +2,18 @@ package testquality
 
 import (
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"tofu/internal/rule"
+	"tofu/internal/sys"
 )
 
 func qaDomain(t *testing.T) rule.Domain {
 	t.Helper()
-	domains, err := rule.LoadDomains(os.DirFS("../../library"), "library")
+	domains, err := rule.LoadDomains(os.DirFS(filepath.Join(sys.SourceRoot(), "library")), "library")
 	if err != nil {
 		t.Fatalf("LoadDomains: %v", err)
 	}
@@ -37,7 +39,7 @@ func TestEveryQAAgentAndSkillNamesTheReferencesItReads(t *testing.T) {
 }
 
 func TestEveryQARuleDistilledFromASkillCitesItAndCarriesEvidence(t *testing.T) {
-	faults, err := QARuleFaults(os.DirFS("../../library/qa"), "library/qa")
+	faults, err := QARuleFaults(os.DirFS(filepath.Join(sys.SourceRoot(), "library", "qa")), "library/qa")
 	if err != nil {
 		t.Fatalf("loading library/qa: %v", err)
 	}

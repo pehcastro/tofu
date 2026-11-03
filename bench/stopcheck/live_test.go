@@ -15,7 +15,7 @@ import (
 	"tofu/internal/sys"
 )
 
-const repoRoot = "../.."
+var repoRoot = sys.SourceRoot()
 
 func liveBattery(t *testing.T) (Battery, []Turn, []corpus.SkippedTurn) {
 	t.Helper()

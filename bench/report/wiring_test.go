@@ -2,11 +2,11 @@ package report
 
 import (
 	"html"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"tofu/internal/judge/method"
+	"tofu/internal/sys"
 	shipped "tofu/library"
 )
 
@@ -75,13 +75,13 @@ func TestTheBuildRefusesAPageThatContradictsTheMethodTable(t *testing.T) {
 		Source: "bench/sift/report-2026-09-21.md",
 	}
 	bodies := map[string]string{"bench/sift/report-2026-09-21.md": "18 of 34 and 27 of 34"}
-	err := checkPlacement(claimed, table, filepath.Join("..", ".."), bodies)
+	err := checkPlacement(claimed, table, sys.SourceRoot(), bodies)
 	if err == nil {
 		t.Fatal("the page said shell_sift is not wired and the table says judged, and the build accepted it")
 	}
 	t.Logf("refused, as it must be: %v", err)
 	claimed.InUse = method.Judged
-	if err := checkPlacement(claimed, table, filepath.Join("..", ".."), bodies); err != nil {
+	if err := checkPlacement(claimed, table, sys.SourceRoot(), bodies); err != nil {
 		t.Fatalf("the page and the table agree and the build still refused: %v", err)
 	}
 }
@@ -135,7 +135,7 @@ func TestAPointWhoseCheapMethodNothingCallsIsNotCalledDecided(t *testing.T) {
 
 func TestACallerNamedForAPointThatDoesNotCallItIsRefused(t *testing.T) {
 	table := shippedTable(t)
-	tree := filepath.Join("..", "..")
+	tree := sys.SourceRoot()
 	callers, err := readCallers("callers.json")
 	if err != nil {
 		t.Fatalf("reading %s: %v", CallersPath, err)

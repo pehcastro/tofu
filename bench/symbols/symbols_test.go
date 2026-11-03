@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"tofu/internal/search"
+	"tofu/internal/sys"
 )
 
 const runsPerQuery = 5
@@ -33,7 +34,7 @@ type tally struct {
 func TestSymbolsAgainstTheRipgrepPatternOverRustAndTypeScript(t *testing.T) {
 	corpora := []corpus{
 		{
-			language: "rust", root: "../../apps/desk", globs: []string{"*.rs"},
+			language: "rust", root: filepath.Join(sys.SourceRoot(), sys.DeskRoot), globs: []string{"*.rs"},
 			call: `\b%s\s*(::<[^>]*>\s*)?\(`, declared: `\bfn\s+%s\b`,
 			names: []string{
 				"advance_next_nonspace", "allocations", "ask_questions", "board_card", "build_question", "channel", "close_here", "container", "desk_folder", "elbowed",
@@ -41,7 +42,7 @@ func TestSymbolsAgainstTheRipgrepPatternOverRustAndTypeScript(t *testing.T) {
 			},
 		},
 		{
-			language: "typescript", root: "../../.local/sources/pi-lens", globs: []string{"*.ts", "*.tsx"},
+			language: "typescript", root: filepath.Join(sys.SourceRoot(), ".local", "sources", "pi-lens"), globs: []string{"*.ts", "*.tsx"},
 			call: `\b%s\s*(<[^>]*>\s*)?\(`, declared: `\bfunction\s*\*?\s*%s\b`,
 			names: []string{
 				"applyFindingPolicy", "attributionKey", "boundedKeyLabel", "buildWordIndexAsync", "carriesComposedSql",

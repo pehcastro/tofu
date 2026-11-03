@@ -26,7 +26,7 @@ func (r ProseReport) Render() string {
 	fmt.Fprintf(&b, "`go test ./bench/tokens/... -count=1` passes, %d test functions.\n\n", r.TestCount)
 
 	b.WriteString("## What was counted\n\n")
-	fmt.Fprintf(&b, "Over the same registry `cmd/tofu/run.go` builds for a plain `tofu run` that `bench/schemas` measured on this date, %d tools, this splits each tool's schema bytes into two: `len(Description)`, the raw prose string, against the marshalled JSON of `Parameters`, the input schema. Both are counted in raw bytes, not JSON-escaped inside a wrapper object, so the two never sum to the wire figure on their own: the gap is the structural bytes, `{\"name\":...,\"description\":...,\"input_schema\":...}`, its quoting, and the array's own brackets and commas.\n\n", r.ToolCount)
+	fmt.Fprintf(&b, "Over the same registry the tofu command's `run.go` builds for a plain `tofu run` that `bench/schemas` measured on this date, %d tools, this splits each tool's schema bytes into two: `len(Description)`, the raw prose string, against the marshalled JSON of `Parameters`, the input schema. Both are counted in raw bytes, not JSON-escaped inside a wrapper object, so the two never sum to the wire figure on their own: the gap is the structural bytes, `{\"name\":...,\"description\":...,\"input_schema\":...}`, its quoting, and the array's own brackets and commas.\n\n", r.ToolCount)
 
 	b.WriteString("## Per-tool split\n\n")
 	b.WriteString("| Tool | Desc bytes | Param bytes | Schema bytes | Desc share |\n|---|---|---|---|---|\n")

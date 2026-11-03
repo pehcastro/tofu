@@ -18,7 +18,7 @@ import (
 	libraryquestions "tofu/library/questions"
 )
 
-const repoRoot = "../.."
+var repoRoot = sys.SourceRoot()
 
 func liveClient(t *testing.T) (*jev.Client, question.Set) {
 	t.Helper()

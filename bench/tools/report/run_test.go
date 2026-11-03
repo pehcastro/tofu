@@ -18,10 +18,9 @@ import (
 	"tofu/internal/sys"
 )
 
-const (
-	tofuRoot            = "../../.."
-	wantCorpusQuestions = 100
-)
+const wantCorpusQuestions = 100
+
+var tofuRoot = sys.SourceRoot()
 
 func liveClient(t *testing.T) *jev.Client {
 	t.Helper()

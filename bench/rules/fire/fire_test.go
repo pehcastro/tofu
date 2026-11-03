@@ -4,9 +4,10 @@ import (
 	"testing"
 
 	"tofu/bench/corpus/recorded"
+	"tofu/internal/sys"
 )
 
-const repoRoot = "../../.."
+var repoRoot = sys.SourceRoot()
 
 func TestReadDirReadsTheRealLog(t *testing.T) {
 	fires, unreadable, err := ReadDir(recorded.State(t, "log"))

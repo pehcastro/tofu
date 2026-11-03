@@ -11,7 +11,7 @@ import (
 	"tofu/internal/sys"
 )
 
-const forkRepoRoot = "../.."
+var forkRepoRoot = sys.SourceRoot()
 
 func liveJevWire(t *testing.T) jev.Wire {
 	t.Helper()

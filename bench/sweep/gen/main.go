@@ -3,14 +3,16 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"tofu/bench/report"
 	"tofu/bench/sweep"
+	"tofu/internal/sys"
 )
 
 func main() {
 	err := report.Generate("cross-package sweep report", func(machine, date string) (string, error) {
-		lines, err := sweep.CountLines("../..")
+		lines, err := sweep.CountLines(filepath.Join(sys.SourceRoot(), "bench"))
 		if err != nil {
 			return "", err
 		}

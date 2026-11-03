@@ -14,6 +14,7 @@ import (
 
 	"tofu/bench/harness/task"
 	sessionstore "tofu/internal/session"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
@@ -571,9 +572,9 @@ func TestGradedDropsARecordedItemByItsStatusAndNotByItsNumber(t *testing.T) {
 
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
-	root, err := filepath.Abs(filepath.Join("..", ".."))
-	if err != nil {
-		t.Fatalf("locate the repository root: %v", err)
+	root := sys.SourceRoot()
+	if root == "" {
+		t.Fatal("no go.mod above the tofu source, so the repository root is unknown")
 	}
 	return root
 }
@@ -584,17 +585,35 @@ func buildTofu(t *testing.T, root string) string {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	if _, err := exec.LookPath("go"); err != nil {
-		t.Skipf("no go toolchain on PATH, so cmd/tofu cannot be built here at all: %v", err)
+		t.Skipf("no go toolchain on PATH, so tofu cannot be built here at all: %v", err)
 	}
-	bin := filepath.Join(t.TempDir(), "tofu.exe")
-	out, err := goBuild(root, tofuPackage, bin)
+	var holders []string
+	for _, goRoot := range sys.GoRoots() {
+		_ = filepath.WalkDir(filepath.Join(root, filepath.FromSlash(goRoot)), func(file string, entry os.DirEntry, err error) error {
+			if err != nil || entry.IsDir() || !strings.HasSuffix(file, ".go") || strings.HasSuffix(file, "_test.go") {
+				return nil
+			}
+			if body, err := os.ReadFile(file); err == nil && strings.Contains(string(body), "\nfunc crashTold(") {
+				holders = append(holders, filepath.Dir(file))
+			}
+			return nil
+		})
+	}
+	if len(holders) != 1 {
+		t.Fatalf("crashTold is declared in %d Go files under %s, not one, so the tofu package is unknown: %v", len(holders), root, holders)
+	}
+	product, err := filepath.Rel(root, holders[0])
 	if err != nil {
-		t.Fatalf("go build %s exited %v, so the bench tofu arm has no binary and its flag list is unchecked\n%s", tofuPackage, err, out)
+		t.Fatal(err)
+	}
+	product = "./" + filepath.ToSlash(product)
+	bin := filepath.Join(t.TempDir(), "tofu.exe")
+	out, err := goBuild(root, product, bin)
+	if err != nil {
+		t.Fatalf("go build %s exited %v, so the bench tofu arm has no binary and its flag list is unchecked\n%s", product, err, out)
 	}
 	return bin
 }
-
-const tofuPackage = "./cmd/tofu"
 
 func goBuild(root, pkg, bin string) (string, error) {
 	cmd := exec.Command("go", "build", "-o", bin, pkg)
@@ -606,7 +625,7 @@ func goBuild(root, pkg, bin string) (string, error) {
 func TestGoBuildFailureCarriesTheCompilerOutputRatherThanStandingDown(t *testing.T) {
 	root := repositoryRoot(t)
 	bin := filepath.Join(t.TempDir(), "tofu.exe")
-	out, err := goBuild(root, "./cmd/tofu-no-such-package", bin)
+	out, err := goBuild(root, "./no-such-package", bin)
 	if err == nil {
 		t.Fatalf("a package path that does not exist built anyway, so buildTofu cannot tell a broken tree from a good one\n%s", out)
 	}

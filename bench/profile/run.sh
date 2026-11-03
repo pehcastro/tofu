@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
-root=$(cd "$here/../.." && pwd)
+root=$(git -C "$here" rev-parse --show-toplevel)
 work=${PROFILE_WORK:?set PROFILE_WORK to a scratch directory outside any repository}
 slot=${PROFILE_SLOT:?set PROFILE_SLOT to the directory taken with mkdir so one model run holds the machine}
 live=${PROFILE_LIVE:-yes}
@@ -13,10 +13,12 @@ give() { rmdir "$slot"; }
 
 buildslot=${PROFILE_BUILD_SLOT:-$work/buildslot}
 
+main=$(git -C "$root" grep -l -E '^func crashTold\(' -- '*.go')
+[ "$(printf '%s' "$main" | grep -c .)" = 1 ] || { echo "symbol crashTold is in ${main:-no} Go file, not one, so tofu cannot be built" >&2; exit 2; }
 mkdir -p "$work"
 until mkdir "$buildslot" 2>/dev/null; do sleep 60; done
 (cd "$root" && GOMAXPROCS=2 go build -p 2 -o "$work/profile.exe" ./bench/profile && GOMAXPROCS=2 go build -p 2 -o "$work/scale.exe" ./bench/scale &&
-  { [ -n "${PROFILE_TOFU:-}" ] || GOMAXPROCS=2 go build -p 2 -o "$tofu" ./cmd/tofu; })
+  { [ -n "${PROFILE_TOFU:-}" ] || GOMAXPROCS=2 go build -p 2 -o "$tofu" "./$(dirname "$main")"; })
 built=$?
 rmdir "$buildslot"
 [ "$built" -eq 0 ] || exit 1

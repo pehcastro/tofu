@@ -1,22 +1,25 @@
 #!/usr/bin/env bash
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
-root=$(cd "$here/../.." && pwd)
+root=$(git -C "$here" rev-parse --show-toplevel)
 work=${PROFILE_WORK:?set PROFILE_WORK to a scratch directory outside any repository}
 label=${PROFILE_LABEL:-head}
 buildslot=${PROFILE_BUILD_SLOT:-$work/buildslot}
 
 native() { if command -v cygpath >/dev/null; then cygpath -w "$1"; else echo "$1"; fi; }
 
+main=$(git -C "$root" grep -l -E '^func crashTold\(' HEAD -- '*.go' | sed 's/^HEAD://')
+[ "$(printf '%s' "$main" | grep -c .)" = 1 ] || { echo "symbol crashTold is in ${main:-no} Go file at HEAD, not one, so tofu cannot be built" >&2; exit 2; }
+product=./$(dirname "$main")
 commit=$(git -C "$root" rev-parse --short HEAD)
 src=$work/src-$label
 rm -rf "$src"
 mkdir -p "$src" "$work/idle"
-git -C "$root" archive HEAD go.mod go.sum bench cmd internal interface library third_party | tar -x -C "$src"
+git -C "$root" archive HEAD -- . ':(exclude)apps/desk' | tar -x -C "$src"
 until mkdir "$buildslot" 2>/dev/null; do sleep 60; done
 (cd "$root" && GOMAXPROCS=2 go build -p 2 -o "$work/profile.exe" ./bench/profile) &&
-  (cd "$src" && GOMAXPROCS=2 go build -p 2 -buildvcs=false -trimpath -ldflags="-s -w" -o "$work/$label-strip.exe" ./cmd/tofu &&
-    GOMAXPROCS=2 go build -p 2 -buildvcs=false -trimpath -o "$work/$label-full.exe" ./cmd/tofu)
+  (cd "$src" && GOMAXPROCS=2 go build -p 2 -buildvcs=false -trimpath -ldflags="-s -w" -o "$work/$label-strip.exe" "$product" &&
+    GOMAXPROCS=2 go build -p 2 -buildvcs=false -trimpath -o "$work/$label-full.exe" "$product")
 built=$?
 rmdir "$buildslot"
 [ "$built" -eq 0 ] || exit 1

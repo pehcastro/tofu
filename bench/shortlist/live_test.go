@@ -13,7 +13,7 @@ import (
 	"tofu/internal/sys"
 )
 
-const repoRoot = "../.."
+var repoRoot = sys.SourceRoot()
 
 func liveClient(t *testing.T) *jev.Client {
 	t.Helper()

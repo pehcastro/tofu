@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -66,10 +67,16 @@ func buildTofu(scratch string, tree bool) (binary, project, built, commit string
 	if tree {
 		built, commit = source, commit+"+tree"
 	}
-	build := exec.Command("go", "build", "-o", binary, "./cmd/tofu")
+	found, err := git(built, "grep", "-l", "-E", `^func crashTold\(`, "--", "*.go")
+	files := strings.Fields(found)
+	if err != nil || len(files) != 1 {
+		return "", "", "", "", fmt.Errorf("symbol crashTold is in %d Go files under %s, not one, so the tofu package is unknown: %v", len(files), built, err)
+	}
+	product := "./" + path.Dir(files[0])
+	build := exec.Command("go", "build", "-o", binary, product)
 	build.Dir = built
 	if said, err := build.CombinedOutput(); err != nil {
-		return "", "", "", "", fmt.Errorf("go build ./cmd/tofu in %s: %w: %s", built, err, said)
+		return "", "", "", "", fmt.Errorf("go build %s in %s: %w: %s", product, built, err, said)
 	}
 	return binary, project, built, commit, nil
 }

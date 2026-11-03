@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"tofu/internal/sys"
 )
 
 func TestAWithdrawnReportNamingNoFallenSentenceIsNotQuotedAtAll(t *testing.T) {
@@ -100,7 +102,7 @@ func TestARowOfAStruckTableCannotBeCitedAsEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	standing, err := standingText(filepath.Join("..", ".."), map[string]string{source: plain(string(body))})
+	standing, err := standingText(sys.SourceRoot(), map[string]string{source: plain(string(body))})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,13 +4,17 @@ package sys
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"runtime/metrics"
 	"runtime/pprof"
 	"slices"
+	"strconv"
 	"time"
+
+	"tofu/internal/safe"
 )
 
 const (
@@ -20,6 +24,10 @@ const (
 	profileSampleEvery = 20 * time.Millisecond
 	countEvery         = 20 * time.Millisecond
 	profilePeakStep    = 1 << 20
+	SnapshotEvery      = 3 * time.Minute
+	SnapshotsKept      = 5
+	profileRunsKept    = 5
+	profileFolder      = "profile"
 )
 
 type memoryPoint struct {
@@ -149,4 +157,54 @@ func StartProfile() (stop func()) {
 		stopPprof()
 		stopCount()
 	}
+}
+
+func StartSnapshots(state string) (dir string, stop func(), err error) {
+	root := filepath.Join(state, profileFolder)
+	runs, _ := os.ReadDir(root)
+	for _, old := range runs[:max(0, len(runs)-profileRunsKept+1)] {
+		_ = os.RemoveAll(filepath.Join(root, old.Name()))
+	}
+	dir = filepath.Join(root, time.Now().Format("20060102-150405.000")+"-"+strconv.Itoa(os.Getpid()))
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", nil, err
+	}
+	named := func(n int, kind string) string { return filepath.Join(dir, fmt.Sprintf("%04d-%s", n, kind)) }
+	startCPU := func(n int) *os.File {
+		cpu, err := os.Create(named(n, "cpu.pprof"))
+		if err == nil {
+			_ = pprof.StartCPUProfile(cpu)
+		}
+		return cpu
+	}
+	snapshot := func(n int, cpu *os.File) {
+		pprof.StopCPUProfile()
+		_ = cpu.Close()
+		writeProfile("heap", named(n, "heap.pprof"), 0)
+		writeProfile("goroutine", named(n, "goroutines.txt"), 1)
+		stale, _ := filepath.Glob(named(n-SnapshotsKept, "*"))
+		for _, path := range stale {
+			_ = os.Remove(path)
+		}
+	}
+	done, finished := make(chan struct{}), make(chan struct{})
+	safe.Go(Crashes("."), "profile snapshots", func() {
+		defer close(finished)
+		tick := time.NewTicker(SnapshotEvery)
+		defer tick.Stop()
+		for n, cpu := 1, startCPU(1); ; n++ {
+			select {
+			case <-done:
+				snapshot(n, cpu)
+				return
+			case <-tick.C:
+				snapshot(n, cpu)
+				cpu = startCPU(n + 1)
+			}
+		}
+	})
+	return dir, func() {
+		close(done)
+		<-finished
+	}, nil
 }

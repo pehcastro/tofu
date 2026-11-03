@@ -10,7 +10,7 @@ import (
 	"tofu/internal/sys"
 )
 
-const treeRoot = "../.."
+var treeRoot = sys.SourceRoot()
 
 var reportGeneratedAt = time.Date(2026, time.September, 23, 8, 38, 15, 0, time.FixedZone("-03", -3*60*60))
 

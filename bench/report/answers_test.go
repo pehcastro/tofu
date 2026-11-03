@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"tofu/internal/judge/method"
+	"tofu/internal/sys"
 )
 
 var (
@@ -88,7 +89,7 @@ func TestADecisionThatCannotNameItsMethodsIsNeverGivenANumber(t *testing.T) {
 		Source: "bench/ask/report-2026-09-21.md",
 	}
 	bodies := map[string]string{"bench/ask/report-2026-09-21.md": "a report that says none of that"}
-	if err := checkPlacement(invented, shippedTable(t), filepath.Join("..", ".."), bodies); err == nil {
+	if err := checkPlacement(invented, shippedTable(t), sys.SourceRoot(), bodies); err == nil {
 		t.Fatal("a percentage citing a line no report carries was accepted")
 	} else {
 		t.Logf("refused, as it must be: %v", err)
@@ -97,11 +98,11 @@ func TestADecisionThatCannotNameItsMethodsIsNeverGivenANumber(t *testing.T) {
 
 func TestASentenceAWithdrawalStruckIsNoLongerEvidence(t *testing.T) {
 	const shortlist = "bench/shortlist/report-2026-09-21.md"
-	body, err := os.ReadFile(filepath.Join("..", "..", filepath.FromSlash(shortlist)))
+	body, err := os.ReadFile(filepath.Join(sys.SourceRoot(), filepath.FromSlash(shortlist)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	standing, err := standingText(filepath.Join("..", ".."), map[string]string{shortlist: string(body)})
+	standing, err := standingText(sys.SourceRoot(), map[string]string{shortlist: string(body)})
 	if err != nil {
 		t.Fatal(err)
 	}

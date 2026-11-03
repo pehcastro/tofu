@@ -6,9 +6,11 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"tofu/internal/sys"
 )
 
-const repoRoot = "../.."
+var repoRoot = sys.SourceRoot()
 
 type RtkFilter string
 

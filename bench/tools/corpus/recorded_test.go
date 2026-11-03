@@ -43,7 +43,7 @@ func TestExtractRecordedTextSearchCalls(t *testing.T) {
 				if root == "" {
 					root = "."
 				}
-				out, _ := exec.Command("git", "-C", "../../..", "grep", "-nE", a.Pattern, "--", root).CombinedOutput()
+				out, _ := exec.Command("git", "-C", sys.SourceRoot(), "grep", "-nE", a.Pattern, "--", root).CombinedOutput()
 				lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
 				if len(lines) == 1 && lines[0] == "" {
 					lines = nil

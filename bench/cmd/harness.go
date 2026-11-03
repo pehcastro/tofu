@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -78,7 +79,7 @@ func knownArm(name string) error {
 	return fmt.Errorf("unknown arm %q, the arms are tofu, claude and codex", name)
 }
 
-func tofuUnderTest(named string) (path string, cleanup func(), err error) {
+func tofuUnderTest(named string) (binary string, cleanup func(), err error) {
 	if named != "" {
 		abs, err := filepath.Abs(named)
 		return abs, func() {}, err
@@ -91,10 +92,19 @@ func tofuUnderTest(named string) (path string, cleanup func(), err error) {
 	if runtime.GOOS == "windows" {
 		bin += ".exe"
 	}
-	build := exec.Command("go", "build", "-o", bin, "./cmd/tofu")
+	root := sys.SourceRoot()
+	found, err := exec.Command("git", "-C", root, "grep", "-l", "-E", `^func crashTold\(`, "--", "*.go").Output()
+	files := strings.Fields(string(found))
+	if err != nil || len(files) != 1 {
+		_ = os.RemoveAll(dir)
+		return "", func() {}, fmt.Errorf("symbol crashTold is in %d Go files under %s, not one, so the tofu package is unknown. Name a built binary with --tofu to measure one instead: %v", len(files), root, err)
+	}
+	product := "./" + path.Dir(files[0])
+	build := exec.Command("go", "build", "-o", bin, product)
+	build.Dir = root
 	if out, err := build.CombinedOutput(); err != nil {
 		_ = os.RemoveAll(dir)
-		return "", func() {}, fmt.Errorf("the tofu arm measures the tofu in this tree, so the bench builds ./cmd/tofu, and that failed. Name a built binary with --tofu to measure one instead: %w\n%s", err, out)
+		return "", func() {}, fmt.Errorf("the tofu arm measures the tofu in this tree, so the bench builds %s, and that failed. Name a built binary with --tofu to measure one instead: %w\n%s", product, err, out)
 	}
 	return bin, func() { _ = os.RemoveAll(dir) }, nil
 }

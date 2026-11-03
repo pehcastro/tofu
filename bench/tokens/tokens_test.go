@@ -9,10 +9,12 @@ import (
 
 	"tofu/bench/corpus/recorded"
 	"tofu/internal/konst"
+	"tofu/internal/sys"
 	"tofu/internal/turn/tools"
 )
 
-const repoRoot = "../.."
+var repoRoot = sys.SourceRoot()
+
 const replayFailuresInTheReport = 6
 
 var reportGeneratedAt = time.Date(2026, time.September, 21, 20, 45, 0, 0, time.FixedZone("-03", -3*60*60))
