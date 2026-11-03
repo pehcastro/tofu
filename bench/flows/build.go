@@ -14,9 +14,8 @@ import (
 )
 
 const (
-	childProcs    = "4"
-	panicMark     = "FLOWS-PANIC"
-	productSymbol = `(?m)^func crashTold\(`
+	childProcs = "4"
+	panicMark  = "FLOWS-PANIC"
 )
 
 type seam struct {
@@ -45,7 +44,7 @@ func build(src, work string, seamed bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	product, err := locate(files, productSymbol)
+	product, err := locate(files, "(?m)"+sys.ProductSymbol)
 	if err != nil {
 		return "", err
 	}

@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"tofu/internal/sys"
 )
 
 func signedIn(exe, home, dir string, env []string, batch int) error {
@@ -82,12 +83,10 @@ func build(work string) (string, error) {
 		return "", fmt.Errorf("live450 builds tofu from the repository it runs in: %w", err)
 	}
 	repo := strings.TrimSpace(string(root))
-	found, err := exec.Command("git", "-C", repo, "grep", "-l", "-E", `^func crashTold\(`, "--", "*.go").Output()
-	files := strings.Fields(string(found))
-	if err != nil || len(files) != 1 {
-		return "", fmt.Errorf("symbol crashTold is in %d Go files under %s, not one, so the tofu package is unknown: %v", len(files), repo, err)
+	product, err := sys.ProductPackage(repo)
+	if err != nil {
+		return "", err
 	}
-	product := "./" + path.Dir(files[0])
 	exe := filepath.Join(work, "tofu.exe")
 	cmd := exec.Command("go", "build", "-trimpath", "-p", buildProcs, "-o", exe, product)
 	cmd.Dir, cmd.Env = repo, append(os.Environ(), "GOMAXPROCS="+buildProcs)

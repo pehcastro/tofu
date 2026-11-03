@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -16,6 +15,7 @@ import (
 
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/models/llm/wire/anthropic"
+	"tofu/internal/sys"
 )
 
 const (
@@ -110,12 +110,10 @@ func run() error {
 }
 
 func build(repo, work string) (string, error) {
-	found, err := exec.Command("git", "-C", repo, "grep", "-l", "-E", `^func crashTold\(`, "--", "*.go").Output()
-	files := strings.Fields(string(found))
-	if err != nil || len(files) != 1 {
-		return "", fmt.Errorf("symbol crashTold is in %d Go files under %s, not one, so the tofu package is unknown: %v", len(files), repo, err)
+	product, err := sys.ProductPackage(repo)
+	if err != nil {
+		return "", err
 	}
-	product := "./" + path.Dir(files[0])
 	exe := filepath.Join(work, "tofu.exe")
 	cmd := exec.Command("go", "build", "-trimpath", "-p", buildProcs, "-o", exe, product)
 	cmd.Dir, cmd.Env = repo, append(os.Environ(), "GOMAXPROCS="+buildProcs)

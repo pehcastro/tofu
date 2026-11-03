@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -18,6 +17,8 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
+
+	"tofu/internal/sys"
 )
 
 type run struct {
@@ -67,12 +68,10 @@ func buildTofu(scratch string, tree bool) (binary, project, built, commit string
 	if tree {
 		built, commit = source, commit+"+tree"
 	}
-	found, err := git(built, "grep", "-l", "-E", `^func crashTold\(`, "--", "*.go")
-	files := strings.Fields(found)
-	if err != nil || len(files) != 1 {
-		return "", "", "", "", fmt.Errorf("symbol crashTold is in %d Go files under %s, not one, so the tofu package is unknown: %v", len(files), built, err)
+	product, err := sys.ProductPackage(built)
+	if err != nil {
+		return "", "", "", "", err
 	}
-	product := "./" + path.Dir(files[0])
 	build := exec.Command("go", "build", "-o", binary, product)
 	build.Dir = built
 	if said, err := build.CombinedOutput(); err != nil {

@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -93,13 +92,11 @@ func tofuUnderTest(named string) (binary string, cleanup func(), err error) {
 		bin += ".exe"
 	}
 	root := sys.SourceRoot()
-	found, err := exec.Command("git", "-C", root, "grep", "-l", "-E", `^func crashTold\(`, "--", "*.go").Output()
-	files := strings.Fields(string(found))
-	if err != nil || len(files) != 1 {
+	product, err := sys.ProductPackage(root)
+	if err != nil {
 		_ = os.RemoveAll(dir)
-		return "", func() {}, fmt.Errorf("symbol crashTold is in %d Go files under %s, not one, so the tofu package is unknown. Name a built binary with --tofu to measure one instead: %v", len(files), root, err)
+		return "", func() {}, fmt.Errorf("%w. Name a built binary with --tofu to measure one instead", err)
 	}
-	product := "./" + path.Dir(files[0])
 	build := exec.Command("go", "build", "-o", bin, product)
 	build.Dir = root
 	if out, err := build.CombinedOutput(); err != nil {

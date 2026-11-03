@@ -587,26 +587,10 @@ func buildTofu(t *testing.T, root string) string {
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skipf("no go toolchain on PATH, so tofu cannot be built here at all: %v", err)
 	}
-	var holders []string
-	for _, goRoot := range sys.GoRoots() {
-		_ = filepath.WalkDir(filepath.Join(root, filepath.FromSlash(goRoot)), func(file string, entry os.DirEntry, err error) error {
-			if err != nil || entry.IsDir() || !strings.HasSuffix(file, ".go") || strings.HasSuffix(file, "_test.go") {
-				return nil
-			}
-			if body, err := os.ReadFile(file); err == nil && strings.Contains(string(body), "\nfunc crashTold(") {
-				holders = append(holders, filepath.Dir(file))
-			}
-			return nil
-		})
-	}
-	if len(holders) != 1 {
-		t.Fatalf("crashTold is declared in %d Go files under %s, not one, so the tofu package is unknown: %v", len(holders), root, holders)
-	}
-	product, err := filepath.Rel(root, holders[0])
+	product, err := sys.ProductPackage(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	product = "./" + filepath.ToSlash(product)
 	bin := filepath.Join(t.TempDir(), "tofu.exe")
 	out, err := goBuild(root, product, bin)
 	if err != nil {

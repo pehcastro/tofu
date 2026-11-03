@@ -21,9 +21,8 @@ import (
 )
 
 const (
-	deadProxy     = "http://127.0.0.1:9"
-	benchDir      = "bench/cli"
-	productSymbol = `^func crashTold\(`
+	deadProxy = "http://127.0.0.1:9"
+	benchDir  = "bench/cli"
 )
 
 type row struct {
@@ -181,14 +180,14 @@ func sample(m meter, arms []arm, work string, command []string, godebug string) 
 }
 
 func build(binary, dir, modfile, revision string) error {
-	grep := []string{"grep", "-l", "-E", productSymbol}
+	grep := []string{"grep", "-l", "-E", sys.ProductSymbol}
 	if revision != "" {
 		grep = append(grep, revision)
 	}
 	found, err := exec.Command("git", append(grep, "--", "*.go")...).Output()
 	files := strings.Fields(string(found))
 	if err != nil || len(files) != 1 {
-		return fmt.Errorf("symbol %q is in %d Go files at %s, not one, so the tofu package is unknown: %v", productSymbol, len(files), cmp.Or(revision, "the working tree"), err)
+		return fmt.Errorf("symbol %q is in %d Go files at %s, not one, so the tofu package is unknown: %v", sys.ProductSymbol, len(files), cmp.Or(revision, "the working tree"), err)
 	}
 	product := strings.TrimPrefix(files[0], revision+":")
 	cmd := exec.Command("go", "build", "-modfile="+cmp.Or(modfile, "go.mod"), "-o", binary, "./"+path.Dir(product))
