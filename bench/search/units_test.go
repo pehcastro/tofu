@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	tool "tofu/internal/tools/code/search/engine"
+	"tofu/internal/tools/code/search/engine"
 )
 
 const (
@@ -59,15 +59,15 @@ func TestWhatAWholeUnitSavesOverFramedLinesOutsideGo(t *testing.T) {
 		names := calledNames(t, corpus.root, files)
 		for _, name := range names {
 			pattern := regexp.MustCompile(`\b` + name + `\(`)
-			find := func(root string, files []string, budget int) tool.Result {
-				result, err := tool.Find(tool.Request{Root: root, Files: files, Pattern: pattern, MaxTokens: budget})
+			find := func(root string, files []string, budget int) engine.Result {
+				result, err := engine.Find(engine.Request{Root: root, Files: files, Pattern: pattern, MaxTokens: budget})
 				if err != nil {
 					t.Fatal(err)
 				}
 				return result
 			}
 			declared := find(corpus.root, files, 1<<30).Units
-			for arm, result := range map[*armCost]tool.Result{&framed: find(framedRoot, framedFiles, 0), &whole: find(corpus.root, files, 0)} {
+			for arm, result := range map[*armCost]engine.Result{&framed: find(framedRoot, framedFiles, 0), &whole: find(corpus.root, files, 0)} {
 				arm.tokens += result.Stats.Tokens
 				arm.returned += result.Stats.Returned
 				arm.matched += result.Stats.Units
@@ -128,13 +128,13 @@ func calledNames(t *testing.T, root string, files []string) []string {
 	return sampled
 }
 
-func readsAfter(shown tool.Unit, declared []tool.Unit) []tool.Unit {
-	if shown.Kind != tool.KindLines {
+func readsAfter(shown engine.Unit, declared []engine.Unit) []engine.Unit {
+	if shown.Kind != engine.KindLines {
 		return nil
 	}
-	var reads []tool.Unit
+	var reads []engine.Unit
 	for _, decl := range declared {
-		if decl.Kind == tool.KindLines || decl.Path != strings.TrimSuffix(shown.Path, framedSuffix) {
+		if decl.Kind == engine.KindLines || decl.Path != strings.TrimSuffix(shown.Path, framedSuffix) {
 			continue
 		}
 		for _, match := range shown.Matches {

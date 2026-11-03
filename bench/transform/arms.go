@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	tf "tofu/internal/tools/files/edit/patch"
+	"tofu/internal/tools/files/edit/patch"
 )
 
 type Estimate struct {
@@ -64,8 +64,8 @@ type writeCall struct {
 }
 
 type typedCall struct {
-	Path  string    `json:"path"`
-	Edits []tf.Edit `json:"edits"`
+	Path  string       `json:"path"`
+	Edits []patch.Edit `json:"edits"`
 }
 
 func Measure(writes []Write, root string) ([]Row, error) {
@@ -86,9 +86,9 @@ func Measure(writes []Write, root string) ([]Row, error) {
 		if err != nil {
 			return nil, fmt.Errorf("serialising the typed call for %s: %w", write.Path, err)
 		}
-		shape := tf.Replace
-		if len(edits) == 1 && edits[0].Kind == tf.Create {
-			shape = tf.Create
+		shape := patch.Replace
+		if len(edits) == 1 && edits[0].Kind == patch.Create {
+			shape = patch.Create
 		}
 		row.Expressible, row.Shape, row.Edits = true, string(shape), len(edits)
 		row.TypedOut, row.TypedIn = len(typed), len(preview.Result())
@@ -97,34 +97,34 @@ func Measure(writes []Write, root string) ([]Row, error) {
 	return rows, nil
 }
 
-func rebuild(root string, write Write) ([]tf.Edit, tf.Preview, error) {
-	edits, err := tf.Derive(write.Before, write.Content)
+func rebuild(root string, write Write) ([]patch.Edit, patch.Preview, error) {
+	edits, err := patch.Derive(write.Before, write.Content)
 	if err != nil {
-		return nil, tf.Preview{}, err
+		return nil, patch.Preview{}, err
 	}
 	local := filepath.FromSlash(write.Path)
 	full := filepath.Join(root, local)
 	if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
-		return nil, tf.Preview{}, fmt.Errorf("making the rebuild directory for %s: %w", write.Path, err)
+		return nil, patch.Preview{}, fmt.Errorf("making the rebuild directory for %s: %w", write.Path, err)
 	}
 	if write.Before != "" {
 		if err := os.WriteFile(full, []byte(write.Before), 0o600); err != nil {
-			return nil, tf.Preview{}, fmt.Errorf("seeding %s: %w", write.Path, err)
+			return nil, patch.Preview{}, fmt.Errorf("seeding %s: %w", write.Path, err)
 		}
 	}
-	preview, err := tf.Plan(root, local, edits)
+	preview, err := patch.Plan(root, local, edits)
 	if err != nil {
-		return nil, tf.Preview{}, err
+		return nil, patch.Preview{}, err
 	}
-	if err := tf.Commit(root, preview); err != nil {
-		return nil, tf.Preview{}, err
+	if err := patch.Commit(root, preview); err != nil {
+		return nil, patch.Preview{}, err
 	}
 	rebuilt, err := os.ReadFile(full)
 	if err != nil {
-		return nil, tf.Preview{}, fmt.Errorf("reading the rebuilt %s: %w", write.Path, err)
+		return nil, patch.Preview{}, fmt.Errorf("reading the rebuilt %s: %w", write.Path, err)
 	}
 	if string(rebuilt) != write.Content {
-		return nil, tf.Preview{}, fmt.Errorf("the typed edits rebuilt %d bytes where the recorded write held %d",
+		return nil, patch.Preview{}, fmt.Errorf("the typed edits rebuilt %d bytes where the recorded write held %d",
 			len(rebuilt), len(write.Content))
 	}
 	return edits, preview, nil

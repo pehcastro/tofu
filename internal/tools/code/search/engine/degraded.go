@@ -1,4 +1,4 @@
-package search
+package engine
 
 type Degraded string
 

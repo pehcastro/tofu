@@ -65,7 +65,7 @@ func (s Symbols) Run(_ context.Context, raw json.RawMessage) (contract.Result, e
 		return contract.Result{}, fmt.Errorf("symbols: %w", err)
 	}
 	under = listed.under
-	graph, err := search.Symbols(string(s.root), listed.files, args.Name)
+	graph, err := engine.Symbols(string(s.root), listed.files, args.Name)
 	if err != nil {
 		return contract.Result{}, err
 	}

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	tool "tofu/internal/tools/code/search/engine"
+	"tofu/internal/tools/code/search/engine"
 )
 
 const costRuns = 5
@@ -15,10 +15,10 @@ const costRuns = 5
 type costRun struct {
 	read    time.Duration
 	total   time.Duration
-	byForm  map[tool.Candidate]time.Duration
-	notRun  map[tool.Candidate]string
+	byForm  map[engine.Candidate]time.Duration
+	notRun  map[engine.Candidate]string
 	files   int
-	answers tool.Candidate
+	answers engine.Candidate
 }
 
 func measure(t *testing.T, pattern string) []costRun {
@@ -31,15 +31,15 @@ func measure(t *testing.T, pattern string) []costRun {
 	runs := make([]costRun, 0, costRuns)
 	for range costRuns {
 		started := time.Now()
-		result, err := tool.Find(tool.Request{Root: treeRoot, Files: files, Pattern: compiled})
+		result, err := engine.Find(engine.Request{Root: treeRoot, Files: files, Pattern: compiled})
 		if err != nil {
 			t.Fatal(err)
 		}
 		run := costRun{
 			read:    result.Stats.Read,
 			total:   time.Since(started),
-			byForm:  map[tool.Candidate]time.Duration{},
-			notRun:  map[tool.Candidate]string{},
+			byForm:  map[engine.Candidate]time.Duration{},
+			notRun:  map[engine.Candidate]string{},
 			files:   len(files),
 			answers: result.Answered,
 		}
@@ -84,7 +84,7 @@ func wholeTreePatterns(t *testing.T, want int) []string {
 }
 
 func TestWhatEachCandidateCostsOverTheWholeTree(t *testing.T) {
-	forms := []tool.Candidate{tool.Literal, tool.WordBoundary, tool.CaseInsensitive, tool.GoSymbol}
+	forms := []engine.Candidate{engine.Literal, engine.WordBoundary, engine.CaseInsensitive, engine.GoSymbol}
 	plainWord := strings.ToUpper("f") + "allback"
 	for _, pattern := range append(wholeTreePatterns(t, 3), plainWord) {
 		runs := measure(t, pattern)
@@ -92,7 +92,7 @@ func TestWhatEachCandidateCostsOverTheWholeTree(t *testing.T) {
 		total := median(runs, func(run costRun) time.Duration { return run.total })
 		t.Logf("%q over %d files, %d runs: whole call %v, of which reading the files %v, answered by %s",
 			pattern, runs[0].files, len(runs), total, read, runs[0].answers)
-		if runs[0].answers != tool.Literal {
+		if runs[0].answers != engine.Literal {
 			t.Logf("  the literal found nothing, so this one is priced by the absence measurement instead")
 			continue
 		}
@@ -104,7 +104,7 @@ func TestWhatEachCandidateCostsOverTheWholeTree(t *testing.T) {
 			}
 			spent := median(runs, func(run costRun) time.Duration { return run.byForm[form] })
 			t.Logf("  %-16s %v", form, spent)
-			if form != tool.Literal {
+			if form != engine.Literal {
 				extra += spent
 			}
 		}
@@ -119,15 +119,15 @@ func TestWhatItCostsToTellAWrongPatternFromAnAbsence(t *testing.T) {
 	absent := "xyzzy" + "plughquux"
 	for _, pattern := range []string{rescued, absent} {
 		runs := measure(t, pattern)
-		if why, skipped := runs[0].notRun[tool.CaseInsensitive]; skipped {
+		if why, skipped := runs[0].notRun[engine.CaseInsensitive]; skipped {
 			t.Fatalf("%q found nothing on the literal and the case insensitive form still did not run: %s", pattern, why)
 		}
 		t.Logf("%q over %d files, %d runs: whole call %v, of which reading the files twice %v, literal %v, case insensitive %v, answered by %s",
 			pattern, runs[0].files, len(runs),
 			median(runs, func(run costRun) time.Duration { return run.total }),
 			median(runs, func(run costRun) time.Duration { return run.read }),
-			median(runs, func(run costRun) time.Duration { return run.byForm[tool.Literal] }),
-			median(runs, func(run costRun) time.Duration { return run.byForm[tool.CaseInsensitive] }),
+			median(runs, func(run costRun) time.Duration { return run.byForm[engine.Literal] }),
+			median(runs, func(run costRun) time.Duration { return run.byForm[engine.CaseInsensitive] }),
 			runs[0].answers)
 	}
 }

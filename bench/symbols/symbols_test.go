@@ -77,11 +77,11 @@ func TestSymbolsAgainstTheRipgrepPatternOverRustAndTypeScript(t *testing.T) {
 					}
 				}
 			}
-			var graph search.Graph
+			var graph engine.Graph
 			var spent []time.Duration
 			for range runsPerQuery {
 				started := time.Now()
-				found, err := search.Symbols(each.root, files, name)
+				found, err := engine.Symbols(each.root, files, name)
 				spent = append(spent, time.Since(started))
 				if err != nil {
 					t.Fatal(err)

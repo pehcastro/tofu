@@ -80,7 +80,7 @@ func (e Edit) Definition() llm.Tool {
 
 type plannedEdit struct {
 	resolved string
-	preview  transform.Preview
+	preview  patch.Preview
 	change   turn.LineChange
 	notes    []string
 	fires    []rule.Fire
@@ -115,12 +115,12 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 		}
 	}
 	for i, plan := range plans {
-		if err := transform.Commit(string(e.root), plan.preview); err != nil {
+		if err := patch.Commit(string(e.root), plan.preview); err != nil {
 			for _, written := range plans[:i] {
-				_ = transform.Commit(string(e.root), transform.Preview{Path: written.preview.Path, Before: written.preview.After, After: written.preview.Before})
+				_ = patch.Commit(string(e.root), patch.Preview{Path: written.preview.Path, Before: written.preview.After, After: written.preview.Before})
 			}
-			if errors.Is(err, transform.ErrStale) {
-				return contract.Result{}, errors.New("edit: " + search.Note(search.Stale,
+			if errors.Is(err, patch.ErrStale) {
+				return contract.Result{}, errors.New("edit: " + engine.Note(engine.Stale,
 					plan.preview.Path+" is no longer the text edit read, so nothing was written: read it again and edit the text that is there now"))
 			}
 			return contract.Result{}, fmt.Errorf("edit: %w%s", err, turn.NoneWritten(len(files)))
@@ -185,7 +185,7 @@ func (e Edit) plan(ctx context.Context, changes []turn.EditChange, several bool)
 	}
 
 	if bytes.IndexByte(body, 0) >= 0 {
-		return plannedEdit{}, errors.New("edit: " + search.Note(search.BinarySkipped,
+		return plannedEdit{}, errors.New("edit: " + engine.Note(engine.BinarySkipped,
 			target+" holds a null byte, so it is not text and replacing a stretch of it would corrupt it"))
 	}
 	before := string(body)
@@ -242,6 +242,6 @@ func (e Edit) plan(ctx context.Context, changes []turn.EditChange, several bool)
 		return plannedEdit{}, fmt.Errorf("edit: %w", err)
 	}
 	notes = append(notes, recorded...)
-	preview := transform.Preview{Path: target, Existed: true, Before: before, After: after, Diff: transform.Unified(target, before, after)}
+	preview := patch.Preview{Path: target, Existed: true, Before: before, After: after, Diff: patch.Unified(target, before, after)}
 	return plannedEdit{resolved: resolved, preview: preview, change: change, notes: notes, fires: fires}, nil
 }

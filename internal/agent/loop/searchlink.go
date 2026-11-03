@@ -64,7 +64,7 @@ func SearchLinksOf(conversation []llm.Message) []SearchLink {
 		if call.tool != "search" {
 			continue
 		}
-		offered := search.OfferedPaths(results[call.id])
+		offered := engine.OfferedPaths(results[call.id])
 		link := SearchLink{SearchCallID: call.id, Offered: offered, Kind: SearchLinkNone}
 		for _, later := range calls[i+1:] {
 			if !actsOnAPath(later.tool) || later.path == "" {

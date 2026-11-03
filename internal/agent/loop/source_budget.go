@@ -232,7 +232,7 @@ func sources(r contract.Root) map[string]string {
 
 func changedLines(before, after string) int {
 	changed := 0
-	for _, hunk := range transform.Hunks(before, after) {
+	for _, hunk := range patch.Hunks(before, after) {
 		changed += max(len(hunk.Removed), len(hunk.Added))
 	}
 	return changed

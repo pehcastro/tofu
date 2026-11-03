@@ -293,7 +293,7 @@ func quoteCut(noun, words string) (string, string) {
 	for kept > 0 && !utf8.RuneStart(words[kept]) {
 		kept--
 	}
-	return words[:kept], search.Note(search.Truncated, fmt.Sprintf(
+	return words[:kept], engine.Note(engine.Truncated, fmt.Sprintf(
 		"the %s is %d bytes and the first %d are here: the rest of it stays in the session record, which the person can open",
 		noun, len(words), kept))
 }

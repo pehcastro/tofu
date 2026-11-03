@@ -1,4 +1,4 @@
-package search_test
+package engine_test
 
 import (
 	"os"
@@ -33,10 +33,10 @@ func TestEveryCitationInTheReportsUnderTheSweptDirectory(t *testing.T) {
 		if err != nil {
 			t.Fatalf("reading %s: %v", entry.Name(), err)
 		}
-		cited := search.Cite(root, string(body))
+		cited := engine.Cite(root, string(body))
 		total, resolved = total+len(cited.Found), resolved+cited.Resolved
 		for _, one := range cited.Found {
-			if one.Claim != search.ClaimResolved {
+			if one.Claim != engine.ClaimResolved {
 				refused = append(refused, entry.Name()+"  "+one.Text+"  "+string(one.Claim)+": "+one.Detail)
 			}
 		}

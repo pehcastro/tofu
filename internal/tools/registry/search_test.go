@@ -40,7 +40,7 @@ func TestSearchProfileOverATree(t *testing.T) {
 		}
 		listing := time.Since(started)
 		started = time.Now()
-		result, err := search.Find(search.Request{Root: string(root), Files: files, Pattern: regexp.MustCompile(pattern), MaxTokens: 3000})
+		result, err := engine.Find(engine.Request{Root: string(root), Files: files, Pattern: regexp.MustCompile(pattern), MaxTokens: 3000})
 		if err != nil {
 			t.Fatal(err)
 		}

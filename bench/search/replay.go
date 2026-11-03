@@ -12,24 +12,24 @@ import (
 	"slices"
 	"strings"
 
-	tool "tofu/internal/tools/code/search/engine"
+	"tofu/internal/tools/code/search/engine"
 )
 
 var ErrPathGone = errors.New("bench/search: the recorded path is not in the tree today")
 
 type Outcome struct {
 	Row      Recorded
-	Answered tool.Candidate
-	Attempts []tool.Attempt
+	Answered engine.Candidate
+	Attempts []engine.Attempt
 }
 
-func (o Outcome) Attempt(candidate tool.Candidate) tool.Attempt {
+func (o Outcome) Attempt(candidate engine.Candidate) engine.Attempt {
 	for _, attempt := range o.Attempts {
 		if attempt.Candidate == candidate {
 			return attempt
 		}
 	}
-	return tool.Attempt{Candidate: candidate, NotRun: "the candidate was not reported at all"}
+	return engine.Attempt{Candidate: candidate, NotRun: "the candidate was not reported at all"}
 }
 
 func Replay(root string, row Recorded) (Outcome, error) {
@@ -41,7 +41,7 @@ func Replay(root string, row Recorded) (Outcome, error) {
 	if err != nil {
 		return Outcome{}, fmt.Errorf("bench/search: %s recorded a pattern that no longer compiles: %w", row.Turn, err)
 	}
-	result, err := tool.Find(tool.Request{Root: root, Files: files, Pattern: pattern, MaxTokens: row.MaxTokens})
+	result, err := engine.Find(engine.Request{Root: root, Files: files, Pattern: pattern, MaxTokens: row.MaxTokens})
 	if err != nil {
 		return Outcome{}, err
 	}

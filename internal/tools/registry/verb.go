@@ -271,7 +271,7 @@ func (v Verb) spawn(ctx context.Context, words []string, body string) (contract.
 	output, runErr := cmd.CombinedOutput()
 	command := "tofu " + strings.Join(words, " ")
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return contract.Result{}, errors.New(v.spec.tool + ": " + search.Note(search.Stopped,
+		return contract.Result{}, errors.New(v.spec.tool + ": " + engine.Note(engine.Stopped,
 			fmt.Sprintf("%s ran past the %d ms deadline and was killed", command, konst.VerbTimeoutMillis)))
 	}
 	if cmd.ProcessState == nil {

@@ -121,7 +121,7 @@ func (g Glob) Run(_ context.Context, raw json.RawMessage) (contract.Result, erro
 		case last < matched:
 			next = fmt.Sprintf("skip %d shows the next page, or narrow the pattern", last)
 		}
-		note = strings.TrimSpace(note + " " + search.Note(search.Truncated,
+		note = strings.TrimSpace(note + " " + engine.Note(engine.Truncated,
 			fmt.Sprintf("%d files matched and %d a page are shown: %s", matched, konst.GlobPathsResultCap, next)))
 	}
 	return contract.Result{
@@ -316,7 +316,7 @@ func filesUnder(root contract.Root, under string, includeIgnored bool) (listing,
 		walked.notes = append(walked.notes, note)
 	}
 	if includeIgnored {
-		walked.notes = append(walked.notes, search.Note(search.Unfiltered, "include_ignored was set, so this listing is wider than git's"))
+		walked.notes = append(walked.notes, engine.Note(engine.Unfiltered, "include_ignored was set, so this listing is wider than git's"))
 	} else {
 		walked.loadAncestors(from)
 	}
@@ -333,7 +333,7 @@ func filesUnder(root contract.Root, under string, includeIgnored bool) (listing,
 		walked.notes = append(walked.notes, fmt.Sprintf("links not followed: %d, because each leads outside the working directory or nowhere.", walked.notFollowed))
 	}
 	if walked.unsized > 0 {
-		walked.notes = append(walked.notes, search.Note(search.Partial,
+		walked.notes = append(walked.notes, engine.Note(engine.Partial,
 			fmt.Sprintf("%d of the %d files listed could not be measured, so the total size is lower than the real one", walked.unsized, len(walked.files))))
 	}
 	return listing{under: under, files: walked.files, sizes: walked.sizes, bytes: walked.bytes, note: strings.Join(walked.notes, " ")}, walkErr
@@ -455,7 +455,7 @@ func projectInstructions(name string) bool {
 func (w *walk) loadAncestors(from string) {
 	rel, err := filepath.Rel(string(w.root), from)
 	if err != nil {
-		w.notes = append(w.notes, search.Note(search.Unfiltered, "the path walked is not under the working directory"))
+		w.notes = append(w.notes, engine.Note(engine.Unfiltered, "the path walked is not under the working directory"))
 		return
 	}
 	w.load(string(w.root), "")
@@ -479,11 +479,11 @@ func (w *walk) load(dir, base string) {
 	where := cmp.Or(base, "./")
 	body, err := io.ReadAll(io.LimitReader(file, konst.IgnoreFileBytesCap+1))
 	if err != nil {
-		w.notes = append(w.notes, search.Note(search.IgnoreSkipped, "the .gitignore in "+where+" could not be read"))
+		w.notes = append(w.notes, engine.Note(engine.IgnoreSkipped, "the .gitignore in "+where+" could not be read"))
 		return
 	}
 	if len(body) > konst.IgnoreFileBytesCap {
-		w.notes = append(w.notes, search.Note(search.IgnoreSkipped,
+		w.notes = append(w.notes, engine.Note(engine.IgnoreSkipped,
 			fmt.Sprintf("the .gitignore in %s is over the %d byte cap", where, konst.IgnoreFileBytesCap)))
 		return
 	}
@@ -495,7 +495,7 @@ func (w *walk) load(dir, base string) {
 		}
 		rule, err := parseIgnoreLine(line)
 		if err != nil {
-			w.notes = append(w.notes, search.Note(search.IgnoreSkipped,
+			w.notes = append(w.notes, engine.Note(engine.IgnoreSkipped,
 				fmt.Sprintf("the .gitignore in %s has a pattern tofu does not support, %s: %v", where, line, err)))
 			continue
 		}

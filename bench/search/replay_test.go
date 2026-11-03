@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"tofu/internal/sys"
-	tool "tofu/internal/tools/code/search/engine"
+	"tofu/internal/tools/code/search/engine"
 )
 
 var treeRoot = sys.SourceRoot()
@@ -50,9 +50,9 @@ func TestHowOftenASinglePatternFindReturnsNothingWhereACandidateAnswers(t *testi
 		}
 		replayed++
 		switch {
-		case outcome.Answered == tool.Literal:
+		case outcome.Answered == engine.Literal:
 			continue
-		case outcome.Answered != tool.NoCandidate:
+		case outcome.Answered != engine.NoCandidate:
 			literalEmpty++
 			rescued++
 			t.Logf("rescued %q under %q: the literal found 0 lines and the %s form found %d in %d files",
@@ -79,11 +79,11 @@ func TestHowOftenASinglePatternFindReturnsNothingWhereACandidateAnswers(t *testi
 func TestEveryReplayedRowNamesTheFormThatAnsweredIt(t *testing.T) {
 	loaded := loadOrSkip(t)
 
-	known := map[tool.Candidate]bool{
-		tool.Literal:         true,
-		tool.WordBoundary:    true,
-		tool.CaseInsensitive: true,
-		tool.NoCandidate:     true,
+	known := map[engine.Candidate]bool{
+		engine.Literal:         true,
+		engine.WordBoundary:    true,
+		engine.CaseInsensitive: true,
+		engine.NoCandidate:     true,
 	}
 	for _, row := range loaded.Rows {
 		outcome, err := Replay(treeRoot, row)

@@ -44,7 +44,7 @@ func (c cited) Run(ctx context.Context, raw json.RawMessage) (contract.Result, e
 	}
 	_ = json.Unmarshal(raw, &args)
 	root := string(c.root)
-	result.Content = withNote(result.Content, search.Cite(root, result.Content, leadingDirs(root, args.Command)...).Text)
+	result.Content = withNote(result.Content, engine.Cite(root, result.Content, leadingDirs(root, args.Command)...).Text)
 	return result, nil
 }
 

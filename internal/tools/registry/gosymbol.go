@@ -26,7 +26,7 @@ func goStillParses(shown, before, after string) error {
 	return nil
 }
 
-func declarations(found []search.Definition) string {
+func declarations(found []engine.Definition) string {
 	if len(found) == 0 {
 		return "no declaration there carries that name"
 	}
@@ -45,7 +45,7 @@ func replaceDeclaration(root contract.Root, shown, symbol, before, becomes strin
 	if len(parts) > 2 || slices.ContainsFunc(parts, func(part string) bool { return !token.IsIdentifier(part) }) {
 		return "", fmt.Errorf("edit: symbol %q is neither a declared name nor a receiver and a method name: it is spelled Resolve for a function, a type or a value, and Root.Resolve for a method", symbol)
 	}
-	graph, err := search.Symbols(string(root), []string{shown}, parts[len(parts)-1])
+	graph, err := engine.Symbols(string(root), []string{shown}, parts[len(parts)-1])
 	if err != nil {
 		return "", fmt.Errorf("edit: %w", err)
 	}
@@ -55,7 +55,7 @@ func replaceDeclaration(root contract.Root, shown, symbol, before, becomes strin
 	if graph.Unparsed > 0 {
 		return "", fmt.Errorf("edit: %s does not parse as go, so no declaration in it can be named: repair it with old_string first", shown)
 	}
-	found := slices.DeleteFunc(slices.Clone(graph.Definitions), func(definition search.Definition) bool { return definition.Symbol != symbol })
+	found := slices.DeleteFunc(slices.Clone(graph.Definitions), func(definition engine.Definition) bool { return definition.Symbol != symbol })
 	if len(found) > 1 {
 		return "", fmt.Errorf("edit: %s declares %s %d times, as %s, and an edit names exactly one: replace the one you mean with old_string. nothing was changed",
 			shown, symbol, len(found), declarations(found))

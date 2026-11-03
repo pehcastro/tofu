@@ -109,7 +109,7 @@ func (p Project) Run(_ context.Context, raw json.RawMessage) (contract.Result, e
 
 	note := listed.note
 	if len(cut) > 0 {
-		note = strings.TrimSpace(note + " " + search.Note(search.Truncated,
+		note = strings.TrimSpace(note + " " + engine.Note(engine.Truncated,
 			"limit is "+strconv.Itoa(limit)+" and "+strings.Join(cut, ", ")+": raise limit, or glob the one you want in full"))
 	}
 	return contract.Result{Content: withNote(out.String(), note), Command: strconv.Itoa(len(listed.files)) + " files"}, nil

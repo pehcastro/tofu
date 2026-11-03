@@ -123,12 +123,12 @@ func (t *WriteTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 	}
 	t.ledger.Mark(ctx, args.Path, []byte(args.Content))
 	before := string(held)
-	preview := transform.Preview{
+	preview := patch.Preview{
 		Path:    args.Path,
 		Existed: readErr == nil,
 		Before:  before,
 		After:   args.Content,
-		Diff:    transform.Unified(args.Path, before, args.Content),
+		Diff:    patch.Unified(args.Path, before, args.Content),
 	}
 	return contract.Result{Content: t.checkers.Typechecked(ctx, resolved, strings.Join(append([]string{preview.Result()}, ruled...), "\n")), Command: args.Path, Rules: fires}, nil
 }

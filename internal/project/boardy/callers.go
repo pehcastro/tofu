@@ -90,9 +90,9 @@ func ImpactOf(root string, wrote []string) Impact {
 		return Impact{}
 	}
 	lines, touched := sourceLines{root: root, read: map[string][]string{}}, changedIn(root, files)
-	declared := search.Index(root, files, func(string) bool { return true })
+	declared := engine.Index(root, files, func(string) bool { return true })
 	impact := Impact{Unread: declared.Unread}
-	var changed []search.Definition
+	var changed []engine.Definition
 	for _, definition := range declared.Definitions {
 		head := lines.head(definition)
 		exported := map[string]bool{".go": ast.IsExported(bareName(definition.Symbol)), ".rs": strings.HasPrefix(head, "pub"), ".ts": strings.HasPrefix(head, "export")}
@@ -107,8 +107,8 @@ func ImpactOf(root string, wrote []string) Impact {
 	if sources == nil {
 		sources, stopped = walkedSources(root)
 	}
-	graph := search.Index(root, sources, func(name string) bool {
-		return slices.ContainsFunc(changed, func(definition search.Definition) bool { return bareName(definition.Symbol) == name })
+	graph := engine.Index(root, sources, func(name string) bool {
+		return slices.ContainsFunc(changed, func(definition engine.Definition) bool { return bareName(definition.Symbol) == name })
 	})
 	impact.Stopped = stopped
 	for _, unread := range graph.Unread {
@@ -129,8 +129,8 @@ func ImpactOf(root string, wrote []string) Impact {
 	return impact
 }
 
-func goCallee(root, module string, definition search.Definition) (callerItem, bool) {
-	if definition.Kind != search.KindFunc && definition.Kind != search.KindMethod || languageOf(definition.Path) != ".go" {
+func goCallee(root, module string, definition engine.Definition) (callerItem, bool) {
+	if definition.Kind != engine.KindFunc && definition.Kind != engine.KindMethod || languageOf(definition.Path) != ".go" {
 		return callerItem{}, false
 	}
 	raw, err := os.ReadFile(filepath.Join(root, definition.Path))
@@ -164,13 +164,13 @@ func (item callerItem) impacted(root string, sources []string) []string {
 	return callers
 }
 
-func impactedBy(graph search.Graph, definition search.Definition) []string {
+func impactedBy(graph engine.Graph, definition engine.Definition) []string {
 	name := bareName(definition.Symbol)
 	var callers []string
 	at, more := map[string]int{}, []int{}
 	for _, site := range graph.Callers {
 		if site.Name != name || site.Path == definition.Path || languageOf(site.Path) != languageOf(definition.Path) ||
-			slices.ContainsFunc(graph.Definitions, func(other search.Definition) bool { return other.Path == site.Path && bareName(other.Symbol) == name }) {
+			slices.ContainsFunc(graph.Definitions, func(other engine.Definition) bool { return other.Path == site.Path && bareName(other.Symbol) == name }) {
 			continue
 		}
 		if seen, found := at[site.Path]; found {
@@ -228,11 +228,11 @@ func walkedSources(root string) ([]string, string) {
 	return sources, stopped
 }
 
-func changedIn(root string, files []string) func(search.Definition) bool {
+func changedIn(root string, files []string) func(engine.Definition) bool {
 	tracked, listErr := gitOut(root, "", append([]string{"ls-tree", "-r", "--name-only", "HEAD", "--"}, files...)...)
 	diff, diffErr := gitOut(root, "", append([]string{"diff", "-U0", "--no-color", "--no-ext-diff", "--relative", "HEAD", "--"}, files...)...)
 	if listErr != nil || diffErr != nil {
-		return func(search.Definition) bool { return true }
+		return func(engine.Definition) bool { return true }
 	}
 	hunks := map[string][][2]int{}
 	current := ""
@@ -252,7 +252,7 @@ func changedIn(root string, files []string) func(search.Definition) bool {
 		}
 	}
 	known := strings.Split(filepath.ToSlash(tracked), "\n")
-	return func(definition search.Definition) bool {
+	return func(definition engine.Definition) bool {
 		return !slices.Contains(known, definition.Path) || slices.ContainsFunc(hunks[definition.Path], func(hunk [2]int) bool {
 			return hunk[0] <= definition.LastLine && definition.FirstLine <= hunk[1]
 		})
@@ -275,7 +275,7 @@ func (s sourceLines) line(rel string, number int) string {
 	return strings.TrimSpace(s.read[rel][number-1])
 }
 
-func (s sourceLines) head(definition search.Definition) string {
+func (s sourceLines) head(definition engine.Definition) string {
 	head := definition.FirstLine
 	for head < definition.LastLine && strings.HasPrefix(s.line(definition.Path, head), "#[") {
 		head++
@@ -402,17 +402,17 @@ func functionCallers(root string, sources []string, owned func(string) bool, tex
 	}
 	lines := sourceLines{root: root, read: map[string][]string{}}
 	home := map[string]string{}
-	for _, definition := range search.Index(root, mine, func(string) bool { return true }).Definitions {
+	for _, definition := range engine.Index(root, mine, func(string) bool { return true }).Definitions {
 		name := bareName(definition.Symbol)
-		public := definition.Kind == search.KindFunc && path.Ext(definition.Path) == ".rs" && strings.HasPrefix(lines.head(definition), "pub")
-		if home[name] == "" && (public || named(text, "fn "+name) && (definition.Kind == search.KindFunc || definition.Kind == search.KindMethod)) {
+		public := definition.Kind == engine.KindFunc && path.Ext(definition.Path) == ".rs" && strings.HasPrefix(lines.head(definition), "pub")
+		if home[name] == "" && (public || named(text, "fn "+name) && (definition.Kind == engine.KindFunc || definition.Kind == engine.KindMethod)) {
 			home[name] = definition.Path
 		}
 	}
 	if len(home) == 0 {
 		return nil
 	}
-	graph := search.Index(root, others, func(name string) bool { return home[name] != "" })
+	graph := engine.Index(root, others, func(name string) bool { return home[name] != "" })
 	definedIn := map[string][]string{}
 	for _, definition := range graph.Definitions {
 		name := bareName(definition.Symbol)

@@ -31,7 +31,7 @@ func (s Search) Definition() llm.Tool {
 		Name: "search",
 		Description: "the only content search: matches a go regexp against every text file under the working directory. " +
 			"a match in .go, .ts, .tsx, .js, .jsx, .py or .rs returns its whole declaration, marked code, comment or string; other files return the lines around it. " +
-			fmt.Sprintf("matches in more than %d files return each declaration's name and matching lines instead, %d files a page, and skip passes over that many files to reach the next page. ", search.FilesPerPage, search.FilesPerPage) +
+			fmt.Sprintf("matches in more than %d files return each declaration's name and matching lines instead, %d files a page, and skip passes over that many files to reach the next page. ", engine.FilesPerPage, engine.FilesPerPage) +
 			"spends max_tokens, not lines, and says how many matched. " +
 			"skips what .gitignore skips unless include_ignored. " +
 			"when it returns less than you need, narrow path or raise max_tokens",
@@ -78,12 +78,12 @@ func (s Search) Run(_ context.Context, raw json.RawMessage) (contract.Result, er
 		return contract.Result{}, fmt.Errorf("search: %w", err)
 	}
 	under = listed.under
-	result, err := search.Find(search.Request{
+	result, err := engine.Find(engine.Request{
 		Root:      string(s.root),
 		Files:     listed.files,
 		Sizes:     listed.sizes,
 		Pattern:   expression,
-		MaxTokens: search.Unbudgeted,
+		MaxTokens: engine.Unbudgeted,
 	})
 	if err != nil {
 		return contract.Result{}, err
