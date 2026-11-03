@@ -11,13 +11,14 @@ import (
 	"strings"
 
 	"tofu/internal/rule"
+	"tofu/internal/sys"
 )
 
 const (
 	FlowsStamps    = "flows"
 	TreewideStamps = "treewide"
 	DeskStamps     = "desk"
-	deskArea       = "apps/desk"
+	deskArea       = sys.DeskRoot
 )
 
 func StampDir(repo string) string {
@@ -29,30 +30,54 @@ func StampPath(repo, kind, tree string) string {
 }
 
 func HeadTree(repo string) (string, []string, error) {
-	tree, err := headTreeWithoutApps(repo)
+	tree, err := headTreeWithoutDesk(repo)
 	if err != nil {
 		return "", nil, err
 	}
-	dirty, err := uncommitted(repo, "*.go", ":(exclude)apps/")
+	dirty, err := uncommitted(repo, "*.go", ":(exclude)"+deskArea+"/")
 	return tree, dirty, err
 }
 
-func headTreeWithoutApps(repo string) (string, error) {
-	listing, err := gitOut(repo, "", "ls-tree", "-z", "HEAD")
+func headTreeWithoutDesk(repo string) (string, error) {
+	tree, err := treeWithout(repo, "HEAD", deskArea)
+	if tree == "" && err == nil {
+		return gitOut(repo, "", "mktree", "-z")
+	}
+	return tree, err
+}
+
+func treeWithout(repo, tree, drop string) (string, error) {
+	first, rest, nested := strings.Cut(drop, "/")
+	listing, err := gitOut(repo, "", "ls-tree", "-z", tree)
 	if err != nil {
 		return "", err
 	}
 	var kept strings.Builder
 	for _, entry := range strings.Split(listing, "\x00") {
-		if _, name, _ := strings.Cut(entry, "\t"); entry != "" && name != "apps" {
-			kept.WriteString(entry + "\x00")
+		meta, name, _ := strings.Cut(entry, "\t")
+		if entry == "" || name == first && !nested {
+			continue
 		}
+		if fields := strings.Fields(meta); name == first && len(fields) == 3 && fields[1] == "tree" {
+			sub, err := treeWithout(repo, fields[2], rest)
+			if err != nil {
+				return "", err
+			}
+			if sub == "" {
+				continue
+			}
+			entry = fields[0] + " tree " + sub + "\t" + name
+		}
+		kept.WriteString(entry + "\x00")
+	}
+	if kept.Len() == 0 {
+		return "", nil
 	}
 	return gitOut(repo, kept.String(), "mktree", "-z")
 }
 
 func Unstamped(repo string, kinds ...string) (string, []string, error) {
-	tree, err := headTreeWithoutApps(repo)
+	tree, err := headTreeWithoutDesk(repo)
 	if err != nil {
 		return "", nil, err
 	}
@@ -89,15 +114,33 @@ type DoneGate struct {
 	Unstamped     bool
 	DeskUnstamped bool
 	deskUnread    string
+	lost          bool
 	owns          []string
 	stamps        string
 }
 
 func checkDone(repo string, owns []string) DoneGate {
-	if len(flowsAreas(owns)) == 0 {
+	if len(flowsAreas(owns)) == 0 && len(lostFlowsAreas(repo)) == 0 {
 		return DoneGate{}
 	}
 	return headGate(repo).owning(repo, owns)
+}
+
+func lostFlowsAreas(repo string) []string {
+	if repo == "" {
+		return nil
+	}
+	mod, err := os.ReadFile(filepath.Join(repo, "go.mod"))
+	if err != nil || !slices.Contains(strings.Split(strings.ReplaceAll(string(mod), "\r", ""), "\n"), "module tofu") {
+		return nil
+	}
+	var lost []string
+	for _, area := range flowsAreaList() {
+		if folder, _ := sys.IsDir(filepath.Join(repo, area)); !folder {
+			lost = append(lost, area)
+		}
+	}
+	return lost
 }
 
 func headGate(repo string) DoneGate {
@@ -117,6 +160,9 @@ func headGate(repo string) DoneGate {
 }
 
 func (g DoneGate) owning(repo string, owns []string) DoneGate {
+	if lost := lostFlowsAreas(repo); len(lost) > 0 {
+		return DoneGate{lost: true, Unread: strings.Join(lost, ", ") + " is not a folder in " + repo + ", and the done stamp gate names it as a flows area, so it cannot tell which tickets the flows cover until the area list moves with the tree."}
+	}
 	areas := flowsAreas(owns)
 	g.Area, g.owns = strings.Join(areas, ", "), owns
 	g.Unstamped = g.Unstamped && slices.ContainsFunc(areas, func(area string) bool { return area != deskArea })
@@ -138,6 +184,9 @@ func (g DoneGate) owning(repo string, owns []string) DoneGate {
 }
 
 func (g DoneGate) Refusal() string {
+	if g.lost {
+		return g.Unread
+	}
 	if g.Area == "" {
 		return ""
 	}
@@ -180,11 +229,15 @@ func DoneRefusal(repo, id string, owns []string) string {
 	return checkDone(repo, owns).Refusal()
 }
 
+func flowsAreaList() []string {
+	return []string{"internal/turn", "internal/host", "internal/subagent", "internal/session", "interface/tui", "cmd/tofu", deskArea}
+}
+
 func flowsAreas(globs []string) []string {
 	var areas []string
 	for _, glob := range globs {
 		literal, _, _ := strings.Cut(strings.ToLower(strings.ReplaceAll(glob, `\`, "/")), "*")
-		for _, area := range []string{"internal/turn", "internal/host", "internal/subagent", "internal/session", "interface/tui", "cmd/tofu", deskArea} {
+		for _, area := range flowsAreaList() {
 			if (strings.HasPrefix(literal, area+"/") || strings.HasPrefix(area+"/", literal)) && !slices.Contains(areas, area) {
 				areas = append(areas, area)
 			}

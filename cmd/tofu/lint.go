@@ -12,8 +12,6 @@ import (
 
 const lintUsage = "tofu lint comments [path] [--json]"
 
-func sourceRoots() []string { return []string{"bench", "cmd/tofu", "interface", "library", "internal"} }
-
 type lintFinding struct {
 	File   string `json:"file"`
 	Line   int    `json:"line"`
@@ -35,7 +33,7 @@ func lintVerb(args []string, out, errOut io.Writer) int {
 	if len(operands) > 1 {
 		return o.usage(fmt.Errorf("unknown argument %q", operands[1]))
 	}
-	targets := sourceRoots()
+	targets := sys.GoRoots()
 	if len(operands) == 1 {
 		targets = operands
 	}

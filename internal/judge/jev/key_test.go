@@ -297,9 +297,12 @@ func TestNobodyOutsideTheJudgeMatchesTheKeyErrorText(t *testing.T) {
 	root := sys.SourceRoot()
 	judge := filepath.Join(root, "internal", "judge")
 	var found []string
-	for _, area := range []string{"bench", "cmd", "interface", "internal", "library"} {
-		if err := filepath.WalkDir(filepath.Join(root, area), func(path string, entry fs.DirEntry, err error) error {
+	for _, area := range sys.GoRoots() {
+		walked := filepath.Join(root, area)
+		if err := filepath.WalkDir(walked, func(path string, entry fs.DirEntry, err error) error {
 			switch {
+			case path == walked && os.IsNotExist(err):
+				return nil
 			case err != nil:
 				return err
 			case entry.IsDir() && path == judge:

@@ -2,11 +2,27 @@ package main
 
 import (
 	"bytes"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func everyRuleMatched(files map[string]string) map[string]string {
+	tree := map[string]string{
+		"bench/cost/cost.go":           "package cost\n\nfunc Run() int { return 1 }\n",
+		"cmd/tofu/main.go":             "package main\n\nfunc main() {}\n",
+		"interface/cli/cli.go":         "package cli\n",
+		"library/embed.go":             "package library\n",
+		"internal/judge/jev/client.go": "package jev\n\nimport \"tofu/internal/sys\"\n\nfunc Name() string { return sys.OS() }\n",
+		"internal/sys/sys.go":          "package sys\n\nfunc OS() string { return \"windows\" }\n",
+		"internal/konst/konst.go":      "package konst\n",
+		"internal/safe/safe.go":        "package safe\n",
+	}
+	maps.Copy(tree, files)
+	return tree
+}
 
 func writeFixtureModule(t *testing.T, files map[string]string) string {
 	t.Helper()
@@ -25,11 +41,9 @@ func writeFixtureModule(t *testing.T, files map[string]string) string {
 }
 
 func TestImportsFailsOnACommandImportingBench(t *testing.T) {
-	dir := writeFixtureModule(t, map[string]string{
-		"bench/cost/cost.go":  "package cost\n\nfunc Run() int { return 1 }\n",
-		"cmd/tofu/main.go":    "package main\n\nimport \"tofu/bench/cost\"\n\nfunc main() { _ = cost.Run() }\n",
-		"internal/sys/sys.go": "package sys\n\nfunc OS() string { return \"windows\" }\n",
-	})
+	dir := writeFixtureModule(t, everyRuleMatched(map[string]string{
+		"cmd/tofu/main.go": "package main\n\nimport \"tofu/bench/cost\"\n\nfunc main() { _ = cost.Run() }\n",
+	}))
 
 	out := &bytes.Buffer{}
 	code := doctorImports(dir, false, out, out)
@@ -37,7 +51,7 @@ func TestImportsFailsOnACommandImportingBench(t *testing.T) {
 		t.Fatalf("exit = %d, want %d, output %q", code, exitVerdict, out.String())
 	}
 	for _, want := range []string{
-		"Imports · 3 packages · 11 rules",
+		"Imports · 8 packages · 10 rules",
 		"✗ 1 violations\n",
 		"  ✗ tofu/cmd             never tofu/bench\n",
 		"violations\n  ✗ tofu/cmd/tofu  imports tofu/bench/cost\n",
@@ -49,15 +63,13 @@ func TestImportsFailsOnACommandImportingBench(t *testing.T) {
 }
 
 func TestImportsFailsOnJudgeImportingTurn(t *testing.T) {
-	dir := writeFixtureModule(t, map[string]string{
+	dir := writeFixtureModule(t, everyRuleMatched(map[string]string{
 		"internal/turn/turn.go":         "package turn\n\nfunc Step() int { return 1 }\n",
 		"internal/judge/gate/rule.go":   "package gate\n\nimport \"tofu/internal/turn\"\n\nfunc Decide() int { return turn.Step() }\n",
-		"internal/judge/jev/client.go":  "package jev\n\nimport \"tofu/internal/sys\"\n\nfunc Name() string { return sys.OS() }\n",
-		"internal/sys/sys.go":           "package sys\n\nfunc OS() string { return \"windows\" }\n",
 		"internal/transport/retry.go":   "package transport\n\nfunc Retries() int { return 3 }\n",
 		"internal/judge/ledger/row.go":  "package ledger\n\nimport \"tofu/internal/transport\"\n\nfunc N() int { return transport.Retries() }\n",
 		"internal/judge/state/state.go": "package state\n\nimport \"tofu/internal/judge/ledger\"\n\nfunc N() int { return ledger.N() }\n",
-	})
+	}))
 
 	report, err := readImports(dir)
 	if err != nil {
@@ -72,19 +84,17 @@ func TestImportsFailsOnJudgeImportingTurn(t *testing.T) {
 }
 
 func TestImportsPassesOnATreeThatObeysTheRules(t *testing.T) {
-	dir := writeFixtureModule(t, map[string]string{
-		"bench/cost/cost.go":           "package cost\n\nimport \"tofu/internal/judge/jev\"\n\nfunc Run() string { return jev.Name() }\n",
-		"cmd/tofu/main.go":             "package main\n\nimport \"tofu/internal/judge/jev\"\n\nfunc main() { _ = jev.Name() }\n",
-		"internal/judge/jev/client.go": "package jev\n\nimport \"tofu/internal/sys\"\n\nfunc Name() string { return sys.OS() }\n",
-		"internal/sys/sys.go":          "package sys\n\nfunc OS() string { return \"windows\" }\n",
-	})
+	dir := writeFixtureModule(t, everyRuleMatched(map[string]string{
+		"bench/cost/cost.go": "package cost\n\nimport \"tofu/internal/judge/jev\"\n\nfunc Run() string { return jev.Name() }\n",
+		"cmd/tofu/main.go":   "package main\n\nimport \"tofu/internal/judge/jev\"\n\nfunc main() { _ = jev.Name() }\n",
+	}))
 
 	out := &bytes.Buffer{}
 	code := doctorImports(dir, false, out, out)
 	if code != exitOK {
 		t.Fatalf("exit = %d, want %d, output %q", code, exitOK, out.String())
 	}
-	if first := strings.SplitN(out.String(), "\n", 2)[0]; !strings.HasPrefix(first, "Imports · 4 packages · 11 rules ") || !strings.HasSuffix(first, " ✓ no violations") {
+	if first := strings.SplitN(out.String(), "\n", 2)[0]; !strings.HasPrefix(first, "Imports · 8 packages · 10 rules ") || !strings.HasSuffix(first, " ✓ no violations") {
 		t.Fatalf("title %q, want the counts and no violations", first)
 	}
 	if strings.Contains(out.String(), "✗") {
@@ -93,9 +103,7 @@ func TestImportsPassesOnATreeThatObeysTheRules(t *testing.T) {
 }
 
 func TestImportsNamesEveryRuleItChecked(t *testing.T) {
-	dir := writeFixtureModule(t, map[string]string{
-		"internal/sys/sys.go": "package sys\n\nfunc OS() string { return \"windows\" }\n",
-	})
+	dir := writeFixtureModule(t, everyRuleMatched(nil))
 
 	out := &bytes.Buffer{}
 	if code := doctorImports(dir, true, out, out); code != exitOK {
@@ -114,6 +122,35 @@ func TestImportsNamesEveryRuleItChecked(t *testing.T) {
 		if envelope.Data.Rules[i] != rule.String() {
 			t.Fatalf("rule %d is %q, want %q", i, envelope.Data.Rules[i], rule)
 		}
+	}
+}
+
+func TestImportsFailsOnARuleThatMatchesNoPackage(t *testing.T) {
+	tree := everyRuleMatched(nil)
+	delete(tree, "interface/cli/cli.go")
+	delete(tree, "bench/cost/cost.go")
+	dir := writeFixtureModule(t, tree)
+
+	report, err := readImports(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dead := map[string]string{}
+	for _, violation := range report.Violations {
+		dead[violation.Rule] = violation.From
+	}
+	want := map[string]string{
+		"nothing under tofu/cmd imports tofu/bench":          "tofu/bench",
+		"nothing under tofu/interface imports tofu/bench":    "tofu/interface",
+		"nothing under tofu/internal imports tofu/bench":     "tofu/bench",
+		"nothing under tofu/internal imports tofu/interface": "tofu/interface",
+	}
+	if !maps.Equal(dead, want) || len(report.Violations) != len(want) {
+		t.Fatalf("violations %+v, want one per rule matching no package: %v", report.Violations, want)
+	}
+	out := &bytes.Buffer{}
+	if code := doctorImports(dir, false, out, out); code != exitVerdict || !strings.Contains(out.String(), "tofu/interface  matches no package: nothing under tofu/internal imports") {
+		t.Fatalf("exit %d, output\n%s\nwant exit %d and the dead rule named", code, out.String(), exitVerdict)
 	}
 }
 

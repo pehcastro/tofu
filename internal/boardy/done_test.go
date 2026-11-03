@@ -164,6 +164,49 @@ func TestADeskTicketNeedsTheDeskStampOfItsTree(t *testing.T) {
 	refused(t, err, "apps/desk")
 }
 
+func TestADoneMoveInTofusTreeIsRefusedWhileAFlowsAreaIsNotAFolder(t *testing.T) {
+	jevSaysNothingOpen(t)
+	repo := t.TempDir()
+	gitIn(t, repo, "init", "-q")
+	for path, body := range map[string]string{".gitignore": ".local/\n", "go.mod": "module tofu\n\ngo 1.25\n"} {
+		if err := os.WriteFile(filepath.Join(repo, path), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitIn(t, repo, "add", "-A")
+	gitIn(t, repo, "commit", "-q", "-m", "work")
+	areas := flowsAreaList()
+	lost := areas[1]
+	for _, area := range areas {
+		if area != lost {
+			if err := os.MkdirAll(filepath.Join(repo, area), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := os.WriteFile(filepath.Join(repo, lost), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := managedBoard(t, "DEMO")
+	m.Store.Root = repo
+	library, err := m.Create("DEMO", ticketWith("library", "library/**"), manager)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proved(t, m, library.ID)
+	_, err = m.Move(library.ID, Done, closedReason, person)
+	refused(t, err, lost+" is not a folder")
+	if err := os.Remove(filepath.Join(repo, lost)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(repo, lost), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if moved, err := m.Move(library.ID, Done, closedReason, person); err != nil || moved.Status != Done {
+		t.Fatalf("a ticket outside the gated areas in a tree holding every area was refused: %v", err)
+	}
+}
+
 func TestFlowsAreasReachDeskAndSessions(t *testing.T) {
 	for glob, want := range map[string]string{
 		"apps/desk/**":                     "apps/desk",

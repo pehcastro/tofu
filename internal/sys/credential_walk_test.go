@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"io/fs"
 	"maps"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -16,8 +17,6 @@ const credentialMark = ".env"
 
 const nodeEnvironmentObject = "process.env"
 
-var credentialRoots = []string{"bench", "library", "cmd", "interface", "internal"}
-
 const credentialOpener = "sys.readCredentialFile"
 
 var rawReaders = map[string]bool{"ReadFile": true, "Open": true, "OpenFile": true}
@@ -25,9 +24,12 @@ var rawReaders = map[string]bool{"ReadFile": true, "Open": true, "OpenFile": tru
 func TestOnlyOneFunctionOpensACredentialFile(t *testing.T) {
 	root := SourceRoot()
 	var found []string
-	for _, name := range credentialRoots {
+	for _, name := range GoRoots() {
 		dir := filepath.Join(root, name)
 		if err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+			if path == dir && os.IsNotExist(err) {
+				return nil
+			}
 			if err != nil || entry.IsDir() || !strings.HasSuffix(path, ".go") {
 				return err
 			}

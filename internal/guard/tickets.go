@@ -168,15 +168,13 @@ func foldContains(names []string, want string) bool {
 	return slices.ContainsFunc(names, func(name string) bool { return strings.EqualFold(name, want) })
 }
 
-var gatedRoots = []string{"cmd/", "internal/", "interface/", "bench/", "library/"}
-
 func ownPaths(env Env, ev event) (Answer, error) {
 	target := ev.ToolInput.FilePath
 	if blank(target) {
 		return Answer{}, nil
 	}
 	rel, inside := underRoot(env.Root, target)
-	gated := slices.ContainsFunc(gatedRoots, func(root string) bool { return foldPrefix(rel, root) })
+	gated := slices.ContainsFunc(sys.GoRoots(), func(root string) bool { return foldPrefix(rel, root+"/") })
 	if !inside || !gated || blank(ev.AgentID) {
 		return Answer{}, nil
 	}

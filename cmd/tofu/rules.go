@@ -505,7 +505,7 @@ func rulesCheckVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return o.fail(err)
 	}
-	roots := sourceRoots()
+	roots := sys.GoRoots()
 	if len(opts.rest) == 1 {
 		roots = opts.rest
 	}

@@ -31,7 +31,6 @@ func importRules() []importRule {
 		{from: "tofu/internal", scope: "tofu/interface"},
 		{from: "tofu/library", scope: "tofu"},
 		{from: "tofu/internal/judge", scope: "tofu/internal", allow: slices.Concat([]string{"tofu/internal/judge"}, leaves, []string{"tofu/internal/transport"})},
-		{from: "tofu/internal/point", scope: "tofu/internal", allow: slices.Concat([]string{"tofu/internal/judge", "tofu/internal/rule", "tofu/internal/transform"}, leaves)},
 	}
 	for _, leaf := range leaves {
 		rules = append(rules, importRule{from: leaf, scope: "tofu", allow: leaves})
@@ -79,6 +78,22 @@ type importViolation struct {
 	Rule string `json:"rule"`
 }
 
+func (v importViolation) what() string {
+	if v.To == "" {
+		return "matches no package: " + v.Rule
+	}
+	return "imports " + v.To
+}
+
+func deadRule(rule importRule, pkgs []packageImports) (importViolation, bool) {
+	for _, prefix := range []string{rule.from, rule.scope} {
+		if !slices.ContainsFunc(pkgs, func(pkg packageImports) bool { return under(pkg.ImportPath, prefix) }) {
+			return importViolation{From: prefix, Rule: rule.String()}, true
+		}
+	}
+	return importViolation{}, false
+}
+
 type packageImports struct {
 	ImportPath string
 	Imports    []string
@@ -120,6 +135,9 @@ func readImports(dir string) (importsReport, error) {
 	rules := importRules()
 	for _, rule := range rules {
 		report.Rules = append(report.Rules, rule.String())
+		if dead, ok := deadRule(rule, pkgs); ok {
+			report.Violations = append(report.Violations, dead)
+		}
 	}
 	for _, pkg := range pkgs {
 		for _, imported := range pkg.Imports {
@@ -157,7 +175,11 @@ func doctorImports(dir string, asJSON bool, out, errOut io.Writer) int {
 func importProblems(report importsReport) []cli.Problem {
 	problems := make([]cli.Problem, len(report.Violations))
 	for i, violation := range report.Violations {
-		problems[i] = cli.Problem{What: violation.From + " imports " + violation.To + ", and " + violation.Rule}
+		what := violation.From + " " + violation.what()
+		if violation.To != "" {
+			what += ", and " + violation.Rule
+		}
+		problems[i] = cli.Problem{What: what}
 	}
 	return problems
 }
@@ -185,7 +207,7 @@ func importsPage(page cli.Page, report importsReport) []string {
 	}
 	rows = make([]cli.Row, len(report.Violations))
 	for i, violation := range report.Violations {
-		rows[i] = cli.Row{Mark: cli.Fail, Cells: []string{violation.From, "imports " + violation.To}}
+		rows[i] = cli.Row{Mark: cli.Fail, Cells: []string{violation.From, violation.what()}}
 	}
 	lines = append(lines, "", page.Section("violations", cli.Verdict{}))
 	return append(lines, cli.Indent(page.Rows(rows)...)...)

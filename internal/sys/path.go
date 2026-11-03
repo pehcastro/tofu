@@ -86,7 +86,14 @@ func SourceRoot() string {
 	if !ok {
 		return ""
 	}
-	return filepath.Dir(filepath.Dir(filepath.Dir(file)))
+	for dir := filepath.Dir(file); ; dir = filepath.Dir(dir) {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		if filepath.Dir(dir) == dir {
+			return ""
+		}
+	}
 }
 
 func InsideSourceTree(path string) bool {

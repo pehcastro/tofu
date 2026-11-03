@@ -322,14 +322,11 @@ If you are the orchestrator: move the ticket to review/ first. That is the phase
 }
 
 func ownsGo(globs []string) bool {
-	for _, glob := range globs {
-		first, _, _ := strings.Cut(glob, "/")
-		switch strings.ToLower(first) {
-		case "cmd", "internal", "interface", "library", "bench":
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(globs, func(glob string) bool {
+		return slices.ContainsFunc(sys.GoRoots(), func(root string) bool {
+			return strings.EqualFold(glob, root) || foldPrefix(glob, root+"/")
+		})
+	})
 }
 
 func stripHeredocs(command string) string {
