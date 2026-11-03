@@ -6,8 +6,8 @@ notes: >-
   one request per message the person typed. state.said is the new message and
   state.earlier holds earlier messages the same person typed in this chain of
   sessions. standing is asked once, of said alone; repeats is the rubric, and
-  internal/learn/repeat asks it once for each earlier message in that one
-  request. internal/learn narrows the earlier messages by shared words and
+  internal/store/learn/repeat asks it once for each earlier message in that
+  one request. internal/store/learn narrows the earlier messages by shared words and
   recency only, never by a match. a note goes to the lead when standing is at
   or above standing_at and the highest repeats answer is at or above
   repeats_at, naming that earlier message. both sit at the middle of the noul

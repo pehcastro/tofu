@@ -19,11 +19,11 @@ import (
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
-	"tofu/internal/learn"
 	"tofu/internal/llm"
 	"tofu/internal/memory"
 	"tofu/internal/session"
 	settingspkg "tofu/internal/settings"
+	"tofu/internal/store/learn"
 	"tofu/internal/sys"
 	"tofu/library/changelog"
 )

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"tofu/internal/learn/words"
 	"tofu/internal/memory"
 	"tofu/internal/session"
+	"tofu/internal/store/learn/words"
 	"tofu/internal/sys"
 )
 

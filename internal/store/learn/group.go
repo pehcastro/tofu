@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"tofu/internal/learn/words"
+	"tofu/internal/store/learn/words"
 )
 
 const groupingTask = `Below are the messages one person typed to a coding agent run by tofu, a coding-agent harness, across many sessions, each with the end of what the agent said just before it. Find what kept going wrong.

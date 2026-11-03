@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"tofu/internal/agent/commands"
-	"tofu/internal/learn"
 	"tofu/internal/memory"
 	"tofu/internal/memtree"
 	"tofu/internal/session"
+	"tofu/internal/store/learn"
 	roster "tofu/internal/subagent"
 )
 

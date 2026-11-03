@@ -15,7 +15,7 @@ import (
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
-	"tofu/internal/learn/words"
+	"tofu/internal/store/learn/words"
 	"tofu/library/questions"
 )
 

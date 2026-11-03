@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/learn/words"
+	"tofu/internal/store/learn/words"
 	"tofu/internal/sys"
 )
 

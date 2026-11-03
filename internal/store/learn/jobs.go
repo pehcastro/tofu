@@ -5,7 +5,7 @@ import (
 	"slices"
 	"time"
 
-	"tofu/internal/learn/words"
+	"tofu/internal/store/learn/words"
 )
 
 type JobRun struct {

@@ -17,8 +17,8 @@ import (
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/konst"
-	"tofu/internal/learn"
 	"tofu/internal/session"
+	"tofu/internal/store/learn"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
 )

@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/learn"
 	"tofu/internal/session"
+	"tofu/internal/store/learn"
 	"tofu/internal/sys"
 )
 

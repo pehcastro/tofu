@@ -15,13 +15,13 @@ import (
 	"unicode/utf8"
 
 	"tofu/internal/konst"
-	"tofu/internal/learn/repeat"
-	"tofu/internal/learn/words"
 	"tofu/internal/llm"
 	"tofu/internal/memory"
 	"tofu/internal/safe"
 	"tofu/internal/session"
 	"tofu/internal/shell"
+	"tofu/internal/store/learn/repeat"
+	"tofu/internal/store/learn/words"
 	"tofu/internal/sys"
 )
 
