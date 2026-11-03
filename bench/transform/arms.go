@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	tf "tofu/internal/transform"
+	tf "tofu/internal/tools/files/edit/patch"
 )
 
 type Estimate struct {

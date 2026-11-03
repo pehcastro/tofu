@@ -16,7 +16,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/rule"
 	"tofu/internal/sys"
-	"tofu/internal/transform"
+	"tofu/internal/tools/files/edit/patch"
 )
 
 const writePerm = 0o644

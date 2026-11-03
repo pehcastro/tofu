@@ -17,7 +17,7 @@ import (
 	"tofu/internal/rule"
 	"tofu/internal/search"
 	"tofu/internal/tools/contract"
-	"tofu/internal/transform"
+	"tofu/internal/tools/files/edit/patch"
 	"tofu/internal/turn"
 )
 

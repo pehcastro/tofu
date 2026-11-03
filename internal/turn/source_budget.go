@@ -18,7 +18,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/rule"
 	"tofu/internal/subagent"
-	"tofu/internal/transform"
+	"tofu/internal/tools/files/edit/patch"
 )
 
 type BudgetRefusal string
