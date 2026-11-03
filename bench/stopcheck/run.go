@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"time"
 
-	"tofu/bench/api"
 	"tofu/bench/corpus"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
@@ -102,7 +101,7 @@ func New(root, key string) (Battery, error) {
 	resolution := gate.Resolve(pol, gate.LockLookup{}, gate.Current{})
 	pol = resolution.Rule
 
-	bound, err := api.JudgeModel()
+	bound, err := typesafe.JudgeModel()
 	if err != nil {
 		return Battery{}, err
 	}

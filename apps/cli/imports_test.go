@@ -153,15 +153,13 @@ func TestImportsFailsOnARuleThatMatchesNoPackage(t *testing.T) {
 	}
 }
 
-func TestImportsOnThisTreeFindsNothingButTheKnownCommandToBenchEdge(t *testing.T) {
+func TestImportsOnThisTreeFindsNothing(t *testing.T) {
 	report, err := readImports(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, violation := range report.Violations {
-		if violation.From != "tofu/apps/cli" || !strings.HasPrefix(violation.To, "tofu/bench/") {
-			t.Fatalf("an import violation outside the known cmd to bench edge: %+v", violation)
-		}
+	if len(report.Violations) > 0 {
+		t.Fatalf("import violations on this tree: %+v", report.Violations)
 	}
 }
 

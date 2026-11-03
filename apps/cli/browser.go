@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"tofu/bench/browser/steps"
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
 	"tofu/internal/cli/render"
@@ -29,6 +28,7 @@ import (
 	"tofu/internal/tools/web/browser/loop"
 	"tofu/internal/tools/web/browser/motion"
 	"tofu/internal/tools/web/browser/recipe"
+	"tofu/internal/tools/web/browser/steps"
 )
 
 type extension struct {

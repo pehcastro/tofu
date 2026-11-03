@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/typesafe"
 )
 
 type OptionSweepPoint struct {
@@ -18,13 +19,13 @@ type OptionSweepPoint struct {
 	ServerError string
 }
 
-func OptionSweep(ctx context.Context, wire jev.Wire, counts []int) ([]OptionSweepPoint, []Call) {
+func OptionSweep(ctx context.Context, wire jev.Wire, counts []int) ([]OptionSweepPoint, []typesafe.Call) {
 	results := make([]OptionSweepPoint, 0, len(counts))
-	var calls []Call
+	var calls []typesafe.Call
 	for _, count := range counts {
 		question, expected := OptionSweepQuestion(count)
 		state := OptionSweepState(expected)
-		call := Ask(ctx, wire, jev.Request{State: state, Questions: []jev.Question{question}})
+		call := typesafe.Ask(ctx, wire, jev.Request{State: state, Questions: []jev.Question{question}})
 		calls = append(calls, call)
 		if call.Err != nil {
 			results = append(results, OptionSweepPoint{Options: count, Succeeded: false, ServerError: call.Err.Error()})

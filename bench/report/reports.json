@@ -7504,6 +7504,11 @@
       "note": "runs every case in its catalog against two tofu executables and writes which answers differ under bench/parity/results. A gate between two builds, not a measurement: 0 dated reports."
     },
     {
+      "package": "phase",
+      "kind": "measurement with no dated report",
+      "note": "phase labels from internal/agent/loop against hand labels on 20 mocked steps, as one test file that fails under 0.8 agreement, 0 dated reports so far."
+    },
+    {
       "package": "profile",
       "kind": "measurement with no dated report",
       "note": "report.md, undated by name, runs of 2026-10-13 on the build 0.5.13-fix1+dev at f360965a and after TOFU-1319 at 60c41fb3, 1 run per row. runs/ holds every row as JSON."
@@ -7547,11 +7552,6 @@
       "package": "sessiontime",
       "kind": "measurement with no dated report",
       "note": "prints to the terminal and writes no file. Run 2026-10-13 at 7624da00 (TOFU-1313) and 2026-10-14 at 9586ec60; the second output is in bench/report/runs/sessiontime-2026-10-14.txt."
-    },
-    {
-      "package": "stat",
-      "kind": "library",
-      "note": "median, p95 and p99 over a slice of floats, called by every bench that reports a spread."
     },
     {
       "package": "symbols",

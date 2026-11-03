@@ -8,11 +8,11 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/bench/stat"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/classifiers/providers/typesafe"
+	"tofu/internal/stat"
 )
 
 const (

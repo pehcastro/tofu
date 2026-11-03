@@ -13,12 +13,12 @@ import (
 
 	"github.com/charmbracelet/colorprofile"
 
-	"tofu/bench/browser/steps"
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
 	"tofu/internal/tools/web/browser/driver"
+	"tofu/internal/tools/web/browser/steps"
 )
 
 type unreadStdin struct{ t *testing.T }

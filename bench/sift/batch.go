@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"tofu/bench/stat"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
+	"tofu/internal/stat"
 	"tofu/internal/tools/shell/sift"
 )
 

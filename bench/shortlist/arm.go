@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"tofu/bench/api"
 	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/typesafe"
 )
 
-var NewWire = api.NewWire
+var NewWire = typesafe.NewWire
 
 const (
 	ShortlistSize = 5

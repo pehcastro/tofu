@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	benchapi "tofu/bench/api"
 	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/typesafe"
 )
 
 const jevWordQuestionID = "carries_the_answer"
@@ -39,7 +39,7 @@ func JevLastWord(ctx context.Context, wire jev.Wire, task, raw string) (JevWordR
 	question := jevWordQuestion(candidates)
 	started := time.Now()
 	state := map[string]any{"task": task, "candidates": candidates}
-	call := benchapi.Ask(ctx, wire, jev.Request{State: state, Questions: []jev.Question{question}})
+	call := typesafe.Ask(ctx, wire, jev.Request{State: state, Questions: []jev.Question{question}})
 	if call.Err != nil {
 		return JevWordResult{}, call.Err
 	}

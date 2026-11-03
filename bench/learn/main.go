@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"tofu/bench/api"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
@@ -151,7 +150,7 @@ func askJev(windows []window) ([]labels, float64, string, error) {
 	if err != nil {
 		return nil, 0, "", err
 	}
-	bound, err := api.JudgeModel()
+	bound, err := typesafe.JudgeModel()
 	if err != nil {
 		return nil, 0, "", err
 	}

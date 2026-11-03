@@ -80,10 +80,10 @@ tofu/
 │   ├── cmd/  corpus/  cost/  drain/  enforce/  fanin/  flows/
 │   ├── forkcache/  harness/  instruction/  judge/  learn/  linenumbers/  longsession/
 │   ├── memory/  memtree/  minimal/  mutate/  nativetools/  orchestrator/  parity/
-│   ├── picker/  planspawn/  prefix/  profile/  promote/  reach/  readworth/
+│   ├── phase/  picker/  planspawn/  prefix/  profile/  promote/  reach/  readworth/
 │   ├── recall/  report/  review/  rivals/  rules/  scale/  schemas/
 │   ├── search/  searchlarge/  serve/  sessiontime/  shortlist/  sift/  skills/
-│   ├── startup/  stat/  stopcheck/  sweep/  symbols/  testquality/  thread/
+│   ├── startup/  stopcheck/  sweep/  symbols/  testquality/  thread/
 │   ├── thrift/  tokencount/  tokens/  toolerrors/  tools/  transform/  treewide/
 │   └── tui/  turn/  websift/  wording/  wrongpath/
 ├── docs/
@@ -139,6 +139,7 @@ tofu/
 │   │   ├── session/
 │   │   ├── settings/
 │   │   └── snapshot/
+│   ├── stat/
 │   ├── sys/
 │   ├── testkit/
 │   │   ├── cli/

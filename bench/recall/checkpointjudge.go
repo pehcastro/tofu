@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	benchapi "tofu/bench/api"
 	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/typesafe"
 )
 
 const checkpointAnswerabilityQuestionID = "answerable"
@@ -33,7 +33,7 @@ func JevAnswerability(ctx context.Context, wire jev.Wire, task, arm, carry strin
 	}
 	started := time.Now()
 	state := map[string]any{"task": task, "arm": arm, "carry": carry}
-	call := benchapi.Ask(ctx, wire, jev.Request{State: state, Questions: []jev.Question{question}})
+	call := typesafe.Ask(ctx, wire, jev.Request{State: state, Questions: []jev.Question{question}})
 	if call.Err != nil {
 		return CheckpointScore{}, call.Err
 	}

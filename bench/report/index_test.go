@@ -97,7 +97,7 @@ func TestEveryBenchWithNoDatedReportIsNamedAndClassified(t *testing.T) {
 	for _, pkg := range data.NoReport {
 		named[pkg.Package] = pkg.Kind
 	}
-	for _, want := range []string{"cmd", "corpus", "report", "stat"} {
+	for _, want := range []string{"cmd", "corpus", "report", "phase"} {
 		if _, ok := named[want]; !ok {
 			t.Errorf("bench/%s has no dated report and is not named in the index", want)
 		}

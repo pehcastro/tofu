@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"tofu/bench/report"
-	"tofu/bench/stat"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/classifiers/providers/typesafe"
+	"tofu/internal/stat"
 )
 
 const (

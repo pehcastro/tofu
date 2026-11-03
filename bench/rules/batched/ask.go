@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"tofu/bench/api"
 	"tofu/bench/report"
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
@@ -41,7 +40,7 @@ func askAll(ctx context.Context, replies []reply, rules []rule.Rule) (record, er
 	if err != nil {
 		return record{}, fmt.Errorf("no TypeSafe key for Jev, and this bench asks nothing else: %w", err)
 	}
-	wire, err := api.NewWire(key)
+	wire, err := typesafe.NewWire(key)
 	if err != nil {
 		return record{}, err
 	}
@@ -66,7 +65,7 @@ func askAll(ctx context.Context, replies []reply, rules []rule.Rule) (record, er
 		if estimate := jev.EstimateTokens(len(body)); estimate > konst.JudgeRequestTokenCeiling {
 			return record{}, fmt.Errorf("%s: the request is about %d tokens, over the %d ceiling, so it is not sent", r.ID, estimate, konst.JudgeRequestTokenCeiling)
 		}
-		call := api.Ask(ctx, wire, request)
+		call := typesafe.Ask(ctx, wire, request)
 		if call.Err != nil {
 			return record{}, fmt.Errorf("%s: %w", r.ID, call.Err)
 		}

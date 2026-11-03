@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"tofu/bench/stat"
 	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/typesafe"
+	"tofu/internal/stat"
 )
 
 type SizeLatency struct {
@@ -22,16 +23,16 @@ type SizeLatency struct {
 	Cost        float64
 }
 
-func LatencyByStateSize(ctx context.Context, wire jev.Wire, fixtures []SizeFixture, question jev.Question, runsPerSize int) ([]SizeLatency, []Call, error) {
+func LatencyByStateSize(ctx context.Context, wire jev.Wire, fixtures []SizeFixture, question jev.Question, runsPerSize int) ([]SizeLatency, []typesafe.Call, error) {
 	results := make([]SizeLatency, 0, len(fixtures))
-	var calls []Call
+	var calls []typesafe.Call
 	for _, fixture := range fixtures {
 		latencies := make([]float64, 0, runsPerSize)
 		billed := make([]int, 0, runsPerSize)
 		build := ""
 		cost := 0.0
 		for run := 0; run < runsPerSize; run++ {
-			call := Ask(ctx, wire, jev.Request{State: fixture.State, Questions: []jev.Question{question}})
+			call := typesafe.Ask(ctx, wire, jev.Request{State: fixture.State, Questions: []jev.Question{question}})
 			calls = append(calls, call)
 			if call.Err != nil {
 				return nil, calls, fmt.Errorf("size %s run %d: %w", fixture.Label, run, call.Err)
@@ -64,14 +65,14 @@ type CountLatency struct {
 	MedianMS float64
 }
 
-func LatencyByQuestionCount(ctx context.Context, wire jev.Wire, state any, counts []int, runsPerCount int) ([]CountLatency, []Call, error) {
+func LatencyByQuestionCount(ctx context.Context, wire jev.Wire, state any, counts []int, runsPerCount int) ([]CountLatency, []typesafe.Call, error) {
 	results := make([]CountLatency, 0, len(counts))
-	var calls []Call
+	var calls []typesafe.Call
 	for _, count := range counts {
 		questions := CountSweepQuestions(count)
 		latencies := make([]float64, 0, runsPerCount)
 		for run := 0; run < runsPerCount; run++ {
-			call := Ask(ctx, wire, jev.Request{State: state, Questions: questions})
+			call := typesafe.Ask(ctx, wire, jev.Request{State: state, Questions: questions})
 			calls = append(calls, call)
 			if call.Err != nil {
 				return nil, calls, fmt.Errorf("question count %d run %d: %w", count, run, call.Err)

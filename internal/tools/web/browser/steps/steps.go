@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/bench/stat"
+	"tofu/internal/stat"
 	"tofu/internal/tools/web/browser/driver"
 	"tofu/internal/tools/web/browser/loop"
 )

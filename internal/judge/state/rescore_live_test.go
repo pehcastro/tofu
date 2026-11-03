@@ -11,11 +11,11 @@ import (
 	"strings"
 	"testing"
 
-	benchapi "tofu/bench/api"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/questions"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/typesafe"
 	"tofu/internal/sys"
 )
 
@@ -130,7 +130,7 @@ func askOneCase(t *testing.T, wire jev.Wire, battery []jev.Question, one recorde
 	if err := json.Unmarshal(built, &state); err != nil {
 		t.Fatalf("%s: decode the built state: %v", one.ID, err)
 	}
-	call := benchapi.Ask(context.Background(), wire, jev.Request{State: state, Questions: battery})
+	call := typesafe.Ask(context.Background(), wire, jev.Request{State: state, Questions: battery})
 	if call.Err != nil {
 		t.Fatalf("%s: %v", one.ID, call.Err)
 	}
@@ -232,7 +232,7 @@ func TestLiveCompareTheTwoNewestQuestionSets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
-	wire, err := benchapi.NewWire(key)
+	wire, err := typesafe.NewWire(key)
 	if err != nil {
 		t.Fatalf("wire: %v", err)
 	}
@@ -308,7 +308,7 @@ func TestLiveReadEveryAnswerOnTheDisagreementCase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
-	wire, err := benchapi.NewWire(key)
+	wire, err := typesafe.NewWire(key)
 	if err != nil {
 		t.Fatalf("wire: %v", err)
 	}

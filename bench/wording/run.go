@@ -8,8 +8,9 @@ import (
 	"time"
 
 	benchapi "tofu/bench/api"
-	"tofu/bench/stat"
 	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/typesafe"
+	"tofu/internal/stat"
 )
 
 const repsPerCase = 3
@@ -70,7 +71,7 @@ func Run(ctx context.Context, key string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	wire, err := benchapi.NewWire(key)
+	wire, err := typesafe.NewWire(key)
 	if err != nil {
 		return Result{}, err
 	}
@@ -111,11 +112,11 @@ func runCase(ctx context.Context, wire jev.Wire, gateCase benchapi.GateCase, bat
 	var build string
 
 	for rep := 0; rep < repsPerCase; rep++ {
-		callV1 := benchapi.Ask(ctx, wire, jev.Request{State: gateCase.State, Questions: batteryV1})
+		callV1 := typesafe.Ask(ctx, wire, jev.Request{State: gateCase.State, Questions: batteryV1})
 		if callV1.Err != nil {
 			return caseRun{}, fmt.Errorf("%s v1 rep %d: %w", gateCase.Name, rep, callV1.Err)
 		}
-		callV2 := benchapi.Ask(ctx, wire, jev.Request{State: gateCase.State, Questions: batteryV2})
+		callV2 := typesafe.Ask(ctx, wire, jev.Request{State: gateCase.State, Questions: batteryV2})
 		if callV2.Err != nil {
 			return caseRun{}, fmt.Errorf("%s v2 rep %d: %w", gateCase.Name, rep, callV2.Err)
 		}

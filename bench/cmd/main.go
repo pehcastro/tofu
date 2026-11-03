@@ -85,7 +85,7 @@ func reportOf(target string) producer {
 	switch target {
 	case "api":
 		return func(ctx context.Context, key string) (string, string, error) {
-			wire, err := benchapi.NewWire(key)
+			wire, err := typesafe.NewWire(key)
 			if err != nil {
 				return "", "", err
 			}

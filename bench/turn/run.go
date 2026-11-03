@@ -6,12 +6,12 @@ import (
 	"os"
 	"time"
 
-	"tofu/bench/stat"
 	iturn "tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/openrouter"
 	"tofu/internal/models/transport"
+	"tofu/internal/stat"
 )
 
 const (

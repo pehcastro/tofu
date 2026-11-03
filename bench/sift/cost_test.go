@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"tofu/bench/stat"
 	"tofu/internal/konst"
+	"tofu/internal/stat"
 	"tofu/internal/sys"
 	"tofu/internal/tools/shell/sift"
 )

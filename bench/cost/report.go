@@ -7,8 +7,8 @@ import (
 
 	"tofu/bench/corpus"
 	"tofu/bench/report"
-	"tofu/bench/stat"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/stat"
 )
 
 func Render(result Result, conditions report.Conditions) string {

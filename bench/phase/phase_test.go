@@ -1,4 +1,4 @@
-package stat
+package phase
 
 import (
 	"testing"

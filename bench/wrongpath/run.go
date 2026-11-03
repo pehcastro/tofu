@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"tofu/bench/corpus"
-	"tofu/bench/stat"
+	"tofu/internal/stat"
 )
 
 const ratePerCalls = 100

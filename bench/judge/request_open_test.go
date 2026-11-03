@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"tofu/bench/api"
 	"tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/typesafe"
 	"tofu/internal/sys"
 	"tofu/library/questions"
 )
@@ -85,7 +85,7 @@ func TestRequestOpenAgainstAnArmThatAlwaysRestates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
-	wire, err := api.NewWire(key)
+	wire, err := typesafe.NewWire(key)
 	if err != nil {
 		t.Fatal(err)
 	}

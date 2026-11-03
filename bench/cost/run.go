@@ -12,6 +12,7 @@ import (
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/typesafe"
 )
 
 type CaseResult struct {
@@ -238,12 +239,12 @@ func msSince(d time.Duration) float64 {
 }
 
 func runJev(ctx context.Context, key string, records []corpus.Record, battery []jev.Question, pol gate.Rule) (ArmResult, error) {
-	wire, err := benchapi.NewWire(key)
+	wire, err := typesafe.NewWire(key)
 	if err != nil {
 		return ArmResult{}, err
 	}
 	arm := buildArm("jev", records, func(record corpus.Record) (CaseResult, error) {
-		call := benchapi.Ask(ctx, wire, jev.Request{State: record.State, Questions: battery})
+		call := typesafe.Ask(ctx, wire, jev.Request{State: record.State, Questions: battery})
 		if call.Err != nil {
 			return CaseResult{}, call.Err
 		}

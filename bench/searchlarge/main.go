@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"tofu/bench/stat"
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
+	"tofu/internal/stat"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/registry"
 )

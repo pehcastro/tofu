@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"tofu/bench/api"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/typesafe"
 	"tofu/internal/sys"
 	library "tofu/library"
 	libraryquestions "tofu/library/questions"
@@ -29,7 +29,7 @@ func liveClient(t *testing.T) (*jev.Client, question.Set, subagent.AskRule) {
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
-	wire, err := api.NewWire(key)
+	wire, err := typesafe.NewWire(key)
 	if err != nil {
 		t.Fatalf("NewWire: %v", err)
 	}

@@ -1,4 +1,4 @@
-package api
+package typesafe
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/models/classifiers/providers/typesafe"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/transport"
 	shipped "tofu/library"
@@ -22,12 +21,12 @@ func judgeTransport() transport.Config {
 	}
 }
 
-func NewWire(key string) (*typesafe.Wire, error) {
+func NewWire(key string) (*Wire, error) {
 	model, err := JudgeModel()
 	if err != nil {
 		return nil, err
 	}
-	return typesafe.New(model, typesafe.Config{Key: key, Transport: judgeTransport()})
+	return New(model, Config{Key: key, Transport: judgeTransport()})
 }
 
 func JudgeModel() (string, error) {

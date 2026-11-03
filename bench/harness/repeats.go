@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"tofu/bench/stat"
+	"tofu/internal/stat"
 )
 
 type Spread struct {

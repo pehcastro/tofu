@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"tofu/bench/stat"
 	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/typesafe"
+	"tofu/internal/stat"
 )
 
 const rerunThresholdProbe = 0.5
@@ -19,11 +20,11 @@ type RerunQuestion struct {
 	Straddle bool
 }
 
-func RerunAgreement(ctx context.Context, wire jev.Wire, battery []jev.Question, state any, reruns int) ([]RerunQuestion, []Call, error) {
+func RerunAgreement(ctx context.Context, wire jev.Wire, battery []jev.Question, state any, reruns int) ([]RerunQuestion, []typesafe.Call, error) {
 	values := make(map[string][]float64, len(battery))
-	var calls []Call
+	var calls []typesafe.Call
 	for run := 0; run < reruns; run++ {
-		call := Ask(ctx, wire, jev.Request{State: state, Questions: battery})
+		call := typesafe.Ask(ctx, wire, jev.Request{State: state, Questions: battery})
 		calls = append(calls, call)
 		if call.Err != nil {
 			return nil, calls, fmt.Errorf("rerun %d: %w", run, call.Err)

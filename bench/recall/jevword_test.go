@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	benchapi "tofu/bench/api"
 	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/typesafe"
 	"tofu/internal/sys"
 )
 
@@ -23,7 +23,7 @@ func liveJevWire(t *testing.T) jev.Wire {
 	if err != nil {
 		t.Skipf("no TYPESAFE_API_KEY reachable: %v", err)
 	}
-	wire, err := benchapi.NewWire(key)
+	wire, err := typesafe.NewWire(key)
 	if err != nil {
 		t.Fatalf("NewWire: %v", err)
 	}

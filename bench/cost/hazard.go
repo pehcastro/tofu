@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 
-	benchapi "tofu/bench/api"
 	"tofu/bench/corpus"
 	"tofu/bench/report"
 	"tofu/internal/judge/ledger"
@@ -209,7 +208,7 @@ func answersOf(set question.Set, values map[string]float64) (map[string]jev.Answ
 }
 
 func runHazardArms(ctx context.Context, key string, arms []jevArm, records []corpus.Record, conditions report.Conditions) ([]hazardRow, error) {
-	wire, err := benchapi.NewWire(key)
+	wire, err := typesafe.NewWire(key)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +224,7 @@ func runHazardArms(ctx context.Context, key string, arms []jevArm, records []cor
 			order = []jevArm{arms[1], arms[0]}
 		}
 		for _, arm := range order {
-			call := benchapi.Ask(ctx, wire, jev.Request{State: built, Questions: arm.questions})
+			call := typesafe.Ask(ctx, wire, jev.Request{State: built, Questions: arm.questions})
 			if call.Err != nil {
 				return rows, fmt.Errorf("case %s, arm %s: %w", record.ID, arm.name, call.Err)
 			}

@@ -20,9 +20,9 @@
     "note": "reads 1 session folder and prints where its time went, with 0 dated reports of its own."
   },
   {
-    "package": "stat",
-    "kind": "library",
-    "note": "median, p95 and p99 over a slice of floats, called by every bench that reports a spread."
+    "package": "phase",
+    "kind": "measurement with no dated report",
+    "note": "phase labels from internal/agent/loop against hand labels on 20 mocked steps, as one test file that fails under 0.8 agreement, 0 dated reports so far."
   },
   {
     "package": "cache",
