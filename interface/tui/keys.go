@@ -15,11 +15,11 @@ import (
 	"tofu/interface/tui/keyfield"
 	"tofu/interface/tui/shells"
 	"tofu/internal/host"
-	"tofu/internal/keymap"
 	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
 	isettings "tofu/internal/settings"
 	"tofu/internal/turn/tools"
+	"tofu/internal/ui/keymap"
 )
 
 const (

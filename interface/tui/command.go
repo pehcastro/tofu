@@ -11,11 +11,11 @@ import (
 	"tofu/interface/tui/quote"
 	"tofu/interface/tui/session"
 	"tofu/internal/command"
-	"tofu/internal/keymap"
 	isession "tofu/internal/session"
 	isettings "tofu/internal/settings"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
+	"tofu/internal/ui/keymap"
 )
 
 const (

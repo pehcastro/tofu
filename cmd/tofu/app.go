@@ -27,7 +27,6 @@ import (
 	"tofu/internal/classifier"
 	"tofu/internal/host"
 	"tofu/internal/judge/jev"
-	"tofu/internal/keymap"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
@@ -42,6 +41,7 @@ import (
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
+	"tofu/internal/ui/keymap"
 	"tofu/internal/widget"
 )
 

@@ -17,12 +17,12 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/host"
-	"tofu/internal/keymap"
 	"tofu/internal/llm/models"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/skill"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
+	"tofu/internal/ui/keymap"
 )
 
 const (

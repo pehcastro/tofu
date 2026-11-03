@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"tofu/interface/tui/look"
-	"tofu/internal/keymap"
+	"tofu/internal/ui/keymap"
 )
 
 type operation string

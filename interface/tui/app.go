@@ -35,7 +35,6 @@ import (
 	"tofu/interface/tui/shells"
 	"tofu/interface/tui/subagent"
 	"tofu/internal/host"
-	"tofu/internal/keymap"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
@@ -45,6 +44,7 @@ import (
 	"tofu/internal/status"
 	isubagent "tofu/internal/subagent"
 	"tofu/internal/sys"
+	"tofu/internal/ui/keymap"
 )
 
 type EventKind = host.EventKind

@@ -11,12 +11,12 @@ import (
 	"tofu/interface/tui/feed"
 	"tofu/interface/tui/hostkeys"
 	"tofu/interface/tui/settings"
-	"tofu/internal/keymap"
 	library "tofu/internal/llm/models"
 	isession "tofu/internal/session"
 	isettings "tofu/internal/settings"
 	isubagent "tofu/internal/subagent"
 	"tofu/internal/sys"
+	"tofu/internal/ui/keymap"
 )
 
 const (

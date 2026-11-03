@@ -12,7 +12,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"tofu/internal/keymap"
+	"tofu/internal/ui/keymap"
 )
 
 func handledKeys(t *testing.T, file string) []string {

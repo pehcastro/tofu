@@ -8,7 +8,7 @@ import (
 
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/pointer"
-	"tofu/internal/keymap"
+	"tofu/internal/ui/keymap"
 )
 
 const (

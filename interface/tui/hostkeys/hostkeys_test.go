@@ -12,7 +12,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/internal/golden"
-	"tofu/internal/keymap"
+	"tofu/internal/ui/keymap"
 )
 
 var (
