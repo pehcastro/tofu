@@ -6,8 +6,8 @@ import (
 	"slices"
 	"time"
 
+	"tofu/internal/agent/commands"
 	"tofu/internal/boardy"
-	"tofu/internal/command"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
 	"tofu/internal/learn"

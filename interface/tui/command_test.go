@@ -14,7 +14,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/palette"
-	"tofu/internal/command"
+	"tofu/internal/agent/commands"
 	"tofu/internal/golden"
 	"tofu/internal/host"
 )

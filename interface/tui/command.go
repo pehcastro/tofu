@@ -10,7 +10,7 @@ import (
 	"tofu/interface/tui/palette"
 	"tofu/interface/tui/quote"
 	"tofu/interface/tui/session"
-	"tofu/internal/command"
+	"tofu/internal/agent/commands"
 	isession "tofu/internal/session"
 	isettings "tofu/internal/settings"
 	"tofu/internal/sys"

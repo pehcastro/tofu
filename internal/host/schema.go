@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/agent/commands"
 	"tofu/internal/boardy"
-	"tofu/internal/command"
 	"tofu/internal/drain"
 	"tofu/internal/hook"
 	"tofu/internal/judge/ledger"

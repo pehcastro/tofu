@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/command"
+	"tofu/internal/agent/commands"
 	"tofu/internal/learn"
 	"tofu/internal/memory"
 	"tofu/internal/memtree"

@@ -19,7 +19,7 @@ import (
 	"tofu/interface/tui/shells"
 	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/trace"
-	"tofu/internal/command"
+	"tofu/internal/agent/commands"
 	"tofu/internal/host"
 	"tofu/internal/judge/jev"
 	"tofu/internal/konst"
