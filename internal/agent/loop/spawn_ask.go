@@ -20,6 +20,7 @@ import (
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/shell/process"
 	shipped "tofu/library"
 )
@@ -59,13 +60,13 @@ func (askTool) Definition() llm.Tool {
 	}
 }
 
-func (a askTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+func (a askTool) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args askArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return Result{}, fmt.Errorf("ask: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("ask: arguments are not the expected shape: %w", err)
 	}
 	if strings.TrimSpace(args.Question) == "" || strings.TrimSpace(args.Default) == "" {
-		return Result{}, errors.New("ask: question and default are both required")
+		return contract.Result{}, errors.New("ask: question and default are both required")
 	}
 	t, id := a.orchestrator, a.asking.ID
 	asked := boardy.Event{At: t.clock().UTC().Truncate(time.Second), Kind: boardy.Asked, Author: boardy.SubAgentAuthor(t.base.Session, id), Agent: id,
@@ -75,10 +76,10 @@ func (a askTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
 	t.roster.Reached(id, subagent.Working, "")
 	if err != nil {
 		asked.Unanswered = err.Error()
-		return Result{Content: AskAssumed + args.Default + "\n\nwhy there was no answer: " + err.Error() + a.onThread(asked), Command: "ask assumed: " + args.Question}, nil
+		return contract.Result{Content: AskAssumed + args.Default + "\n\nwhy there was no answer: " + err.Error() + a.onThread(asked), Command: "ask assumed: " + args.Question}, nil
 	}
 	written := a.onThread(asked, boardy.Event{Kind: boardy.Answered, Actor: t.base.Session, Author: t.speaker(), Agent: id, Text: answer})
-	return Result{Content: AskAnswered + answer + written, Command: "ask answered: " + args.Question}, nil
+	return contract.Result{Content: AskAnswered + answer + written, Command: "ask answered: " + args.Question}, nil
 }
 
 func (a askTool) onThread(asked boardy.Event, answered ...boardy.Event) string {

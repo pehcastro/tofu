@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"tofu/internal/tools/contract"
 )
 
 func link(t *testing.T, name, target string) {
@@ -58,7 +59,7 @@ func TestResolveRefusesALinkThatLeadsOutsideTheRoot(t *testing.T) {
 		{filepath.Join(base, "via"), "out/x.txt", `link "out"`},
 	}
 	for _, row := range rows {
-		got, err := Root(row.root).Resolve(row.path)
+		got, err := contract.Root(row.root).Resolve(row.path)
 		if row.refusal == "" {
 			if want := filepath.Join(row.root, row.path); err != nil || got != want {
 				t.Errorf("%s under %s: got %q, %v, want %q", row.path, row.root, got, err, want)

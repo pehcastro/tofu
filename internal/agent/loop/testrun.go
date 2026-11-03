@@ -18,6 +18,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/platform/recover"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -136,11 +137,11 @@ func (r *TestRunners) Close() {
 	}
 }
 
-func (r *TestRunners) Test(ctx context.Context, resolved string) (Result, error) {
+func (r *TestRunners) Test(ctx context.Context, resolved string) (contract.Result, error) {
 	since := time.Now()
 	info, err := os.Stat(resolved)
 	if err != nil {
-		return Result{}, err
+		return contract.Result{}, err
 	}
 	from, files, beside := resolved, []string{resolved}, ""
 	if !info.IsDir() {
@@ -153,16 +154,16 @@ func (r *TestRunners) Test(ctx context.Context, resolved string) (Result, error)
 	if name := filepath.Base(resolved); !info.IsDir() && !strings.Contains(name, ".test.") && !strings.Contains(name, ".spec.") {
 		stem := strings.TrimSuffix(name, filepath.Ext(name))
 		if files, err = colocatedTests(from, stem); err != nil {
-			return Result{}, err
+			return contract.Result{}, err
 		}
 		if len(files) == 0 {
-			return Result{Content: fmt.Sprintf("test: no test for %s: looked for %s.test%s or %s.spec%s beside it", name, stem, filepath.Ext(name), stem, filepath.Ext(name))}, nil
+			return contract.Result{Content: fmt.Sprintf("test: no test for %s: looked for %s.test%s or %s.spec%s beside it", name, stem, filepath.Ext(name), stem, filepath.Ext(name))}, nil
 		}
 		beside = ", the tests beside " + name
 	}
 	runner, err := r.runnerFor(dir)
 	if err != nil {
-		return Result{}, fmt.Errorf("vitest did not start in %s: %w", dir, err)
+		return contract.Result{}, fmt.Errorf("vitest did not start in %s: %w", dir, err)
 	}
 	if r == nil {
 		defer runner.stop()
@@ -184,9 +185,9 @@ func (r *TestRunners) Test(ctx context.Context, resolved string) (Result, error)
 	return failure(fmt.Sprintf("test: vitest in %s, %d ms, vitest stopped before it answered. its last lines:\n%s", dir, took, strings.Join(runner.lastSaid(), "\n"))), nil
 }
 
-func failure(content string) Result {
+func failure(content string) contract.Result {
 	first, _, _ := strings.Cut(content, "\n")
-	return Result{Content: content, FailureText: first}
+	return contract.Result{Content: content, FailureText: first}
 }
 
 func colocatedTests(dir, stem string) ([]string, error) {
@@ -203,7 +204,7 @@ func colocatedTests(dir, stem string) ([]string, error) {
 	return tests, nil
 }
 
-func vitestPackage(from string) (string, Result) {
+func vitestPackage(from string) (string, contract.Result) {
 	manifestPath, found := findUp(from, "package.json")
 	if !found {
 		return "", failure("test skipped: no package.json in " + from + " or above it, so run this project's tests through the shell")
@@ -236,7 +237,7 @@ func vitestPackage(from string) (string, Result) {
 	case unread == nil && (major < konst.OldestVitestMajor || major == konst.OldestVitestMajor && minor < konst.OldestVitestMinor):
 		return "", failure(fmt.Sprintf("test skipped: %s holds vitest %s, older than %d.%d, the oldest the test tool runs, so run this project's tests through the shell", installedPath, vitest.Version, konst.OldestVitestMajor, konst.OldestVitestMinor))
 	}
-	return dir, Result{}
+	return dir, contract.Result{}
 }
 
 func holdsTests(dir string) bool {
@@ -379,12 +380,12 @@ func (t *testRunner) ask(ctx context.Context, files []string) (testReply, error)
 	}
 }
 
-func testReport(reply testReply, dir, head string) Result {
+func testReport(reply testReply, dir, head string) contract.Result {
 	if reply.Failure != "" {
 		return failure(head + ", vitest could not run it:\n" + firstLines(reply.Failure))
 	}
 	if reply.None {
-		return Result{Content: head + ": no test file in this package runs it, directly or through what it imports"}
+		return contract.Result{Content: head + ": no test file in this package runs it, directly or through what it imports"}
 	}
 	var summaries, lines []string
 	for _, module := range reply.Modules {
@@ -414,7 +415,7 @@ func testReport(reply testReply, dir, head string) Result {
 	}
 	report := strings.Join(append([]string{head + ", " + strings.Join(summaries, "; ")}, shown...), "\n")
 	if len(lines) == 0 {
-		return Result{Content: report}
+		return contract.Result{Content: report}
 	}
 	return failure(report)
 }

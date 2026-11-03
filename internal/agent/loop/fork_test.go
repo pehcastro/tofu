@@ -13,6 +13,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/contract"
 )
 
 func taskOpening(task string) llm.Message {
@@ -27,15 +28,15 @@ func (sizedRead) Definition() llm.Tool {
 	return llm.Tool{Name: "read", Parameters: map[string]any{"type": "object"}}
 }
 
-func (r sizedRead) Run(_ context.Context, raw json.RawMessage) (Result, error) {
+func (r sizedRead) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		Path string `json:"path"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return Result{}, err
+		return contract.Result{}, err
 	}
 	line := "the text of " + args.Path + "\n"
-	return Result{Content: strings.Repeat(line, max(1, r.bytes[args.Path]/len(line)))}, nil
+	return contract.Result{Content: strings.Repeat(line, max(1, r.bytes[args.Path]/len(line)))}, nil
 }
 
 type scriptedLead struct {
@@ -78,8 +79,8 @@ func forkingConfig(t *testing.T, model Model, bytes map[string]int, ceiling stri
 		t.Fatal(err)
 	}
 	var steps []StepRow
-	config := baseConfig(t, model, NewRegistry(sizedRead{bytes: bytes}, &stubTool{name: "bash", result: Result{Content: "wrote a.sh"}},
-		&stubTool{name: "write", result: Result{Content: "wrote b.go"}}))
+	config := baseConfig(t, model, NewRegistry(sizedRead{bytes: bytes}, &stubTool{name: "bash", result: contract.Result{Content: "wrote a.sh"}},
+		&stubTool{name: "write", result: contract.Result{Content: "wrote b.go"}}))
 	config.Task, config.Budget, config.Caps.MaxSteps, config.ResultBytesCap = "rename the parser", budget, 30, 1<<20
 	config.Step = func(step StepRow) { steps = append(steps, step) }
 	return config, &steps
@@ -305,9 +306,9 @@ func (*pictureRead) Definition() llm.Tool {
 	return llm.Tool{Name: "read", Parameters: map[string]any{"type": "object"}}
 }
 
-func (r *pictureRead) Run(context.Context, json.RawMessage) (Result, error) {
+func (r *pictureRead) Run(context.Context, json.RawMessage) (contract.Result, error) {
 	r.calls++
-	return Result{Content: "a.png: png, 4x4", Images: []llm.Image{{MediaType: "image/png", Data: []byte("png")}}, Repeat: r.calls > 1}, nil
+	return contract.Result{Content: "a.png: png, 4x4", Images: []llm.Image{{MediaType: "image/png", Data: []byte("png")}}, Repeat: r.calls > 1}, nil
 }
 
 func pictureStep(id string) []llm.Message {

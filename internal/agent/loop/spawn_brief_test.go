@@ -12,6 +12,7 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/registry"
 )
 
@@ -67,7 +68,7 @@ func TestTheBriefPlacesEachFileTheLeadReadInsideTheOwnedPathsOnceAndAsItIsNow(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	memoised := tools.NewMemo().Wrap([]turn.Tool{read})
+	memoised := tools.NewMemo().Wrap([]contract.Tool{read})
 	brief := "Change src/c.ts so it exports a name; c.ts is the entry point and d.ts imports it."
 	script := &changingBeforeSpawn{
 		prefetchScript: &prefetchScript{brief: brief, lead: []llm.Decision{
@@ -92,7 +93,7 @@ func TestTheBriefPlacesEachFileTheLeadReadInsideTheOwnedPathsOnceAndAsItIsNow(t 
 	}
 	spawner := turn.NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
 	orchestrator := base
-	orchestrator.Task, orchestrator.Tools, orchestrator.Inbox = "hand the work to a sub-agent", turn.NewRegistry(append([]turn.Tool{spawner}, memoised...)...), spawner.Inbox
+	orchestrator.Task, orchestrator.Tools, orchestrator.Inbox = "hand the work to a sub-agent", turn.NewRegistry(append([]contract.Tool{spawner}, memoised...)...), spawner.Inbox
 
 	if err := turn.Lead(context.Background(), orchestrator, nil, nil, func(turn.Row, error) {}); err != nil {
 		t.Fatalf("Lead: %v", err)

@@ -18,6 +18,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/files/edit/patch"
 )
 
@@ -174,7 +175,7 @@ func runsScript(step subagent.ShellStep) bool {
 	return scriptRunner(step.Program) || launched || step.Program == "go" && len(step.Args) > 0 && step.Args[0] == "run"
 }
 
-func scriptsOutsideSource(r Root, steps []subagent.ShellStep) bool {
+func scriptsOutsideSource(r contract.Root, steps []subagent.ShellStep) bool {
 	for _, step := range steps {
 		if !runsScript(step) {
 			continue
@@ -212,7 +213,7 @@ func generatedFiles(steps []subagent.ShellStep) []string {
 	return generated
 }
 
-func sources(r Root) map[string]string {
+func sources(r contract.Root) map[string]string {
 	listed, err := gitListing(r)
 	if err != nil {
 		listed, _ = walkListing(r)
@@ -238,7 +239,7 @@ func changedLines(before, after string) int {
 }
 
 type wroteBySubAgent struct {
-	tool   Tool
+	tool   contract.Tool
 	writes *subagent.Writes
 }
 
@@ -246,7 +247,7 @@ func (t wroteBySubAgent) Name() string { return t.tool.Name() }
 
 func (t wroteBySubAgent) Definition() llm.Tool { return t.tool.Definition() }
 
-func (t wroteBySubAgent) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+func (t wroteBySubAgent) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	paths, _ := TargetPaths(t.Name(), raw)
 	t.writes.Wrote(paths)
 	defer t.writes.Wrote(paths)
@@ -393,11 +394,11 @@ func (b *sourceBudget) markPrinted(ctx context.Context, command, printed string)
 }
 
 type budgetedTool struct {
-	tool   Tool
+	tool   contract.Tool
 	budget *sourceBudget
 }
 
-func WithSourceBudget(tools []Tool, defined []subagent.Definition) []Tool {
+func WithSourceBudget(tools []contract.Tool, defined []subagent.Definition) []contract.Tool {
 	budget := &sourceBudget{enabled: enabledSubAgents(defined), writes: &subagent.Writes{}}
 	wrapped := slices.Clone(tools)
 	for i, tool := range wrapped {
@@ -405,7 +406,7 @@ func WithSourceBudget(tools []Tool, defined []subagent.Definition) []Tool {
 			budget.writes, budget.roster = spawner.writes, spawner.roster
 		}
 		inner := tool
-		if memoised, cached := tool.(interface{ Uncached() Tool }); cached {
+		if memoised, cached := tool.(interface{ Uncached() contract.Tool }); cached {
 			inner = memoised.Uncached()
 		}
 		if writer, writes := inner.(*WriteTool); writes {
@@ -442,9 +443,9 @@ func (t budgetedTool) refuse(refusal SourceBudgetError) SourceBudgetError {
 	return refusal
 }
 
-func (t budgetedTool) runShell(ctx context.Context, raw json.RawMessage, command string) (Result, error) {
+func (t budgetedTool) runShell(ctx context.Context, raw json.RawMessage, command string) (contract.Result, error) {
 	if refusal, refused := shellRefusal(command); refused {
-		return Result{}, t.refuse(refusal)
+		return contract.Result{}, t.refuse(refusal)
 	}
 	steps := subagent.ShellSteps(command)
 	if !slices.ContainsFunc(steps, runsScript) || t.budget.files == nil {
@@ -456,7 +457,7 @@ func (t budgetedTool) runShell(ctx context.Context, raw json.RawMessage, command
 	}
 	root := t.budget.files.root
 	if t.budget.spent >= konst.OrchestratorSourceLinesPerTurn && !scriptsOutsideSource(root, steps) {
-		return Result{}, t.refuse(SourceBudgetError{Reason: RefusedSpentScript})
+		return contract.Result{}, t.refuse(SourceBudgetError{Reason: RefusedSpentScript})
 	}
 	mark, held := t.budget.writes.Begin(), t.budget.heldBySubAgents()
 	before := sources(root)
@@ -471,7 +472,7 @@ func (t budgetedTool) runShell(ctx context.Context, raw json.RawMessage, command
 	return result, err
 }
 
-func (t budgetedTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+func (t budgetedTool) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args budgetArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return t.tool.Run(ctx, raw)
@@ -497,7 +498,7 @@ func (t budgetedTool) Run(ctx context.Context, raw json.RawMessage) (Result, err
 		}
 		lines += t.budget.linesChanged(t.Name(), change)
 		if t.budget.spent+lines > konst.OrchestratorSourceLinesPerTurn {
-			return Result{}, t.refuse(SourceBudgetError{Path: change.Path, Lines: lines, Reason: RefusedOverLines})
+			return contract.Result{}, t.refuse(SourceBudgetError{Path: change.Path, Lines: lines, Reason: RefusedOverLines})
 		}
 	}
 	result, err := t.tool.Run(ctx, raw)

@@ -13,6 +13,7 @@ import (
 
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/contract"
 )
 
 func messageDoing(id, to, do string, owns ...string) llm.Decision {
@@ -214,7 +215,7 @@ func TestASubAgentWritesAndDeletesInItsScratchWithNoAsk(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(seen, "run.log")); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("run.log is still in the scratch: %v", err)
 	}
-	if _, inside := within(root, seen); inside {
+	if _, inside := contract.Within(root, seen); inside {
 		t.Errorf("the scratch folder %s is inside the project %s", seen, root)
 	}
 	ran := 0

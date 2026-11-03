@@ -16,6 +16,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 )
 
 type slowGate struct{ took time.Duration }
@@ -265,9 +266,9 @@ func (planSetting) Definition() llm.Tool {
 	return llm.Tool{Name: "plan", Parameters: map[string]any{"type": "object"}}
 }
 
-func (p planSetting) Run(context.Context, json.RawMessage) (Result, error) {
+func (p planSetting) Run(context.Context, json.RawMessage) (contract.Result, error) {
 	*p.held = "plan, 3 items\n  running  read the spec\n  pending  write the routes\n  pending  run the tests"
-	return Result{Content: *p.held}, nil
+	return contract.Result{Content: *p.held}, nil
 }
 
 func TestLoopShowsThePlanAfterTheCachedPrefixOfEveryLaterRequestAndKeepsItOutOfHistory(t *testing.T) {

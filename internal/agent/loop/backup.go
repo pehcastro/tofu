@@ -13,6 +13,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 )
 
 const (
@@ -87,18 +88,18 @@ func (t *SpawnTool) conversationSoFar(held *heldSubAgent, running bool) ([]llm.M
 	return append(slices.Clone(began), since...), nil
 }
 
-func (t *SpawnTool) backup(to string) (Result, error) {
+func (t *SpawnTool) backup(to string) (contract.Result, error) {
 	held, running := t.Inbox.find(to)
 	if held == nil {
-		return Result{}, t.unknown(to)
+		return contract.Result{}, t.unknown(to)
 	}
 	history, err := t.conversationSoFar(held, running)
 	if err != nil {
-		return Result{}, fmt.Errorf("message: %s's conversation did not read back: %w", to, err)
+		return contract.Result{}, fmt.Errorf("message: %s's conversation did not read back: %w", to, err)
 	}
 	dir, err := t.artifactDir()
 	if err != nil {
-		return Result{}, err
+		return contract.Result{}, err
 	}
 	kept := subAgentBackup{ID: to, Agent: held.agent.Agent, Model: held.agent.Model, Mission: held.agent.Mission, Brief: held.agent.Brief, Owns: held.boundary.Owns(), Ticket: held.agent.Ticket,
 		Depth: held.trace.depth, Taken: t.clock(), Files: map[string]string{}}
@@ -120,11 +121,11 @@ func (t *SpawnTool) backup(to string) (Result, error) {
 	}
 	raw, err := json.Marshal(kept)
 	if err != nil {
-		return Result{}, err
+		return contract.Result{}, err
 	}
 	name := to + "-" + kept.Taken.Format(backupStamp)
 	if err := sys.WriteFile(filepath.Join(dir, backupsDir, name+backupSuffix), raw, 0o644); err != nil {
-		return Result{}, fmt.Errorf("message: the backup of %s was not written: %w", to, err)
+		return contract.Result{}, fmt.Errorf("message: the backup of %s was not written: %w", to, err)
 	}
 	said := fmt.Sprintf("%s is backed up as %s: %d messages, and %d files it wrote as they are now. message with text and from %s resumes it from this conversation.",
 		to, name, len(history), len(kept.Files), name)
@@ -134,7 +135,7 @@ func (t *SpawnTool) backup(to string) (Result, error) {
 	if len(gone) > 0 {
 		said += " these files it wrote are gone, so the backup has no copy: " + strings.Join(gone, ", ")
 	}
-	return Result{Content: said, Command: "backup " + to, SubAgent: to}, nil
+	return contract.Result{Content: said, Command: "backup " + to, SubAgent: to}, nil
 }
 
 func (t *SpawnTool) restoreBackup(to, from string) ([]llm.Message, error) {

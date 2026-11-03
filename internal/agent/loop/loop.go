@@ -28,6 +28,7 @@ import (
 	"tofu/internal/platform/recover"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/shell/process"
 	shipped "tofu/library"
 )
@@ -38,7 +39,7 @@ const theResponseHitTheOutputTokenLimit = "the response hit the output token lim
 const nobodyAnswersThisTurn = "nobody is here to answer this turn: tofu run has no person and a cron job runs unattended, so take the recommended option where it can be undone, or end the turn on the question"
 
 type ListedOnly struct {
-	Tool Tool
+	Tool contract.Tool
 	Why  string
 }
 
@@ -46,8 +47,8 @@ func (t ListedOnly) Name() string { return t.Tool.Name() }
 
 func (t ListedOnly) Definition() llm.Tool { return t.Tool.Definition() }
 
-func (t ListedOnly) Run(context.Context, json.RawMessage) (Result, error) {
-	return Result{}, fmt.Errorf("%s refused: %s. it stays listed so the tool list matches the one this session's cache was written with", t.Tool.Name(), t.Why)
+func (t ListedOnly) Run(context.Context, json.RawMessage) (contract.Result, error) {
+	return contract.Result{}, fmt.Errorf("%s refused: %s. it stays listed so the tool list matches the one this session's cache was written with", t.Tool.Name(), t.Why)
 }
 
 const memoryAddedSince = "added to memory outside this session since its memory was sent, and held from now on:\n"
@@ -218,7 +219,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	if referencesOffered {
 		maps.Copy(references.held, config.References)
 	}
-	withLoopTools := func(tools []Tool) []Tool {
+	withLoopTools := func(tools []contract.Tool) []contract.Tool {
 		added := slices.Clone(tools)
 		holdsSkill := false
 		for at, tool := range tools {
@@ -240,8 +241,8 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 		return added
 	}
-	answerable := func(tools []Tool) []Tool {
-		tools = slices.DeleteFunc(tools, func(tool Tool) bool { return unoffered(tool.Name()) })
+	answerable := func(tools []contract.Tool) []contract.Tool {
+		tools = slices.DeleteFunc(tools, func(tool contract.Tool) bool { return unoffered(tool.Name()) })
 		for at, tool := range tools {
 			if !personAnswers && tool.Name() == AskPersonToolName {
 				tools[at] = ListedOnly{Tool: tool, Why: nobodyAnswersThisTurn}
@@ -1654,18 +1655,18 @@ func (*loadedReferences) Name() string { return ReferenceToolName }
 
 func (*loadedReferences) Definition() llm.Tool { return referenceTool{}.Definition() }
 
-func (r *loadedReferences) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+func (r *loadedReferences) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	return referenceTool{held: r.held}.Run(ctx, raw)
 }
 
 type skillLoading struct {
-	Tool
+	contract.Tool
 	references *loadedReferences
 }
 
-func (s skillLoading) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+func (s skillLoading) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	result, err := s.Tool.Run(ctx, raw)
 	if err != nil || result.Origin.Source != llm.SourceSkillLoad || result.Origin.ID != "" {
 		return result, err
@@ -1677,7 +1678,7 @@ func (s skillLoading) Run(ctx context.Context, raw json.RawMessage) (Result, err
 	}
 	files, err := skill.ReferenceFiles(shipped.Files(), skills[at].Name, skills[at].References)
 	if err != nil {
-		return Result{}, err
+		return contract.Result{}, err
 	}
 	read, err := libraryReferences(shipped.Files(), files)
 	s.references.mutex.Lock()
@@ -1688,7 +1689,7 @@ func (s skillLoading) Run(ctx context.Context, raw json.RawMessage) (Result, err
 	return result, err
 }
 
-func runningSubAgents(tools []Tool) []string {
+func runningSubAgents(tools []contract.Tool) []string {
 	var running []string
 	for _, tool := range tools {
 		spawner, spawns := tool.(*SpawnTool)

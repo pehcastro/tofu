@@ -13,6 +13,7 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/contract"
 )
 
 func claimNotes(t *testing.T, store *session.Store, owns ...string) func() error {
@@ -33,7 +34,7 @@ func TestASideChatsHeldPathsHoldAgainstTheLeadsBash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ran := func(owner, command string) (Result, error) {
+	ran := func(owner, command string) (contract.Result, error) {
 		args, _ := json.Marshal(bashArgs{Command: command})
 		return claimedTools(NewRegistry(bash), store, owner).byName[bashToolName].Run(t.Context(), args)
 	}

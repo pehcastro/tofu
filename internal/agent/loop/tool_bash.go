@@ -23,11 +23,12 @@ import (
 	"tofu/internal/platform/recover"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/shell/process"
 )
 
 type BashTool struct {
-	root      Root
+	root      contract.Root
 	choice    shell.Choice
 	probe     *toolchainProbe
 	softLimit time.Duration
@@ -70,7 +71,7 @@ func NewBashTool(root string) (*BashTool, error) {
 }
 
 func NewBashToolCached(root string, cache *ToolchainCache) (*BashTool, error) {
-	resolved, err := NewRoot(root)
+	resolved, err := contract.NewRoot(root)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +157,7 @@ func ResolveRunShell(override string) (RunShell, error) {
 }
 
 func NewBashToolFromShell(root string, shell RunShell) (*BashTool, error) {
-	resolved, err := NewRoot(root)
+	resolved, err := contract.NewRoot(root)
 	if err != nil {
 		return nil, err
 	}
@@ -345,7 +346,7 @@ type bashArgs struct {
 	CheckPort  int    `json:"check_port,omitempty"`
 }
 
-func (t *BashTool) checkPort(ctx context.Context, port int) Result {
+func (t *BashTool) checkPort(ctx context.Context, port int) contract.Result {
 	started := time.Now()
 	lookup, cancel := context.WithTimeout(ctx, konst.PortHolderTimeoutMillis*time.Millisecond)
 	defer cancel()
@@ -358,11 +359,11 @@ func (t *BashTool) checkPort(ctx context.Context, port int) Result {
 		lines = append(lines, address.Host+": "+state)
 	}
 	code := 0
-	return Result{
+	return contract.Result{
 		Content:  fmt.Sprintf("port %d, checked in %d ms\n%s", port, time.Since(started).Milliseconds(), strings.Join(lines, "\n")),
 		Command:  fmt.Sprintf("check_port %d", port),
 		ExitCode: &code,
-		Outcome:  ResultSucceeded,
+		Outcome:  contract.ResultSucceeded,
 	}
 }
 
@@ -386,23 +387,23 @@ func boardActor(ctx context.Context) string {
 	return place.SessionID
 }
 
-func exitedResult(command, output string, code int, note string) Result {
-	outcome := ResultSucceeded
+func exitedResult(command, output string, code int, note string) contract.Result {
+	outcome := contract.ResultSucceeded
 	if code != 0 {
 		output = strings.TrimRight(output, "\n")
 		if output != "" {
 			output += "\n"
 		}
 		output += fmt.Sprintf(commandExited, code)
-		outcome = ResultFailed
+		outcome = contract.ResultFailed
 	}
-	return Result{Content: note + output, Command: command, ExitCode: &code, FailureText: bashFailureText(code), Outcome: outcome}
+	return contract.Result{Content: note + output, Command: command, ExitCode: &code, FailureText: bashFailureText(code), Outcome: outcome}
 }
 
-func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (Result, error) {
+func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (contract.Result, error) {
 	registry := ShellRegistryFrom(ctx)
 	if registry == nil {
-		return Result{}, errors.New("bash: background needs a shell registry and none is attached to this turn")
+		return contract.Result{}, errors.New("bash: background needs a shell registry and none is attached to this turn")
 	}
 	cmd := t.command(context.Background(), ctx, args.Command)
 	got, err := registry.YieldReady(ctx, cmd, args.Command, shellOwnerFrom(ctx), shell.Wait{
@@ -413,15 +414,15 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (Result, er
 		Call:   shellCallFrom(ctx),
 	})
 	if err != nil {
-		return Result{}, fmt.Errorf("bash: %w", err)
+		return contract.Result{}, fmt.Errorf("bash: %w", err)
 	}
 	ran := got.Shell
 	if ran.State == shell.Running {
-		return Result{
+		return contract.Result{
 			Content: fmt.Sprintf("%s is still running as pid %d in %s, and keeps running after this call: it is listed on the shells screen. this call returned after %d ms because %s. its output so far:\n%s",
 				ran.Name, ran.PID, ran.Dir, got.Took.Milliseconds(), got.Ready.Words(), got.Output),
 			Command: "background " + ran.Name + ": " + args.Command,
-			Outcome: ResultSucceeded,
+			Outcome: contract.ResultSucceeded,
 		}, nil
 	}
 	return exitedResult(args.Command, got.Output, *ran.ExitCode, fmt.Sprintf(
@@ -429,14 +430,14 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (Result, er
 		konst.BackgroundReadyMillis)), nil
 }
 
-func deadlineResult(command, output string, deadline time.Duration) Result {
+func deadlineResult(command, output string, deadline time.Duration) contract.Result {
 	killed := fmt.Sprintf("bash: %s: %q was killed at its deadline and its output until then is above. do not run it again unchanged: narrow it, or pass timeout_ms up to %d when the command truly needs longer. "+
 		"a question about which files exist or what they contain is answered by project_report, glob or search without a shell and without this cost",
 		shell.HitDeadline(deadline), command, konst.BashMaxDeadlineMillis)
-	return Result{Content: output + "\n" + killed, Command: command, Outcome: ResultFailed, FailureText: killed}
+	return contract.Result{Content: output + "\n" + killed, Command: command, Outcome: contract.ResultFailed, FailureText: killed}
 }
 
-func (t *BashTool) runOrMove(ctx context.Context, registry *shell.Registry, command, corrected string, deadline time.Duration) (Result, error) {
+func (t *BashTool) runOrMove(ctx context.Context, registry *shell.Registry, command, corrected string, deadline time.Duration) (contract.Result, error) {
 	limit, inbox := konst.BashSoftLimitMillis*time.Millisecond, (*Inbox)(nil)
 	if ledByTheLead(ctx) {
 		limit, inbox = t.softLimit, leadInboxFrom(ctx)
@@ -452,12 +453,12 @@ func (t *BashTool) runOrMove(ctx context.Context, registry *shell.Registry, comm
 	}
 	got, err := registry.YieldReady(ctx, t.command(context.Background(), ctx, command), command, shellOwnerFrom(ctx), wait)
 	if err != nil {
-		return Result{}, fmt.Errorf("bash: %w", err)
+		return contract.Result{}, fmt.Errorf("bash: %w", err)
 	}
 	ran := got.Shell
 	if got.Ready == shell.ReadyWaited && deadline <= limit {
 		if err := registry.KillAtDeadline(ran.Name, deadline); err != nil && !errors.Is(err, shell.ErrNotRunning) {
-			return Result{}, fmt.Errorf("bash: %w", err)
+			return contract.Result{}, fmt.Errorf("bash: %w", err)
 		}
 		return deadlineResult(command, corrected+got.Output, deadline), nil
 	}
@@ -468,10 +469,10 @@ func (t *BashTool) runOrMove(ctx context.Context, registry *shell.Registry, comm
 		text, dropped := output.text()
 		return exitedResult(command, text, *ran.ExitCode, dropped+corrected), nil
 	case shell.ReadyStopped:
-		return Result{
+		return contract.Result{
 			Content:     got.Output,
 			Command:     command,
-			Outcome:     ResultAborted,
+			Outcome:     contract.ResultAborted,
 			FailureText: fmt.Sprintf(cancelledWhileRunning, command),
 		}, registry.Kill(ran.Name)
 	}
@@ -484,11 +485,11 @@ func (t *BashTool) runOrMove(ctx context.Context, registry *shell.Registry, comm
 			readBack = "the person wrote while it ran, so it moved before the " + limit.String() + " limit. " + readBack
 		}
 	}
-	return Result{
+	return contract.Result{
 		Content: fmt.Sprintf("%s is still running after %d ms, so it moved to a background shell as pid %d instead of holding this call. it was not killed and keeps running, listed on the shells screen. %s. its output so far:\n%s",
 			ran.Name, got.Took.Milliseconds(), ran.PID, readBack, got.Output),
 		Command: "background " + ran.Name + ": " + command,
-		Outcome: ResultSucceeded,
+		Outcome: contract.ResultSucceeded,
 	}, nil
 }
 
@@ -521,7 +522,7 @@ func OwnShellsCalled(ctx context.Context, request GateRequest) []string {
 	return nil
 }
 
-func stopOwned(registry *shell.Registry, command string, owned []shell.Shell) (Result, error) {
+func stopOwned(registry *shell.Registry, command string, owned []shell.Shell) (contract.Result, error) {
 	var names, left []string
 	for _, one := range owned {
 		err := registry.AgentKill(one.Name)
@@ -530,7 +531,7 @@ func stopOwned(registry *shell.Registry, command string, owned []shell.Shell) (R
 		case errors.As(err, &held):
 			left = append(left, one.Name+" is held by the person and was left running")
 		case err != nil:
-			return Result{}, fmt.Errorf("bash: %q kills %s, which tofu started, so it ran as shell stop, and the stop failed: %w", command, one.Name, err)
+			return contract.Result{}, fmt.Errorf("bash: %q kills %s, which tofu started, so it ran as shell stop, and the stop failed: %w", command, one.Name, err)
 		default:
 			names = append(names, one.Name)
 		}
@@ -540,10 +541,10 @@ func stopOwned(registry *shell.Registry, command string, owned []shell.Shell) (R
 	if len(names) == 0 {
 		said = fmt.Sprintf("bash: %q kills a shell tofu started, so it ran as shell stop instead", command)
 	}
-	return Result{
+	return contract.Result{
 		Content: strings.Join(append([]string{said}, left...), ". "),
 		Command: strings.TrimSpace(ShellToolName + " stop " + stopped),
-		Outcome: ResultSucceeded,
+		Outcome: contract.ResultSucceeded,
 	}, nil
 }
 
@@ -588,16 +589,16 @@ func bashDeadline(requested int) (deadline int, corrected string) {
 	}
 }
 
-func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args bashArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return Result{}, fmt.Errorf("bash: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("bash: arguments are not the expected shape: %w", err)
 	}
 	if args.CheckPort != 0 {
 		return t.checkPort(ctx, args.CheckPort), nil
 	}
 	if strings.TrimSpace(args.Command) == "" {
-		return Result{}, errors.New("bash: command is required unless check_port is set")
+		return contract.Result{}, errors.New("bash: command is required unless check_port is set")
 	}
 	owner := shellOwnerFrom(ctx)
 	subAgent := !ledByTheLead(ctx)
@@ -610,11 +611,11 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	}
 	if subAgent {
 		if err := subAgentRefusal(args); err != nil {
-			return Result{}, err
+			return contract.Result{}, err
 		}
 	}
 	if name, summary, missing := missingInterpreterNamed(args.Command, t.probe.wait()); missing {
-		return Result{}, fmt.Errorf("bash: %s is not on this shell's PATH, so this command would just fail not found. %s", name, summary)
+		return contract.Result{}, fmt.Errorf("bash: %s is not on this shell's PATH, so this command would just fail not found. %s", name, summary)
 	}
 	if args.Background {
 		return t.runBackground(ctx, args)
@@ -633,7 +634,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	cmd.Stdout, cmd.Stderr = output, output
 	tracked, startErr := shell.StartTracked(cmd)
 	if startErr != nil {
-		return Result{}, fmt.Errorf("bash: %w", startErr)
+		return contract.Result{}, fmt.Errorf("bash: %w", startErr)
 	}
 	defer tracked.Release()
 	runErr := cmd.Wait()
@@ -644,15 +645,15 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 		return deadlineResult(args.Command, note+text, deadline), nil
 	}
 	if ctx.Err() != nil {
-		return Result{
+		return contract.Result{
 			Content:     note + text,
 			Command:     args.Command,
-			Outcome:     ResultAborted,
+			Outcome:     contract.ResultAborted,
 			FailureText: fmt.Sprintf(cancelledWhileRunning, args.Command),
 		}, nil
 	}
 	if cmd.ProcessState == nil {
-		return Result{}, fmt.Errorf("bash: %w", runErr)
+		return contract.Result{}, fmt.Errorf("bash: %w", runErr)
 	}
 	return exitedResult(args.Command, text, cmd.ProcessState.ExitCode(), note), nil
 }
@@ -673,7 +674,7 @@ func (inlineCodeTool) Name() string { return bashToolName }
 
 func (inlineCodeTool) Definition() llm.Tool { return llm.Tool{Name: bashToolName} }
 
-func (t inlineCodeTool) Run(ctx context.Context, _ json.RawMessage) (Result, error) {
+func (t inlineCodeTool) Run(ctx context.Context, _ json.RawMessage) (contract.Result, error) {
 	code := *t.request.Code
 	extension := ".js"
 	if code.Python() {
@@ -681,7 +682,7 @@ func (t inlineCodeTool) Run(ctx context.Context, _ json.RawMessage) (Result, err
 	}
 	snapshot := filepath.Join(code.Cwd, "code", CodeSum(code)+extension)
 	if err := sys.WriteFile(snapshot, []byte(code.Code), 0o600); err != nil {
-		return Result{}, fmt.Errorf("bash: the inline code was not copied to run: %w", err)
+		return contract.Result{}, fmt.Errorf("bash: the inline code was not copied to run: %w", err)
 	}
 	deadline := konst.BashDeadlineMillis * time.Millisecond
 	ctx, cancel := context.WithTimeout(ctx, deadline)
@@ -696,19 +697,19 @@ func (t inlineCodeTool) Run(ctx context.Context, _ json.RawMessage) (Result, err
 	started := time.Now()
 	tracked, err := shell.StartTracked(cmd)
 	if err != nil {
-		return Result{}, fmt.Errorf("bash: %w", err)
+		return contract.Result{}, fmt.Errorf("bash: %w", err)
 	}
 	defer tracked.Release()
 	runErr := cmd.Wait()
 	text, dropped := output.text()
 	command := strings.Join(append([]string{code.Program}, argv...), " ")
 	ran := "ran " + command + " in " + code.Cwd + " with environment " + shell.CodeEnvProfile + ", killed at " + deadline.String() + "\n" + dropped
-	var result Result
+	var result contract.Result
 	switch {
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
 		result = deadlineResult(command, ran+text, deadline)
 	case cmd.ProcessState == nil:
-		return Result{}, fmt.Errorf("bash: %w", runErr)
+		return contract.Result{}, fmt.Errorf("bash: %w", runErr)
 	default:
 		result = exitedResult(command, text, cmd.ProcessState.ExitCode(), ran)
 	}

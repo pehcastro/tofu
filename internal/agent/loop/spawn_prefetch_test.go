@@ -14,6 +14,7 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/registry"
 )
 
@@ -85,7 +86,7 @@ func TestABriefNamingFilesStartsTheSubAgentHoldingThemAndItsEditIsNotRefused(t *
 	base := turn.Config{
 		Model:          script,
 		Spend:          turn.SpendAPIKey,
-		Tools:          turn.NewRegistry(tools.NewMemo().Wrap([]turn.Tool{read.Reading(ledger), edit.Reading(ledger)})...),
+		Tools:          turn.NewRegistry(tools.NewMemo().Wrap([]contract.Tool{read.Reading(ledger), edit.Reading(ledger)})...),
 		Caps:           turn.Caps{MaxSteps: 5},
 		ResultBytesCap: 4096,
 		ArtifactDir:    filepath.Join(outside, "artifacts"),

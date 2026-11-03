@@ -23,6 +23,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 	"tofu/library/questions"
 )
 
@@ -228,7 +229,7 @@ func (j *keepJudge) keyOf(drop recall.Drop) dropKey {
 		path = filepath.Join(j.project, path)
 	}
 	path = filepath.Clean(path)
-	if inProject, inside := within(j.project, path); inside {
+	if inProject, inside := contract.Within(j.project, path); inside {
 		path = inProject
 	}
 	key.path = filepath.ToSlash(path)
@@ -484,34 +485,34 @@ type fetchArgs struct {
 	Length int    `json:"length"`
 }
 
-func (t FetchTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
+func (t FetchTool) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args fetchArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return Result{}, fmt.Errorf("artifact_fetch: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("artifact_fetch: arguments are not the expected shape: %w", err)
 	}
 	decoded, err := hex.DecodeString(args.Handle)
 	if err != nil || len(decoded) != artifactHandleBytes {
-		return Result{}, fmt.Errorf("artifact_fetch: %q is not an artifact handle", args.Handle)
+		return contract.Result{}, fmt.Errorf("artifact_fetch: %q is not an artifact handle", args.Handle)
 	}
 	if args.Length <= 0 {
-		return Result{}, fmt.Errorf("artifact_fetch: length %d is not a range, ask for at least one byte", args.Length)
+		return contract.Result{}, fmt.Errorf("artifact_fetch: length %d is not a range, ask for at least one byte", args.Length)
 	}
 	if args.Offset < 0 {
-		return Result{}, fmt.Errorf("artifact_fetch: offset %d is before the start of artifact %s", args.Offset, args.Handle)
+		return contract.Result{}, fmt.Errorf("artifact_fetch: offset %d is before the start of artifact %s", args.Offset, args.Handle)
 	}
 	if t.store == nil {
-		return Result{}, fmt.Errorf("artifact_fetch: this turn stored no artifacts, so handle %s cannot be read", args.Handle)
+		return contract.Result{}, fmt.Errorf("artifact_fetch: this turn stored no artifacts, so handle %s cannot be read", args.Handle)
 	}
 	body, err := t.store.Fetch(args.Handle)
 	if err != nil {
-		return Result{}, fmt.Errorf("artifact_fetch: no stored result for handle %s: %w", args.Handle, err)
+		return contract.Result{}, fmt.Errorf("artifact_fetch: no stored result for handle %s: %w", args.Handle, err)
 	}
 	if args.Offset >= len(body) {
-		return Result{}, fmt.Errorf("artifact_fetch: offset %d is past the end of artifact %s, which is %d bytes",
+		return contract.Result{}, fmt.Errorf("artifact_fetch: offset %d is past the end of artifact %s, which is %d bytes",
 			args.Offset, args.Handle, len(body))
 	}
 	end := min(args.Offset+args.Length, len(body))
-	return Result{
+	return contract.Result{
 		Content: string(body[args.Offset:end]),
 		Command: fmt.Sprintf("%s bytes %d to %d of %d", args.Handle, args.Offset, end, len(body)),
 	}, nil

@@ -15,6 +15,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/web"
 )
 
@@ -29,13 +30,13 @@ func (s scriptedPages) Definition() llm.Tool {
 	return llm.Tool{Name: s.name, Parameters: map[string]any{"type": "object"}}
 }
 
-func (s scriptedPages) Run(context.Context, json.RawMessage) (Result, error) {
+func (s scriptedPages) Run(context.Context, json.RawMessage) (contract.Result, error) {
 	next := (*s.pages)[0]
 	*s.pages = (*s.pages)[1:]
 	if next == "" {
-		return Result{}, errors.New("the tab closed")
+		return contract.Result{}, errors.New("the tab closed")
 	}
-	return Result{Content: next}, nil
+	return contract.Result{Content: next}, nil
 }
 
 type shownPage struct {

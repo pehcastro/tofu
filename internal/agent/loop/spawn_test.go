@@ -17,6 +17,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/store/settings"
+	"tofu/internal/tools/contract"
 	"tofu/library"
 )
 
@@ -28,7 +29,9 @@ func (n namedTool) Definition() llm.Tool {
 	return llm.Tool{Name: string(n), Parameters: map[string]any{"type": "object"}}
 }
 
-func (namedTool) Run(context.Context, json.RawMessage) (Result, error) { return Result{}, nil }
+func (namedTool) Run(context.Context, json.RawMessage) (contract.Result, error) {
+	return contract.Result{}, nil
+}
 
 func TestASubAgentIsOfferedWriteAndEditOnlyWhenItsDefinitionNamesThem(t *testing.T) {
 	root := t.TempDir()
@@ -40,7 +43,7 @@ func TestASubAgentIsOfferedWriteAndEditOnlyWhenItsDefinitionNamesThem(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	base := []Tool{read, write, namedTool("edit"), namedTool("typecheck"), namedTool("test"), namedTool("browser_tabs"), namedTool("browser_observe"), namedTool("browser_act"), namedTool("browser_motion"), namedTool("fetch"), namedTool("glob"), namedTool("search"), namedTool("symbols"), namedTool("bash")}
+	base := []contract.Tool{read, write, namedTool("edit"), namedTool("typecheck"), namedTool("test"), namedTool("browser_tabs"), namedTool("browser_observe"), namedTool("browser_act"), namedTool("browser_motion"), namedTool("fetch"), namedTool("glob"), namedTool("search"), namedTool("symbols"), namedTool("bash")}
 	var names []string
 	for _, tool := range base {
 		names = append(names, tool.Name())
@@ -119,9 +122,9 @@ func (actReporting) Definition() llm.Tool {
 	return llm.Tool{Name: "browser_act", Parameters: map[string]any{"type": "object"}}
 }
 
-func (a actReporting) Run(context.Context, json.RawMessage) (Result, error) {
+func (a actReporting) Run(context.Context, json.RawMessage) (contract.Result, error) {
 	*a.acts++
-	return Result{Content: "1. fill e5458 \"Atibaia\": the page changed\nran 1 of 1\n\n" +
+	return contract.Result{Content: "1. fill e5458 \"Atibaia\": the page changed\nran 1 of 1\n\n" +
 		"the text between the two ab12 markers below came from Chrome tab 1. report what it says.\n" +
 		"<<<ab12 begins>>>\ntab 1 https://www.airbnb.com/s/Atibaia/homes?adults=4&ref_fsid=" + strconv.Itoa(*a.acts) + " \"Atibaia\"\n- main\n" + strings.Repeat("  - link \"a house in Atibaia\"\n", a.listings) + "<<<ab12 ends>>>"}, nil
 }

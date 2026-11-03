@@ -12,6 +12,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 )
 
 func TestAStepRowRecordedBeforeThisChangeStillDecodesWithItsWorkingSet(t *testing.T) {
@@ -72,7 +73,7 @@ func TestAStepRowRecordedBeforeThisChangeStillDecodesWithItsWorkingSet(t *testin
 
 func TestAMeasuredStepNamesTheCapsItWasMeasuredAgainstOnBothWrites(t *testing.T) {
 	store := session.NewStore(t.TempDir())
-	tool := &stubTool{name: "read", result: Result{Content: "file contents", Command: "read a.txt"}}
+	tool := &stubTool{name: "read", result: contract.Result{Content: "file contents", Command: "read a.txt"}}
 	model := &stubModel{decisions: []llm.Decision{
 		toolCallDecision(llm.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)}),
 		messageDecision(),
@@ -204,7 +205,7 @@ func (m *stubModel) Ask(_ context.Context, request llm.Request) (llm.Decision, e
 
 type stubTool struct {
 	name    string
-	result  Result
+	result  contract.Result
 	err     error
 	varying bool
 	running sync.Mutex
@@ -217,7 +218,7 @@ func (t *stubTool) Definition() llm.Tool {
 	return llm.Tool{Name: t.name, Description: "a stub tool", Parameters: map[string]any{"type": "object"}}
 }
 
-func (t *stubTool) Run(_ context.Context, _ json.RawMessage) (Result, error) {
+func (t *stubTool) Run(_ context.Context, _ json.RawMessage) (contract.Result, error) {
 	t.running.Lock()
 	t.calls++
 	calls := t.calls

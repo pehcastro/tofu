@@ -16,6 +16,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/contract"
 )
 
 const (
@@ -260,8 +261,8 @@ func orchestratorOnly() []string {
 }
 
 func sideTools(registry Registry, boundary *subagent.Boundary) Registry {
-	var kept []Tool
-	refused := func(tool Tool) sideRefused { return sideRefused{tool: tool, owns: boundary.Owns()} }
+	var kept []contract.Tool
+	refused := func(tool contract.Tool) sideRefused { return sideRefused{tool: tool, owns: boundary.Owns()} }
 	for _, tool := range registry.tools {
 		spawner, spawning := tool.(*SpawnTool)
 		switch name := tool.Name(); {
@@ -281,7 +282,7 @@ func sideTools(registry Registry, boundary *subagent.Boundary) Registry {
 }
 
 type sideWrite struct {
-	tool     Tool
+	tool     contract.Tool
 	boundary *subagent.Boundary
 }
 
@@ -306,9 +307,9 @@ func (t sideWrite) refusal(raw json.RawMessage) error {
 	return nil
 }
 
-func (t sideWrite) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+func (t sideWrite) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	if err := t.refusal(raw); err != nil {
-		return Result{}, err
+		return contract.Result{}, err
 	}
 	return t.tool.Run(ctx, raw)
 }
@@ -332,15 +333,15 @@ func (t sideShell) refusal(raw json.RawMessage) error {
 
 func (t sideShell) Definition() llm.Tool { return t.tool.Definition() }
 
-func (t sideShell) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+func (t sideShell) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	if err := t.refusal(raw); err != nil {
-		return Result{}, err
+		return contract.Result{}, err
 	}
 	return t.tool.Run(ctx, raw)
 }
 
 type sideRefused struct {
-	tool Tool
+	tool contract.Tool
 	owns []string
 }
 
@@ -352,8 +353,8 @@ func (t sideRefused) refusal(json.RawMessage) error {
 	return SideRefusedError{Tool: t.Name(), What: "it is the orchestrator's, offered here only so the tool list matches the session this chat sits beside, and " + sideNever, Owns: t.owns}
 }
 
-func (t sideRefused) Run(_ context.Context, raw json.RawMessage) (Result, error) {
-	return Result{}, t.refusal(raw)
+func (t sideRefused) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
+	return contract.Result{}, t.refusal(raw)
 }
 
 type SideRefusedError struct {

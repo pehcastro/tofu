@@ -18,6 +18,7 @@ import (
 	"tofu/bench/stat"
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/registry"
 )
 
@@ -35,7 +36,7 @@ func calls() []call {
 	}
 }
 
-func runner(repo, name string) (turn.Tool, error) {
+func runner(repo, name string) (contract.Tool, error) {
 	switch name {
 	case "read":
 		return turn.NewReadTool(repo)

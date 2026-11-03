@@ -17,6 +17,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/project/boardy"
+	"tofu/internal/tools/contract"
 )
 
 type failsOnceTool struct{ calls int }
@@ -27,13 +28,13 @@ func (t *failsOnceTool) Definition() llm.Tool {
 	return llm.Tool{Name: "check", Description: "a check that fails once", Parameters: map[string]any{"type": "object"}}
 }
 
-func (t *failsOnceTool) Run(context.Context, json.RawMessage) (Result, error) {
+func (t *failsOnceTool) Run(context.Context, json.RawMessage) (contract.Result, error) {
 	t.calls++
 	exit := 0
 	if t.calls == 1 {
 		exit = 2
 	}
-	return Result{Content: "checked", Command: "check", ExitCode: &exit}, nil
+	return contract.Result{Content: "checked", Command: "check", ExitCode: &exit}, nil
 }
 
 func TestASubAgentThatRetriedAFailureAndLearnedNothingReportsNeitherAndEndsDone(t *testing.T) {

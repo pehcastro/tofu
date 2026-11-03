@@ -14,6 +14,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 )
 
 func (s SubAgents) prompt(inherited Config, definition subagent.Definition, task string, owns []string) (string, []PromptPart, string, error) {
@@ -130,7 +131,7 @@ func (t *SpawnTool) briefFiles(ctx context.Context, args spawnArgs, lead []llm.M
 	if !readable {
 		return ""
 	}
-	if memoised, cached := read.(interface{ Uncached() Tool }); cached {
+	if memoised, cached := read.(interface{ Uncached() contract.Tool }); cached {
 		read = memoised.Uncached()
 	}
 	named := briefPath.FindAllString(args.Task, -1)

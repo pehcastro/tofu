@@ -12,6 +12,7 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/registry"
 )
 
@@ -22,7 +23,7 @@ func subAgentShellAnswers(t *testing.T, root string, bash *turn.BashTool, comman
 	for _, command := range commands {
 		script.subAgent = append(script.subAgent, calling("bash", map[string]any{"command": command}))
 	}
-	checked, err := tools.Checked(root, []turn.Tool{bash})
+	checked, err := tools.Checked(root, []contract.Tool{bash})
 	if err != nil {
 		t.Fatal(err)
 	}

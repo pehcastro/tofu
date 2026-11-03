@@ -10,6 +10,7 @@ import (
 
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/contract"
 )
 
 func readCall(index int) llm.Decision {
@@ -30,7 +31,7 @@ func TestATurnCappedAtFiveStepsIsWarnedOnItsFourthRequestAndAnswersOnItsFifth(t 
 		claimDecision("read four of five; the fifth is left"),
 		{Build: "m1", Outcome: llm.OutcomeToolCalls, Content: "read four of five; the fifth is left", ToolCalls: []llm.ToolCall{{ID: "call-5", Name: "read", Arguments: json.RawMessage(`{"path":"5.txt"}`)}}},
 	} {
-		read := &stubTool{name: "read", result: Result{Content: "a note"}, varying: true}
+		read := &stubTool{name: "read", result: contract.Result{Content: "a note"}, varying: true}
 		model := &stubModel{decisions: []llm.Decision{readCall(1), readCall(2), readCall(3), readCall(4), last}}
 		row, err := Run(context.Background(), Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(read), Task: "read the five notes",
 			Caps: Caps{MaxSteps: 5}, ResultBytesCap: 4096, ArtifactDir: t.TempDir()})
@@ -70,9 +71,9 @@ func (sleepingTool) Definition() llm.Tool {
 	return llm.Tool{Name: "bash", Parameters: map[string]any{"type": "object"}}
 }
 
-func (s sleepingTool) Run(context.Context, json.RawMessage) (Result, error) {
+func (s sleepingTool) Run(context.Context, json.RawMessage) (contract.Result, error) {
 	time.Sleep(time.Duration(s))
-	return Result{Content: "slept"}, nil
+	return contract.Result{Content: "slept"}, nil
 }
 
 func TestASubAgentPastItsWallClockFinishesItsStepAndAnswersOnceRetired(t *testing.T) {

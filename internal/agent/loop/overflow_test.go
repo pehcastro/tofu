@@ -16,6 +16,7 @@ import (
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/models/llm/wire/codex"
 	"tofu/internal/models/transport"
+	"tofu/internal/tools/contract"
 )
 
 type answer func(t *testing.T) (llm.Decision, error)
@@ -42,12 +43,12 @@ func (l longResult) Definition() llm.Tool {
 	return llm.Tool{Name: string(l), Parameters: map[string]any{"type": "object"}}
 }
 
-func (longResult) Run(_ context.Context, args json.RawMessage) (Result, error) {
+func (longResult) Run(_ context.Context, args json.RawMessage) (contract.Result, error) {
 	var lines strings.Builder
 	for i := range 1500 {
 		fmt.Fprintf(&lines, "%s line %d of a long file\n", args, i)
 	}
-	return Result{Content: lines.String()}, nil
+	return contract.Result{Content: lines.String()}, nil
 }
 
 func callNamed(id string) answer {

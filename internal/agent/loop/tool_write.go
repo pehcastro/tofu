@@ -16,20 +16,21 @@ import (
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/files/edit/patch"
 )
 
 const writePerm = 0o644
 
 type WriteTool struct {
-	root     Root
+	root     contract.Root
 	ledger   *ReadLedger
 	checkers *Typecheckers
 	rules    []rule.Rule
 }
 
 func NewWriteTool(root string) (*WriteTool, error) {
-	resolved, err := NewRoot(root)
+	resolved, err := contract.NewRoot(root)
 	if err != nil {
 		return nil, err
 	}
@@ -80,45 +81,45 @@ type writeArgs struct {
 	Append  bool   `json:"append"`
 }
 
-func (t *WriteTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+func (t *WriteTool) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args writeArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return Result{}, fmt.Errorf("write: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("write: arguments are not the expected shape: %w", err)
 	}
 	resolved, err := t.root.Resolve(args.Path)
 	if err != nil {
-		return Result{}, fmt.Errorf("write: %w", err)
+		return contract.Result{}, fmt.Errorf("write: %w", err)
 	}
 	if args.Append {
 		return t.appendTo(ctx, resolved, args)
 	}
 	held, readErr := os.ReadFile(resolved)
 	if readErr != nil && !errors.Is(readErr, fs.ErrNotExist) {
-		return Result{}, fmt.Errorf("write: reading %s before replacing it: %w", args.Path, readErr)
+		return contract.Result{}, fmt.Errorf("write: reading %s before replacing it: %w", args.Path, readErr)
 	}
 	fires := rule.CheckWrite(t.rules, filepath.Clean(args.Path), string(held), args.Content)
 	ruled, err := rule.Weigh(fires)
 	if err != nil {
-		return Result{}, fmt.Errorf("write: %w", err)
+		return contract.Result{}, fmt.Errorf("write: %w", err)
 	}
 	if readErr != nil {
 		err = sys.WriteFile(resolved, []byte(args.Content), writePerm)
 	} else {
 		change := ChangeOf(string(held), args.Content)
 		if !t.ledger.Saw(ctx, args.Path, held) {
-			return Result{}, fmt.Errorf("write: %s exists and has not been read in this session or has changed since, so replacing it whole is refused rather than trusted against a guess: %s",
+			return contract.Result{}, fmt.Errorf("write: %s exists and has not been read in this session or has changed since, so replacing it whole is refused rather than trusted against a guess: %s",
 				args.Path, t.ledger.Refuse(ctx, args.Path, held, change))
 		}
 		if err := t.ledger.Unshown(ctx, args.Path, held, change); err != nil {
-			return Result{}, fmt.Errorf("write: %w", err)
+			return contract.Result{}, fmt.Errorf("write: %w", err)
 		}
 		if err := refuseOmission(string(held), args.Content); err != nil {
-			return Result{}, fmt.Errorf("write: %s: %w", args.Path, err)
+			return contract.Result{}, fmt.Errorf("write: %s: %w", args.Path, err)
 		}
 		err = overwrite(resolved, held, []byte(args.Content))
 	}
 	if err != nil {
-		return Result{}, fmt.Errorf("write: %w", err)
+		return contract.Result{}, fmt.Errorf("write: %w", err)
 	}
 	t.ledger.Mark(ctx, args.Path, []byte(args.Content))
 	before := string(held)
@@ -129,19 +130,19 @@ func (t *WriteTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		After:   args.Content,
 		Diff:    transform.Unified(args.Path, before, args.Content),
 	}
-	return Result{Content: t.checkers.Typechecked(ctx, resolved, strings.Join(append([]string{preview.Result()}, ruled...), "\n")), Command: args.Path, Rules: fires}, nil
+	return contract.Result{Content: t.checkers.Typechecked(ctx, resolved, strings.Join(append([]string{preview.Result()}, ruled...), "\n")), Command: args.Path, Rules: fires}, nil
 }
 
-func (t *WriteTool) appendTo(ctx context.Context, resolved string, args writeArgs) (Result, error) {
+func (t *WriteTool) appendTo(ctx context.Context, resolved string, args writeArgs) (contract.Result, error) {
 	if args.Content == "" {
-		return Result{}, fmt.Errorf("write: append with empty content would change nothing in %s, so it is refused", args.Path)
+		return contract.Result{}, fmt.Errorf("write: append with empty content would change nothing in %s, so it is refused", args.Path)
 	}
 	held, err := os.ReadFile(resolved)
 	if errors.Is(err, fs.ErrNotExist) {
-		return Result{}, fmt.Errorf("write: %s does not exist, so there is no end to append to: write it without append to create it", args.Path)
+		return contract.Result{}, fmt.Errorf("write: %s does not exist, so there is no end to append to: write it without append to create it", args.Path)
 	}
 	if err != nil {
-		return Result{}, fmt.Errorf("write: reading %s before appending to it: %w", args.Path, err)
+		return contract.Result{}, fmt.Errorf("write: reading %s before appending to it: %w", args.Path, err)
 	}
 	lead, endings := EndingsOf(string(held))
 	if len(held) > 0 && !strings.HasSuffix(lead, "\n") {
@@ -152,18 +153,18 @@ func (t *WriteTool) appendTo(ctx context.Context, resolved string, args writeArg
 	fires := rule.CheckWrite(t.rules, filepath.Clean(args.Path), string(held), after)
 	ruled, err := rule.Weigh(fires)
 	if err != nil {
-		return Result{}, fmt.Errorf("write: %w", err)
+		return contract.Result{}, fmt.Errorf("write: %w", err)
 	}
 	change := ChangeOf(string(held), after)
 	if !t.ledger.Saw(ctx, args.Path, held) {
-		return Result{}, fmt.Errorf("write: %s has not been read in this session or has changed since, so appending to it is refused: %s",
+		return contract.Result{}, fmt.Errorf("write: %s has not been read in this session or has changed since, so appending to it is refused: %s",
 			args.Path, t.ledger.Refuse(ctx, args.Path, held, change))
 	}
 	if err := t.ledger.Unshown(ctx, args.Path, held, change); err != nil {
-		return Result{}, fmt.Errorf("write: %w", err)
+		return contract.Result{}, fmt.Errorf("write: %w", err)
 	}
 	if err := overwrite(resolved, held, []byte(after)); err != nil {
-		return Result{}, fmt.Errorf("write: %w", err)
+		return contract.Result{}, fmt.Errorf("write: %w", err)
 	}
 	t.ledger.Rewrote(ctx, args.Path, []byte(after), change)
 	first := strings.Count(lead, "\n") + 1
@@ -172,7 +173,7 @@ func (t *WriteTool) appendTo(ctx context.Context, resolved string, args writeArg
 	for i, line := range lines {
 		shown += fmt.Sprintf("\n%d\t%s", first+i, line)
 	}
-	return Result{Content: t.checkers.Typechecked(ctx, resolved, strings.Join(append([]string{shown}, ruled...), "\n")), Command: args.Path, Rules: fires}, nil
+	return contract.Result{Content: t.checkers.Typechecked(ctx, resolved, strings.Join(append([]string{shown}, ruled...), "\n")), Command: args.Path, Rules: fires}, nil
 }
 
 const (

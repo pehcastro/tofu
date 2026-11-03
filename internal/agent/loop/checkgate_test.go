@@ -8,6 +8,7 @@ import (
 
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/contract"
 )
 
 type typecheckIn struct {
@@ -21,7 +22,7 @@ func (typecheckIn) Definition() llm.Tool {
 	return llm.Tool{Name: "typecheck", Parameters: map[string]any{"type": "object"}}
 }
 
-func (c typecheckIn) Run(ctx context.Context, _ json.RawMessage) (Result, error) {
+func (c typecheckIn) Run(ctx context.Context, _ json.RawMessage) (contract.Result, error) {
 	return c.checkers.Check(ctx, c.dir)
 }
 

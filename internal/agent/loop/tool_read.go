@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/contract"
 )
 
 const readRepeatsBeforeNote = 3
@@ -25,14 +26,14 @@ type readSeen struct {
 }
 
 type ReadTool struct {
-	root   Root
+	root   contract.Root
 	ledger *ReadLedger
 	mutex  sync.Mutex
 	seen   map[string]readSeen
 }
 
 func NewReadTool(root string) (*ReadTool, error) {
-	resolved, err := NewRoot(root)
+	resolved, err := contract.NewRoot(root)
 	if err != nil {
 		return nil, err
 	}
@@ -70,25 +71,25 @@ type readArgs struct {
 	EndLine   int    `json:"end_line"`
 }
 
-func (t *ReadTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+func (t *ReadTool) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args readArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return Result{}, fmt.Errorf("read: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("read: arguments are not the expected shape: %w", err)
 	}
 	resolved, err := t.root.Resolve(args.Path)
 	if err != nil {
-		return Result{}, fmt.Errorf("read: %w", err)
+		return contract.Result{}, fmt.Errorf("read: %w", err)
 	}
 	repair := ""
 	content, err := os.ReadFile(resolved)
 	if errors.Is(err, fs.ErrNotExist) {
 		found, listErr := lookalikes(t.root, args.Path)
 		if listErr != nil {
-			return Result{}, fmt.Errorf("read: %w", listErr)
+			return contract.Result{}, fmt.Errorf("read: %w", listErr)
 		}
 		repaired, note, refusal := RepairPath(args.Path, "file", found)
 		if refusal != nil {
-			return Result{}, fmt.Errorf("read: %w", refusal)
+			return contract.Result{}, fmt.Errorf("read: %w", refusal)
 		}
 		args.Path, repair = repaired, note+"\n"
 		if resolved, err = t.root.Resolve(repaired); err == nil {
@@ -96,20 +97,20 @@ func (t *ReadTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 		}
 	}
 	if err != nil {
-		return Result{}, fmt.Errorf("read: %w", err)
+		return contract.Result{}, fmt.Errorf("read: %w", err)
 	}
 	switch media := http.DetectContentType(content); media {
 	case "image/png", "image/jpeg", "image/gif", "image/webp":
 		t.ledger.Mark(ctx, args.Path, content)
 		picture, said, err := lookAt(media, content)
 		if err != nil {
-			return Result{}, fmt.Errorf("read: %s: %w", args.Path, err)
+			return contract.Result{}, fmt.Errorf("read: %s: %w", args.Path, err)
 		}
-		return Result{Content: repair + args.Path + ": " + said, Images: []llm.Image{picture}, Command: args.Path}, nil
+		return contract.Result{Content: repair + args.Path + ": " + said, Images: []llm.Image{picture}, Command: args.Path}, nil
 	}
 	if args.StartLine <= 0 && args.EndLine <= 0 {
 		t.ledger.Mark(ctx, args.Path, content)
-		return Result{Content: repair + t.noteRepeat(ctx, args.Path, content, string(content)), Command: args.Path}, nil
+		return contract.Result{Content: repair + t.noteRepeat(ctx, args.Path, content, string(content)), Command: args.Path}, nil
 	}
 
 	lines := strings.Split(strings.TrimSuffix(string(content), "\n"), "\n")
@@ -118,14 +119,14 @@ func (t *ReadTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 		end = len(lines)
 	}
 	if start > len(lines) {
-		return Result{}, fmt.Errorf("read: %s has %d lines and start_line is %d", args.Path, len(lines), start)
+		return contract.Result{}, fmt.Errorf("read: %s has %d lines and start_line is %d", args.Path, len(lines), start)
 	}
 	if end < start {
-		return Result{}, fmt.Errorf("read: %s end_line %d is before start_line %d", args.Path, end, start)
+		return contract.Result{}, fmt.Errorf("read: %s end_line %d is before start_line %d", args.Path, end, start)
 	}
 	span := fmt.Sprintf("%s lines %d-%d of %d", args.Path, start, end, len(lines))
 	t.ledger.MarkLines(ctx, args.Path, content, start, end)
-	return Result{
+	return contract.Result{
 		Content: repair + t.noteRepeat(ctx, args.Path, content, span+"\n"+strings.Join(lines[start-1:end], "\n")),
 		Command: span,
 	}, nil

@@ -7,14 +7,14 @@ import (
 
 	"tofu/bench/tools"
 	toolscorpus "tofu/bench/tools/corpus"
-	"tofu/internal/agent/loop"
+	"tofu/internal/tools/contract"
 	tofutools "tofu/internal/tools/registry"
 )
 
 const nativeToolTimeout = 60 * time.Second
 
 type nativeResult struct {
-	result turn.Result
+	result contract.Result
 	err    error
 }
 

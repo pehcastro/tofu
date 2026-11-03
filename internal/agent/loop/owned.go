@@ -7,10 +7,11 @@ import (
 
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/contract"
 )
 
 type ownedTool struct {
-	tool     Tool
+	tool     contract.Tool
 	boundary *subagent.Boundary
 }
 
@@ -51,9 +52,9 @@ func (t ownedTool) refusal(raw json.RawMessage) error {
 	return nil
 }
 
-func (t ownedTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+func (t ownedTool) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	if err := t.refusal(raw); err != nil {
-		return Result{}, err
+		return contract.Result{}, err
 	}
 	return t.tool.Run(ctx, raw)
 }
@@ -70,7 +71,7 @@ func (e ReadOnlyError) Error() string {
 }
 
 type ownedShell struct {
-	tool     Tool
+	tool     contract.Tool
 	boundary *subagent.Boundary
 }
 
@@ -108,12 +109,12 @@ func (t ownedShell) grammars() []subagent.Grammar {
 	return []subagent.Grammar{subagent.POSIX, subagent.PowerShell}
 }
 
-func underlyingBash(tool Tool) (*BashTool, bool) {
+func underlyingBash(tool contract.Tool) (*BashTool, bool) {
 	for {
 		switch inner := tool.(type) {
 		case *BashTool:
 			return inner, true
-		case interface{ Uncached() Tool }:
+		case interface{ Uncached() contract.Tool }:
 			tool = inner.Uncached()
 		default:
 			return nil, false
@@ -134,9 +135,9 @@ func (t ownedShell) refusal(raw json.RawMessage) error {
 	return nil
 }
 
-func (t ownedShell) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+func (t ownedShell) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	if err := t.refusal(raw); err != nil {
-		return Result{}, err
+		return contract.Result{}, err
 	}
 	return t.tool.Run(ctx, raw)
 }

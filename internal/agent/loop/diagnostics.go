@@ -20,6 +20,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/platform/recover"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -212,11 +213,11 @@ func (c *Typecheckers) Typecheck(ctx context.Context, resolved string) (string, 
 	return result.Content, err
 }
 
-func (c *Typecheckers) Check(ctx context.Context, resolved string) (Result, error) {
+func (c *Typecheckers) Check(ctx context.Context, resolved string) (contract.Result, error) {
 	since := time.Now()
 	info, err := os.Stat(resolved)
 	if err != nil {
-		return Result{}, err
+		return contract.Result{}, err
 	}
 	from := resolved
 	if !info.IsDir() {
@@ -263,7 +264,7 @@ func (c *Typecheckers) watchFor(checker typechecker) *tscWatch {
 	return c.watching[checker.dir]
 }
 
-func (c *Typecheckers) check(ctx context.Context, checker typechecker, scope string, since time.Time, wait checkWait) Result {
+func (c *Typecheckers) check(ctx context.Context, checker typechecker, scope string, since time.Time, wait checkWait) contract.Result {
 	watch := c.watchFor(checker)
 	if watch == nil {
 		return coldTypecheck(ctx, checker, scope)
@@ -290,7 +291,7 @@ func (c *Typecheckers) check(ctx context.Context, checker typechecker, scope str
 	case outcome != watchLost && wait == waitInline:
 		background := "typecheck: " + watch.command + " checks this change in the background, and the typecheck tool reports it"
 		if cycle.started.IsZero() {
-			return Result{Content: background}
+			return contract.Result{Content: background}
 		}
 		return tscReport(cycle.output, scope, background+". its last finished check, from before this change", cycle.failed)
 	case outcome == watchBusy:
@@ -298,7 +299,7 @@ func (c *Typecheckers) check(ctx context.Context, checker typechecker, scope str
 		if cycle.started.IsZero() {
 			state = "warming, on its first check of this project"
 		}
-		return Result{FailureText: typecheckUnanswered, Content: fmt.Sprintf(
+		return contract.Result{FailureText: typecheckUnanswered, Content: fmt.Sprintf(
 			"typecheck: %s is still %s after %d ms. it keeps running: call typecheck again for its answer rather than running tsc through the shell", watch.command, state, took)}
 	}
 	c.mutex.Lock()
@@ -461,7 +462,7 @@ func svelteChecker(dir, manager string, manifest packageManifest) (typechecker, 
 	return checker, ""
 }
 
-func coldTypecheck(ctx context.Context, checker typechecker, relative string) Result {
+func coldTypecheck(ctx context.Context, checker typechecker, relative string) contract.Result {
 	command := strings.Join(checker.argv, " ")
 	ctx, cancel := context.WithTimeout(ctx, konst.TypecheckDeadlineMillis*time.Millisecond)
 	defer cancel()
@@ -561,7 +562,7 @@ func runsTypeScript(manifest packageManifest) bool {
 	return false
 }
 
-func tscReport(output, scope, head string, failed bool) Result {
+func tscReport(output, scope, head string, failed bool) contract.Result {
 	var mine, global, unread []string
 	errorsHere, elsewhere, inMine := 0, 0, false
 	for _, printed := range strings.Split(strings.ReplaceAll(output, "\r\n", "\n"), "\n") {
@@ -592,7 +593,7 @@ func tscReport(output, scope, head string, failed bool) Result {
 	if namedNoFile {
 		lines, summary = unread, head+", the checker failed and named no file"
 	}
-	report := Result{Content: summary}
+	report := contract.Result{Content: summary}
 	if len(lines) > 0 {
 		shown := lines[:min(len(lines), konst.TypecheckLinesCap)]
 		if cut := len(lines) - len(shown); cut > 0 {

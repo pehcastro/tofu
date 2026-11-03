@@ -26,6 +26,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -734,10 +735,10 @@ func setsInAThrowawayHome(project, command string, args []string) bool {
 	}
 	project, _ = filepath.Abs(project)
 	home = filepath.Clean(home)
-	if below, inside := within(project, home); filepath.IsAbs(home) && inside {
+	if below, inside := contract.Within(project, home); filepath.IsAbs(home) && inside {
 		home = below
 	}
-	_, err := Root(project).Resolve(home)
+	_, err := contract.Root(project).Resolve(home)
 	return home != "." && err == nil
 }
 

@@ -15,6 +15,7 @@ import (
 	"tofu/internal/judge/state"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/contract"
 )
 
 type queuedModel struct {
@@ -40,9 +41,9 @@ func (*echoTool) Definition() llm.Tool {
 	return llm.Tool{Name: "bash", Description: "run a command", Parameters: map[string]any{"type": "object"}}
 }
 
-func (t *echoTool) Run(context.Context, json.RawMessage) (turn.Result, error) {
+func (t *echoTool) Run(context.Context, json.RawMessage) (contract.Result, error) {
 	t.calls++
-	return turn.Result{Content: "ok " + strconv.Itoa(t.calls), Command: "ls"}, nil
+	return contract.Result{Content: "ok " + strconv.Itoa(t.calls), Command: "ls"}, nil
 }
 
 type shadowGate struct {

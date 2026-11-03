@@ -15,10 +15,11 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/shell/process"
 )
 
-func runBash(t *testing.T, tool *BashTool, args map[string]any) Result {
+func runBash(t *testing.T, tool *BashTool, args map[string]any) contract.Result {
 	t.Helper()
 	raw, _ := json.Marshal(args)
 	result, err := tool.Run(context.Background(), raw)
@@ -39,7 +40,7 @@ func newBash(t *testing.T) *BashTool {
 
 func TestBashDeadlineSaysItWasTheDeadline(t *testing.T) {
 	alone := runBash(t, newBash(t), map[string]any{"command": "echo partial; sleep 5", "timeout_ms": 1500})
-	if !strings.Contains(alone.Content, "partial") || alone.Outcome != ResultFailed || !strings.HasPrefix(alone.FailureText, "bash: hit the deadline after 1.5 s") {
+	if !strings.Contains(alone.Content, "partial") || alone.Outcome != contract.ResultFailed || !strings.HasPrefix(alone.FailureText, "bash: hit the deadline after 1.5 s") {
 		t.Errorf("no registry: outcome %v, content %q, failure %q", alone.Outcome, alone.Content, alone.FailureText)
 	}
 	tool := newBash(t)
@@ -50,7 +51,7 @@ func TestBashDeadlineSaysItWasTheDeadline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(listed.Content, "partial") || listed.Outcome != ResultFailed || !strings.HasPrefix(listed.FailureText, "bash: hit the deadline after 2 s") {
+	if !strings.Contains(listed.Content, "partial") || listed.Outcome != contract.ResultFailed || !strings.HasPrefix(listed.FailureText, "bash: hit the deadline after 2 s") {
 		t.Errorf("registry: outcome %v, content %q, failure %q", listed.Outcome, listed.Content, listed.FailureText)
 	}
 	if shells, _ := registry.List(); len(shells) != 0 {
@@ -58,7 +59,7 @@ func TestBashDeadlineSaysItWasTheDeadline(t *testing.T) {
 	}
 	quick, _ := json.Marshal(map[string]any{"command": "echo quick", "timeout_ms": 5000})
 	ended, err := tool.Run(ctx, quick)
-	if after, _ := registry.List(); err != nil || ended.Content != "quick\n" || ended.Outcome != ResultSucceeded || len(after) != 0 {
+	if after, _ := registry.List(); err != nil || ended.Content != "quick\n" || ended.Outcome != contract.ResultSucceeded || len(after) != 0 {
 		t.Errorf("a call inside its deadline came back %q (%v), and left %d rows where none were", ended.Content, err, len(after))
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/contract"
 )
 
 func claimedTools(registry Registry, store *session.Store, own string) Registry {
@@ -42,7 +43,7 @@ func sideName(claim session.Claim) string {
 }
 
 type claimed struct {
-	tool  Tool
+	tool  contract.Tool
 	store *session.Store
 	own   string
 }
@@ -101,10 +102,10 @@ func (t claimed) refusal(raw json.RawMessage) error {
 	return err
 }
 
-func (t claimed) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+func (t claimed) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	note, err := t.check(raw)
 	if err != nil {
-		return Result{}, err
+		return contract.Result{}, err
 	}
 	result, err := t.tool.Run(ctx, raw)
 	if note != "" {

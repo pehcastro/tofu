@@ -13,6 +13,7 @@ import (
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/contract"
 )
 
 const anthropicLookbackBlocks = 20
@@ -193,7 +194,7 @@ type idlingRead struct {
 	idle  time.Duration
 }
 
-func (r idlingRead) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+func (r idlingRead) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	*r.clock = r.clock.Add(r.idle)
 	return r.sizedRead.Run(ctx, raw)
 }

@@ -14,6 +14,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/contract"
 )
 
 type ranTool struct {
@@ -24,14 +25,14 @@ type ranTool struct {
 
 func (t ranTool) Name() string         { return t.name }
 func (t ranTool) Definition() llm.Tool { return llm.Tool{Name: t.name} }
-func (t ranTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
+func (t ranTool) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	*t.ran = append(*t.ran, string(raw))
-	return Result{Content: t.printed}, nil
+	return contract.Result{Content: t.printed}, nil
 }
 
 func TestShellWriteToSourceIsRefusedOnlyWhenTheCommandCarriesTheSource(t *testing.T) {
 	var ran []string
-	shell := WithSourceBudget([]Tool{ranTool{name: "bash", ran: &ran}}, nil)[0]
+	shell := WithSourceBudget([]contract.Tool{ranTool{name: "bash", ran: &ran}}, nil)[0]
 	for _, c := range []struct {
 		command string
 		refused bool
@@ -68,7 +69,7 @@ func TestShellWriteToSourceIsRefusedOnlyWhenTheCommandCarriesTheSource(t *testin
 
 func TestARefusedShellWriteNamesTheCallThatDoesItInOneReply(t *testing.T) {
 	var ran []string
-	shell := WithSourceBudget([]Tool{ranTool{name: "bash", ran: &ran}}, nil)[0]
+	shell := WithSourceBudget([]contract.Tool{ranTool{name: "bash", ran: &ran}}, nil)[0]
 	for _, c := range []struct {
 		command string
 		want    []string
@@ -103,13 +104,13 @@ func TestARefusedShellWriteNamesTheCallThatDoesItInOneReply(t *testing.T) {
 
 func TestTheLeadSpendsOneLineBudgetAcrossDirectories(t *testing.T) {
 	var ran []string
-	budgeted := WithSourceBudget([]Tool{ranTool{name: "edit", ran: &ran}, ranTool{name: "write", ran: &ran}}, nil)
+	budgeted := WithSourceBudget([]contract.Tool{ranTool{name: "edit", ran: &ran}, ranTool{name: "write", ran: &ran}}, nil)
 	edit, write := budgeted[0], budgeted[1]
 	lines := func(n int) string { return strings.Repeat("x\n", n) }
 	budget := konst.OrchestratorSourceLinesPerTurn
 	quarter := budget / 4
 	for _, c := range []struct {
-		tool   Tool
+		tool   contract.Tool
 		path   string
 		lines  int
 		reason BudgetRefusal
@@ -135,7 +136,7 @@ func TestTheLeadSpendsOneLineBudgetAcrossDirectories(t *testing.T) {
 	if len(ran) != 7 {
 		t.Errorf("ran %d writes, want the seven inside the budget", len(ran))
 	}
-	quoted := WithSourceBudget([]Tool{ranTool{name: "edit", ran: &ran}}, nil)[0]
+	quoted := WithSourceBudget([]contract.Tool{ranTool{name: "edit", ran: &ran}}, nil)[0]
 	around := lines(budget)
 	raw, _ := json.Marshal(map[string]string{"path": "store/store.go", "old_string": around + "old\n" + around, "new_string": around + "new\n" + around})
 	if _, err := quoted.Run(context.Background(), raw); err != nil {
@@ -159,7 +160,7 @@ func TestAWriteOverAnExistingFileSpendsTheLinesItsDiffChanges(t *testing.T) {
 	ledger := NewReadLedger()
 	ledger.Mark(context.Background(), "big.go", []byte(held))
 	var ran []string
-	budgeted := WithSourceBudget([]Tool{writer.Reading(ledger), ranTool{name: "edit", ran: &ran}}, nil)
+	budgeted := WithSourceBudget([]contract.Tool{writer.Reading(ledger), ranTool{name: "edit", ran: &ran}}, nil)
 	write, edit := budgeted[0], budgeted[1]
 	raw, _ := json.Marshal(map[string]string{"path": "big.go", "content": "var y0 = 2\nvar y1 = 3\n" + held[len("var x0 = 0\nvar x1 = 1\n"):]})
 	if _, err := write.Run(context.Background(), raw); err != nil {
@@ -216,7 +217,7 @@ func TestAFileTheShellPrintedWholeAfterCatCountsAsRead(t *testing.T) {
 			}
 			ledger := NewReadLedger()
 			var ran []string
-			shell := WithSourceBudget([]Tool{writer.Reading(ledger), ranTool{name: "bash", ran: &ran, printed: c.printed}}, nil)[1]
+			shell := WithSourceBudget([]contract.Tool{writer.Reading(ledger), ranTool{name: "bash", ran: &ran, printed: c.printed}}, nil)[1]
 			raw, _ := json.Marshal(map[string]string{"command": c.command})
 			if _, err := shell.Run(context.Background(), raw); err != nil {
 				t.Fatal(err)
@@ -239,10 +240,10 @@ type scriptTool struct {
 
 func (t scriptTool) Name() string         { return "bash" }
 func (t scriptTool) Definition() llm.Tool { return llm.Tool{Name: "bash"} }
-func (t scriptTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
+func (t scriptTool) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	*t.ran = append(*t.ran, string(raw))
 	t.run(t.dir)
-	return Result{Content: "ok"}, nil
+	return contract.Result{Content: "ok"}, nil
 }
 
 func scriptProject(t *testing.T, git bool) string {
@@ -313,7 +314,7 @@ func TestAScriptThatWritesSourceSpendsTheLinesItChanged(t *testing.T) {
 					t.Fatal(err)
 				}
 				var ran []string
-				shell := WithSourceBudget([]Tool{writer, scriptTool{dir: dir, ran: &ran, run: c.run}}, nil)[1]
+				shell := WithSourceBudget([]contract.Tool{writer, scriptTool{dir: dir, ran: &ran, run: c.run}}, nil)[1]
 				raw, _ := json.Marshal(map[string]string{"command": c.command})
 				result, err := shell.Run(context.Background(), raw)
 				if err != nil || len(ran) != 1 {
@@ -341,7 +342,7 @@ func TestAScriptPastTheBudgetRunsThenEveryFurtherWriteIsRefusedNamingIt(t *testi
 	big := scriptTool{dir: dir, ran: &ran, run: func(dir string) {
 		_ = os.WriteFile(filepath.Join(dir, "big.go"), []byte(strings.Repeat("x\n", budget+50)), 0o644)
 	}}
-	tools := WithSourceBudget([]Tool{writer, big, ranTool{name: "edit", ran: &ran}}, nil)
+	tools := WithSourceBudget([]contract.Tool{writer, big, ranTool{name: "edit", ran: &ran}}, nil)
 	shell, edit := tools[1], tools[2]
 	command := func(text string) json.RawMessage {
 		raw, _ := json.Marshal(map[string]string{"command": text})

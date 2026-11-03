@@ -12,6 +12,7 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/contract"
 )
 
 type scriptedCheck string
@@ -22,16 +23,16 @@ func (s scriptedCheck) Definition() llm.Tool {
 	return llm.Tool{Name: string(s), Parameters: map[string]any{"type": "object"}}
 }
 
-func (s scriptedCheck) Run(_ context.Context, raw json.RawMessage) (Result, error) {
+func (s scriptedCheck) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		Command string `json:"command"`
 		Exit    int    `json:"exit"`
 		Fail    string `json:"fail"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return Result{}, err
+		return contract.Result{}, err
 	}
-	result := Result{Content: "ran", Command: args.Command, FailureText: args.Fail}
+	result := contract.Result{Content: "ran", Command: args.Command, FailureText: args.Fail}
 	if s == "bash" {
 		result.ExitCode = &args.Exit
 	}

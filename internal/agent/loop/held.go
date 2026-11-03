@@ -14,6 +14,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 )
 
 type heldSubAgent struct {
@@ -123,7 +124,7 @@ func (h *heldSubAgent) reloaded() error {
 }
 
 type watchedTool struct {
-	tool       Tool
+	tool       contract.Tool
 	held       *heldSubAgent
 	definition llm.Tool
 }
@@ -139,7 +140,7 @@ func (w watchedTool) refusal(raw json.RawMessage) error {
 	return nil
 }
 
-func (w watchedTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+func (w watchedTool) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	call := w.held.opened(w.tool.Name(), raw)
 	defer w.held.closed(call)
 	return w.tool.Run(ctx, raw)

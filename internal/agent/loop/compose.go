@@ -29,6 +29,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 	shipped "tofu/library"
 	"tofu/library/questions"
 )
@@ -786,16 +787,16 @@ func (referenceTool) Definition() llm.Tool {
 	}
 }
 
-func (r referenceTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
+func (r referenceTool) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		Name string `json:"name"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return Result{}, fmt.Errorf("reference: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("reference: arguments are not the expected shape: %w", err)
 	}
 	text, held := r.held[args.Name]
 	if !held {
-		return Result{}, fmt.Errorf("reference: no reference is named %q; the references are %s", args.Name, cmp.Or(strings.Join(slices.Sorted(maps.Keys(r.held)), ", "), "none"))
+		return contract.Result{}, fmt.Errorf("reference: no reference is named %q; the references are %s", args.Name, cmp.Or(strings.Join(slices.Sorted(maps.Keys(r.held)), ", "), "none"))
 	}
-	return Result{Content: text, Command: ReferenceToolName + " " + args.Name, Origin: llm.Origin{Source: llm.SourceReference, Name: args.Name}}, nil
+	return contract.Result{Content: text, Command: ReferenceToolName + " " + args.Name, Origin: llm.Origin{Source: llm.SourceReference, Name: args.Name}}, nil
 }

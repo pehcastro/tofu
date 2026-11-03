@@ -12,6 +12,7 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/contract"
 )
 
 type subAgentsTool struct {
@@ -41,7 +42,7 @@ func (subAgentsTool) Definition() llm.Tool {
 	}
 }
 
-func (l subAgentsTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+func (l subAgentsTool) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	t := l.orchestrator
 	var args struct {
 		Name string `json:"name"`
@@ -49,11 +50,11 @@ func (l subAgentsTool) Run(ctx context.Context, raw json.RawMessage) (Result, er
 	}
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &args); err != nil {
-			return Result{}, fmt.Errorf("subagents: arguments are not the expected shape: %w", err)
+			return contract.Result{}, fmt.Errorf("subagents: arguments are not the expected shape: %w", err)
 		}
 	}
 	if err := t.recall(args.Name); err != nil {
-		return Result{}, fmt.Errorf("subagents refused: %w", err)
+		return contract.Result{}, fmt.Errorf("subagents refused: %w", err)
 	}
 	switch args.Show {
 	case "":
@@ -62,13 +63,13 @@ func (l subAgentsTool) Run(ctx context.Context, raw json.RawMessage) (Result, er
 	case showDiagnose:
 		return t.diagnose(ctx, args.Name)
 	default:
-		return Result{}, fmt.Errorf("subagents refused: show is %s or %s, and %q is neither", showRead, showDiagnose, args.Show)
+		return contract.Result{}, fmt.Errorf("subagents refused: show is %s or %s, and %q is neither", showRead, showDiagnose, args.Show)
 	}
 	agents := t.roster.SubAgents()
 	if args.Name != "" {
 		agent, found := t.roster.SubAgent(args.Name)
 		if !found {
-			return Result{}, t.unknown(args.Name)
+			return contract.Result{}, t.unknown(args.Name)
 		}
 		agents = []subagent.SubAgent{agent}
 	}
@@ -113,7 +114,7 @@ func (l subAgentsTool) Run(ctx context.Context, raw json.RawMessage) (Result, er
 	if len(lines) > 0 {
 		listed = strings.Join(lines, "\n")
 	}
-	return Result{Content: listed, Command: strings.TrimSpace("subagents " + args.Name), SubAgent: args.Name}, nil
+	return contract.Result{Content: listed, Command: strings.TrimSpace("subagents " + args.Name), SubAgent: args.Name}, nil
 }
 
 func conversationText(history []llm.Message) string {
@@ -131,10 +132,10 @@ func conversationText(history []llm.Message) string {
 	return text.String()
 }
 
-func (t *SpawnTool) read(name string) (Result, error) {
+func (t *SpawnTool) read(name string) (contract.Result, error) {
 	agent, found := t.roster.SubAgent(name)
 	if !found {
-		return Result{}, t.unknown(name)
+		return contract.Result{}, t.unknown(name)
 	}
 	said := name + " is " + agent.State.String()
 	if agent.Released {
@@ -143,18 +144,18 @@ func (t *SpawnTool) read(name string) (Result, error) {
 	said += ". its report:\n" + cmp.Or(agent.Report, "none yet")
 	held, running := t.Inbox.find(name)
 	if held == nil {
-		return Result{Content: said + "\n\nits conversation is kept by the sub-agent that spawned it, not by you.", Command: "read " + name, SubAgent: name}, nil
+		return contract.Result{Content: said + "\n\nits conversation is kept by the sub-agent that spawned it, not by you.", Command: "read " + name, SubAgent: name}, nil
 	}
 	history, err := t.conversationSoFar(held, running)
 	if err != nil {
-		return Result{}, fmt.Errorf("subagents: %s's conversation did not read back: %w", name, err)
+		return contract.Result{}, fmt.Errorf("subagents: %s's conversation did not read back: %w", name, err)
 	}
 	said += "\n\nfiles it changed: " + cmp.Or(strings.Join(filesWritten(history), ", "), "none")
 	said += fmt.Sprintf("\n\nits conversation, %d messages", len(history))
 	if running {
 		said += ", so far, since it is running"
 	}
-	return Result{Content: said + ":" + conversationText(history), Command: "read " + name, SubAgent: name}, nil
+	return contract.Result{Content: said + ":" + conversationText(history), Command: "read " + name, SubAgent: name}, nil
 }
 
 func (t *SpawnTool) failedCalls(held *heldSubAgent) []string {
@@ -212,10 +213,10 @@ func (t *SpawnTool) requestsSeen(held *heldSubAgent) []string {
 	return append(failed, last...)
 }
 
-func (t *SpawnTool) diagnose(ctx context.Context, name string) (Result, error) {
+func (t *SpawnTool) diagnose(ctx context.Context, name string) (contract.Result, error) {
 	agent, found := t.roster.SubAgent(name)
 	if !found {
-		return Result{}, t.unknown(name)
+		return contract.Result{}, t.unknown(name)
 	}
 	held, running := t.Inbox.find(name)
 	runs := "not running"
@@ -251,5 +252,5 @@ func (t *SpawnTool) diagnose(ctx context.Context, name string) (Result, error) {
 			lines = append(lines, fmt.Sprintf("shell %s runs %s as pid %d since %s, and its last lines are:\n%s", running.Name, running.Command, running.PID, running.Started.Format(time.TimeOnly), tail))
 		}
 	}
-	return Result{Content: strings.Join(lines, "\n"), Command: "diagnose " + name, SubAgent: name}, nil
+	return contract.Result{Content: strings.Join(lines, "\n"), Command: "diagnose " + name, SubAgent: name}, nil
 }

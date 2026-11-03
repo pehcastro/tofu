@@ -7,9 +7,10 @@ import (
 	"testing"
 
 	"tofu/internal/store/session"
+	"tofu/internal/tools/contract"
 )
 
-func runBashAs(t *testing.T, owner, command string, cancelled bool) (Result, error) {
+func runBashAs(t *testing.T, owner, command string, cancelled bool) (contract.Result, error) {
 	t.Helper()
 	tool, err := NewBashTool(t.TempDir())
 	if err != nil {

@@ -13,6 +13,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/memory/tree"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/contract"
 )
 
 const (
@@ -150,13 +151,13 @@ func (lookupTool) Definition() llm.Tool {
 	}
 }
 
-func (t lookupTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
+func (t lookupTool) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		Session string `json:"session"`
 		Call    string `json:"call"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return Result{}, fmt.Errorf("lookup: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("lookup: arguments are not the expected shape: %w", err)
 	}
 	if args.Session == "" {
 		args.Session = t.current()
@@ -166,7 +167,7 @@ func (t lookupTool) Run(_ context.Context, raw json.RawMessage) (Result, error) 
 		seen[id] = true
 		events, err := t.sessions.Events(id)
 		if err != nil {
-			return Result{}, fmt.Errorf("lookup: session %s: %w", id, err)
+			return contract.Result{}, fmt.Errorf("lookup: session %s: %w", id, err)
 		}
 		var call session.CallBody
 		var result session.ResultBody
@@ -179,21 +180,21 @@ func (t lookupTool) Run(_ context.Context, raw json.RawMessage) (Result, error) 
 				err = json.Unmarshal(event.Body, &result)
 			}
 			if err != nil {
-				return Result{}, fmt.Errorf("lookup: call %s in session %s does not parse: %w", args.Call, id, err)
+				return contract.Result{}, fmt.Errorf("lookup: call %s in session %s does not parse: %w", args.Call, id, err)
 			}
 		}
 		if call.Tool != "" {
-			return Result{Content: "the call: " + call.Tool + " " + string(call.Args) + "\nits result:\n" + result.Content,
+			return contract.Result{Content: "the call: " + call.Tool + " " + string(call.Args) + "\nits result:\n" + result.Content,
 				Command: "call " + args.Call + " in session " + id}, nil
 		}
 		header, err := t.sessions.Header(id)
 		if err != nil {
-			return Result{}, fmt.Errorf("lookup: session %s: %w", id, err)
+			return contract.Result{}, fmt.Errorf("lookup: session %s: %w", id, err)
 		}
 		id = ""
 		if header.CarriedFrom != nil {
 			id = header.CarriedFrom.Session
 		}
 	}
-	return Result{}, fmt.Errorf("lookup: no call %s in session %s or any session it was carried from", args.Call, args.Session)
+	return contract.Result{}, fmt.Errorf("lookup: no call %s in session %s or any session it was carried from", args.Call, args.Session)
 }

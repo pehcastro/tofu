@@ -16,6 +16,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 )
 
 const (
@@ -195,7 +196,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		row.ResultHandleError = storeErr.Error()
 	}
 	outcome := row.Outcome()
-	if result.Outcome == ResultAborted {
+	if result.Outcome == contract.ResultAborted {
 		outcome = llm.ToolOutcomeAborted
 	}
 	body := rendered

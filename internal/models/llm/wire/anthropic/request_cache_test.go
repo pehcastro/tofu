@@ -24,6 +24,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/registry"
 	shipped "tofu/library"
 )
@@ -81,7 +82,7 @@ func sessionConfig(t *testing.T, replies ...string) (turn.Config, *capturedServe
 	return config, server
 }
 
-func servedSession(t *testing.T, server http.Handler) (turn.Config, []turn.Tool) {
+func servedSession(t *testing.T, server http.Handler) (turn.Config, []contract.Tool) {
 	t.Helper()
 	listening := httptest.NewServer(server)
 	t.Cleanup(listening.Close)
@@ -115,7 +116,7 @@ func servedSession(t *testing.T, server http.Handler) (turn.Config, []turn.Tool)
 		ResultBytesCap: 1 << 16,
 		ArtifactDir:    filepath.Join(root, "artifacts"),
 		NewID:          func() string { return "turn-test" },
-	}, []turn.Tool{read, write}
+	}, []contract.Tool{read, write}
 }
 
 func sessionSpec(t *testing.T, task string, role rule.Role) turn.ComposeSpec {
@@ -466,8 +467,8 @@ func (d describedTool) Definition() llm.Tool {
 	return llm.Tool{Name: "roster", Description: *d.description, Parameters: *d.schema}
 }
 
-func (describedTool) Run(context.Context, json.RawMessage) (turn.Result, error) {
-	return turn.Result{}, nil
+func (describedTool) Run(context.Context, json.RawMessage) (contract.Result, error) {
+	return contract.Result{}, nil
 }
 
 func TestASessionsLaterTurnSendsTheSystemPromptAndToolsItsFirstTurnSent(t *testing.T) {

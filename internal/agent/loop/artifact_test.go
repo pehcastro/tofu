@@ -11,11 +11,12 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/contract"
 )
 
 const bigLinePad = "............................................"
 
-func runOneTool(t *testing.T, tool Tool, args string, truncate bool) (string, string) {
+func runOneTool(t *testing.T, tool contract.Tool, args string, truncate bool) (string, string) {
 	t.Helper()
 	model := &stubModel{decisions: []llm.Decision{
 		toolCallDecision(llm.ToolCall{ID: "call-1", Name: tool.Name(), Arguments: json.RawMessage(args)}),

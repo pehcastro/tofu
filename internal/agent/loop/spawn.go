@@ -30,6 +30,7 @@ import (
 	"tofu/internal/store/session"
 	"tofu/internal/store/settings"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 )
 
 type DepthLimitError struct {
@@ -217,15 +218,17 @@ func (b *builtOncePerTurn) defined(tools Registry) []llm.Tool {
 }
 
 type agentPlan struct {
-	tool  Tool
+	tool  contract.Tool
 	shown func() string
 }
 
-func (t *SpawnTool) ownPlan(id string, lead Tool) (agentPlan, bool) {
-	if memoised, cached := lead.(interface{ Uncached() Tool }); cached {
+func (t *SpawnTool) ownPlan(id string, lead contract.Tool) (agentPlan, bool) {
+	if memoised, cached := lead.(interface{ Uncached() contract.Tool }); cached {
 		lead = memoised.Uncached()
 	}
-	separable, isPlan := lead.(interface{ ForAnotherAgent() (Tool, func() string) })
+	separable, isPlan := lead.(interface {
+		ForAnotherAgent() (contract.Tool, func() string)
+	})
 	if !isPlan {
 		return agentPlan{}, false
 	}
@@ -408,11 +411,11 @@ func (a spawnArgs) mission() string {
 	return strings.TrimRight(cut, " ,;:") + "..."
 }
 
-func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	timing := startSpawnTiming()
 	var args spawnArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return Result{}, fmt.Errorf("spawn: arguments are not the expected shape: %w", err)
+		return contract.Result{}, fmt.Errorf("spawn: arguments are not the expected shape: %w", err)
 	}
 	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
 	t.mu.Lock()
@@ -420,20 +423,20 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	t.mu.Unlock()
 	defer naming.passed(site.call)
 	if strings.TrimSpace(args.Task) == "" {
-		return Result{}, errors.New("spawn: task is required")
+		return contract.Result{}, errors.New("spawn: task is required")
 	}
 	cited, err := t.citedMemory(args.Task)
 	if err != nil {
-		return Result{}, err
+		return contract.Result{}, err
 	}
 	timing.took("memory")
 	if t.writesNothing && (len(args.Owns) > 0 || args.Ticket != "") {
-		return Result{}, ReadOnlyError{Tool: t.Name()}
+		return contract.Result{}, ReadOnlyError{Tool: t.Name()}
 	}
 	var effort llm.Effort
 	if args.Effort != "" {
 		if effort, err = llm.ParseEffort(args.Effort); err != nil {
-			return Result{}, fmt.Errorf("spawn: %w", err)
+			return contract.Result{}, fmt.Errorf("spawn: %w", err)
 		}
 	}
 	var boardSizes map[string]int64
@@ -441,29 +444,29 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if args.Ticket != "" && t.base.Board != nil {
 		boardSizes = t.base.Board.Store.EventSizes()
 		if err := t.base.Board.Fire(rule.WhenBefore, rule.HookAgentSpawn, "", args.Ticket, t.base.Session); err != nil {
-			return Result{}, fmt.Errorf("spawn: %w%s", err, BoardNudges(t.base.Board.Store, boardSizes))
+			return contract.Result{}, fmt.Errorf("spawn: %w%s", err, BoardNudges(t.base.Board.Store, boardSizes))
 		}
 		ticket, err := t.base.Board.Get(args.Ticket)
 		if err != nil {
-			return Result{}, fmt.Errorf("spawn: %w", err)
+			return contract.Result{}, fmt.Errorf("spawn: %w", err)
 		}
 		thread, err := t.base.Board.Store.Thread(args.Ticket)
 		if err != nil {
-			return Result{}, fmt.Errorf("spawn: %w", err)
+			return contract.Result{}, fmt.Errorf("spawn: %w", err)
 		}
 		revision = len(ticket.Acceptance)
 		if err := raisedTwice(args.Ticket, thread, revision, effort); err != nil {
-			return Result{}, err
+			return contract.Result{}, err
 		}
 		args.Owns = ticket.Owns
 	}
 	timing.took("ticket grant")
 	limits := t.limits()
 	if t.depth+1 > limits.Depth {
-		return Result{}, DepthLimitError{Depth: t.depth + 1, Limit: limits.Depth}
+		return contract.Result{}, DepthLimitError{Depth: t.depth + 1, Limit: limits.Depth}
 	}
 	if err := t.Inbox.reserve(limits.Running); err != nil {
-		return Result{}, fmt.Errorf("spawn %w", err)
+		return contract.Result{}, fmt.Errorf("spawn %w", err)
 	}
 	opened, started := SubAgentModel{}, false
 	defer func() {
@@ -478,13 +481,13 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	}()
 	definition, err := t.SubAgents.Named(args.Agent)
 	if err != nil {
-		return Result{}, err
+		return contract.Result{}, err
 	}
 	narrowed := ""
 	if fire, firing := ctx.Value(hookFireKey{}).(func(context.Context, hook.Input) hook.Verdict); firing {
 		spawning := fire(ctx, hook.Input{Event: hook.SubagentSpawn, CallID: site.call, Spawn: &hook.SpawnFacts{Definition: definition.Name, Mission: args.mission(), Task: args.Task, Owns: append([]string{}, args.Owns...), Ticket: args.Ticket}})
 		if spawning.Block != "" {
-			return Result{}, errors.New("spawn refused by a SubagentSpawn hook: " + spawning.Block)
+			return contract.Result{}, errors.New("spawn refused by a SubagentSpawn hook: " + spawning.Block)
 		}
 		if spawning.Narrowed {
 			narrowed = "a SubagentSpawn hook narrowed owns from [" + strings.Join(args.Owns, ", ") + "] to [" + strings.Join(spawning.Owns, ", ") + "]. "
@@ -493,15 +496,15 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	}
 	timing.took("hook")
 	if err := sideHeldOwns(t.Name(), t.base.Sessions, t.base.Session, args.Owns); err != nil {
-		return Result{}, err
+		return contract.Result{}, err
 	}
 	system, parts, environment, err := t.SubAgents.prompt(t.base, definition, args.Task, args.Owns)
 	if err != nil {
-		return Result{}, fmt.Errorf("spawn: the sub-agent's prompt did not compose: %w", err)
+		return contract.Result{}, fmt.Errorf("spawn: the sub-agent's prompt did not compose: %w", err)
 	}
 	timing.took("prompt")
 	if opened, err = t.open(definition, effort); err != nil {
-		return Result{}, fmt.Errorf("spawn: %w", err)
+		return contract.Result{}, fmt.Errorf("spawn: %w", err)
 	}
 	timing.took("account pick")
 	var recorded []string
@@ -511,7 +514,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		}
 	}
 	if err := naming.waitForEarlier(ctx, site.call); err != nil {
-		return Result{}, fmt.Errorf("spawn stopped before it started: %w", err)
+		return contract.Result{}, fmt.Errorf("spawn stopped before it started: %w", err)
 	}
 	timing.took("earlier siblings")
 	t.tree.mu.Lock()
@@ -531,29 +534,29 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if err := holding; err != nil {
 		var collision subagent.CollisionError
 		if errors.As(err, &collision) {
-			return Result{}, fmt.Errorf("spawn refused: %s already holds %q, which overlaps %q. send this work to %s with message, or free its paths with message and do release, or do kill if it runs",
+			return contract.Result{}, fmt.Errorf("spawn refused: %s already holds %q, which overlaps %q. send this work to %s with message, or free its paths with message and do release, or do kill if it runs",
 				collision.Holder, collision.HolderGlob, collision.Glob, collision.Holder)
 		}
-		return Result{}, fmt.Errorf("spawn: %w", err)
+		return contract.Result{}, fmt.Errorf("spawn: %w", err)
 	}
 	if args.Ticket != "" && t.base.Board != nil {
 		lead := t.speaker()
 		if _, err := t.base.TicketGrant(t.boardAs(t.base.Session, lead), args.Ticket, t.base.Session, subAgentID); err != nil {
 			t.roster.Release(subAgentID)
-			return Result{}, fmt.Errorf("spawn: %w", err)
+			return contract.Result{}, fmt.Errorf("spawn: %w", err)
 		}
 		spawned := boardy.Event{Ticket: args.Ticket, Kind: boardy.Spawned, Actor: t.base.Session, Author: lead, Session: t.base.Session, Agent: subAgentID, Call: site.call,
 			Text: subAgentID + effortWords(effort) + ", " + agent.Mission, Brief: agent.Brief, Assignee: subAgentID, To: boardy.Doing, Effort: string(effort), Revision: revision}
 		if err := t.base.Board.Store.RecordTicket(spawned); err != nil {
 			t.roster.Release(subAgentID)
-			return Result{}, fmt.Errorf("spawn: %s's spawn was not written to %s's thread: %w", subAgentID, args.Ticket, err)
+			return contract.Result{}, fmt.Errorf("spawn: %s's spawn was not written to %s's thread: %w", subAgentID, args.Ticket, err)
 		}
 	}
 
 	scratch, err := t.scratch(ctx, subAgentID)
 	if err != nil {
 		t.roster.Release(subAgentID)
-		return Result{}, fmt.Errorf("spawn: %s's scratch folder was not made: %w", subAgentID, err)
+		return contract.Result{}, fmt.Errorf("spawn: %s's scratch folder was not made: %w", subAgentID, err)
 	}
 	timing.took("scratch")
 	held := &heldSubAgent{agent: agent, definition: definition, effort: opened.Effort, askedEffort: effort, system: system, parts: parts,
@@ -584,7 +587,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		}
 		said += BoardNudges(t.base.Board.Store, boardSizes)
 	}
-	return Result{Content: said, Command: subAgentID + " running: " + agent.Mission, SubAgent: subAgentID}, nil
+	return contract.Result{Content: said, Command: subAgentID + " running: " + agent.Mission, SubAgent: subAgentID}, nil
 }
 
 func (t *SpawnTool) proseStore() *recall.Store {
@@ -699,14 +702,14 @@ func (t *SpawnTool) OfferedTo(definition subagent.Definition, ticket string) []l
 	return NewRegistry(offered...).Definitions()
 }
 
-func (t *SpawnTool) offeredTools(held *heldSubAgent, site spawnSite, limits SubAgentLimits) ([]Tool, agentPlan) {
+func (t *SpawnTool) offeredTools(held *heldSubAgent, site spawnSite, limits SubAgentLimits) ([]contract.Tool, agentPlan) {
 	offered := func(name string) bool {
 		if name == ShellToolName {
 			name = bashToolName
 		}
 		return len(held.definition.Tools) == 0 || slices.Contains(held.definition.Tools, name)
 	}
-	var owned []Tool
+	var owned []contract.Tool
 	var plan agentPlan
 	defined := t.built.defined(t.base.Tools)
 	for i, tool := range t.base.Tools.tools {

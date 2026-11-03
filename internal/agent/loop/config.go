@@ -21,6 +21,7 @@ import (
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/contract"
 	"tofu/library/changelog"
 )
 
@@ -124,7 +125,7 @@ type Config struct {
 	Drops           *DropIndex
 	Board           *boardy.Managed
 	TicketGrant     func(board boardy.Managed, id, lead, agent string) ([]string, error)
-	TicketTools     func(board boardy.Managed, actor string) ([]Tool, error)
+	TicketTools     func(board boardy.Managed, actor string) ([]contract.Tool, error)
 	Log             *session.Log
 	Turn            string
 	SpawnedBy       string

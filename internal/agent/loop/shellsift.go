@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"tofu/internal/judge/method"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/shell/sift"
 	shipped "tofu/library"
 )
@@ -80,7 +81,7 @@ func siftOrNothing(given *ShellSift) *ShellSift {
 	return &built
 }
 
-func (g gatedCall) cutShellResult(ctx context.Context, tool string, result Result) ShellCut {
+func (g gatedCall) cutShellResult(ctx context.Context, tool string, result contract.Result) ShellCut {
 	if g.sift == nil || tool != bashToolName || result.ExitCode == nil {
 		return ShellCut{Text: result.Content}
 	}

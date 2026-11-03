@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"tofu/internal/tools/contract"
 )
 
 func writeThrough(t *testing.T, dir, path, content string) error {
@@ -97,7 +98,7 @@ func TestWriteKeepsModeAndFollowsSymlink(t *testing.T) {
 	}
 }
 
-func appendThrough(t *testing.T, dir string, ledger *ReadLedger, content string) (Result, error) {
+func appendThrough(t *testing.T, dir string, ledger *ReadLedger, content string) (contract.Result, error) {
 	t.Helper()
 	tool, err := NewWriteTool(dir)
 	if err != nil {

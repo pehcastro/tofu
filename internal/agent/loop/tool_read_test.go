@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/contract"
 )
 
 func madeUpPNG(t *testing.T, width, height int) []byte {
@@ -106,13 +107,13 @@ func TestReadHandsAPictureToTheModel(t *testing.T) {
 	}
 }
 
-type replayedRead map[string]Result
+type replayedRead map[string]contract.Result
 
 func (r replayedRead) Name() string { return "read" }
 
 func (r replayedRead) Definition() llm.Tool { return llm.Tool{Name: "read"} }
 
-func (r replayedRead) Run(_ context.Context, raw json.RawMessage) (Result, error) {
+func (r replayedRead) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct{ Call string }
 	err := json.Unmarshal(raw, &args)
 	return r[args.Call], err
@@ -129,7 +130,7 @@ type sentAs struct {
 
 func TestARepeatedReadPointsAtTheCopyTheNextRequestStillCarries(t *testing.T) {
 	file := strings.Repeat("func f() int { return 1 }\n", 40)
-	first, repeat := Result{Content: file}, Result{Content: file, Repeat: true}
+	first, repeat := contract.Result{Content: file}, contract.Result{Content: file, Repeat: true}
 	rows := []struct {
 		name      string
 		answers   replayedRead

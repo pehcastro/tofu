@@ -11,6 +11,7 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/contract"
 )
 
 type searchPage struct{ acts *int }
@@ -21,9 +22,9 @@ func (searchPage) Definition() llm.Tool {
 	return llm.Tool{Name: "browser_act", Parameters: map[string]any{"type": "object"}}
 }
 
-func (s searchPage) Run(context.Context, json.RawMessage) (turn.Result, error) {
+func (s searchPage) Run(context.Context, json.RawMessage) (contract.Result, error) {
 	*s.acts++
-	return turn.Result{Content: "1. click e7 \"Apply\": the page changed\n\n<<<ab12 begins>>>\ntab 1 https://www.airbnb.com.br/s/Atibaia--SP/homes?min_bedrooms=" + strconv.Itoa(*s.acts) + "\n- main\n<<<ab12 ends>>>"}, nil
+	return contract.Result{Content: "1. click e7 \"Apply\": the page changed\n\n<<<ab12 begins>>>\ntab 1 https://www.airbnb.com.br/s/Atibaia--SP/homes?min_bedrooms=" + strconv.Itoa(*s.acts) + "\n- main\n<<<ab12 ends>>>"}, nil
 }
 
 type actsPastTheFactSheet struct{ asked int }
