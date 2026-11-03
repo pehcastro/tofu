@@ -1,7 +1,7 @@
 ---
 id: quote-resolution
 domain: general
-document: interface/tui/quote, internal/turn/tools and internal/store/session, read in this repository
+document: internal/ui/tui/chat/quote, internal/turn/tools and internal/store/session, read in this repository
 also: library/general/references/what-reaches-a-screen.md
 ---
 
@@ -37,7 +37,7 @@ An item larger than the tool result cap comes back cut at the cap, with a note n
 
 Nothing falls back to the nearest item, and there is no fourth case. That is why the rule says an id matching no item and an id matching more than one resolve to neither, and why it says to name which of the two happened rather than answer anyway: the code has already distinguished them, and a model that collapses them throws away the only information the reader needs to fix the reference.
 
-A turn recorded before event ids existed is not skipped. `internal/turn/tools.SaidEventID` gives it an id derived from the session and the turn's place in it, and `interface/tui/quote.Collect` uses the same function, so an old transcript is quotable on the same terms as a new one.
+A turn recorded before event ids existed is not skipped. `internal/turn/tools.SaidEventID` gives it an id derived from the session and the turn's place in it, and `internal/ui/tui/chat/quote.Collect` uses the same function, so an old transcript is quotable on the same terms as a new one.
 
 ## Why the rule exists at all
 
