@@ -3,7 +3,7 @@ domain: general
 questions_version: 1
 mode: enforced
 notes: >-
-  asked by internal/turn/compose.go each time a prompt is composed for a task
+  asked by internal/agent/loop/compose.go each time a prompt is composed for a task
   that is not blank, the lead's and each spawn's brief, when the run gives
   Compose a kind judge. state.task is the task text alone. a rule declaring
   task: debug, explore, review, write or plan fires when the chosen kind is

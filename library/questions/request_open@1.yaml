@@ -3,7 +3,7 @@ domain: general
 questions_version: 1
 mode: enforced
 notes: >-
-  asked by internal/turn/inbox.go once for each message the person types to
+  asked by internal/agent/loop/inbox.go once for each message the person types to
   the lead, before the lead's turn starts. state.said is that message alone,
   without tofu's notes. at or above open_at the verdict is ask: the task
   carries a note that the request is open, and the rule restate_open makes

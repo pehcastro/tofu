@@ -3,7 +3,7 @@ domain: general
 questions_version: 1
 mode: enforced
 notes: >-
-  asked by internal/turn/compose.go when a prompt is composed for a writer,
+  asked by internal/agent/loop/compose.go when a prompt is composed for a writer,
   a sub-agent or a lead working alone. state.task is the task text,
   state.paths the paths it names or owns, empty when it names none, and
   state.rules holds each rule whose touches would otherwise decide, with its

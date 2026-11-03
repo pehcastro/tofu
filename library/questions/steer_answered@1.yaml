@@ -3,7 +3,7 @@ domain: general
 questions_version: 1
 mode: enforced
 notes: >-
-  asked by internal/turn/loop.go while a message the person wrote mid-turn has
+  asked by internal/agent/loop/loop.go while a message the person wrote mid-turn has
   no answer yet, once for each assistant text that is not blank. state.said is
   the first line of that message and state.reply is the text the lead wrote
   after reading it. the question stays open, so the turn is sent back once,

@@ -15,7 +15,7 @@ A row carries no message text. `recall.Measure` reads only `len(text)`, so a row
 To take a new pin, with the live sessions present:
 
 ```
-TOFU_PIN_ESTIMATE_CORPUS=testdata/estimate-corpus.jsonl go test ./internal/recall/ -run TestThePinnedCorpusStillMatchesTheLiveSessionsItWasTakenFrom -count=1 -v
+TOFU_PIN_ESTIMATE_CORPUS=testdata/estimate-corpus.jsonl go test ./internal/agent/context/recall/ -run TestThePinnedCorpusStillMatchesTheLiveSessionsItWasTakenFrom -count=1 -v
 ```
 
 That is a deliberate act and it moves the bound's meaning, so the counts above and the numbers in the ticket report are rewritten in the same change. `TestThePinnedCorpusStillMatchesTheLiveSessionsItWasTakenFrom` fails when a pinned row still in the live store no longer rebuilds to the same numbers, and counts the live requests recorded since the pin without failing on them.
