@@ -85,7 +85,7 @@ commit, drops or merges a dead ticket with a pointer, and batches drives.
     tofu boardy show DEMO-1
     tofu boardy show DEMO-1 --thread
     tofu boardy lint
-    tofu boardy held cmd/tofu/main.go --json
+    tofu boardy held apps/cli/main.go --json
 
 `list` shows the live tickets; `--all` adds done and dropped, and
 `--status review` shows one status. `--fields id,status,assignee,owns`

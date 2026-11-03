@@ -131,14 +131,14 @@ reuse: rules that don't change with the task stay in the cached prefix.
 ## Commands
 
 ```sh
-tofu rules index "fix the failing go test in internal/turn/loop.go" internal/turn/loop.go
+tofu rules index "fix the failing go test in internal/agent/loop/loop.go" internal/agent/loop/loop.go
 ```
 
 ```text
 Rules index · from the project                                  ● 32 of 157 fire
 
-  task      fix the failing go test in internal/turn/loop.go
-  paths     internal/turn/loop.go
+  task      fix the failing go test in internal/agent/loop/loop.go
+  paths     internal/agent/loop/loop.go
   concerns  code_rules, process_discipline, safety, output_shape, tool_guidance
 ```
 
@@ -148,6 +148,6 @@ with the reason:
 ```text
 ○ fe_accessible_names         no package.json the task reaches lists react or
   svelte or vue or solid or angular or astro or preact
-● go_context_first            the language go reached internal/turn/loop.go
+● go_context_first            the language go reached internal/agent/loop/loop.go
 ● em_dash                     always on, the rule declares no trigger
 ```

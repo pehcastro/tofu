@@ -6,7 +6,7 @@ updated: 2026-10-13
 ---
 
 Every sub-agent that can write holds a list of paths, its `owns`: a file, a
-folder, or a glob such as `internal/turn/*.go`. The lead gives it in the
+folder, or a glob such as `internal/agent/loop/*.go`. The lead gives it in the
 `spawn` call. tofu checks every write against it before anything changes.
 
 ![The file edits tab: each changed file and the sub-agent that changed it](./media/tui-file-edits.png)

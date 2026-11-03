@@ -29,7 +29,7 @@ You need Go 1.25.8 or later and git.
 
 `cd tofu`
 
-`go build -o ~/.local/bin/tofu ./cmd/tofu`
+`go build -o ~/.local/bin/tofu ./apps/cli`
 
 
 # Windows
@@ -38,11 +38,11 @@ You need Go 1.25.8 or later and git.
 
 `cd tofu`
 
-`go build -o $HOME\.local\bin\tofu.exe ./cmd/tofu`
+`go build -o $HOME\.local\bin\tofu.exe ./apps/cli`
 
 ````
 
-`go install ./cmd/tofu` also works and puts the binary in Go's bin directory.
+`go install ./apps/cli` also works and puts the binary in Go's bin directory.
 Building to `~/.local/bin` replaces a script-installed `tofu`, so you run
 your own build under the same name.
 
@@ -53,7 +53,7 @@ release, so skip it while you run your own build.
 
 ```
 git pull
-go build -o ~/.local/bin/tofu ./cmd/tofu
+go build -o ~/.local/bin/tofu ./apps/cli
 ```
 
 ## Check the build

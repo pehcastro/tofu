@@ -44,7 +44,7 @@ func stampRepo(t *testing.T) string {
 	put(t, repo, ".local/boji/tickets/review/TOFU-1.md", "---\nid: TOFU-1\nowns:\n  - internal/agent/loop/**\n---\n")
 	put(t, repo, ".local/boji/tickets/review/TOFU-2.md", "---\nid: TOFU-2\nowns:\n  - internal/guard/**\n  - docs/**\n---\n")
 	put(t, repo, ".local/boji/tickets/review/TOFU-3.md", "---\nid: TOFU-3\nowns:\n  - internal/**\n---\n")
-	put(t, repo, ".local/boji/tickets/review/TOFU-4.md", "---\nid: TOFU-4\nowns:\n  - cmd/tofu/guard.go\n---\n")
+	put(t, repo, ".local/boji/tickets/review/TOFU-4.md", "---\nid: TOFU-4\nowns:\n  - apps/cli/guard.go\n---\n")
 	put(t, repo, ".local/boji/tickets/review/TOFU-5.md", "---\nid: TOFU-5\nowns:\n  - apps/desk/**\n---\n")
 	commitAll(t, repo)
 	return repo
@@ -81,7 +81,7 @@ func TestDoneMoveNeedsAFlowsStampForHeadAndCommittedWork(t *testing.T) {
 	}{
 		{name: "a turn ticket with no stamp", command: move + " --reason ok", refused: true, want: "go run ./bench/flows"},
 		{name: "a broad internal glob touches turn", command: "tofu boardy move TOFU-3 done", refused: true},
-		{name: "one file in cmd/tofu", command: "tofu boardy move TOFU-4 done", refused: true},
+		{name: "one file in apps/cli", command: "tofu boardy move TOFU-4 done", refused: true},
 		{name: "a desk ticket with no stamp", command: "tofu boardy move TOFU-5 done", refused: true, want: "apps/desk"},
 		{name: "flags before the id", command: `tofu boardy move --reason "all good" --as orchestrator TOFU-1 done`, refused: true},
 		{name: "chained after another command", command: `cd x && tofu.exe boardy move TOFU-1 done`, refused: true},

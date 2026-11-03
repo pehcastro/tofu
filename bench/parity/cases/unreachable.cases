@@ -2,7 +2,7 @@ unreachable flows 4, 6, 7 and 9
 why bench/flows seams them inside its own runner (a panic hook, a cap, a fold cassette built at run time, a survive kill), so a script alone does not replay them; bench/flows itself runs them
 
 unreachable slash /copy, /copy-call and /quote
-why tofu drive leaves the app's Copy unset, so the app writes the real Windows clipboard; the hook needed is a Copy sink in cmd/tofu/drive.go beside the --clipboard reader
+why tofu drive leaves the app's Copy unset, so the app writes the real Windows clipboard; the hook needed is a Copy sink in apps/cli/drive.go beside the --clipboard reader
 
 unreachable serve session.history right after turn.completed
 why one build answers from the live event lines (turn.started first, 14 lines) or from the persisted log (session.updated first, 6 lines) depending on timing, so two runs of one build differ; session-history-empty covers the method

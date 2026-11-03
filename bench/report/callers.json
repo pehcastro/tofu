@@ -11,17 +11,17 @@
   },
   {
     "point": "stop_check",
-    "file": "cmd/tofu/run_done.go",
+    "file": "apps/cli/run_done.go",
     "symbol": "BuildStopCheck"
   },
   {
     "point": "memory_scope",
-    "file": "cmd/tofu/judge_ledger.go",
+    "file": "apps/cli/judge_ledger.go",
     "symbol": "memoryScopeJudge"
   },
   {
     "point": "read_worth",
-    "file": "cmd/tofu/sift.go",
+    "file": "apps/cli/sift.go",
     "symbol": "sift.Length"
   },
   {
@@ -76,7 +76,7 @@
   },
   {
     "point": "rule_applies",
-    "file": "cmd/tofu/run.go",
+    "file": "apps/cli/run.go",
     "symbol": "NewRuleJudge"
   }
 ]

@@ -1,0 +1,972 @@
+package main
+
+import (
+	"cmp"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime/debug"
+	"slices"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/charmbracelet/x/term"
+
+	"tofu/internal/agent/context/recall"
+	"tofu/internal/agent/loop"
+	roster "tofu/internal/agent/subagents"
+	"tofu/internal/cli/output"
+	"tofu/internal/cli/render"
+	"tofu/internal/host"
+	"tofu/internal/konst"
+	"tofu/internal/models/classifiers"
+	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/llm/accounts"
+	"tofu/internal/models/llm/catalog"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/recover"
+	"tofu/internal/store/memory/entries"
+	sessionstore "tofu/internal/store/session"
+	settingspkg "tofu/internal/store/settings"
+	"tofu/internal/sys"
+	"tofu/internal/tools/registry"
+	"tofu/internal/tools/shell/process"
+	"tofu/internal/ui/keymap"
+	"tofu/internal/ui/tui/app"
+	"tofu/internal/ui/tui/composer/paste"
+	"tofu/internal/ui/tui/frame/frame"
+	"tofu/internal/ui/tui/panels/shells"
+	"tofu/internal/ui/tui/pickers/settings"
+)
+
+const (
+	noTerminal       = "tofu: the app needs a terminal. with input redirected, use tofu run --dir <dir> <task>"
+	gateOffNote      = "gate off: no tool call is judged until tofu login classifier stores the key of the bound classifier"
+	noCredential     = "no subscription is signed in, so no model can answer"
+	modelStep        = "language model"
+	classifierStep   = "classifier · jev, required"
+	unreadableSource = "unreadable: "
+	jevName          = "jev"
+	freshSessionNote = "the next task starts a new session and carries nothing from the last one"
+	sessionEnded     = "tofu: session ended"
+	stoppingPrefix   = ", stopping "
+	leavingPrefix    = ", leaving running for the next launch "
+	leftOverNote     = "shells left over from an earlier tofu: "
+	leftOverFix      = ", end them in the shells screen"
+	noteSeparator    = "  ·  "
+	roundMark        = "-r"
+	artifactsDirName = "artifacts"
+	sessionsDirName  = "sessions"
+	sweptStampName   = "swept"
+)
+
+const (
+	stateFileKeptDays = 7
+	shellPruneEvery   = time.Hour
+)
+
+type appWiring struct {
+	open      func(runOpts) (appWire, error)
+	wires     func() []tui.Wire
+	blockers  func() []tui.Requirement
+	clipboard func() (sys.Clipboard, error)
+	quota     func() []frame.Quota
+	reload    func(ctx context.Context, out io.Writer) int
+	now       func() time.Time
+	joins     bool
+}
+
+type appLaunch struct {
+	resumed       sessionResume
+	fresh         bool
+	registry      *shell.Registry
+	registryErr   error
+	note          string
+	tabs          *tools.BrowserTabs
+	release       *func()
+	endSession    *func() []string
+	turnRunning   *func() (string, bool)
+	stopRestoring func()
+}
+
+func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
+	registry, registryErr := launchShellRegistry(dir)
+	home, _ := os.UserHomeDir()
+	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: tools.NewBrowserTabs(home), release: new(func()), endSession: new(func() []string), turnRunning: new(func() (string, bool)), stopRestoring: func() {}}
+	safe.Go(sys.Crashes(dir), "state sweep", func() {
+		state, err := sys.ProjectStateDirAt(dir)
+		if err != nil {
+			return
+		}
+		sys.OncePerDay(filepath.Join(state, sweptStampName), time.Now(), func() {
+			aged := time.Now().AddDate(0, 0, -stateFileKeptDays)
+			_ = sys.RemoveUnreferencedArtifacts(filepath.Join(state, artifactsDirName), filepath.Join(state, sessionsDirName), aged)
+			_ = sys.RemoveAged(state, safe.CrashPrefix, safe.CrashSuffix, aged)
+			if stateHome, err := sys.HomeConfigDir(); err == nil {
+				_ = sys.RemoveAged(stateHome, safe.CrashPrefix, safe.CrashSuffix, aged)
+			}
+		})
+	})
+	if registryErr != nil {
+		return launch
+	}
+	_ = registry.Prune()
+	found, _ := registry.List()
+	if leftOver := len(slices.DeleteFunc(found, func(one shell.Shell) bool { return !one.LeftOver() })); leftOver > 0 {
+		launch.note = leftOverNote + strconv.Itoa(leftOver) + leftOverFix
+	}
+	return launch
+}
+
+func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch, held heldStore) tui.Options {
+	defer launch.stopRestoring()
+	places, _ := sys.ResolvePlaces(".")
+	engine := &appEngine{dir: dir, arms: arms, open: wiring.open, quota: wiring.quota, tabs: launch.tabs, places: places}
+	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), Resumed: launch.resumed.hosted(), Joins: wiring.joins, Now: wiring.now})
+	notes := append([]string{launch.note}, troubles...)
+	if _, err := gateKeyFrom(held.keys()); err != nil {
+		notes = append(notes, gateOffSaid(err))
+	}
+	note := strings.Join(slices.DeleteFunc(notes, func(one string) bool { return one == "" }), noteSeparator)
+	*launch.release = func() {
+		live.Close()
+		engine.warm.Close()
+	}
+	*launch.turnRunning = live.Turn
+	*launch.endSession = func() []string {
+		if wiring.joins {
+			return nil
+		}
+		return turn.EndSession(context.Background(), dir, live.ID(), sessionEndExit)
+	}
+	settingsStore, _ := settingspkg.OpenFor(dir)
+	shortcuts, _ := keymap.ShortcutsPath()
+	opening := live.Opening(launch.resumed.hosted())
+	if note := resumeNote(launch.resumed); note != "" {
+		opening.Chat = append(opening.Chat, tui.Event{Kind: tui.EventNote, Text: note})
+	}
+	if memoryOn(dir) {
+		shelves, err := memory.Open(dir)
+		if err != nil {
+			shelves.Copied = append(shelves.Copied, "your memory is unreadable: "+err.Error())
+		}
+		for _, line := range shelves.Copied {
+			opening.Chat = append(opening.Chat, tui.Event{Kind: tui.EventNote, Text: line})
+		}
+	}
+	return tui.Options{
+		Repo:         filepath.Base(dir),
+		Root:         dir,
+		Branch:       branchOf(dir),
+		Note:         note,
+		Requirements: wiring.blockers(),
+		Recheck:      wiring.blockers,
+		SignIn:       func(source string) *exec.Cmd { return loginCommand(source)() },
+		SaveKey:      storeKeyFor,
+		Wires:        wiring.wires,
+		Models:       func() (models.Library, error) { return modelLibrary(dir) },
+		Providers:    held.providers(),
+		Quota:        wiring.quota,
+		Settings:     settingsStore,
+		Reload:       appReload(dir),
+		ReloadModels: modelsReload(dir, wiring.reload),
+		ModelsStale:  catalogStale(time.Now()),
+		Host:         live,
+		Paste:        paste.Board{Read: wiring.clipboard, Dir: live.AttachmentDir, Recorded: live.Attached},
+		Paths:        appPaths(dir),
+		Sessions:     func() ([]tui.SessionRow, error) { return appSessions(live.ID()) },
+		Resume:       func(handle string) (string, host.Opened) { return appResume(live, handle) },
+		NewSession:   func() string { return freshSession(live) },
+		Compact:      func(focus string) string { return forkNote(live, turn.ForkCompact, focus) },
+		Fork:         func() string { return forkNote(live, turn.ForkByHand, "") },
+		BranchAt:     func(message string) (string, string) { return branchLine(live, message) },
+		Undo:         func(count string) string { return undoTurns(live.ID(), count) },
+		Updates:      appUpdates(dir),
+		Shells:       appShells(dir, launch.registry, launch.registryErr),
+		KillShell:    appKillShell(launch.registry, launch.registryErr),
+		RunCommand: func(ctx context.Context, command string) (string, bool) {
+			printed, stopped := shellCommand(ctx, dir, launch.registry, command)
+			return live.Ran(command, printed, stopped), stopped
+		},
+		Fresh:   launch.fresh,
+		Resumed: opening,
+		Keymap:  shortcuts,
+		Agents:  func() roster.Found { found, _ := discoverAgents(); return found },
+	}
+}
+
+const (
+	reloadStampSuffix = ".reload"
+	reloadSucceeded   = "succeeded"
+	reloadFailed      = "failed"
+	reloadFound       = "models reload found "
+)
+
+func catalogStale(now time.Time) bool {
+	catalog, err := models.CatalogDir()
+	if err != nil {
+		return false
+	}
+	stamp := catalog + reloadStampSuffix
+	outcome, readErr := os.ReadFile(stamp)
+	info, statErr := os.Stat(stamp)
+	if readErr != nil || statErr != nil {
+		return true
+	}
+	age := now.Sub(info.ModTime())
+	switch string(outcome) {
+	case reloadSucceeded:
+		return age >= konst.CatalogStaleHours*time.Hour
+	case reloadFailed:
+		return age >= konst.CatalogRetryHours*time.Hour
+	}
+	return true
+}
+
+func stampReload(exit int) {
+	catalog, err := models.CatalogDir()
+	if err != nil || os.MkdirAll(filepath.Dir(catalog), 0o755) != nil {
+		return
+	}
+	outcome := reloadFailed
+	if exit == output.ExitOK {
+		outcome = reloadSucceeded
+	}
+	_ = os.WriteFile(catalog+reloadStampSuffix, []byte(outcome), 0o644)
+}
+
+func modelsReload(dir string, reload func(context.Context, io.Writer) int) func() string {
+	if reload == nil {
+		return nil
+	}
+	return func() string {
+		before, unreadBefore := modelLibrary(dir)
+		stampReload(reload(context.Background(), io.Discard))
+		debug.FreeOSMemory()
+		after, err := modelLibrary(dir)
+		if err != nil {
+			return models.ReloadVerb + ": " + err.Error()
+		}
+		var found []string
+		for _, model := range after.Models {
+			known := slices.ContainsFunc(before.Models, func(was models.Model) bool { return was.Slug() == model.Slug() })
+			if !known && model.Use != models.UseExcluded {
+				found = append(found, model.Slug())
+			}
+		}
+		if len(found) == 0 || unreadBefore != nil {
+			return ""
+		}
+		return reloadFound + strings.Join(found, ", ")
+	}
+}
+
+func isTerminal(stream any) bool {
+	file, isFile := stream.(*os.File)
+	return isFile && term.IsTerminal(file.Fd())
+}
+
+func collectForALongLife() {
+	if os.Getenv("GOGC") == "" {
+		debug.SetGCPercent(konst.LongLivedGCPercent)
+	}
+	if os.Getenv("GOMEMLIMIT") == "" {
+		debug.SetMemoryLimit(konst.LongLivedMemoryLimitBytes)
+	}
+}
+
+func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
+	if !isTerminal(in) {
+		_, _ = fmt.Fprintln(errOut, noTerminal)
+		return output.ExitUsage
+	}
+	collectForALongLife()
+	dir, err := os.Getwd()
+	if err != nil {
+		_, _ = fmt.Fprintf(errOut, "tofu: the working directory is unreadable: %v\n", err)
+		return output.ExitVerdict
+	}
+	stopRestoring := restoring(out, resumed)
+	held := holdStore()
+	defer held.close()
+	live := appWiring{open: openAppWire, wires: held.wires, blockers: held.requirements, quota: held.quota, reload: held.reload, joins: true}
+	launch := launchOf(dir, resumed, resumed.Session == "")
+	launch.stopRestoring = stopRestoring
+	var identity sync.WaitGroup
+	var identityErr error
+	identity.Go(func() {
+		identityErr = sys.Crashed(dir, safe.Call(nil, "project identity", func() error { return sys.RecordIdentity(dir) }))
+	})
+	err = tui.Run(appOptions(dir, runOpts{}, live, launch, held))
+	identity.Wait()
+	if identityErr != nil {
+		_, _ = fmt.Fprintf(errOut, "tofu: the git remote and root of this project were not recorded: %v\n", identityErr)
+	}
+	(*launch.release)()
+	for _, warning := range (*launch.endSession)() {
+		_, _ = fmt.Fprintln(errOut, "tofu: "+warning)
+	}
+	if err != nil {
+		_, _ = fmt.Fprintf(errOut, "tofu: %v\n", err)
+		return output.ExitVerdict
+	}
+	_, _ = fmt.Fprintln(out, sessionEndLine(launch.registry, launch.registryErr))
+	leaveShells(launch.registry)
+	return output.ExitOK
+}
+
+func leaveShells(registry *shell.Registry) {
+	if registry == nil || registry.Lifetime == shell.OutlivesTofu {
+		return
+	}
+	for _, one := range registry.Own() {
+		_ = registry.Kill(one.Name)
+	}
+}
+
+func sessionEndLine(registry *shell.Registry, openErr error) string {
+	var running []string
+	if openErr == nil {
+		for _, one := range registry.Own() {
+			running = append(running, one.Name+" ("+one.Command+")")
+		}
+	}
+	if len(running) == 0 {
+		return sessionEnded
+	}
+	if registry.Lifetime == shell.OutlivesTofu {
+		return sessionEnded + leavingPrefix + strings.Join(running, ", ")
+	}
+	return sessionEnded + stoppingPrefix + strings.Join(running, ", ")
+}
+
+func appPaths(dir string) func() []string {
+	return func() []string {
+		listed, err := tools.ListPaths(dir)
+		if err != nil {
+			return nil
+		}
+		return listed
+	}
+}
+
+func loginCommand(provider string) func() *exec.Cmd {
+	return func() *exec.Cmd {
+		return exec.Command(os.Args[0], append([]string{"login"}, loginWords(provider)...)...)
+	}
+}
+
+func (h heldStore) wires() []tui.Wire {
+	library, err := modelLibrary("")
+	if h.err != nil || err != nil {
+		return nil
+	}
+	now := time.Now()
+	var wires []tui.Wire
+	for _, spec := range library.Subscriptions {
+		row, present, err := h.store.RowAt(cred.Provider(spec.ID), now)
+		if err != nil || !present || row.Unusable(now) != "" {
+			continue
+		}
+		if selected, err := library.Default(spec.ID); err == nil {
+			wires = append(wires, tui.Wire{Name: spec.Wire, Model: selected.ID, Provider: string(spec.ID), Efforts: wireEfforts(spec.Wire)})
+		}
+	}
+	if _, err := h.keys().KeyFor(sys.CredentialFileName, models.Meta.KeyName()); err != nil {
+		return wires
+	}
+	if chosen, err := library.Default(models.Subscription(models.Meta)); err == nil {
+		wires = append(wires, tui.Wire{Name: wireMeta, Model: chosen.ID, Provider: string(models.Meta), Efforts: chosen.Efforts})
+	}
+	return wires
+}
+
+type startStep struct {
+	label   string
+	step    string
+	what    string
+	command string
+	done    string
+	choices []tui.Choice
+}
+
+func (h heldStore) startSteps() []startStep {
+	return []startStep{h.orchestratorStep(), classifierStepOf(h.keys())}
+}
+
+func (h heldStore) orchestratorStep() startStep {
+	step := startStep{label: string(models.RoleOrchestrator), step: modelStep}
+	library, _ := modelLibrary(".")
+	orchestrator, bound := library.Bound(models.RoleOrchestrator)
+	wires := h.wires()
+	signed := slices.ContainsFunc(wires, func(wire tui.Wire) bool { return wire.Provider == orchestrator.Source() })
+	switch {
+	case bound && signed:
+		step.done = orchestrator.Source() + " · " + orchestrator.ID
+		return step
+	case bound:
+		step.what, step.command = "the orchestrator runs "+orchestrator.Slug()+", and "+orchestrator.Source()+" is not signed in", loginHint(orchestrator.Source())
+	case len(wires) == 0:
+		step.what, step.command = noCredential, commandFor("login", roleLLM, "<source>")
+	default:
+		step.what, step.command = models.RoleOrchestrator.Unset().Error(), "tofu models bind orchestrator <provider/model>"
+	}
+	for _, wire := range wires {
+		slug := wire.Provider + "/" + wire.Model
+		step.choices = append(step.choices, tui.Choice{Label: "bind " + slug, Run: func() *exec.Cmd {
+			return exec.Command(os.Args[0], "models", "bind", string(models.RoleOrchestrator), slug)
+		}})
+	}
+	for _, spec := range library.Subscriptions {
+		if !slices.ContainsFunc(wires, func(wire tui.Wire) bool { return wire.Provider == string(spec.ID) }) {
+			step.choices = append(step.choices, tui.Choice{Label: string(spec.ID) + ", signs in through the browser", Run: loginCommand(string(spec.ID))})
+		}
+	}
+	if !slices.ContainsFunc(wires, func(wire tui.Wire) bool { return wire.Name == wireMeta }) {
+		step.choices = append(step.choices, tui.Choice{Label: models.Meta.Display() + " API key", Key: sys.MetaMuseKeyName})
+	}
+	return step
+}
+
+func classifierStepOf(keys jev.Keyring) startStep {
+	step := startStep{label: jevName, step: classifierStep}
+	route, err := classifier.Resolve(".", keys)
+	if jev.IsUnbound(err) {
+		step.what, step.command = err.Error(), "tofu models bind classifier <provider/model>"
+		library, _ := modelLibrary(".")
+		for _, model := range library.Models {
+			if model.Kind == models.KindClassifier && model.Use != models.UseExcluded {
+				step.choices = append(step.choices, tui.Choice{Label: "bind " + model.Slug(), Run: func() *exec.Cmd {
+					return exec.Command(os.Args[0], "models", "bind", string(models.RoleClassifier), model.Slug())
+				}})
+			}
+		}
+		return step
+	}
+	provider := route.Model.Provider
+	if provider == "" {
+		step.what = err.Error()
+		return step
+	}
+	step.what = "there is no " + string(provider) + " key, so jev judges no tool call"
+	step.command = commandFor("login", roleClassifier, string(provider))
+	step.choices = []tui.Choice{{Label: provider.Display() + " key", Key: classifier.KeyName(provider)}}
+	if err == nil {
+		step.done = provider.Display() + " key " + widget.Mask(route.Key)
+	}
+	return step
+}
+
+func gateOffSaid(err error) string {
+	if jev.IsUnbound(err) {
+		return err.Error()
+	}
+	return gateOffNote
+}
+
+func (h heldStore) startBlockers() []startStep {
+	return slices.DeleteFunc(h.startSteps(), func(step startStep) bool { return step.done != "" })
+}
+
+func (h heldStore) requirements() []tui.Requirement {
+	steps := h.startSteps()
+	needed := make([]tui.Requirement, 0, len(steps))
+	for _, step := range steps {
+		needed = append(needed, tui.Requirement{Step: step.step, What: step.what, Fix: step.command, Done: step.done, Choices: step.choices})
+	}
+	return needed
+}
+
+func (h heldStore) providers() []settings.Provider {
+	library, _ := modelLibrary("")
+	var rows []settings.Provider
+	for _, spec := range library.Subscriptions {
+		rows = append(rows, h.subscriptionProvider(cred.Provider(spec.ID)))
+	}
+	return append(rows, openRouterProvider(h.keys()), jevProvider(h.keys()))
+}
+
+func (h heldStore) subscriptionProvider(provider cred.Provider) settings.Provider {
+	row := settings.Provider{Name: string(provider), Source: h.path}
+	if h.err != nil {
+		row.Fix = unreadableSource + h.err.Error()
+		return row
+	}
+	now := time.Now()
+	stored, present, err := h.store.RowAt(provider, now)
+	switch {
+	case err != nil:
+		row.Fix = unreadableSource + err.Error()
+	case !present:
+		row.Fix = "run " + loginHint(string(provider))
+	case stored.Unusable(now) != "":
+		row.State = stored.Unusable(now)
+	default:
+		row.State = strings.TrimSpace("signed in " + maskedAccount(stored.Credential.Identity))
+	}
+	return row
+}
+
+func openRouterProvider(keys jev.Keyring) settings.Provider {
+	located, err := keys.LocateFor(sys.CredentialFileName, jev.OpenRouterVariable)
+	row := settings.Provider{Name: openRouterName, Source: located.Path}
+	if located.Source == jev.SourceEnvironment {
+		row.Source = located.Name + " in the environment"
+	}
+	key, keyErr := keys.KeyFor(sys.CredentialFileName, jev.OpenRouterVariable)
+	if err != nil || keyErr != nil {
+		row.Fix = openRouterFix
+		return row
+	}
+	row.Key = widget.Mask(key)
+	return row
+}
+
+func jevProvider(keys jev.Keyring) settings.Provider {
+	dir, err := sys.LogDir()
+	if err != nil {
+		return settings.Provider{Name: jevName, Fix: unreadableSource + err.Error()}
+	}
+	row := settings.Provider{Name: jevName, Source: dir}
+	key, keyErr := gateKeyFrom(keys)
+	if keyErr == nil {
+		row.Key = widget.Mask(key)
+	}
+	current, err := currentBuild(dir, "")
+	switch {
+	case err != nil:
+		row.Fix = unreadableSource + err.Error()
+	case keyErr != nil:
+		row.Fix = gateOffSaid(keyErr)
+	case current.Known:
+		row.State = current.Build
+	default:
+		row.Fix = "no decision recorded yet"
+	}
+	return row
+}
+
+func branchOf(dir string) string {
+	head, err := os.ReadFile(filepath.Join(dir, ".git", "HEAD"))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimPrefix(strings.TrimSpace(string(head)), "ref: refs/heads/")
+}
+
+func appShells(dir string, registry *shell.Registry, openErr error) func() []shells.Entry {
+	var tails shell.Tails
+	return func() []shells.Entry {
+		if openErr != nil {
+			return nil
+		}
+		_ = registry.PruneEvery(shellPruneEvery)
+		found, err := registry.List()
+		if err != nil {
+			return nil
+		}
+		tail, err := strconv.Atoi(settingspkg.TextSaying(dir, settingspkg.LogTail, nil))
+		if err != nil {
+			tail = konst.ShellLogTailLinesDefault
+		}
+		entries := make([]shells.Entry, 0, len(found))
+		for _, one := range found {
+			entry := shells.Entry{Name: one.Name, Command: one.Command, Started: one.Started, Ended: one.Ended, ExitCode: one.ExitCode, PID: one.PID, Dir: one.Dir, Owner: ownerName(one.Owner), OneShot: one.OneShot()}
+			switch one.State {
+			case shell.Running:
+				entry.State = shells.Running
+				if one.LeftOver() {
+					entry.State = shells.LeftOver
+				}
+			case shell.Exited:
+				entry.State = shells.Exited
+			case shell.Killed:
+				entry.State = shells.Killed
+			}
+			entry.Log, _ = tails.Tail(registry, one.Name, tail)
+			entries = append(entries, entry)
+		}
+		tails.Forget(found)
+		return entries
+	}
+}
+
+func ownerName(owner string) string {
+	at := strings.LastIndex(owner, roundMark)
+	if at < 0 {
+		return owner
+	}
+	if _, err := strconv.Atoi(owner[at+len(roundMark):]); err != nil {
+		return owner
+	}
+	return owner[:at]
+}
+
+func appKillShell(registry *shell.Registry, openErr error) func(string) error {
+	return func(name string) error {
+		if openErr != nil {
+			return openErr
+		}
+		return registry.Kill(name)
+	}
+}
+
+func (h heldStore) quota() []frame.Quota {
+	if h.err != nil {
+		return nil
+	}
+	return quotaFrames(pollStore(context.Background(), h.store, time.Now, nil))
+}
+
+func quotaFrames(results []pollResult, err error) []frame.Quota {
+	if err != nil {
+		return nil
+	}
+	var quotas []frame.Quota
+	for _, result := range results {
+		for _, window := range result.report.Windows {
+			quotas = append(quotas, frame.Quota{
+				Label:    string(result.report.Provider) + " " + window.ID,
+				Account:  "#" + strconv.FormatInt(result.row, 10),
+				Fraction: window.Used.Fraction,
+				Reported: window.Used.Reported,
+				ResetsAt: window.ResetsAt,
+				ReadAt:   result.report.FetchedAt,
+				Stale:    result.report.Stale,
+			})
+		}
+	}
+	return quotas
+}
+
+type appWire struct {
+	held     *accounts
+	spend    turn.Spend
+	selected models.Model
+}
+
+func openAppWire(opts runOpts) (appWire, error) {
+	selected, err := chooseModel(opts)
+	if err != nil {
+		return appWire{}, err
+	}
+	opts.effort = selected.EffortTaken(opts.effort)
+	held, spend, err := openAccounts(opts, selected)
+	return appWire{held: held, spend: spend, selected: selected}, err
+}
+
+func shellCommand(ctx context.Context, dir string, registry *shell.Registry, command string) (string, bool) {
+	chosen, err := turn.ResolveRunShell(settingspkg.TextSaying(dir, settingspkg.Shell, nil))
+	if err != nil {
+		return err.Error(), false
+	}
+	bash, err := turn.NewBashToolFromShell(dir, chosen)
+	if err != nil {
+		return err.Error(), false
+	}
+	args, _ := json.Marshal(map[string]string{"command": command})
+	result, err := bash.Run(turn.WithShellRegistry(ctx, registry), args)
+	if err != nil {
+		return err.Error(), false
+	}
+	return result.Content, result.Outcome == turn.ResultAborted
+}
+
+func freshSession(live *host.Host) string {
+	if err := live.Fresh(); err != nil {
+		return err.Error()
+	}
+	return freshSessionNote
+}
+
+func appResume(live *host.Host, handle string) (string, host.Opened) {
+	store, err := sessionstore.Open()
+	if err != nil {
+		return "the session store does not open, so nothing is carried: " + err.Error(), host.Opened{}
+	}
+	carry, err := resumeOf(store, handle)
+	if err != nil {
+		return err.Error(), host.Opened{}
+	}
+	opened, err := live.Resume(carry.hosted())
+	if err != nil {
+		return err.Error(), host.Opened{}
+	}
+	return "continuing " + carry.Session + ", " + strconv.Itoa(carry.Carried) + " messages from " + output.Plural(carry.Steps, "step"), opened
+}
+
+func appSessions(inUse string) ([]tui.SessionRow, error) {
+	store, err := sessionstore.Open()
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	report, err := sessionListing(store)
+	if err != nil {
+		return nil, err
+	}
+	open, _ := store.Identity(inUse)
+	rows := make([]tui.SessionRow, len(report.Sessions))
+	for i, row := range report.Sessions {
+		rows[i] = tui.SessionRow{ID: row.ID, Name: row.Handle, Task: output.OneLine(row.Task), InUse: row.ID == inUse || (open.Family != "" && row.Family == open.Family),
+			Facts: sessionWhen(row.At, now) + " · " + output.Plural(row.Turns, "turn") + " · " + output.Plural(row.Generations, "generation")}
+	}
+	return rows, nil
+}
+
+func imagesRefused(setting string, model models.Model, attached int) string {
+	held := strconv.Itoa(attached) + " attached image(s) stayed out of this turn"
+	switch setting {
+	case settingspkg.ImagesOff:
+		return "images is off, so " + held
+	case settingspkg.ImagesAuto:
+		if model.Vision == models.VisionBlind {
+			return "images is auto and " + model.Slug() + " cannot see images, so " + held + "; pick a model that can, or set images to inline"
+		}
+		return ""
+	case settingspkg.ImagesInline:
+		return ""
+	}
+	panic("tofu: unknown images setting " + setting)
+}
+
+func pickedOpts(dir string, start host.Turn, maxSteps int) runOpts {
+	return onTheBoundWire(runOpts{
+		dir:              dir,
+		task:             start.Task,
+		turnID:           start.ID,
+		session:          start.Session,
+		wire:             start.Pick.Wire,
+		model:            start.Pick.Model,
+		toolSet:          toolSetFull,
+		effort:           cmp.Or(start.Pick.Effort, llm.EffortDefault),
+		loopGuardRepeats: konst.TurnLoopGuardRepeats,
+		loopGuardWindow:  konst.TurnLoopGuardWindow,
+		maxSteps:         maxSteps,
+	})
+}
+
+type missingJudge int
+
+const (
+	missingJudgeRunsWithout missingJudge = iota
+	missingJudgeRefuses
+)
+
+type appEngine struct {
+	dir          string
+	arms         runOpts
+	open         func(runOpts) (appWire, error)
+	quota        func() []frame.Quota
+	tabs         *tools.BrowserTabs
+	warm         *warmProcesses
+	places       sys.Places
+	timed        string
+	missingJudge missingJudge
+}
+
+type startedTurn struct {
+	host.Prepared
+	gate   *toolGate
+	scorer *shellScorer
+	budget recall.Budget
+}
+
+func settled(opts runOpts, say func(string)) runOpts {
+	dir := cmp.Or(opts.dir, ".")
+	if opts.maxSteps == 0 {
+		opts.maxSteps = settingspkg.IntSaying(dir, settingspkg.DecisionCap, say)
+	}
+	opts.noSubAgents = opts.noSubAgents || settingspkg.IntSaying(dir, settingspkg.TurnMaySpawn, say) == 0
+	opts.readBeforeEdit = settingspkg.IntSaying(dir, settingspkg.ReadBeforeEdit, say) != 0
+	opts.planEveryStep = settingspkg.IntSaying(dir, settingspkg.PlanEveryStep, say) != 0
+	if opts.doneArm == "" && spawnlessFlag(opts) == "" {
+		opts.doneArm = settingspkg.TextSaying(dir, settingspkg.DoneReview, say)
+	}
+	opts.doneArm = cmp.Or(opts.doneArm, settingspkg.DoneReviewOff)
+	return opts
+}
+
+func (e *appEngine) Renew() {
+	e.warm.Close()
+	e.warm = newWarmProcesses(e.tabs)
+	e.warm.checkers.Warm(e.dir)
+}
+
+func (e *appEngine) OneTurnPerProject() bool {
+	return settingspkg.IntSaying(e.dir, settingspkg.OneWorkingSessionPerProject, nil) != 0
+}
+
+func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, error) {
+	opts := pickedOpts(e.dir, start, e.arms.maxSteps)
+	opts.gateArm, opts.siftArm, opts.doneArm, opts.noInstructions, opts.noDocs = e.arms.gateArm, e.arms.siftArm, e.arms.doneArm, e.arms.noInstructions, e.arms.noDocs
+	opts.toolSet, opts.contextCeiling, opts.noSubAgents = cmp.Or(e.arms.toolSet, opts.toolSet), e.arms.contextCeiling, e.arms.noSubAgents
+	started, err := e.startTurn(settled(opts, hooks.Say), start, hooks, clockFromNow())
+	if started.scorer != nil {
+		closing := started.Close
+		started.Close = func() {
+			closing()
+			if calls, cost := started.scorer.spend(); calls > 0 {
+				hooks.Say(fmt.Sprintf("sift decisions %d cost $%.6f", calls, cost))
+			}
+		}
+	}
+	return started.Prepared, err
+}
+
+func (e *appEngine) startTurn(opts runOpts, start host.Turn, hooks host.Hooks, clock *startupClock) (startedTurn, error) {
+	say, dir := hooks.Say, cmp.Or(opts.dir, ".")
+	started := startedTurn{Prepared: host.Prepared{MaxSteps: opts.maxSteps}}
+	prepared := &started.Prepared
+	shell, err := turn.ResolveRunShell(settingspkg.TextSaying(dir, settingspkg.Shell, say))
+	if err != nil {
+		return started, err
+	}
+	opts.shell = shell
+	clock.step("settings")
+	opened, err := e.open(opts)
+	if opened.held != nil {
+		prepared.Close = opened.held.close
+	}
+	if err != nil {
+		return started, err
+	}
+	checked := opened.held.checkUsageAlongside(clock)
+	prepared.Close = func() {
+		checked()
+		opened.held.close()
+	}
+	clock.step("model choice and credentials")
+	images := start.Images
+	if len(images) > 0 {
+		if refused := imagesRefused(settingspkg.TextSaying(dir, settingspkg.Images, say), opened.selected, len(images)); refused != "" {
+			say(refused)
+			images = nil
+		}
+	}
+	built, plan, builtErr := buildRunToolsForRun(opts.dir, opts.toolSet, readsWhen(opts.readBeforeEdit, hooks.Reads), e.warm, shell)
+	sessions, sessionsErr := sessionstore.OpenIn(dir)
+	if err := cmp.Or(builtErr, sessionsErr); err != nil {
+		return started, err
+	}
+	sessions.Redacts(e.warm.keys.redactor)
+	built, plan = planAsOffered(opened.selected, built, plan)
+	if start.Pick.Fired != "" {
+		built = withoutPush(built)
+	}
+	clock.step("shell, tools and session store")
+	places := e.places
+	if places == (sys.Places{}) {
+		if places, err = sys.ResolvePlaces("."); err != nil {
+			return started, err
+		}
+	}
+	var gate *toolGate
+	var gateErr error
+	if opts.gateArm != gateOff {
+		gate, gateErr = toolGateOn(opts.dir, places.Log, e.warm.keys.keyring())
+	}
+	var unusable unusableRule
+	switch {
+	case gateErr == nil:
+	case e.missingJudge == missingJudgeRefuses:
+		return started, gateErr
+	case errors.As(gateErr, &unusable):
+		return started, fmt.Errorf("no turn starts while the tool gate rule is unusable: %w", unusable)
+	case jev.IsUnbound(gateErr):
+		sayEach, unbound := say, gateErr.Error()
+		say = func(note string) {
+			if !strings.HasSuffix(note, unbound) {
+				sayEach(note)
+			}
+		}
+	}
+	sifter, scorer, siftErr := shellSiftOn(opts.siftArm, places.Log, e.warm.keys.keyring())
+	var contradiction turn.RuleContradictsTheTableError
+	if siftErr != nil && e.missingJudge == missingJudgeRefuses && !errors.As(siftErr, &contradiction) {
+		return started, siftErr
+	}
+	if siftErr != nil {
+		say("no shell result is cut: " + siftErr.Error())
+	}
+	clock.step("gate and sift")
+	budget, err := contextBudget(opts, opened.selected)
+	if err != nil {
+		return started, err
+	}
+	clock.step("model catalogue")
+	opened.held.wrapping(func(model turn.Model, budget recall.Budget) (turn.Model, error) {
+		asked, guardErr := guarded(model, budget)
+		if guardErr != nil {
+			return nil, guardErr
+		}
+		return hooks.Lead(clock.leading(asked)), nil
+	}, budget, opts)
+	wrapSubAgent := func(model turn.Model, budget recall.Budget) (turn.Model, error) {
+		asked, guardErr := guarded(model, budget)
+		return hooks.SubAgent(asked), guardErr
+	}
+	person := hooks.Inbox.LeadAsks(hooks.Person)
+	turnAccounts, account := opened.held.forTurn(), spentAccount(opened.held, opened.selected.ID)
+	if stand := e.standIns(opened.held, opts.wire); len(stand.mine()) > 0 {
+		turnAccounts, account = stand.forTurn(), stand.spent
+	}
+	config, spawner, err := runConfig(opts, built, runtime{accounts: clock.picking(turnAccounts, opened.held.store), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: say, roster: hooks.Roster, inbox: hooks.Inbox, now: hooks.Now,
+		open: e.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.selected, tabs: e.tabs, leadAsks: person, cron: hooks.Cron, plan: plan, places: places, startup: clock, keys: &e.warm.keys, memory: &e.warm.memory, drops: e.warm.drops})
+	if err != nil {
+		return started, err
+	}
+	if spawner != nil {
+		spawner.Review = newDoneReview(opts.doneArm, say)
+	}
+	clock.step("lead tools, board and spawn")
+	if config.Session != e.timed {
+		e.timed = config.Session
+		closeAccounts := prepared.Close
+		prepared.Close = func() {
+			closeAccounts()
+			if err := clock.record(sessions, config.Session); err != nil {
+				say("the startup steps were not recorded: " + err.Error())
+			}
+		}
+	}
+	if gate != nil {
+		gate.watch = hooks.Gate
+		prepared.Decisions = func() int { return gate.decisions }
+	}
+	config.Images = images
+	config.Person = person.Asking(config.GatePromptAsks)
+	prepared.Config, prepared.Spawner, prepared.Plan, prepared.Ceiling, prepared.Sessions, prepared.GateOff, prepared.Account = config, spawner, plan, budget.CeilingTokens, sessions, gateErr, account
+	started.gate, started.scorer, started.budget = gate, scorer, budget
+	return started, nil
+}
+
+func (e *appEngine) standIns(held *accounts, wire string) standIns {
+	if _, recorded := held.fixed.(*cassette); !recorded || e.quota == nil {
+		return standIns{}
+	}
+	library, _ := modelLibrary(e.dir)
+	spec, _ := library.ForWire(wire)
+	return standIns{held: held, source: string(spec.ID), readings: e.quota()}
+}
+
+func spentAccount(held *accounts, model string) func(int64) host.TurnAccount {
+	return func(id int64) host.TurnAccount {
+		spent := host.TurnAccount{Source: string(held.provider), AccountID: id, Model: model}
+		if held.store == nil {
+			return spent
+		}
+		rows, err := held.store.List()
+		if at := slices.IndexFunc(rows, func(row cred.Row) bool { return row.ID == id }); err == nil && at >= 0 {
+			spent.Login = accountName(rows[at].Credential.Identity, false)
+		}
+		return spent
+	}
+}

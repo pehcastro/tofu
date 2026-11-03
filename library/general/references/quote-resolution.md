@@ -1,7 +1,7 @@
 ---
 id: quote-resolution
 domain: general
-document: internal/ui/tui/chat/quote, internal/turn/tools and internal/store/session, read in this repository
+document: internal/ui/tui/chat/quote, internal/tools/registry and internal/store/session, read in this repository
 also: library/general/references/what-reaches-a-screen.md
 ---
 
@@ -16,11 +16,11 @@ An item is anything the screen shows with an id:
 - a turn: what the person said, what the agent said, or what a tool returned
 - a tool call: an edit, a shell command, a question asked of the person, a sub-agent spawned, or a call a sub-agent made
 
-The token is the same for every kind. `internal/turn/tools.QuoteRef` builds it, `[quote#` and the last six characters of the id, and the interface and the server both call it, so a token typed by hand, inserted by ctrl+r or sent over the wire is one string.
+The token is the same for every kind. `internal/tools/registry.QuoteRef` builds it, `[quote#` and the last six characters of the id, and the interface and the server both call it, so a token typed by hand, inserted by ctrl+r or sent over the wire is one string.
 
 ## What the tool does
 
-`internal/turn/tools.Quote` takes the reference as the model received it, reads the recorded session it belongs to and every session that session was forked from, and returns the item.
+`internal/tools/registry.Quote` takes the reference as the model received it, reads the recorded session it belongs to and every session that session was forked from, and returns the item.
 
 - A turn comes back as its own words and the names of the tools that ran, never their arguments. What the person typed comes back as it was recorded, which is the text that was already sent when the turn happened.
 - A tool call comes back as its arguments and what it returned, with every key tofu knows masked. A call still running says no result is recorded for it yet.
@@ -29,7 +29,7 @@ An item larger than the tool result cap comes back cut at the cap, with a note n
 
 ## The three outcomes
 
-`internal/turn/tools.ResolveQuote` counts how many recorded ids the short reference is drawn from, turns and tool calls together, and returns one of three outcomes:
+`internal/tools/registry.ResolveQuote` counts how many recorded ids the short reference is drawn from, turns and tool calls together, and returns one of three outcomes:
 
 - `item`: exactly one match, and that item
 - `not_found`: no match in the session or any it was forked from
@@ -37,7 +37,7 @@ An item larger than the tool result cap comes back cut at the cap, with a note n
 
 Nothing falls back to the nearest item, and there is no fourth case. That is why the rule says an id matching no item and an id matching more than one resolve to neither, and why it says to name which of the two happened rather than answer anyway: the code has already distinguished them, and a model that collapses them throws away the only information the reader needs to fix the reference.
 
-A turn recorded before event ids existed is not skipped. `internal/turn/tools.SaidEventID` gives it an id derived from the session and the turn's place in it, and `internal/ui/tui/chat/quote.Collect` uses the same function, so an old transcript is quotable on the same terms as a new one.
+A turn recorded before event ids existed is not skipped. `internal/tools/registry.SaidEventID` gives it an id derived from the session and the turn's place in it, and `internal/ui/tui/chat/quote.Collect` uses the same function, so an old transcript is quotable on the same terms as a new one.
 
 ## Why the rule exists at all
 

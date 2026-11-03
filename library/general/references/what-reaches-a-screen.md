@@ -1,7 +1,7 @@
 ---
 id: what-reaches-a-screen
 domain: general
-document: internal/turn, cmd/tofu and internal/platform/credential, read in this repository
+document: internal/agent/loop, apps/cli and internal/platform/credential, read in this repository
 ---
 
 # What reaches a screen

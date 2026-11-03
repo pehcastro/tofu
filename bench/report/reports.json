@@ -5470,7 +5470,7 @@
       "switched_on": "yes, through the judged method",
       "costs": "a median $0.000067 a session over the 20 recorded sessions that ran it, worst $0.004574, $0.0089 over the whole recorded ledger; one call a hand-back, an open acceptance line included, $0.00093 and p50 202 ms over the 24 mocked ones",
       "why": "jev agrees with 71 of 78 hand labels against the repeat check's 68, 1.04x, and makes a false stop a third as often; on 24 mocked sub-agent hand-backs it is right on 23 on four passes at jev-1.14.0, against 12 for the arm that never stops the turn, the one miss a stop after only reading the file it was told to change. the rule ships shadow, where the acceptance-line screen decides and the row decides nothing",
-      "called_by": "cmd/tofu/run_done.go"
+      "called_by": "apps/cli/run_done.go"
     },
     {
       "point": "read_worth",
@@ -5478,7 +5478,7 @@
       "switched_on": "yes, through the cheap method",
       "costs": "nothing, and no call is made",
       "why": "a fifteen word floor agrees with 87.1 percent of the labels, the same as jev, and saves 12.6 percent of bytes against 9.3. a tie goes to the method that costs nothing",
-      "called_by": "cmd/tofu/sift.go"
+      "called_by": "apps/cli/sift.go"
     },
     {
       "point": "memory_scope",
@@ -5486,7 +5486,7 @@
       "switched_on": "yes, through the judged method",
       "costs": "not measured. one jev call a remember candidate, which is rare in a session; the shadow rows carry cost and latency",
       "why": "in shadow. jev picks the scope on every remember candidate and the card preselects it, the person's pick is the label in the ledger, and a names_private yes refuses project local. nothing is measured yet, 4 probe candidates picked the expected scope on one run",
-      "called_by": "cmd/tofu/judge_ledger.go"
+      "called_by": "apps/cli/judge_ledger.go"
     },
     {
       "point": "memory_same",
@@ -5570,7 +5570,7 @@
       "switched_on": "yes, through the judged method",
       "costs": "one jev request a writer's prompt with a framework rule that declares touches, every such rule asked in it; 11 questions in 192 to 227 ms, a $0.00018 to $0.00024 list charge over 4 driven requests",
       "why": "on 5 mocked writer tasks in a gpui-ce and a react workspace, 16 labelled rules among the framework's touches rules, jev fires 15 of 16 on three passes with 3 to 5 fired that the labels hold, against the touches keyword's 9 of 16 with 4; on make the panel ease in jev fires 6 of 7 motion rules and the keyword 1. the tasks, the labels and the one wording change were written by one author on the same 5 tasks, so 15 of 16 is a ceiling rather than a rate",
-      "called_by": "cmd/tofu/run.go"
+      "called_by": "apps/cli/run.go"
     }
   ],
   "what_decides_what_read_from": "library/decisions/methods@1.yaml",

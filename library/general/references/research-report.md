@@ -18,7 +18,7 @@ One finding per numbered question, under the same number. Each finding:
 
 - answers that question in one or two sentences;
 - carries its citation: path:line for code, a URL for the web;
-- names the command behind any count, such as `git grep -c Spawn internal/turn`;
+- names the command behind any count, such as `git grep -c Spawn internal/agent/loop`;
 - quotes the exact text when the question is about a schema, a prompt, a signature or a threshold.
 
 A question you could not answer keeps its number and names the blocker: what you tried and what stopped you.

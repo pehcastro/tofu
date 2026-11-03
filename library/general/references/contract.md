@@ -1,7 +1,7 @@
 ---
 id: contract
 domain: general
-document: internal/project/boardy/events.go, internal/project/boardy/hook.go and internal/turn/spawn.go, read in this repository
+document: internal/project/boardy/events.go, internal/project/boardy/hook.go and internal/agent/loop/spawn.go, read in this repository
 ---
 
 # What a sub-agent hands back at the end of its work

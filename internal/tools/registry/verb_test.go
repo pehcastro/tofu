@@ -34,7 +34,7 @@ const (
 	slashSlash            = "/" + "/"
 	rulesInTheBinary      = "the binary"
 	rulesInTheProject     = "the project"
-	realTofuPackage       = "./cmd/tofu"
+	realTofuPackage       = "./apps/cli"
 )
 
 func TestMain(m *testing.M) {

@@ -66,7 +66,7 @@ func TestEveryMoveToDoneNeedsTheFlowsStamp(t *testing.T) {
 		t.Fatalf("a ticket outside the gated areas was refused: %v", err)
 	}
 	unrooted := managedBoard(t, "DEMO")
-	desk, err := unrooted.Create("DEMO", ticketWith("desk", "cmd/tofu/main.go"), manager)
+	desk, err := unrooted.Create("DEMO", ticketWith("desk", "apps/cli/main.go"), manager)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +214,8 @@ func TestFlowsAreasReachDeskAndSessions(t *testing.T) {
 	for glob, want := range map[string]string{
 		"apps/desk/**":                     "apps/desk",
 		"apps/desk/crates/ui/src/theme.rs": "apps/desk",
-		"apps/**":                          "apps/desk",
+		"apps/**":                          "apps/cli, apps/desk",
+		"apps/cli/**":                      "apps/cli",
 		"internal/store/session/**":        "internal/store/session",
 		"apps/other/**":                    "",
 		"internal/store/sessions/**":       "",

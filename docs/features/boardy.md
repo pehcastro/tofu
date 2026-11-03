@@ -221,11 +221,11 @@ tofu boardy lint
 Ask what a hook asks, fast, without reading ticket bodies:
 
 ```
-tofu boardy held cmd/tofu/main.go --json
+tofu boardy held apps/cli/main.go --json
 tofu boardy list --fields id,status,assignee,owns --json
 ```
 
-`held` answers `{"held": true, "ticket": "OPS-1", "status": "doing", "glob": "cmd/tofu/**"}`
+`held` answers `{"held": true, "ticket": "OPS-1", "status": "doing", "glob": "apps/cli/**"}`
 from any board of the project, or `{"held": false}`.
 
 Ask the person for a decision they can make in a minute:
