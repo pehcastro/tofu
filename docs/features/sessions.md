@@ -143,8 +143,9 @@ tools.
   <name|id|head> "<task>"` works the task as that session's next turn. It
   sends the conversation and the system prompt and tools the session first
   sent, so the model's cache reads, and prints the same totals as a fresh run.
-  It runs on the model `tofu session set --model` chose unless `--model`
-  names another, and holds the session until it ends, so a session open in
+  It runs on the model `--model` names, else the one `tofu session set
+  --model` chose, else the one that answered the session's last request,
+  and its first line says which. It holds the session until it ends, so a session open in
   the app or `tofu serve` is refused as busy. A name it cannot find exits 2
   before any request. It starts with no sub-agents from earlier turns.
 - **Start fresh**: `/new`.

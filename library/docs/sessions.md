@@ -54,7 +54,7 @@ Continue the head, or any other session:
 
 A session is named by its name (the newest generation), its id, or a handle:
 `tidy-moss-vole#12cp3.1` is the first generation, `12cp3` the family; `[session#9ff700]` from the
-header finds its generation too; `head` is the project's head session. In the app, `/resume` carries the last session and `/new` starts fresh. `tofu run --session` works the task as that session's next turn, with no window: it sends the conversation and the system prompt and tools the session first sent, so the model's cache reads, runs on the model `session set --model` chose unless `--model` names another, and holds the session until it ends, so a session open in the app or `tofu serve` is refused as busy. A session it cannot find exits 2 before any request. It starts with no sub-agents from earlier turns.
+header finds its generation too; `head` is the project's head session. In the app, `/resume` carries the last session and `/new` starts fresh. `tofu run --session` works the task as that session's next turn, with no window: it sends the conversation and the system prompt and tools the session first sent, so the model's cache reads, runs on the model `--model` names, else the one `session set --model` chose, else the one that answered the session's last request, and its first line says which. It holds the session until it ends, so a session open in the app or `tofu serve` is refused as busy. A session it cannot find exits 2 before any request. It starts with no sub-agents from earlier turns.
 
     tofu session rename <name|id|head> "checkout redesign"
     tofu session set <name|id|head> --model claude-sub/claude-sonnet-5
