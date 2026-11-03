@@ -21,8 +21,8 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/safe"
-	"tofu/internal/search"
 	"tofu/internal/sys"
+	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
 )
 

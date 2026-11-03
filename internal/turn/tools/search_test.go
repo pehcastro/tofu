@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/search"
+	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
 )
 

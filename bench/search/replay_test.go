@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	tool "tofu/internal/search"
 	"tofu/internal/sys"
+	tool "tofu/internal/tools/code/search/engine"
 )
 
 var treeRoot = sys.SourceRoot()

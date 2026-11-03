@@ -20,9 +20,9 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/rule"
-	"tofu/internal/search"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
+	"tofu/internal/tools/code/search/engine"
 )
 
 const notOwnedOnPurpose = "not-owned-on-purpose"

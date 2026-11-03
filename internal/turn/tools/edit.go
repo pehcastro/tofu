@@ -15,7 +15,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/rule"
-	"tofu/internal/search"
+	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/files/edit/patch"
 	"tofu/internal/turn"

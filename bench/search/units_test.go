@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	tool "tofu/internal/search"
+	tool "tofu/internal/tools/code/search/engine"
 )
 
 const (

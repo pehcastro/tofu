@@ -6,8 +6,8 @@ import (
 	"slices"
 
 	"tofu/internal/llm"
-	"tofu/internal/search"
 	"tofu/internal/shell"
+	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
 )
 

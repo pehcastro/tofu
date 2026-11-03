@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/search"
+	"tofu/internal/tools/code/search/engine"
 )
 
 const sweepEnvar = "TOFU_CITE_SWEEP"
@@ -17,7 +17,7 @@ func TestEveryCitationInTheReportsUnderTheSweptDirectory(t *testing.T) {
 	if dir == "" {
 		t.Skip("skipped: " + sweepEnvar + " names no directory of reports to sweep, and this test reads no path of its own")
 	}
-	root, err := filepath.Abs("../..")
+	root, err := filepath.Abs("../../../../..")
 	if err != nil {
 		t.Fatalf("locating the repository: %v", err)
 	}

@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/search"
 	"tofu/internal/sys"
+	"tofu/internal/tools/code/search/engine"
 )
 
 const runsPerQuery = 5

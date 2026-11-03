@@ -12,7 +12,7 @@ import (
 	"slices"
 	"strings"
 
-	tool "tofu/internal/search"
+	tool "tofu/internal/tools/code/search/engine"
 )
 
 var ErrPathGone = errors.New("bench/search: the recorded path is not in the tree today")

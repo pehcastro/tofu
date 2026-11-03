@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	tool "tofu/internal/search"
+	tool "tofu/internal/tools/code/search/engine"
 )
 
 const costRuns = 5
