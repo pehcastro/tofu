@@ -267,6 +267,17 @@ type Prefix struct {
 	removed  []keptPart
 	unloaded []keptPart
 	sent     messagesKept
+
+	memoryDropped bool
+}
+
+func (p *Prefix) memoryTurnedBackOn(fresh, was []llm.Message) bool {
+	if p == nil {
+		return false
+	}
+	back := p.memoryDropped && len(was) == 0 && len(fresh) > 0
+	p.memoryDropped = len(fresh) == 0 && (len(was) > 0 || p.memoryDropped)
+	return back
 }
 
 type heldPrefix struct {

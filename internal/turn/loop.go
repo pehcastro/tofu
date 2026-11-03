@@ -439,7 +439,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		return message.Origin.Source == llm.SourceSpawnLine || held.composedNow && promptChange(message)
 	}), []llm.Message(nil)
 	fresh, was := config.MemoryMessage(), newestMemoryView(carried)
-	if config.opensGeneration() || len(fresh) == 0 || len(was) == 0 {
+	if config.Prefix.memoryTurnedBackOn(fresh, was) || config.opensGeneration() || len(fresh) == 0 {
 		if len(fresh) > 0 && (len(was) == 0 || was[0].Content != fresh[0].Content) {
 			recorded.message(fresh[0], "", nil)
 		}
