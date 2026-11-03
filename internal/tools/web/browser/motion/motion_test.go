@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/dummy"
 	"tofu/internal/konst"
 )
 
@@ -246,7 +247,7 @@ func TestCompareRefusesDifferentViewports(t *testing.T) {
 }
 
 func TestTheFieldNotesScenarioParsesWithReadyAttributesAndScale(t *testing.T) {
-	raw, err := os.ReadFile("testdata/field-notes-close.json")
+	raw, err := os.ReadFile(dummy.Path("browser", "field-notes-close.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -16,7 +16,7 @@ import (
 func servedInTurn(t *testing.T, first string, reset bool) (*httptest.Server, *atomic.Int32) {
 	t.Helper()
 	read := func(name string) []byte {
-		body, err := os.ReadFile(filepath.Join("..", "..", "core", "testdata", "turn-survives", name))
+		body, err := os.ReadFile(filepath.Join("testdata", "turn-survives", name))
 		if err != nil {
 			t.Fatal(err)
 		}

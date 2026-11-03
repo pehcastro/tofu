@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/dummy"
 	"tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/tools/web/browser/driver"
@@ -38,7 +39,7 @@ func (w *recordedWire) Post(_ context.Context, body []byte) (jev.Raw, error) {
 
 func readFixture(t *testing.T, name string) []byte {
 	t.Helper()
-	data, err := os.ReadFile("testdata/" + name)
+	data, err := os.ReadFile(dummy.Path("browser", name))
 	if err != nil {
 		t.Fatal(err)
 	}

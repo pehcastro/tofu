@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"tofu/internal/dummy"
 	"tofu/internal/konst"
 	"tofu/internal/tools/web/browser/motion"
 )
@@ -193,7 +194,7 @@ func (p *motionPage) relay(t *testing.T) *Driver {
 }
 
 func fieldNotes(t *testing.T) motion.Scenario {
-	sc, err := ReadScenario(filepath.Join("..", "motion", "testdata", "field-notes-close.json"))
+	sc, err := ReadScenario(dummy.Path("browser", "field-notes-close.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

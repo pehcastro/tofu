@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/dummy"
 	"tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/tools/web/browser/driver"
@@ -127,7 +128,7 @@ func sharedTab(t *testing.T, answer func(extensionCall) string) (browser.SharedT
 
 func recordedSnapshot(t *testing.T) string {
 	t.Helper()
-	raw, err := os.ReadFile("../loop/testdata/hotel.json")
+	raw, err := os.ReadFile(dummy.Path("browser", "hotel.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +223,7 @@ func (w recordedWire) Post(context.Context, []byte) (jev.Raw, error) {
 }
 
 func TestBrowserRunsOneJevStepOnTheSharedTab(t *testing.T) {
-	answer, err := os.ReadFile("../loop/testdata/hotel_answer.json")
+	answer, err := os.ReadFile(dummy.Path("browser", "hotel_answer.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -334,7 +335,7 @@ type fakePage struct {
 
 func loadPage(t *testing.T, name string) *fakePage {
 	t.Helper()
-	raw, err := os.ReadFile("../extension/testdata/pages/" + name + ".json")
+	raw, err := os.ReadFile("testdata/pages/" + name + ".json")
 	page := &fakePage{scrolled: map[int]float64{}}
 	if err == nil {
 		err = json.Unmarshal(raw, page)
