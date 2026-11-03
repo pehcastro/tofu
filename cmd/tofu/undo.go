@@ -12,7 +12,7 @@ import (
 
 	"github.com/charmbracelet/colorprofile"
 
-	"tofu/interface/cli"
+	"tofu/internal/cli/page"
 	"tofu/internal/konst"
 	sessionstore "tofu/internal/store/session"
 	rewind "tofu/internal/store/snapshot"

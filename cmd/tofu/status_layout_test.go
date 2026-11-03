@@ -10,7 +10,7 @@ import (
 
 	"github.com/charmbracelet/colorprofile"
 
-	"tofu/interface/cli"
+	"tofu/internal/cli/page"
 	"tofu/internal/host"
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/sys"

@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"tofu/interface/cli"
 	"tofu/internal/agent/context/recall"
+	"tofu/internal/cli/page"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/store/session"

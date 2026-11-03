@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/interface/tui"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
@@ -19,6 +18,7 @@ import (
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
+	"tofu/internal/ui/tui/app"
 	library "tofu/library"
 )
 

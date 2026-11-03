@@ -1,0 +1,262 @@
+package tui
+
+import (
+	"cmp"
+	"context"
+	"maps"
+	"path/filepath"
+	"slices"
+	"strings"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+
+	isubagent "tofu/internal/agent/subagents"
+	"tofu/internal/host"
+	"tofu/internal/models/classifiers/core"
+	library "tofu/internal/models/llm/catalog"
+	"tofu/internal/models/llm/core"
+	isettings "tofu/internal/store/settings"
+	"tofu/internal/sys"
+	"tofu/internal/ui/tui/chat/session"
+	"tofu/internal/ui/tui/pickers/models"
+	"tofu/internal/ui/tui/pickers/settings"
+	shipped "tofu/library"
+)
+
+const (
+	pickedHead    = "the next turn runs "
+	pickedEffort  = " at effort "
+	pickedOnce    = ", and a restart starts again on the bound model"
+	reboundHead   = "the orchestrator is now bound to "
+	reboundTail   = ", so the next turn runs it"
+	noWireToPick  = "no subscription is signed in, so there is no model to pick"
+	noWireForPick = " has no signed-in subscription or stored key, so the next turn keeps its model"
+	notSet        = "not set"
+	heldUnsigned  = " is the wire the session runs on, and it has no signed-in subscription here, so this tofu shows "
+)
+
+type pickPollMsg struct{}
+
+func (a *App) watchPick() tea.Cmd {
+	if a.options.Host == nil || a.pickWatching {
+		return nil
+	}
+	a.pickWatching = true
+	return tea.Tick(pickPoll, func(time.Time) tea.Msg { return pickPollMsg{} })
+}
+
+func (a *App) offerDefaultPick() {
+	if a.defaultOffered || a.options.Host == nil || a.wire == "" {
+		return
+	}
+	a.defaultOffered = true
+	if _, held := a.options.Host.Settings(); held.Wire == "" {
+		a.options.Host.Choose(a.pick())
+	}
+}
+
+func (a *App) pick() Pick { return Pick{Wire: a.wire, Model: a.picked, Effort: a.effort} }
+
+func (a *App) syncPick() {
+	if a.options.Host == nil {
+		return
+	}
+	if own := a.pick(); own != a.ownPick {
+		a.ownPick = own
+		a.options.Host.Choose(own)
+		return
+	}
+	_, held := a.options.Host.Settings()
+	if held == a.heldPick {
+		return
+	}
+	a.heldPick, a.effort = held, held.Effort
+	at := slices.IndexFunc(a.wires, func(wire Wire) bool { return wire.Name == held.Wire })
+	switch {
+	case at >= 0:
+		wire := a.wires[at]
+		model, _ := strings.CutPrefix(held.Model, wire.Provider+"/")
+		a.wire, a.provider, a.model, a.picked = wire.Name, wire.Provider, cmp.Or(model, wire.Model), ""
+		if model != "" {
+			a.picked = wire.Provider + "/" + model
+		}
+	case held.Wire != "":
+		a.notify(held.Wire + heldUnsigned + a.slug())
+	}
+	a.ownPick = a.pick()
+}
+
+func layeredModels(root string) func() (library.Library, error) {
+	return func() (library.Library, error) {
+		layers, err := library.Layers(shipped.Files(), root)
+		if err != nil {
+			return library.Library{}, err
+		}
+		loaded, _ := library.Load(layers)
+		return loaded, nil
+	}
+}
+
+func (a *App) noteRefused(loaded library.Library) {
+	if len(loaded.Broken) > 0 {
+		a.notify((&library.BrokenLibrary{Refused: loaded.Broken}).Error())
+	}
+}
+
+func (a *App) openPicker(assign string) {
+	loaded, err := a.options.Models()
+	if err != nil {
+		a.notify(err.Error())
+		return
+	}
+	a.noteRefused(loaded)
+	sources := make([]models.Source, 0, len(a.wires))
+	for _, wire := range a.wires {
+		sources = append(sources, models.Source{ID: library.Subscription(wire.Provider), Efforts: wire.Efforts})
+	}
+	rows := a.roleRows()
+	targets := make([]models.Target, len(rows))
+	for index, row := range rows {
+		targets[index] = models.Target{Name: row.Label, Job: row.Description, Assigned: row.Value}
+		if row.Action == settings.RowRole {
+			targets[index].Role = library.RoleID(strings.TrimPrefix(row.Key, roleKeyPrefix))
+		}
+	}
+	if spec, isSetting := a.pickedSetting(assign); isSetting {
+		rows = append(rows, settings.Row{Key: assign})
+		targets = append(targets, models.Target{Name: spec.Label, Job: spec.Description, Assigned: cmp.Or(a.store.Text(assign), notSet), Setting: assign, Pays: continuityPays(assign)})
+	}
+	envFile := filepath.Join(a.options.Root, sys.CredentialFileName)
+	keys := models.Keys{
+		Set: func(name string) bool { _, err := jev.KeyFor(envFile, name); return err == nil },
+		Save: func(ctx context.Context, name, value string) error {
+			if save := a.options.SaveKey; save != nil {
+				_, err := save(ctx, name, value)
+				return err
+			}
+			if name == library.Meta.KeyName() {
+				return library.StoreMetaKey(ctx, value)
+			}
+			return sys.SaveKey(name, value)
+		},
+	}
+	picker := models.Build(loaded, sources, keys, targets)
+	if len(picker.Groups) == 0 && assign != roleKeyPrefix+string(library.RoleClassifier) {
+		a.notify(noWireToPick)
+		return
+	}
+	picker.SetSize(a.width, a.height)
+	fallback, _ := loaded.Default(library.Subscription(a.provider))
+	picker.OpenOn(a.slug(), fallback.Slug())
+	if at := slices.IndexFunc(rows, func(row settings.Row) bool { return row.Key == assign }); at >= 0 {
+		picker.AssignTo(at)
+	}
+	a.push(&modelsDialog{picker: picker})
+}
+
+func (a *App) pickedSetting(key string) (isettings.Spec, bool) {
+	if a.store == nil || key != isettings.BrowserModel && continuityPays(key) == "" {
+		return isettings.Spec{}, false
+	}
+	return a.spec(key)
+}
+
+func continuityPays(key string) library.Pays {
+	switch key {
+	case isettings.ContinueOnSubscription:
+		return library.PaysSubscription
+	case isettings.ContinueOnAPIModel:
+		return library.PaysKey
+	}
+	return ""
+}
+
+func (a *App) continueOn(setting, slug string) string {
+	if setting != isettings.ContinueOnSubscription || slug == "" {
+		return slug
+	}
+	source, _, _ := strings.Cut(slug, "/")
+	picks := strings.FieldsFunc(a.store.Text(setting), func(r rune) bool { return r == ',' })
+	at := slices.IndexFunc(picks, func(pick string) bool { return strings.HasPrefix(pick, source+"/") })
+	if at < 0 {
+		return strings.Join(append(picks, slug), ",")
+	}
+	picks[at] = slug
+	return strings.Join(picks, ",")
+}
+
+func (a *App) nowRuns(name string) string {
+	a.readRoles()
+	at := slices.IndexFunc(a.defined, func(definition isubagent.Definition) bool { return definition.Name == name })
+	if at < 0 {
+		return name + " is no longer found"
+	}
+	definition := a.defined[at]
+	switch definition.Runs {
+	case isubagent.RunsModel:
+		return name + " now runs " + definition.Model
+	case isubagent.RunsInherit:
+		return name + " now runs on the orchestrator's model"
+	case isubagent.RunsDisabled:
+		return name + " is disabled"
+	case isubagent.RunsRefused:
+		return name + " is refused: " + strings.Join(definition.Refused, "; ")
+	}
+	panic("tui: unknown sub-agent state " + string(definition.Runs))
+}
+
+func (a *App) runNextTurnOn(slug string, effort llm.Effort) {
+	if !a.runOn(slug, effort) {
+		a.notify(slug + noWireForPick)
+		return
+	}
+	note := pickedHead + slug
+	if effort != "" {
+		note += pickedEffort + string(effort)
+	}
+	a.view.Append(session.Entry{Kind: session.Note, Body: note + pickedOnce})
+}
+
+func (a *App) runOn(slug string, effort llm.Effort) bool {
+	source, model, _ := strings.Cut(slug, "/")
+	serves := func(wire Wire) bool { return wire.Provider == source }
+	if !slices.ContainsFunc(a.wires, serves) {
+		a.readWires()
+	}
+	at := slices.IndexFunc(a.wires, serves)
+	if at < 0 {
+		return false
+	}
+	a.wire, a.provider, a.model = a.wires[at].Name, source, model
+	a.picked, a.effort = slug, effort
+	return true
+}
+
+func (a *App) followConfig() {
+	seen := host.ConfigSeen(a.options.Root)
+	if maps.Equal(seen, a.configSeen) {
+		return
+	}
+	a.configSeen, a.roles = seen, nil
+	if a.store != nil {
+		if err := a.store.Reread(); err != nil {
+			a.notify(settingsUnread + err.Error())
+		}
+	}
+	a.refreshSettingsRows()
+	if a.options.Models == nil {
+		return
+	}
+	loaded, err := a.options.Models()
+	orchestrator, bound := loaded.Bound(library.RoleOrchestrator)
+	if err != nil || !bound || orchestrator.Slug() == a.bound {
+		return
+	}
+	a.bound = orchestrator.Slug()
+	if !a.runOn(a.bound, "") {
+		a.notify(a.bound + noWireForPick)
+		return
+	}
+	a.view.Append(session.Entry{Kind: session.Note, Body: reboundHead + a.bound + reboundTail})
+}

@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/interface/tui"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
+	"tofu/internal/ui/tui/app"
 )
 
 var recordedSessionsDir = sys.RecordedStateDir("sessions")

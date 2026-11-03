@@ -17,10 +17,6 @@ import (
 	"sync"
 	"time"
 
-	"tofu/interface/tui"
-	"tofu/interface/tui/filmstrip"
-	"tofu/interface/tui/fixture"
-	"tofu/interface/tui/frame"
 	"tofu/internal/cli/render"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/accounts"
@@ -33,6 +29,10 @@ import (
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
+	"tofu/internal/ui/tui/app"
+	"tofu/internal/ui/tui/fixture"
+	"tofu/internal/ui/tui/frame/filmstrip"
+	"tofu/internal/ui/tui/frame/frame"
 )
 
 const driveUsage = `usage: tofu drive [SCRIPT] [--dir PATH] [--home PATH] [--cassette PATH] [--clipboard PATH] [--source NAME] [--quota PATH] [--width N] [--height N] [--timeout 60s] [--plain] [--fresh | --continue] [--host] [--setup] [ARM]

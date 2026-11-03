@@ -13,8 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"tofu/interface/tui"
-	"tofu/interface/tui/paste"
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/cron"
 	"tofu/internal/host"
@@ -22,6 +20,8 @@ import (
 	sessionstore "tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
+	"tofu/internal/ui/tui/app"
+	"tofu/internal/ui/tui/composer/paste"
 )
 
 type sendModel struct {

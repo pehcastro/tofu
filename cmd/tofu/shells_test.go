@@ -15,9 +15,9 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui/shells"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/tools/shell/process"
+	"tofu/internal/ui/tui/panels/shells"
 )
 
 func TestShellsVerbListsReadsAndKillsARealProcess(t *testing.T) {

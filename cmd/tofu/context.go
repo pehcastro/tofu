@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/interface/cli"
 	"tofu/internal/agent/context/recall"
+	"tofu/internal/cli/page"
 	"tofu/internal/host"
 	"tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"

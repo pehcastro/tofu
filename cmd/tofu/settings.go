@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/interface/cli"
+	"tofu/internal/cli/page"
 	"tofu/internal/host"
 	"tofu/internal/project/boardy"
 	settingspkg "tofu/internal/store/settings"

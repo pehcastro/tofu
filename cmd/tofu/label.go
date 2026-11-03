@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"tofu/interface/cli"
+	"tofu/internal/cli/page"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/sys"
 )

@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	tuisession "tofu/interface/tui/session"
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/cron"
 	"tofu/internal/agent/subagents"
@@ -34,6 +33,7 @@ import (
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
+	tuisession "tofu/internal/ui/tui/chat/session"
 )
 
 func projectSessions(t *testing.T, dir string) *session.Store {

@@ -13,16 +13,16 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	app "tofu/interface/tui"
-	"tofu/interface/tui/frame"
-	"tofu/interface/tui/shells"
-	"tofu/interface/tui/subagent"
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/tools/shell/process"
+	app "tofu/internal/ui/tui/app"
+	"tofu/internal/ui/tui/frame/frame"
+	"tofu/internal/ui/tui/panels/shells"
+	"tofu/internal/ui/tui/panels/subagent"
 )
 
 const (

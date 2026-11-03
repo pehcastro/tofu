@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/interface/tui"
-	"tofu/interface/tui/subagent"
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/ui/tui/app"
+	"tofu/internal/ui/tui/panels/subagent"
 )
 
 func TestTheSubAgentViewShowsTheStepsASubAgentHasTakenWhileItIsStillRunning(t *testing.T) {

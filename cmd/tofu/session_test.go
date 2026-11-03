@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/interface/cli"
+	"tofu/internal/cli/page"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"

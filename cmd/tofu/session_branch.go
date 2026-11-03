@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/interface/cli"
+	"tofu/internal/cli/page"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"

@@ -25,12 +25,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui"
-	"tofu/interface/tui/frame"
-	"tofu/interface/tui/session"
-	"tofu/interface/tui/settings"
-	"tofu/interface/tui/subagent"
-	"tofu/interface/tui/trace"
 	"tofu/internal/agent/context/recall"
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/cli/render"
@@ -51,6 +45,12 @@ import (
 	"tofu/internal/tools/web"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
+	"tofu/internal/ui/tui/app"
+	"tofu/internal/ui/tui/chat/session"
+	"tofu/internal/ui/tui/frame/frame"
+	"tofu/internal/ui/tui/panels/subagent"
+	"tofu/internal/ui/tui/panels/trace"
+	"tofu/internal/ui/tui/pickers/settings"
 	shipped "tofu/library"
 )
 

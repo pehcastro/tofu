@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"time"
 
-	"tofu/interface/cli"
-	"tofu/interface/tui/frame"
+	"tofu/internal/cli/page"
 	"tofu/internal/sys"
+	"tofu/internal/ui/tui/frame/frame"
 )
 
 type versionReport struct {

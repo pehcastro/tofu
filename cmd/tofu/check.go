@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"tofu/interface/cli"
+	"tofu/internal/cli/page"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"

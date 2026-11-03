@@ -14,8 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/interface/cli"
-	"tofu/interface/tui/frame"
+	"tofu/internal/cli/page"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
@@ -25,6 +24,7 @@ import (
 	"tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
+	"tofu/internal/ui/tui/frame/frame"
 	"tofu/library/changelog"
 )
 

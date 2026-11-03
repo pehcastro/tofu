@@ -16,9 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"tofu/interface/cli"
-	"tofu/interface/tui/trace"
 	"tofu/internal/agent/cron"
+	"tofu/internal/cli/page"
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
@@ -28,6 +27,7 @@ import (
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
+	"tofu/internal/ui/tui/panels/trace"
 )
 
 const (

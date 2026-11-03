@@ -24,14 +24,14 @@ import (
 	"strings"
 	"time"
 
-	"tofu/interface/cli"
-	"tofu/interface/tui/frame"
+	"tofu/internal/cli/page"
 	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/models/transport"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
 	"tofu/internal/tools/web/browser/driver"
+	"tofu/internal/ui/tui/frame/frame"
 )
 
 const (

@@ -16,11 +16,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui"
-	"tofu/interface/tui/session"
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
+	"tofu/internal/ui/tui/app"
+	"tofu/internal/ui/tui/chat/session"
 )
 
 func firstRunApp(t *testing.T, width, height int) *tui.App {

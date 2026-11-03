@@ -6,7 +6,7 @@ import (
 	"io"
 	"path/filepath"
 
-	"tofu/interface/cli"
+	"tofu/internal/cli/page"
 	"tofu/internal/sys"
 )
 

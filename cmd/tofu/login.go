@@ -17,8 +17,7 @@ import (
 	"github.com/charmbracelet/x/term"
 	"github.com/mattn/go-isatty"
 
-	"tofu/interface/cli"
-	"tofu/interface/tui/keyfield"
+	"tofu/internal/cli/page"
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/models/classifiers"
@@ -27,6 +26,7 @@ import (
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/transport"
 	"tofu/internal/sys"
+	"tofu/internal/ui/tui/composer/keyfield"
 )
 
 const (

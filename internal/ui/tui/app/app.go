@@ -1,0 +1,838 @@
+package tui
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"os/signal"
+	"runtime"
+	"runtime/debug"
+	"slices"
+	"strings"
+	"sync/atomic"
+	"syscall"
+	"time"
+	"weak"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
+	"github.com/charmbracelet/x/ansi"
+
+	isubagent "tofu/internal/agent/subagents"
+	"tofu/internal/host"
+	"tofu/internal/konst"
+	library "tofu/internal/models/llm/catalog"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/recover"
+	isession "tofu/internal/store/session"
+	isettings "tofu/internal/store/settings"
+	"tofu/internal/sys"
+	"tofu/internal/ui/keymap"
+	"tofu/internal/ui/statusline"
+	"tofu/internal/ui/tui/chat/feed"
+	"tofu/internal/ui/tui/chat/markdown"
+	"tofu/internal/ui/tui/chat/session"
+	"tofu/internal/ui/tui/composer/keyfield"
+	"tofu/internal/ui/tui/composer/paste"
+	"tofu/internal/ui/tui/composer/question"
+	"tofu/internal/ui/tui/frame/frame"
+	"tofu/internal/ui/tui/input/pointer"
+	"tofu/internal/ui/tui/panels/edits"
+	orderpane "tofu/internal/ui/tui/panels/orders"
+	"tofu/internal/ui/tui/panels/shells"
+	"tofu/internal/ui/tui/panels/subagent"
+	"tofu/internal/ui/tui/pickers/settings"
+)
+
+type EventKind = host.EventKind
+
+const (
+	EventText        = host.EventText
+	EventTextDelta   = host.EventTextDelta
+	EventToolCall    = host.EventToolCall
+	EventToolResult  = host.EventToolResult
+	EventNote        = host.EventNote
+	EventFailure     = host.EventFailure
+	EventStats       = host.EventStats
+	EventDone        = host.EventDone
+	EventDecision    = host.EventDecision
+	EventGateOff     = host.EventGateOff
+	EventContext     = host.EventContext
+	EventForkStart   = host.EventForkStart
+	EventForkEnd     = host.EventForkEnd
+	EventSubAgent    = host.EventSubAgent
+	EventAwaitPerson = host.EventAwaitPerson
+	EventResumed     = host.EventResumed
+	EventSteered     = host.EventSteered
+	EventRequesting  = host.EventRequesting
+	EventPlan        = host.EventPlan
+	EventSession     = host.EventSession
+	EventTask        = host.EventTask
+	EventStreamReset = host.EventStreamReset
+	EventThinking    = host.EventThinking
+	EventTurnStarted = host.EventTurnStarted
+	EventPersisted   = host.EventPersisted
+)
+
+type Event = host.Event
+
+func answered(e Event) bool {
+	switch e.Kind {
+	case EventText, EventTextDelta, EventToolCall, EventThinking, EventStats:
+		return true
+	}
+	return false
+}
+
+type CalledFromInsideTheTurnAndNeverAfterItReturns func(Event)
+
+type Pick = host.Pick
+
+type Turn func(ctx context.Context, pick Pick, task string, emit CalledFromInsideTheTurnAndNeverAfterItReturns)
+
+type Answer = host.Answer
+
+const (
+	Denied      = host.Denied
+	AllowedOnce = host.AllowedOnce
+	AlwaysHere  = host.AlwaysHere
+)
+
+type Requirement struct {
+	Step    string
+	What    string
+	Fix     string
+	Run     func() *exec.Cmd
+	Done    string
+	Choices []Choice
+}
+
+type Choice struct {
+	Label string
+	Run   func() *exec.Cmd
+	Key   string
+}
+
+type setupEntry struct {
+	label, variable, refusal string
+	field                    keyfield.Field
+	checking                 int
+}
+
+type keySavedMsg struct {
+	check int
+	text  string
+	err   error
+}
+
+type Wire struct {
+	Name     string
+	Model    string
+	Provider string
+	Efforts  []llm.Effort
+}
+
+type Options struct {
+	Repo          string
+	Root          string
+	Branch        string
+	Note          string
+	Release       string
+	Requirements  []Requirement
+	Recheck       func() []Requirement
+	SaveKey       func(ctx context.Context, variable, value string) (string, error)
+	Login         func() *exec.Cmd
+	SignIn        func(source string) *exec.Cmd
+	Wires         func() []Wire
+	Models        func() (library.Library, error)
+	Agents        func() isubagent.Found
+	Providers     []settings.Provider
+	Quota         func() []frame.Quota
+	Settings      *isettings.Store
+	Promotions    isession.PromotionLog
+	Reload        func() string
+	ReloadModels  func() string
+	ModelsStale   bool
+	Host          *host.Host
+	Turn          Turn
+	Paste         paste.Board
+	Copy          func(text string) error
+	Paths         func() []string
+	Sessions      func() ([]SessionRow, error)
+	Resume        func(id string) (string, host.Opened)
+	NewSession    func() string
+	Compact       func(focus string) string
+	Fork          func() string
+	BranchAt      func(message string) (note, words string)
+	Undo          func(count string) string
+	Updates       func() string
+	Now           func() time.Time
+	Shells        func() []shells.Entry
+	KillShell     func(name string) error
+	RunCommand    func(ctx context.Context, command string) (output string, stopped bool)
+	Fresh         bool
+	Resumed       host.Opened
+	Pose          string
+	Keymap        string
+	PromptHistory string
+}
+
+type screen int
+
+const (
+	screenChat screen = iota
+	screenAgents
+	screenEdits
+	screenShells
+	screenOrders
+	screenSettings
+)
+
+const (
+	defaultWidth  = 80
+	defaultHeight = 24
+	chromeRows    = 3
+	bodyTop       = 2
+	pulseInterval = session.TickInterval
+	noticeShown   = 3 * time.Second
+	noticePulses  = int(noticeShown / pulseInterval)
+	wheelRows     = 3
+	setupPoll     = time.Second
+	shellPoll     = 250 * time.Millisecond
+	shellPulses   = int(shellPoll / pulseInterval)
+	pickPoll      = 500 * time.Millisecond
+	exitReset     = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[0m" + ansi.ResetBackgroundColor
+)
+
+const (
+	termWithoutHardTabs  = "TERM=linux"
+	controlSequenceStart = "\x1b["
+	absoluteColumnFinal  = '`'
+	columnFromStartFinal = 'G'
+)
+
+type App struct {
+	options        Options
+	requirements   []Requirement
+	entry          setupEntry
+	keyChecks      int
+	setupNote      string
+	current        screen
+	questions      []*question.Form
+	view           session.Model
+	feed           feed.Model
+	edits          edits.Model
+	shells         shells.Model
+	orders         orderpane.Model
+	ordersSeen     map[string]int
+	orderCalls     map[string]orderpane.Order
+	settings       settings.Model
+	store          *isettings.Store
+	defaults       []isettings.Spec
+	preview        preview
+	roles          map[library.RoleID]library.Role
+	defined        []isubagent.Definition
+	shortcuts      map[string]string
+	prompts        *isession.PromptHistory
+	dialogs        []dialog
+	searchedFolded weak.Pointer[[]feed.Event]
+	intro          intro
+	status         frame.Status
+	noticeAt       int
+	pulse          int
+	pulsing        bool
+	filling        bool
+	wire           string
+	model          string
+	provider       string
+	picked         string
+	bound          string
+	configSeen     host.ConfigFiles
+	chosen         resolvedModel
+	effort         llm.Effort
+	heldPick       Pick
+	ownPick        Pick
+	pickWatching   bool
+	defaultOffered bool
+	sessionName    string
+	sessionID      string
+	sessionRoot    string
+	wires          []Wire
+	width          int
+	height         int
+	started        time.Time
+	busy           bool
+	leading        bool
+	afterTurn      []func() string
+	forking        bool
+	gateOff        bool
+	running        int
+	pressedAt      time.Time
+	steered        map[string]string
+	steeredUnread  []string
+	earlier        *host.Earlier
+	sentNow        bool
+	stopCommand    context.CancelFunc
+	subAgents      []subagent.Row
+	allSubAgents   []subagent.Row
+	folded         map[string]bool
+	unfolded       bool
+	openedFolded   map[string]bool
+	foldDue        time.Time
+	foldArmed      time.Time
+	moves          map[string]movement
+	liveShells     []shells.Entry
+	shellsTicking  bool
+	shellsPolling  bool
+	happened       []feed.Event
+	happenedIndex  map[string]int
+	lengthenedIDs  map[string]string
+	feedStale      bool
+	reached        []string
+	board          paste.Board
+	minted         int
+	happenedAtTurn int
+	trimmedTo      int
+	gapReadEmpty   feed.Gap
+	gapReading     bool
+	unheld         feed.Unheld
+	unheldCounted  bool
+	unheldReading  bool
+	keptAnswer     string
+	updateSaid     updateMsg
+	updateChecked  bool
+	updateAt       int
+	selection      pointer.Selection
+	frozen         string
+	drag           pointer.Drag
+	lastSelection  string
+	drawn          string
+	hits           []frame.Hit
+	listening      atomic.Bool
+	statusWatch    statusWatch
+	feedAgents     []feed.Agent
+	serving        map[string]string
+	firesDrawn     []string
+}
+
+type resolvedModel struct {
+	slug  string
+	model library.Model
+	known bool
+}
+
+type Closed struct{}
+
+type requirementsMsg []Requirement
+
+type recheckMsg struct{}
+
+type pathsMsg []string
+
+type pulseMsg struct{}
+
+type fillMsg struct{}
+
+type foldDueMsg struct{}
+
+type shellsMsg []shells.Entry
+
+type shellsDueMsg struct{}
+
+type noticeMsg string
+
+type updateMsg string
+
+func New(options Options) *App {
+	if options.Now == nil {
+		options.Now = time.Now
+	}
+	if options.Copy == nil {
+		options.Copy = sys.WriteClipboardText
+	}
+	if options.Models == nil {
+		options.Models = layeredModels(options.Root)
+	}
+	if state, err := sys.ProjectStateDirAt(options.Root); err == nil && options.Promotions == "" && options.Root != "" {
+		options.Promotions = isession.NewPromotionLog(state)
+	}
+	if options.Keymap == "" {
+		options.Keymap, _ = keymap.ShortcutsPath()
+	}
+	if options.PromptHistory == "" {
+		options.PromptHistory, _ = sys.HomeConfigDir()
+	}
+	if options.Host == nil && options.Turn != nil {
+		turn := options.Turn
+		options.Host, _ = host.New(host.Config{Now: options.Now, Play: func(ctx context.Context, pick Pick, task string, live host.Live) {
+			turn(ctx, pick, task, live.Emit)
+		}})
+	}
+	app := &App{
+		options:       options,
+		requirements:  options.Requirements,
+		view:          session.New(options.Now, new(markdown.Renderer).Lines),
+		feed:          feed.New(options.Now),
+		edits:         edits.Model{Root: options.Root},
+		shells:        shells.New(options.Now),
+		settings:      settings.Model{Providers: options.Providers, Scopes: []string{"global", "project"}},
+		store:         options.Settings,
+		defaults:      isettings.Default(),
+		shortcuts:     keymap.LoadShortcuts(options.Keymap),
+		width:         defaultWidth,
+		height:        defaultHeight,
+		started:       options.Now(),
+		moves:         map[string]movement{},
+		openedFolded:  map[string]bool{},
+		steered:       map[string]string{},
+		happenedIndex: map[string]int{},
+		lengthenedIDs: map[string]string{},
+		serving:       map[string]string{},
+		ordersSeen:    map[string]int{},
+		orderCalls:    map[string]orderpane.Order{},
+		board:         paste.Default(options.Paste),
+	}
+	app.view.FeedID = app.shownID
+	if options.PromptHistory != "" {
+		app.prompts = isession.OpenPromptHistory(options.PromptHistory)
+	}
+	app.status.Note = options.Note
+	app.status.Fresh = options.Fresh
+	app.view.Commands = commands(options)
+	app.settings.SetSearchKey(app.shortcuts[searchAction])
+	app.settings.SetBranch(options.Branch)
+	app.intro = newIntro(options.Fresh, app.text(isettings.Animations) != animationsOff, options.Pose)
+	app.resize(app.width, app.height)
+	for _, event := range options.Resumed.Chat {
+		app.absorb(event)
+	}
+	app.earlier, app.options.Resumed = options.Resumed.Earlier, host.Opened{}
+	app.view.Stop()
+	app.readWires()
+	app.configSeen = host.ConfigSeen(options.Root)
+	if loaded, err := app.options.Models(); err == nil {
+		app.noteRefused(loaded)
+	}
+	app.ownPick = app.pick()
+	app.flushFeed()
+	app.syncFeed()
+	return app
+}
+
+func (a *App) readWires() {
+	if a.options.Wires == nil {
+		return
+	}
+	signed := a.options.Wires()
+	if len(signed) == 0 {
+		return
+	}
+	a.wires = signed
+	a.wire, a.model, a.provider = signed[0].Name, signed[0].Model, signed[0].Provider
+	if a.options.Models == nil {
+		return
+	}
+	loaded, err := a.options.Models()
+	orchestrator, bound := loaded.Bound(library.RoleOrchestrator)
+	if err != nil || !bound {
+		return
+	}
+	a.bound = orchestrator.Slug()
+	source, model, _ := strings.Cut(a.bound, "/")
+	if at := slices.IndexFunc(signed, func(wire Wire) bool { return wire.Provider == source }); at >= 0 {
+		a.wire, a.model, a.provider, a.picked = signed[at].Name, model, source, orchestrator.Slug()
+	}
+}
+
+func consoleEnviron(environ []string, goos string) []string {
+	if goos != "windows" {
+		return environ
+	}
+	return append(slices.DeleteFunc(slices.Clone(environ), func(entry string) bool { return strings.HasPrefix(entry, "TERM=") }), termWithoutHardTabs)
+}
+
+type conhostOutput struct{ *os.File }
+
+func (c conhostOutput) Write(frame []byte) (int, error) {
+	if _, err := c.File.Write(columnMovesAsCHA(frame)); err != nil {
+		return 0, err
+	}
+	return len(frame), nil
+}
+
+func columnMovesAsCHA(frame []byte) []byte {
+	out := make([]byte, 0, len(frame))
+	for {
+		at := bytes.Index(frame, []byte(controlSequenceStart))
+		if at < 0 {
+			return append(out, frame...)
+		}
+		end := at + len(controlSequenceStart)
+		for end < len(frame) && frame[end] >= '0' && frame[end] <= '9' {
+			end++
+		}
+		out = append(out, frame[:end]...)
+		if end < len(frame) && frame[end] == absoluteColumnFinal {
+			out, end = append(out, columnFromStartFinal), end+1
+		}
+		frame = frame[end:]
+	}
+}
+
+func Run(options Options) error {
+	environ := os.Environ()
+	profile := colorprofile.Detect(os.Stdout, environ)
+	programOptions := []tea.ProgramOption{tea.WithEnvironment(consoleEnviron(environ, runtime.GOOS)), tea.WithColorProfile(profile)}
+	if runtime.GOOS == "windows" {
+		programOptions = append(programOptions, tea.WithOutput(conhostOutput{os.Stdout}))
+	}
+	program := tea.NewProgram(New(options), programOptions...)
+	hangup, root := make(chan os.Signal, 1), options.Root
+	signal.Notify(hangup, syscall.SIGHUP)
+	unheard := func(p safe.Panic) {
+		signal.Stop(hangup)
+		state, err := sys.ProjectStateDirAt(root)
+		if err != nil {
+			state = os.TempDir()
+		}
+		program.Send(noticeMsg(p.Saved(state)))
+	}
+	safe.Go(unheard, "hangup handler", func() {
+		if _, hungUp := <-hangup; hungUp {
+			program.Quit()
+		}
+	})
+	_, err := program.Run()
+	signal.Stop(hangup)
+	close(hangup)
+	_, _ = io.WriteString(os.Stdout, exitReset+status.Encode(status.Record{State: status.Clear}))
+	return err
+}
+
+func (a *App) Init() tea.Cmd {
+	return caught(tea.Batch(a.view.Focus(), a.intro.start(), a.pollQuota(), a.readPaths(), a.watchSetup(), a.pollShells(), a.startPulse(), a.reloadStaleModels(), a.listen(), a.watchUpdates(0), a.loadEarlier()))
+}
+
+func (a *App) watchUpdates(after time.Duration) tea.Cmd {
+	updates := a.options.Updates
+	if updates == nil {
+		return nil
+	}
+	return tea.Tick(after, func(time.Time) tea.Msg { return updateMsg(updates()) })
+}
+
+func (a *App) reloadStaleModels() tea.Cmd {
+	reload := a.options.ReloadModels
+	if !a.options.ModelsStale || reload == nil {
+		return nil
+	}
+	return func() tea.Msg { return noticeMsg(reload()) }
+}
+
+func (a *App) pollShells() tea.Cmd {
+	poll := a.options.Shells
+	if poll == nil || a.shellsPolling {
+		return nil
+	}
+	a.shellsPolling = true
+	return func() tea.Msg { return shellsMsg(poll()) }
+}
+
+func (a *App) watchSetup() tea.Cmd {
+	if !a.settingUp() || a.options.Recheck == nil {
+		return nil
+	}
+	return tea.Tick(setupPoll, func(time.Time) tea.Msg { return recheckMsg{} })
+}
+
+func (a *App) settingUp() bool {
+	return slices.ContainsFunc(a.requirements, func(step Requirement) bool { return step.Done == "" })
+}
+
+func (a *App) readPaths() tea.Cmd {
+	under := a.options.Paths
+	if under == nil {
+		return nil
+	}
+	return func() tea.Msg { return pathsMsg(under()) }
+}
+
+func (a *App) pollQuota() tea.Cmd {
+	poll := a.options.Quota
+	if poll == nil {
+		return nil
+	}
+	return func() tea.Msg { return poll() }
+}
+
+func (a *App) resize(width, height int) {
+	a.width, a.height = width, height
+	body := height - chromeRows
+	a.view.SetSize(width, body)
+	a.feed.SetSize(width, body)
+	a.edits.SetSize(width, body)
+	a.shells.SetSize(width, body)
+	a.orders.SetSize(width, body)
+	a.settings.SetSize(width, height)
+	a.selection, a.frozen = pointer.Selection{}, ""
+}
+
+type commandPanicked string
+
+func caught(cmd tea.Cmd) tea.Cmd {
+	if cmd == nil {
+		return nil
+	}
+	return func() (msg tea.Msg) {
+		defer func() {
+			if value := recover(); value != nil {
+				msg = commandPanicked(fmt.Sprintf("%v\n\n%s", value, debug.Stack()))
+			}
+		}()
+		msg = cmd()
+		if batch, isBatch := msg.(tea.BatchMsg); isBatch {
+			for i, each := range batch {
+				batch[i] = caught(each)
+			}
+		}
+		return msg
+	}
+}
+
+func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if panicked, inACommand := msg.(commandPanicked); inACommand {
+		panic(string(panicked))
+	}
+	a.followStatus(msg)
+	cmd := a.update(msg)
+	if a.feed.FoldAsked() {
+		a.toggleFold()
+	}
+	a.syncPick()
+	a.view.Activity = nil
+	if a.busy {
+		a.watchSubAgents()
+		a.view.Activity = append(a.view.Activity, a.shellActivity()...)
+	}
+	a.ageWorking()
+	a.trimFeed()
+	counting := a.countWhatIsNotHeld()
+	a.flushFeed()
+	filling := a.fillGap()
+	a.syncFeed()
+	return a, caught(tea.Batch(cmd, counting, filling, a.startPulse(), a.reportStatus(), a.foldLater()))
+}
+
+func (a *App) update(msg tea.Msg) tea.Cmd {
+	if size, resized := msg.(tea.WindowSizeMsg); resized {
+		a.resize(size.Width, size.Height)
+		cmd, _ := a.toFiles(msg)
+		return tea.Batch(cmd, a.fillLater(), a.watchPick())
+	}
+	if a.hostResult(msg) {
+		return nil
+	}
+	switch msg := msg.(type) {
+	case tea.MouseClickMsg:
+		a.press(msg)
+		return nil
+	case tea.MouseMotionMsg:
+		a.motion(msg)
+		return nil
+	case tea.MouseReleaseMsg:
+		return a.release(msg)
+	case tea.MouseWheelMsg:
+		return a.wheel(msg)
+	case tea.KeyPressMsg:
+		if msg.String() == foldKey && a.current == screenAgents && a.top() == nil && !a.settingUp() && len(a.folded) > 0 {
+			a.toggleFold()
+			return nil
+		}
+		return a.key(msg)
+	case tea.PasteMsg:
+		return a.pasted(msg)
+	case pulseMsg:
+		a.beat()
+		if a.busy && !a.shellsTicking && a.pulse%shellPulses == 0 {
+			return a.pollShells()
+		}
+		return nil
+	case foldDueMsg:
+		a.foldArmed = time.Time{}
+		a.refold()
+		return nil
+	case fillMsg:
+		a.filling = false
+		if a.view.Fill() {
+			return a.fillLater()
+		}
+		return nil
+	case Event:
+		a.absorb(msg)
+		return a.listen()
+	case gapReadMsg:
+		a.gapRead(msg)
+		return nil
+	case unheldReadMsg:
+		a.unheldRead(msg)
+		return nil
+	case paste.Outcome:
+		a.view.Attached(msg)
+		return nil
+	case editedMsg:
+		a.edited(msg)
+		return nil
+	case ranMsg:
+		a.ran(msg)
+		return nil
+	case copiedMsg:
+		a.notify(msg.note())
+		if msg.state == copyToTerminal {
+			return tea.SetClipboard(msg.text)
+		}
+		return nil
+	case Closed:
+		return a.closed()
+	case pathsMsg:
+		a.view.Paths = msg
+		return nil
+	case []frame.Quota:
+		a.status.Quotas = inSpendOrder(msg, a.serving, a.options.Now())
+		return nil
+	case recheckMsg:
+		recheck := a.options.Recheck
+		if recheck == nil {
+			return nil
+		}
+		return func() tea.Msg { return requirementsMsg(recheck()) }
+	case keySavedMsg:
+		return a.keySaved(msg)
+	case requirementsMsg:
+		was, before := a.settingUp(), a.currentStep()
+		a.requirements = msg
+		cleared := was && !a.settingUp()
+		a.readWires()
+		switch {
+		case cleared:
+			return tea.Batch(a.view.Focus(), tea.ClearScreen)
+		case a.currentStep().Step != before.Step || a.currentStep().What != before.What:
+			return tea.Batch(a.watchSetup(), tea.ClearScreen)
+		}
+		return a.watchSetup()
+	case shellsMsg:
+		a.shellsPolling = false
+		a.showShells(msg)
+		if a.shellsTicking || !slices.ContainsFunc(msg, func(entry shells.Entry) bool { return entry.State == shells.Running }) {
+			return nil
+		}
+		a.shellsTicking = true
+		return tea.Tick(shellPoll, func(time.Time) tea.Msg { return shellsDueMsg{} })
+	case shellsDueMsg:
+		a.shellsTicking = false
+		return a.pollShells()
+	case pickerReloadedMsg:
+		return a.pickerReloaded(string(msg))
+	case pickPollMsg:
+		a.pickWatching = false
+		a.followConfig()
+		a.offerDefaultPick()
+		return a.watchPick()
+	case noticeMsg:
+		if msg != "" {
+			a.notify(string(msg))
+		}
+		return nil
+	case earlierMsg:
+		return a.drawEarlier(msg)
+	case updateMsg:
+		if msg != a.updateSaid {
+			a.updateAt = a.pulse
+		}
+		a.updateSaid, a.updateChecked = msg, true
+		return a.watchUpdates(konst.UpdateWatchSeconds * time.Second)
+	}
+	if cmd, open := a.toFiles(msg); open {
+		return cmd
+	}
+	if a.intro.shown {
+		var moved tea.Cmd
+		a.intro.identity, moved = a.intro.identity.Update(msg)
+		return tea.Batch(moved, a.view.Update(msg))
+	}
+	return a.view.Update(msg)
+}
+
+func (a *App) startPulse() tea.Cmd {
+	_, shimmering := a.shimmer()
+	moving := a.busy && !a.view.Awaiting() || a.status.Note != "" || shimmering
+	if a.pulsing || !moving {
+		return nil
+	}
+	a.pulsing = true
+	return tea.Tick(pulseInterval, func(time.Time) tea.Msg { return pulseMsg{} })
+}
+
+func (a *App) fillLater() tea.Cmd {
+	if a.filling {
+		return nil
+	}
+	a.filling = true
+	return tea.Tick(konst.RewrapFillMillis*time.Millisecond, func(time.Time) tea.Msg { return fillMsg{} })
+}
+
+func (a *App) beat() {
+	a.pulsing = false
+	a.pulse++
+	if a.text(isettings.Animations) != animationsOff {
+		frame := int(time.Duration(a.options.Now().UnixNano()) / pulseInterval)
+		a.feed.SetFrame(frame)
+		a.view.SetFrame(frame)
+	}
+	if a.status.Note != "" && a.pulse-a.noticeAt > noticePulses {
+		a.status.Note = ""
+	}
+}
+
+func (a *App) notify(note string) {
+	a.status.Note, a.noticeAt = note, a.pulse
+}
+
+func (a *App) show(to screen) tea.Cmd {
+	if to != screenSettings && a.settings.CloseDialog().Action == settings.ActionRevert {
+		a.preview = preview{}
+	}
+	if to == screenSettings {
+		a.refreshSettingsRows()
+	}
+	a.current = to
+	return a.clearDialogs()
+}
+
+func (a *App) clearDialogs() tea.Cmd {
+	a.dialogs = nil
+	if a.current == screenChat {
+		return a.view.Focus()
+	}
+	return nil
+}
+
+func (a *App) closed() tea.Cmd {
+	a.busy, a.leading, a.edits.Busy = false, false, false
+	a.running, a.pressedAt, a.sentNow = 0, time.Time{}, false
+	clear(a.steered)
+	a.parkSubAgentsTheTurnLeftBehind()
+	a.stopWhatStillRuns()
+	a.view.Stop()
+	a.countCrons()
+	a.carryHeld()
+	if carried := a.carrySteers(); len(carried) > 0 {
+		a.busy, a.edits.Busy = true, true
+		a.leadTurnBegins()
+		a.view.Release()
+		a.steeredUnread = append(a.steeredUnread, carried...)
+	}
+	return tea.Batch(a.pollQuota(), a.readPaths(), a.pollShells(), a.listen())
+}

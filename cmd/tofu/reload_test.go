@@ -9,7 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"tofu/interface/tui"
+	"tofu/internal/ui/tui/app"
 )
 
 const (

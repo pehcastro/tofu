@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/interface/tui"
-	"tofu/interface/tui/session"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/turn/tools"
+	"tofu/internal/ui/tui/app"
+	"tofu/internal/ui/tui/chat/session"
 )
 
 func TestADryRunListsThePlanToolAndTheOffArmDoesNot(t *testing.T) {

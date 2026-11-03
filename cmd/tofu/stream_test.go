@@ -10,11 +10,11 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"tofu/interface/tui"
-	"tofu/interface/tui/frame"
 	"tofu/internal/models/llm/core"
 	sessionstore "tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
+	"tofu/internal/ui/tui/app"
+	"tofu/internal/ui/tui/frame/frame"
 )
 
 type streamingModel struct {

@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/interface/tui"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/turn"
+	"tofu/internal/ui/tui/app"
 )
 
 const middlingRiskAskReply = `{"model":"typesafe/jev-1.13-20260917","provider":"TypeSafe","id":"gen-stub-ask",` +

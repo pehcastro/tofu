@@ -1,0 +1,294 @@
+package tui
+
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
+
+	"tofu/internal/sys"
+	"tofu/internal/testkit/golden"
+	"tofu/internal/ui/tui/composer/paste"
+)
+
+const (
+	pasteSessionID = "turn-19a2b3c4d5"
+	pasteWidth     = 80
+	pasteHeight    = 24
+	screenshot     = "pretend this is the png encoding of a screenshot"
+)
+
+func pasteApp(t *testing.T, board paste.Board) *App {
+	t.Helper()
+	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
+	app := newTestApp(Options{
+		Repo:   testRepo,
+		Branch: "develop",
+		Wires:  anthropicAlone,
+		Now:    func() time.Time { return at },
+		Paste:  board,
+	})
+	app.Init()
+	app.Update(tea.WindowSizeMsg{Width: pasteWidth, Height: pasteHeight})
+	return app
+}
+
+func pasteBoard(t *testing.T) (paste.Board, string) {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), pasteSessionID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("the session directory could not be made: %v", err)
+	}
+	return paste.Board{
+		Read: func() (sys.Clipboard, error) {
+			return sys.Clipboard{Kind: sys.ClipboardImage, PNG: []byte(screenshot)}, nil
+		},
+		Dir: func() (string, error) { return dir, nil },
+	}, dir
+}
+
+func pasteKeys() map[string]tea.KeyPressMsg {
+	return map[string]tea.KeyPressMsg{
+		"ctrl+v": {Code: 'v', Mod: tea.ModCtrl},
+		"alt+v":  {Code: 'v', Mod: tea.ModAlt},
+	}
+}
+
+func TestEitherPasteKeyAttachesAnImage(t *testing.T) {
+	for name, key := range pasteKeys() {
+		t.Run(name, func(t *testing.T) {
+			board, dir := pasteBoard(t)
+			app := pasteApp(t, board)
+			_, cmd := app.Update(key)
+			if cmd == nil {
+				t.Fatalf("%s returned no command, so nothing was pasted", name)
+			}
+			if !strings.Contains(ansi.Strip(app.View().Content), "[pasting 1]") {
+				t.Fatalf("%s left no placeholder in the composer:\n%s", name, ansi.Strip(app.View().Content))
+			}
+			app.Update(cmd())
+			frame := ansi.Strip(app.View().Content)
+			if !strings.Contains(frame, "[Image #1]") {
+				t.Fatalf("%s did not draw the numbered chip:\n%s", name, frame)
+			}
+			if _, err := os.Stat(filepath.Join(dir, pasteSessionID+"-image-01.png")); err != nil {
+				t.Fatalf("%s wrote nothing beside the record: %v", name, err)
+			}
+		})
+	}
+}
+
+func TestThePasteKeypressReturnsBeforeTheImageIsWritten(t *testing.T) {
+	board, _ := pasteBoard(t)
+	release := make(chan struct{})
+	board.Write = func(string, []byte) error {
+		<-release
+		return nil
+	}
+	app := pasteApp(t, board)
+	_, cmd := app.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+	written := make(chan tea.Msg, 1)
+	go func() { written <- cmd() }()
+
+	frame := ansi.Strip(app.View().Content)
+	if !strings.Contains(frame, "[pasting 1]") {
+		t.Fatalf("the frame does not render while the writer is blocked:\n%s", frame)
+	}
+	select {
+	case msg := <-written:
+		t.Fatalf("the write finished before it was released, returning %v", msg)
+	default:
+	}
+	close(release)
+	app.Update(<-written)
+	if !strings.Contains(ansi.Strip(app.View().Content), "[Image #1]") {
+		t.Fatal("the released write never reached the composer")
+	}
+}
+
+func TestAFailedPasteKeepsThePlaceholderAndSaysWhy(t *testing.T) {
+	board, _ := pasteBoard(t)
+	board.Write = func(string, []byte) error { return errors.New("the disk is full") }
+	app := pasteApp(t, board)
+	_, cmd := app.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+	app.Update(cmd())
+	frame := ansi.Strip(app.View().Content)
+	for _, want := range []string{"image 1", "could not be pasted: the disk is full"} {
+		if !strings.Contains(frame, want) {
+			t.Fatalf("the frame does not say %q:\n%s", want, frame)
+		}
+	}
+}
+
+func TestPastingTextLeavesNoPlaceholderAndTypesTheText(t *testing.T) {
+	board, _ := pasteBoard(t)
+	board.Read = func() (sys.Clipboard, error) {
+		return sys.Clipboard{Kind: sys.ClipboardText, Text: "rerun the gate bench"}, nil
+	}
+	app := pasteApp(t, board)
+	_, cmd := app.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+	app.Update(cmd())
+	frame := ansi.Strip(app.View().Content)
+	if strings.Contains(frame, "image 1") {
+		t.Fatalf("text left an image placeholder behind:\n%s", frame)
+	}
+	if !strings.Contains(frame, "rerun the gate bench") {
+		t.Fatalf("the pasted text is not in the composer:\n%s", frame)
+	}
+}
+
+func TestAPastedImageBecomesANumberedChipAtThePositionItWasPasted(t *testing.T) {
+	board, _ := pasteBoard(t)
+	app := pasteApp(t, board)
+	typeText(app, "look at ")
+	_, cmd := app.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+	app.Update(cmd())
+	typeText(app, " and tell me why")
+	if got := app.view.Value(); got != "look at [Image #1] and tell me why" {
+		t.Fatalf("the composer holds %q, want the chip at the pasted position", got)
+	}
+	golden.Assert(t, "session-paste-image-chip-80x24.golden", app.View().Content)
+}
+
+func TestTwoImagesPastedInOrderNumberInThatOrder(t *testing.T) {
+	board, _ := pasteBoard(t)
+	app := pasteApp(t, board)
+	_, first := app.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+	app.Update(first())
+	_, second := app.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+	app.Update(second())
+	if got := app.view.Value(); got != "[Image #1][Image #2]" {
+		t.Fatalf("the composer holds %q, want the two chips numbered in paste order", got)
+	}
+}
+
+func TestALongPastedBlockBecomesATextChip(t *testing.T) {
+	board, _ := pasteBoard(t)
+	long := strings.Repeat("the gate reads the policy before the wire. ", 10)
+	board.Read = func() (sys.Clipboard, error) {
+		return sys.Clipboard{Kind: sys.ClipboardText, Text: long}, nil
+	}
+	app := pasteApp(t, board)
+	_, cmd := app.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+	app.Update(cmd())
+	frame := ansi.Strip(app.View().Content)
+	if strings.Contains(frame, long) {
+		t.Fatalf("a long paste was typed in full instead of becoming a chip:\n%s", frame)
+	}
+	want := "[Text " + strconv.Itoa(len([]rune(long))) + " characters]"
+	if !strings.Contains(frame, want) {
+		t.Fatalf("the frame does not carry %q:\n%s", want, frame)
+	}
+	golden.Assert(t, "session-paste-text-chip-80x24.golden", app.View().Content)
+}
+
+func TestASentMessageDrawsATreeBeneathItNamingWhatWentWithIt(t *testing.T) {
+	board, _ := pasteBoard(t)
+	app := newTestApp(Options{
+		Repo:   testRepo,
+		Branch: "develop",
+		Wires:  anthropicAlone,
+		Now:    func() time.Time { return time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC) },
+		Paste:  board,
+		Turn:   func(context.Context, Pick, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
+	})
+	app.Init()
+	app.Update(tea.WindowSizeMsg{Width: pasteWidth, Height: pasteHeight})
+	typeText(app, "compare ")
+	_, cmd := app.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+	app.Update(cmd())
+	typeText(app, " to the spec")
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	frame := ansi.Strip(app.View().Content)
+	if !strings.Contains(frame, "compare [Image #1] to the spec") || !strings.Contains(frame, "Attached 1 Image") || strings.Contains(frame, "Images") {
+		t.Fatalf("the sent message does not say Attached 1 Image:\n%s", frame)
+	}
+	if strings.Contains(frame, pasteSessionID+"-image-01.png") {
+		t.Fatalf("the sent message still names the file:\n%s", frame)
+	}
+	golden.Assert(t, "session-paste-tree-80x24.golden", app.View().Content)
+}
+
+func TestDeletingAPastedImagesTokenDropsItFromTheSentTree(t *testing.T) {
+	board, _ := pasteBoard(t)
+	app := newTestApp(Options{
+		Repo:   testRepo,
+		Branch: "develop",
+		Wires:  anthropicAlone,
+		Now:    func() time.Time { return time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC) },
+		Paste:  board,
+		Turn:   func(context.Context, Pick, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
+	})
+	app.Init()
+	app.Update(tea.WindowSizeMsg{Width: pasteWidth, Height: pasteHeight})
+	typeText(app, "compare ")
+	_, first := app.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+	app.Update(first())
+	_, second := app.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+	app.Update(second())
+	if got := app.view.Value(); got != "compare [Image #1][Image #2]" {
+		t.Fatalf("the composer holds %q before the delete", got)
+	}
+	app.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+	if got := app.view.Value(); got != "compare [Image #1]" {
+		t.Fatalf("the composer holds %q after deleting the second token", got)
+	}
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	frame := ansi.Strip(app.View().Content)
+	if strings.Count(frame, "Attached 1 Image") != 1 || strings.Contains(frame, "Images") {
+		t.Fatalf("the sent message does not count exactly one kept image:\n%s", frame)
+	}
+}
+
+func TestADroppedImagePathAttachesAndAnyOtherPathStaysText(t *testing.T) {
+	board, dir := pasteBoard(t)
+	shots := filepath.Join(t.TempDir(), "My Shots")
+	if err := os.MkdirAll(shots, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	shot, notes, gone := filepath.Join(shots, "shot.png"), filepath.Join(shots, "notes.txt"), filepath.Join(shots, "gone.png")
+	for _, path := range []string{shot, notes} {
+		if err := os.WriteFile(path, []byte(screenshot), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	app := pasteApp(t, board)
+	paste := func(text string) {
+		if _, cmd := app.Update(tea.PasteMsg{Content: text}); cmd != nil {
+			app.Update(cmd())
+		}
+	}
+	paste(`"` + shot + `"`)
+	typeText(app, " then ")
+	paste(notes)
+	typeText(app, " and ")
+	paste(gone)
+	if want := "[Image #1] then " + notes + " and " + gone; app.view.Value() != want {
+		t.Fatalf("the composer holds %q, want %q", app.view.Value(), want)
+	}
+	copied, err := os.ReadFile(filepath.Join(dir, pasteSessionID+"-image-01.png"))
+	if err != nil || string(copied) != screenshot {
+		t.Fatalf("the dropped image was not copied beside the record: %q, %v", copied, err)
+	}
+}
+
+func TestThePastedComposerIsWhatHeSees(t *testing.T) {
+	board, _ := pasteBoard(t)
+	app := pasteApp(t, board)
+	_, cmd := app.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
+	app.Update(cmd())
+	typeText(app, "what changed between these two frames?")
+	rows := strings.Split(ansi.Strip(app.View().Content), "\n")
+	composer := strings.Join(rows[len(rows)-8:], "\n")
+	if !strings.Contains(composer, "what changed between these two frames?") {
+		t.Fatalf("the composer does not hold the typed task:\n%s", composer)
+	}
+	t.Log("\n" + composer)
+}

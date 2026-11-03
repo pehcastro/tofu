@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	app "tofu/interface/tui"
+	app "tofu/internal/ui/tui/app"
 )
 
 const (

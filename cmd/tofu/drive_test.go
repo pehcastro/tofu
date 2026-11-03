@@ -15,12 +15,12 @@ import (
 	"testing"
 	"time"
 
-	"tofu/interface/tui/progress"
-	"tofu/interface/tui/session"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
+	"tofu/internal/ui/tui/chat/session"
+	"tofu/internal/ui/tui/panels/progress"
 )
 
 func TestADrivenStepSettlesInsideOneProgressTick(t *testing.T) {

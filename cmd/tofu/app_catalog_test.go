@@ -12,9 +12,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"tofu/interface/tui"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/catalog"
+	"tofu/internal/ui/tui/app"
 )
 
 const servedID = "claude-sub/claude-sonnet-5-5"

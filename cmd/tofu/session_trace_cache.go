@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"tofu/interface/cli"
+	"tofu/internal/cli/page"
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/konst"

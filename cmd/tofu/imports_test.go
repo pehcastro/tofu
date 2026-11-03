@@ -13,7 +13,6 @@ func everyRuleMatched(files map[string]string) map[string]string {
 	tree := map[string]string{
 		"bench/cost/cost.go":                    "package cost\n\nfunc Run() int { return 1 }\n",
 		"cmd/tofu/main.go":                      "package main\n\nfunc main() {}\n",
-		"interface/cli/cli.go":                  "package cli\n",
 		"library/embed.go":                      "package library\n",
 		"internal/judge/questions/questions.go": "package questions\n\nimport \"tofu/internal/sys\"\n\nfunc Name() string { return sys.OS() }\n",
 		"internal/sys/sys.go":                   "package sys\n\nfunc OS() string { return \"windows\" }\n",
@@ -51,7 +50,7 @@ func TestImportsFailsOnACommandImportingBench(t *testing.T) {
 		t.Fatalf("exit = %d, want %d, output %q", code, exitVerdict, out.String())
 	}
 	for _, want := range []string{
-		"Imports · 8 packages · 10 rules",
+		"Imports · 7 packages · 8 rules",
 		"✗ 1 violations\n",
 		"  ✗ tofu/cmd                        never tofu/bench\n",
 		"violations\n  ✗ tofu/cmd/tofu  imports tofu/bench/cost\n",
@@ -95,7 +94,7 @@ func TestImportsPassesOnATreeThatObeysTheRules(t *testing.T) {
 	if code != exitOK {
 		t.Fatalf("exit = %d, want %d, output %q", code, exitOK, out.String())
 	}
-	if first := strings.SplitN(out.String(), "\n", 2)[0]; !strings.HasPrefix(first, "Imports · 8 packages · 10 rules ") || !strings.HasSuffix(first, " ✓ no violations") {
+	if first := strings.SplitN(out.String(), "\n", 2)[0]; !strings.HasPrefix(first, "Imports · 7 packages · 8 rules ") || !strings.HasSuffix(first, " ✓ no violations") {
 		t.Fatalf("title %q, want the counts and no violations", first)
 	}
 	if strings.Contains(out.String(), "✗") {
@@ -128,7 +127,6 @@ func TestImportsNamesEveryRuleItChecked(t *testing.T) {
 
 func TestImportsFailsOnARuleThatMatchesNoPackage(t *testing.T) {
 	tree := everyRuleMatched(nil)
-	delete(tree, "interface/cli/cli.go")
 	delete(tree, "bench/cost/cost.go")
 	dir := writeFixtureModule(t, tree)
 
@@ -141,16 +139,14 @@ func TestImportsFailsOnARuleThatMatchesNoPackage(t *testing.T) {
 		dead[violation.Rule] = violation.From
 	}
 	want := map[string]string{
-		"nothing under tofu/cmd imports tofu/bench":          "tofu/bench",
-		"nothing under tofu/interface imports tofu/bench":    "tofu/interface",
-		"nothing under tofu/internal imports tofu/bench":     "tofu/bench",
-		"nothing under tofu/internal imports tofu/interface": "tofu/interface",
+		"nothing under tofu/cmd imports tofu/bench":      "tofu/bench",
+		"nothing under tofu/internal imports tofu/bench": "tofu/bench",
 	}
 	if !maps.Equal(dead, want) || len(report.Violations) != len(want) {
 		t.Fatalf("violations %+v, want one per rule matching no package: %v", report.Violations, want)
 	}
 	out := &bytes.Buffer{}
-	if code := doctorImports(dir, false, out, out); code != exitVerdict || !strings.Contains(out.String(), "tofu/interface  matches no package: nothing under tofu/internal imports") {
+	if code := doctorImports(dir, false, out, out); code != exitVerdict || !strings.Contains(out.String(), "tofu/bench  matches no package: nothing under tofu/internal imports") {
 		t.Fatalf("exit %d, output\n%s\nwant exit %d and the dead rule named", code, out.String(), exitVerdict)
 	}
 }

@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/interface/cli"
+	"tofu/internal/cli/page"
 	"tofu/internal/judge/gate"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"

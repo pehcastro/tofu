@@ -14,7 +14,7 @@ import (
 	"github.com/charmbracelet/colorprofile"
 
 	"tofu/bench/browser/steps"
-	"tofu/interface/cli"
+	"tofu/internal/cli/page"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
 	"tofu/internal/tools/web/browser/driver"

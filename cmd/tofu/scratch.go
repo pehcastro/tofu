@@ -11,7 +11,7 @@ import (
 	"slices"
 	"time"
 
-	"tofu/interface/cli"
+	"tofu/internal/cli/page"
 	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/store/session"

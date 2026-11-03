@@ -81,7 +81,7 @@ func TestTheFixtureRuleIsTheOneAPersonWouldPredict(t *testing.T) {
 		"internal/turn/testdata/subscription-end-turn.sse",
 		"bench/cost/answers/heldout-2026-09-19.jsonl",
 		"bench/cost/testdata/spendsum/main.go",
-		"interface/tui/testdata/session-80x24.golden",
+		"internal/ui/tui/app/testdata/session-80x24.golden",
 	}
 	notRecorded := []string{
 		"bench/corpus/scrub.go",

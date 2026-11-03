@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"tofu/interface/cli"
 	"tofu/internal/agent/subagents"
+	"tofu/internal/cli/page"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/project/boardy"
 )

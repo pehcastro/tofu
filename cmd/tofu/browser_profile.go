@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"tofu/interface/cli"
+	"tofu/internal/cli/page"
 	"tofu/internal/tools/web/browser/driver"
 )
 

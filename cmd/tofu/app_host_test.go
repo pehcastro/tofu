@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"tofu/interface/tui"
 	"tofu/internal/host"
 	"tofu/internal/turn"
+	"tofu/internal/ui/tui/app"
 )
 
 const cancelledAt = "cancelled at"

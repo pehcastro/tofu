@@ -17,11 +17,11 @@ import (
 	"sync"
 	"time"
 
-	"tofu/interface/cli"
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/cron"
 	"tofu/internal/agent/hooks"
 	"tofu/internal/agent/subagents"
+	"tofu/internal/cli/page"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/questions"

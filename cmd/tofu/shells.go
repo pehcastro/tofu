@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/interface/cli"
+	"tofu/internal/cli/page"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
 	"tofu/internal/tools/shell/process"

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/interface/cli"
+	"tofu/internal/cli/page"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/tools/web/browser/driver"
 	"tofu/internal/turn"

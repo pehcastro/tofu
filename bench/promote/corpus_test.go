@@ -9,10 +9,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	tui "tofu/interface/tui"
 	"tofu/internal/store/session"
 	"tofu/internal/store/settings"
 	"tofu/internal/sys"
+	tui "tofu/internal/ui/tui/app"
 )
 
 func drive(t *testing.T, dir string) {

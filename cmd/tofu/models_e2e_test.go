@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/interface/cli"
+	"tofu/internal/cli/page"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/models/llm/wire/codex"

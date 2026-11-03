@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/interface/cli"
+	"tofu/internal/cli/page"
 	"tofu/internal/cli/render"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"

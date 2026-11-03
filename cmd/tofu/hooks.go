@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"tofu/interface/cli"
 	"tofu/internal/agent/hooks"
+	"tofu/internal/cli/page"
 	"tofu/internal/host"
 	"tofu/internal/tools/shell/process"
 )

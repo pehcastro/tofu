@@ -8,8 +8,8 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/interface/tui/filmstrip"
-	"tofu/interface/tui/fixture"
+	"tofu/internal/ui/tui/fixture"
+	"tofu/internal/ui/tui/frame/filmstrip"
 )
 
 const frameUsage = "usage: tofu frame [NAME] [--width N] [--height N] [--plain] [--list]"

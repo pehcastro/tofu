@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	"tofu/interface/cli"
-	"tofu/interface/cli/sample"
+	"tofu/internal/cli/page"
+	"tofu/internal/cli/sample"
 )
 
 func previewVerb(args []string, out, errOut io.Writer) int {

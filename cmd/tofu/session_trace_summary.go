@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"tofu/interface/cli"
 	"tofu/internal/agent/subagents"
+	"tofu/internal/cli/page"
 	"tofu/internal/cli/render"
 	"tofu/internal/store/session"
 )

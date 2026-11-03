@@ -19,11 +19,6 @@ import (
 
 	"github.com/charmbracelet/x/term"
 
-	"tofu/interface/tui"
-	"tofu/interface/tui/frame"
-	"tofu/interface/tui/paste"
-	"tofu/interface/tui/settings"
-	"tofu/interface/tui/shells"
 	"tofu/internal/agent/context/recall"
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/cli/render"
@@ -43,6 +38,11 @@ import (
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 	"tofu/internal/ui/keymap"
+	"tofu/internal/ui/tui/app"
+	"tofu/internal/ui/tui/composer/paste"
+	"tofu/internal/ui/tui/frame/frame"
+	"tofu/internal/ui/tui/panels/shells"
+	"tofu/internal/ui/tui/pickers/settings"
 )
 
 const (

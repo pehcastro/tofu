@@ -12,7 +12,7 @@ import (
 	"time"
 	"unicode"
 
-	"tofu/interface/cli"
+	"tofu/internal/cli/page"
 	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/platform/recover"

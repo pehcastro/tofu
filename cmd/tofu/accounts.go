@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"tofu/interface/tui/frame"
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
@@ -30,6 +29,7 @@ import (
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
+	"tofu/internal/ui/tui/frame/frame"
 )
 
 const (

@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"tofu/bench/browser/steps"
-	"tofu/interface/cli"
+	"tofu/internal/cli/page"
 	"tofu/internal/cli/render"
 	"tofu/internal/konst"
 	settingspkg "tofu/internal/store/settings"

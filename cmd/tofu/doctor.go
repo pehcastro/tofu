@@ -10,8 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/interface/cli"
-	"tofu/interface/tui/frame"
+	"tofu/internal/cli/page"
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/method"
@@ -23,6 +22,7 @@ import (
 	"tofu/internal/tools/shell/sift"
 	"tofu/internal/tools/web/browser/driver"
 	"tofu/internal/turn"
+	"tofu/internal/ui/tui/frame/frame"
 )
 
 const (

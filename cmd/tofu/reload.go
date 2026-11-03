@@ -15,8 +15,8 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/interface/cli"
 	"tofu/internal/agent/subagents"
+	"tofu/internal/cli/page"
 	"tofu/internal/host"
 	"tofu/internal/librarian/skills"
 	"tofu/internal/models/llm/catalog"

@@ -11,15 +11,15 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	app "tofu/interface/tui"
-	"tofu/interface/tui/fixture"
-	"tofu/interface/tui/frame"
-	"tofu/interface/tui/paste"
-	"tofu/interface/tui/session"
-	"tofu/interface/tui/settings"
-	"tofu/interface/tui/subagent"
 	"tofu/internal/konst"
 	isettings "tofu/internal/store/settings"
+	app "tofu/internal/ui/tui/app"
+	"tofu/internal/ui/tui/chat/session"
+	"tofu/internal/ui/tui/composer/paste"
+	"tofu/internal/ui/tui/fixture"
+	"tofu/internal/ui/tui/frame/frame"
+	"tofu/internal/ui/tui/panels/subagent"
+	"tofu/internal/ui/tui/pickers/settings"
 )
 
 const (
