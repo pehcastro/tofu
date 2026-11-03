@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/sys"
+	"tofu/bench/corpus/recorded"
 	"tofu/internal/turn"
 )
 
@@ -50,7 +50,7 @@ func TestNoReadEverEmitsALineNumber(t *testing.T) {
 }
 
 func TestByteTotalsOverTheRealCorpus(t *testing.T) {
-	sessionsDir := sys.RecordedStateDir("sessions")
+	sessionsDir := recorded.State(t, "sessions")
 	result, err := Run(sessionsDir)
 	if err != nil {
 		t.Fatalf("Run(%q): %v", sessionsDir, err)

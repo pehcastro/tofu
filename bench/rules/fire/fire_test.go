@@ -3,13 +3,13 @@ package fire
 import (
 	"testing"
 
-	"tofu/internal/sys"
+	"tofu/bench/corpus/recorded"
 )
 
 const repoRoot = "../../.."
 
 func TestReadDirReadsTheRealLog(t *testing.T) {
-	fires, unreadable, err := ReadDir(sys.RecordedStateDir("log"))
+	fires, unreadable, err := ReadDir(recorded.State(t, "log"))
 	if err != nil {
 		t.Fatalf("ReadDir: %v", err)
 	}

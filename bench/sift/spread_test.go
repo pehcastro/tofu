@@ -7,7 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	"tofu/internal/sys"
+	"tofu/bench/corpus/recorded"
 )
 
 const (
@@ -17,16 +17,16 @@ const (
 )
 
 func TestTheLedgerBuildOnTheDayTheOldFigureWasRecorded(t *testing.T) {
-	days, err := ReadLedgerBuilds(sys.RecordedStateDir("log"))
+	days, err := ReadLedgerBuilds(recorded.State(t, "log"))
 	if err != nil {
 		t.Fatalf("ReadLedgerBuilds: %v", err)
 	}
 	for _, day := range slices.Sorted(maps.Keys(days)) {
 		t.Logf("%s: %v", day, days[day])
 	}
-	recorded := days[recordedFigureDay]
-	if len(recorded) != 1 || recorded[recordedBuild] == 0 {
-		t.Fatalf("%s carries %v, and the reports of that day all name %s alone", recordedFigureDay, recorded, recordedBuild)
+	onTheDay := days[recordedFigureDay]
+	if len(onTheDay) != 1 || onTheDay[recordedBuild] == 0 {
+		t.Fatalf("%s carries %v, and the reports of that day all name %s alone", recordedFigureDay, onTheDay, recordedBuild)
 	}
 }
 

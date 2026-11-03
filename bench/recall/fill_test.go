@@ -11,7 +11,6 @@ import (
 	"tofu/internal/konst"
 	rc "tofu/internal/recall"
 	"tofu/internal/session"
-	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
@@ -67,7 +66,7 @@ func fillOf(t *testing.T, header session.Header, events []session.Event) recorde
 
 func recordedFills(t *testing.T, recordedBy time.Time) ([]recordedFill, []string, int) {
 	t.Helper()
-	store := session.NewStore(sys.RecordedStateDir("sessions"))
+	store := session.NewStore(realSessionsDir(t))
 	listing, err := store.Listing()
 	if err != nil {
 		t.Fatalf("read the recorded sessions: %v", err)
@@ -104,7 +103,7 @@ func TestHowFullTheRecordedTurnsEverGotAgainstTheOperatingCeilingAndAgainstTheMo
 	t.Logf("%d sessions recorded after %s, not read", later, reachReportGeneratedAt.Format(time.RFC3339))
 	if len(billed)+len(unbilled) < sessionsExpected {
 		t.Fatalf("%d sessions read under %s and %d are on disk: the measurement is over a corpus that is not there",
-			len(billed)+len(unbilled), sys.RecordedStateDir("sessions"), sessionsExpected)
+			len(billed)+len(unbilled), realSessionsDir(t), sessionsExpected)
 	}
 	ceiling := konst.ContextCeilingTokens
 	target := rc.ShippedBands().Target()

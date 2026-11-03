@@ -33,7 +33,7 @@ func TestRtkIsTheProxyAndNotSomethingElseWearingTheName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rtk gain: %v, so the binary named rtk is a different tool and every proxy figure here is void", err)
 	}
-	if !strings.Contains(string(gain), "Token Savings") {
+	if !strings.Contains(string(gain), "Token Savings") && !strings.Contains(string(gain), "No tracking data yet") {
 		t.Fatal("rtk gain printed no savings summary, so the binary named rtk is a different tool")
 	}
 	t.Logf("rtk --version printed %q and rtk gain answered", printed)

@@ -7,10 +7,8 @@ import (
 	"time"
 
 	"tofu/bench/corpus"
-	"tofu/internal/sys"
+	"tofu/bench/corpus/recorded"
 )
-
-func sessionsDir() string { return sys.RecordedStateDir("sessions") }
 
 func rawCall(args string) corpus.RecordedCall {
 	return corpus.RecordedCall{Tool: "read", Args: json.RawMessage(args)}
@@ -165,7 +163,7 @@ func TestByWireAndByShapeGroupSamples(t *testing.T) {
 var wireCheckWrittenAt = time.Date(2026, time.September, 24, 2, 3, 59, 0, time.FixedZone("-03", -3*60*60))
 
 func TestReadWireReadsBothStorageSchemasFromTheRealCorpus(t *testing.T) {
-	live, err := corpus.WalkSessions(sessionsDir())
+	live, err := corpus.WalkSessions(recorded.State(t, "sessions"))
 	if err != nil {
 		t.Fatalf("WalkSessions: %v", err)
 	}
@@ -189,9 +187,9 @@ func TestReadWireReadsBothStorageSchemasFromTheRealCorpus(t *testing.T) {
 }
 
 func TestRunOverTheRealCorpusProducesUsableSamples(t *testing.T) {
-	result, err := Run(sessionsDir())
+	result, err := Run(recorded.State(t, "sessions"))
 	if err != nil {
-		t.Fatalf("Run(%q): %v", sessionsDir(), err)
+		t.Fatalf("Run(%q): %v", recorded.State(t, "sessions"), err)
 	}
 	if result.Turns == 0 {
 		t.Fatal("no turn was read: the path is wrong or the corpus is empty")
@@ -213,7 +211,7 @@ func TestRunOverTheRealCorpusProducesUsableSamples(t *testing.T) {
 }
 
 func TestRenderCoversEveryAcceptanceLine(t *testing.T) {
-	result, err := Run(sessionsDir())
+	result, err := Run(recorded.State(t, "sessions"))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

@@ -7,12 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"tofu/bench/corpus/recorded"
 	"tofu/internal/konst"
-	"tofu/internal/sys"
 	"tofu/internal/turn/tools"
 )
-
-func sessionsDir() string { return sys.RecordedStateDir("sessions") }
 
 const repoRoot = "../.."
 const replayFailuresInTheReport = 6
@@ -21,12 +19,13 @@ var reportGeneratedAt = time.Date(2026, time.September, 21, 20, 45, 0, 0, time.F
 
 func replayed(t *testing.T) Result {
 	t.Helper()
-	result, err := Run(sessionsDir(), repoRoot, reportGeneratedAt)
+	sessions := recorded.State(t, "sessions")
+	result, err := Run(sessions, repoRoot, reportGeneratedAt)
 	if errors.Is(err, ErrNoPinnedTree) {
 		t.Skipf("skip, named: commit %s is not in this checkout: %v", PinnedCommit, err)
 	}
 	if err != nil {
-		t.Fatalf("Run(%q): %v", sessionsDir(), err)
+		t.Fatalf("Run(%q): %v", sessions, err)
 	}
 	return result
 }

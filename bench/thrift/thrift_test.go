@@ -6,21 +6,17 @@ import (
 	"time"
 
 	"tofu/bench/corpus"
-	"tofu/internal/sys"
+	"tofu/bench/corpus/recorded"
 )
-
-func sessionsDir() string { return sys.RecordedStateDir("sessions") }
-
-func artifactsDir() string { return sys.RecordedStateDir("artifacts") }
 
 const turnsGainedFromSplitRestarts = 7
 
 var splitRestartsCountedAt = time.Date(2026, time.September, 24, 2, 3, 59, 0, time.FixedZone("-03", -3*60*60))
 
 func TestEveryCorpusEntryIsEitherASessionOrANamedSkip(t *testing.T) {
-	live, err := corpus.WalkSessions(sessionsDir())
+	live, err := corpus.WalkSessions(recorded.State(t, "sessions"))
 	if err != nil {
-		t.Fatalf("WalkSessions(%q): %v", sessionsDir(), err)
+		t.Fatalf("WalkSessions(%q): %v", recorded.State(t, "sessions"), err)
 	}
 	walked := live.RecordedBy(splitRestartsCountedAt)
 	t.Logf("%d entries, %d turns and %d skips recorded by %s; %d turns after it, not read", walked.EntryCount, len(walked.Turns), len(walked.Skipped), splitRestartsCountedAt.Format(time.RFC3339), walked.Later)
@@ -82,7 +78,7 @@ func TestBlankDuplicateAndTrailingBytesNeverOverlap(t *testing.T) {
 }
 
 func TestTheArmNeverKeepsMoreThanTheCapAndNeverKeepsMoreLinesThanExist(t *testing.T) {
-	result, err := Run(sessionsDir(), artifactsDir())
+	result, err := Run(recorded.State(t, "sessions"), recorded.State(t, "artifacts"))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -103,7 +99,7 @@ func TestTheArmNeverKeepsMoreThanTheCapAndNeverKeepsMoreLinesThanExist(t *testin
 }
 
 func TestRtkCappedSavingNeverExceedsTheClaimedOne(t *testing.T) {
-	result, err := Run(sessionsDir(), artifactsDir())
+	result, err := Run(recorded.State(t, "sessions"), recorded.State(t, "artifacts"))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -116,7 +112,7 @@ func TestRtkCappedSavingNeverExceedsTheClaimedOne(t *testing.T) {
 }
 
 func TestReportOverTheRealCorpus(t *testing.T) {
-	result, err := Run(sessionsDir(), artifactsDir())
+	result, err := Run(recorded.State(t, "sessions"), recorded.State(t, "artifacts"))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

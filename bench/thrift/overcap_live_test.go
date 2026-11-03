@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"tofu/bench/corpus"
+	"tofu/bench/corpus/recorded"
 	"tofu/bench/report"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/sys"
@@ -29,14 +30,14 @@ func TestTheNineOverCapArtifactsJudgedAgainstFixedTruncation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ThriftQuestions: %v", err)
 	}
-	walked, err := corpus.WalkSessions(sessionsDir())
+	walked, err := corpus.WalkSessions(recorded.State(t, "sessions"))
 	if err != nil {
-		t.Fatalf("WalkSessions(%q): %v", sessionsDir(), err)
+		t.Fatalf("WalkSessions(%q): %v", recorded.State(t, "sessions"), err)
 	}
 	if len(walked.Turns) == 0 {
 		t.Fatal("no session was read: the path is wrong or the corpus is empty")
 	}
-	targets, idSkips := OverCapReadAndSearchTargets(artifactsDir(), walked.Turns)
+	targets, idSkips := OverCapReadAndSearchTargets(recorded.State(t, "artifacts"), walked.Turns)
 	if len(targets)+len(idSkips) == 0 {
 		t.Fatal("no over-cap read or search artifact was found in the corpus")
 	}

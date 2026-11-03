@@ -4,14 +4,14 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/sys"
+	"tofu/bench/corpus/recorded"
 )
 
 var reachReportGeneratedAt = time.Date(2026, time.September, 23, 14, 19, 12, 0, time.FixedZone("-03", -3*60*60))
 
 func realSessionsDir(t *testing.T) string {
 	t.Helper()
-	return sys.RecordedStateDir("sessions")
+	return recorded.State(t, "sessions")
 }
 
 func TestNoRecordedSessionHasEverCrossedTheCeiling(t *testing.T) {

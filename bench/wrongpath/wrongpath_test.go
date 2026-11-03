@@ -7,10 +7,8 @@ import (
 	"time"
 
 	"tofu/bench/corpus"
-	"tofu/internal/sys"
+	"tofu/bench/corpus/recorded"
 )
-
-func sessionsDir() string { return sys.RecordedStateDir("sessions") }
 
 func call(tool string, args any) corpus.RecordedCall {
 	encoded, err := json.Marshal(args)
@@ -102,9 +100,9 @@ const turnsGainedFromSplitRestarts = 7
 var splitRestartsCountedAt = time.Date(2026, time.September, 24, 2, 3, 59, 0, time.FixedZone("-03", -3*60*60))
 
 func TestEveryCorpusEntryIsEitherASessionOrANamedSkip(t *testing.T) {
-	result, err := Run(sessionsDir(), splitRestartsCountedAt)
+	result, err := Run(recorded.State(t, "sessions"), splitRestartsCountedAt)
 	if err != nil {
-		t.Fatalf("Run(%q): %v", sessionsDir(), err)
+		t.Fatalf("Run(%q): %v", recorded.State(t, "sessions"), err)
 	}
 	if result.Sessions == 0 {
 		t.Fatal("no session was read: the path is wrong or the corpus is empty")
@@ -120,7 +118,7 @@ func TestEveryCorpusEntryIsEitherASessionOrANamedSkip(t *testing.T) {
 }
 
 func TestNoStrictVariantExceedsItsLooseOne(t *testing.T) {
-	result, err := Run(sessionsDir(), time.Now())
+	result, err := Run(recorded.State(t, "sessions"), time.Now())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -138,7 +136,7 @@ func TestNoStrictVariantExceedsItsLooseOne(t *testing.T) {
 }
 
 func TestReportOverTheRealCorpus(t *testing.T) {
-	result, err := Run(sessionsDir(), time.Now())
+	result, err := Run(recorded.State(t, "sessions"), time.Now())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

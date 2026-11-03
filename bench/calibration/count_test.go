@@ -4,13 +4,13 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/sys"
+	"tofu/bench/corpus/recorded"
 )
 
 var reportGeneratedAt = time.Date(2026, time.September, 24, 2, 3, 59, 0, time.FixedZone("-03", -3*60*60))
 
 func TestTheLedgerHasBeenCounted(t *testing.T) {
-	counts, err := Count(sys.RecordedStateDir("log"), reportGeneratedAt)
+	counts, err := Count(recorded.State(t, "log"), reportGeneratedAt)
 	if err != nil {
 		t.Fatalf("Count: %v", err)
 	}

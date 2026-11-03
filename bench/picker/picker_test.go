@@ -8,11 +8,26 @@ import (
 	"testing"
 	"time"
 
+	"tofu/bench/corpus/recorded"
 	"tofu/internal/llm/quota"
-	"tofu/internal/sys"
 )
 
 const prefixPath = "../forkcache/testdata/forks.jsonl"
+
+const restoreForks = "the fork pairs TOFU-373 recorded left the repository in 31ecff7e; git show 31ecff7e^:bench/forkcache/testdata/forks.jsonl restores them"
+
+func forkPrefixes(t *testing.T) string {
+	t.Helper()
+	return recorded.Need(t, prefixPath, restoreForks)
+}
+
+func recordedRoots(t *testing.T) []string {
+	t.Helper()
+	return []string{
+		recorded.State(t, "log"),
+		recorded.State(t, "sessions"),
+	}
+}
 
 const fullAgain = 1
 
@@ -81,7 +96,7 @@ func TestAWindowPastItsResetCountsAsFullAgain(t *testing.T) {
 }
 
 func TestFreshPrefixComesFromTheForkcacheRows(t *testing.T) {
-	prefixes, err := FreshPrefixIn(prefixPath)
+	prefixes, err := FreshPrefixIn(forkPrefixes(t))
 	if err != nil {
 		t.Fatalf("FreshPrefixIn(%q): %v", prefixPath, err)
 	}
@@ -127,7 +142,7 @@ func TestAReadingMissingAFieldIsSkippedAndNamed(t *testing.T) {
 }
 
 func TestEveryRecordedRowIsEitherAReadingOrANamedSkip(t *testing.T) {
-	corpus, err := Gather(sys.RecordedStateDir("log"), sys.RecordedStateDir("sessions"))
+	corpus, err := Gather(recordedRoots(t)...)
 	if err != nil {
 		t.Fatalf("Gather: %v", err)
 	}
@@ -142,7 +157,7 @@ func TestEveryRecordedRowIsEitherAReadingOrANamedSkip(t *testing.T) {
 }
 
 func TestTheReportOverTheRecordedCorpus(t *testing.T) {
-	result, err := Run(prefixPath, sys.RecordedStateDir("log"), sys.RecordedStateDir("sessions"))
+	result, err := Run(forkPrefixes(t), recordedRoots(t)...)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -159,7 +174,7 @@ func TestTheReportOverTheRecordedCorpus(t *testing.T) {
 }
 
 func TestTheInstrumentSeparatesTheArmsWhenTwoAccountsAreRecorded(t *testing.T) {
-	prefixes, err := FreshPrefixIn(prefixPath)
+	prefixes, err := FreshPrefixIn(forkPrefixes(t))
 	if err != nil {
 		t.Fatalf("FreshPrefixIn: %v", err)
 	}

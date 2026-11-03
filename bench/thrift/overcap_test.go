@@ -5,18 +5,19 @@ import (
 	"time"
 
 	"tofu/bench/corpus"
+	"tofu/bench/corpus/recorded"
 )
 
 var overCapReportGeneratedAt = time.Date(2026, time.September, 23, 9, 25, 4, 0, time.FixedZone("-03", -3*60*60))
 
 func TestOverCapTargetsMatchTheNineIdentifiedInSectionFour(t *testing.T) {
-	live, err := corpus.WalkSessions(sessionsDir())
+	live, err := corpus.WalkSessions(recorded.State(t, "sessions"))
 	if err != nil {
-		t.Fatalf("WalkSessions(%q): %v", sessionsDir(), err)
+		t.Fatalf("WalkSessions(%q): %v", recorded.State(t, "sessions"), err)
 	}
 	walked := live.RecordedBy(overCapReportGeneratedAt)
 	t.Logf("%d turns recorded after %s, not read", walked.Later, overCapReportGeneratedAt.Format(time.RFC3339))
-	targets, idSkips := OverCapReadAndSearchTargets(artifactsDir(), walked.Turns)
+	targets, idSkips := OverCapReadAndSearchTargets(recorded.State(t, "artifacts"), walked.Turns)
 	if len(targets)+len(idSkips) != 9 {
 		t.Fatalf("%d over-cap read or search artifacts found, want 9 as report-2026-09-23.md section 4 counts", len(targets)+len(idSkips))
 	}

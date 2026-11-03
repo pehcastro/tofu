@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"tofu/bench/corpus"
+	"tofu/bench/corpus/recorded"
 	"tofu/internal/konst"
 	rc "tofu/internal/recall"
 	"tofu/internal/sys"
@@ -14,6 +15,8 @@ import (
 
 const stressForkCeiling = 6300
 const realForkCeiling = 15750
+
+const ownerTurn = "a turn named by id exists only in the home that recorded it"
 
 type checkpointCase struct {
 	name   string
@@ -24,7 +27,7 @@ type checkpointCase struct {
 
 func readCorpusDirTurn(t *testing.T, id string) corpus.RecordedTurn {
 	t.Helper()
-	turn, err := corpus.ReadTurnDir(sys.RecordedStateDir("sessions", id))
+	turn, err := corpus.ReadTurnDir(recorded.Need(t, sys.RecordedStateDir("sessions", id), ownerTurn))
 	if err != nil {
 		t.Fatalf("read %s: %v", id, err)
 	}
@@ -33,7 +36,7 @@ func readCorpusDirTurn(t *testing.T, id string) corpus.RecordedTurn {
 
 func readCorpusFileTurn(t *testing.T, id string) corpus.RecordedTurn {
 	t.Helper()
-	turn, err := corpus.ReadTurn(sys.RecordedStateDir("sessions", id+".json"))
+	turn, err := corpus.ReadTurn(recorded.Need(t, sys.RecordedStateDir("sessions", id+".json"), ownerTurn))
 	if err != nil {
 		t.Fatalf("read %s: %v", id, err)
 	}

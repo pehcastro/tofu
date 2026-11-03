@@ -3,6 +3,8 @@ package tokencount
 import (
 	"strings"
 	"testing"
+
+	"tofu/bench/corpus/recorded"
 )
 
 func TestFitFactorsFitsOnlyAccountableSamplesPerShape(t *testing.T) {
@@ -72,7 +74,7 @@ func TestErrorPctHandlesZeroActual(t *testing.T) {
 }
 
 func TestRenderCorrectionCoversEveryAcceptanceLine(t *testing.T) {
-	result, err := Run(sessionsDir())
+	result, err := Run(recorded.State(t, "sessions"))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

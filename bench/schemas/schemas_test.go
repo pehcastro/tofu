@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/sys"
+	"tofu/bench/corpus/recorded"
 )
 
 const targetTurnID = TargetTurnID
@@ -41,7 +41,7 @@ func TestMeasureAgreesWithTheRealWireEncoder(t *testing.T) {
 }
 
 func TestReadSessionsFindsTheTargetTurn(t *testing.T) {
-	usable, _, err := ReadSessions(sys.RecordedStateDir("sessions"))
+	usable, _, err := ReadSessions(recorded.State(t, "sessions"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestCostOfDeferringNamesTheMechanism(t *testing.T) {
 }
 
 func TestBuildCohortReadsRealRecordedTurns(t *testing.T) {
-	cohort, err := BuildCohort(sys.RecordedStateDir("sessions"))
+	cohort, err := BuildCohort(recorded.State(t, "sessions"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestBuildCohortReadsRealRecordedTurns(t *testing.T) {
 }
 
 func TestReportRenders(t *testing.T) {
-	usable, _, err := ReadSessions(sys.RecordedStateDir("sessions"))
+	usable, _, err := ReadSessions(recorded.State(t, "sessions"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestReportRenders(t *testing.T) {
 	}
 	defs := FullRegistry(t.TempDir()).Definitions()
 	whole := Measure(defs)
-	cohort, err := BuildCohort(sys.RecordedStateDir("sessions"))
+	cohort, err := BuildCohort(recorded.State(t, "sessions"))
 	if err != nil {
 		t.Fatal(err)
 	}

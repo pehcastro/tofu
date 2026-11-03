@@ -160,6 +160,16 @@
     "version": "0.5.20+dev"
   },
   {
+    "report": "bench/forkcache/report-2026-11-01-ratio.txt",
+    "figure": "65.8%",
+    "says": "With every count divided by recall's 2830 bytes per thousand tokens, 65.8% of the parent's last 20 lookups are no longer held in the first request after a working-state ask fork and 43.2% after an episode carry fork, against 0.0% inside a session. Each fork writes 14653 to 16860 tokens of cache and none of the 4 is repaid inside its sub-session, the first request after /compact reads 50363 of a 50415 shared prefix at reach 0, and no request reaches past the 20-block lookback.",
+    "from": "rerun",
+    "sample": "4 mocked recorded turns, 2 carry arms, 4 forks, 4 compact runs, checked against 1 real claude-sub trace",
+    "skips": "no fork-off arm: tofu run has no switch for it, so carrying on is computed from the parent's last request",
+    "commit": "97c27c42",
+    "version": "0.5.20+dev"
+  },
+  {
     "report": "bench/harness/report-2026-09-20.md",
     "figure": "10 write calls",
     "says": "The three-arm comparison this package exists for has never been run. The one real figure it produces is a transform measure over 1 recorded turn and its 10 write calls.",

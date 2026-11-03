@@ -4,11 +4,15 @@ import (
 	"path/filepath"
 	"testing"
 
-	"tofu/internal/sys"
+	"tofu/bench/corpus/recorded"
 )
+
+const adminTemplate = "drive tofu in the sibling project admin-template beside this repository to record it"
 
 func loadBoth(t *testing.T) (Moment, Moment) {
 	t.Helper()
+	recorded.Need(t, SessionDir(Session1), adminTemplate)
+	recorded.Need(t, SessionDir(Session2), adminTemplate)
 	first, err := Load(SessionDir(Session1), "dev")
 	if err != nil {
 		t.Fatalf("Load session 1: %v", err)
@@ -65,7 +69,7 @@ func TestShapeMatchAsksAndDoesNotPickWrong(t *testing.T) {
 }
 
 func TestFireShareAcrossTheWholeCorpus(t *testing.T) {
-	share, err := Scan(sys.RecordedStateDir("sessions"), filepath.Dir(SessionDir(Session1)))
+	share, err := Scan(recorded.State(t, "sessions"), recorded.Need(t, filepath.Dir(SessionDir(Session1)), adminTemplate))
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}

@@ -7,7 +7,6 @@ import (
 	"tofu/bench/corpus"
 	"tofu/internal/konst"
 	rc "tofu/internal/recall"
-	"tofu/internal/sys"
 )
 
 var (
@@ -40,7 +39,7 @@ func replay(t *testing.T, cfg rc.Config, bands rc.Bands, session Session, arm Ar
 
 func widestWorkingSet(t *testing.T, cfg rc.Config, bands rc.Bands) rc.Occupancy {
 	t.Helper()
-	walked, err := corpus.WalkSessions(sys.RecordedStateDir("sessions"))
+	walked, err := corpus.WalkSessions(realSessionsDir(t))
 	if err != nil {
 		t.Fatalf("no recorded sessions to measure the working set band against at the %d ceiling: %v", konst.ContextCeilingTokens, err)
 	}
