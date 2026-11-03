@@ -16,12 +16,13 @@ import (
 	"tofu/internal/llm/models"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
+	"tofu/library/questions"
 )
 
 const oneCallAtATime = 1
 
 const (
-	runGatePoint       = "tool_gate@3"
+	runGatePoint       = questions.ToolGatePin
 	judgeEndpointEnvar = classifier.EndpointVariable
 )
 

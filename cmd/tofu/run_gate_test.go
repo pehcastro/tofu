@@ -21,7 +21,10 @@ import (
 	library "tofu/library"
 )
 
-const gateFixtureBuild = "typesafe/jev-1.13-20260917"
+const (
+	gateFixtureBuild   = "typesafe/jev-1.13-20260917"
+	gateFixtureVersion = 6
+)
 
 const gateFixtureThresholds = "  risk_ask_at: 1.5\n  risk_deny_at: 2.5\n" +
 	"  user_requested_relax_at: 0.85\n  approval_relax_at: 0.15\n  from_untrusted_block_at: 0.5\n"
@@ -36,7 +39,7 @@ func writeGateRuleWithThresholds(t *testing.T, thresholds string) string {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	body := "name: tool_gate\ndomain: general\nkind: threshold\nrule_version: 3\nquestions: tool_gate\nquestions_version: 3\n" +
+	body := fmt.Sprintf("name: tool_gate\ndomain: general\nkind: threshold\nrule_version: %d\nquestions: tool_gate\nquestions_version: %d\n", gateFixtureVersion, gateFixtureVersion) +
 		"mode: enforced\nsample_floor: 300\n" +
 		"risk_question: risk\napproval_question: approval\n" +
 		"user_requested_question: user_requested\nfrom_untrusted_question: from_untrusted\n" +
@@ -69,10 +72,10 @@ func writeGateLockFixture(t *testing.T, build string) gate.Thresholds {
 		t.Fatalf("mkdir: %v", err)
 	}
 	body := fmt.Sprintf(""+
-		"rule: tool_gate\nrule_version: 3\nquestions: tool_gate\nquestions_version: 3\n"+
+		"rule: tool_gate\nrule_version: %d\nquestions: tool_gate\nquestions_version: %d\n"+
 		"build: %s\nn_fit: 500\nn_verify: 400\n"+
 		"thresholds:\n  risk_ask_at: 1.25\n  risk_deny_at: 2.75\n"+
-		"  user_requested_relax_at: 0.9\n  approval_relax_at: 0.2\n  from_untrusted_block_at: 0.4\n", build)
+		"  user_requested_relax_at: 0.9\n  approval_relax_at: 0.2\n  from_untrusted_block_at: 0.4\n", gateFixtureVersion, gateFixtureVersion, build)
 	path := filepath.Join(calibDir, runGatePoint+".lock")
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatalf("writing the lock fixture: %v", err)
@@ -92,7 +95,7 @@ func writeGateLedgerRowFixture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sys.LogDir: %v", err)
 	}
-	row := ledger.Row{Point: "tool_gate", Questions: "tool_gate", Version: 3, Build: gateFixtureBuild}
+	row := ledger.Row{Point: "tool_gate", Questions: "tool_gate", Version: gateFixtureVersion, Build: gateFixtureBuild}
 	if _, err := ledger.NewWriter(dir).Append(row); err != nil {
 		t.Fatalf("writing the ledger fixture: %v", err)
 	}

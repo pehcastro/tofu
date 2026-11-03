@@ -14,7 +14,7 @@ import (
 	"tofu/library/questions"
 )
 
-const askPoint = "ask@1"
+const askPoint = questions.AskPin
 
 func askPersonTool(dir, log string, person turn.Person, inbox *turn.Inbox, keys jev.Keyring, say func(string)) tools.AskPerson {
 	tool := tools.AskPerson{Person: person, Inbox: inbox, Wait: time.Duration(settingInt(dir, settingspkg.AskPersonWaitSeconds, say)) * time.Second,

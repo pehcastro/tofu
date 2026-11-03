@@ -30,9 +30,9 @@ shell
   ⚠ rtk  not on PATH, so bash commands run as asked  → RTK_INSTALL
 
 rules
-  ✓ library       binary · 9 points
-  ○ 8 points      shadow · thresholds from the rule
-    gate tool_gate@3
+  ✓ library       binary · 7 points
+  ○ 6 points      shadow · thresholds from the rule
+    gate tool_gate@6
   ✗ shell_sift@1  unusable · the gate is off because no classifier is bound:
     store its key with tofu login classifier and pick it in Models
 
@@ -55,10 +55,10 @@ shell
   ⚠ rtk  not on PATH, so bash commands run as asked  → RTK_INSTALL
 
 rules
-  ✓ library       project · 1 of 9 points
-  ○ 7 points      shadow · thresholds from the rule
+  ✓ library       project · 1 of 7 points
+  ○ 5 points      shadow · thresholds from the rule
   ● shell_sift@1  enforced · thresholds from the rule
-  ⚠ tool_gate@3   shadow · no lock file for tool_gate@3
+  ⚠ tool_gate@6   shadow · no lock file for tool_gate@6
 
 state
   calibration  none
@@ -68,9 +68,9 @@ state
 	projectToolGateRule = `name: tool_gate
 domain: general
 kind: threshold
-rule_version: 3
+rule_version: 6
 questions: tool_gate
-questions_version: 3
+questions_version: 6
 mode: enforced
 sample_floor: 300
 
@@ -124,12 +124,12 @@ func TestE2EDoctorReadsTheKeyAndTheRuleOfTheProjectItRunsIn(t *testing.T) {
 		body string
 	}{
 		{"a project with no key and no rule of its own", "", "", doctorBodyWithNoKeyAndNoProjectRule},
-		{"a project carrying its own key and its own tool_gate@3", "TYPESAFE_API_KEY=sk-or-v1-thistestwroteit\n", projectToolGateRule, doctorBodyWithAKeyAndAProjectRule},
+		{"a project carrying its own key and its own " + runGatePoint, "TYPESAFE_API_KEY=sk-or-v1-thistestwroteit\n", projectToolGateRule, doctorBodyWithAKeyAndAProjectRule},
 	} {
 		p := newProject(t, "doctor")
 		if step.env != "" {
 			writeFile(t, p.dir, ".env", step.env)
-			writeFile(t, p.dir, ".tofu/library/general/rules/tool_gate@3.yaml", step.rule)
+			writeFile(t, p.dir, ".tofu/library/general/rules/"+runGatePoint+".yaml", step.rule)
 			writeFile(t, p.dir, ".tofu/roles/classifier.yaml", "model: typesafe/jev-latest\n")
 		}
 		title, body, _ := strings.Cut(p.run(t, exitVerdict, "doctor"), "\n")
@@ -252,8 +252,8 @@ func TestE2EDoctorJSONIsOneEnvelopeThatCarriesTheBlockersAsProblems(t *testing.T
 		{What: "jev: the gate is off because no classifier is bound: store its key with tofu login classifier and pick it in Models", Hint: "tofu models bind classifier <provider/model>"},
 	}
 	if envelope.Tofu != konst.Version || envelope.Verb != "doctor" || envelope.OK || envelope.Data.Verdict != doctorNotReady ||
-		len(envelope.Problems) != len(want) || envelope.Problems[0] != want[0] || envelope.Problems[1] != want[1] || len(envelope.Data.Rules) != 9 {
-		t.Fatalf("the envelope is %+v, want doctor, not ok, not ready, 9 rules and the problems %+v", envelope, want)
+		len(envelope.Problems) != len(want) || envelope.Problems[0] != want[0] || envelope.Problems[1] != want[1] || len(envelope.Data.Rules) != 7 {
+		t.Fatalf("the envelope is %+v, want doctor, not ok, not ready, 7 rules and the problems %+v", envelope, want)
 	}
 }
 
