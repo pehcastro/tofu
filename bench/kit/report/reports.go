@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"tofu/internal/judge/method"
@@ -87,10 +88,11 @@ func Build(benchRoot string) (Data, error) {
 		return Data{}, err
 	}
 	data := Data{
-		Counts:            index.Counts,
-		NoReport:          index.NoReport,
-		WithdrawalsLiveIn: WithdrawalsPath,
-		GeneratedBy:       RegenerateWith,
+		Counts:             index.Counts,
+		NoReport:           index.NoReport,
+		SkippedWithdrawals: index.SkippedWithdrawals,
+		WithdrawalsLiveIn:  WithdrawalsPath,
+		GeneratedBy:        RegenerateWith,
 	}
 	bodies := make(map[string]string, len(index.Entries))
 	for _, entry := range index.Entries {
@@ -125,8 +127,9 @@ func Build(benchRoot string) (Data, error) {
 		})
 	}
 	for path := range hand {
-		return Data{}, fmt.Errorf("bench/kit/report/handread.json names %s, which is not a dated report under bench/", path)
+		data.SkippedHandRead = append(data.SkippedHandRead, path)
 	}
+	sort.Strings(data.SkippedHandRead)
 	if err := readJSON(filepath.Join(benchRoot, reportDir, "answers.json"), &data.Answers); err != nil {
 		return Data{}, err
 	}

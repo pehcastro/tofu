@@ -27,7 +27,7 @@ func TestAWithdrawnReportNamingNoFallenSentenceIsNotQuotedAtAll(t *testing.T) {
 }
 
 func TestAPartialWithdrawalKeepsWhatStandsAndStrikesWhatFell(t *testing.T) {
-	for _, path := range []string{"bench/sift/report-2026-09-21.md", "bench/websift/report-2026-09-21.md"} {
+	for _, path := range []string{"bench/suites/judge/sift/report-2026-09-21.md", "bench/suites/tools/websift/report-2026-09-21.md"} {
 		report := find(t, path)
 		stands, fell := 0, 0
 		for _, part := range report.Conclusion {
@@ -50,16 +50,16 @@ func TestAPartialWithdrawalKeepsWhatStandsAndStrikesWhatFell(t *testing.T) {
 func plant(t *testing.T, body, fell string) (map[string]withdrawal, error) {
 	t.Helper()
 	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "bench", "sift"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "bench", "suites", "judge", "sift"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(root, "bench", "kit", "report"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "bench", "sift", "report-2026-09-21.md"), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "bench", "suites", "judge", "sift", "report-2026-09-21.md"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	entry := `[{"report":"bench/sift/report-2026-09-21.md","state":"withdrawn in part","why":"planted by the test","fell":[` + fell + `]}]`
+	entry := `[{"report":"bench/suites/judge/sift/report-2026-09-21.md","state":"withdrawn in part","why":"planted by the test","fell":[` + fell + `]}]`
 	path := filepath.Join(root, "bench", "kit", "report", "withdrawals.json")
 	if err := os.WriteFile(path, []byte(entry), 0o644); err != nil {
 		t.Fatal(err)
@@ -82,7 +82,7 @@ func TestQuotingOneRowOfATableStrikesEveryRowOfIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fell := read["bench/sift/report-2026-09-21.md"].Fell
+	fell := read["bench/suites/judge/sift/report-2026-09-21.md"].Fell
 	for _, want := range []string{"| Arm | hit@1 |", "| grep | 1/4 |", "| judged | 4/4 |"} {
 		if !slices.Contains(fell, want) {
 			t.Errorf("%q is a row of the struck table and is not struck: %q", want, fell)
@@ -97,8 +97,8 @@ func TestQuotingOneRowOfATableStrikesEveryRowOfIt(t *testing.T) {
 }
 
 func TestARowOfAStruckTableCannotBeCitedAsEvidence(t *testing.T) {
-	const source = "bench/shortlist/report-2026-09-21.md"
-	body, err := os.ReadFile(filepath.Join(benchTree(), "shortlist", "report-2026-09-21.md"))
+	const source = "bench/suites/tools/shortlist/report-2026-09-21.md"
+	body, err := os.ReadFile(filepath.Join(benchTree(), "suites", "tools", "shortlist", "report-2026-09-21.md"))
 	if err != nil {
 		t.Fatal(err)
 	}

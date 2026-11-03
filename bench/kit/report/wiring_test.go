@@ -17,12 +17,12 @@ methods:
   page_sift:
     method: cheap
     why: the link stripper keeps 21 of 21 planted needles against jev's 15, 1.40x
-    measured: bench/websift/report-2026-09-21.md
+    measured: bench/suites/tools/websift/report-2026-09-21.md
     cost: nothing, and no call is made
   shell_sift:
     method: judged
     why: jev keeps 27 of 34 planted needles against the free method's 18, 1.50x
-    measured: bench/sift/report-2026-09-21.md
+    measured: bench/suites/judge/sift/report-2026-09-21.md
     cost: a median $0.000540 a session and 838 ms on a shell call
 `
 
@@ -43,7 +43,7 @@ func fixturePage(t *testing.T, rows string) string {
 	}
 	callers := map[string]caller{
 		"shell_sift": {Point: "shell_sift", File: "internal/agent/loop/shellsift.go", Symbol: "cutShellResult"},
-		"page_sift":  {Point: "page_sift", Nothing: "0 files outside bench/websift name it"},
+		"page_sift":  {Point: "page_sift", Nothing: "0 files outside bench/suites/tools/websift name it"},
 	}
 	data := Data{Wiring: wiringOf(table, callers), MethodTable: table.File}
 	return Page(data)
@@ -70,11 +70,11 @@ func TestTheBuildRefusesAPageThatContradictsTheMethodTable(t *testing.T) {
 		Point: "shell_sift", Question: "how much of a shell result to keep", Decides: "shell_sift", InUse: method.Unwired,
 		Axis:       Axis{Name: "planted needles kept", Unit: "percent of results", BetterWhen: BetterHigher},
 		Free:       Method{Name: "regex on error lines", Does: "keeps the head and the tail", DoesFrom: "internal/tools/shell/sift/shellarm.go", Percent: 52.9, Hits: 18, OutOf: 34, Evidence: "18 of 34"},
-		Judged:     Method{Name: "Jev", Does: "scores each chunk", DoesFrom: "bench/sift/arm.go", Percent: 79.4, Hits: 27, OutOf: 34, Evidence: "27 of 34"},
+		Judged:     Method{Name: "Jev", Does: "scores each chunk", DoesFrom: "bench/suites/judge/sift/arm.go", Percent: 79.4, Hits: 27, OutOf: 34, Evidence: "27 of 34"},
 		SampleSize: 34, SampleOf: "recorded shell results",
-		Source: "bench/sift/report-2026-09-21.md",
+		Source: "bench/suites/judge/sift/report-2026-09-21.md",
 	}
-	bodies := map[string]string{"bench/sift/report-2026-09-21.md": "18 of 34 and 27 of 34"}
+	bodies := map[string]string{"bench/suites/judge/sift/report-2026-09-21.md": "18 of 34 and 27 of 34"}
 	err := checkPlacement(claimed, table, sys.SourceRoot(), bodies)
 	if err == nil {
 		t.Fatal("the page said shell_sift is not wired and the table says judged, and the build accepted it")

@@ -1,6 +1,6 @@
 [
   {
-    "report": "bench/skills/report-2026-09-26.md",
+    "report": "bench/suites/rules/skills/report-2026-09-26.md",
     "figure": "2 of 3",
     "says": "With the skill listing on, the model loaded the matching skill in 2 of 3 tasks and followed it both times. On the third it never loaded the skill and silently ignored the convention. With the listing off, 0 of 3 followed. The listing costs 247 cached tokens per request. Skills earn a place for a person's own conventions, not for library content that must always apply.",
     "from": "prose",
@@ -10,7 +10,7 @@
     "version": "0.5.0-rc-fix5"
   },
   {
-    "report": "bench/browser/report-2026-09-28.md",
+    "report": "bench/suites/tools/browser/report-2026-09-28.md",
     "figure": "316 ms",
     "says": "Jev picked the right next browser action on 8 of 8 recorded pages, with a median of 316 ms and 1,340 input tokens a decision, against jev-ultrafast's 178 ms and 5.3k tokens. The whole pass cost $0.000496. The model arm, the turn's own model calling browser_act, is not measured.",
     "from": "prose",
@@ -20,7 +20,7 @@
     "version": "0.5.0-rc-fix13"
   },
   {
-    "report": "bench/tui/report-2026-09-26.md",
+    "report": "bench/suites/perf/tui/report-2026-09-26.md",
     "figure": "2.0 ms",
     "says": "The new interface draws every screen inside the 16.7 ms frame budget on a replay of 30 real turns. Before the frame budget fixes a resize took 97 to 169 ms and the first open of sub-agents 59.6 ms; after them a resize takes 0.3 to 3.2 ms and sub-agents opens in 2.0 ms. The chat scrollbar went from 3.05x the showcase baseline to 0.28x. Every other row that could be built is within 1.5x of the baseline.",
     "from": "prose",
@@ -30,7 +30,7 @@
     "version": "0.4.19"
   },
   {
-    "report": "bench/sift/report-2026-09-22-rerun.md",
+    "report": "bench/suites/judge/sift/report-2026-09-22-rerun.md",
     "figure": "0.027",
     "says": "The rerun spread of the judged shell sift is one needle and 0.4 points of bytes saved over three runs in one sitting, 30, 31 and 30 of 34 needles at 26.4, 26.3 and 26.7 percent. The mean per unit score spread over three runs is 0.027 and 13 of 297 units cross keep_at 0.50. That cannot explain the move from 27 of 34 at 54.0 percent on 2026-09-21, so the model behind the pinned build id changed rather than the measurement being noisy. All 891 calls today and all 764 ledger rows of 2026-09-21 report typesafe/jev-1.13-20260917, so the id did not move. Three runs cannot separate a replaced model from a changed route.",
     "from": "rerun",
@@ -40,7 +40,7 @@
     "version": "0.4.10"
   },
   {
-    "report": "bench/sift/report-2026-09-22-rtk.md",
+    "report": "bench/suites/judge/sift/report-2026-09-22-rtk.md",
     "figure": "70.9%",
     "says": "rtk in front of Jev buys a 29 percent cheaper Jev call, $0.00644 against $0.00909, and pays 5 of 34 needles for it. Jev after rtk sees 66.5 percent of the state bytes over 73.4 percent of the calls. Neither rtk arm beats Jev alone: rtk alone keeps 26 of 34 at 36.9 percent of bytes removed, rtk then Jev 25 of 34 at 48.3 percent, Jev alone 30 of 34 at 26.7 percent, the regex 18 of 34 at 54.7 percent. rtk has no filter for 21 of the 34 recorded commands and passes them through whole.",
     "from": "rerun",
@@ -50,7 +50,7 @@
     "version": "0.4.9"
   },
   {
-    "report": "bench/sift/report-2026-09-22.md",
+    "report": "bench/suites/judge/sift/report-2026-09-22.md",
     "figure": "$0.00054",
     "says": "Switching shell_sift@1 on costs a median $0.00054 a session and $0.01107 in the worst of 109 recorded sessions, and stops sending 54.0 percent of every shell result, 13.7 percent of every byte the model reads back from a tool. The ledger holds no shell_sift row at all, so the per-decision price is borrowed from the TOFU-217 log and bracketed above by the ledger p50 at $0.000478 a sift.",
     "from": "rerun",
@@ -60,7 +60,7 @@
     "version": "0.4.9"
   },
   {
-    "report": "bench/tools/report-2026-09-22.md",
+    "report": "bench/suites/tools/tools/report-2026-09-22.md",
     "figure": "29 of 100",
     "says": "The best free search arm reads 29 of 100 and the corpus cannot separate it from tofu search at 18 of 100, exact two sided p = 0.10 over 24 discordant against 13. The only arm it separates is bm25 alone at 0 of 20. file_shortlist gets no ranking from this file.",
     "from": "rerun",
@@ -70,7 +70,7 @@
     "version": "0.4.9"
   },
   {
-    "report": "bench/picker/report-2026-09-22.txt",
+    "report": "bench/suites/judge/picker/report-2026-09-22.txt",
     "figure": "0 recorded window readings",
     "says": "The three arms cannot be separated, because nothing in the tree ever wrote a window reading to disk: the poller cached a report in memory and every caller dropped it. Over a hand-built two-account fixture the same instrument separates them cleanly, first usable at 2 forced moves, round robin at 4, headroom at 1, and that table says nothing about real sessions.",
     "from": "prose",
@@ -100,7 +100,7 @@
     "version": "0.4.2"
   },
   {
-    "report": "bench/ask/report-2026-09-21.md",
+    "report": "bench/suites/judge/ask/report-2026-09-21.md",
     "figure": "One correct call out of four",
     "says": "The free ownership boundary already gets the three grant moments exactly and for nothing, so the judgment wins one extra moment of the remaining four and misses three.",
     "from": "prose",
@@ -110,7 +110,7 @@
     "version": "0.4.6"
   },
   {
-    "report": "bench/cost/report-2026-09-18.md",
+    "report": "bench/suites/judge/cost/report-2026-09-18.md",
     "figure": "$0.000041",
     "says": "Jev decided for $0.000041 per correct decision against opus at $0.005351, 131 times more. All four arms scored six of six, so this run is a cost result and not a correctness result.",
     "from": "prose",
@@ -120,7 +120,7 @@
     "version": "none, older than konst.Version"
   },
   {
-    "report": "bench/cost/report-2026-09-19.md",
+    "report": "bench/suites/judge/cost/report-2026-09-19.md",
     "figure": "$1.584970",
     "says": "What stands is the spend: $1.584970 on a key through OpenRouter, on two frontier arms retired the same day. Every accuracy figure in the file is withdrawn, because the verdicts came from a rule the gate does not run.",
     "from": "prose",
@@ -130,7 +130,7 @@
     "version": "none, older than konst.Version"
   },
   {
-    "report": "bench/forkcache/report-2026-11-01.txt",
+    "report": "bench/suites/context/forkcache/report-2026-11-01.txt",
     "figure": "58.5%",
     "says": "Of the parent's last 20 lookups, 58.5% are no longer held in the first request after a fork, against 0.0% inside a session; each fork writes 12,645 to 21,912 tokens of cache and repays in 17.1 to 36.4 requests.",
     "from": "rerun",
@@ -140,7 +140,7 @@
     "version": "0.5.20+dev"
   },
   {
-    "report": "bench/forkcache/report-2026-11-01-toolchoice.txt",
+    "report": "bench/suites/context/forkcache/report-2026-11-01-toolchoice.txt",
     "figure": "61998",
     "says": "With tool_choice in the cache key and reach counted from the deepest prefix the cache holds, the first request after /compact reads 61998 of a 62270 shared prefix at reach 0, and no request on any arm reaches past the 20-block lookback. In the working-state ask arm every switch from auto to none reads 20957, the tools and system blocks alone, and misses every message block, so each fork there writes 36449 to 42337 tokens of cache against 8201 to 14190 for episode carry.",
     "from": "rerun",
@@ -150,7 +150,7 @@
     "version": "0.5.20+dev"
   },
   {
-    "report": "bench/forkcache/report-2026-11-01-realwire.txt",
+    "report": "bench/suites/context/forkcache/report-2026-11-01-realwire.txt",
     "figure": "46725",
     "says": "Checked against a real claude-sub run, rapid-sable-finch#ub4fl.1, where an ask sent with tool_choice none read 18561, the 17098 read plus 1463 written of the step before it: the stand-in now keeps the message cache across a tool_choice switch, so every working-state ask switch reads all its prior, 46725 of 46725 on the first, and messages hit. Each fork in that arm writes 9497 to 16568 tokens of cache against 8201 to 14190 for episode carry, the first request after /compact reads 61998 of a 62270 shared prefix at reach 0, and no request reaches past the 20-block lookback.",
     "from": "rerun",
@@ -160,7 +160,7 @@
     "version": "0.5.20+dev"
   },
   {
-    "report": "bench/forkcache/report-2026-11-01-ratio.txt",
+    "report": "bench/suites/context/forkcache/report-2026-11-01-ratio.txt",
     "figure": "65.8%",
     "says": "With every count divided by recall's 2830 bytes per thousand tokens, 65.8% of the parent's last 20 lookups are no longer held in the first request after a working-state ask fork and 43.2% after an episode carry fork, against 0.0% inside a session. Each fork writes 14653 to 16860 tokens of cache and none of the 4 is repaid inside its sub-session, the first request after /compact reads 50363 of a 50415 shared prefix at reach 0, and no request reaches past the 20-block lookback.",
     "from": "rerun",
@@ -180,7 +180,7 @@
     "version": "0.4.2"
   },
   {
-    "report": "bench/mutate/report-2026-09-20.md",
+    "report": "bench/suites/rules/mutate/report-2026-09-20.md",
     "figure": "84.62%",
     "says": "Mutation efficacy on internal/judge/policy, reproduced today from the committed fixture: 88 killed, 16 lived, 84.62%. The after figures, 95.19 and 100, come from a board entry rather than a rerun.",
     "from": "prose",
@@ -190,7 +190,7 @@
     "version": "0.4.2"
   },
   {
-    "report": "bench/promote/report-2026-09-21.md",
+    "report": "bench/suites/judge/promote/report-2026-09-21.md",
     "figure": "0 rows",
     "says": "The promotion recorder holds 0 rows and needs 78 before anything can be judged. There is no arm and no accuracy number here yet, and the report says so rather than inventing one.",
     "from": "prose",
@@ -200,7 +200,7 @@
     "version": "0.4.6"
   },
   {
-    "report": "bench/promote/report-2026-09-23.md",
+    "report": "bench/suites/judge/promote/report-2026-09-23.md",
     "figure": "0 rows",
     "says": "Recounted two days after the first report: still 0 rows, still 0 distinct turns, still 0 usable labels, 78 short of the floor of 78. No row exists to leak its own answer, because no row exists.",
     "from": "rerun",
@@ -210,7 +210,7 @@
     "version": "0.4.14"
   },
   {
-    "report": "bench/readworth/report-2026-09-21.md",
+    "report": "bench/suites/judge/readworth/report-2026-09-21.md",
     "figure": "87.1%",
     "says": "A length floor of 15 characters matches jev at 87.1% accuracy and saves more bytes, 12.6% against 9.4%, for no call and no money. The free arm removes more, costs nothing and is not worse.",
     "from": "prose",
@@ -220,7 +220,7 @@
     "version": "0.4.2"
   },
   {
-    "report": "bench/recall/report-2026-09-20.md",
+    "report": "bench/suites/context/recall/report-2026-09-20.md",
     "figure": "20 real forks",
     "says": "In all 20 real forks the last word is a bare tool call and never prose, so there is nothing for a distilled or a Jev arm to summarise. The free raw copy wins and a live Jev call was disqualified on latency alone.",
     "from": "prose",
@@ -230,7 +230,7 @@
     "version": "0.4.2"
   },
   {
-    "report": "bench/shortlist/report-2026-09-21.md",
+    "report": "bench/suites/tools/shortlist/report-2026-09-21.md",
     "figure": "The corpus holds four.",
     "says": "Thirty file-localisation questions were asked for and the recorded corpus yields four, so file_shortlist is neither recommended nor refused. The table that scored the two methods was struck by bench/kit/report/withdrawals.json on 2026-09-23 and no reading off it is quoted here.",
     "from": "prose",
@@ -240,7 +240,7 @@
     "version": "0.4.1"
   },
   {
-    "report": "bench/sift/report-2026-09-21.md",
+    "report": "bench/suites/judge/sift/report-2026-09-21.md",
     "figure": "27 of 34",
     "says": "Jev keeps 27 of 34 needles against the free arm's 18 at the bytes saved the free arm already matches, two runs, same direction. This is the run that paid for the flip: library/tools/shell/rules/shell_sift@1.yaml reads mode: enforced from TOFU-434, committed in 0.4.11, so the win is measured and wired.",
     "from": "prose",
@@ -250,7 +250,7 @@
     "version": "0.4.2"
   },
   {
-    "report": "bench/stopcheck/report-2026-09-19.md",
+    "report": "bench/suites/judge/stopcheck/report-2026-09-19.md",
     "figure": "37 agreements against 36",
     "says": "The typed arm won 37 agreements against the cheap arm's 36 out of 41 labelled steps. The corpus is 78 steps today, so this run is stale and does not line up against the two later ones.",
     "from": "prose",
@@ -260,7 +260,7 @@
     "version": "none, older than konst.Version"
   },
   {
-    "report": "bench/stopcheck/report-2026-09-20.md",
+    "report": "bench/suites/judge/stopcheck/report-2026-09-20.md",
     "figure": "71 agreements against 68",
     "says": "The typed arm won 71 agreements against the cheap arm's 68 out of 78 labelled steps, which on a corpus this size is one labeller's judgement on a handful of steps rather than a result.",
     "from": "prose",
@@ -270,7 +270,7 @@
     "version": "0.4.2"
   },
   {
-    "report": "bench/stopcheck/report-2026-09-21.md",
+    "report": "bench/suites/judge/stopcheck/report-2026-09-21.md",
     "figure": "71 agreements against 68",
     "says": "Unchanged from the run of the day before: the typed arm won 71 agreements against the cheap arm's 68 out of 78 labelled steps, and neither arm is fit to end a turn, so the point stays in shadow.",
     "from": "prose",
@@ -280,7 +280,7 @@
     "version": "0.4.2"
   },
   {
-    "report": "bench/testquality/report-2026-09-21.md",
+    "report": "bench/suites/rules/testquality/report-2026-09-21.md",
     "figure": "off 53, on 53",
     "says": "The three test-quality rules moved the dead-test count by nothing over nine comparable tasks. The model already reaches the rule catalog through a standing tool, so a sentence in the prompt changes almost nothing.",
     "from": "prose",
@@ -290,7 +290,7 @@
     "version": "0.4.6"
   },
   {
-    "report": "bench/thrift/report-2026-09-21.md",
+    "report": "bench/suites/context/thrift/report-2026-09-21.md",
     "figure": "15.5 percent",
     "says": "Every session ever recorded here, added together, is 15.5 percent of the one hypothetical session the volume case multiplied. A recorded session runs a median of 7 tool calls and a worst case of 55, not 9,000.",
     "from": "prose",
@@ -300,7 +300,7 @@
     "version": "0.4.6"
   },
   {
-    "report": "bench/tokens/report-2026-09-21.md",
+    "report": "bench/suites/context/tokens/report-2026-09-21.md",
     "figure": "88.7%",
     "says": "glob is 88.7% of every result byte the model read, 48,186,030 of 54,295,422 over 109 recorded turns, and a cap of 300 paths cuts the corpus total by 88.4%.",
     "from": "prose",
@@ -310,7 +310,7 @@
     "version": "0.4.6"
   },
   {
-    "report": "bench/tokens/report-2026-09-21-pinned.md",
+    "report": "bench/suites/context/tokens/report-2026-09-21-pinned.md",
     "figure": "207 to 1,222",
     "says": "Replayed against a pinned commit, the safe band for the glob path cap is 207 to 1,222 and 300 sits inside it with nothing in between, so the cap is a judgement rather than a measurement. The cap is unchanged at 300.",
     "from": "prose",
@@ -323,7 +323,7 @@
     "rechecked_version": "0.5.10-fix1"
   },
   {
-    "report": "bench/transform/report-2026-09-20.md",
+    "report": "bench/suites/context/transform/report-2026-09-20.md",
     "figure": "3 of 14",
     "says": "Only 3 of 14 recorded writes are the shape a typed edit exists for; the other 11 create a file that did not exist. One changed line in the largest recorded file costs 4,284 output tokens to rewrite and 96 to express typed.",
     "from": "prose",
@@ -333,7 +333,7 @@
     "version": "0.4.2"
   },
   {
-    "report": "bench/turn/report-2026-09-18.md",
+    "report": "bench/suites/agent/turn/report-2026-09-18.md",
     "figure": "3 of 24 runs failed",
     "says": "The loop arm passed all 12 of its runs and the one-step arm failed the two-file task three times out of three. The whole run cost $0.399410 over 24 turns on a key.",
     "from": "prose",
@@ -343,7 +343,7 @@
     "version": "none, older than konst.Version"
   },
   {
-    "report": "bench/turn/report-2026-09-21.md",
+    "report": "bench/suites/agent/turn/report-2026-09-21.md",
     "figure": "16513 ms",
     "says": "Replaying 102 recorded turns, the repair rule saves 2 round trips and a derived 16513 ms. Refuse saves nothing by construction and remember saves nothing at all, and remember is not kept.",
     "from": "prose",
@@ -353,7 +353,7 @@
     "version": "0.4.1"
   },
   {
-    "report": "bench/websift/report-2026-09-21.md",
+    "report": "bench/suites/tools/websift/report-2026-09-21.md",
     "figure": "21/21",
     "says": "The readability rule, a free arm, keeps 21/21 needles where the shipped judged arm keeps 15/21, and the judgment is not wired. The first round compared two arms that had nothing to remove.",
     "from": "prose",
@@ -363,7 +363,7 @@
     "version": "0.4.2"
   },
   {
-    "report": "bench/wording/report-2026-09-18.md",
+    "report": "bench/suites/judge/wording/report-2026-09-18.md",
     "figure": "1 of 6",
     "says": "No case's verdict changed between the two wordings of tool_gate@1, 1 of 6 cases had a margin wider than the rerun spread, and v2 costs more for the identical decision. Keep v1.",
     "from": "prose",
@@ -373,7 +373,7 @@
     "version": "none, older than konst.Version"
   },
   {
-    "report": "bench/wrongpath/report-2026-09-22.md",
+    "report": "bench/suites/tools/wrongpath/report-2026-09-22.md",
     "figure": "1.01 per session",
     "says": "At 30 sessions per arm the smallest visible difference in reverts is 1.01 per session against a corpus mean of 0.47, so the measure cannot separate two arms and this line of work stops here.",
     "from": "prose",
@@ -396,7 +396,7 @@
     "version": "0.4.12"
   },
   {
-    "report": "bench/shortlist/report-2026-09-23-join.md",
+    "report": "bench/suites/tools/shortlist/report-2026-09-23-join.md",
     "figure": "13",
     "says": "The search to action join is the right denominator for this point by argument, and it clears the count floor of 12 at 13 distinct-task rows out of 23 recorded searches. It does not clear the leakage floor: 13 of 13 rows name their own label in their own task, because all thirteen tasks are one repeated template saying a named test file is missing and should be added back. So the corpus was not built, no arm ran and the stated cap of 13 calls, about eight hundredths of a cent, went unspent. The denominator argument is that the join carries a task, a candidate set and a right answer in one shape, which is what the point ranks in production, where the sibling report's population counts turn outcomes with nothing to rank against. The falsifier named with it partly fired: 8 of 23 acted searches, 34.8 percent, ended in a path the search never offered, which bounds how good any ranker over these candidates can look before a row is scored.",
     "from": "prose",
@@ -406,7 +406,7 @@
     "version": "0.4.13"
   },
   {
-    "report": "bench/shortlist/report-2026-09-23.md",
+    "report": "bench/suites/tools/shortlist/report-2026-09-23.md",
     "figure": "12",
     "says": "Twelve questions would decide the gap this bench observed, and the recorded corpus can support two, so the arms were not rerun and nothing was spent. The arithmetic is stated rather than asserted: the 4 of 4 and 1 of 4 rates are Laplace smoothed first, because 4 of 4 has zero variance and a sample size formula divides by it, then two proportions at 95 percent confidence and 80 percent power give 11.3, rounded to twelve. The corpus count is read at run time out of 111 recorded entries: 110 turns read, 65 change no file, 37 create only, 8 recordable, 2 distinct once identical task text is deduplicated. That is unchanged from a count taken three days earlier, so the corpus is not slowly filling. Three of the four original questions named their own answer and were removed, leaving one, and the check that used to skip now fails on any leak. The report's conclusion is that this point cannot be settled by replaying recorded sessions on this machine and needs a shortlist call wired into the live harness with its outcomes logged.",
     "from": "prose",
@@ -419,7 +419,7 @@
     "rechecked_version": "0.5.10-fix1"
   },
   {
-    "report": "bench/sweep/report-2026-09-23.md",
+    "report": "bench/suites/tools/sweep/report-2026-09-23.md",
     "figure": "5",
     "says": "Five independent readers of the recorded sessions exist where one shared reader is imported by nineteen packages, and three of the four extras have a real reason: one needs per step token fields the shared record does not carry, one needs occupancy and fork and compaction and reads through the session store instead, and one is a byte scan for a quota key rather than a turn parse. Only one re-walks by hand what the shared walker already does, and that is a clean merge. The most repeated shape is the smallest: six separate declarations of a skip record holding a path and a reason, with two pairs sharing a name across different packages. Two apparent duplications are left alone with arguments: a nearest rank percentile over integers is correct where an interpolated float one is not, because a fractional value between two byte counts means nothing. One thing that looks like duplication is named as not being any: four packages sum a cost with the same loop, and each sums a different field on a different struct answering a different question, so a shared helper would save one line per site and put a layer between the reader and the field. Nothing was merged, deleted or rewritten: the deliverable is the list and the judgment.",
     "from": "prose",
@@ -429,7 +429,7 @@
     "version": "0.4.14"
   },
   {
-    "report": "bench/rules/report-2026-09-23.md",
+    "report": "bench/suites/rules/rules/report-2026-09-23.md",
     "figure": "239",
     "says": "Seven structural rules run in shadow and 239 fires are on disk across three days, but they are fewer discoveries than they look: the 84, 120 and 10 fires of the three test rules are one full tree sweep run five times over the same fixed set of packages. The finding worth more than any count is a false positive: the em dash rule fired on a Go file that passes the character as a string literal to a replace call, inside the function whose job is to strip em dashes, because the checker's quote exception applies only to markdown paths. Enforcing that rule as written would block editing the code that removes em dashes. One rule has never matched real code at all: every one of test_mock_boundary's ten fires lands on two fixtures built inside the rule package to trip it, so its recommendation is delete or off rather than shadow. Three rules, comments, no_worktree and ownership, have never fired at all, which is stated as a finding rather than omitted. Every fire is tofu working on tofu in one repository over three sessions, and the report says so: the epic's promise is a rule written in one repository running correctly in another, and nothing here tests that.",
     "from": "prose",
@@ -439,7 +439,7 @@
     "version": "0.4.14"
   },
   {
-    "report": "bench/calibration/report-2026-09-23.md",
+    "report": "bench/suites/judge/calibration/report-2026-09-23.md",
     "figure": "20",
     "says": "The ledger holds 2,780 decision rows and 20 of them carry an outcome, all hand labelled and all attached to tool_gate. Exactly one labelled row sits near a threshold, within three dead bands of risk_deny_at, and none sits near risk_ask_at; stop_check and shell_sift have none at all. A threshold needs roughly 60 labels near its operating point at a 5 percent false positive budget and 300 at 1 percent, so no point is calibratable at either and tool_gate alone needs 59 more near one threshold and 60 near the other. The reach of three dead bands is argued rather than assumed: one dead band is the tie zone the decision code already uses, so a label sitting inside it proves nothing about where the line should sit. There is no arrival rate, because all 20 outcomes were written in a 78 second window five days ago and nothing since, with nineteen of them inside two seconds, which the report calls consistent with a scripted loop rather than a person. Its conclusion is that hand labelling cannot close the gap and the shadow gate writing outcomes automatically is the path that scales. It also found that the ask point has never written a ledger row at all, which is a missing writer rather than a labelling gap.",
     "from": "prose",
@@ -449,7 +449,7 @@
     "version": "0.4.14"
   },
   {
-    "report": "bench/recall/report-2026-09-23.md",
+    "report": "bench/suites/context/recall/report-2026-09-23.md",
     "figure": "26.5",
     "says": "No recorded session has ever come near the context ceiling: the highest peak is 66,162 tokens, 26.5 percent of the 250,000 limit, and the median is 20,179, 8.1 percent. Zero sessions reached half the ceiling, one reached a quarter and fifteen reached a tenth. Two sessions did cross the compaction target in force when they ran, 66,162 against 63,000 and 57,326 against 50,000, and the two targets differ because the band shares in konst moved between them. Nothing has ever been evicted by the in-place rewrite: zero compaction events on any step of any recorded session. What ran twice instead was the fork, which isolates and continues, matching the two crossings one for one. The re-fetch rate is therefore defined rather than undefined, and it is 0 of 2: neither continuation repeated a pre-fork tool call, and the one time one wanted old material it fetched the artifact handle the carry already held. The condition under which this starts to matter is named: a session several times longer than any recorded, a smaller ceiling, a model with a smaller window, or a task reading much larger results than this corpus of many small calls.",
     "from": "prose",
@@ -462,7 +462,7 @@
     "rechecked_version": "0.5.10-fix1"
   },
   {
-    "report": "bench/schemas/report-2026-09-23.md",
+    "report": "bench/suites/context/schemas/report-2026-09-23.md",
     "figure": "16575",
     "says": "The tool schemas a turn sends cost 16,575 bytes on every request, about 4,143 tokens for all 18 tools, and deferring them is not worth building. The figure is measured by encoding a real request with and without the tools array and taking the difference; summing the tools individually gives 16,492, and the 83 byte gap is the array's own brackets and commas. Caching is what decides it: on the measured turn the block was written to cache once on step one and never again across eleven steps, and 81.6 percent of that turn's billed input was cache reads. Across the corpus, 24 recorded turns wrote to cache and 23 of them made a second model call and read the write back; at today's 18 tool scale, 14 of 15 did. The deferral mechanism is named and costed rather than assumed: a catalog line plus a fetch before first use would have added 5 round trips to the measured turn to save at most 2,873 tokens, paid once at cache-write price. The only case it would pay is a turn that makes exactly one model call and never returns, which was 1 of 24.",
     "from": "prose",
@@ -472,9 +472,9 @@
     "version": "0.4.14"
   },
   {
-    "report": "bench/tokens/report-2026-09-23.md",
+    "report": "bench/suites/context/tokens/report-2026-09-23.md",
     "figure": "69.7%",
-    "says": "Description bytes are 69.7 percent of the wire schema bytes over all 18 tools, below the 79 percent another harness reports, 11,559 description bytes and 3,987 parameter bytes of a 16,574 byte whole. Seventeen of the eighteen tools measure byte for byte identical to TOFU-520's 16,575; bash alone differs by one byte, because its description embeds the shell's own pwd for the directory the generator ran from, one character shorter here than in bench/schemas/gen, and that is the whole of the gap.",
+    "says": "Description bytes are 69.7 percent of the wire schema bytes over all 18 tools, below the 79 percent another harness reports, 11,559 description bytes and 3,987 parameter bytes of a 16,574 byte whole. Seventeen of the eighteen tools measure byte for byte identical to TOFU-520's 16,575; bash alone differs by one byte, because its description embeds the shell's own pwd for the directory the generator ran from, one character shorter here than in bench/suites/context/schemas/gen, and that is the whole of the gap.",
     "from": "prose",
     "sample": "the same 18-tool registry cmd/tofu/run.go builds for a plain tofu run, that TOFU-520 measured",
     "skips": "none: no live model call and no network call, len(Description) and marshalled len(Parameters) read straight off the registry",
@@ -482,9 +482,9 @@
     "version": "0.4.14"
   },
   {
-    "report": "bench/tokencount/report-2026-09-24.md",
+    "report": "bench/suites/context/tokencount/report-2026-09-24.md",
     "figure": "71.2%",
-    "says": "Bytes over four misses the provider's own completion_tokens by a median of 71.2 percent and 96.7 percent of 635 usable steps are out by more than a tenth, so four is not a good enough estimate on the completion side of this corpus. The comparison is honest about its limit: only what a step itself generates, assistant text or a tool call's own Args, can be checked against completion_tokens, because the bytes a prompt sent are never stored per step. The static tool schema block bench/schemas already measured at 16574 bytes and an estimated 4143 tokens is cited rather than remeasured, and named as unmeasurable here since it never arrives as its own receipt. Tool-call arguments err worse than prose, median 74.1 against 34.6 percent, and several steps carry a completion_tokens far larger than their visible bytes could explain, consistent with a billed reasoning pass the step never writes down. Replacing four costs a real vocabulary and a merge loop this project has no dependency for.",
+    "says": "Bytes over four misses the provider's own completion_tokens by a median of 71.2 percent and 96.7 percent of 635 usable steps are out by more than a tenth, so four is not a good enough estimate on the completion side of this corpus. The comparison is honest about its limit: only what a step itself generates, assistant text or a tool call's own Args, can be checked against completion_tokens, because the bytes a prompt sent are never stored per step. The static tool schema block bench/suites/context/schemas already measured at 16574 bytes and an estimated 4143 tokens is cited rather than remeasured, and named as unmeasurable here since it never arrives as its own receipt. Tool-call arguments err worse than prose, median 74.1 against 34.6 percent, and several steps carry a completion_tokens far larger than their visible bytes could explain, consistent with a billed reasoning pass the step never writes down. Replacing four costs a real vocabulary and a merge loop this project has no dependency for.",
     "from": "prose",
     "sample": "118 turns read through bench/corpus.WalkSessions over both wires in the corpus, anthropic and codex, 1033 steps read and 635 usable",
     "skips": "1 of 112 entries under .tofu/sessions is not a turn, HEAD; 58 of 118 turns carry no wire field and are excluded from the per-wire table; 398 of 1033 steps skipped, named by reason in the report's own Corpus section",
@@ -495,7 +495,7 @@
     "rechecked_version": "0.5.10-fix1"
   },
   {
-    "report": "bench/tokencount/report-2026-09-24-accountable.md",
+    "report": "bench/suites/context/tokencount/report-2026-09-24-accountable.md",
     "figure": "47.1%",
     "says": "The earlier aggregate of 71.2 percent buried two different failures. Split on a hard floor, a token is at least one byte so a step billing more tokens than it has visible bytes cannot have produced them at all: 287 of 635 steps fail that floor outright, almost all of them tool-call arguments, 286 of 287, median error 87.2 percent there because the content that would explain the bill is not in the corpus. On the remaining 348 steps, where the byte count at least allows the token count, four still misses, median 47.1 percent overall, 33.9 percent for prose and 49.2 percent for tool-call arguments, one-sided: it undershoots 300 of 300 accountable tool-call samples, because short JSON tokenizes more densely than four bytes per token, a separate and smaller effect from the unaccountable group. TOFU-540 and TOFU-544 landed a typed thinking and reasoning field on 2026-09-23, so the corpus was scanned for it directly: 0 of 1841 assistant messages across the 48 turns that carry a message stream hold a populated thinking or reasoning field, so the theory that unaccountable steps are billing an invisible reasoning pass stays a theory, not confirmed by this corpus. Four is not good enough on either half.",
     "from": "prose",
@@ -505,9 +505,9 @@
     "version": "0.4.14"
   },
   {
-    "report": "bench/tokencount/report-2026-09-24-corrected.md",
+    "report": "bench/suites/context/tokencount/report-2026-09-24-corrected.md",
     "figure": "16.8%",
-    "says": "Fitted per shape on the 348 accountable steps report-2026-09-24-accountable.md separated out, a median-of-ratios divisor moves the overall accountable median from 47.1 to 16.8 percent, but 67.0 percent of corrected steps are still out by more than a tenth. The two shapes move differently: tool-call arguments improve from 49.2 to 15.9 percent median at a fitted 2.08 bytes per token over 300 samples, but prose gets worse, 33.9 to 39.5 percent median at a fitted 2.65 bytes per token over 48 samples, because the median ratio is not the divisor that minimizes median error and this corpus's prose is the counterexample. The factor does nothing for the 287 unaccountable steps, still a median 87.2 percent off, because no divisor reproduces a token count the visible bytes cannot hold. konst.SearchBytesPerToken is left at 4; the report names seven dated reports whose token figures were derived from it and would move if it changed: bench/schemas, both bench/prefix reports, both bench/tokens reports, bench/linenumbers, and the two earlier bench/tokencount reports.",
+    "says": "Fitted per shape on the 348 accountable steps report-2026-09-24-accountable.md separated out, a median-of-ratios divisor moves the overall accountable median from 47.1 to 16.8 percent, but 67.0 percent of corrected steps are still out by more than a tenth. The two shapes move differently: tool-call arguments improve from 49.2 to 15.9 percent median at a fitted 2.08 bytes per token over 300 samples, but prose gets worse, 33.9 to 39.5 percent median at a fitted 2.65 bytes per token over 48 samples, because the median ratio is not the divisor that minimizes median error and this corpus's prose is the counterexample. The factor does nothing for the 287 unaccountable steps, still a median 87.2 percent off, because no divisor reproduces a token count the visible bytes cannot hold. konst.SearchBytesPerToken is left at 4; the report names seven dated reports whose token figures were derived from it and would move if it changed: bench/suites/context/schemas, both bench/suites/context/prefix reports, both bench/suites/context/tokens reports, bench/suites/context/linenumbers, and the two earlier bench/suites/context/tokencount reports.",
     "from": "prose",
     "sample": "the same 118 turns and 635 usable steps as report-2026-09-24.md, split into 348 accountable and 287 unaccountable by TOFU-562's byte floor; the factor is fitted only on the 348",
     "skips": "same corpus skips as report-2026-09-24.md; the factor is fitted and reported on the same steps, not validated on a held-out set",
@@ -515,7 +515,7 @@
     "version": "0.4.15"
   },
   {
-    "report": "bench/instruction/report-2026-09-23.md",
+    "report": "bench/suites/judge/instruction/report-2026-09-23.md",
     "figure": "25",
     "says": "Jev scored 25 of 27 against a regular expression's 24 of 27 on a corpus of real recorded tool results, and a rerun minutes later tied both arms at 24, so the report's conclusion is that the corpus cannot decide this rather than that the judgment won. Both arms score high because this project's recorded sessions carry almost no adversarial instruction-shaped text: what looks like a directive is nearly always the harness's own scaffolding, an oversized-result notice, a bash-timeout caution or a refused-citation notice, never a planted attack. Neither arm's mistakes sit inside the other's: the regular expression's three misses are directive-shaped words inside ordinary Go source or a test assertion rather than text addressed to a reader, and jev's two misses are the same refused-citation caution scored at 0.18, under its own line, which the literal word match caught. The two-task test found no separation, 0.03 to 0.06 apart on three cases, which is the opposite of what the shell sift found. Deciding two arms that both score in the high eighties needs a few hundred labelled cases, and this corpus is 27. It cost $0.000935 over 27 live calls.",
     "from": "prose",
@@ -525,7 +525,7 @@
     "version": "0.4.13"
   },
   {
-    "report": "bench/thrift/report-2026-09-23-overcap.md",
+    "report": "bench/suites/context/thrift/report-2026-09-23-overcap.md",
     "figure": "13.7",
     "says": "The sibling report of the same day measured the judged cut on 8 results that were all under the truncation cap, where fixed truncation never fired. This one reaches the results over it, where the arm genuinely cuts, and the judged cut removes a further 3,367 of 24,619 tokens, 13.7 percent, against the 1.5 percent mechanical floor from TOFU-338. Nine distinct over-cap read and search artifacts were identified in the corpus and 3 were judged inside a stated cap of 250 live calls; 247 calls were made for $0.013247, against 393 calls and $0.040968 for the first run. The worked example is a design document, not a test log: fixed truncation drops 781 bytes from its middle and every one of those bytes falls inside a single paragraph the judgment marked keep, so truncation by position drops exactly the part the judgment says still matters. The 6 unjudged artifacts are each skipped with a named reason, a paragraph count over the remaining call budget, and two of them are 798 paragraph reads that would need roughly 0.18 dollars more to judge.",
     "from": "prose",
@@ -538,7 +538,7 @@
     "rechecked_version": "0.5.10-fix1"
   },
   {
-    "report": "bench/thrift/report-2026-09-23.md",
+    "report": "bench/suites/context/thrift/report-2026-09-23.md",
     "figure": "1.9",
     "says": "A judged cut over a read or search result was measured live against fixed truncation, 393 Jev calls for $0.040968, and it removed 402 of 21,569 tokens, 1.9 percent. TOFU-338 measured a mechanical pass at 1.5 percent of recorded result bytes, so the judgment clears that floor and does not clear it widely. The arm it is compared against did not fire on this sample: all 8 measured results are under the 32,768 byte truncation cap and the largest is 12,793 bytes, so the 1.9 percent came off results fixed truncation would have passed through whole. 9 of 39 stored read and search artifacts in the corpus exceed the cap and none fell inside the live call budget, so the arm-firing comparison cannot be made on this sample. Three arms over the corpus total read neither 570,999 tokens, rtk alone 458,199, rtk with the judged cut 457,797, and the last term is not extrapolated past the 8 calls actually judged. Task outcome was not measured, so fewer tokens with the same outcome is not claimed. The point ships off.",
     "from": "prose",
@@ -551,7 +551,7 @@
     "rechecked_version": "0.5.10-fix1"
   },
   {
-    "report": "bench/sift/report-2026-09-23.md",
+    "report": "bench/suites/judge/sift/report-2026-09-23.md",
     "figure": "13",
     "says": "The shell sift is live and the ledger carries 13 real shell_sift decisions, so the report measures them instead of deriving from TOFU-217. They cost p50 361 ms, p95 524 ms, worst 722 ms, and $0.000431 in total, every figure read off the latency_ms and cost fields of the recorded rows rather than a rate card. 9 of the 13 cut the shell chunk and 4 left it whole, counted against the shipped keep_at of 0.50. TOFU-217 predicted $0.0000303 per decision and the measured median is $0.0000331, 9 percent above, so the prediction is kept only as the comparison. The 13 decisions are not 13 independent calls: they come from two shell tool calls inside one turn, turn-18d7e7074db17e6c, so there is no session to session spread and no real tail. The report says that in its own words and concludes that thirteen is not enough to decide whether the point behaves the same way on the next hundred.",
     "from": "prose",
@@ -561,7 +561,7 @@
     "version": "0.4.12"
   },
   {
-    "report": "bench/search/report-2026-09-23.md",
+    "report": "bench/suites/tools/search/report-2026-09-23.md",
     "figure": "0",
     "says": "Running four candidate search patterns over the whole tree costs 320 ms against 14 ms for the literal, so the plan's claim that they cost nothing is false as written and the first implementation spent 638 ms of candidate scan on an 819 ms call. Each form now runs only where it can change the answer: the word boundary and go symbol forms match a subset of the literal, so they are free at 11 ms of a 165 ms call against 131 ms spent reading files. Telling an absence from a wrong pattern is not free, about 590 ms against 150 ms, roughly 3.5x. Over 20 replayed recorded searches, 6 returned nothing and a candidate form rescued 0 of them: not one was a case error. What it buys is the other half, 30 percent of real searches now saying absence rather than being ambiguous. The self answer check caught four leaks across two rounds, including the bench's own test file answering a recorded pattern.",
     "from": "prose",
@@ -574,7 +574,7 @@
     "rechecked_version": "0.5.10-fix1"
   },
   {
-    "report": "bench/prefix/report-2026-09-23.md",
+    "report": "bench/suites/context/prefix/report-2026-09-23.md",
     "figure": "4135 bytes",
     "says": "With the real composed system prompt turn.Compose sends for a real task, 9 rules firing on top of the two builtin blocks, the per-session cache rewrite is 4135 bytes, an estimated 1033 tokens, against TOFU-532's unrules floor of 2209 bytes and 552 tokens. The 9 fired rules add 2283 bytes; this package's ToolGuidance is 357 bytes short of cmd/tofu's real one, because the working-directory prefix and the spawn addendum are private constants it cannot import without copying, so 2283 minus 357 accounts for the whole 1926 byte gap. With the billing block absent, the same request with Request.Encode(false), the two fingerprinted first messages produce a byte-identical 3908-byte system array: 0 bytes rewritten per session, which is the arm.",
     "from": "prose",
@@ -584,9 +584,9 @@
     "version": "0.4.14"
   },
   {
-    "report": "bench/prefix/report-2026-09-23-corrected.md",
+    "report": "bench/suites/context/prefix/report-2026-09-23-corrected.md",
     "figure": "4492 bytes",
-    "says": "TOFU-538 moved the working-directory line and the spawn addendum out of cmd/tofu/run.go into exported names in internal/turn, so bench/prefix.RealToolGuidance now composes the same text a real tofu run sends rather than a subset of it. With that fix, the per-session cache rewrite for the same real task and the same 9 fired rules is 4492 bytes, an estimated 1123 tokens: 357 bytes above the earlier report's 4135, which is exactly the working-directory line and the spawn addendum the earlier report could not reach. The builtin-only arm, no rules fired, now measures 2209 bytes, TOFU-532's floor exactly, so the whole 2283 byte gap above that floor is now the 9 fired rules and nothing else. The earlier report at bench/prefix/report-2026-09-23.md is left in place rather than edited: it is immutable, and this report supersedes its headline figure.",
+    "says": "TOFU-538 moved the working-directory line and the spawn addendum out of cmd/tofu/run.go into exported names in internal/turn, so bench/suites/context/prefix.RealToolGuidance now composes the same text a real tofu run sends rather than a subset of it. With that fix, the per-session cache rewrite for the same real task and the same 9 fired rules is 4492 bytes, an estimated 1123 tokens: 357 bytes above the earlier report's 4135, which is exactly the working-directory line and the spawn addendum the earlier report could not reach. The builtin-only arm, no rules fired, now measures 2209 bytes, TOFU-532's floor exactly, so the whole 2283 byte gap above that floor is now the 9 fired rules and nothing else. The earlier report at bench/suites/context/prefix/report-2026-09-23.md is left in place rather than edited: it is immutable, and this report supersedes its headline figure.",
     "from": "prose",
     "sample": "one real task, write a fix for the flaky test in internal/turn/compose_test.go, against the shipped rule library under library/, composed and encoded directly with no live call and no network call",
     "skips": "0, everything measured runs; TestGeneratorReproducesTheSameBytesTwice composes and measures the same rules twice in process rather than by re-invoking the generator, since report.Generate refuses to overwrite a dated report already on disk",
@@ -594,7 +594,7 @@
     "version": "0.4.14"
   },
   {
-    "report": "bench/toolerrors/report-2026-09-23.md",
+    "report": "bench/suites/context/toolerrors/report-2026-09-23.md",
     "figure": "74.6%",
     "says": "67 of 1412 recorded tool calls failed, 4.7%, and 74.6% of those failures carry no reason beyond a bare nonzero exit code. Every failure that carries any error text at all classifies cleanly into bad arguments, not found in this environment or timeout; the whole unknown share is bash calls that exited nonzero with an empty Error field, a number the harness already has and never types. edit is the worst tool among those with at least 5 calls, 11 of 55, 20.0%, every one of them an anchor or an occurrence count that no longer matches the file. The categories cannot express the admin-template shape named in the ticket, a run of calls that succeed as a process and fail as work: this project's own corpus holds the same pattern in turn-18d6ea32da3230c0 and turn-18d6e1de4b235b54, hunting for a go binary, and only the probes that happened to exit nonzero land in this report at all.",
     "from": "prose",
@@ -604,7 +604,7 @@
     "version": "0.4.14"
   },
   {
-    "report": "bench/linenumbers/report-2026-09-23.md",
+    "report": "bench/suites/context/linenumbers/report-2026-09-23.md",
     "figure": "0",
     "says": "There is nothing to save because there is nothing there: tofu's read tool never prefixes a line with its number. A whole read returns the file bytes verbatim and a ranged read prepends one header line. Over 296 read calls in 110 recorded turns, line-number bytes are 0, which is 0.0 percent of 1,016,862 read-tool bytes and 0.0 percent of 9,257,594 cache-read tokens. The threshold was stated first, under 0.5 percent is a no. The pasted claim of 1.6 percent described a harness that numbers every line, which two clones do behind a flag that is off by default, and neither they nor any other clone numbers sparsely.",
     "from": "prose",
@@ -614,7 +614,7 @@
     "version": "0.4.14"
   },
   {
-    "report": "bench/startup/report-2026-09-23.md",
+    "report": "bench/suites/perf/startup/report-2026-09-23.md",
     "figure": "780.7 ms",
     "says": "Against a 100 ms threshold chosen before measuring, every shape crosses it: shell resolution median 101.5 ms and worst 135.3 ms over 12 samples, the go toolchain probe median 172.9 ms and worst 201.2 ms, the node toolchain probe with node and npm median 780.7 ms and worst 904.7 ms, both over 6 rounds. So a node project waits about eight tenths of a second before the first token, paid once per session, for a line in the environment block. The figures are derived rather than directly timed: NewBashTool is timed on an empty directory and on the project directory back to back, because resolveShell and probeToolchain have no exported seam, and the probe figure is the delta.",
     "from": "prose",
@@ -624,7 +624,7 @@
     "version": "0.4.14"
   },
   {
-    "report": "bench/toolerrors/report-2026-09-23-categorized.md",
+    "report": "bench/suites/context/toolerrors/report-2026-09-23-categorized.md",
     "figure": "71.6%",
     "says": "Naming the reason at the moment a command exits moves the unclassifiable share of tool failures from 74.6 percent to 71.6, 50 failures to 48, over the same 1,412 calls and 67 failures. The recovery is small on purpose: only 2 of the 50 bare failures carried exit 127 or 126, and the other 48 are exit 1 or 2, which mean nothing on their own and stay unknown. The gain is on calls made from now on, where the harness records not found in this environment or found but not executable rather than a number, and the same fallback reads records already on disk so the corpus improves without a rewrite.",
     "from": "prose",
@@ -634,7 +634,7 @@
     "version": "0.4.14"
   },
   {
-    "report": "bench/startup/report-2026-09-23-overlapped.md",
+    "report": "bench/suites/perf/startup/report-2026-09-23-overlapped.md",
     "figure": "89.0 ms",
     "says": "Starting the toolchain probe in the background moves the wait rather than removing it, and the report says so. Constructing the bash tool on a node project is now a median of 0.5 ms and a worst of 6.0, against 780.7 and 904.7 before. Realized, meaning construction plus the first read of the answer in a fresh directory, it is a median of 722.0 ms and a worst of 768.5: the same work, paid when the answer is first needed. What is genuinely saved is a second turn in the same directory sharing one cache, a median of 89.0 ms and a worst of 95.0. Shell resolution is a median of 96.0 ms. A person feels none of this yet, because cmd/tofu/run.go still resolves and probes twice per session and shares no cache.",
     "from": "prose",
@@ -647,7 +647,7 @@
     "rechecked_version": "0.5.10-fix1"
   },
   {
-    "report": "bench/calibration/report-2026-09-24.md",
+    "report": "bench/suites/judge/calibration/report-2026-09-24.md",
     "figure": "2785 rows total",
     "says": "The ledger holds 2,785 decision rows and 20 of them carry an outcome, all hand labelled, which is the same shape the report of 2026-09-23 found with five fewer rows. Nothing automatic has ever written an outcome, so the labelled set is still the only calibration evidence and it is still far under any floor a threshold could be fitted against. The five new rows since the previous count are all tool_gate, all unlabelled, written on this machine at 01:57 on 2026-09-24, so the labelled count, the near threshold counts and every calibratable verdict are unchanged.",
     "from": "prose",
@@ -660,7 +660,7 @@
     "rechecked_version": "0.5.10-fix1"
   },
   {
-    "report": "bench/ask/server/report-2026-09-23.md",
+    "report": "bench/suites/judge/ask/server/report-2026-09-23.md",
     "figure": "2 of 113",
     "says": "The free arm, read the project's declared commands and act when one candidate fits, fires on 2 of 113 readable turns and removes 15 of 18 recorded steps in one session and 23 of 24 in the other. The line that decides the ticket splits on a definition: read by literal name against the task's own words, exactly one script matches and it is the wrong one in both sessions, 2 of 2, because start needs a production build neither had where dev was right. Read by what the scripts actually run, two candidates fit and the arm asks instead of choosing, so it never picks wrong because it never picks. The cheap arm loses on this corpus and the one that does not lose needs judgement.",
     "from": "prose",
@@ -670,7 +670,7 @@
     "version": "0.4.14"
   },
   {
-    "report": "bench/ask/server/report-2026-09-24.md",
+    "report": "bench/suites/judge/ask/server/report-2026-09-24.md",
     "figure": "2 of 121",
     "says": "The same measurement after the reader was corrected: the arm fires on 2 of 121 readable turns, 1.65 percent, where the earlier run read 113 turns and 1.77 percent. The denominator moved because corpus.WalkSessions now returns one turn per outcome segment, so six restarted directories yield their real turns. Every finding about the arm itself is unchanged: 15 of 18 steps removed in one session, 23 of 24 in the other, and the literal name reading still picks the wrong script in both.",
     "from": "prose",
@@ -680,7 +680,7 @@
     "version": "0.4.14"
   },
   {
-    "report": "bench/nativetools/report-2026-10-04.md",
+    "report": "bench/suites/tools/nativetools/report-2026-10-04.md",
     "figure": "tofu edit 40",
     "says": "Tool against tool with no model in the loop, tofu edit is right or refuses with a reason on 40 of 40 recorded edits, and changes no file wrongly without saying so. sed on the changed line gets 24 right and changes 16 files wrongly in silence, sed -z with the whole old_string 36 and 4, and a here-doc rewrite 36 and 0 while sending 587,287 bytes against tofu edit's 19,001. tofu read returns 57,522 bytes on 40 reads and never needs a second call, against 54,997 for sed -n and head and tail and 785,105 for cat, which needs a second call on 11. On 20 listings find returns 19,631 bytes, glob 20,989 and ls -R 125,828, and glob and find return different paths on 3 of 20.",
     "from": "prose",
@@ -690,7 +690,7 @@
     "version": "0.5.0-rc-fix24"
   },
   {
-    "report": "bench/planspawn/report-2026-10-05.md",
+    "report": "bench/suites/rules/planspawn/report-2026-10-05.md",
     "figure": "16.9%",
     "says": "The new plan_before_spawn wording spent 16.9% more lead tokens than the old over the same four requests, 831150 against 710834, on the same 21 lead requests and the same sub-agent count per request. Sub-agent tokens rose 15.9%. Every check passed under both wordings, and hard-ls wrote one plan file outside packages/ under each.",
     "from": "prose",
@@ -700,7 +700,7 @@
     "version": "0.5.0"
   },
   {
-    "report": "bench/boardy/report-2026-10-14.md",
+    "report": "bench/suites/perf/boardy/report-2026-10-14.md",
     "figure": "1.64x faster",
     "says": "On a generated board of 1,500 tickets, boardy list, report and catchup run 1.64x, 1.63x and 1.70x faster after TOFU-1358 and the serve calls 1.81x to 2.03x; boardy report runs another 1.11x faster after TOFU-1359. show and epic list are level, and every output is byte-identical between head and fix.",
     "from": "prose",
@@ -710,17 +710,17 @@
     "version": "0.5.14"
   },
   {
-    "report": "bench/drain/report-2026-10-22.md",
+    "report": "bench/suites/agent/drain/report-2026-10-22.md",
     "figure": "805 ms",
     "says": "tofu session drain answers in a median of 805 ms on a 20.2 MB session of 11,298 events, 672 ms over the 132 ms floor of starting the binary; the slowest of 12 runs took 1,037 ms.",
     "from": "prose",
-    "sample": "12 timed drains and 10 floor runs of tofu version, two passes of bench/drain/run.sh over one recorded 20,168,967 byte session, on DESKTOP-AHUN9RO",
+    "sample": "12 timed drains and 10 floor runs of tofu version, two passes of bench/suites/agent/drain/run.sh over one recorded 20,168,967 byte session, on DESKTOP-AHUN9RO",
     "skips": "one session and one machine only; no earlier drain build to compare against, so the floor is the only baseline",
     "commit": "b4cf8de6",
     "version": "0.5.16-fix2"
   },
   {
-    "report": "bench/startup/frame/report-2026-10-14.md",
+    "report": "bench/suites/perf/startup/frame/report-2026-10-14.md",
     "figure": "1.45x faster",
     "says": "The first typeable frame on a fresh project draws 1.45x faster after TOFU-1354 and 1.38x faster after TOFU-1357; resuming a 2,130 event session draws 1.49x and then 1.19x faster, with drive screens identical to head.",
     "from": "prose",
@@ -730,7 +730,7 @@
     "version": "0.5.14"
   },
   {
-    "report": "bench/minimal/report-2026-10-14.md",
+    "report": "bench/suites/perf/minimal/report-2026-10-14.md",
     "figure": "0.7 MB per sub-agent",
     "says": "Under one vCPU and 128 MB tofu finishes 0 to 10 sub-agents and idles as tofu serve, at 9 to 16 MB of private memory and about 0.7 MB per sub-agent; Claude Code and omp do not start under 256 MB, and codex dies at 4 sub-agents under 256 MB and at 0 under 128 MB.",
     "from": "prose",
@@ -740,7 +740,7 @@
     "version": "0.5.14"
   },
   {
-    "report": "bench/browser/report-2026-10-24.md",
+    "report": "bench/suites/tools/browser/report-2026-10-24.md",
     "figure": "207 ms",
     "says": "Jev picked the right next browser action on 7 of 8 recorded pages, 88%, with a median of 207 ms and 1340 input tokens a decision, against jev-ultrafast's 178 ms and 5300 tokens, at $0.000056 a decision. It missed the login wall page, typing where it should have said BLOCKED. The model arm and the live turn against turn A/B were not run.",
     "from": "rerun",
@@ -750,27 +750,27 @@
     "version": "0.5.17-fix1"
   },
   {
-    "report": "bench/enforce/report-2026-10-28.md",
+    "report": "bench/suites/rules/enforce/report-2026-10-28.md",
     "figure": "2 of 8 (25%)",
     "says": "Enforced, the seven desk_refuse rules refused no clean write from HEAD, and four of them refused every planted desk mistake. Three fall short of 90 percent planted: desk_refuse_allow_dead 6 of 8, desk_refuse_fixture 19 of 32, and desk_refuse_ui_block 2 of 8 (25%). In shadow mode no write is refused and the same planted writes are recorded.",
     "from": "prose",
-    "sample": "planted desk mistakes mocked from DESK tickets in bench/enforce/corpus/planted.txt and clean 40 line cuts from git HEAD, each through internal/rule CheckWrite then Weigh, once enforced and once in shadow; no model call, no network",
+    "sample": "planted desk mistakes mocked from DESK tickets in bench/suites/rules/enforce/corpus/planted.txt and clean 40 line cuts from git HEAD, each through internal/rule CheckWrite then Weigh, once enforced and once in shadow; no model call, no network",
     "skips": "one window skipped as debt already in the tree, apps/desk/crates/ui/src/component.rs:10-49 for desk_refuse_static_api; one run, deterministic",
     "commit": "038fa276",
     "version": "0.5.19"
   },
   {
-    "report": "bench/rules/report-2026-10-24.md",
+    "report": "bench/suites/rules/rules/report-2026-10-24.md",
     "figure": "22 of 41 (54%)",
     "says": "Asking Jev every applicable prose rule in one request a reply agrees with the hand label less often than no check at all on every labelled rule: em_dash 22 of 41 (54%) against 41 of 41 for the shipped checker, report_short 14 of 41 against 30, stay_in_scope 36 of 41 against 38, quote 3 of 5 for both. A batched request asks 25 questions at a median of 6239 input tokens and 234 ms, 0.010760 USD over 41 requests.",
     "from": "rerun",
-    "sample": "41 final lead replies recorded in this project's sessions, text mocked, hand labelled on em_dash, quote, report_short and stay_in_scope, one live pass over typesafe on jev-1.14.0, rerun offline from bench/rules/batched/runs/2026-10-24.json",
+    "sample": "41 final lead replies recorded in this project's sessions, text mocked, hand labelled on em_dash, quote, report_short and stay_in_scope, one live pass over typesafe on jev-1.14.0, rerun offline from bench/suites/rules/rules/batched/runs/2026-10-24.json",
     "skips": "one labeller; quote applies to 5 of 41 replies only; the rules nobody labelled are counted for flags and not scored; no call discarded as a warm up",
     "commit": "81a71bb8",
     "version": "0.5.17-fix1"
   },
   {
-    "report": "bench/stopcheck/report-2026-10-24.md",
+    "report": "bench/suites/judge/stopcheck/report-2026-10-24.md",
     "figure": "71 agreements against 68",
     "says": "The cheap arm won 71 agreements against 68 out of 81 labelled steps, and the chained second request did not move the typed arm: both caught 12 of 16 stops against the cheap arm's 15, while the chain took 21 of 81 steps and raised the cost from $0.000083 to $0.000107 a step. Neither arm is fit to end a turn, so the point stays in shadow.",
     "from": "prose",

@@ -86,9 +86,9 @@ func TestADecisionThatCannotNameItsMethodsIsNeverGivenANumber(t *testing.T) {
 		Axis:   Axis{Name: "accuracy", Unit: "percent", BetterWhen: BetterHigher},
 		Free:   Method{Name: "a regular expression", Does: "matches a pattern", DoesFrom: "bench/kit/report/figure.go", Percent: 50, Hits: 1, OutOf: 2, Evidence: "no such line is in any report"},
 		Judged: Method{Name: "Jev", Does: "scores the state", DoesFrom: "bench/kit/report/figure.go", Percent: 100, Hits: 2, OutOf: 2, Evidence: "nor is this one"},
-		Source: "bench/ask/report-2026-09-21.md",
+		Source: "bench/suites/judge/ask/report-2026-09-21.md",
 	}
-	bodies := map[string]string{"bench/ask/report-2026-09-21.md": "a report that says none of that"}
+	bodies := map[string]string{"bench/suites/judge/ask/report-2026-09-21.md": "a report that says none of that"}
 	if err := checkPlacement(invented, shippedTable(t), sys.SourceRoot(), bodies); err == nil {
 		t.Fatal("a percentage citing a line no report carries was accepted")
 	} else {
@@ -97,7 +97,7 @@ func TestADecisionThatCannotNameItsMethodsIsNeverGivenANumber(t *testing.T) {
 }
 
 func TestASentenceAWithdrawalStruckIsNoLongerEvidence(t *testing.T) {
-	const shortlist = "bench/shortlist/report-2026-09-21.md"
+	const shortlist = "bench/suites/tools/shortlist/report-2026-09-21.md"
 	body, err := os.ReadFile(filepath.Join(sys.SourceRoot(), filepath.FromSlash(shortlist)))
 	if err != nil {
 		t.Fatal(err)
@@ -124,19 +124,19 @@ func TestASentenceAWithdrawalStruckIsNoLongerEvidence(t *testing.T) {
 func withdrawnCorrectionFixture(t *testing.T, why string) (tree string, bodies map[string]string, one Placement) {
 	t.Helper()
 	tree = t.TempDir()
-	const source = "bench/stopcheck/report-2026-09-21.md"
+	const source = "bench/suites/judge/stopcheck/report-2026-09-21.md"
 	const struck = "cheap arm: 68 of 78 labelled steps, 87.2%. of the 15 steps labelled stop it caught 14"
 	report := "# stop_check\n\n" + struck + "\n"
-	if err := os.MkdirAll(filepath.Join(tree, "bench", "stopcheck"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(tree, "bench", "suites", "judge", "stopcheck"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(tree, "bench", "kit", "report"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(tree, "bench", "stopcheck", "report-2026-09-21.md"), []byte(report), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tree, "bench", "suites", "judge", "stopcheck", "report-2026-09-21.md"), []byte(report), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(tree, "bench", "stopcheck", "arm.go"), []byte("package stopcheck\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tree, "bench", "suites", "judge", "stopcheck", "arm.go"), []byte("package stopcheck\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	entry := `[{"report":"` + source + `","state":"withdrawn in part","why":"` + why + `","fell":["` + struck + `"]}]`
@@ -153,7 +153,7 @@ func withdrawnCorrectionFixture(t *testing.T, why string) (tree string, bodies m
 
 func TestAWithdrawnSentenceIsAcceptedOnlyWhenTheWithdrawalCarriesTheCorrection(t *testing.T) {
 	method := Method{
-		Name: "the repeat check", Does: "stops on a repeated command", DoesFrom: "bench/stopcheck/arm.go",
+		Name: "the repeat check", Does: "stops on a repeated command", DoesFrom: "bench/suites/judge/stopcheck/arm.go",
 		Percent: 87.7, Hits: 71, OutOf: 81,
 		Evidence: "cheap arm: 68 of 78 labelled steps, 87.2%",
 	}
@@ -291,9 +291,9 @@ func TestAnAxisIsDeclaredByTheBenchAndNotFixedByTheViewer(t *testing.T) {
 		Point: "shell_sift", Question: "how long did the tools take",
 		Axis:       Axis{Name: "tool calls per turn", Unit: "percent of the cheaper method's calls", BetterWhen: BetterLower},
 		Free:       Method{Name: "regex on error lines", Does: "keeps the head and the tail", DoesFrom: "internal/tools/shell/sift/shellarm.go", Percent: 100, Hits: 34, OutOf: 34, Evidence: "34 shell results this harness really returned to a model"},
-		Judged:     Method{Name: "Jev", Does: "scores each chunk", DoesFrom: "bench/sift/arm.go", Percent: 50, Hits: 17, OutOf: 34, Evidence: "34 shell results this harness really returned to a model"},
+		Judged:     Method{Name: "Jev", Does: "scores each chunk", DoesFrom: "bench/suites/judge/sift/arm.go", Percent: 50, Hits: 17, OutOf: 34, Evidence: "34 shell results this harness really returned to a model"},
 		SampleSize: 34, SampleOf: "recorded shell results", Decides: "shell_sift", InUse: method.Judged,
-		Source: "bench/sift/report-2026-09-21.md",
+		Source: "bench/suites/judge/sift/report-2026-09-21.md",
 	}
 	before := Page(data)
 	if strings.Contains(before, added.Axis.Name) {

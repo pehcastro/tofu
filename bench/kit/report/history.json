@@ -2,7 +2,7 @@
   "read_on": "2026-10-15",
   "tree": "b440a772",
   "version": "0.5.15-rc1",
-  "level_rule": "Level means the spread of tofu's latest 3 runs overlaps the other harness's, the rule bench/rivals judges by; where a measure has 1 run, the figures are compared as they are.",
+  "level_rule": "Level means the spread of tofu's latest 3 runs overlaps the other harness's, the rule bench/suites/agent/rivals judges by; where a measure has 1 run, the figures are compared as they are.",
   "headlines": [
     {
       "pairing": "coding task, Claude Code's setting",
@@ -111,8 +111,8 @@
   ],
   "measures": [
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, Sonnet 5.5 on claude-sub, tofu sending Claude Code's thinking body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, Sonnet 5.5 on claude-sub, tofu sending Claude Code's thinking body",
       "measure": "quality, hidden tests plus rubric",
       "unit": "of 10",
       "better": "higher",
@@ -165,8 +165,8 @@
       "pairing": "coding task, Claude Code's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, Sonnet 5.5 on claude-sub, tofu sending Claude Code's thinking body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, Sonnet 5.5 on claude-sub, tofu sending Claude Code's thinking body",
       "measure": "wall time",
       "unit": "s",
       "better": "lower",
@@ -219,8 +219,8 @@
       "pairing": "coding task, Claude Code's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, Sonnet 5.5 on claude-sub, tofu sending Claude Code's thinking body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, Sonnet 5.5 on claude-sub, tofu sending Claude Code's thinking body",
       "measure": "model requests",
       "unit": "requests",
       "better": "lower",
@@ -273,8 +273,8 @@
       "pairing": "coding task, Claude Code's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, Sonnet 5.5 on claude-sub, tofu sending Claude Code's thinking body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, Sonnet 5.5 on claude-sub, tofu sending Claude Code's thinking body",
       "measure": "input tokens, fresh plus cache read plus cache write",
       "unit": "tokens",
       "better": "lower",
@@ -327,8 +327,8 @@
       "pairing": "coding task, Claude Code's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, Sonnet 5.5 on claude-sub, tofu sending Claude Code's thinking body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, Sonnet 5.5 on claude-sub, tofu sending Claude Code's thinking body",
       "measure": "output tokens",
       "unit": "tokens",
       "better": "lower",
@@ -381,8 +381,8 @@
       "pairing": "coding task, Claude Code's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, Sonnet 5.5 on claude-sub, tofu sending Claude Code's thinking body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, Sonnet 5.5 on claude-sub, tofu sending Claude Code's thinking body",
       "measure": "peak memory of the whole process tree",
       "unit": "MB",
       "better": "lower",
@@ -435,8 +435,8 @@
       "pairing": "coding task, Claude Code's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, Sonnet 5.5 on claude-sub, tofu sending Claude Code's thinking body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, Sonnet 5.5 on claude-sub, tofu sending Claude Code's thinking body",
       "measure": "CPU of the whole process tree",
       "unit": "s",
       "better": "lower",
@@ -489,8 +489,8 @@
       "pairing": "coding task, Claude Code's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, Sonnet 5.5 on claude-sub, tofu sending Claude Code's thinking body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, Sonnet 5.5 on claude-sub, tofu sending Claude Code's thinking body",
       "measure": "failed tool calls",
       "unit": "calls",
       "better": "lower",
@@ -543,8 +543,8 @@
       "pairing": "coding task, Claude Code's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, Sonnet 5.5 on claude-sub, tofu sending omp's thinking body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, Sonnet 5.5 on claude-sub, tofu sending omp's thinking body",
       "measure": "quality, hidden tests plus rubric",
       "unit": "of 10",
       "better": "higher",
@@ -597,8 +597,8 @@
       "pairing": "coding task, omp's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, Sonnet 5.5 on claude-sub, tofu sending omp's thinking body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, Sonnet 5.5 on claude-sub, tofu sending omp's thinking body",
       "measure": "wall time",
       "unit": "s",
       "better": "lower",
@@ -651,8 +651,8 @@
       "pairing": "coding task, omp's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, Sonnet 5.5 on claude-sub, tofu sending omp's thinking body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, Sonnet 5.5 on claude-sub, tofu sending omp's thinking body",
       "measure": "model requests",
       "unit": "requests",
       "better": "lower",
@@ -705,8 +705,8 @@
       "pairing": "coding task, omp's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, Sonnet 5.5 on claude-sub, tofu sending omp's thinking body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, Sonnet 5.5 on claude-sub, tofu sending omp's thinking body",
       "measure": "input tokens, fresh plus cache read plus cache write",
       "unit": "tokens",
       "better": "lower",
@@ -759,8 +759,8 @@
       "pairing": "coding task, omp's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, Sonnet 5.5 on claude-sub, tofu sending omp's thinking body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, Sonnet 5.5 on claude-sub, tofu sending omp's thinking body",
       "measure": "output tokens",
       "unit": "tokens",
       "better": "lower",
@@ -813,8 +813,8 @@
       "pairing": "coding task, omp's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, Sonnet 5.5 on claude-sub, tofu sending omp's thinking body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, Sonnet 5.5 on claude-sub, tofu sending omp's thinking body",
       "measure": "peak memory of the whole process tree",
       "unit": "MB",
       "better": "lower",
@@ -867,8 +867,8 @@
       "pairing": "coding task, omp's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, Sonnet 5.5 on claude-sub, tofu sending omp's thinking body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, Sonnet 5.5 on claude-sub, tofu sending omp's thinking body",
       "measure": "CPU of the whole process tree",
       "unit": "s",
       "better": "lower",
@@ -921,8 +921,8 @@
       "pairing": "coding task, omp's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, Sonnet 5.5 on claude-sub, tofu sending omp's thinking body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, Sonnet 5.5 on claude-sub, tofu sending omp's thinking body",
       "measure": "failed tool calls",
       "unit": "calls",
       "better": "lower",
@@ -975,8 +975,8 @@
       "pairing": "coding task, omp's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, gpt-5.6-sol on codex-sub, tofu sending codex's reasoning body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, gpt-5.6-sol on codex-sub, tofu sending codex's reasoning body",
       "measure": "quality, hidden tests plus rubric",
       "unit": "of 10",
       "better": "higher",
@@ -1029,8 +1029,8 @@
       "pairing": "coding task, codex's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, gpt-5.6-sol on codex-sub, tofu sending codex's reasoning body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, gpt-5.6-sol on codex-sub, tofu sending codex's reasoning body",
       "measure": "wall time",
       "unit": "s",
       "better": "lower",
@@ -1083,8 +1083,8 @@
       "pairing": "coding task, codex's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, gpt-5.6-sol on codex-sub, tofu sending codex's reasoning body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, gpt-5.6-sol on codex-sub, tofu sending codex's reasoning body",
       "measure": "model requests",
       "unit": "requests",
       "better": "lower",
@@ -1137,8 +1137,8 @@
       "pairing": "coding task, codex's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, gpt-5.6-sol on codex-sub, tofu sending codex's reasoning body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, gpt-5.6-sol on codex-sub, tofu sending codex's reasoning body",
       "measure": "input tokens, fresh plus cache read plus cache write",
       "unit": "tokens",
       "better": "lower",
@@ -1191,8 +1191,8 @@
       "pairing": "coding task, codex's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, gpt-5.6-sol on codex-sub, tofu sending codex's reasoning body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, gpt-5.6-sol on codex-sub, tofu sending codex's reasoning body",
       "measure": "output tokens",
       "unit": "tokens",
       "better": "lower",
@@ -1245,8 +1245,8 @@
       "pairing": "coding task, codex's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, gpt-5.6-sol on codex-sub, tofu sending codex's reasoning body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, gpt-5.6-sol on codex-sub, tofu sending codex's reasoning body",
       "measure": "peak memory of the whole process tree",
       "unit": "MB",
       "better": "lower",
@@ -1299,8 +1299,8 @@
       "pairing": "coding task, codex's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, gpt-5.6-sol on codex-sub, tofu sending codex's reasoning body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, gpt-5.6-sol on codex-sub, tofu sending codex's reasoning body",
       "measure": "CPU of the whole process tree",
       "unit": "s",
       "better": "lower",
@@ -1353,8 +1353,8 @@
       "pairing": "coding task, codex's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, gpt-5.6-sol on codex-sub, tofu sending codex's reasoning body",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, gpt-5.6-sol on codex-sub, tofu sending codex's reasoning body",
       "measure": "failed tool calls",
       "unit": "calls",
       "better": "lower",
@@ -1407,8 +1407,8 @@
       "pairing": "coding task, codex's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, gpt-5.6-sol on codex-sub, tofu sending codex's reasoning body, all edit calls of 3 runs pooled; tofu times its own calls and the others are timed from their output, so only the order of magnitude compares",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, gpt-5.6-sol on codex-sub, tofu sending codex's reasoning body, all edit calls of 3 runs pooled; tofu times its own calls and the others are timed from their output, so only the order of magnitude compares",
       "measure": "time per edit call, median",
       "unit": "ms",
       "better": "lower",
@@ -1456,8 +1456,8 @@
       "pairing": "coding task, codex's setting"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task subagents, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task subagents, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
       "measure": "quality, hidden tests plus rubric",
       "unit": "of 6",
       "better": "higher",
@@ -1470,7 +1470,7 @@
           "build": "b0e2401d built in scratch, 3 live runs",
           "figure": "6 [6 to 6]",
           "value": 6.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 26 [25 to 27] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |",
           "low": 6.0,
           "high": 6.0
@@ -1498,7 +1498,7 @@
           "build": "live, 3 runs",
           "figure": "6 [6 to 6]",
           "value": 6.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 31 [30 to 46] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |",
           "low": 6.0,
           "high": 6.0
@@ -1510,8 +1510,8 @@
       "pairing": "three new tasks"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task subagents, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task subagents, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
       "measure": "wall time",
       "unit": "s",
       "better": "lower",
@@ -1524,7 +1524,7 @@
           "build": "b0e2401d built in scratch, 3 live runs",
           "figure": "74.0 [71.9 to 80.1]",
           "value": 74.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 26 [25 to 27] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |",
           "low": 71.9,
           "high": 80.1
@@ -1552,7 +1552,7 @@
           "build": "live, 3 runs",
           "figure": "82.9 [80.3 to 124.6]",
           "value": 82.9,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 31 [30 to 46] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |",
           "low": 80.3,
           "high": 124.6
@@ -1564,8 +1564,8 @@
       "pairing": "three new tasks"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task subagents, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task subagents, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
       "measure": "model requests",
       "unit": "requests",
       "better": "lower",
@@ -1578,7 +1578,7 @@
           "build": "b0e2401d built in scratch, 3 live runs",
           "figure": "26 [25 to 27]",
           "value": 26.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 26 [25 to 27] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |",
           "low": 25.0,
           "high": 27.0
@@ -1606,7 +1606,7 @@
           "build": "live, 3 runs",
           "figure": "31 [30 to 46]",
           "value": 31.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 31 [30 to 46] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |",
           "low": 30.0,
           "high": 46.0
@@ -1618,8 +1618,8 @@
       "pairing": "three new tasks"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task subagents, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task subagents, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
       "measure": "input tokens, fresh plus cache read plus cache write",
       "unit": "tokens",
       "better": "lower",
@@ -1632,7 +1632,7 @@
           "build": "b0e2401d built in scratch, 3 live runs",
           "figure": "365425 [350668 to 394047]",
           "value": 365425.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 26 [25 to 27] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |",
           "low": 350668.0,
           "high": 394047.0
@@ -1660,7 +1660,7 @@
           "build": "live, 3 runs",
           "figure": "455504 [324613 to 700756]",
           "value": 455504.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 31 [30 to 46] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |",
           "low": 324613.0,
           "high": 700756.0
@@ -1672,8 +1672,8 @@
       "pairing": "three new tasks"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task subagents, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task subagents, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
       "measure": "output tokens",
       "unit": "tokens",
       "better": "lower",
@@ -1686,7 +1686,7 @@
           "build": "b0e2401d built in scratch, 3 live runs",
           "figure": "6965 [6374 to 7001]",
           "value": 6965.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 26 [25 to 27] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |",
           "low": 6374.0,
           "high": 7001.0
@@ -1714,7 +1714,7 @@
           "build": "live, 3 runs",
           "figure": "14501 [7325 to 21323]",
           "value": 14501.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 31 [30 to 46] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |",
           "low": 7325.0,
           "high": 21323.0
@@ -1726,8 +1726,8 @@
       "pairing": "three new tasks"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task subagents, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task subagents, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
       "measure": "failed tool calls",
       "unit": "calls",
       "better": "lower",
@@ -1740,7 +1740,7 @@
           "build": "b0e2401d built in scratch, 3 live runs",
           "figure": "0 [0 to 1]",
           "value": 0.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 26 [25 to 27] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |",
           "low": 0.0,
           "high": 1.0
@@ -1768,7 +1768,7 @@
           "build": "live, 3 runs",
           "figure": "4 [3 to 9]",
           "value": 4.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 31 [30 to 46] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |",
           "low": 3.0,
           "high": 9.0
@@ -1780,8 +1780,8 @@
       "pairing": "three new tasks"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task subagents, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task subagents, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
       "measure": "peak memory of the whole process tree",
       "unit": "MB",
       "better": "lower",
@@ -1794,7 +1794,7 @@
           "build": "b0e2401d built in scratch, 3 live runs",
           "figure": "362.5 [353.6 to 367.8]",
           "value": 362.5,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 26 [25 to 27] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |",
           "low": 353.6,
           "high": 367.8
@@ -1822,7 +1822,7 @@
           "build": "live, 3 runs",
           "figure": "1080.0 [1046.2 to 1154.8]",
           "value": 1080.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 31 [30 to 46] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |",
           "low": 1046.2,
           "high": 1154.8
@@ -1834,8 +1834,8 @@
       "pairing": "three new tasks"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task bigread, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task bigread, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
       "measure": "quality, hidden tests plus rubric",
       "unit": "of 6",
       "better": "higher",
@@ -1848,7 +1848,7 @@
           "build": "b0e2401d built in scratch, 3 live runs",
           "figure": "6 [6 to 6]",
           "value": 6.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 6 [6 to 6] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 6.0,
           "high": 6.0
@@ -1876,7 +1876,7 @@
           "build": "live, 3 runs",
           "figure": "6 [6 to 6]",
           "value": 6.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 7 [7 to 7] | 0 [0 to 0] | 16 [16 to 16] | 91850 [91078 to 91884] | 4649 [4246 to 4662] | 96528 [95340 to 96549] | 982 [980 to 1041] | 22.6 [20.4 to 23.2] | 537.6 [531.9 to 541.7] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 6.0,
           "high": 6.0
@@ -1888,8 +1888,8 @@
       "pairing": "three new tasks"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task bigread, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task bigread, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
       "measure": "wall time",
       "unit": "s",
       "better": "lower",
@@ -1902,7 +1902,7 @@
           "build": "b0e2401d built in scratch, 3 live runs",
           "figure": "21.5 [20.8 to 22.8]",
           "value": 21.5,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 6 [6 to 6] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 20.8,
           "high": 22.8
@@ -1930,7 +1930,7 @@
           "build": "live, 3 runs",
           "figure": "22.6 [20.4 to 23.2]",
           "value": 22.6,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 7 [7 to 7] | 0 [0 to 0] | 16 [16 to 16] | 91850 [91078 to 91884] | 4649 [4246 to 4662] | 96528 [95340 to 96549] | 982 [980 to 1041] | 22.6 [20.4 to 23.2] | 537.6 [531.9 to 541.7] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 20.4,
           "high": 23.2
@@ -1942,8 +1942,8 @@
       "pairing": "three new tasks"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task bigread, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task bigread, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
       "measure": "model requests",
       "unit": "requests",
       "better": "lower",
@@ -1956,7 +1956,7 @@
           "build": "b0e2401d built in scratch, 3 live runs",
           "figure": "6 [6 to 6]",
           "value": 6.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 6 [6 to 6] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 6.0,
           "high": 6.0
@@ -1984,7 +1984,7 @@
           "build": "live, 3 runs",
           "figure": "7 [7 to 7]",
           "value": 7.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 7 [7 to 7] | 0 [0 to 0] | 16 [16 to 16] | 91850 [91078 to 91884] | 4649 [4246 to 4662] | 96528 [95340 to 96549] | 982 [980 to 1041] | 22.6 [20.4 to 23.2] | 537.6 [531.9 to 541.7] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 7.0,
           "high": 7.0
@@ -1996,8 +1996,8 @@
       "pairing": "three new tasks"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task bigread, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task bigread, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
       "measure": "input tokens, fresh plus cache read plus cache write",
       "unit": "tokens",
       "better": "lower",
@@ -2010,7 +2010,7 @@
           "build": "b0e2401d built in scratch, 3 live runs",
           "figure": "128721 [128403 to 129857]",
           "value": 128721.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 6 [6 to 6] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 128403.0,
           "high": 129857.0
@@ -2038,7 +2038,7 @@
           "build": "live, 3 runs",
           "figure": "96528 [95340 to 96549]",
           "value": 96528.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 7 [7 to 7] | 0 [0 to 0] | 16 [16 to 16] | 91850 [91078 to 91884] | 4649 [4246 to 4662] | 96528 [95340 to 96549] | 982 [980 to 1041] | 22.6 [20.4 to 23.2] | 537.6 [531.9 to 541.7] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 95340.0,
           "high": 96549.0
@@ -2050,8 +2050,8 @@
       "pairing": "three new tasks"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task bigread, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task bigread, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
       "measure": "output tokens",
       "unit": "tokens",
       "better": "lower",
@@ -2064,7 +2064,7 @@
           "build": "b0e2401d built in scratch, 3 live runs",
           "figure": "1063 [966 to 1085]",
           "value": 1063.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 6 [6 to 6] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 966.0,
           "high": 1085.0
@@ -2092,7 +2092,7 @@
           "build": "live, 3 runs",
           "figure": "982 [980 to 1041]",
           "value": 982.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 7 [7 to 7] | 0 [0 to 0] | 16 [16 to 16] | 91850 [91078 to 91884] | 4649 [4246 to 4662] | 96528 [95340 to 96549] | 982 [980 to 1041] | 22.6 [20.4 to 23.2] | 537.6 [531.9 to 541.7] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 980.0,
           "high": 1041.0
@@ -2104,8 +2104,8 @@
       "pairing": "three new tasks"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task bigread, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task bigread, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
       "measure": "failed tool calls",
       "unit": "calls",
       "better": "lower",
@@ -2118,7 +2118,7 @@
           "build": "b0e2401d built in scratch, 3 live runs",
           "figure": "0 [0 to 0]",
           "value": 0.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 6 [6 to 6] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 0.0,
           "high": 0.0
@@ -2146,7 +2146,7 @@
           "build": "live, 3 runs",
           "figure": "0 [0 to 0]",
           "value": 0.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 7 [7 to 7] | 0 [0 to 0] | 16 [16 to 16] | 91850 [91078 to 91884] | 4649 [4246 to 4662] | 96528 [95340 to 96549] | 982 [980 to 1041] | 22.6 [20.4 to 23.2] | 537.6 [531.9 to 541.7] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 0.0,
           "high": 0.0
@@ -2158,8 +2158,8 @@
       "pairing": "three new tasks"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task bigread, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task bigread, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
       "measure": "peak memory of the whole process tree",
       "unit": "MB",
       "better": "lower",
@@ -2172,7 +2172,7 @@
           "build": "b0e2401d built in scratch, 3 live runs",
           "figure": "57.5 [53.3 to 70.3]",
           "value": 57.5,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 6 [6 to 6] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 53.3,
           "high": 70.3
@@ -2200,7 +2200,7 @@
           "build": "live, 3 runs",
           "figure": "537.6 [531.9 to 541.7]",
           "value": 537.6,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 7 [7 to 7] | 0 [0 to 0] | 16 [16 to 16] | 91850 [91078 to 91884] | 4649 [4246 to 4662] | 96528 [95340 to 96549] | 982 [980 to 1041] | 22.6 [20.4 to 23.2] | 537.6 [531.9 to 541.7] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 531.9,
           "high": 541.7
@@ -2212,8 +2212,8 @@
       "pairing": "three new tasks"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task longedit, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task longedit, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
       "measure": "peak memory of the whole process tree",
       "unit": "MB",
       "better": "lower",
@@ -2226,7 +2226,7 @@
           "build": "b0e2401d built in scratch, 3 live runs",
           "figure": "347.1 [344.3 to 347.5]",
           "value": 347.1,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 10 [10 to 10] | 16 [12 to 18] | 8 [7 to 9] | 11296 [10118 to 13413] | 418778 [277977 to 466108] | 45990 [35919 to 52822] | 478181 [340917 to 513323] | 14937 [13270 to 19335] | 146.4 [143.5 to 167.5] | 347.1 [344.3 to 347.5] | 14 [6 to 23] | 1 [1 to 1] |",
           "low": 344.3,
           "high": 347.5
@@ -2254,7 +2254,7 @@
           "build": "live, 3 runs",
           "figure": "778.2 [762.9 to 886.6]",
           "value": 778.2,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 10 [10 to 10] | 7 [6 to 7] | 0 [0 to 0] | 16 [14 to 16] | 114697 [93075 to 114726] | 11505 [9727 to 12016] | 126247 [102816 to 126729] | 6185 [4197 to 6210] | 91.4 [80.6 to 116.6] | 778.2 [762.9 to 886.6] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 762.9,
           "high": 886.6
@@ -2266,8 +2266,8 @@
       "pairing": "three new tasks"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task longedit, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task longedit, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
       "measure": "quality, hidden tests plus rubric",
       "unit": "of 10",
       "better": "higher",
@@ -2306,7 +2306,7 @@
           "build": "live, 3 runs",
           "figure": "10 [10 to 10]",
           "value": 10.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 10 [10 to 10] | 7 [6 to 7] | 0 [0 to 0] | 16 [14 to 16] | 114697 [93075 to 114726] | 11505 [9727 to 12016] | 126247 [102816 to 126729] | 6185 [4197 to 6210] | 91.4 [80.6 to 116.6] | 778.2 [762.9 to 886.6] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 10.0,
           "high": 10.0
@@ -2318,8 +2318,8 @@
       "pairing": "three new tasks"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task longedit, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task longedit, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
       "measure": "wall time",
       "unit": "s",
       "better": "lower",
@@ -2360,7 +2360,7 @@
           "build": "live, 3 runs",
           "figure": "91.4 [80.6 to 116.6]",
           "value": 91.4,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 10 [10 to 10] | 7 [6 to 7] | 0 [0 to 0] | 16 [14 to 16] | 114697 [93075 to 114726] | 11505 [9727 to 12016] | 126247 [102816 to 126729] | 6185 [4197 to 6210] | 91.4 [80.6 to 116.6] | 778.2 [762.9 to 886.6] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 80.6,
           "high": 116.6
@@ -2372,8 +2372,8 @@
       "pairing": "three new tasks"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task longedit, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task longedit, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
       "measure": "model requests",
       "unit": "requests",
       "better": "lower",
@@ -2414,7 +2414,7 @@
           "build": "live, 3 runs",
           "figure": "7 [6 to 7]",
           "value": 7.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 10 [10 to 10] | 7 [6 to 7] | 0 [0 to 0] | 16 [14 to 16] | 114697 [93075 to 114726] | 11505 [9727 to 12016] | 126247 [102816 to 126729] | 6185 [4197 to 6210] | 91.4 [80.6 to 116.6] | 778.2 [762.9 to 886.6] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 6.0,
           "high": 7.0
@@ -2426,8 +2426,8 @@
       "pairing": "three new tasks"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task longedit, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task longedit, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
       "measure": "input tokens, fresh plus cache read plus cache write",
       "unit": "tokens",
       "better": "lower",
@@ -2468,7 +2468,7 @@
           "build": "live, 3 runs",
           "figure": "126247 [102816 to 126729]",
           "value": 126247.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 10 [10 to 10] | 7 [6 to 7] | 0 [0 to 0] | 16 [14 to 16] | 114697 [93075 to 114726] | 11505 [9727 to 12016] | 126247 [102816 to 126729] | 6185 [4197 to 6210] | 91.4 [80.6 to 116.6] | 778.2 [762.9 to 886.6] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 102816.0,
           "high": 126729.0
@@ -2480,8 +2480,8 @@
       "pairing": "three new tasks"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task longedit, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task longedit, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
       "measure": "output tokens",
       "unit": "tokens",
       "better": "lower",
@@ -2522,7 +2522,7 @@
           "build": "live, 3 runs",
           "figure": "6185 [4197 to 6210]",
           "value": 6185.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 10 [10 to 10] | 7 [6 to 7] | 0 [0 to 0] | 16 [14 to 16] | 114697 [93075 to 114726] | 11505 [9727 to 12016] | 126247 [102816 to 126729] | 6185 [4197 to 6210] | 91.4 [80.6 to 116.6] | 778.2 [762.9 to 886.6] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 4197.0,
           "high": 6210.0
@@ -2534,8 +2534,8 @@
       "pairing": "three new tasks"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task longedit, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task longedit, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
       "measure": "tool calls refused or failed",
       "unit": "calls",
       "better": "lower",
@@ -2576,7 +2576,7 @@
           "build": "live, 3 runs",
           "figure": "0 [0 to 0]",
           "value": 0.0,
-          "source": "bench/rivals/report.md",
+          "source": "bench/suites/agent/rivals/report.md",
           "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 10 [10 to 10] | 7 [6 to 7] | 0 [0 to 0] | 16 [14 to 16] | 114697 [93075 to 114726] | 11505 [9727 to 12016] | 126247 [102816 to 126729] | 6185 [4197 to 6210] | 91.4 [80.6 to 116.6] | 778.2 [762.9 to 886.6] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 0.0,
           "high": 0.0
@@ -2588,8 +2588,8 @@
       "pairing": "three new tasks"
     },
     {
-      "bench": "minimal",
-      "task": "bench/minimal, one vCPU and 256 MB, 0, 1, 4 and 10 sub-agents; tofu on a recording, the others live, so only starting and finishing compare",
+      "bench": "suites/perf/minimal",
+      "task": "bench/suites/perf/minimal, one vCPU and 256 MB, 0, 1, 4 and 10 sub-agents; tofu on a recording, the others live, so only starting and finishing compare",
       "measure": "sub-agents finished under one vCPU and 256 MB",
       "unit": "sub-agents",
       "better": "higher",
@@ -2602,7 +2602,7 @@
           "build": "git archive of 3827a25d with a goroutine counter",
           "figure": "10",
           "value": 10.0,
-          "source": "bench/minimal/report-2026-10-14.md",
+          "source": "bench/suites/perf/minimal/report-2026-10-14.md",
           "evidence": "tofu finishes every rung, 0 to 10 sub-agents, under one vCPU at 256 MB and at 128 MB, on a Linux cgroup and a Windows job object."
         }
       ],
@@ -2615,7 +2615,7 @@
           "build": "live, one Windows job object, one CPU",
           "figure": "does not start",
           "value": 0.0,
-          "source": "bench/minimal/report-2026-10-14.md",
+          "source": "bench/suites/perf/minimal/report-2026-10-14.md",
           "evidence": "| Claude Code 2.1.300 | does not start | does not start | exit 0xC0000409 at 254 MB of commit |"
         },
         {
@@ -2626,7 +2626,7 @@
           "build": "live, one Windows job object, one CPU",
           "figure": "does not start",
           "value": 0.0,
-          "source": "bench/minimal/report-2026-10-14.md",
+          "source": "bench/suites/perf/minimal/report-2026-10-14.md",
           "evidence": "| omp 18.3.2 | does not start | does not start | bun: OutOfMemory reading cli.js |"
         },
         {
@@ -2637,7 +2637,7 @@
           "build": "live, one Windows job object, one CPU",
           "figure": "1, dies at 4",
           "value": 1.0,
-          "source": "bench/minimal/report-2026-10-14.md",
+          "source": "bench/suites/perf/minimal/report-2026-10-14.md",
           "evidence": "| codex-cli 0.155.1 | 0 and 1 sub-agents, dies at 4 | dies at 0 | memory allocation of 33554432 bytes failed |"
         }
       ],
@@ -2647,8 +2647,8 @@
       "pairing": "one vCPU, little memory"
     },
     {
-      "bench": "minimal",
-      "task": "bench/minimal, one vCPU and 128 MB, 0, 1, 4 and 10 sub-agents; tofu on a recording, the others live, so only starting and finishing compare",
+      "bench": "suites/perf/minimal",
+      "task": "bench/suites/perf/minimal, one vCPU and 128 MB, 0, 1, 4 and 10 sub-agents; tofu on a recording, the others live, so only starting and finishing compare",
       "measure": "sub-agents finished under one vCPU and 128 MB",
       "unit": "sub-agents",
       "better": "higher",
@@ -2661,7 +2661,7 @@
           "build": "git archive of 3827a25d with a goroutine counter",
           "figure": "10",
           "value": 10.0,
-          "source": "bench/minimal/report-2026-10-14.md",
+          "source": "bench/suites/perf/minimal/report-2026-10-14.md",
           "evidence": "tofu finishes every rung, 0 to 10 sub-agents, under one vCPU at 256 MB and at 128 MB, on a Linux cgroup and a Windows job object."
         }
       ],
@@ -2674,7 +2674,7 @@
           "build": "live, one Windows job object, one CPU",
           "figure": "does not start",
           "value": 0.0,
-          "source": "bench/minimal/report-2026-10-14.md",
+          "source": "bench/suites/perf/minimal/report-2026-10-14.md",
           "evidence": "| Claude Code 2.1.300 | does not start | does not start | exit 0xC0000409 at 254 MB of commit |"
         },
         {
@@ -2685,7 +2685,7 @@
           "build": "live, one Windows job object, one CPU",
           "figure": "does not start",
           "value": 0.0,
-          "source": "bench/minimal/report-2026-10-14.md",
+          "source": "bench/suites/perf/minimal/report-2026-10-14.md",
           "evidence": "| omp 18.3.2 | does not start | does not start | bun: OutOfMemory reading cli.js |"
         },
         {
@@ -2696,7 +2696,7 @@
           "build": "live, one Windows job object, one CPU",
           "figure": "dies at 0",
           "value": 0.0,
-          "source": "bench/minimal/report-2026-10-14.md",
+          "source": "bench/suites/perf/minimal/report-2026-10-14.md",
           "evidence": "| codex-cli 0.155.1 | 0 and 1 sub-agents, dies at 4 | dies at 0 | memory allocation of 33554432 bytes failed |"
         }
       ],
@@ -2706,8 +2706,8 @@
       "pairing": "one vCPU, little memory"
     },
     {
-      "bench": "profile",
-      "task": "bench/profile idle, five fresh starts, 10 s window, percent of one core by cycles",
+      "bench": "suites/perf/profile",
+      "task": "bench/suites/perf/profile idle, five fresh starts, 10 s window, percent of one core by cycles",
       "measure": "CPU while idle in a chat",
       "unit": "% of a core",
       "better": "lower",
@@ -2744,8 +2744,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "profile",
-      "task": "bench/profile idle, five fresh starts, 10 s window, percent of one core by cycles",
+      "bench": "suites/perf/profile",
+      "task": "bench/suites/perf/profile idle, five fresh starts, 10 s window, percent of one core by cycles",
       "measure": "CPU while idle on the set-up screen",
       "unit": "% of a core",
       "better": "lower",
@@ -2782,8 +2782,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "profile",
-      "task": "bench/profile idle, five fresh starts, 10 s window, percent of one core by cycles",
+      "bench": "suites/perf/profile",
+      "task": "bench/suites/perf/profile idle, five fresh starts, 10 s window, percent of one core by cycles",
       "measure": "CPU while tofu serve sits idle",
       "unit": "% of a core",
       "better": "lower",
@@ -2820,8 +2820,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "minimal",
-      "task": "bench/minimal, one vCPU and 128 MB, 10 sub-agents, heap profile 10 less 1 divided by 9, mean of 9 runs",
+      "bench": "suites/perf/minimal",
+      "task": "bench/suites/perf/minimal, one vCPU and 128 MB, 10 sub-agents, heap profile 10 less 1 divided by 9, mean of 9 runs",
       "measure": "memory allocated per sub-agent",
       "unit": "KB",
       "better": "lower",
@@ -2854,7 +2854,7 @@
       "worse_word": "more"
     },
     {
-      "bench": "rivals",
+      "bench": "suites/agent/rivals",
       "task": "tofu run --dry-run, claude-sub, fresh home",
       "measure": "bytes of one request before any task",
       "unit": "bytes",
@@ -2888,8 +2888,8 @@
       "worse_word": "larger"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, Sonnet 5.5, median of 6 runs",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, Sonnet 5.5, median of 6 runs",
       "measure": "input tokens after the tool text cut",
       "unit": "tokens",
       "better": "lower",
@@ -2922,8 +2922,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task, Sonnet 5.5, median of 3 runs",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task, Sonnet 5.5, median of 3 runs",
       "measure": "input tokens when the lead works alone",
       "unit": "tokens",
       "better": "lower",
@@ -2960,8 +2960,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task longedit, Sonnet 5.5, median of 3 runs",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task longedit, Sonnet 5.5, median of 3 runs",
       "measure": "wall time on the long edit",
       "unit": "s",
       "better": "lower",
@@ -2998,8 +2998,8 @@
       "worse_word": "slower"
     },
     {
-      "bench": "rivals",
-      "task": "bench/rivals task longedit, Sonnet 5.5, median of 3 runs",
+      "bench": "suites/agent/rivals",
+      "task": "bench/suites/agent/rivals task longedit, Sonnet 5.5, median of 3 runs",
       "measure": "input tokens on the long edit",
       "unit": "tokens",
       "better": "lower",
@@ -3036,8 +3036,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "scale",
-      "task": "bench/scale tiny task, 0 to 10 sub-agents, 1 run per rung, a straight line fitted over 7 rungs; codex runs gpt-5.6-sol, the others Sonnet 5.5",
+      "bench": "suites/perf/scale",
+      "task": "bench/suites/perf/scale tiny task, 0 to 10 sub-agents, 1 run per rung, a straight line fitted over 7 rungs; codex runs gpt-5.6-sol, the others Sonnet 5.5",
       "measure": "peak memory with no sub-agent",
       "unit": "MB",
       "better": "lower",
@@ -3047,7 +3047,7 @@
           "date": "2026-10-13",
           "commit": "b7c52479",
           "version": "0.5.13-fix1",
-          "build": "not recorded by bench/scale, the tree at b7c52479",
+          "build": "not recorded by bench/suites/perf/scale, the tree at b7c52479",
           "figure": "42",
           "value": 42.0,
           "source": "bench/kit/report/runs/scale-2026-10-13.md",
@@ -3061,7 +3061,7 @@
           "build": "a clean clone of HEAD, live claude-sub",
           "figure": "37",
           "value": 37.0,
-          "source": "bench/scale/report.md",
+          "source": "bench/suites/perf/scale/report.md",
           "evidence": "| tofu | live | claude-sonnet-5-5 | 37 | 0.7 | 95 | 0.8 | 0.81 | 0.06 |"
         }
       ],
@@ -3070,33 +3070,33 @@
           "label": "Claude Code",
           "date": "2026-10-13",
           "commit": "b7c52479",
-          "version": "not recorded by bench/scale",
+          "version": "not recorded by bench/suites/perf/scale",
           "build": "live, 1 run per rung",
           "figure": "281",
           "value": 281.0,
-          "source": "bench/scale/report.md",
+          "source": "bench/suites/perf/scale/report.md",
           "evidence": "| claude | live | claude-sonnet-5-5 | 281 | 4.3 | 380 | 1.7 | 2.10 | 0.30 |"
         },
         {
           "label": "omp",
           "date": "2026-10-13",
           "commit": "b7c52479",
-          "version": "not recorded by bench/scale",
+          "version": "not recorded by bench/suites/perf/scale",
           "build": "live, 1 run per rung",
           "figure": "699",
           "value": 699.0,
-          "source": "bench/scale/report.md",
+          "source": "bench/suites/perf/scale/report.md",
           "evidence": "| omp | live | claude-sonnet-5-5 | 699 | 20.9 | 1321 | 36.5 | 5.57 | 0.62 |"
         },
         {
           "label": "codex",
           "date": "2026-10-13",
           "commit": "b7c52479",
-          "version": "not recorded by bench/scale",
+          "version": "not recorded by bench/suites/perf/scale",
           "build": "live, 1 run per rung",
           "figure": "215",
           "value": 215.0,
-          "source": "bench/scale/report.md",
+          "source": "bench/suites/perf/scale/report.md",
           "evidence": "| codex | live | gpt-5.6-sol | 215 | 22.0 | 169 | 19.7 | 3.12 | 3.44 |"
         }
       ],
@@ -3106,8 +3106,8 @@
       "pairing": "Per sub-agent"
     },
     {
-      "bench": "scale",
-      "task": "bench/scale tiny task, 0 to 10 sub-agents, 1 run per rung, a straight line fitted over 7 rungs; codex runs gpt-5.6-sol, the others Sonnet 5.5",
+      "bench": "suites/perf/scale",
+      "task": "bench/suites/perf/scale tiny task, 0 to 10 sub-agents, 1 run per rung, a straight line fitted over 7 rungs; codex runs gpt-5.6-sol, the others Sonnet 5.5",
       "measure": "peak memory each extra sub-agent adds",
       "unit": "MB",
       "better": "lower",
@@ -3117,7 +3117,7 @@
           "date": "2026-10-13",
           "commit": "b7c52479",
           "version": "0.5.13-fix1",
-          "build": "not recorded by bench/scale, the tree at b7c52479",
+          "build": "not recorded by bench/suites/perf/scale, the tree at b7c52479",
           "figure": "0.4",
           "value": 0.4,
           "source": "bench/kit/report/runs/scale-2026-10-13.md",
@@ -3131,7 +3131,7 @@
           "build": "a clean clone of HEAD, live claude-sub",
           "figure": "0.7",
           "value": 0.7,
-          "source": "bench/scale/report.md",
+          "source": "bench/suites/perf/scale/report.md",
           "evidence": "| tofu | live | claude-sonnet-5-5 | 37 | 0.7 | 95 | 0.8 | 0.81 | 0.06 |"
         }
       ],
@@ -3140,33 +3140,33 @@
           "label": "Claude Code",
           "date": "2026-10-13",
           "commit": "b7c52479",
-          "version": "not recorded by bench/scale",
+          "version": "not recorded by bench/suites/perf/scale",
           "build": "live, 1 run per rung",
           "figure": "4.3",
           "value": 4.3,
-          "source": "bench/scale/report.md",
+          "source": "bench/suites/perf/scale/report.md",
           "evidence": "| claude | live | claude-sonnet-5-5 | 281 | 4.3 | 380 | 1.7 | 2.10 | 0.30 |"
         },
         {
           "label": "omp",
           "date": "2026-10-13",
           "commit": "b7c52479",
-          "version": "not recorded by bench/scale",
+          "version": "not recorded by bench/suites/perf/scale",
           "build": "live, 1 run per rung",
           "figure": "20.9",
           "value": 20.9,
-          "source": "bench/scale/report.md",
+          "source": "bench/suites/perf/scale/report.md",
           "evidence": "| omp | live | claude-sonnet-5-5 | 699 | 20.9 | 1321 | 36.5 | 5.57 | 0.62 |"
         },
         {
           "label": "codex",
           "date": "2026-10-13",
           "commit": "b7c52479",
-          "version": "not recorded by bench/scale",
+          "version": "not recorded by bench/suites/perf/scale",
           "build": "live, 1 run per rung",
           "figure": "22.0",
           "value": 22.0,
-          "source": "bench/scale/report.md",
+          "source": "bench/suites/perf/scale/report.md",
           "evidence": "| codex | live | gpt-5.6-sol | 215 | 22.0 | 169 | 19.7 | 3.12 | 3.44 |"
         }
       ],
@@ -3176,8 +3176,8 @@
       "pairing": "Per sub-agent"
     },
     {
-      "bench": "scale",
-      "task": "bench/scale tiny task, 0 to 10 sub-agents, 1 run per rung, a straight line fitted over 7 rungs; codex runs gpt-5.6-sol, the others Sonnet 5.5",
+      "bench": "suites/perf/scale",
+      "task": "bench/suites/perf/scale tiny task, 0 to 10 sub-agents, 1 run per rung, a straight line fitted over 7 rungs; codex runs gpt-5.6-sol, the others Sonnet 5.5",
       "measure": "CPU each extra sub-agent adds",
       "unit": "s",
       "better": "lower",
@@ -3187,7 +3187,7 @@
           "date": "2026-10-13",
           "commit": "b7c52479",
           "version": "0.5.13-fix1",
-          "build": "not recorded by bench/scale, the tree at b7c52479",
+          "build": "not recorded by bench/suites/perf/scale, the tree at b7c52479",
           "figure": "0.12",
           "value": 0.12,
           "source": "bench/kit/report/runs/scale-2026-10-13.md",
@@ -3201,7 +3201,7 @@
           "build": "a clean clone of HEAD, live claude-sub",
           "figure": "0.06",
           "value": 0.06,
-          "source": "bench/scale/report.md",
+          "source": "bench/suites/perf/scale/report.md",
           "evidence": "| tofu | live | claude-sonnet-5-5 | 37 | 0.7 | 95 | 0.8 | 0.81 | 0.06 |"
         }
       ],
@@ -3210,33 +3210,33 @@
           "label": "Claude Code",
           "date": "2026-10-13",
           "commit": "b7c52479",
-          "version": "not recorded by bench/scale",
+          "version": "not recorded by bench/suites/perf/scale",
           "build": "live, 1 run per rung",
           "figure": "0.30",
           "value": 0.3,
-          "source": "bench/scale/report.md",
+          "source": "bench/suites/perf/scale/report.md",
           "evidence": "| claude | live | claude-sonnet-5-5 | 281 | 4.3 | 380 | 1.7 | 2.10 | 0.30 |"
         },
         {
           "label": "omp",
           "date": "2026-10-13",
           "commit": "b7c52479",
-          "version": "not recorded by bench/scale",
+          "version": "not recorded by bench/suites/perf/scale",
           "build": "live, 1 run per rung",
           "figure": "0.62",
           "value": 0.62,
-          "source": "bench/scale/report.md",
+          "source": "bench/suites/perf/scale/report.md",
           "evidence": "| omp | live | claude-sonnet-5-5 | 699 | 20.9 | 1321 | 36.5 | 5.57 | 0.62 |"
         },
         {
           "label": "codex",
           "date": "2026-10-13",
           "commit": "b7c52479",
-          "version": "not recorded by bench/scale",
+          "version": "not recorded by bench/suites/perf/scale",
           "build": "live, 1 run per rung",
           "figure": "3.44",
           "value": 3.44,
-          "source": "bench/scale/report.md",
+          "source": "bench/suites/perf/scale/report.md",
           "evidence": "| codex | live | gpt-5.6-sol | 215 | 22.0 | 169 | 19.7 | 3.12 | 3.44 |"
         }
       ],
@@ -3246,8 +3246,8 @@
       "pairing": "Per sub-agent"
     },
     {
-      "bench": "scale",
-      "task": "bench/scale tiny task, 0 to 10 sub-agents, 1 run per rung, a straight line fitted over 7 rungs; codex runs gpt-5.6-sol, the others Sonnet 5.5",
+      "bench": "suites/perf/scale",
+      "task": "bench/suites/perf/scale tiny task, 0 to 10 sub-agents, 1 run per rung, a straight line fitted over 7 rungs; codex runs gpt-5.6-sol, the others Sonnet 5.5",
       "measure": "sub-agents that fit in 2 GB by peak memory",
       "unit": "agents",
       "better": "higher",
@@ -3257,7 +3257,7 @@
           "date": "2026-10-13",
           "commit": "b7c52479",
           "version": "0.5.13-fix1",
-          "build": "not recorded by bench/scale, the tree at b7c52479",
+          "build": "not recorded by bench/suites/perf/scale, the tree at b7c52479",
           "figure": "over 100",
           "value": 100.0,
           "source": "bench/kit/report/runs/scale-2026-10-13.md",
@@ -3271,7 +3271,7 @@
           "build": "a clean clone of HEAD, live claude-sub",
           "figure": "over 100",
           "value": 100.0,
-          "source": "bench/scale/report.md",
+          "source": "bench/suites/perf/scale/report.md",
           "evidence": "| tofu | live | claude-sonnet-5-5 | 37 | 0.7 | 95 | 0.8 | 0.81 | 0.06 | over 100, a straight line past 10 measured |"
         }
       ],
@@ -3280,33 +3280,33 @@
           "label": "Claude Code",
           "date": "2026-10-13",
           "commit": "b7c52479",
-          "version": "not recorded by bench/scale",
+          "version": "not recorded by bench/suites/perf/scale",
           "build": "live, 1 run per rung",
           "figure": "over 100",
           "value": 100.0,
-          "source": "bench/scale/report.md",
+          "source": "bench/suites/perf/scale/report.md",
           "evidence": "| claude | live | claude-sonnet-5-5 | 281 | 4.3 | 380 | 1.7 | 2.10 | 0.30 | over 100, a straight line past 10 measured |"
         },
         {
           "label": "omp",
           "date": "2026-10-13",
           "commit": "b7c52479",
-          "version": "not recorded by bench/scale",
+          "version": "not recorded by bench/suites/perf/scale",
           "build": "live, 1 run per rung",
           "figure": "64",
           "value": 64.0,
-          "source": "bench/scale/report.md",
+          "source": "bench/suites/perf/scale/report.md",
           "evidence": "| omp | live | claude-sonnet-5-5 | 699 | 20.9 | 1321 | 36.5 | 5.57 | 0.62 | 64 |"
         },
         {
           "label": "codex",
           "date": "2026-10-13",
           "commit": "b7c52479",
-          "version": "not recorded by bench/scale",
+          "version": "not recorded by bench/suites/perf/scale",
           "build": "live, 1 run per rung",
           "figure": "83",
           "value": 83.0,
-          "source": "bench/scale/report.md",
+          "source": "bench/suites/perf/scale/report.md",
           "evidence": "| codex | live | gpt-5.6-sol | 215 | 22.0 | 169 | 19.7 | 3.12 | 3.44 | 83 |"
         }
       ],
@@ -3316,7 +3316,7 @@
       "pairing": "Per sub-agent"
     },
     {
-      "bench": "sessiontime",
+      "bench": "suites/agent/sessiontime",
       "task": "agent-hours in the sessions recorded on one machine; tofu and Claude Code did different work, so this describes and does not rank",
       "measure": "share of agent time waiting on the model",
       "unit": "percent",
@@ -3350,7 +3350,7 @@
           "label": "Claude Code",
           "date": "2026-10-14",
           "commit": "9586ec60",
-          "version": "not recorded by bench/sessiontime",
+          "version": "not recorded by bench/suites/agent/sessiontime",
           "build": "every transcript to 2026-10-14",
           "figure": "42.3",
           "value": 42.3,
@@ -3363,7 +3363,7 @@
       "worse_word": "more"
     },
     {
-      "bench": "sessiontime",
+      "bench": "suites/agent/sessiontime",
       "task": "agent-hours in the sessions recorded on one machine; tofu and Claude Code did different work, so this describes and does not rank",
       "measure": "share of agent time in builds",
       "unit": "percent",
@@ -3397,7 +3397,7 @@
           "label": "Claude Code",
           "date": "2026-10-14",
           "commit": "9586ec60",
-          "version": "not recorded by bench/sessiontime",
+          "version": "not recorded by bench/suites/agent/sessiontime",
           "build": "every transcript to 2026-10-14",
           "figure": "3.6",
           "value": 3.6,
@@ -3410,7 +3410,7 @@
       "worse_word": "more"
     },
     {
-      "bench": "sessiontime",
+      "bench": "suites/agent/sessiontime",
       "task": "agent-hours in the sessions recorded on one machine; tofu and Claude Code did different work, so this describes and does not rank",
       "measure": "share of agent time in tests",
       "unit": "percent",
@@ -3444,7 +3444,7 @@
           "label": "Claude Code",
           "date": "2026-10-14",
           "commit": "9586ec60",
-          "version": "not recorded by bench/sessiontime",
+          "version": "not recorded by bench/suites/agent/sessiontime",
           "build": "every transcript to 2026-10-14",
           "figure": "13.6",
           "value": 13.6,
@@ -3457,8 +3457,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "profile",
-      "task": "the bench/rivals task on Sonnet 5.5, 1 run per row",
+      "bench": "suites/perf/profile",
+      "task": "the bench/suites/agent/rivals task on Sonnet 5.5, 1 run per row",
       "measure": "tofu's own CPU",
       "unit": "s",
       "better": "lower",
@@ -3471,7 +3471,7 @@
           "build": "0.5.13-fix1+dev",
           "figure": "2.38",
           "value": 2.38,
-          "source": "bench/profile/report.md",
+          "source": "bench/suites/perf/profile/report.md",
           "evidence": "| rivals before, TOFU-1317 | 2.38 | 55.14 | 18 | 25 | 144.6 (profiled row, 16 calls) |"
         },
         {
@@ -3482,7 +3482,7 @@
           "build": "the tree committed as 60c41fb3, released in 0.5.14",
           "figure": "1.28",
           "value": 1.28,
-          "source": "bench/profile/report.md",
+          "source": "bench/suites/perf/profile/report.md",
           "evidence": "| rivals after | 1.28 | 50.16 | 7 | 19 | |"
         },
         {
@@ -3504,8 +3504,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "profile",
-      "task": "the bench/rivals task on Sonnet 5.5, 1 run per row",
+      "bench": "suites/perf/profile",
+      "task": "the bench/suites/agent/rivals task on Sonnet 5.5, 1 run per row",
       "measure": "memory tofu allocates over the task",
       "unit": "MB",
       "better": "lower",
@@ -3518,7 +3518,7 @@
           "build": "0.5.13-fix1+dev",
           "figure": "144.6",
           "value": 144.6,
-          "source": "bench/profile/report.md",
+          "source": "bench/suites/perf/profile/report.md",
           "evidence": "| rivals before, TOFU-1317 | 2.38 | 55.14 | 18 | 25 | 144.6 (profiled row, 16 calls) |"
         },
         {
@@ -3529,7 +3529,7 @@
           "build": "the tree committed as 60c41fb3, released in 0.5.14",
           "figure": "66.9",
           "value": 66.9,
-          "source": "bench/profile/report.md",
+          "source": "bench/suites/perf/profile/report.md",
           "evidence": "| rivals after, profiled row | 1.14 | 48.41 | 7 | 24 | 66.9 |"
         }
       ],
@@ -3538,8 +3538,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "profile",
-      "task": "the bench/rivals task on Sonnet 5.5, 1 run per row",
+      "bench": "suites/perf/profile",
+      "task": "the bench/suites/agent/rivals task on Sonnet 5.5, 1 run per row",
       "measure": "git processes tofu starts",
       "unit": "processes",
       "better": "lower",
@@ -3552,7 +3552,7 @@
           "build": "0.5.13-fix1+dev",
           "figure": "18",
           "value": 18,
-          "source": "bench/profile/report.md",
+          "source": "bench/suites/perf/profile/report.md",
           "evidence": "| rivals before, TOFU-1317 | 2.38 | 55.14 | 18 | 25 | 144.6 (profiled row, 16 calls) |"
         },
         {
@@ -3563,7 +3563,7 @@
           "build": "the tree committed as 60c41fb3, released in 0.5.14",
           "figure": "7",
           "value": 7,
-          "source": "bench/profile/report.md",
+          "source": "bench/suites/perf/profile/report.md",
           "evidence": "| rivals after | 1.28 | 50.16 | 7 | 19 | |"
         }
       ],
@@ -3572,8 +3572,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "profile",
-      "task": "bench/scale tiny task, job CPU of 10 sub-agents less 0, over 10, live on Sonnet 5.5",
+      "bench": "suites/perf/profile",
+      "task": "bench/suites/perf/scale tiny task, job CPU of 10 sub-agents less 0, over 10, live on Sonnet 5.5",
       "measure": "CPU each sub-agent costs",
       "unit": "s",
       "better": "lower",
@@ -3586,7 +3586,7 @@
           "build": "0.5.13-fix1+dev",
           "figure": "0.117 and 0.142",
           "value": 0.1295,
-          "source": "bench/profile/report.md",
+          "source": "bench/suites/perf/profile/report.md",
           "evidence": "Per sub-agent, job CPU from the live tiny task, (10 agents less 0) / 10: before 0.117 and 0.142 s; after 0.104 s",
           "low": 0.117,
           "high": 0.142
@@ -3599,7 +3599,7 @@
           "build": "the tree committed as 60c41fb3, released in 0.5.14",
           "figure": "0.104",
           "value": 0.104,
-          "source": "bench/profile/report.md",
+          "source": "bench/suites/perf/profile/report.md",
           "evidence": "Per sub-agent, job CPU from the live tiny task, (10 agents less 0) / 10: before 0.117 and 0.142 s; after 0.104 s"
         },
         {
@@ -3621,8 +3621,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "cli",
-      "task": "bench/cli, every verb in a fresh home, GOMAXPROCS=2, median of 7 runs",
+      "bench": "suites/perf/cli",
+      "task": "bench/suites/perf/cli, every verb in a fresh home, GOMAXPROCS=2, median of 7 runs",
       "measure": "CPU of tofu version",
       "unit": "ms",
       "better": "lower",
@@ -3635,7 +3635,7 @@
           "build": "06042c16 with uncommitted changes",
           "figure": "103.7",
           "value": 103.7,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| version | 103.7 | 41.9 | 2.47x |"
         },
         {
@@ -3646,7 +3646,7 @@
           "build": "06042c16 with uncommitted changes",
           "figure": "62.1",
           "value": 62.1,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| version | 103.7 | 62.1 | 1.67x |"
         },
         {
@@ -3657,7 +3657,7 @@
           "build": "06042c16 with uncommitted changes, committed as 787f2384",
           "figure": "41.9",
           "value": 41.9,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| version | 103.7 | 41.9 | 2.47x |"
         },
         {
@@ -3668,7 +3668,7 @@
           "build": "a git archive of e68578c9",
           "figure": "50.1",
           "value": 50.1,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| version | 103.7 | 50.1 | 2.07x |"
         },
         {
@@ -3679,7 +3679,7 @@
           "build": "9f1aaf88 with uncommitted changes, TOFU-1328",
           "figure": "18.5",
           "value": 18.5,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| version | 50.1 | 18.5 | 2.70x |"
         }
       ],
@@ -3688,8 +3688,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "cli",
-      "task": "bench/cli, every verb in a fresh home, GOMAXPROCS=2, median of 7 runs",
+      "bench": "suites/perf/cli",
+      "task": "bench/suites/perf/cli, every verb in a fresh home, GOMAXPROCS=2, median of 7 runs",
       "measure": "CPU of tofu docs",
       "unit": "ms",
       "better": "lower",
@@ -3702,7 +3702,7 @@
           "build": "06042c16 with uncommitted changes",
           "figure": "120.5",
           "value": 120.5,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| docs | 120.5 | 43.5 | 2.77x |"
         },
         {
@@ -3713,7 +3713,7 @@
           "build": "06042c16 with uncommitted changes, committed as 787f2384",
           "figure": "43.5",
           "value": 43.5,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| docs | 120.5 | 43.5 | 2.77x |"
         },
         {
@@ -3724,7 +3724,7 @@
           "build": "a git archive of e68578c9",
           "figure": "52.9",
           "value": 52.9,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| docs | 120.5 | 52.9 | 2.28x |"
         },
         {
@@ -3735,7 +3735,7 @@
           "build": "9f1aaf88 with uncommitted changes, TOFU-1328",
           "figure": "19.4",
           "value": 19.4,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| docs | 52.9 | 19.4 | 2.72x |"
         }
       ],
@@ -3744,8 +3744,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "cli",
-      "task": "bench/cli, every verb in a fresh home, GOMAXPROCS=2, median of 7 runs",
+      "bench": "suites/perf/cli",
+      "task": "bench/suites/perf/cli, every verb in a fresh home, GOMAXPROCS=2, median of 7 runs",
       "measure": "CPU of tofu changelog",
       "unit": "ms",
       "better": "lower",
@@ -3758,7 +3758,7 @@
           "build": "06042c16 with uncommitted changes",
           "figure": "119.9",
           "value": 119.9,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| changelog | 119.9 | 44.5 | 2.69x |"
         },
         {
@@ -3769,7 +3769,7 @@
           "build": "06042c16 with uncommitted changes, committed as 787f2384",
           "figure": "44.5",
           "value": 44.5,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| changelog | 119.9 | 44.5 | 2.69x |"
         },
         {
@@ -3780,7 +3780,7 @@
           "build": "a git archive of e68578c9",
           "figure": "50.6",
           "value": 50.6,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| changelog | 119.9 | 50.6 | 2.37x |"
         },
         {
@@ -3791,7 +3791,7 @@
           "build": "9f1aaf88 with uncommitted changes, TOFU-1328",
           "figure": "22.1",
           "value": 22.1,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| changelog | 50.6 | 22.1 | 2.29x |"
         }
       ],
@@ -3800,8 +3800,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "cli",
-      "task": "bench/cli, every verb in a fresh home, GOMAXPROCS=2, median of 7 runs",
+      "bench": "suites/perf/cli",
+      "task": "bench/suites/perf/cli, every verb in a fresh home, GOMAXPROCS=2, median of 7 runs",
       "measure": "CPU of tofu context",
       "unit": "ms",
       "better": "lower",
@@ -3814,7 +3814,7 @@
           "build": "06042c16 with uncommitted changes",
           "figure": "98.7",
           "value": 98.7,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| context | 98.7 | 44.7 | 2.21x |"
         },
         {
@@ -3825,7 +3825,7 @@
           "build": "06042c16 with uncommitted changes, committed as 787f2384",
           "figure": "44.7",
           "value": 44.7,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| context | 98.7 | 44.7 | 2.21x |"
         },
         {
@@ -3836,7 +3836,7 @@
           "build": "a git archive of e68578c9",
           "figure": "48.9",
           "value": 48.9,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| context | 98.7 | 48.9 | 2.02x |"
         },
         {
@@ -3847,7 +3847,7 @@
           "build": "9f1aaf88 with uncommitted changes, TOFU-1328",
           "figure": "20.0",
           "value": 20.0,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| context | 48.9 | 20.0 | 2.45x |"
         }
       ],
@@ -3856,8 +3856,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "cli",
-      "task": "bench/cli, every verb in a fresh home, GOMAXPROCS=2, median of 7 runs",
+      "bench": "suites/perf/cli",
+      "task": "bench/suites/perf/cli, every verb in a fresh home, GOMAXPROCS=2, median of 7 runs",
       "measure": "CPU of tofu settings",
       "unit": "ms",
       "better": "lower",
@@ -3870,7 +3870,7 @@
           "build": "06042c16 with uncommitted changes",
           "figure": "108.9",
           "value": 108.9,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| settings | 108.9 | 36.6 | 2.98x |"
         },
         {
@@ -3881,7 +3881,7 @@
           "build": "06042c16 with uncommitted changes, committed as 787f2384",
           "figure": "36.6",
           "value": 36.6,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| settings | 108.9 | 36.6 | 2.98x |"
         },
         {
@@ -3892,7 +3892,7 @@
           "build": "a git archive of e68578c9",
           "figure": "42.5",
           "value": 42.5,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| settings | 108.9 | 42.5 | 2.56x |"
         },
         {
@@ -3903,7 +3903,7 @@
           "build": "9f1aaf88 with uncommitted changes, TOFU-1328",
           "figure": "18.6",
           "value": 18.6,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| settings | 42.5 | 18.6 | 2.29x |"
         }
       ],
@@ -3912,8 +3912,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "cli",
-      "task": "bench/cli, every verb in a fresh home, GOMAXPROCS=2, median of 7 runs",
+      "bench": "suites/perf/cli",
+      "task": "bench/suites/perf/cli, every verb in a fresh home, GOMAXPROCS=2, median of 7 runs",
       "measure": "package init allocations",
       "unit": "MB",
       "better": "lower",
@@ -3926,7 +3926,7 @@
           "build": "06042c16 with uncommitted changes",
           "figure": "8.39",
           "value": 8.39,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| v0 | 0.5.11-fix2 | 06042c16 dirty | 2026-10-13 05:19:28 | windows/amd64 | 7 | 78.6 | 8.39 |"
         },
         {
@@ -3937,7 +3937,7 @@
           "build": "06042c16 with uncommitted changes",
           "figure": "8.37",
           "value": 8.37,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| v1-runewidth | 0.5.11-fix2 | 06042c16 dirty | 2026-10-13 05:20:18 | windows/amd64 | 7 | 46.8 | 8.37 |"
         },
         {
@@ -3948,7 +3948,7 @@
           "build": "06042c16 with uncommitted changes, committed as 787f2384",
           "figure": "3.80",
           "value": 3.8,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| v1-chroma | 0.5.11-fix2 | 06042c16 dirty | 2026-10-13 05:20:55 | windows/amd64 | 7 | 26.7 | 3.80 |"
         },
         {
@@ -3959,7 +3959,7 @@
           "build": "a git archive of e68578c9",
           "figure": "3.40",
           "value": 3.4,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| v2 | 0.5.14+dev | e68578c9 archive | 2026-10-14 06:57:03 | windows/amd64 | 7 | 40.8 | 3.40 |"
         },
         {
@@ -3970,7 +3970,7 @@
           "build": "9f1aaf88 with uncommitted changes, TOFU-1328",
           "figure": "3.37",
           "value": 3.37,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| v3 | 0.5.14+dev | 9f1aaf88 dirty | 2026-10-14 07:18:44 | windows/amd64 | 7 | 10.5 | 3.37 |"
         }
       ],
@@ -3979,8 +3979,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "cli",
-      "task": "bench/cli, every verb in a fresh home, GOMAXPROCS=2, median of 7 runs",
+      "bench": "suites/perf/cli",
+      "task": "bench/suites/perf/cli, every verb in a fresh home, GOMAXPROCS=2, median of 7 runs",
       "measure": "package init clock",
       "unit": "ms",
       "better": "lower",
@@ -3993,7 +3993,7 @@
           "build": "06042c16 with uncommitted changes",
           "figure": "78.6",
           "value": 78.6,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| v0 | 0.5.11-fix2 | 06042c16 dirty | 2026-10-13 05:19:28 | windows/amd64 | 7 | 78.6 | 8.39 |"
         },
         {
@@ -4004,7 +4004,7 @@
           "build": "06042c16 with uncommitted changes",
           "figure": "46.8",
           "value": 46.8,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| v1-runewidth | 0.5.11-fix2 | 06042c16 dirty | 2026-10-13 05:20:18 | windows/amd64 | 7 | 46.8 | 8.37 |"
         },
         {
@@ -4015,7 +4015,7 @@
           "build": "06042c16 with uncommitted changes, committed as 787f2384",
           "figure": "26.7",
           "value": 26.7,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| v1-chroma | 0.5.11-fix2 | 06042c16 dirty | 2026-10-13 05:20:55 | windows/amd64 | 7 | 26.7 | 3.80 |"
         },
         {
@@ -4026,7 +4026,7 @@
           "build": "a git archive of e68578c9",
           "figure": "40.8",
           "value": 40.8,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| v2 | 0.5.14+dev | e68578c9 archive | 2026-10-14 06:57:03 | windows/amd64 | 7 | 40.8 | 3.40 |"
         },
         {
@@ -4037,7 +4037,7 @@
           "build": "9f1aaf88 with uncommitted changes, TOFU-1328",
           "figure": "10.5",
           "value": 10.5,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| v3 | 0.5.14+dev | 9f1aaf88 dirty | 2026-10-14 07:18:44 | windows/amd64 | 7 | 10.5 | 3.37 |"
         }
       ],
@@ -4046,8 +4046,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "scale",
-      "task": "bench/scale tiny task, live on claude-sub/claude-sonnet-5-5, medians over 2 or 3 runs per count",
+      "bench": "suites/perf/scale",
+      "task": "bench/suites/perf/scale tiny task, live on claude-sub/claude-sonnet-5-5, medians over 2 or 3 runs per count",
       "measure": "wall time of the whole run",
       "unit": "s",
       "better": "neither",
@@ -4060,7 +4060,7 @@
           "build": "4009ae9f with uncommitted changes, TOFU-1325",
           "figure": "15.77",
           "value": 15.77,
-          "source": "bench/scale/wall.md",
+          "source": "bench/suites/perf/scale/wall.md",
           "evidence": "| live | 2 | 4009ae9f | 3.73 | 3.10 | 5.44 | 3.61 | 0.16 | 15.77 | 2.00 |"
         },
         {
@@ -4071,7 +4071,7 @@
           "build": "4009ae9f with uncommitted changes, TOFU-1325",
           "figure": "17.40",
           "value": 17.4,
-          "source": "bench/scale/wall.md",
+          "source": "bench/suites/perf/scale/wall.md",
           "evidence": "| live | 4 | 4009ae9f | 0.29 | 3.81 | 6.47 | 5.75 | 0.11 | 17.40 | 2.00 |"
         },
         {
@@ -4082,7 +4082,7 @@
           "build": "4009ae9f with uncommitted changes, TOFU-1325",
           "figure": "20.94",
           "value": 20.94,
-          "source": "bench/scale/wall.md",
+          "source": "bench/suites/perf/scale/wall.md",
           "evidence": "| live | 10 | 4009ae9f | 0.34 | 9.11 | 7.01 | 3.42 | 0.11 | 20.94 | 2.00 |"
         }
       ],
@@ -4092,8 +4092,8 @@
       "worse_word": "slower"
     },
     {
-      "bench": "scale",
-      "task": "bench/scale tiny task, live on claude-sub/claude-sonnet-5-5, medians over 2 or 3 runs per count",
+      "bench": "suites/perf/scale",
+      "task": "bench/suites/perf/scale tiny task, live on claude-sub/claude-sonnet-5-5, medians over 2 or 3 runs per count",
       "measure": "the lead request that spawns",
       "unit": "s",
       "better": "neither",
@@ -4106,7 +4106,7 @@
           "build": "4009ae9f with uncommitted changes, TOFU-1325",
           "figure": "3.10",
           "value": 3.1,
-          "source": "bench/scale/wall.md",
+          "source": "bench/suites/perf/scale/wall.md",
           "evidence": "| live | 2 | 4009ae9f | 3.73 | 3.10 | 5.44 | 3.61 | 0.16 | 15.77 | 2.00 |"
         },
         {
@@ -4117,7 +4117,7 @@
           "build": "4009ae9f with uncommitted changes, TOFU-1325",
           "figure": "3.81",
           "value": 3.81,
-          "source": "bench/scale/wall.md",
+          "source": "bench/suites/perf/scale/wall.md",
           "evidence": "| live | 4 | 4009ae9f | 0.29 | 3.81 | 6.47 | 5.75 | 0.11 | 17.40 | 2.00 |"
         },
         {
@@ -4128,7 +4128,7 @@
           "build": "4009ae9f with uncommitted changes, TOFU-1325",
           "figure": "9.11",
           "value": 9.11,
-          "source": "bench/scale/wall.md",
+          "source": "bench/suites/perf/scale/wall.md",
           "evidence": "| live | 10 | 4009ae9f | 0.34 | 9.11 | 7.01 | 3.42 | 0.11 | 20.94 | 2.00 |"
         }
       ],
@@ -4138,8 +4138,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "scale",
-      "task": "bench/scale tiny task, live on claude-sub/claude-sonnet-5-5, medians over 2 or 3 runs per count",
+      "bench": "suites/perf/scale",
+      "task": "bench/suites/perf/scale tiny task, live on claude-sub/claude-sonnet-5-5, medians over 2 or 3 runs per count",
       "measure": "spawn request end to final answer",
       "unit": "s",
       "better": "neither",
@@ -4152,7 +4152,7 @@
           "build": "4009ae9f with uncommitted changes, TOFU-1325",
           "figure": "5.44",
           "value": 5.44,
-          "source": "bench/scale/wall.md",
+          "source": "bench/suites/perf/scale/wall.md",
           "evidence": "| live | 2 | 4009ae9f | 3.73 | 3.10 | 5.44 | 3.61 | 0.16 | 15.77 | 2.00 |"
         },
         {
@@ -4163,7 +4163,7 @@
           "build": "4009ae9f with uncommitted changes, TOFU-1325",
           "figure": "6.47",
           "value": 6.47,
-          "source": "bench/scale/wall.md",
+          "source": "bench/suites/perf/scale/wall.md",
           "evidence": "| live | 4 | 4009ae9f | 0.29 | 3.81 | 6.47 | 5.75 | 0.11 | 17.40 | 2.00 |"
         },
         {
@@ -4174,7 +4174,7 @@
           "build": "4009ae9f with uncommitted changes, TOFU-1325",
           "figure": "7.01",
           "value": 7.01,
-          "source": "bench/scale/wall.md",
+          "source": "bench/suites/perf/scale/wall.md",
           "evidence": "| live | 10 | 4009ae9f | 0.34 | 9.11 | 7.01 | 3.42 | 0.11 | 20.94 | 2.00 |"
         }
       ],
@@ -4184,8 +4184,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "scale",
-      "task": "bench/scale tiny task, live on claude-sub/claude-sonnet-5-5, medians over 2 or 3 runs per count",
+      "bench": "suites/perf/scale",
+      "task": "bench/suites/perf/scale tiny task, live on claude-sub/claude-sonnet-5-5, medians over 2 or 3 runs per count",
       "measure": "memory model requests after the answer",
       "unit": "s",
       "better": "neither",
@@ -4198,7 +4198,7 @@
           "build": "4009ae9f with uncommitted changes, TOFU-1325",
           "figure": "3.61",
           "value": 3.61,
-          "source": "bench/scale/wall.md",
+          "source": "bench/suites/perf/scale/wall.md",
           "evidence": "| live | 2 | 4009ae9f | 3.73 | 3.10 | 5.44 | 3.61 | 0.16 | 15.77 | 2.00 |"
         },
         {
@@ -4209,7 +4209,7 @@
           "build": "4009ae9f with uncommitted changes, TOFU-1325",
           "figure": "5.75",
           "value": 5.75,
-          "source": "bench/scale/wall.md",
+          "source": "bench/suites/perf/scale/wall.md",
           "evidence": "| live | 4 | 4009ae9f | 0.29 | 3.81 | 6.47 | 5.75 | 0.11 | 17.40 | 2.00 |"
         },
         {
@@ -4220,7 +4220,7 @@
           "build": "4009ae9f with uncommitted changes, TOFU-1325",
           "figure": "3.42",
           "value": 3.42,
-          "source": "bench/scale/wall.md",
+          "source": "bench/suites/perf/scale/wall.md",
           "evidence": "| live | 10 | 4009ae9f | 0.34 | 9.11 | 7.01 | 3.42 | 0.11 | 20.94 | 2.00 |"
         }
       ],
@@ -4230,8 +4230,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "scale",
-      "task": "bench/scale tiny task, live on claude-sub/claude-sonnet-5-5, medians over 2 or 3 runs per count",
+      "bench": "suites/perf/scale",
+      "task": "bench/suites/perf/scale tiny task, live on claude-sub/claude-sonnet-5-5, medians over 2 or 3 runs per count",
       "measure": "held until the first sibling answers, per sub-agent",
       "unit": "s",
       "better": "neither",
@@ -4244,7 +4244,7 @@
           "build": "4009ae9f with uncommitted changes, TOFU-1325",
           "figure": "1.71",
           "value": 1.71,
-          "source": "bench/scale/wall.md",
+          "source": "bench/suites/perf/scale/wall.md",
           "evidence": "| live | 2 | 2 | 0.5.14+dev 4009ae9f | claude-sonnet-5-5 | 0.03 | 1.71 | 0.00 | 3.15 | 0.00 | 0.01 | 0.25 | 1.73 | 2 | 5.44 | 5.44 | 4/4 |"
         },
         {
@@ -4255,7 +4255,7 @@
           "build": "4009ae9f with uncommitted changes, TOFU-1325",
           "figure": "1.41",
           "value": 1.41,
-          "source": "bench/scale/wall.md",
+          "source": "bench/suites/perf/scale/wall.md",
           "evidence": "| live | 4 | 3 | 0.5.14+dev 4009ae9f | claude-sonnet-5-5 | 0.03 | 1.41 | 0.00 | 2.39 | 0.00 | 0.01 | 0.68 | 1.67 | 2 | 6.47 | 7.37 | 12/12 |"
         },
         {
@@ -4266,7 +4266,7 @@
           "build": "4009ae9f with uncommitted changes, TOFU-1325",
           "figure": "1.68",
           "value": 1.68,
-          "source": "bench/scale/wall.md",
+          "source": "bench/suites/perf/scale/wall.md",
           "evidence": "| live | 10 | 3 | 0.5.14+dev 4009ae9f | claude-sonnet-5-5 | 0.04 | 1.68 | 0.01 | 2.52 | 0.00 | 0.00 | 1.59 | 2.29 | 2 | 7.01 | 9.19 | 30/30 |"
         }
       ],
@@ -4276,8 +4276,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "scale",
-      "task": "bench/scale tiny task, live on claude-sub/claude-sonnet-5-5, medians over 2 or 3 runs per count",
+      "bench": "suites/perf/scale",
+      "task": "bench/suites/perf/scale tiny task, live on claude-sub/claude-sonnet-5-5, medians over 2 or 3 runs per count",
       "measure": "model time per sub-agent",
       "unit": "s",
       "better": "neither",
@@ -4290,7 +4290,7 @@
           "build": "4009ae9f with uncommitted changes, TOFU-1325",
           "figure": "3.15",
           "value": 3.15,
-          "source": "bench/scale/wall.md",
+          "source": "bench/suites/perf/scale/wall.md",
           "evidence": "| live | 2 | 2 | 0.5.14+dev 4009ae9f | claude-sonnet-5-5 | 0.03 | 1.71 | 0.00 | 3.15 | 0.00 | 0.01 | 0.25 | 1.73 | 2 | 5.44 | 5.44 | 4/4 |"
         },
         {
@@ -4301,7 +4301,7 @@
           "build": "4009ae9f with uncommitted changes, TOFU-1325",
           "figure": "2.39",
           "value": 2.39,
-          "source": "bench/scale/wall.md",
+          "source": "bench/suites/perf/scale/wall.md",
           "evidence": "| live | 4 | 3 | 0.5.14+dev 4009ae9f | claude-sonnet-5-5 | 0.03 | 1.41 | 0.00 | 2.39 | 0.00 | 0.01 | 0.68 | 1.67 | 2 | 6.47 | 7.37 | 12/12 |"
         },
         {
@@ -4312,7 +4312,7 @@
           "build": "4009ae9f with uncommitted changes, TOFU-1325",
           "figure": "2.52",
           "value": 2.52,
-          "source": "bench/scale/wall.md",
+          "source": "bench/suites/perf/scale/wall.md",
           "evidence": "| live | 10 | 3 | 0.5.14+dev 4009ae9f | claude-sonnet-5-5 | 0.04 | 1.68 | 0.01 | 2.52 | 0.00 | 0.00 | 1.59 | 2.29 | 2 | 7.01 | 9.19 | 30/30 |"
         }
       ],
@@ -4322,8 +4322,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "scale",
-      "task": "bench/scale tiny task, live on claude-sub/claude-sonnet-5-5, medians over 2 or 3 runs per count",
+      "bench": "suites/perf/scale",
+      "task": "bench/suites/perf/scale tiny task, live on claude-sub/claude-sonnet-5-5, medians over 2 or 3 runs per count",
       "measure": "tofu's own time per sub-agent on a cassette, read column",
       "unit": "s",
       "better": "neither",
@@ -4336,7 +4336,7 @@
           "build": "4009ae9f with uncommitted changes, TOFU-1325",
           "figure": "0.31",
           "value": 0.31,
-          "source": "bench/scale/wall.md",
+          "source": "bench/suites/perf/scale/wall.md",
           "evidence": "| cassette | 2 | 3 | 0.5.14+dev 4009ae9f | cassette | 0.01 | 0.10 | 0.00 | 0.08 | 0.00 | 0.01 | 0.01 | 0.08 | 2 | 0.31 | 0.32 | 6/6 |"
         },
         {
@@ -4347,7 +4347,7 @@
           "build": "4009ae9f with uncommitted changes, TOFU-1325",
           "figure": "0.31",
           "value": 0.31,
-          "source": "bench/scale/wall.md",
+          "source": "bench/suites/perf/scale/wall.md",
           "evidence": "| cassette | 4 | 3 | 0.5.14+dev 4009ae9f | cassette | 0.01 | 0.10 | 0.00 | 0.09 | 0.00 | 0.01 | 0.02 | 0.07 | 2 | 0.31 | 0.32 | 12/12 |"
         },
         {
@@ -4358,7 +4358,7 @@
           "build": "4009ae9f with uncommitted changes, TOFU-1325",
           "figure": "0.36",
           "value": 0.36,
-          "source": "bench/scale/wall.md",
+          "source": "bench/suites/perf/scale/wall.md",
           "evidence": "| cassette | 10 | 3 | 0.5.14+dev 4009ae9f | cassette | 0.02 | 0.11 | 0.00 | 0.09 | 0.00 | 0.02 | 0.03 | 0.08 | 2 | 0.36 | 0.42 | 30/30 |"
         }
       ],
@@ -4368,7 +4368,7 @@
       "worse_word": "more"
     },
     {
-      "bench": "cli",
+      "bench": "suites/perf/cli",
       "task": "the long-session TUI test, median of 3",
       "measure": "GC CPU",
       "unit": "ms",
@@ -4382,7 +4382,7 @@
           "build": "f347e62d with uncommitted changes, committed as 4eb86202",
           "figure": "219.3",
           "value": 219.3,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| GC CPU ms over the long-session TUI test, median of 3 | 219.3 | 102.1 | 2.15x |"
         },
         {
@@ -4393,7 +4393,7 @@
           "build": "f347e62d with uncommitted changes, committed as 4eb86202",
           "figure": "102.1",
           "value": 102.1,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| GC CPU ms over the long-session TUI test, median of 3 | 219.3 | 102.1 | 2.15x |"
         }
       ],
@@ -4402,7 +4402,7 @@
       "worse_word": "more"
     },
     {
-      "bench": "cli",
+      "bench": "suites/perf/cli",
       "task": "the long-session TUI test, median of 3",
       "measure": "peak heap, the cost of the GC change",
       "unit": "MB",
@@ -4416,7 +4416,7 @@
           "build": "f347e62d with uncommitted changes, committed as 4eb86202",
           "figure": "21",
           "value": 21.0,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| peak heap MB over the long-session TUI test, median of 3 | 21 | 29 | 0.72x |"
         },
         {
@@ -4427,7 +4427,7 @@
           "build": "f347e62d with uncommitted changes, committed as 4eb86202",
           "figure": "29",
           "value": 29.0,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| peak heap MB over the long-session TUI test, median of 3 | 21 | 29 | 0.72x |"
         }
       ],
@@ -4436,7 +4436,7 @@
       "worse_word": "more"
     },
     {
-      "bench": "cli",
+      "bench": "suites/perf/cli",
       "task": "tofu run --dry-run on claude-sub/claude-opus-5",
       "measure": "tokens before the first fork on a 1M window model",
       "unit": "tokens",
@@ -4450,7 +4450,7 @@
           "build": "f347e62d with uncommitted changes, committed as 4eb86202",
           "figure": "200000",
           "value": 200000.0,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| tokens before the first fork on a 1M window model | 200000 | 360000 | 1.80x |"
         },
         {
@@ -4461,7 +4461,7 @@
           "build": "f347e62d with uncommitted changes, committed as 4eb86202",
           "figure": "360000",
           "value": 360000.0,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| tokens before the first fork on a 1M window model | 200000 | 360000 | 1.80x |"
         }
       ],
@@ -4470,7 +4470,7 @@
       "worse_word": "less"
     },
     {
-      "bench": "cli",
+      "bench": "suites/perf/cli",
       "task": "Encode of a 1419957 byte request, median of 5",
       "measure": "bytes allocated per Encode, a change measured and dropped",
       "unit": "bytes",
@@ -4484,7 +4484,7 @@
           "build": "f347e62d with uncommitted changes, committed as 4eb86202",
           "figure": "2706804",
           "value": 2706804.0,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| bytes allocated per Encode of a 1419957 byte request, median of 5 | 2706804 | 3570784 | 0.76x |"
         },
         {
@@ -4495,7 +4495,7 @@
           "build": "f347e62d with uncommitted changes, committed as 4eb86202",
           "figure": "3570784",
           "value": 3570784.0,
-          "source": "bench/cli/passes.md",
+          "source": "bench/suites/perf/cli/passes.md",
           "evidence": "| bytes allocated per Encode of a 1419957 byte request, median of 5 | 2706804 | 3570784 | 0.76x |"
         }
       ],
@@ -4504,8 +4504,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "fanin",
-      "task": "bench/fanin cassette clustered, 3 sub-agents finishing together, fresh home, no model called",
+      "bench": "suites/agent/fanin",
+      "task": "bench/suites/agent/fanin cassette clustered, 3 sub-agents finishing together, fresh home, no model called",
       "measure": "lead turns",
       "unit": "turns",
       "better": "lower",
@@ -4538,8 +4538,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "fanin",
-      "task": "bench/fanin cassette straggler, 4 sub-agents with one late, fresh home, no model called",
+      "bench": "suites/agent/fanin",
+      "task": "bench/suites/agent/fanin cassette straggler, 4 sub-agents with one late, fresh home, no model called",
       "measure": "lead turns",
       "unit": "turns",
       "better": "lower",
@@ -4572,8 +4572,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "fanin",
-      "task": "bench/fanin cassette spread, 3 sub-agents finishing outside the window, fresh home, no model called",
+      "bench": "suites/agent/fanin",
+      "task": "bench/suites/agent/fanin cassette spread, 3 sub-agents finishing outside the window, fresh home, no model called",
       "measure": "lead turns",
       "unit": "turns",
       "better": "lower",
@@ -4606,8 +4606,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "fanin",
-      "task": "bench/fanin cassette checkins, a check every second, fresh home, no model called",
+      "bench": "suites/agent/fanin",
+      "task": "bench/suites/agent/fanin cassette checkins, a check every second, fresh home, no model called",
       "measure": "lead turns started by a check-in",
       "unit": "turns",
       "better": "lower",
@@ -4644,8 +4644,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "fanin",
-      "task": "bench/fanin cassette ask, an ask between two reports, fresh home, no model called",
+      "bench": "suites/agent/fanin",
+      "task": "bench/suites/agent/fanin cassette ask, an ask between two reports, fresh home, no model called",
       "measure": "seconds until the last report is read, the cost of the window",
       "unit": "s",
       "better": "lower",
@@ -4678,8 +4678,8 @@
       "worse_word": "more"
     },
     {
-      "bench": "learn",
-      "task": "bench/learn/jobs, 5 made-up sessions holding 5 labelled repeated jobs and 6 distractors, no model called",
+      "bench": "suites/context/learn",
+      "task": "bench/suites/context/learn/jobs, 5 made-up sessions holding 5 labelled repeated jobs and 6 distractors, no model called",
       "measure": "repeated jobs found",
       "unit": "of 5 labelled jobs",
       "better": "higher",
@@ -4723,8 +4723,8 @@
       "worse_word": "less"
     },
     {
-      "bench": "learn",
-      "task": "bench/learn/jobs, 5 made-up sessions holding 5 labelled repeated jobs and 6 distractors, no model called",
+      "bench": "suites/context/learn",
+      "task": "bench/suites/context/learn/jobs, 5 made-up sessions holding 5 labelled repeated jobs and 6 distractors, no model called",
       "measure": "false finds",
       "unit": "false finds",
       "better": "lower",
@@ -4768,7 +4768,7 @@
       "worse_word": "more"
     },
     {
-      "bench": "tokens",
+      "bench": "suites/context/tokens",
       "task": "glob calls replayed from recorded sessions",
       "measure": "glob calls that cannot replay",
       "unit": "glob calls, compared as a share of all",
@@ -4782,7 +4782,7 @@
           "build": "198947c1",
           "figure": "6 of 142",
           "value": 4.2,
-          "source": "bench/tokens/report-2026-09-21-pinned.md",
+          "source": "bench/suites/context/tokens/report-2026-09-21-pinned.md",
           "evidence": "Glob calls that cannot replay: 6 of 142."
         },
         {
@@ -4793,7 +4793,7 @@
           "build": "560c8075",
           "figure": "29 of 568",
           "value": 5.1,
-          "source": "bench/tokens/report-2026-09-21-pinned.md",
+          "source": "bench/suites/context/tokens/report-2026-09-21-pinned.md",
           "evidence": "The live folder on 2026-10-10: 29 of 568"
         }
       ],
@@ -4803,7 +4803,7 @@
       "worse_word": "more"
     },
     {
-      "bench": "recall",
+      "bench": "suites/context/recall",
       "task": "the largest billed request in recorded sessions",
       "measure": "largest billed request",
       "unit": "tokens",
@@ -4817,7 +4817,7 @@
           "build": "36cb8150",
           "figure": "66354",
           "value": 66354,
-          "source": "bench/recall/report-2026-09-23.md",
+          "source": "bench/suites/context/recall/report-2026-09-23.md",
           "evidence": "largest billed request 66354 tokens"
         },
         {
@@ -4828,7 +4828,7 @@
           "build": "82890ac1",
           "figure": "218558",
           "value": 218558,
-          "source": "bench/recall/report-2026-09-23.md",
+          "source": "bench/suites/context/recall/report-2026-09-23.md",
           "evidence": "the largest billed request is 218558 tokens"
         }
       ],
@@ -4838,7 +4838,7 @@
       "worse_word": "more"
     },
     {
-      "bench": "shortlist",
+      "bench": "suites/tools/shortlist",
       "task": "recorded turns a file shortlist question can be asked of",
       "measure": "recordable turns",
       "unit": "turns",
@@ -4852,7 +4852,7 @@
           "build": "b29d651e",
           "figure": "8 of 117",
           "value": 8,
-          "source": "bench/shortlist/report-2026-09-23.md",
+          "source": "bench/suites/tools/shortlist/report-2026-09-23.md",
           "evidence": "117 turns, 8 recordable"
         },
         {
@@ -4863,7 +4863,7 @@
           "build": "82890ac1",
           "figure": "462 of 2116",
           "value": 462,
-          "source": "bench/shortlist/report-2026-09-23.md",
+          "source": "bench/suites/tools/shortlist/report-2026-09-23.md",
           "evidence": "2116 turns, 462 recordable"
         }
       ],
@@ -4873,7 +4873,7 @@
       "worse_word": "less"
     },
     {
-      "bench": "thrift",
+      "bench": "suites/context/thrift",
       "task": "read and search results over the size cap in recorded sessions",
       "measure": "over-cap artifacts",
       "unit": "artifacts",
@@ -4887,7 +4887,7 @@
           "build": "6a1e8315",
           "figure": "9",
           "value": 9,
-          "source": "bench/thrift/report-2026-09-23-overcap.md",
+          "source": "bench/suites/context/thrift/report-2026-09-23-overcap.md",
           "evidence": "and finds the 9 above"
         },
         {
@@ -4898,7 +4898,7 @@
           "build": "82890ac1",
           "figure": "195",
           "value": 195,
-          "source": "bench/thrift/report-2026-09-23-overcap.md",
+          "source": "bench/suites/context/thrift/report-2026-09-23-overcap.md",
           "evidence": "holds 195 over-cap read or search artifacts"
         }
       ],
@@ -4908,7 +4908,7 @@
       "worse_word": "more"
     },
     {
-      "bench": "boardy",
+      "bench": "suites/perf/boardy",
       "task": "a generated board of 1,500 tickets and 24,390 events, GOMAXPROCS=2, 20 calls x 3 rounds, p50",
       "measure": "boardy list, tickets read in parallel",
       "unit": "ms",
@@ -4942,7 +4942,7 @@
       "worse_word": "slower"
     },
     {
-      "bench": "boardy",
+      "bench": "suites/perf/boardy",
       "task": "a generated board of 1,500 tickets and 24,390 events, GOMAXPROCS=2, 20 calls x 3 rounds, p50",
       "measure": "boardy report, tickets read in parallel",
       "unit": "ms",
@@ -4976,7 +4976,7 @@
       "worse_word": "slower"
     },
     {
-      "bench": "boardy",
+      "bench": "suites/perf/boardy",
       "task": "a generated board of 1,500 tickets and 24,390 events, GOMAXPROCS=2, 20 calls x 3 rounds, p50",
       "measure": "boardy catchup, tickets read in parallel",
       "unit": "ms",
@@ -5010,7 +5010,7 @@
       "worse_word": "slower"
     },
     {
-      "bench": "boardy",
+      "bench": "suites/perf/boardy",
       "task": "a generated board of 1,500 tickets and 24,390 events, GOMAXPROCS=2, 20 calls x 3 rounds, p50",
       "measure": "boardy report, events decoded in parallel",
       "unit": "ms",
@@ -5044,7 +5044,7 @@
       "worse_word": "slower"
     },
     {
-      "bench": "boardy",
+      "bench": "suites/perf/boardy",
       "task": "a generated board of 1,500 tickets and 24,390 events, GOMAXPROCS=2, 20 calls x 3 rounds, p50",
       "measure": "serve boardy.report, events decoded in parallel",
       "unit": "ms",
@@ -5078,7 +5078,7 @@
       "worse_word": "slower"
     },
     {
-      "bench": "startup/frame",
+      "bench": "suites/perf/startup/frame",
       "task": "the first typeable frame in a pseudo console, local stub, GOMAXPROCS=2, 10 interleaved runs, p50",
       "measure": "first frame on a fresh project",
       "unit": "ms",
@@ -5112,7 +5112,7 @@
       "worse_word": "slower"
     },
     {
-      "bench": "startup/frame",
+      "bench": "suites/perf/startup/frame",
       "task": "the first typeable frame in a pseudo console, local stub, GOMAXPROCS=2, 10 interleaved runs, p50",
       "measure": "first frame resuming a 2,130 event session",
       "unit": "ms",
@@ -5146,7 +5146,7 @@
       "worse_word": "slower"
     },
     {
-      "bench": "startup/frame",
+      "bench": "suites/perf/startup/frame",
       "task": "the first typeable frame in a pseudo console, local stub, GOMAXPROCS=2, 10 interleaved runs, p50",
       "measure": "first frame on a fresh project",
       "unit": "ms",
@@ -5180,7 +5180,7 @@
       "worse_word": "slower"
     },
     {
-      "bench": "startup/frame",
+      "bench": "suites/perf/startup/frame",
       "task": "the first typeable frame in a pseudo console, local stub, GOMAXPROCS=2, 10 interleaved runs, p50",
       "measure": "first frame resuming a 2,130 event session",
       "unit": "ms",

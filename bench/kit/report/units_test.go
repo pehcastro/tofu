@@ -18,9 +18,9 @@ var (
 
 func TestEveryDatedReportCarriesTheUnitOfItsCostFigures(t *testing.T) {
 	awaiting := map[string]string{
-		"turn/report-2026-09-18.md":    "money, from usage.cost on an OpenRouter key; BOJI-064 could not write the line, bench/turn is outside its owns",
-		"wording/report-2026-09-18.md": "money, from usage.cost on an OpenRouter key; BOJI-064 could not write the line, bench/wording is outside its owns",
-		"cost/sweep-2026-09-19.md":     "money, the same unit its sibling cost/report-2026-09-19.md declares and reads from the same ledger; BOJI-098 could not write the line, bench/cost is outside its owns",
+		"suites/agent/turn/report-2026-09-18.md":    "money, from usage.cost on an OpenRouter key; BOJI-064 could not write the line, bench/suites/agent/turn is outside its owns",
+		"suites/judge/wording/report-2026-09-18.md": "money, from usage.cost on an OpenRouter key; BOJI-064 could not write the line, bench/suites/judge/wording is outside its owns",
+		"suites/judge/cost/sweep-2026-09-19.md":     "money, the same unit its sibling cost/report-2026-09-19.md declares and reads from the same ledger; BOJI-098 could not write the line, bench/suites/judge/cost is outside its owns",
 	}
 	declared, pending, noFigures := 0, 0, 0
 	root := benchTree()

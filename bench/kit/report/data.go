@@ -12,16 +12,18 @@ const (
 )
 
 type Data struct {
-	History           History       `json:"history"`
-	Answers           Answers       `json:"answers"`
-	Wiring            []Wiring      `json:"what_decides_what"`
-	MethodTable       string        `json:"what_decides_what_read_from"`
-	Judgments         []JudgmentRow `json:"judgments"`
-	Reports           []Report      `json:"reports"`
-	NoReport          []Package     `json:"benches_with_no_dated_report"`
-	Counts            Counts        `json:"counts"`
-	WithdrawalsLiveIn string        `json:"withdrawals_declared_from_outside_live_in"`
-	GeneratedBy       string        `json:"generated_by"`
+	History            History       `json:"history"`
+	Answers            Answers       `json:"answers"`
+	Wiring             []Wiring      `json:"what_decides_what"`
+	MethodTable        string        `json:"what_decides_what_read_from"`
+	Judgments          []JudgmentRow `json:"judgments"`
+	Reports            []Report      `json:"reports"`
+	NoReport           []Package     `json:"benches_with_no_dated_report"`
+	Counts             Counts        `json:"counts"`
+	WithdrawalsLiveIn  string        `json:"withdrawals_declared_from_outside_live_in"`
+	GeneratedBy        string        `json:"generated_by"`
+	SkippedHandRead    []string      `json:"-"`
+	SkippedWithdrawals []string      `json:"-"`
 }
 
 func (d Data) ComparedDecisions() int {

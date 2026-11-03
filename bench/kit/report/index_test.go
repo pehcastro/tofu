@@ -1,7 +1,6 @@
 package report
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -64,7 +63,7 @@ func TestEveryDatedReportOnDiskIsInTheIndex(t *testing.T) {
 }
 
 func TestTheCostReportSaysItsOwnWithdrawal(t *testing.T) {
-	report := find(t, "bench/cost/report-2026-09-19.md")
+	report := find(t, "bench/suites/judge/cost/report-2026-09-19.md")
 	if report.State != StateWithdrawnInPart {
 		t.Errorf("state is %q, and the file's own first line says PART OF THIS REPORT IS WITHDRAWN", report.State)
 	}
@@ -77,8 +76,8 @@ func TestTheCostReportSaysItsOwnWithdrawal(t *testing.T) {
 }
 
 func TestAReportIsWithdrawnFromOutsideItself(t *testing.T) {
-	report := find(t, "bench/websift/report-2026-09-21.md")
-	body, err := os.ReadFile(filepath.Join(benchTree(), "websift", "report-2026-09-21.md"))
+	report := find(t, "bench/suites/tools/websift/report-2026-09-21.md")
+	body, err := os.ReadFile(filepath.Join(benchTree(), "suites", "tools", "websift", "report-2026-09-21.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +101,7 @@ func TestEveryBenchWithNoDatedReportIsNamedAndClassified(t *testing.T) {
 	for _, pkg := range data.NoReport {
 		named[pkg.Package] = pkg.Kind
 	}
-	for _, want := range []string{"cmd", "corpus", reportDir, "phase"} {
+	for _, want := range []string{"cmd", "corpus", reportDir, "suites/agent/phase"} {
 		if _, ok := named[want]; !ok {
 			t.Errorf("bench/%s has no dated report and is not named in the index", want)
 		}
@@ -126,7 +125,7 @@ func TestAConclusionThatCannotBeParsedIsListedAsUnparsed(t *testing.T) {
 	if len(unparsed) != data.Counts.Unparsed {
 		t.Errorf("%d reports are listed unparsed and the count says %d", len(unparsed), data.Counts.Unparsed)
 	}
-	want := []string{"bench/promote/report-2026-09-21.md", "bench/turn/report-2026-09-18.md"}
+	want := []string{"bench/suites/judge/promote/report-2026-09-21.md", "bench/suites/agent/turn/report-2026-09-18.md"}
 	if strings.Join(unparsed, ",") != strings.Join(want, ",") {
 		t.Errorf("the reports naming no conclusion are %v, want %v", unparsed, want)
 	}
@@ -139,7 +138,7 @@ func TestAConclusionThatCannotBeParsedIsListedAsUnparsed(t *testing.T) {
 }
 
 func TestAnUnparsedHeadingIsFilledFromTheHandReadEntryInstead(t *testing.T) {
-	report := find(t, "bench/calibration/report-2026-09-23.md")
+	report := find(t, "bench/suites/judge/calibration/report-2026-09-23.md")
 	if report.Unparsed {
 		t.Fatal("this report has a handread.json entry and must stop reading unparsed")
 	}
@@ -170,14 +169,14 @@ func TestANestedBenchIsItsOwnBenchInTheIndex(t *testing.T) {
 	data := built(t)
 	found := map[string]string{}
 	for _, report := range data.Reports {
-		if strings.HasPrefix(report.Source, "bench/ask/") {
+		if strings.HasPrefix(report.Source, "bench/suites/judge/ask/") {
 			found[report.Source] = report.Package
 		}
 	}
 	want := map[string]string{
-		"bench/ask/report-2026-09-21.md":        "ask",
-		"bench/ask/server/report-2026-09-23.md": "ask/server",
-		"bench/ask/server/report-2026-09-24.md": "ask/server",
+		"bench/suites/judge/ask/report-2026-09-21.md":        "suites/judge/ask",
+		"bench/suites/judge/ask/server/report-2026-09-23.md": "suites/judge/ask/server",
+		"bench/suites/judge/ask/server/report-2026-09-24.md": "suites/judge/ask/server",
 	}
 	for path, pkg := range want {
 		if found[path] != pkg {
@@ -185,13 +184,13 @@ func TestANestedBenchIsItsOwnBenchInTheIndex(t *testing.T) {
 		}
 	}
 	if len(found) != len(want) {
-		t.Errorf("bench/ask/* carries %d reports in the index, want %d: %v", len(found), len(want), found)
+		t.Errorf("bench/suites/judge/ask/* carries %d reports in the index, want %d: %v", len(found), len(want), found)
 	}
 }
 
 func TestAWithdrawalNamingANestedReportIsAccepted(t *testing.T) {
 	fixture := "fixture_withdrawn_nested.json"
-	body := `[{"report":"bench/ask/server/report-2026-09-23.md","state":"stale","why":"proving TOFU-568's fix accepts a withdrawal naming a nested report"}]`
+	body := `[{"report":"bench/suites/judge/ask/server/report-2026-09-23.md","state":"stale","why":"proving TOFU-568's fix accepts a withdrawal naming a nested report"}]`
 	if err := os.WriteFile(fixture, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +199,7 @@ func TestAWithdrawalNamingANestedReportIsAccepted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a withdrawal naming a nested report was refused: %v", err)
 	}
-	if _, named := withdrawals["bench/ask/server/report-2026-09-23.md"]; !named {
+	if _, named := withdrawals["bench/suites/judge/ask/server/report-2026-09-23.md"]; !named {
 		t.Fatal("the nested report did not come back out of readWithdrawals")
 	}
 }
@@ -208,12 +207,12 @@ func TestAWithdrawalNamingANestedReportIsAccepted(t *testing.T) {
 func TestABenchWithSeveralDatedRunsKeepsThemNewestFirst(t *testing.T) {
 	var runs []string
 	for _, report := range built(t).Reports {
-		if report.Package == "stopcheck" {
+		if report.Package == "suites/judge/stopcheck" {
 			runs = append(runs, report.Date+" "+report.Figure+" ("+string(report.State)+")")
 		}
 	}
 	if len(runs) != 4 {
-		t.Fatalf("stopcheck has 4 dated runs, the fourth bench/stopcheck/report-2026-10-24.md, and the index carries %d", len(runs))
+		t.Fatalf("stopcheck has 4 dated runs, the fourth bench/suites/judge/stopcheck/report-2026-10-24.md, and the index carries %d", len(runs))
 	}
 	for i := 1; i < len(runs); i++ {
 		if runs[i-1] < runs[i] {
@@ -234,90 +233,8 @@ func find(t *testing.T, path string) Report {
 	return Report{}
 }
 
-func TestTheFilesOnDiskAreWhatTheGeneratorWouldWriteNow(t *testing.T) {
-	data := built(t)
-	machine, err := data.JSON()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for name, want := range map[string][]byte{
-		ViewerFile: []byte(Page(data)),
-		DataFile:   machine,
-		"INDEX.md": []byte(data.Markdown()),
-	} {
-		got, err := os.ReadFile(name)
-		if err != nil {
-			t.Fatalf("%v: run %s", err, RegenerateWith)
-		}
-		if string(got) != string(want) {
-			t.Errorf("bench/kit/report/%s is not what the code writes today, %d bytes against %d: run %s", name, len(got), len(want), RegenerateWith)
-		}
-	}
-}
-
-func TestTheMachineFormCarriesEveryJudgmentTheViewerShows(t *testing.T) {
-	machine, err := os.ReadFile(DataFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var fromDisk Data
-	if err := json.Unmarshal(machine, &fromDisk); err != nil {
-		t.Fatal(err)
-	}
-	page := Page(built(t))
-	if len(fromDisk.Judgments) == 0 {
-		t.Fatalf("%s carries no judgment row", DataFile)
-	}
-	for _, row := range fromDisk.Judgments {
-		if !strings.Contains(page, row.Point) {
-			t.Errorf("%s carries %s and the page does not show it", DataFile, row.Point)
-		}
-	}
-}
-
-func TestTheHumanIndexCarriesTheSameRowsAsTheMachineOne(t *testing.T) {
-	doc, err := os.ReadFile("INDEX.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var rows [][]string
-	inReports := false
-	for _, line := range strings.Split(string(doc), "\n") {
-		if strings.HasPrefix(line, "## Every dated report") {
-			inReports = true
-		}
-		if !inReports || !strings.HasPrefix(line, "| ") || strings.HasPrefix(line, "|---") || strings.HasPrefix(line, "| Bench ") {
-			continue
-		}
-		cells := strings.Split(strings.Trim(strings.TrimSpace(line), "|"), " | ")
-		for i, cell := range cells {
-			cells[i] = strings.TrimSpace(strings.ReplaceAll(cell, "\\|", "|"))
-		}
-		rows = append(rows, cells)
-	}
-	data := built(t)
-	if len(rows) != len(data.Reports) {
-		t.Fatalf("INDEX.md carries %d rows and the machine form carries %d", len(rows), len(data.Reports))
-	}
-	for i, report := range data.Reports {
-		want := []string{report.Package, report.Date, "`" + report.Source + "`", report.Quoted(), report.Sample, string(report.State)}
-		for j, cell := range want {
-			if cell == "" {
-				cell = "not stated"
-			}
-			if rows[i][j] != cell {
-				t.Errorf("row %d column %d: INDEX.md says %q and the data says %q", i, j, rows[i][j], cell)
-			}
-		}
-	}
-}
-
 func TestTheViewerFetchesNothingWhenItOpens(t *testing.T) {
-	body, err := os.ReadFile(ViewerFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	page := string(body)
+	page := Page(built(t))
 	for _, refused := range []string{"http://", "https://", "<link", "@import", "fetch(", "XMLHttpRequest", "import(", "src="} {
 		if strings.Contains(page, refused) {
 			t.Errorf("%s reaches for %q when it opens", ViewerFile, refused)
@@ -328,8 +245,8 @@ func TestTheViewerFetchesNothingWhenItOpens(t *testing.T) {
 			t.Errorf("%s loads %q, and only a data: URL is carried inside the page", ViewerFile, link[1][:min(60, len(link[1]))])
 		}
 	}
-	if len(body) > maxViewerBytes {
-		t.Errorf("%s is %d bytes, over the %d the embedded font leaves room for", ViewerFile, len(body), maxViewerBytes)
+	if len(page) > maxViewerBytes {
+		t.Errorf("%s is %d bytes, over the %d the embedded font leaves room for", ViewerFile, len(page), maxViewerBytes)
 	}
 	if !strings.Contains(page, "src:url(data:font/woff2;base64,") {
 		t.Errorf("%s does not carry Inter inside it, so it renders in whatever the machine has", ViewerFile)

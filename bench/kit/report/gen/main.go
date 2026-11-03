@@ -23,6 +23,12 @@ func generate(root string) error {
 	if err != nil {
 		return err
 	}
+	for _, path := range data.SkippedHandRead {
+		fmt.Printf("skipped %s: named in %s and not on disk\n", path, report.HandReadPath)
+	}
+	for _, path := range data.SkippedWithdrawals {
+		fmt.Printf("skipped %s: named in %s and not on disk\n", path, report.WithdrawalsPath)
+	}
 	machine, err := data.JSON()
 	if err != nil {
 		return err

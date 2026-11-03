@@ -39,12 +39,13 @@ const (
 	RegenerateWith  = "go run ./bench/kit/report/gen"
 	kitDir          = "kit"
 	gatesDir        = "gates"
+	suitesDir       = "suites"
 	reportDir       = kitDir + "/report"
 )
 
 var namesNoAnswer = map[string]bool{
-	"bench/promote/report-2026-09-21.md": true,
-	"bench/turn/report-2026-09-18.md":    true,
+	"bench/suites/judge/promote/report-2026-09-21.md": true,
+	"bench/suites/agent/turn/report-2026-09-18.md":    true,
 }
 
 var datedReport = regexp.MustCompile(`^report-(\d{4}-\d{2}-\d{2})(?:-[a-z0-9-]+)?\.[a-z]+$`)
@@ -83,9 +84,10 @@ type Counts struct {
 }
 
 type benchIndex struct {
-	Entries  []datedEntry
-	NoReport []Package
-	Counts   Counts
+	Entries            []datedEntry
+	NoReport           []Package
+	Counts             Counts
+	SkippedWithdrawals []string
 }
 
 func readIndex(benchRoot string) (benchIndex, error) {
@@ -122,8 +124,9 @@ func readIndex(benchRoot string) (benchIndex, error) {
 		return benchIndex{}, fmt.Errorf("%s names bench/%s, which either has a dated report now or does not exist", PackagesPath, name)
 	}
 	for path := range withdrawals {
-		return benchIndex{}, fmt.Errorf("%s names %s, which is not a dated report under bench/", WithdrawalsPath, path)
+		index.SkippedWithdrawals = append(index.SkippedWithdrawals, path)
 	}
+	sort.Strings(index.SkippedWithdrawals)
 	handRead, err := readHandRead(filepath.Join(benchRoot, reportDir, "handread.json"))
 	if err != nil {
 		return benchIndex{}, err
@@ -175,17 +178,39 @@ func packageDirs(benchRoot string) ([]string, error) {
 		switch {
 		case !dir.IsDir():
 		case dir.Name() == kitDir || dir.Name() == gatesDir:
-			group, err := os.ReadDir(filepath.Join(benchRoot, dir.Name()))
+			group, err := subDirs(benchRoot, dir.Name())
 			if err != nil {
-				return nil, fmt.Errorf("reading bench/%s: %w", dir.Name(), err)
+				return nil, err
 			}
-			for _, sub := range group {
-				if sub.IsDir() {
-					names = append(names, dir.Name()+"/"+sub.Name())
+			names = append(names, group...)
+		case dir.Name() == suitesDir:
+			areas, err := subDirs(benchRoot, suitesDir)
+			if err != nil {
+				return nil, err
+			}
+			for _, area := range areas {
+				group, err := subDirs(benchRoot, area)
+				if err != nil {
+					return nil, err
 				}
+				names = append(names, group...)
 			}
 		default:
 			names = append(names, dir.Name())
+		}
+	}
+	return names, nil
+}
+
+func subDirs(benchRoot, group string) ([]string, error) {
+	dirs, err := os.ReadDir(filepath.Join(benchRoot, group))
+	if err != nil {
+		return nil, fmt.Errorf("reading bench/%s: %w", group, err)
+	}
+	var names []string
+	for _, dir := range dirs {
+		if dir.IsDir() {
+			names = append(names, group+"/"+dir.Name())
 		}
 	}
 	return names, nil

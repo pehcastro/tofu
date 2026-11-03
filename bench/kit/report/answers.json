@@ -4,14 +4,14 @@
       "label": "Jev, paid per decision",
       "figure": "$0.000041",
       "note": "per correct decision, 6 case battery",
-      "source": "bench/cost/report-2026-09-18.md",
+      "source": "bench/suites/judge/cost/report-2026-09-18.md",
       "evidence": "Jev decided for $0.000041 per correct decision and opus for $0.005351, 131 times Jev."
     },
     {
       "label": "Jev, median latency",
       "figure": "344 ms",
       "note": "median of 7 calls",
-      "source": "bench/ask/report-2026-09-21.md",
+      "source": "bench/suites/judge/ask/report-2026-09-21.md",
       "evidence": "judged 4 of 7, free 3 of 7, 7 calls, $0.000187, $0.000027 each, mean 376ms, p50 344ms"
     }
   ],
@@ -30,7 +30,7 @@
       "sample_of": "file finding questions, against a floor of 30 the recorded sessions could not reach",
       "decides": "file_shortlist",
       "wiring": "unwired",
-      "source": "bench/shortlist/report-2026-09-21.md",
+      "source": "bench/suites/tools/shortlist/report-2026-09-21.md",
       "unanswerable_because": "The one table that scored the two methods was struck by bench/kit/report/withdrawals.json, so there is no reading left to compare. 3 of the 4 questions name their own answer inside their own prompt, which makes that table a judge reading a filename out of the task against a BM25 with no stopword list, and nothing scored on it can be told apart from a regular expression pulling the filename out. The corpus is parked rather than rebuilt: the recorded sessions yield 7 recordable turns carrying 2 distinct tasks against a floor of 30, so there is nothing to rerun it on. What stands from the run is the cost and latency of Jev alone, 4 calls at $0.000063 a question and a p50 of about 333 ms, which says what the method costs and nothing about whether it wins.",
       "unanswerable_evidence": "Not yet decided, and it cannot be decided from four questions."
     },
@@ -54,7 +54,7 @@
       "judged_arm": {
         "name": "Jev",
         "does": "scores each chunk of the output for whether the task still needs it, and drops the chunks that score low",
-        "does_from": "bench/sift/arm.go",
+        "does_from": "bench/suites/judge/sift/arm.go",
         "percent": 79.4,
         "hits": 27,
         "out_of": 34,
@@ -64,7 +64,7 @@
       "sample_of": "recorded shell results, one needle planted in each",
       "decides": "shell_sift",
       "wiring": "judged",
-      "source": "bench/sift/report-2026-09-21.md"
+      "source": "bench/suites/judge/sift/report-2026-09-21.md"
     },
     {
       "point": "ask",
@@ -77,7 +77,7 @@
       "free_arm": {
         "name": "the ownership check",
         "does": "asks now when the path being written is outside the list of paths this agent was given, and carries on when it is inside",
-        "does_from": "bench/ask/arm.go",
+        "does_from": "bench/suites/judge/ask/arm.go",
         "percent": 42.9,
         "hits": 3,
         "out_of": 7,
@@ -86,7 +86,7 @@
       "judged_arm": {
         "name": "Jev",
         "does": "scores how settled the situation is and chooses to ask now, wait until the end, or carry on",
-        "does_from": "bench/ask/arm.go",
+        "does_from": "bench/suites/judge/ask/arm.go",
         "percent": 57.1,
         "hits": 4,
         "out_of": 7,
@@ -96,7 +96,7 @@
       "sample_of": "real moments taken from the ticket logs, against the 20 this project uses for a decision of this shape",
       "decides": "ask",
       "wiring": "unwired",
-      "source": "bench/ask/report-2026-09-21.md"
+      "source": "bench/suites/judge/ask/report-2026-09-21.md"
     },
     {
       "point": "stop_check",
@@ -109,7 +109,7 @@
       "free_arm": {
         "name": "the repeat check",
         "does": "stops when the step called no tool at all, or when every command in the step already ran earlier in the same turn",
-        "does_from": "bench/stopcheck/arm.go",
+        "does_from": "bench/suites/judge/stopcheck/arm.go",
         "percent": 87.7,
         "hits": 71,
         "out_of": 81,
@@ -118,7 +118,7 @@
       "judged_arm": {
         "name": "Jev",
         "does": "scores whether work remains, whether the turn has stalled and whether the budget is spent, then stops or carries on",
-        "does_from": "bench/stopcheck/arm.go",
+        "does_from": "bench/suites/judge/stopcheck/arm.go",
         "percent": 91.0,
         "hits": 71,
         "out_of": 78,
@@ -128,7 +128,7 @@
       "sample_of": "hand labelled steps, one labeller, no second opinion",
       "decides": "stop_check",
       "wiring": "judged",
-      "source": "bench/stopcheck/report-2026-09-21.md"
+      "source": "bench/suites/judge/stopcheck/report-2026-09-21.md"
     },
     {
       "point": "read_worth",
@@ -141,7 +141,7 @@
       "free_arm": {
         "name": "word counter",
         "does": "drops any paragraph of fewer than 15 words and keeps every longer one",
-        "does_from": "bench/readworth/arm.go",
+        "does_from": "bench/suites/judge/readworth/arm.go",
         "percent": 87.1,
         "evidence": "| length floor 15 | 87.1% | 12.6% | 87.1% | 12.6% |"
       },
@@ -156,7 +156,7 @@
       "sample_of": "hand labelled paragraphs over 25 tasks, 35 keep and 35 drop",
       "decides": "read_worth",
       "wiring": "cheap",
-      "source": "bench/readworth/report-2026-09-21.md"
+      "source": "bench/suites/judge/readworth/report-2026-09-21.md"
     },
     {
       "point": "tool_gate",
@@ -172,7 +172,7 @@
       "sample_of": "held out cases of a 178 case set",
       "decides": "tool_gate",
       "wiring": "unwired",
-      "source": "bench/cost/report-2026-09-19.md",
+      "source": "bench/suites/judge/cost/report-2026-09-19.md",
       "unanswerable_because": "Nobody has a usable score for either side of this one. The only dated report that measured it withdrew every accuracy number in the file, because they were scored by a rule the gate does not actually run. It needs one fresh run of Jev and one of the regular expression over the same 89 cases, through the rule the gate really uses, written up as a dated report.",
       "unanswerable_evidence": "Agreement with the label: the Correct, Agreement, Blocks caught and False blocks columns, every row."
     },
@@ -190,7 +190,7 @@
       "sample_of": "cases written by hand, never recorded from a real turn",
       "decides": "tool_gate",
       "wiring": "unwired",
-      "source": "bench/wording/report-2026-09-18.md",
+      "source": "bench/suites/judge/wording/report-2026-09-18.md",
       "unanswerable_because": "There is nothing cheap to compare this against: both sides are Jev, one question against two. The six cases were also written by hand rather than recorded, so nothing here says what would happen on real traffic.",
       "unanswerable_evidence": "The six states are authored, not recorded."
     }
