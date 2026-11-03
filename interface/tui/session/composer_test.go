@@ -8,7 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"tofu/internal/golden"
+	"tofu/internal/testkit/golden"
 )
 
 func TestTypingAndDeletingLeavesThePlaceholderWholeOrNothing(t *testing.T) {

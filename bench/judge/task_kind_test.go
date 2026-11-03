@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/judge/jev"
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers"
+	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 	"tofu/library/questions"

@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"tofu/internal/memory"
 	"tofu/internal/store/learn/words"
+	"tofu/internal/store/memory/entries"
 )
 
 type Class string

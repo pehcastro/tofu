@@ -7,9 +7,9 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
-	"tofu/internal/rule"
-	"tofu/internal/subagent"
+	"tofu/internal/librarian/rules"
 	shipped "tofu/library"
 )
 

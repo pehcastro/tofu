@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"tofu/bench/corpus"
-	"tofu/internal/llm/quota"
+	"tofu/internal/models/llm/quota"
 )
 
 type Reading struct {

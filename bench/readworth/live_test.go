@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"tofu/bench/api"
-	"tofu/internal/judge/jev"
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
+	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
 	"tofu/internal/tools/shell/sift"
 	libraryquestions "tofu/library/questions"

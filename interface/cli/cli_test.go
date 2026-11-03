@@ -10,8 +10,8 @@ import (
 
 	"github.com/charmbracelet/colorprofile"
 
-	"tofu/internal/golden"
 	"tofu/internal/konst"
+	"tofu/internal/testkit/golden"
 )
 
 const sampleHome = "/home/sample"

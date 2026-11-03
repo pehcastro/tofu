@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/shell"
-	roster "tofu/internal/subagent"
+	roster "tofu/internal/agent/subagents"
+	"tofu/internal/tools/shell/process"
 	"tofu/internal/ui/statusline"
 )
 

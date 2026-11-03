@@ -14,8 +14,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/look"
-	"tofu/internal/golden"
-	"tofu/internal/widget"
+	"tofu/internal/cli/render"
+	"tofu/internal/testkit/golden"
 )
 
 func downsampled(profile colorprofile.Profile, frame string) string {

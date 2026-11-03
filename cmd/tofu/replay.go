@@ -13,12 +13,12 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/cli/render"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
 	"tofu/internal/judge/state"
 	"tofu/internal/sys"
-	"tofu/internal/widget"
 	"tofu/library/questions"
 )
 

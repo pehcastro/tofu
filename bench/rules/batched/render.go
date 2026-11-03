@@ -9,10 +9,10 @@ import (
 	"strings"
 
 	"tofu/bench/stat"
-	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
-	"tofu/internal/rule"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/models/classifiers/providers/typesafe"
 )
 
 const (
@@ -52,7 +52,7 @@ func render(replies []reply, rules []rule.Rule, rec record, recordPath string) (
 	fmt.Fprintf(&b, "Machine: %s. Credential kind: %s. Wire: %s. Model requested: `%s`. Build id the responses reported: `%s`. Date: %s. No first call was discarded as a warm-up; requests ran one at a time.\n\n",
 		rec.Machine, rec.Credential, rec.Wire, rec.Model, strings.Join(slices.Sorted(maps.Keys(builds)), ", "), rec.Date)
 	fmt.Fprintf(&b, "Rerun, offline, from the record: `go run ./bench/rules/batched -record %s`. A new live run needs the network and the TypeSafe key: `go run ./bench/rules/batched -live`.\n\n", recordPath)
-	fmt.Fprintf(&b, "Corpus: %d final lead replies recorded in this project's sessions, text mocked for a public repository, hand labelled on %s. A Jev answer over %.1f counts as breaks. Arms: (a) no check, as shipped, (b) the em_dash checker in internal/rule/check.go, (c) Jev, every applicable rule in one request a reply.\n\n",
+	fmt.Fprintf(&b, "Corpus: %d final lead replies recorded in this project's sessions, text mocked for a public repository, hand labelled on %s. A Jev answer over %.1f counts as breaks. Arms: (a) no check, as shipped, (b) the em_dash checker in internal/librarian/rules/check.go, (c) Jev, every applicable rule in one request a reply.\n\n",
 		len(replies), strings.Join(labelledRules, ", "), breaksAbove)
 	fmt.Fprintf(&b, "Leakage: %d of %d replies quote %d words in a row of a rule they are labelled on.\n\n", len(leaks(replies, rules)), len(replies), leakRunOfWords)
 	writeAgreement(&b, replies, answers, checked)

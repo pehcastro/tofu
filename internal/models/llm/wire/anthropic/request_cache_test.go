@@ -1,0 +1,617 @@
+package anthropic_test
+
+import (
+	"cmp"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"tofu/internal/agent/subagents"
+	"tofu/internal/konst"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/models/llm/wire/anthropic"
+	"tofu/internal/store/session"
+	"tofu/internal/turn"
+	"tofu/internal/turn/tools"
+	shipped "tofu/library"
+)
+
+const (
+	sessionEnvironment = "<env>\nworking directory: Q:\\code\\hono-app-2\nplatform: windows/amd64\n</env>"
+	firstTurnTask      = "this is a hono app with bun, i need you to check the nw.sqlite and extract its schema, then build a hono api using sub agents in parallel, start the dev server for me so i can test too"
+	secondTurnTask     = "debug why bun is running a very wrong project and not this one, its pointing to my portfolio project"
+	thirdTurnTask      = "can you explain what was done to me? can be with lld"
+)
+
+type capturedServer struct {
+	mu      sync.Mutex
+	bodies  [][]byte
+	replies []string
+}
+
+func (s *capturedServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	body, _ := io.ReadAll(r.Body)
+	s.mu.Lock()
+	s.bodies = append(s.bodies, body)
+	reply := "text"
+	if len(s.replies) > 0 {
+		reply, s.replies = s.replies[0], s.replies[1:]
+	}
+	s.mu.Unlock()
+	events := textEvents()
+	if reply == "read" {
+		events = toolUseEvents(map[string]any{"read": map[string]string{"path": "API_SPEC.md"}})
+	}
+	stream(w, events)
+}
+
+func textEvents() []string {
+	return []string{
+		`{"type":"message_start","message":{"id":"msg_1","model":"claude-test","usage":{"input_tokens":3}}}`,
+		`{"type":"content_block_start","index":0,"content_block":{"type":"text"}}`,
+		`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"done"}}`,
+		`{"type":"content_block_stop","index":0}`,
+		`{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2}}`,
+	}
+}
+
+func stream(w http.ResponseWriter, events []string) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	for _, event := range append(events, `{"type":"message_stop"}`) {
+		_, _ = fmt.Fprintf(w, "data: %s\n\n", event)
+	}
+}
+
+func sessionConfig(t *testing.T, replies ...string) (turn.Config, *capturedServer) {
+	t.Helper()
+	server := &capturedServer{replies: replies}
+	config, _ := servedSession(t, server)
+	return config, server
+}
+
+func servedSession(t *testing.T, server http.Handler) (turn.Config, []turn.Tool) {
+	t.Helper()
+	listening := httptest.NewServer(server)
+	t.Cleanup(listening.Close)
+	wire, err := anthropic.New(anthropic.Config{
+		BaseURL: listening.URL,
+		Model:   "claude-test",
+		Proxy:   true,
+		Token:   func(context.Context, string) (string, error) { return "sk-ant-oat01-test", nil },
+	})
+	if err != nil {
+		t.Fatalf("opening the wire: %v", err)
+	}
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "API_SPEC.md"), []byte(strings.Repeat("GET /customers returns every customer\n", 200)), 0o600); err != nil {
+		t.Fatalf("writing the spec: %v", err)
+	}
+	read, err := turn.NewReadTool(root)
+	if err != nil {
+		t.Fatalf("building read: %v", err)
+	}
+	write, err := turn.NewWriteTool(root)
+	if err != nil {
+		t.Fatalf("building write: %v", err)
+	}
+	return turn.Config{
+		Model:          turn.Subscription{Wire: wire},
+		Spend:          turn.SpendSubscription,
+		Tools:          turn.NewRegistry(read, write),
+		Environment:    sessionEnvironment,
+		Caps:           turn.Caps{MaxSteps: 5},
+		ResultBytesCap: 1 << 16,
+		ArtifactDir:    filepath.Join(root, "artifacts"),
+		NewID:          func() string { return "turn-test" },
+	}, []turn.Tool{read, write}
+}
+
+func sessionSpec(t *testing.T, task string, role rule.Role) turn.ComposeSpec {
+	t.Helper()
+	rules, err := rule.LoadFS(shipped.Files(), "library")
+	if err != nil {
+		t.Fatalf("loading the shipped rules: %v", err)
+	}
+	return turn.ComposeSpec{
+		Task:         task,
+		Environment:  sessionEnvironment,
+		ToolGuidance: turn.EveryToolIsRelativeToTheWorkingDirectory + turn.SpawnAddendum,
+		Rules:        rules,
+		Role:         role,
+	}
+}
+
+type cachedPiece struct {
+	where      string
+	text       string
+	breakpoint bool
+	ttl        any
+	history    bool
+}
+
+func inCacheOrder(t *testing.T, body []byte) []cachedPiece {
+	t.Helper()
+	var decoded struct {
+		Tools    []map[string]any `json:"tools"`
+		System   []map[string]any `json:"system"`
+		Messages []struct {
+			Content []map[string]any `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("decoding the request: %v", err)
+	}
+	var pieces []cachedPiece
+	add := func(where string, block map[string]any, history bool) {
+		marked, breakpoint := block["cache_control"].(map[string]any)
+		delete(block, "cache_control")
+		text, err := json.Marshal(block)
+		if err != nil {
+			t.Fatalf("encoding %s: %v", where, err)
+		}
+		pieces = append(pieces, cachedPiece{where: where, text: string(text), breakpoint: breakpoint, ttl: marked["ttl"], history: history})
+	}
+	for _, tool := range decoded.Tools {
+		add(fmt.Sprintf("the tool %v", tool["name"]), tool, false)
+	}
+	for index, block := range decoded.System {
+		if text, _ := block["text"].(string); strings.HasPrefix(text, anthropic.BillingHeaderPrefix) {
+			block["text"] = regexp.MustCompile(`cch=[0-9a-f]+`).ReplaceAllString(text, anthropic.BillingCheckPlaceholder)
+		}
+		add(fmt.Sprintf("system block %d", index), block, false)
+	}
+	for index, message := range decoded.Messages {
+		for part, block := range message.Content {
+			add(fmt.Sprintf("message %d block %d", index, part), block, true)
+		}
+	}
+	return pieces
+}
+
+func assertBreakpointsLive(t *testing.T, body []byte, head, history string) []string {
+	t.Helper()
+	marks := map[bool][]string{}
+	fiveMinutesSeen := false
+	for _, piece := range inCacheOrder(t, body) {
+		if !piece.breakpoint {
+			continue
+		}
+		if want := map[bool]string{false: head, true: history}[piece.history]; piece.ttl != want {
+			t.Fatalf("the breakpoint on %s carries ttl %v, want %s", piece.where, piece.ttl, want)
+		}
+		if piece.ttl == "1h" && fiveMinutesSeen {
+			t.Fatalf("the 1h breakpoint on %s follows a 5m one, which the vendor refuses", piece.where)
+		}
+		fiveMinutesSeen = fiveMinutesSeen || piece.ttl == "5m"
+		marks[piece.history] = append(marks[piece.history], piece.where)
+	}
+	if len(marks[false]) == 0 {
+		t.Fatal("the request marks nothing in its head")
+	}
+	if placed := len(marks[false]) + len(marks[true]); placed > 4 {
+		t.Fatalf("the request places %d breakpoints, past the 4 the vendor allows", placed)
+	}
+	t.Logf("%s on %v, %s on %v", head, marks[false], history, marks[true])
+	return marks[true]
+}
+
+func headOf(pieces []cachedPiece) []cachedPiece {
+	return slices.DeleteFunc(pieces, func(piece cachedPiece) bool { return piece.history })
+}
+
+func assertCachedPrefixCarriesOver(t *testing.T, cached, next []cachedPiece) {
+	t.Helper()
+	last := -1
+	for index, piece := range cached {
+		if piece.breakpoint {
+			last = index
+		}
+	}
+	if last < 0 {
+		t.Fatal("the earlier request placed no breakpoint")
+	}
+	for index, piece := range cached[:last+1] {
+		if index >= len(next) {
+			t.Fatalf("the later request ends before %s, piece %d of the %d cached", piece.where, index+1, last+1)
+		}
+		if later := next[index].text; later != piece.text {
+			at := 0
+			for at < min(len(later), len(piece.text)) && later[at] == piece.text[at] {
+				at++
+			}
+			t.Fatalf("the cached prefix ends at %s and breaks at %s, piece %d of %d, byte %d: %q against %q",
+				cached[last].where, piece.where, index+1, last+1, at,
+				piece.text[at:min(len(piece.text), at+160)], later[at:min(len(later), at+160)])
+		}
+	}
+	t.Logf("%d pieces up to %s carry over byte for byte", last+1, cached[last].where)
+}
+
+func TestSiblingSubAgentsFromOneDefinitionShareTheCachedPrefix(t *testing.T) {
+	base, server := sessionConfig(t)
+	definition := subagent.Definition{Name: "ts-dev", Description: "typescript", Origin: "library", Runs: subagent.RunsModel,
+		Instructions: "you write typescript for bun and hono"}
+	spawn := turn.NewSpawnTool("turn-test", base, &subagent.Roster{})
+	spawn.SubAgents = turn.SubAgents{Defined: []subagent.Definition{definition}, Prompt: sessionSpec(t, "", rule.RoleAny)}
+	for _, brief := range []struct{ task, owns string }{
+		{"write the customers routes against API_SPEC.md", "src/routes/customers.ts"},
+		{"debug the orders routes against API_SPEC.md", "src/routes/orders.ts"},
+	} {
+		args, _ := json.Marshal(map[string]any{"task": brief.task, "owns": []string{brief.owns}, "agent": definition.Name})
+		if _, err := spawn.Run(context.Background(), args); err != nil {
+			t.Fatalf("spawning for %s: %v", brief.owns, err)
+		}
+		for deadline := time.Now().Add(5 * time.Second); len(spawn.Inbox.Take()) == 0; time.Sleep(10 * time.Millisecond) {
+			if time.Now().After(deadline) {
+				t.Fatalf("the sub-agent for %s sent no report within 5s", brief.owns)
+			}
+		}
+	}
+	if len(server.bodies) != 2 {
+		t.Fatalf("two sub-agents sent %d requests, want one each", len(server.bodies))
+	}
+	assertCachedPrefixCarriesOver(t, headOf(inCacheOrder(t, server.bodies[0])), headOf(inCacheOrder(t, server.bodies[1])))
+	assertFirstMessageCarries(t, server.bodies[0], "the paths you hold, and the only ones write, edit and bash may change: src/routes/customers.ts")
+	assertFirstMessageCarries(t, server.bodies[1], "from the rule debug_loop]", "may change: src/routes/orders.ts")
+}
+
+func TestTheNextTurnsFirstRequestReadsTheLastTurnsCachedPrefixAtTheLifetimeItsSettingNames(t *testing.T) {
+	for _, layout := range []struct{ setting, head, history string }{
+		{"", "1h", "1h"},
+		{"5m", "5m", "5m"},
+		{konst.SubscriptionCacheHistory5m, "1h", "5m"},
+	} {
+		t.Run("setting "+cmp.Or(layout.setting, "unset"), func(t *testing.T) {
+			config, server := sessionConfig(t, "read", "text", "text", "text")
+			ctx := context.Background()
+			if layout.setting != "" {
+				ctx = anthropic.WithCacheTTL(ctx, layout.setting)
+			}
+			for _, task := range []string{firstTurnTask, secondTurnTask, thirdTurnTask} {
+				composed, err := turn.Compose(sessionSpec(t, task, rule.RoleOrchestrator))
+				if err != nil {
+					t.Fatalf("composing: %v", err)
+				}
+				config.System, config.Environment, config.Task = composed.Head(), composed.WithTaskRules(sessionEnvironment), task
+				row, err := turn.Run(ctx, config)
+				if err != nil {
+					t.Fatalf("running %q: %v", task, err)
+				}
+				config.History = turn.Sendable(row.Conversation)
+			}
+			if len(server.bodies) != 4 {
+				t.Fatalf("three turns sent %d requests, want 2, 1 and 1", len(server.bodies))
+			}
+			assertCachedPrefixCarriesOver(t, inCacheOrder(t, server.bodies[1]), inCacheOrder(t, server.bodies[2]))
+			if len(assertBreakpointsLive(t, server.bodies[2], layout.head, layout.history)) == 0 {
+				t.Fatal("the next turn's first request marks nothing in its history")
+			}
+			assertFirstMessageCarries(t, server.bodies[0], "[code_rules, from the rule e2e_first]")
+			assertFirstMessageCarries(t, server.bodies[2], "[process_discipline, from the rule debug_loop]\nbefore you form a theory")
+			assertCachedPrefixCarriesOver(t, inCacheOrder(t, server.bodies[2]), inCacheOrder(t, server.bodies[3]))
+			assertFirstMessageCarries(t, server.bodies[3], "[task_shaping, from the rule design_docs]")
+		})
+	}
+}
+
+func TestTwoSessionsInOneProjectSendTheSameCachedPrefix(t *testing.T) {
+	project := t.TempDir()
+	if err := os.WriteFile(filepath.Join(project, "go.mod"), []byte("module race\n\ngo 1.24\n"), 0o600); err != nil {
+		t.Fatalf("writing go.mod: %v", err)
+	}
+	var bodies [][]byte
+	for _, task := range []string{firstTurnTask, secondTurnTask} {
+		config, server := sessionConfig(t)
+		bash, err := turn.NewBashTool(project)
+		if err != nil {
+			t.Fatalf("building bash: %v", err)
+		}
+		spec := sessionSpec(t, task, rule.RoleOrchestrator)
+		spec.Environment = turn.Environment(project, time.Now())
+		composed, err := turn.Compose(spec)
+		if err != nil {
+			t.Fatalf("composing: %v", err)
+		}
+		config.Tools = turn.NewRegistry(bash)
+		config.System, config.Environment, config.Task = composed.Head(), composed.WithTaskRules(spec.Environment), task
+		if _, err := turn.Run(context.Background(), config); err != nil {
+			t.Fatalf("running %q: %v", task, err)
+		}
+		bodies = append(bodies, server.bodies[0])
+	}
+	head := func(body []byte) []cachedPiece {
+		return slices.DeleteFunc(inCacheOrder(t, body), func(piece cachedPiece) bool { return piece.history })
+	}
+	assertCachedPrefixCarriesOver(t, head(bodies[0]), head(bodies[1]))
+}
+
+const subAgentInstructions = "you write typescript for bun and hono"
+
+func toolUseEvents(calls map[string]any) []string {
+	events := []string{`{"type":"message_start","message":{"id":"msg_1","model":"claude-test","usage":{"input_tokens":3}}}`}
+	index := 0
+	for name, input := range calls {
+		arguments, _ := json.Marshal(input)
+		delta, _ := json.Marshal(map[string]any{"type": "input_json_delta", "partial_json": string(arguments)})
+		events = append(events,
+			fmt.Sprintf(`{"type":"content_block_start","index":%d,"content_block":{"type":"tool_use","id":"toolu_%s","name":"_%s","input":{}}}`, index, name, name),
+			fmt.Sprintf(`{"type":"content_block_delta","index":%d,"delta":%s}`, index, delta),
+			fmt.Sprintf(`{"type":"content_block_stop","index":%d}`, index))
+		index++
+	}
+	return append(events, `{"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":2}}`)
+}
+
+type leadAndSubAgentServer struct {
+	mu   sync.Mutex
+	lead [][]byte
+	sub  [][]byte
+}
+
+func (s *leadAndSubAgentServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	body, _ := io.ReadAll(r.Body)
+	var decoded struct {
+		Messages []json.RawMessage `json:"messages"`
+	}
+	_ = json.Unmarshal(body, &decoded)
+	first, events := len(decoded.Messages) == 1, textEvents()
+	s.mu.Lock()
+	switch {
+	case strings.Contains(string(body), subAgentInstructions):
+		s.sub = append(s.sub, body)
+		if first {
+			events = toolUseEvents(map[string]any{"read": map[string]string{"path": "API_SPEC.md"}})
+		}
+	default:
+		s.lead = append(s.lead, body)
+		if first {
+			events = toolUseEvents(map[string]any{"read": map[string]string{"path": "API_SPEC.md"},
+				"spawn": map[string]any{"agent": "ts-dev", "owns": []string{"src/routes/customers.ts"},
+					"task": "write the customers routes against API_SPEC.md\n" + strings.Repeat("every route returns json and checks its input first\n", 100)}})
+		}
+	}
+	s.mu.Unlock()
+	stream(w, events)
+}
+
+func TestASubAgentReadsItsBriefFromCacheOnItsSecondRequestAtTheLifetimeItsSettingSays(t *testing.T) {
+	for _, setting := range []string{"", "5m"} {
+		t.Run("setting "+cmp.Or(setting, "unset"), func(t *testing.T) {
+			server := &leadAndSubAgentServer{}
+			lead, tools := servedSession(t, server)
+			definition := subagent.Definition{Name: "ts-dev", Description: "typescript", Origin: "library", Runs: subagent.RunsModel, Instructions: subAgentInstructions}
+			spawn := turn.NewSpawnTool("turn-test", lead, &subagent.Roster{})
+			spawn.SubAgents = turn.SubAgents{Defined: []subagent.Definition{definition}, Prompt: sessionSpec(t, "", rule.RoleAny)}
+			spawn.Limits = func() turn.SubAgentLimits {
+				return turn.SubAgentLimits{Running: 2, Depth: 1, CheckIn: time.Hour, CacheTTL: setting}
+			}
+			lead.Tools = turn.NewRegistry(append(tools, spawn)...)
+			composed, err := turn.Compose(sessionSpec(t, firstTurnTask, rule.RoleOrchestrator))
+			if err != nil {
+				t.Fatalf("composing: %v", err)
+			}
+			lead.System, lead.Environment, lead.Task = composed.Head(), composed.WithTaskRules(sessionEnvironment), firstTurnTask
+			if _, err := turn.Run(context.Background(), lead); err != nil {
+				t.Fatalf("running the lead: %v", err)
+			}
+			for deadline := time.Now().Add(5 * time.Second); len(spawn.Inbox.Take()) == 0; time.Sleep(10 * time.Millisecond) {
+				if time.Now().After(deadline) {
+					t.Fatal("the sub-agent sent no report within 5s")
+				}
+			}
+			server.mu.Lock()
+			defer server.mu.Unlock()
+			if len(server.sub) != 2 || len(server.lead) < 2 {
+				t.Fatalf("the sub-agent sent %d requests and the lead %d, want 2 and at least 2", len(server.sub), len(server.lead))
+			}
+			ttl := cmp.Or(setting, konst.SubscriptionCacheTTL)
+			if brief := assertBreakpointsLive(t, server.sub[0], ttl, ttl); len(brief) == 0 {
+				t.Fatal("the sub-agent's first request marks nothing after the head, so its brief is not cached")
+			}
+			assertBreakpointsLive(t, server.sub[1], ttl, ttl)
+			assertCachedPrefixCarriesOver(t, inCacheOrder(t, server.sub[0]), inCacheOrder(t, server.sub[1]))
+			for _, body := range server.lead {
+				assertBreakpointsLive(t, body, konst.SubscriptionCacheTTL, konst.SubscriptionCacheTTL)
+			}
+		})
+	}
+}
+
+func TestTheSessionRecordsHowMuchOfARequestsCacheWriteLivesFiveMinutesAndHowMuchAnHour(t *testing.T) {
+	config, _ := servedSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		events := textEvents()
+		events[0] = `{"type":"message_start","message":{"id":"msg_1","model":"claude-test","usage":{"input_tokens":3,"cache_creation_input_tokens":30,"cache_creation":{"ephemeral_5m_input_tokens":10,"ephemeral_1h_input_tokens":20}}}}`
+		stream(w, events)
+	}))
+	store, id := session.NewStore(t.TempDir()), session.NewEventID()
+	config.Sessions, config.Session, config.Task = store, id, firstTurnTask
+	if _, err := turn.Run(context.Background(), config); err != nil {
+		t.Fatalf("running: %v", err)
+	}
+	events, err := store.Events(id)
+	if err != nil {
+		t.Fatalf("reading the session: %v", err)
+	}
+	var recorded []string
+	for _, event := range events {
+		if event.Kind == session.EventRequest {
+			recorded = append(recorded, string(event.Body))
+		}
+	}
+	if len(recorded) != 1 || !strings.Contains(recorded[0], `"cache_write_5m_tokens":10`) || !strings.Contains(recorded[0], `"cache_write_1h_tokens":20`) {
+		t.Fatalf("the session recorded %v, want one request carrying 10 tokens at 5m and 20 at 1h", recorded)
+	}
+}
+
+type describedTool struct {
+	description *string
+	schema      *map[string]any
+}
+
+func (describedTool) Name() string { return "roster" }
+
+func (d describedTool) Definition() llm.Tool {
+	return llm.Tool{Name: "roster", Description: *d.description, Parameters: *d.schema}
+}
+
+func (describedTool) Run(context.Context, json.RawMessage) (turn.Result, error) {
+	return turn.Result{}, nil
+}
+
+func TestASessionsLaterTurnSendsTheSystemPromptAndToolsItsFirstTurnSent(t *testing.T) {
+	firstSchema := map[string]any{"type": "object", "properties": map[string]any{"team": map[string]any{"type": "string"}}}
+	widerSchema := map[string]any{"type": "object", "properties": map[string]any{"team": map[string]any{"type": "string"}, "language": map[string]any{"type": "string"}}}
+	for _, changed := range []struct {
+		name          string
+		schema        map[string]any
+		toolsHeld     bool
+		messagesCarry string
+	}{
+		{name: "only the description changed", schema: firstSchema, toolsHeld: true, messagesCarry: "rust-dev"},
+		{name: "the input schema changed", schema: widerSchema, toolsHeld: false, messagesCarry: "roster"},
+	} {
+		t.Run(changed.name, func(t *testing.T) {
+			config, server := sessionConfig(t, "text", "text")
+			description, schema := "lists the sub-agents ts-dev and go-dev", firstSchema
+			read, _ := turn.NewReadTool(t.TempDir())
+			config.Tools = turn.NewRegistry(read, describedTool{description: &description, schema: &schema})
+			config.Prefix = &turn.Prefix{}
+			composed, err := turn.Compose(sessionSpec(t, firstTurnTask, rule.RoleOrchestrator))
+			if err != nil {
+				t.Fatalf("composing: %v", err)
+			}
+			config.System, config.Environment = composed.Head(), composed.WithTaskRules(sessionEnvironment)
+			for _, task := range []string{firstTurnTask, secondTurnTask} {
+				config.Task = task
+				row, err := turn.Run(context.Background(), config)
+				if err != nil {
+					t.Fatalf("running %q: %v", task, err)
+				}
+				config.History = turn.Sendable(row.Conversation)
+				config.Memory, description, schema = "the person prefers bun over node", "lists the sub-agents ts-dev, go-dev and rust-dev", changed.schema
+			}
+			if len(server.bodies) != 2 {
+				t.Fatalf("two turns sent %d requests, want 2", len(server.bodies))
+			}
+			sent := func(body []byte, where string) string {
+				var pieces []string
+				for _, piece := range inCacheOrder(t, body) {
+					if strings.Contains(piece.where, where) {
+						pieces = append(pieces, piece.text)
+					}
+				}
+				return strings.Join(pieces, "\n")
+			}
+			if sent(server.bodies[0], "system") != sent(server.bodies[1], "system") {
+				t.Fatal("the second turn rewrote its system prompt, so the cached head breaks")
+			}
+			roster := sent(server.bodies[1], "roster")
+			if held := sent(server.bodies[0], "the tool") == sent(server.bodies[1], "the tool"); held != changed.toolsHeld {
+				t.Fatalf("the second turn's tools are byte-identical to the first: %v, want %v; second turn sent %s", held, changed.toolsHeld, roster)
+			}
+			if !changed.toolsHeld && !strings.Contains(roster, "language") {
+				t.Fatalf("the input schema changed and the second turn still sent the first one: %s", roster)
+			}
+			if !strings.Contains(sent(server.bodies[1], "message"), changed.messagesCarry) {
+				t.Fatalf("no message after the cached head says %q, so the model never learns what changed", changed.messagesCarry)
+			}
+			if changed.toolsHeld {
+				assertCachedPrefixCarriesOver(t, headOf(inCacheOrder(t, server.bodies[0])), headOf(inCacheOrder(t, server.bodies[1])))
+			}
+		})
+	}
+}
+
+func cacheReadBytes(t *testing.T, earlier, later []byte) int {
+	t.Helper()
+	asked := inCacheOrder(t, later)
+	read, matched := 0, 0
+	for index, piece := range inCacheOrder(t, earlier) {
+		if index >= len(asked) || asked[index].text != piece.text {
+			break
+		}
+		matched += len(piece.text)
+		if piece.breakpoint {
+			read = matched
+		}
+	}
+	return read
+}
+
+func TestThePlanRidesAfterTheCachedPrefixAndTheCacheReadsWhatItReadWithoutIt(t *testing.T) {
+	steps := [][]string{
+		toolUseEvents(map[string]any{"plan": map[string]any{"op": "set", "items": []map[string]string{
+			{"text": "read the spec"}, {"text": "write the routes"}, {"text": "run the tests"}}}}),
+		toolUseEvents(map[string]any{"read": map[string]string{"path": "API_SPEC.md"}}),
+		toolUseEvents(map[string]any{"plan": map[string]any{"op": "start", "item": "write the routes"}}),
+		toolUseEvents(map[string]any{"write": map[string]string{"path": "src/routes.ts", "content": "export const routes = []\n"}}),
+		textEvents(),
+	}
+	read := map[bool][]int{}
+	for _, shown := range []bool{false, true} {
+		var bodies [][]byte
+		config, built := servedSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			bodies = append(bodies, body)
+			stream(w, steps[min(len(bodies), len(steps))-1])
+		}))
+		plan := tools.NewPlan()
+		config.Tools, config.Task, config.Caps.MaxSteps = turn.NewRegistry(append(built, plan)...), firstTurnTask, 10
+		if shown {
+			config.Plan = plan.Shown
+		}
+		if _, err := turn.Run(context.Background(), config); err != nil {
+			t.Fatalf("running with the plan shown %v: %v", shown, err)
+		}
+		if len(bodies) != len(steps) {
+			t.Fatalf("the turn sent %d requests, want %d", len(bodies), len(steps))
+		}
+		for index, body := range bodies {
+			pieces := inCacheOrder(t, body)
+			last := pieces[len(pieces)-1]
+			carries := strings.Contains(last.text, `"type":"text"`) && strings.Contains(last.text, "read the spec")
+			if wanted := shown && index > 0; carries != wanted || carries && last.breakpoint {
+				t.Errorf("shown %v: request %d ends on %s carrying the plan %v and marked %v, want the plan %v and never marked", shown, index+1, last.where, carries, last.breakpoint, wanted)
+			}
+			if index > 0 {
+				read[shown] = append(read[shown], cacheReadBytes(t, bodies[index-1], body))
+			}
+		}
+	}
+	if !slices.Equal(read[true], read[false]) {
+		t.Fatalf("the cache reads %v bytes with the plan shown and %v without it", read[true], read[false])
+	}
+	t.Logf("cache read bytes per later request, with the plan %v, without it %v", read[true], read[false])
+}
+
+func assertFirstMessageCarries(t *testing.T, body []byte, wanted ...string) {
+	t.Helper()
+	var decoded struct {
+		Messages []struct {
+			Content []struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("decoding the request: %v", err)
+	}
+	last := decoded.Messages[len(decoded.Messages)-1].Content[0].Text
+	for _, text := range wanted {
+		if !strings.Contains(last, text) {
+			t.Fatalf("the turn's first user message does not carry %q:\n%s", text, last)
+		}
+	}
+}

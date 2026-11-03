@@ -20,13 +20,13 @@ import (
 	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/trace"
 	"tofu/internal/agent/commands"
+	roster "tofu/internal/agent/subagents"
 	"tofu/internal/host"
-	"tofu/internal/judge/jev"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	isession "tofu/internal/session"
-	isettings "tofu/internal/settings"
-	roster "tofu/internal/subagent"
+	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/llm/core"
+	isession "tofu/internal/store/session"
+	isettings "tofu/internal/store/settings"
 )
 
 const (

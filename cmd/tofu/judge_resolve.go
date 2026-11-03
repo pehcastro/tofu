@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"tofu/internal/judge/gate"
-	"tofu/internal/judge/jev"
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
 	"tofu/internal/judge/state"
+	"tofu/internal/models/classifiers/core"
 	shipped "tofu/library"
 	"tofu/library/questions"
 )

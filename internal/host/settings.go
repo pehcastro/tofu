@@ -11,11 +11,11 @@ import (
 	"sync"
 	"time"
 
-	"tofu/internal/boardy"
-	"tofu/internal/llm/models"
-	"tofu/internal/safe"
-	"tofu/internal/settings"
-	roster "tofu/internal/subagent"
+	roster "tofu/internal/agent/subagents"
+	"tofu/internal/models/llm/catalog"
+	"tofu/internal/platform/recover"
+	"tofu/internal/project/boardy"
+	"tofu/internal/store/settings"
 	"tofu/internal/sys"
 	shipped "tofu/library"
 )

@@ -12,12 +12,12 @@ import (
 	"testing/synctest"
 	"time"
 
-	"tofu/internal/golden"
+	"tofu/internal/agent/context/recall"
 	"tofu/internal/konst"
-	"tofu/internal/recall"
-	"tofu/internal/session"
-	"tofu/internal/shell"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/testkit/golden"
+	"tofu/internal/tools/shell/process"
 	"tofu/internal/turn"
 )
 

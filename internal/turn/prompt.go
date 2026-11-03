@@ -9,10 +9,10 @@ import (
 	"time"
 	"unicode"
 
+	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
-	"tofu/internal/settings"
-	"tofu/internal/skill"
-	"tofu/internal/subagent"
+	"tofu/internal/librarian/skills"
+	"tofu/internal/store/settings"
 	"tofu/internal/sys"
 )
 

@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"tofu/interface/tui"
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 )

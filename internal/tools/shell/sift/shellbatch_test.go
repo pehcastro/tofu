@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/judge/jev"
 	"tofu/internal/konst"
+	"tofu/internal/models/classifiers/core"
 )
 
 const batchModel = "~typesafe/jev-latest"

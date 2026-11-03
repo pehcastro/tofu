@@ -15,7 +15,7 @@ import (
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 	"tofu/internal/turn"

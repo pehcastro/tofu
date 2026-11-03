@@ -14,10 +14,10 @@ import (
 	"testing"
 
 	"tofu/interface/cli"
-	"tofu/internal/llm/models"
-	"tofu/internal/llm/wire/anthropic"
-	"tofu/internal/llm/wire/codex"
-	settingspkg "tofu/internal/settings"
+	"tofu/internal/models/llm/catalog"
+	"tofu/internal/models/llm/wire/anthropic"
+	"tofu/internal/models/llm/wire/codex"
+	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
 )
 

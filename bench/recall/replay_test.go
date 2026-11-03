@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"tofu/bench/corpus"
+	rc "tofu/internal/agent/context/recall"
 	"tofu/internal/konst"
-	rc "tofu/internal/recall"
 )
 
 var (

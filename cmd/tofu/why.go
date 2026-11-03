@@ -13,7 +13,7 @@ import (
 	"tofu/interface/cli"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
-	sessionstore "tofu/internal/session"
+	sessionstore "tofu/internal/store/session"
 	"tofu/internal/sys"
 )
 

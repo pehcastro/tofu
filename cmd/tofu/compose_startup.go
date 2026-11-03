@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"tofu/internal/llm"
-	"tofu/internal/llm/cred"
-	"tofu/internal/safe"
-	"tofu/internal/session"
+	"tofu/internal/models/llm/accounts"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/recover"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 )

@@ -15,8 +15,8 @@ import (
 	"tofu/bench/report"
 	benchturn "tofu/bench/turn"
 	benchwording "tofu/bench/wording"
-	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/typesafe"
+	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/typesafe"
 )
 
 const (

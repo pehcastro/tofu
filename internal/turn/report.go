@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/internal/boardy"
+	"tofu/internal/agent/context/recall"
+	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/recall"
-	"tofu/internal/subagent"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/project/boardy"
 )
 
 type SubAgentCommand struct {

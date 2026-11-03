@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"tofu/internal/agent/hooks"
-	"tofu/internal/llm"
-	"tofu/internal/shell"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/shell/process"
 )
 
 type hookEngineKey struct{}

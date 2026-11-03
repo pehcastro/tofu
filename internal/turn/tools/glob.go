@@ -19,8 +19,8 @@ import (
 	"unicode/utf8"
 
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/safe"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/recover"
 	"tofu/internal/sys"
 	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"

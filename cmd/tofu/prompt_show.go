@@ -7,9 +7,9 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/internal/llm"
-	"tofu/internal/rule"
-	settingspkg "tofu/internal/settings"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/models/llm/core"
+	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/turn"
 )
 

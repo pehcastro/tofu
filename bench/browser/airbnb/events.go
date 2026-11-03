@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/internal/llm"
-	"tofu/internal/session"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
 )
 
 const browserAgentDefinition = "browser"

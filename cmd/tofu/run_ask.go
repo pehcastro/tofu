@@ -3,11 +3,11 @@ package main
 import (
 	"time"
 
-	"tofu/internal/judge/jev"
+	"tofu/internal/agent/subagents"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/question"
-	settingspkg "tofu/internal/settings"
-	"tofu/internal/subagent"
+	"tofu/internal/judge/questions"
+	"tofu/internal/models/classifiers/core"
+	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 	shipped "tofu/library"

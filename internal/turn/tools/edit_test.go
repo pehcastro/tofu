@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"tofu/internal/judge/state"
-	"tofu/internal/rule"
+	"tofu/internal/librarian/rules"
 	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 )

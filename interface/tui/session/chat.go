@@ -9,8 +9,8 @@ import (
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/progress"
 	"tofu/interface/tui/trace"
-	"tofu/internal/transport"
-	"tofu/internal/widget"
+	"tofu/internal/cli/render"
+	"tofu/internal/models/transport"
 )
 
 const (

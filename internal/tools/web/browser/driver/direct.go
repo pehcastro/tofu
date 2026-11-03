@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/safe"
+	"tofu/internal/platform/recover"
 	"tofu/internal/sys"
 	"tofu/internal/tools/web/browser/extension"
 )

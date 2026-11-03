@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/golden"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
+	"tofu/internal/testkit/golden"
 )
 
 func TestLoginStatusJSONIsOneEnvelopeOfCodes(t *testing.T) {

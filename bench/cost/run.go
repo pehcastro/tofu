@@ -10,8 +10,8 @@ import (
 	benchapi "tofu/bench/api"
 	"tofu/bench/corpus"
 	"tofu/internal/judge/gate"
-	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/models/classifiers/core"
 )
 
 type CaseResult struct {

@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"tofu/internal/agent/cron"
-	"tofu/internal/session"
-	roster "tofu/internal/subagent"
+	roster "tofu/internal/agent/subagents"
+	"tofu/internal/store/session"
 	"tofu/internal/turn"
 )
 

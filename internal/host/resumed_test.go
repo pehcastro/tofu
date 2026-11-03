@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/llm"
-	"tofu/internal/session"
-	roster "tofu/internal/subagent"
+	roster "tofu/internal/agent/subagents"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
 )
 
 type recordedEvent struct {

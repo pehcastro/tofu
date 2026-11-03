@@ -15,9 +15,9 @@ import (
 	"tofu/interface/tui/keyfield"
 	"tofu/interface/tui/shells"
 	"tofu/internal/host"
-	"tofu/internal/llm"
-	library "tofu/internal/llm/models"
-	isettings "tofu/internal/settings"
+	library "tofu/internal/models/llm/catalog"
+	"tofu/internal/models/llm/core"
+	isettings "tofu/internal/store/settings"
 	"tofu/internal/turn/tools"
 	"tofu/internal/ui/keymap"
 )

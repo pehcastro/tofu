@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
+	"tofu/internal/models/classifiers/core"
 	"tofu/internal/tools/shell/sift"
 )
 

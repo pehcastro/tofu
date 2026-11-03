@@ -9,7 +9,7 @@ import (
 	"tofu/bench/shortlist"
 	"tofu/bench/tools"
 	toolscorpus "tofu/bench/tools/corpus"
-	"tofu/internal/judge/jev"
+	"tofu/internal/models/classifiers/core"
 	tofutools "tofu/internal/turn/tools"
 )
 

@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
 )

@@ -9,8 +9,8 @@ import (
 
 	"tofu/interface/tui"
 	"tofu/interface/tui/session"
-	"tofu/internal/llm"
-	"tofu/internal/llm/wire/anthropic"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/turn/tools"
 )
 

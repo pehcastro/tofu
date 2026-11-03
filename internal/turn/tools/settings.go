@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"tofu/internal/llm"
-	"tofu/internal/settings"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/settings"
 	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 )

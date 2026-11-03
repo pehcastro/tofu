@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"tofu/interface/cli"
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/cli/render"
 	"tofu/internal/turn"
-	"tofu/internal/widget"
 )
 
 const (

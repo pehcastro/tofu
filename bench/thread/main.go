@@ -12,7 +12,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"tofu/internal/boardy"
+	"tofu/internal/project/boardy"
 )
 
 const (

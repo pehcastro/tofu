@@ -1,6 +1,6 @@
 package ask
 
-import "tofu/internal/subagent"
+import "tofu/internal/agent/subagents"
 
 type Label string
 

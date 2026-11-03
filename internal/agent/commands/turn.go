@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"tofu/internal/konst"
-	"tofu/internal/skill"
+	"tofu/internal/librarian/skills"
 	"tofu/library"
 )
 

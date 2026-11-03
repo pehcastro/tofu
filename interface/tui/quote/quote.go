@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	isession "tofu/internal/session"
+	isession "tofu/internal/store/session"
 	"tofu/internal/turn/tools"
 )
 

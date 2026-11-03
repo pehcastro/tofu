@@ -11,11 +11,11 @@ import (
 	benchapi "tofu/bench/api"
 	"tofu/bench/corpus"
 	"tofu/bench/report"
-	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
 	"tofu/internal/judge/state"
+	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/typesafe"
 	libraryquestions "tofu/library/questions"
 )
 

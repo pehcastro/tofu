@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"tofu/internal/session"
+	"tofu/internal/store/session"
 )
 
 func Render(machine, date, path string, rows []session.Promotion) string {

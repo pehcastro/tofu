@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/agent/subagents"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/method"
-	"tofu/internal/llm"
-	"tofu/internal/subagent"
+	"tofu/internal/models/llm/core"
 	shipped "tofu/library"
 )
 

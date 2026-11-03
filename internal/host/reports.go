@@ -2,9 +2,9 @@ package host
 
 import (
 	"tofu/internal/agent/hooks"
-	"tofu/internal/memory"
-	"tofu/internal/session"
-	settingspkg "tofu/internal/settings"
+	"tofu/internal/store/memory/entries"
+	"tofu/internal/store/session"
+	settingspkg "tofu/internal/store/settings"
 )
 
 type ModelsReport struct {

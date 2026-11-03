@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
 )
 
 type Check string

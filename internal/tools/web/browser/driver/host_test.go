@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/settings"
+	"tofu/internal/store/settings"
 	"tofu/internal/sys"
 )
 

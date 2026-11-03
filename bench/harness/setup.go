@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sort"
 
-	"tofu/internal/rule"
+	"tofu/internal/librarian/rules"
 	"tofu/internal/sys"
 )
 

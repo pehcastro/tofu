@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/golden"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
+	"tofu/internal/testkit/golden"
 )
 
 type outputCase struct {

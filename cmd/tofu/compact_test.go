@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	sessionstore "tofu/internal/session"
+	sessionstore "tofu/internal/store/session"
 )
 
 func TestCompactShrinksTheCarriedHistoryAndARestartCarriesItShrunk(t *testing.T) {

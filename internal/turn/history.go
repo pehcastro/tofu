@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/agent/context/recall"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/recall"
-	"tofu/internal/rule"
-	"tofu/internal/session"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
 )
 

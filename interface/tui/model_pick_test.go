@@ -12,8 +12,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/models"
-	"tofu/internal/llm"
-	library "tofu/internal/llm/models"
+	library "tofu/internal/models/llm/catalog"
+	"tofu/internal/models/llm/core"
 )
 
 const (

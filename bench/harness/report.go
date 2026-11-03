@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/judge/jev/wire/typesafe"
+	"tofu/internal/models/classifiers/providers/typesafe"
 )
 
 //go:embed entitlement.txt

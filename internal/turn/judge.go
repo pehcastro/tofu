@@ -8,10 +8,10 @@ import (
 	"slices"
 	"strconv"
 
-	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers"
+	"tofu/internal/models/classifiers/core"
 	"tofu/library/questions"
 )
 

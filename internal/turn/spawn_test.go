@@ -11,12 +11,12 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/llm"
-	"tofu/internal/recall"
-	"tofu/internal/rule"
-	"tofu/internal/session"
-	"tofu/internal/settings"
-	"tofu/internal/subagent"
+	"tofu/internal/agent/context/recall"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
+	"tofu/internal/store/settings"
 	"tofu/library"
 )
 

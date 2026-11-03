@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
 	"tofu/internal/sys"
 )
 

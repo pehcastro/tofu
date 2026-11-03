@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"tofu/interface/tui/look"
+	"tofu/internal/cli/render"
 	"tofu/internal/konst"
-	"tofu/internal/widget"
 )
 
 const (

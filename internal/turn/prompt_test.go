@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/settings"
+	"tofu/internal/store/settings"
 )
 
 func TestOldInstructionSourcesReadAsAChoice(t *testing.T) {

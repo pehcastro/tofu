@@ -11,8 +11,8 @@ import (
 	"tofu/interface/tui/palette"
 	"tofu/interface/tui/session"
 	"tofu/internal/host"
-	"tofu/internal/memory"
-	isettings "tofu/internal/settings"
+	"tofu/internal/store/memory/entries"
+	isettings "tofu/internal/store/settings"
 )
 
 const (

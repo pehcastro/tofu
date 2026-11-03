@@ -10,8 +10,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	tui "tofu/interface/tui"
-	"tofu/internal/session"
-	"tofu/internal/settings"
+	"tofu/internal/store/session"
+	"tofu/internal/store/settings"
 	"tofu/internal/sys"
 )
 

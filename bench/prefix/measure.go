@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"tofu/internal/llm"
-	"tofu/internal/llm/wire/anthropic"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/models/llm/wire/anthropic"
 )
 
 const bytesPerEstimatedToken = 4

@@ -7,7 +7,7 @@ import (
 
 	"tofu/internal/agent/cron"
 	"tofu/internal/konst"
-	settingspkg "tofu/internal/settings"
+	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 )

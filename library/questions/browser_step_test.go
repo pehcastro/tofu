@@ -3,7 +3,7 @@ package questions_test
 import (
 	"testing"
 
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
 	"tofu/internal/tools/web/browser/driver"
 	"tofu/library/questions"
 )

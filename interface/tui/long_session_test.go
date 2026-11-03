@@ -15,10 +15,10 @@ import (
 
 	"tofu/interface/tui/shells"
 	"tofu/interface/tui/subagent"
+	roster "tofu/internal/agent/subagents"
 	"tofu/internal/konst"
-	isession "tofu/internal/session"
-	isettings "tofu/internal/settings"
-	roster "tofu/internal/subagent"
+	isession "tofu/internal/store/session"
+	isettings "tofu/internal/store/settings"
 )
 
 const (

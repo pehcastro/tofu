@@ -8,7 +8,7 @@ import (
 
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/trace"
-	"tofu/internal/widget"
+	"tofu/internal/cli/render"
 )
 
 const (

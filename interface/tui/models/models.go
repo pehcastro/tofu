@@ -13,8 +13,8 @@ import (
 	"tofu/interface/tui/keyfield"
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/pointer"
-	"tofu/internal/llm"
-	library "tofu/internal/llm/models"
+	library "tofu/internal/models/llm/catalog"
+	"tofu/internal/models/llm/core"
 )
 
 const (

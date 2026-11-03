@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"tofu/interface/tui/look"
+	"tofu/internal/cli/render"
 	"tofu/internal/turn"
-	"tofu/internal/widget"
 )
 
 type Action int

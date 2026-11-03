@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"time"
 
-	"tofu/internal/safe"
+	"tofu/internal/platform/recover"
 )
 
 const (

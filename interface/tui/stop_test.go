@@ -12,8 +12,8 @@ import (
 
 	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/subagent"
+	roster "tofu/internal/agent/subagents"
 	"tofu/internal/host"
-	roster "tofu/internal/subagent"
 )
 
 type steppedClock struct {

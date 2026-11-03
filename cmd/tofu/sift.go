@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"tofu/interface/cli"
-	"tofu/internal/judge/jev"
 	"tofu/internal/konst"
-	"tofu/internal/safe"
+	"tofu/internal/models/classifiers/core"
+	"tofu/internal/platform/recover"
 	"tofu/internal/tools/shell/sift"
 )
 

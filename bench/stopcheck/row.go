@@ -5,8 +5,8 @@ import (
 	"sort"
 
 	"tofu/internal/judge/gate"
-	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/models/classifiers/core"
 )
 
 func toLedgerAnswers(wording int, in map[string]jev.Answer) []ledger.Answer {

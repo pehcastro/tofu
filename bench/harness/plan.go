@@ -30,7 +30,7 @@ const AskedEffort = EffortMedium
 const (
 	claudeEffortSetBy = "--effort medium, one of low, medium, high, xhigh and max in claude --help"
 	codexEffortSetBy  = "-c model_reasoning_effort='medium', the config override codex exec --help documents, reaching model_reasoning_effort in codex-rs/core/src/config/mod.rs:967"
-	tofuEffortSetBy   = "--effort medium, one of none, minimal, low, medium, high, xhigh and max in tofu run --help, reaching output_config.effort on the anthropic wire in internal/llm/wire/anthropic/request.go"
+	tofuEffortSetBy   = "--effort medium, one of none, minimal, low, medium, high, xhigh and max in tofu run --help, reaching output_config.effort on the anthropic wire in internal/models/llm/wire/anthropic/request.go"
 )
 
 const (

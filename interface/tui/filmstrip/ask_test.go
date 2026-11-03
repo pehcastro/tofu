@@ -7,7 +7,7 @@ import (
 
 	"tofu/interface/tui"
 	"tofu/interface/tui/subagent"
-	roster "tofu/internal/subagent"
+	roster "tofu/internal/agent/subagents"
 )
 
 const (

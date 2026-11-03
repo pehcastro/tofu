@@ -5,9 +5,9 @@ import (
 	"errors"
 	"sync"
 
-	"tofu/internal/llm"
-	"tofu/internal/safe"
-	"tofu/internal/shell"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/recover"
+	"tofu/internal/tools/shell/process"
 )
 
 type heldShells struct {

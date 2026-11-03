@@ -10,8 +10,8 @@ import (
 
 	"tofu/bench/corpus"
 	"tofu/bench/report"
-	"tofu/internal/judge/jev"
 	"tofu/internal/judge/state"
+	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
 )
 

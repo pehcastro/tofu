@@ -12,7 +12,7 @@ import (
 
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/subagent"
-	"tofu/internal/golden"
+	"tofu/internal/testkit/golden"
 )
 
 const (

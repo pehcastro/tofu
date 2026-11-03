@@ -8,8 +8,8 @@ import (
 
 	"tofu/bench/corpus"
 	"tofu/bench/corpus/recorded"
+	rc "tofu/internal/agent/context/recall"
 	"tofu/internal/konst"
-	rc "tofu/internal/recall"
 	"tofu/internal/sys"
 )
 

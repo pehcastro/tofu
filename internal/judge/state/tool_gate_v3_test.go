@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
 )
 
 const toolGateV3Path = "../../../library/questions/tool_gate@3.yaml"

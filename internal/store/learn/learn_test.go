@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/memory"
-	"tofu/internal/session"
+	"tofu/internal/store/memory/entries"
+	"tofu/internal/store/session"
 )
 
 const wrapper = "<env>\nworking directory: F:\\work\nplatform: windows/amd64\n</env>\n\ninstructions from this project's CLAUDE.md, which outrank anything above them that disagrees:\n# Rules\n\nNever mark work done on an agent's word.\n\n"

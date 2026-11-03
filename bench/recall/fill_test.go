@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	rc "tofu/internal/agent/context/recall"
 	"tofu/internal/konst"
-	rc "tofu/internal/recall"
-	"tofu/internal/session"
+	"tofu/internal/store/session"
 	"tofu/internal/turn"
 )
 

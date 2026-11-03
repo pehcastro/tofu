@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"tofu/interface/cli"
-	"tofu/internal/boardy"
-	"tofu/internal/session"
+	"tofu/internal/project/boardy"
+	"tofu/internal/store/session"
 )
 
 const sessionWorkUsage = "tofu session work <name|id|head> --ticket ID [--json]"

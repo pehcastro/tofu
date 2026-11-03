@@ -11,7 +11,7 @@ import (
 	"tofu/interface/cli"
 	"tofu/internal/agent/hooks"
 	"tofu/internal/host"
-	"tofu/internal/shell"
+	"tofu/internal/tools/shell/process"
 )
 
 const hooksSubcommands = "tofu hooks [trust] [--json]"

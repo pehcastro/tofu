@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 )
 
 func madeUpPNG(t *testing.T, width, height int) []byte {

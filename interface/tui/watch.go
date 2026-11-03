@@ -9,8 +9,8 @@ import (
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/shells"
 	"tofu/interface/tui/subagent"
-	isettings "tofu/internal/settings"
-	roster "tofu/internal/subagent"
+	roster "tofu/internal/agent/subagents"
+	isettings "tofu/internal/store/settings"
 )
 
 const (

@@ -18,8 +18,8 @@ import (
 	"unicode/utf8"
 
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/settings"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/settings"
 	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/web"

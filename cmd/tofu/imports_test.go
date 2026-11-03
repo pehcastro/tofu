@@ -11,14 +11,14 @@ import (
 
 func everyRuleMatched(files map[string]string) map[string]string {
 	tree := map[string]string{
-		"bench/cost/cost.go":           "package cost\n\nfunc Run() int { return 1 }\n",
-		"cmd/tofu/main.go":             "package main\n\nfunc main() {}\n",
-		"interface/cli/cli.go":         "package cli\n",
-		"library/embed.go":             "package library\n",
-		"internal/judge/jev/client.go": "package jev\n\nimport \"tofu/internal/sys\"\n\nfunc Name() string { return sys.OS() }\n",
-		"internal/sys/sys.go":          "package sys\n\nfunc OS() string { return \"windows\" }\n",
-		"internal/konst/konst.go":      "package konst\n",
-		"internal/safe/safe.go":        "package safe\n",
+		"bench/cost/cost.go":                    "package cost\n\nfunc Run() int { return 1 }\n",
+		"cmd/tofu/main.go":                      "package main\n\nfunc main() {}\n",
+		"interface/cli/cli.go":                  "package cli\n",
+		"library/embed.go":                      "package library\n",
+		"internal/judge/questions/questions.go": "package questions\n\nimport \"tofu/internal/sys\"\n\nfunc Name() string { return sys.OS() }\n",
+		"internal/sys/sys.go":                   "package sys\n\nfunc OS() string { return \"windows\" }\n",
+		"internal/konst/konst.go":               "package konst\n",
+		"internal/platform/recover/safe.go":     "package safe\n",
 	}
 	maps.Copy(tree, files)
 	return tree
@@ -53,7 +53,7 @@ func TestImportsFailsOnACommandImportingBench(t *testing.T) {
 	for _, want := range []string{
 		"Imports · 8 packages · 10 rules",
 		"✗ 1 violations\n",
-		"  ✗ tofu/cmd             never tofu/bench\n",
+		"  ✗ tofu/cmd                        never tofu/bench\n",
 		"violations\n  ✗ tofu/cmd/tofu  imports tofu/bench/cost\n",
 	} {
 		if !strings.Contains(out.String(), want) {
@@ -64,11 +64,11 @@ func TestImportsFailsOnACommandImportingBench(t *testing.T) {
 
 func TestImportsFailsOnJudgeImportingTurn(t *testing.T) {
 	dir := writeFixtureModule(t, everyRuleMatched(map[string]string{
-		"internal/turn/turn.go":         "package turn\n\nfunc Step() int { return 1 }\n",
-		"internal/judge/gate/rule.go":   "package gate\n\nimport \"tofu/internal/turn\"\n\nfunc Decide() int { return turn.Step() }\n",
-		"internal/transport/retry.go":   "package transport\n\nfunc Retries() int { return 3 }\n",
-		"internal/judge/ledger/row.go":  "package ledger\n\nimport \"tofu/internal/transport\"\n\nfunc N() int { return transport.Retries() }\n",
-		"internal/judge/state/state.go": "package state\n\nimport \"tofu/internal/judge/ledger\"\n\nfunc N() int { return ledger.N() }\n",
+		"internal/turn/turn.go":              "package turn\n\nfunc Step() int { return 1 }\n",
+		"internal/judge/gate/rule.go":        "package gate\n\nimport \"tofu/internal/turn\"\n\nfunc Decide() int { return turn.Step() }\n",
+		"internal/models/transport/retry.go": "package transport\n\nfunc Retries() int { return 3 }\n",
+		"internal/judge/ledger/row.go":       "package ledger\n\nimport \"tofu/internal/models/transport\"\n\nfunc N() int { return transport.Retries() }\n",
+		"internal/judge/state/state.go":      "package state\n\nimport \"tofu/internal/judge/ledger\"\n\nfunc N() int { return ledger.N() }\n",
 	}))
 
 	report, err := readImports(dir)
@@ -77,7 +77,8 @@ func TestImportsFailsOnJudgeImportingTurn(t *testing.T) {
 	}
 	want := importViolation{From: "tofu/internal/judge/gate", To: "tofu/internal/turn", Rule: "under tofu/internal, " +
 		"a package in tofu/internal/judge imports only " +
-		"tofu/internal/judge, tofu/internal/sys, tofu/internal/konst, tofu/internal/safe, tofu/internal/transport"}
+		"tofu/internal/judge, tofu/internal/sys, tofu/internal/konst, tofu/internal/platform/recover, " +
+		"tofu/internal/models/transport, tofu/internal/models/classifiers/core, tofu/internal/models/classifiers/providers"}
 	if len(report.Violations) != 1 || report.Violations[0] != want {
 		t.Fatalf("violations %+v, want only %+v", report.Violations, want)
 	}
@@ -85,8 +86,8 @@ func TestImportsFailsOnJudgeImportingTurn(t *testing.T) {
 
 func TestImportsPassesOnATreeThatObeysTheRules(t *testing.T) {
 	dir := writeFixtureModule(t, everyRuleMatched(map[string]string{
-		"bench/cost/cost.go": "package cost\n\nimport \"tofu/internal/judge/jev\"\n\nfunc Run() string { return jev.Name() }\n",
-		"cmd/tofu/main.go":   "package main\n\nimport \"tofu/internal/judge/jev\"\n\nfunc main() { _ = jev.Name() }\n",
+		"bench/cost/cost.go": "package cost\n\nimport \"tofu/internal/judge/questions\"\n\nfunc Run() string { return questions.Name() }\n",
+		"cmd/tofu/main.go":   "package main\n\nimport \"tofu/internal/judge/questions\"\n\nfunc main() { _ = questions.Name() }\n",
 	}))
 
 	out := &bytes.Buffer{}

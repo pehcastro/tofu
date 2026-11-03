@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
 )
 
 func TestAnUnsetTierStaysOutOfTheChatAndARefusedDefinitionStillShows(t *testing.T) {

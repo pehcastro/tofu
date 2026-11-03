@@ -1,0 +1,60 @@
+package subagent
+
+import (
+	"context"
+	"encoding/json"
+
+	"tofu/internal/judge/ledger"
+	"tofu/internal/judge/questions"
+	"tofu/internal/models/classifiers/core"
+)
+
+const AskStateBuilder = "subagent.AskState@2"
+
+const OutcomeKindAskAnswer = "ask-answer"
+
+type AskJudge struct {
+	Client *jev.Client
+	Set    question.Set
+	Rule   AskRule
+	Ledger *ledger.Writer
+}
+
+func (j AskJudge) Record(ctx context.Context, state AskState) (string, error) {
+	body, err := ledger.Canonical(state)
+	if err != nil {
+		return "", err
+	}
+	asked := make([]jev.Question, len(j.Set.Questions))
+	for i, q := range j.Set.Questions {
+		asked[i] = q.ToJev()
+	}
+	row := ledger.Row{
+		Point: j.Set.Name, Questions: j.Set.Name, Version: j.Set.QuestionsVersion,
+		StateHash: ledger.HashOf(body), StateBuilder: AskStateBuilder, State: body,
+		Verdict: ledger.VerdictAsk, Policy: j.Rule.Name, PolicyVersion: j.Rule.RuleVersion,
+		Reason: &ledger.Reason{Question: DeterminedQuestion, Comparison: ">=", Threshold: j.Rule.DeterminedLowAt, Mode: j.Rule.Mode.Ledger()},
+	}
+	decision, askErr := j.Client.Ask(ctx, jev.Request{State: json.RawMessage(body), Questions: asked})
+	if askErr != nil {
+		failed := "jev could not answer, so the code's ask_now stands: " + askErr.Error()
+		row.Reason.ModeReason = &failed
+	} else {
+		action, determined := decision.Answers[ActionQuestion], decision.Answers[DeterminedQuestion]
+		verdict, err := DecideAsk(action.Choice, determined.Noul, j.Rule.DeterminedLowAt)
+		if err != nil {
+			return "", err
+		}
+		if verdict.Effective != ActionAskNow {
+			row.Verdict = ledger.VerdictAllow
+		}
+		row.Reason.Value = determined.Noul
+		decision.Record(&row, asked, j.Set.QuestionsVersion)
+	}
+	written, err := j.Ledger.Append(row)
+	return written.ID, err
+}
+
+func (j AskJudge) Answered(id, outcome string) error {
+	return j.Ledger.Backfill(id, ledger.Outcome{Kind: OutcomeKindAskAnswer, Detail: outcome})
+}

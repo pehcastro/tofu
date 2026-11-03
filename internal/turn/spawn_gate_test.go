@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/llm"
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/models/llm/core"
 )
 
 var goDev = subagent.Definition{Name: "go-dev", Language: "go", Gate: []string{"go vet", "go test"}}

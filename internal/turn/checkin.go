@@ -15,11 +15,11 @@ import (
 	"time"
 	"unicode"
 
-	"tofu/internal/boardy"
+	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/safe"
-	"tofu/internal/subagent"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/recover"
+	"tofu/internal/project/boardy"
 	"tofu/internal/sys"
 )
 

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"tofu/internal/konst"
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 	iturn "tofu/internal/turn"
 )
 

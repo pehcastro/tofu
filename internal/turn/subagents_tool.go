@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/subagent"
+	"tofu/internal/models/llm/core"
 )
 
 type subAgentsTool struct {

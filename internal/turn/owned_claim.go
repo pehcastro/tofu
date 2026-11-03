@@ -11,9 +11,9 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/internal/llm"
-	"tofu/internal/session"
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
 )
 
 func claimedTools(registry Registry, store *session.Store, own string) Registry {

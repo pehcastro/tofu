@@ -26,7 +26,7 @@
   },
   {
     "point": "board_epic",
-    "file": "internal/boardy/hook_jev.go",
+    "file": "internal/project/boardy/hook_jev.go",
     "symbol": "askJev"
   },
   {
@@ -61,12 +61,12 @@
   },
   {
     "point": "done_reason",
-    "file": "internal/boardy/transition.go",
+    "file": "internal/project/boardy/transition.go",
     "symbol": "doneReasonRef"
   },
   {
     "point": "ticket_feasibility",
-    "file": "internal/boardy/transition.go",
+    "file": "internal/project/boardy/transition.go",
     "symbol": "feasibilityRef"
   },
   {

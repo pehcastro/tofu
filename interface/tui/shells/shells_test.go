@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/look"
-	"tofu/internal/golden"
+	"tofu/internal/testkit/golden"
 )
 
 var testNow = time.Date(2026, 9, 25, 14, 30, 0, 0, time.UTC)

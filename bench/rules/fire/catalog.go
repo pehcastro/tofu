@@ -3,7 +3,7 @@ package fire
 import (
 	"sort"
 
-	"tofu/internal/rule"
+	"tofu/internal/librarian/rules"
 )
 
 type CatalogRule struct {

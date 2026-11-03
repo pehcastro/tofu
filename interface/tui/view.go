@@ -18,10 +18,10 @@ import (
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/pointer"
 	"tofu/interface/tui/shells"
+	isubagent "tofu/internal/agent/subagents"
+	"tofu/internal/cli/render"
 	"tofu/internal/konst"
-	isettings "tofu/internal/settings"
-	isubagent "tofu/internal/subagent"
-	"tofu/internal/widget"
+	isettings "tofu/internal/store/settings"
 )
 
 const (

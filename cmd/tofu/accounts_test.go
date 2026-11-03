@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/turn"
 )
 

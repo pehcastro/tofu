@@ -5,7 +5,7 @@ import (
 	"slices"
 	"time"
 
-	"tofu/internal/llm/quota"
+	"tofu/internal/models/llm/quota"
 )
 
 type Arm string

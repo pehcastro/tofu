@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"tofu/interface/cli"
-	"tofu/internal/boardy"
 	"tofu/internal/konst"
+	"tofu/internal/project/boardy"
 )
 
 func boardyDecideUsage(subcommand string) string {

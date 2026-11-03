@@ -14,10 +14,10 @@ import (
 	"strings"
 	"unicode"
 
+	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/rule"
-	"tofu/internal/subagent"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/files/edit/patch"
 )
 

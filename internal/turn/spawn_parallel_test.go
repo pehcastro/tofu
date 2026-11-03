@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/llm"
-	"tofu/internal/llm/models"
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/models/llm/catalog"
+	"tofu/internal/models/llm/core"
 )
 
 type spawnScript struct {

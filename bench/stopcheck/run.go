@@ -11,14 +11,14 @@ import (
 	"tofu/bench/api"
 	"tofu/bench/corpus"
 	"tofu/internal/judge/gate"
-	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
 	"tofu/internal/judge/state"
 	"tofu/internal/konst"
+	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/typesafe"
+	"tofu/internal/models/transport"
 	"tofu/internal/sys"
-	"tofu/internal/transport"
 	libraryquestions "tofu/library/questions"
 )
 

@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/agent/context/recall"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/recall"
-	"tofu/internal/transport"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/models/transport"
 )
 
 type Account struct {

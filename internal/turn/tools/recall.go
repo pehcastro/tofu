@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/internal/llm"
-	"tofu/internal/memory"
-	"tofu/internal/session"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/memory/tree"
+	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
 )
 

@@ -15,10 +15,10 @@ import (
 	"time"
 
 	"tofu/bench/report"
-	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
+	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/typesafe"
 	"tofu/internal/tools/web/browser/driver"
 )
 

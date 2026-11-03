@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"tofu/internal/llm"
-	"tofu/internal/rule"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
 )
 

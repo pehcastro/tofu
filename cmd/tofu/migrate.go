@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"tofu/interface/cli"
-	"tofu/internal/session"
+	"tofu/internal/cli/render"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
-	"tofu/internal/widget"
 )
 
 const migrateUsage = "tofu migrate [--dry-run | --relink] [--json]"

@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"tofu/interface/cli"
-	"tofu/internal/session"
+	"tofu/internal/store/session"
 )
 
 const (

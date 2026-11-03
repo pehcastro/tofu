@@ -8,9 +8,9 @@ import (
 
 	"tofu/bench/stat"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/llm/wire/openrouter"
-	"tofu/internal/transport"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/models/llm/wire/openrouter"
+	"tofu/internal/models/transport"
 	iturn "tofu/internal/turn"
 )
 

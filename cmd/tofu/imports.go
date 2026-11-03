@@ -22,7 +22,7 @@ type importRule struct {
 }
 
 func importRules() []importRule {
-	leaves := []string{"tofu/internal/sys", "tofu/internal/konst", "tofu/internal/safe"}
+	leaves := []string{"tofu/internal/sys", "tofu/internal/konst", "tofu/internal/platform/recover"}
 	rules := []importRule{
 		{from: "tofu/cmd", scope: "tofu/bench"},
 		{from: "tofu/interface", scope: "tofu/bench"},
@@ -30,7 +30,7 @@ func importRules() []importRule {
 		{from: "tofu/internal", scope: "tofu/cmd"},
 		{from: "tofu/internal", scope: "tofu/interface"},
 		{from: "tofu/library", scope: "tofu"},
-		{from: "tofu/internal/judge", scope: "tofu/internal", allow: slices.Concat([]string{"tofu/internal/judge"}, leaves, []string{"tofu/internal/transport"})},
+		{from: "tofu/internal/judge", scope: "tofu/internal", allow: slices.Concat([]string{"tofu/internal/judge"}, leaves, []string{"tofu/internal/models/transport", "tofu/internal/models/classifiers/core", "tofu/internal/models/classifiers/providers"})},
 	}
 	for _, leaf := range leaves {
 		rules = append(rules, importRule{from: leaf, scope: "tofu", allow: leaves})

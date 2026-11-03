@@ -9,8 +9,8 @@ import (
 	"sync"
 
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/memory"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/memory/tree"
 	"tofu/internal/tools/contract"
 	"tofu/internal/turn"

@@ -1,9 +1,9 @@
 package gate
 
 import (
-	"tofu/internal/judge/jev"
 	"tofu/internal/konst"
-	"tofu/internal/transport"
+	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/transport"
 )
 
 func Decide(answers map[string]jev.Answer, r Rule) (Verdict, Reason, error) {

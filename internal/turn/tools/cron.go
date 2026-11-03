@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"tofu/internal/agent/cron"
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/contract"
 )
 

@@ -11,9 +11,9 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/subagent"
+	roster "tofu/internal/agent/subagents"
+	"tofu/internal/cli/render"
 	"tofu/internal/host"
-	roster "tofu/internal/subagent"
-	"tofu/internal/widget"
 )
 
 type played struct {

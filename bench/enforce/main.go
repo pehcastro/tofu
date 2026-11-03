@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/rule"
+	"tofu/internal/librarian/rules"
 	"tofu/internal/sys"
 )
 
@@ -173,7 +173,7 @@ func report(o outcome, dir, head string, size int) {
 	now := time.Now()
 	machine, _ := os.Hostname()
 	fmt.Printf("# bench enforce: desk_refuse rules on planted desk mistakes and clean desk writes, %s\n\n", now.Format("2006-01-02"))
-	fmt.Printf("Machine: %s. Date: %s. Commit: %s. Rules folder: `%s`, %d desk_refuse rules, each arm setting every rule's mode. Checker: `internal/rule` CheckWrite then Weigh, the call `internal/turn/tool_write.go` makes. No model call, no network, no warm-up. Clean writes: %d lines cut from the middle of a file at HEAD the rule watches, written as an edit that adds them.\n\n", machine, now.Format("2006-01-02 15:04"), head, filepath.Base(dir), len(o.rules), size)
+	fmt.Printf("Machine: %s. Date: %s. Commit: %s. Rules folder: `%s`, %d desk_refuse rules, each arm setting every rule's mode. Checker: `internal/librarian/rules` CheckWrite then Weigh, the call `internal/turn/tool_write.go` makes. No model call, no network, no warm-up. Clean writes: %d lines cut from the middle of a file at HEAD the rule watches, written as an edit that adds them.\n\n", machine, now.Format("2006-01-02 15:04"), head, filepath.Base(dir), len(o.rules), size)
 	fmt.Print("## tldr\n\nSource: bench/enforce/corpus/planted.txt (mocked from DESK tickets) and clean cuts from git HEAD, each through CheckWrite and Weigh with the rules in mode enforced, then in mode shadow.\n\n")
 	fmt.Println("| Rule | Enforced: planted refused | Enforced: clean refused | Shadow: planted refused | Shadow: clean refused | Shadow: planted recorded | Shadow: clean recorded | Meets 90% and 2% |")
 	fmt.Println("|---|---|---|---|---|---|---|---|")

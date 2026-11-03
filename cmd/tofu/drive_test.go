@@ -18,8 +18,8 @@ import (
 	"tofu/interface/tui/progress"
 	"tofu/interface/tui/session"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	settingspkg "tofu/internal/settings"
+	"tofu/internal/models/llm/core"
+	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
 )
 

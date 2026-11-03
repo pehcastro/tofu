@@ -17,13 +17,13 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/safe"
-	"tofu/internal/session"
-	"tofu/internal/shell"
-	"tofu/internal/subagent"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/recover"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/shell/process"
 )
 
 type BashTool struct {

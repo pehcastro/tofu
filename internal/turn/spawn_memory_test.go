@@ -9,12 +9,12 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/hooks"
-	"tofu/internal/llm"
-	"tofu/internal/memory"
-	"tofu/internal/recall"
-	"tofu/internal/session"
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/memory/entries"
+	"tofu/internal/store/session"
 	"tofu/internal/turn"
 )
 

@@ -14,7 +14,7 @@ import (
 
 	"tofu/interface/tui"
 	"tofu/internal/konst"
-	"tofu/internal/llm/models"
+	"tofu/internal/models/llm/catalog"
 )
 
 const servedID = "claude-sub/claude-sonnet-5-5"

@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"tofu/internal/agent/commands"
-	"tofu/internal/memory"
-	"tofu/internal/session"
+	roster "tofu/internal/agent/subagents"
 	"tofu/internal/store/learn"
+	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/memory/tree"
-	roster "tofu/internal/subagent"
+	"tofu/internal/store/session"
 )
 
 func verbAs[T any](s *server, args ...string) (T, error) {

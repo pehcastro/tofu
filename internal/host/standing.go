@@ -10,7 +10,7 @@ import (
 	"slices"
 	"time"
 
-	"tofu/internal/session"
+	"tofu/internal/store/session"
 	"tofu/internal/turn"
 )
 

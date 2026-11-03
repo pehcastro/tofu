@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/skill"
+	"tofu/internal/librarian/skills"
 )
 
 func TestSkillToolReturnsTheBodyAndRefusesTheRest(t *testing.T) {

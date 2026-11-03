@@ -1,6 +1,6 @@
 package testquality
 
-import "tofu/internal/rule"
+import "tofu/internal/librarian/rules"
 
 func judgmentFlags(dir, checkerID string) ([]rule.Finding, error) {
 	checker := rule.Builtins()[checkerID]

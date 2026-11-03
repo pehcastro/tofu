@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"path/filepath"
 
-	"tofu/internal/boardy"
-	"tofu/internal/safe"
-	"tofu/internal/settings"
+	"tofu/internal/platform/recover"
+	"tofu/internal/project/boardy"
+	"tofu/internal/store/settings"
 	"tofu/internal/sys"
 )
 

@@ -13,8 +13,8 @@ import (
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
-	"tofu/internal/shell"
 	"tofu/internal/sys"
+	"tofu/internal/tools/shell/process"
 )
 
 func bashOrSkip(t *testing.T) shell.Choice {

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/rule"
-	"tofu/internal/session"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/store/session"
 )
 
 const (

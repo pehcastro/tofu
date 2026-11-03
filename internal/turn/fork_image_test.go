@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/agent/context/recall"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/recall"
+	"tofu/internal/models/llm/core"
 )
 
 func TestAForkKeepsTheImageOfTheTaskItCarriesAndNoOther(t *testing.T) {

@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/safe"
-	"tofu/internal/session"
+	"tofu/internal/platform/recover"
+	"tofu/internal/store/session"
 	"tofu/internal/ui/statusline"
 )
 

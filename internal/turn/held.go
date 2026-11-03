@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"tofu/internal/llm"
-	"tofu/internal/session"
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
 )
 

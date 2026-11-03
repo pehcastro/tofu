@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"tofu/interface/cli"
-	settingspkg "tofu/internal/settings"
-	"tofu/internal/shell"
+	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
+	"tofu/internal/tools/shell/process"
 )
 
 const shellsSubcommands = "tofu shells list|log|stop|restart <name> [--json]"

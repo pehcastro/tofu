@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"strings"
 
-	isession "tofu/internal/session"
+	isession "tofu/internal/store/session"
 )
 
 type Link struct {

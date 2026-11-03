@@ -15,8 +15,8 @@ import (
 
 	"tofu/interface/tui/palette"
 	"tofu/internal/agent/commands"
-	"tofu/internal/golden"
 	"tofu/internal/host"
+	"tofu/internal/testkit/golden"
 )
 
 func commandApp(t *testing.T, entered chan<- string) *App {

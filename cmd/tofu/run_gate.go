@@ -9,11 +9,11 @@ import (
 
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
-	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
-	"tofu/internal/llm/models"
 	"tofu/internal/models/classifiers"
+	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/llm/catalog"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 	"tofu/library/questions"

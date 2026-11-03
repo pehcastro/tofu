@@ -12,8 +12,8 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/llm"
-	"tofu/internal/session"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 	"tofu/library/questions"

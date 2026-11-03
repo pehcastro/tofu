@@ -9,7 +9,7 @@ import (
 
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
 	"tofu/internal/sys"
 	shipped "tofu/library"
 	"tofu/library/questions"

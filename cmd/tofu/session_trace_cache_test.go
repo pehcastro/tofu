@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/llm"
-	"tofu/internal/session"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
 )
 
 func TestAMemoryModelCallIsNeverACacheBreakAndNeverHidesTheLeadsOwn(t *testing.T) {

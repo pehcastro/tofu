@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/session"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
 	"tofu/internal/turn"
 )
 

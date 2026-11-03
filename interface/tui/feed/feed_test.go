@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"tofu/interface/tui/look"
-	"tofu/internal/golden"
-	roster "tofu/internal/subagent"
+	roster "tofu/internal/agent/subagents"
+	"tofu/internal/testkit/golden"
 )
 
 var sessionStart = time.Date(2026, 9, 25, 17, 29, 0, 0, time.UTC)

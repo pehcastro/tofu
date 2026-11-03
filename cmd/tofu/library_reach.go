@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"tofu/interface/cli"
-	"tofu/internal/rule"
-	"tofu/internal/session"
-	"tofu/internal/widget"
+	"tofu/internal/cli/render"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/store/session"
 )
 
 const (

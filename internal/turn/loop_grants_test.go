@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 )
 
 func TestASubAgentWhoseGrantsShrinkMidRunRecordsEachNewAskAndRunsOn(t *testing.T) {

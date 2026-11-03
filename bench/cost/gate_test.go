@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"tofu/internal/judge/gate"
-	"tofu/internal/judge/jev"
+	"tofu/internal/models/classifiers/core"
 )
 
 func shippedGate(t *testing.T) (gate.Rule, gate.Resolution) {

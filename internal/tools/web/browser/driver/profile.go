@@ -17,9 +17,9 @@ import (
 	"golang.org/x/net/websocket"
 
 	"tofu/internal/konst"
-	"tofu/internal/safe"
-	"tofu/internal/shell"
+	"tofu/internal/platform/recover"
 	"tofu/internal/sys"
+	"tofu/internal/tools/shell/process"
 )
 
 type Endpoint struct {

@@ -9,8 +9,8 @@ import (
 
 	"tofu/interface/tui"
 	"tofu/interface/tui/subagent"
-	"tofu/internal/llm"
-	roster "tofu/internal/subagent"
+	roster "tofu/internal/agent/subagents"
+	"tofu/internal/models/llm/core"
 )
 
 func TestTheSubAgentViewShowsTheStepsASubAgentHasTakenWhileItIsStillRunning(t *testing.T) {

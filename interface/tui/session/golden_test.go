@@ -6,7 +6,7 @@ import (
 
 	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/markdown"
-	"tofu/internal/golden"
+	"tofu/internal/testkit/golden"
 )
 
 func finishedTurn(at *time.Time) *Model {

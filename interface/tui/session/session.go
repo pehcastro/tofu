@@ -18,11 +18,11 @@ import (
 	"tofu/interface/tui/paste"
 	"tofu/interface/tui/progress"
 	"tofu/interface/tui/subagent"
+	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/konst"
-	isession "tofu/internal/session"
+	isession "tofu/internal/store/session"
 	"tofu/internal/turn/tools"
-	"tofu/internal/widget"
 )
 
 const TickInterval = progress.TickInterval

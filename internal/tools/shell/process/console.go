@@ -1,0 +1,207 @@
+package shell
+
+import (
+	"bytes"
+	"cmp"
+	"io"
+	"regexp"
+	"slices"
+	"strconv"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/charmbracelet/x/ansi"
+
+	"tofu/internal/konst"
+	"tofu/internal/platform/recover"
+)
+
+const programStatus = "\x1b]7501;"
+
+func pipeOut(report safe.Report, sink io.Writer, from io.Reader) {
+	if safe.Call(report, "shell output", func() error { _, _ = io.Copy(sink, from); return nil }) != nil {
+		_, _ = io.Copy(io.Discard, from)
+	}
+}
+
+type repaintState int
+
+const (
+	noRepaint repaintState = iota
+	repaintDue
+	repainting
+)
+
+type screenText struct {
+	out         io.Writer
+	held        []byte
+	column      int
+	width       int
+	repaint     repaintState
+	repaintLeft int
+	printed     bool
+}
+
+func (s *screenText) expectRepaint(size Size) {
+	s.repaint, s.repaintLeft = repaintDue, size.rows*(size.cols+1)
+}
+
+func (s *screenText) Write(p []byte) (int, error) {
+	data := slices.Concat(s.held, p)
+	var text, repainted bytes.Buffer
+	at := 0
+	for at < len(data) {
+		into := &text
+		if s.repaint == repainting {
+			into = &repainted
+		}
+		droppedBefore := repainted.Len()
+		size := s.step(data[at:], into)
+		s.repaintLeft -= repainted.Len() - droppedBefore
+		if s.repaint == repainting && s.repaintLeft <= 0 {
+			s.repaint = noRepaint
+		}
+		if size == 0 {
+			break
+		}
+		at += size
+	}
+	s.held, s.printed = slices.Clone(data[at:]), text.Len() > 0
+	if _, err := s.out.Write(text.Bytes()); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+func (s *screenText) step(rest []byte, text *bytes.Buffer) int {
+	if s.repaint == repaintDue && rest[0] != '\x1b' {
+		s.repaint = noRepaint
+	}
+	switch rest[0] {
+	case '\x1b':
+		return s.escape(rest, text)
+	case '\a':
+		return 1
+	case '\n':
+		text.WriteByte('\n')
+		s.column = 0
+		return 1
+	case '\r':
+		if len(rest) < 2 {
+			return 0
+		}
+		wrapped := s.column == cmp.Or(s.width, konst.ShellConsoleColumns)
+		s.column = 0
+		if rest[1] != '\n' {
+			text.WriteByte('\r')
+			return 1
+		}
+		if !wrapped {
+			text.WriteByte('\n')
+		}
+		return 2
+	}
+	if !utf8.FullRune(rest) {
+		return 0
+	}
+	_, size := utf8.DecodeRune(rest)
+	text.Write(rest[:size])
+	s.column += max(1, ansi.StringWidth(string(rest[:size])))
+	return size
+}
+
+func (s *screenText) escape(rest []byte, text *bytes.Buffer) int {
+	if len(rest) < 2 {
+		return 0
+	}
+	switch rest[1] {
+	case '[':
+		end := bytes.IndexFunc(rest[2:], func(r rune) bool { return r >= '@' && r <= '~' })
+		if end < 0 {
+			return 0
+		}
+		end += 2
+		switch cursor := string(rest[2 : end+1]); {
+		case s.repaint == repaintDue && (cursor == "25l" || cursor == "?25l"):
+			s.repaint = repainting
+		case s.repaint == repainting && cursor == "?25h":
+			s.repaint = noRepaint
+		}
+		if rest[end] == 'C' {
+			forward, err := strconv.Atoi(string(rest[2:end]))
+			if err != nil {
+				forward = 1
+			}
+			text.WriteString(strings.Repeat(" ", forward))
+			s.column += forward
+		}
+		return end + 1
+	case ']':
+		bell, terminator := bytes.IndexByte(rest, '\a'), bytes.Index(rest, []byte("\x1b\\"))
+		end := 0
+		switch {
+		case bell >= 0 && (terminator < 0 || bell < terminator):
+			end = bell + 1
+		case terminator >= 0:
+			end = terminator + 2
+		}
+		if bytes.HasPrefix(rest[:end], []byte(programStatus)) {
+			text.Write(rest[:end])
+		}
+		return end
+	}
+	return 2
+}
+
+func pipelines(command string) [][][]string {
+	shielded := regexp.MustCompile(`"[^"]*"|'[^']*'`).ReplaceAllStringFunc(command, func(quoted string) string {
+		return strings.NewReplacer("|", " ", ";", " ", "&", " ", ">", " ").Replace(quoted)
+	})
+	var all [][][]string
+	for _, run := range regexp.MustCompile(`&&|\|\||;|\n`).Split(shielded, -1) {
+		var stages [][]string
+		for _, stage := range strings.Split(run, "|") {
+			stages = append(stages, strings.Fields(stage))
+		}
+		all = append(all, stages)
+	}
+	return all
+}
+
+func blocksOnAPipe(fields []string) bool {
+	lineFlags := map[string][]string{"grep": {"--line-buffered"}, "sed": {"-u", "--unbuffered"}, "awk": nil, "cut": nil, "tr": nil, "uniq": nil}
+	flags, filter := lineFlags[processName(fields[0])]
+	return filter && !slices.ContainsFunc(fields, func(field string) bool { return slices.Contains(flags, field) })
+}
+
+func endsInFilter(command string) bool {
+	return slices.ContainsFunc(pipelines(command), func(stages [][]string) bool {
+		last := stages[len(stages)-1]
+		return len(stages) > 1 && len(last) > 0 && blocksOnAPipe(last) && !strings.Contains(strings.Join(last, " "), ">")
+	})
+}
+
+func heldBy(command string, terminal bool) string {
+	for _, stages := range pipelines(command) {
+		for at, fields := range stages {
+			if at == 0 || len(fields) == 0 {
+				continue
+			}
+			piped := "tofu: piped into " + strings.Join(fields[:min(2, len(fields))], " ")
+			switch processName(fields[0]) {
+			case "tail":
+				if !slices.ContainsFunc(fields, func(flag string) bool { return slices.Contains([]string{"-f", "-F", "--follow"}, flag) }) {
+					return piped + ", which prints when the command ends"
+				}
+			case "sort", "wc", "tac":
+				return piped + ", which prints when the command ends"
+			case "head":
+				return piped + ", which prints when it has its lines"
+			}
+			if blocksOnAPipe(fields) && (!terminal || at < len(stages)-1) {
+				return piped + ", which prints in blocks when not on a terminal"
+			}
+		}
+	}
+	return ""
+}

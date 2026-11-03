@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"tofu/internal/judge/ledger"
-	"tofu/internal/session"
+	"tofu/internal/store/session"
 	"tofu/internal/turn"
 )
 

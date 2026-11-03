@@ -9,10 +9,10 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/internal/golden"
-	"tofu/internal/llm"
-	library "tofu/internal/llm/models"
+	library "tofu/internal/models/llm/catalog"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
+	"tofu/internal/testkit/golden"
 )
 
 const (

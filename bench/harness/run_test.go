@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"tofu/bench/harness/task"
-	sessionstore "tofu/internal/session"
+	sessionstore "tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 )

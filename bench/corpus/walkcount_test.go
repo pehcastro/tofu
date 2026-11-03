@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"tofu/internal/session"
+	"tofu/internal/store/session"
 )
 
 const (

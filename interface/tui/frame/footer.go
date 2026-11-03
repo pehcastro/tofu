@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/look"
-	"tofu/internal/widget"
+	"tofu/internal/cli/render"
 )
 
 const (

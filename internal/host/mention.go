@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"tofu/internal/session"
+	"tofu/internal/store/session"
 	"tofu/internal/turn/tools"
 )
 

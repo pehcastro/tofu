@@ -5,7 +5,7 @@ import (
 	"slices"
 	"sync"
 
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/ui/toolcard"
 )
 

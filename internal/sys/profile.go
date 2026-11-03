@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/safe"
+	"tofu/internal/platform/recover"
 )
 
 const (

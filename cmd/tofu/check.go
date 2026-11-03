@@ -12,9 +12,9 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/judge/gate"
-	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
+	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
 )
 

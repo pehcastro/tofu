@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/rule"
+	"tofu/internal/librarian/rules"
 	"tofu/internal/sys"
 )
 

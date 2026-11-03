@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"tofu/bench/api"
-	"tofu/internal/judge/jev"
+	"tofu/internal/models/classifiers/core"
 )
 
 var NewWire = api.NewWire

@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/agent/subagents"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/session"
-	"tofu/internal/subagent"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
 )
 
 type leadAndSubAgent struct {

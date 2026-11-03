@@ -3,7 +3,7 @@ package main
 import (
 	"io/fs"
 
-	"tofu/internal/llm/models"
+	"tofu/internal/models/llm/catalog"
 	"tofu/internal/turn"
 	shipped "tofu/library"
 )

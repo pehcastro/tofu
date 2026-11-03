@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/shell"
 	"tofu/internal/sys"
+	"tofu/internal/tools/shell/process"
 )
 
 func TestHooksReadACodexConfigTomlBesideItsOtherTablesAndNameTheLineOfABrokenOne(t *testing.T) {

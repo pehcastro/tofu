@@ -10,10 +10,10 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
+	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/web"
 	"tofu/internal/turn"

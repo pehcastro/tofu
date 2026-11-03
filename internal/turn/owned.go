@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"tofu/internal/llm"
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/models/llm/core"
 )
 
 type ownedTool struct {

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/llm/wire/anthropic"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/models/llm/wire/anthropic"
 )
 
 type ToolCost struct {

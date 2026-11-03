@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/paste"
-	isession "tofu/internal/session"
+	isession "tofu/internal/store/session"
 	"tofu/internal/sys"
 )
 

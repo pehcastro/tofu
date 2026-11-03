@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/memory"
-	"tofu/internal/session"
+	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/memory/tree"
+	"tofu/internal/store/session"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 )

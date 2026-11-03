@@ -9,7 +9,7 @@ import (
 
 	"tofu/interface/tui/frame"
 	"tofu/interface/tui/look"
-	"tofu/internal/widget"
+	"tofu/internal/cli/render"
 )
 
 const (

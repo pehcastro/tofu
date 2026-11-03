@@ -9,13 +9,13 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/internal/boardy"
+	"tofu/internal/agent/subagents"
 	"tofu/internal/judge/method"
 	"tofu/internal/judge/state"
-	"tofu/internal/llm"
-	"tofu/internal/rule"
-	"tofu/internal/session"
-	"tofu/internal/subagent"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/project/boardy"
+	"tofu/internal/store/session"
 	shipped "tofu/library"
 )
 

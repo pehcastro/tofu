@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"slices"
 
-	"tofu/internal/session"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 )

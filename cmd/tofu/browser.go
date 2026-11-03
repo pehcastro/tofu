@@ -18,15 +18,15 @@ import (
 
 	"tofu/bench/browser/steps"
 	"tofu/interface/cli"
+	"tofu/internal/cli/render"
 	"tofu/internal/konst"
-	settingspkg "tofu/internal/settings"
+	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
 	"tofu/internal/tools/web/browser/driver"
 	"tofu/internal/tools/web/browser/loop"
 	"tofu/internal/tools/web/browser/motion"
 	"tofu/internal/tools/web/browser/recipe"
 	"tofu/internal/turn/tools"
-	"tofu/internal/widget"
 )
 
 type extension struct {

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/session"
+	"tofu/internal/store/session"
 )
 
 func unaccountedKeys(obj map[string]json.RawMessage, level string) []string {

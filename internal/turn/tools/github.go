@@ -9,7 +9,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 )

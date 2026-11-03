@@ -12,9 +12,9 @@ import (
 
 	"tofu/interface/tui"
 	"tofu/interface/tui/frame"
-	"tofu/internal/llm"
-	sessionstore "tofu/internal/session"
-	settingspkg "tofu/internal/settings"
+	"tofu/internal/models/llm/core"
+	sessionstore "tofu/internal/store/session"
+	settingspkg "tofu/internal/store/settings"
 )
 
 type streamingModel struct {

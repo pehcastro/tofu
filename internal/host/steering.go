@@ -5,8 +5,8 @@ import (
 	"strings"
 	"sync"
 
-	"tofu/internal/llm"
-	"tofu/internal/session"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
 )
 
 type steerQueue struct {

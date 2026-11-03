@@ -10,7 +10,7 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/konst"
-	sessionstore "tofu/internal/session"
+	sessionstore "tofu/internal/store/session"
 )
 
 const (

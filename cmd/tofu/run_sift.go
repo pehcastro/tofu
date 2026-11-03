@@ -8,10 +8,10 @@ import (
 	"slices"
 	"sync"
 
-	"tofu/internal/judge/jev"
 	"tofu/internal/judge/method"
 	"tofu/internal/konst"
-	"tofu/internal/safe"
+	"tofu/internal/models/classifiers/core"
+	"tofu/internal/platform/recover"
 	"tofu/internal/tools/shell/sift"
 	"tofu/internal/turn"
 	shipped "tofu/library"

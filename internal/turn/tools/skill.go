@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"tofu/internal/llm"
-	"tofu/internal/skill"
+	"tofu/internal/librarian/skills"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 	shipped "tofu/library"

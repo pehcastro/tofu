@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	isettings "tofu/internal/settings"
+	isettings "tofu/internal/store/settings"
 )
 
 type Kind int

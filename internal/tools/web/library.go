@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/internal/judge/jev"
+	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
 )
 

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 
 	"tofu/internal/judge/gate"
-	"tofu/internal/judge/jev"
+	"tofu/internal/models/classifiers/core"
 )
 
 const gateRuleFile = "library/general/rules/tool_gate@1.yaml"

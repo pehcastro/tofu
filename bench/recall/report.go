@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	rc "tofu/internal/agent/context/recall"
 	"tofu/internal/konst"
-	rc "tofu/internal/recall"
 )
 
 const ceiling = konst.ContextCeilingTokens

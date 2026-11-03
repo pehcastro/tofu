@@ -14,10 +14,10 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/subagent"
+	roster "tofu/internal/agent/subagents"
 	"tofu/internal/host"
 	"tofu/internal/konst"
-	"tofu/internal/session"
-	roster "tofu/internal/subagent"
+	"tofu/internal/store/session"
 )
 
 const (

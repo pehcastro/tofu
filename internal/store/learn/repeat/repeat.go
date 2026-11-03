@@ -11,10 +11,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers"
+	"tofu/internal/models/classifiers/core"
 	"tofu/internal/store/learn/words"
 	"tofu/library/questions"
 )

@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/internal/rule"
+	"tofu/internal/librarian/rules"
 )
 
 type write struct {

@@ -19,14 +19,14 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"tofu/internal/agent/subagents"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/session"
-	"tofu/internal/shell"
-	"tofu/internal/subagent"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
+	"tofu/internal/tools/shell/process"
 )
 
 type GateRequest struct {

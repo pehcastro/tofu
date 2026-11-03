@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"slices"
 
-	"tofu/internal/llm"
-	"tofu/internal/shell"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/shell/process"
 )
 
 type cited struct {

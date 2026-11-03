@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/safe"
+	"tofu/internal/platform/recover"
 )
 
 const (

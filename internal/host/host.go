@@ -20,14 +20,14 @@ import (
 
 	"tofu/internal/agent/cron"
 	"tofu/internal/agent/hooks"
+	roster "tofu/internal/agent/subagents"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/memory"
-	"tofu/internal/safe"
-	"tofu/internal/session"
-	"tofu/internal/shell"
-	roster "tofu/internal/subagent"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/recover"
+	"tofu/internal/store/memory/entries"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/shell/process"
 	"tofu/internal/turn"
 )
 

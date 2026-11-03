@@ -12,8 +12,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/frametime"
-	"tofu/internal/golden"
-	roster "tofu/internal/subagent"
+	roster "tofu/internal/agent/subagents"
+	"tofu/internal/testkit/golden"
 )
 
 func TestTheLeadsToolCallsFoldIntoOneChatRowAndTheTurnLineStaysPlain(t *testing.T) {

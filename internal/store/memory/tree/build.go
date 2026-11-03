@@ -12,7 +12,7 @@ import (
 	"unicode/utf8"
 
 	"tofu/internal/konst"
-	"tofu/internal/safe"
+	"tofu/internal/platform/recover"
 	"tofu/internal/sys"
 )
 

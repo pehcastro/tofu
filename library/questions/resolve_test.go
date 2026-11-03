@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
 	"tofu/library/questions"
 )
 

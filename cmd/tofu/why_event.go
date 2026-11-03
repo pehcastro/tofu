@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"tofu/interface/cli"
-	sessionstore "tofu/internal/session"
+	"tofu/internal/cli/render"
+	sessionstore "tofu/internal/store/session"
 	"tofu/internal/turn"
-	"tofu/internal/widget"
 )
 
 type recordedCall struct {

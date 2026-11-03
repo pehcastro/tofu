@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 )
 
 func TestAFileReadInTurnOneIsEditedInTurnTwoWithoutARefusal(t *testing.T) {

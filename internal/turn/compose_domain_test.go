@@ -9,8 +9,8 @@ import (
 
 	shipped "tofu/library"
 
-	"tofu/internal/rule"
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/librarian/rules"
 )
 
 func composedRuleIDs(t *testing.T, agent, task string, paths ...string) []string {

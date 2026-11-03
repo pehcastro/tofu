@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/llm"
-	"tofu/internal/recall"
-	"tofu/internal/session"
+	"tofu/internal/agent/context/recall"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
 )
 
 func TestASubAgentWritingAfterTheLeadForksKeepsEveryEventInTheSessionLog(t *testing.T) {

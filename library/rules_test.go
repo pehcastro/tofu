@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/rule"
+	"tofu/internal/librarian/rules"
 	"tofu/library"
 )
 

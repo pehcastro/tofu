@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"tofu/internal/judge/jev"
+	"tofu/internal/models/classifiers/core"
 )
 
 type OptionSweepPoint struct {

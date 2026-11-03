@@ -28,10 +28,10 @@ import (
 	"tofu/interface/tui/frame"
 	"tofu/internal/host"
 	"tofu/internal/konst"
-	settingspkg "tofu/internal/settings"
+	"tofu/internal/models/transport"
+	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
 	"tofu/internal/tools/web/browser/driver"
-	"tofu/internal/transport"
 )
 
 const (

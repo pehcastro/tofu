@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/konst"
-	"tofu/internal/session"
-	"tofu/internal/widget"
+	"tofu/internal/store/session"
 )
 
 const sessionFindUsage = "tofu session find <name|id|head> [--tool T] [--command C] [--file F] [--text T] [--failed] [--agent A] [--since 2h|RFC3339] [--until 2h|RFC3339] [--json]"

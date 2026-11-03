@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"tofu/internal/agent/hooks"
-	"tofu/internal/llm"
-	"tofu/internal/shell"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
+	"tofu/internal/tools/shell/process"
 )
 
 func sessionHooks(t *testing.T, project string) string {

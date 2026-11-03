@@ -13,11 +13,11 @@ import (
 	"tofu/interface/tui"
 	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/session"
+	roster "tofu/internal/agent/subagents"
 	"tofu/internal/host"
-	"tofu/internal/llm"
-	library "tofu/internal/llm/models"
-	isettings "tofu/internal/settings"
-	roster "tofu/internal/subagent"
+	library "tofu/internal/models/llm/catalog"
+	"tofu/internal/models/llm/core"
+	isettings "tofu/internal/store/settings"
 	"tofu/internal/sys"
 )
 

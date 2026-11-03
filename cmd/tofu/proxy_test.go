@@ -16,7 +16,7 @@ import (
 	"testing"
 
 	"tofu/interface/cli"
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/turn"
 )
 

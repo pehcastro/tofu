@@ -6,13 +6,13 @@ import (
 	"sync"
 	"time"
 
+	"tofu/internal/cli/render"
 	"tofu/internal/host"
-	"tofu/internal/llm/cred"
-	"tofu/internal/llm/quota"
-	"tofu/internal/safe"
+	"tofu/internal/models/llm/accounts"
+	"tofu/internal/models/llm/quota"
+	"tofu/internal/models/transport"
+	"tofu/internal/platform/recover"
 	"tofu/internal/sys"
-	"tofu/internal/transport"
-	"tofu/internal/widget"
 )
 
 const (

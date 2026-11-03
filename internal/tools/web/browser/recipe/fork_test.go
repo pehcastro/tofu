@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"testing"
 
+	"tofu/internal/agent/context/recall"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/recall"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/turn"
 )
 

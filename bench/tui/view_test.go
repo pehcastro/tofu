@@ -19,7 +19,7 @@ import (
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/subagent"
 	"tofu/internal/konst"
-	isettings "tofu/internal/settings"
+	isettings "tofu/internal/store/settings"
 )
 
 const (

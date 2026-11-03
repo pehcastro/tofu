@@ -17,10 +17,10 @@ import (
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
-	"tofu/internal/safe"
-	"tofu/internal/session"
-	"tofu/internal/shell"
+	"tofu/internal/platform/recover"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/shell/process"
 )
 
 type SessionSource string

@@ -14,7 +14,7 @@ import (
 
 	"tofu/bench/harness"
 	"tofu/bench/report"
-	"tofu/internal/session"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
 )
 

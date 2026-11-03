@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"tofu/internal/konst"
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 )

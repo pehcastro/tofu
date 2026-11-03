@@ -11,7 +11,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/internal/golden"
+	"tofu/internal/testkit/golden"
 	"tofu/internal/ui/keymap"
 )
 

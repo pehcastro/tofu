@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/cli/render"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
-	"tofu/internal/widget"
 )
 
 func whyPage(page cli.Page, report whyReport, now time.Time) []string {

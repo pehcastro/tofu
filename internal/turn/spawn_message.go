@@ -9,12 +9,12 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/internal/boardy"
-	"tofu/internal/llm"
-	"tofu/internal/safe"
-	"tofu/internal/shell"
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/recover"
+	"tofu/internal/project/boardy"
 	"tofu/internal/sys"
+	"tofu/internal/tools/shell/process"
 )
 
 type messageTool struct {

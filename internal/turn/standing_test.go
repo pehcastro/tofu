@@ -9,9 +9,9 @@ import (
 	"sync"
 	"testing"
 
+	"tofu/internal/agent/subagents"
 	"tofu/internal/judge/state"
-	"tofu/internal/llm"
-	"tofu/internal/subagent"
+	"tofu/internal/models/llm/core"
 )
 
 type seenByAll struct {

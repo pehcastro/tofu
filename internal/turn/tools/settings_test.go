@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"tofu/internal/judge/ledger"
-	"tofu/internal/llm"
-	"tofu/internal/settings"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/settings"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 )

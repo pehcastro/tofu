@@ -12,7 +12,7 @@ import (
 
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/subagent"
-	roster "tofu/internal/subagent"
+	roster "tofu/internal/agent/subagents"
 )
 
 func backgroundOf(c look.Color) string {

@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"tofu/interface/tui/trace"
-	isession "tofu/internal/session"
+	isession "tofu/internal/store/session"
 )
 
 func talked() isession.Conversation {

@@ -5,10 +5,10 @@ import (
 	"time"
 
 	"tofu/interface/tui/look"
+	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
-	"tofu/internal/widget"
 )
 
 const (

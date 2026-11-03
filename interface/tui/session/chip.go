@@ -10,8 +10,8 @@ import (
 
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/paste"
+	"tofu/internal/cli/render"
 	"tofu/internal/host"
-	"tofu/internal/widget"
 )
 
 const (

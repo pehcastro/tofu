@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"tofu/interface/tui/look"
-	"tofu/internal/widget"
+	"tofu/internal/cli/render"
 )
 
 type Provider struct {

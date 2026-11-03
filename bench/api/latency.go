@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"tofu/bench/stat"
-	"tofu/internal/judge/jev"
+	"tofu/internal/models/classifiers/core"
 )
 
 type SizeLatency struct {

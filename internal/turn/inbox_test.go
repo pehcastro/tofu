@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/llm"
-	"tofu/internal/llm/models"
+	"tofu/internal/agent/subagents"
 	"tofu/internal/models/classifiers"
-	"tofu/internal/subagent"
+	"tofu/internal/models/llm/catalog"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
 )
 

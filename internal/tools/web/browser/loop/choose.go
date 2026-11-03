@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
 	"tofu/internal/konst"
+	"tofu/internal/models/classifiers/core"
 	"tofu/internal/tools/web/browser/driver"
 )
 

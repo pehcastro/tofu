@@ -13,7 +13,7 @@ import (
 	"tofu/interface/tui"
 	"tofu/interface/tui/welcome"
 	"tofu/internal/konst"
-	"tofu/internal/safe"
+	"tofu/internal/platform/recover"
 )
 
 const (

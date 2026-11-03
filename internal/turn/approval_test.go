@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/agent/subagents"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/llm"
-	"tofu/internal/subagent"
+	"tofu/internal/models/llm/core"
 )
 
 type failingGate struct{}

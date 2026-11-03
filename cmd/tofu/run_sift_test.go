@@ -21,7 +21,7 @@ import (
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/method"
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
 	"tofu/internal/tools/shell/sift"
 	"tofu/internal/turn"

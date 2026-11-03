@@ -15,7 +15,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"tofu/internal/shell"
+	"tofu/internal/tools/shell/process"
 )
 
 func runBash(t *testing.T, tool *BashTool, args map[string]any) Result {

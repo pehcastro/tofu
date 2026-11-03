@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"tofu/interface/cli"
-	"tofu/internal/boardy"
-	"tofu/internal/rule"
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/project/boardy"
 )
 
 const (

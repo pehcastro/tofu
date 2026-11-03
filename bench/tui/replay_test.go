@@ -17,12 +17,12 @@ import (
 	"tofu/interface/tui/frame"
 	"tofu/interface/tui/shells"
 	"tofu/interface/tui/subagent"
+	roster "tofu/internal/agent/subagents"
 	"tofu/internal/host"
 	"tofu/internal/konst"
-	"tofu/internal/session"
-	"tofu/internal/shell"
-	roster "tofu/internal/subagent"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/shell/process"
 )
 
 const (

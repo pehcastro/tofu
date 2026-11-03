@@ -13,7 +13,7 @@ import (
 	"strings"
 
 	"tofu/bench/corpus"
-	"tofu/internal/session"
+	"tofu/internal/store/session"
 )
 
 const (

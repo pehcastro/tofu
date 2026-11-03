@@ -12,8 +12,8 @@ import (
 
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/markdown"
-	roster "tofu/internal/subagent"
-	"tofu/internal/widget"
+	roster "tofu/internal/agent/subagents"
+	"tofu/internal/cli/render"
 )
 
 const (

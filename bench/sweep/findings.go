@@ -9,13 +9,13 @@ type Reader struct {
 func SessionReaders() []Reader {
 	return []Reader{
 		{Package: "bench/corpus", Dir: "~/.tofu/projects/<folder>-<hash8>/sessions",
-			Differs: "the shared one. ReadTurn, ReadTurnDir and WalkSessions read every turn and every sub-agent run through internal/session.Store, whether it sits in a session folder or in the single-file or header-plus-body.jsonl layout before it, into RecordedTurn. 19 other bench packages import it."},
+			Differs: "the shared one. ReadTurn, ReadTurnDir and WalkSessions read every turn and every sub-agent run through internal/store/session.Store, whether it sits in a session folder or in the single-file or header-plus-body.jsonl layout before it, into RecordedTurn. 19 other bench packages import it."},
 		{Package: "bench/schemas", Dir: ".tofu/sessions",
 			Differs: "reimplements the same header.json plus body.jsonl walk from scratch, in ReadSessions, to reach StepUsage.PromptTokens/CacheReadTokens/CacheWriteTokens/CompletionTokens, fields RecordedStep does not carry."},
 		{Package: "bench/turn", Dir: ".tofu/sessions",
 			Differs: "ReadCorpus re-walks the directory itself, re-doing the file-vs-jsonl-dir classification WalkSessions already does, so it can additionally record JSONLDirs/JSONLDirsSeen/JSONLDirsSkipped. It calls corpus.ReadTurn and corpus.ReadTurnDir per entry rather than corpus.WalkSessions."},
 		{Package: "bench/recall", Dir: ".tofu/sessions",
-			Differs: "does not use bench/corpus at all. WalkCorpusReach reads through internal/session.Store, because it needs StepRow.Occupancy, StepRow.Fork and StepRow.Compaction, none of which RecordedStep carries."},
+			Differs: "does not use bench/corpus at all. WalkCorpusReach reads through internal/store/session.Store, because it needs StepRow.Occupancy, StepRow.Fork and StepRow.Compaction, none of which RecordedStep carries."},
 		{Package: "bench/picker", Dir: ".tofu/sessions and .tofu/log",
 			Differs: "Gather does a raw byte scan of every .json/.jsonl file under the given roots for a line containing \"windows\", looking for quota readings. It does not parse a turn or a ledger row at all, and it is the one reader pointed at both directories at once."},
 	}

@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/llm/wire/codex"
-	"tofu/internal/transport"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/models/llm/wire/codex"
+	"tofu/internal/models/transport"
 )
 
 type answersWithItsLimit struct{ asked int }

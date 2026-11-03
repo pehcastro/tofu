@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"tofu/bench/api"
-	"tofu/internal/judge/jev"
+	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
 	"tofu/internal/tools/web/browser/driver"
 )

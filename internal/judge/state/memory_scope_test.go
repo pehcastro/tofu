@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/judge/question"
-	"tofu/internal/memory"
+	"tofu/internal/judge/questions"
+	"tofu/internal/store/memory/entries"
 	"tofu/library/questions"
 )
 

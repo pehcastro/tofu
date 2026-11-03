@@ -8,7 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	isession "tofu/internal/session"
+	isession "tofu/internal/store/session"
 )
 
 const bangSettle = 2 * time.Second

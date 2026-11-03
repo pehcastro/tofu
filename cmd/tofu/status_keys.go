@@ -16,7 +16,7 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
-	"tofu/internal/transport"
+	"tofu/internal/models/transport"
 )
 
 const (

@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/llm"
-	"tofu/internal/session"
-	"tofu/internal/shell"
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
+	"tofu/internal/tools/shell/process"
 )
 
 func TestEveryTextEnteringTheSessionSaysWhereItCameFrom(t *testing.T) {

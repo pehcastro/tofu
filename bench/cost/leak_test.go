@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"tofu/bench/corpus"
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
 )
 
 const leakWindow = 24

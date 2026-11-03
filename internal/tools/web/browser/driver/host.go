@@ -18,8 +18,8 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/safe"
-	"tofu/internal/settings"
+	"tofu/internal/platform/recover"
+	"tofu/internal/store/settings"
 	"tofu/internal/sys"
 )
 

@@ -15,7 +15,7 @@ import (
 	"testing"
 
 	"tofu/internal/host"
-	"tofu/internal/llm/models"
+	"tofu/internal/models/llm/catalog"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 )

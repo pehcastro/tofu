@@ -5,8 +5,8 @@ import (
 	"runtime"
 	"strings"
 
-	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/models/classifiers/providers/typesafe"
 )
 
 type Agreement struct {
@@ -142,7 +142,7 @@ func costLine(r Result) string {
 		}
 	}
 	fresh := charged[ledger.ChargeProvider] + charged[ledger.ChargeList] + charged[ledger.ChargeNone]
-	return fmt.Sprintf("Cost unit: money, in USD. of this run's %d fresh calls, %d carry a cost the provider read back in its response, %d are priced at list rate because the response carried none, and %d have no price. the list rate is %.0f USD per billion input tokens, typesafe.DollarsPerInputToken in internal/judge/jev/wire/typesafe/typesafe.go, which the jev client applies through ledger.ChargeOf; output tokens are not priced. a replayed answer carries the figure from when it was first bought.",
+	return fmt.Sprintf("Cost unit: money, in USD. of this run's %d fresh calls, %d carry a cost the provider read back in its response, %d are priced at list rate because the response carried none, and %d have no price. the list rate is %.0f USD per billion input tokens, typesafe.DollarsPerInputToken in internal/models/classifiers/providers/typesafe/typesafe.go, which the jev client applies through ledger.ChargeOf; output tokens are not priced. a replayed answer carries the figure from when it was first bought.",
 		fresh, charged[ledger.ChargeProvider], charged[ledger.ChargeList], charged[ledger.ChargeNone], typesafe.DollarsPerInputToken*1e9)
 }
 

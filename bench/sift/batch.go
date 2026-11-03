@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"tofu/bench/stat"
-	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/konst"
+	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/typesafe"
 	"tofu/internal/tools/shell/sift"
 )
 

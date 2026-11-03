@@ -15,9 +15,9 @@ import (
 
 	"tofu/bench/browser/airbnb"
 	"tofu/bench/browser/tasks"
-	"tofu/internal/session"
-	"tofu/internal/shell"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/shell/process"
 	"tofu/internal/tools/web/browser/driver"
 )
 

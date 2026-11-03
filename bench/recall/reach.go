@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"tofu/bench/corpus"
-	rc "tofu/internal/recall"
-	"tofu/internal/session"
+	rc "tofu/internal/agent/context/recall"
+	"tofu/internal/store/session"
 	"tofu/internal/turn"
 )
 

@@ -14,8 +14,8 @@ import (
 	"tofu/interface/tui/frametime"
 	"tofu/interface/tui/progress"
 	"tofu/interface/tui/session"
-	"tofu/internal/golden"
 	"tofu/internal/konst"
+	"tofu/internal/testkit/golden"
 )
 
 const (

@@ -13,7 +13,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	catalog "tofu/internal/llm/models"
+	catalog "tofu/internal/models/llm/catalog"
 )
 
 const tokenMustOutlive = 45 * time.Minute

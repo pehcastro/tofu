@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"tofu/bench/corpus"
-	rc "tofu/internal/recall"
+	rc "tofu/internal/agent/context/recall"
 )
 
 func CorpusSession(turn corpus.RecordedTurn) Session {

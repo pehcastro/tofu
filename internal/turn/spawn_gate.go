@@ -10,9 +10,9 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/internal/llm"
-	"tofu/internal/rule"
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/models/llm/core"
 )
 
 func editedSince(project string, definition subagent.Definition, rounds []Row) ([]ToolCallRow, string) {

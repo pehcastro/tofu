@@ -6,8 +6,8 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
+	"tofu/internal/cli/render"
 	"tofu/internal/konst"
-	"tofu/internal/widget"
 )
 
 const installedNotice = "tofu 9.9.9 is installed · restart to use it"

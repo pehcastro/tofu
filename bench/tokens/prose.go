@@ -5,7 +5,7 @@ import (
 	"sort"
 
 	"tofu/bench/schemas"
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 )
 
 type ToolProse struct {

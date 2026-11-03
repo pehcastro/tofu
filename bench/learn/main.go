@@ -14,13 +14,13 @@ import (
 	"time"
 
 	"tofu/bench/api"
-	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/konst"
-	"tofu/internal/session"
+	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/typesafe"
+	"tofu/internal/models/transport"
 	"tofu/internal/store/learn"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
-	"tofu/internal/transport"
 )
 
 const (

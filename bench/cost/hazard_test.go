@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"tofu/bench/report"
-	"tofu/internal/judge/jev/wire/typesafe"
+	"tofu/internal/models/classifiers/providers/typesafe"
 )
 
 func hazardReport(t *testing.T, rows []hazardRow, answersPath string) string {

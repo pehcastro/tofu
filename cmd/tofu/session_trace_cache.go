@@ -6,10 +6,10 @@ import (
 	"strconv"
 
 	"tofu/interface/cli"
+	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/konst"
-	"tofu/internal/session"
-	"tofu/internal/widget"
+	"tofu/internal/store/session"
 )
 
 type (

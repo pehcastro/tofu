@@ -13,8 +13,8 @@ import (
 	"tofu/interface/tui/progress"
 	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/trace"
-	roster "tofu/internal/subagent"
-	"tofu/internal/widget"
+	roster "tofu/internal/agent/subagents"
+	"tofu/internal/cli/render"
 )
 
 const (

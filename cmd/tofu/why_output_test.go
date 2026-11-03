@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/golden"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
-	sessionstore "tofu/internal/session"
+	sessionstore "tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/testkit/golden"
 )
 
 const (

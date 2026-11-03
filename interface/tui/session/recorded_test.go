@@ -7,7 +7,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	isession "tofu/internal/session"
+	isession "tofu/internal/store/session"
 )
 
 const (

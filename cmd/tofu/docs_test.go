@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/guard"
-	"tofu/internal/settings"
+	"tofu/internal/project/guard"
+	"tofu/internal/store/settings"
 	"tofu/library/docs"
 )
 

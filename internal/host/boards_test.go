@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"tofu/internal/judge/ledger"
-	"tofu/internal/llm/quota"
-	"tofu/internal/session"
+	"tofu/internal/models/llm/quota"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
 )
 

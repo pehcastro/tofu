@@ -12,8 +12,8 @@ import (
 
 	"tofu/interface/tui/feed"
 	"tofu/interface/tui/session"
-	"tofu/internal/golden"
 	"tofu/internal/host"
+	"tofu/internal/testkit/golden"
 )
 
 const (

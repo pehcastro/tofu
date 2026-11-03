@@ -10,9 +10,9 @@ import (
 	"sync"
 	"testing"
 
+	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/subagent"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 )

@@ -9,7 +9,7 @@ import (
 
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/pointer"
-	"tofu/internal/widget"
+	"tofu/internal/cli/render"
 )
 
 type Kind string

@@ -10,10 +10,10 @@ import (
 
 	"tofu/bench/api"
 	"tofu/bench/report"
-	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/konst"
-	"tofu/internal/rule"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/typesafe"
 	"tofu/internal/sys"
 )
 

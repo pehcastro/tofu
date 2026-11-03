@@ -11,11 +11,11 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/judge/gate"
-	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers"
-	"tofu/internal/transport"
+	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/transport"
 )
 
 const judgeUsage = "tofu judge [--dry-run] [--no-cache] [--no-rule] [--json] < request.json, or tofu judge --lint file [--json]"

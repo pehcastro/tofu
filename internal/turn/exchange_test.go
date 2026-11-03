@@ -12,9 +12,9 @@ import (
 	"sync"
 	"testing"
 
-	"tofu/internal/llm"
-	"tofu/internal/llm/wire/anthropic"
-	"tofu/internal/session"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/models/llm/wire/anthropic"
+	"tofu/internal/store/session"
 )
 
 func TestEveryRequestIsKeptByteForByteWithTheProviderErrorBody(t *testing.T) {

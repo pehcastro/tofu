@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"tofu/internal/judge/jev"
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
+	"tofu/internal/models/classifiers/core"
 	"tofu/internal/tools/web/browser/driver"
 	"tofu/internal/tools/web/browser/loop"
 	libraryquestions "tofu/library/questions"

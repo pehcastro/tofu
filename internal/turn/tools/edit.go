@@ -13,8 +13,8 @@ import (
 	"strings"
 
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/rule"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/files/edit/patch"

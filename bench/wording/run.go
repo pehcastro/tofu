@@ -9,7 +9,7 @@ import (
 
 	benchapi "tofu/bench/api"
 	"tofu/bench/stat"
-	"tofu/internal/judge/jev"
+	"tofu/internal/models/classifiers/core"
 )
 
 const repsPerCase = 3

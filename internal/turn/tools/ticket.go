@@ -12,10 +12,10 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"tofu/internal/boardy"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/session"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/project/boardy"
+	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 )

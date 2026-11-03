@@ -15,7 +15,7 @@ import (
 	"tofu/interface/cli"
 	"tofu/internal/host"
 	"tofu/internal/konst"
-	"tofu/internal/safe"
+	"tofu/internal/platform/recover"
 	"tofu/internal/sys"
 	"tofu/library/changelog"
 )

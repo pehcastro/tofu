@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"time"
 
-	"tofu/internal/judge/jev"
-	"tofu/internal/judge/question"
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/judge/questions"
+	"tofu/internal/models/classifiers/core"
 )
 
 const Point = "ask@1"

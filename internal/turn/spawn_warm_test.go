@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/llm"
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/models/llm/core"
 )
 
 var warmBrief = regexp.MustCompile(`brief-\d+`)

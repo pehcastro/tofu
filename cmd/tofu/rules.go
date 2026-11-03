@@ -15,11 +15,11 @@ import (
 	"time"
 
 	"tofu/interface/cli"
-	"tofu/internal/boardy"
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
-	"tofu/internal/rule"
-	settingspkg "tofu/internal/settings"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/project/boardy"
+	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
 	shipped "tofu/library"
 )

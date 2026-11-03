@@ -14,8 +14,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/paste"
-	"tofu/internal/golden"
 	"tofu/internal/sys"
+	"tofu/internal/testkit/golden"
 )
 
 const (

@@ -10,13 +10,13 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
+	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/typesafe"
+	"tofu/internal/models/transport"
 	"tofu/internal/store/learn/words"
 	"tofu/internal/sys"
-	"tofu/internal/transport"
 )
 
 const liveModel = "jev-latest"

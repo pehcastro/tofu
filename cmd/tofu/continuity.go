@@ -9,11 +9,11 @@ import (
 	"strings"
 
 	"tofu/interface/tui/frame"
-	"tofu/internal/llm/cred"
-	"tofu/internal/llm/models"
-	"tofu/internal/llm/quota"
-	"tofu/internal/recall"
-	settingspkg "tofu/internal/settings"
+	"tofu/internal/agent/context/recall"
+	"tofu/internal/models/llm/accounts"
+	"tofu/internal/models/llm/catalog"
+	"tofu/internal/models/llm/quota"
+	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/turn"
 )
 

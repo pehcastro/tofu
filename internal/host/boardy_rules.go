@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/boardy"
 	"tofu/internal/konst"
+	"tofu/internal/project/boardy"
 	"tofu/internal/sys"
 )
 

@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"tofu/internal/boardy"
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/project/boardy"
 )
 
 const (

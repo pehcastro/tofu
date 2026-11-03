@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"tofu/interface/cli"
-	"tofu/internal/boardy"
-	"tofu/internal/widget"
+	"tofu/internal/cli/render"
+	"tofu/internal/project/boardy"
 )
 
 func (c boardyCall) audit() int {

@@ -8,7 +8,7 @@ import (
 	"slices"
 	"time"
 
-	"tofu/internal/llm/quota"
+	"tofu/internal/models/llm/quota"
 )
 
 const leastAccountsThatSeparate = 2

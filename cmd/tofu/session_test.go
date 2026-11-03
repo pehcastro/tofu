@@ -13,12 +13,12 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/llm/wire/anthropic"
-	"tofu/internal/llm/wire/codex"
-	"tofu/internal/session"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/models/llm/wire/anthropic"
+	"tofu/internal/models/llm/wire/codex"
+	"tofu/internal/models/transport"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
-	"tofu/internal/transport"
 	"tofu/internal/turn"
 )
 

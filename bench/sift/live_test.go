@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"tofu/bench/api"
-	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
+	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
 	"tofu/internal/tools/shell/sift"
 )

@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
-	"tofu/internal/rule"
-	"tofu/internal/session"
-	"tofu/internal/subagent"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/store/session"
 )
 
 type spawn struct {

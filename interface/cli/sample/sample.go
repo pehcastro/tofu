@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"tofu/interface/cli"
-	"tofu/internal/widget"
+	"tofu/internal/cli/render"
 )
 
 type reload struct {

@@ -10,7 +10,7 @@ import (
 	"slices"
 	"time"
 
-	"tofu/internal/memory"
+	"tofu/internal/store/memory/entries"
 	"tofu/internal/sys"
 )
 

@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
 	"tofu/internal/sys"
 )
 

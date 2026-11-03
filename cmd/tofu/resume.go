@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"tofu/interface/tui/progress"
-	"tofu/internal/safe"
-	"tofu/internal/widget"
+	"tofu/internal/cli/render"
+	"tofu/internal/platform/recover"
 )
 
 func resumeNote(carry sessionResume) string {

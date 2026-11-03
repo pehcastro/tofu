@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 )
 
 func continuedScreen(t *testing.T, waitFor string) string {

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"tofu/internal/llm/wire/anthropic"
+	"tofu/internal/models/llm/wire/anthropic"
 )
 
 const (

@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"tofu/internal/agent/hooks"
-	"tofu/internal/llm"
-	"tofu/internal/rule"
-	"tofu/internal/session"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
 )
 

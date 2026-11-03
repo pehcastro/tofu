@@ -14,8 +14,8 @@ import (
 	"tofu/interface/cli"
 	"tofu/internal/host"
 	"tofu/internal/konst"
-	"tofu/internal/session"
-	settingspkg "tofu/internal/settings"
+	"tofu/internal/store/session"
+	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 )

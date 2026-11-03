@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/llm/wire/anthropic"
-	"tofu/internal/recall"
+	"tofu/internal/agent/context/recall"
+	"tofu/internal/models/llm/wire/anthropic"
 )
 
 const (

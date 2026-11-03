@@ -9,8 +9,8 @@ import (
 	"sync"
 
 	"tofu/internal/host"
-	"tofu/internal/safe"
-	sessionstore "tofu/internal/session"
+	"tofu/internal/platform/recover"
+	sessionstore "tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"

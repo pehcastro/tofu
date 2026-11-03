@@ -11,16 +11,16 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/hooks"
+	"tofu/internal/agent/subagents"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/llm/wire/codex"
-	"tofu/internal/recall"
-	"tofu/internal/safe"
-	"tofu/internal/session"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/models/llm/wire/codex"
+	"tofu/internal/platform/recover"
+	"tofu/internal/store/session"
 	"tofu/internal/store/snapshot"
-	"tofu/internal/subagent"
 	"tofu/internal/sys"
 )
 

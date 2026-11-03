@@ -23,9 +23,9 @@ import (
 	"tofu/interface/tui/quota"
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/shells"
-	library "tofu/internal/llm/models"
-	isettings "tofu/internal/settings"
-	isubagent "tofu/internal/subagent"
+	isubagent "tofu/internal/agent/subagents"
+	library "tofu/internal/models/llm/catalog"
+	isettings "tofu/internal/store/settings"
 )
 
 const (

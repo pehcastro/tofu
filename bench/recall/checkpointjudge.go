@@ -5,7 +5,7 @@ import (
 	"time"
 
 	benchapi "tofu/bench/api"
-	"tofu/internal/judge/jev"
+	"tofu/internal/models/classifiers/core"
 )
 
 const checkpointAnswerabilityQuestionID = "answerable"

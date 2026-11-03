@@ -11,10 +11,10 @@ import (
 	"github.com/charmbracelet/colorprofile"
 
 	"tofu/interface/cli"
-	"tofu/internal/golden"
 	"tofu/internal/host"
-	"tofu/internal/llm/cred"
+	"tofu/internal/models/llm/accounts"
 	"tofu/internal/sys"
+	"tofu/internal/testkit/golden"
 )
 
 const (

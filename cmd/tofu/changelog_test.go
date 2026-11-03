@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"tofu/interface/cli"
+	"tofu/internal/cli/render"
 	"tofu/internal/konst"
-	"tofu/internal/widget"
 	"tofu/library/changelog"
 )
 

@@ -12,10 +12,10 @@ import (
 	"strings"
 
 	"tofu/interface/cli"
+	"tofu/internal/agent/context/recall"
 	"tofu/internal/host"
-	"tofu/internal/recall"
-	"tofu/internal/session"
-	settingspkg "tofu/internal/settings"
+	"tofu/internal/store/session"
+	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/turn"
 )
 

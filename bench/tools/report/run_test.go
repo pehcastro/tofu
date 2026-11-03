@@ -14,7 +14,7 @@ import (
 	"tofu/bench/tools"
 	"tofu/bench/tools/candidates"
 	toolscorpus "tofu/bench/tools/corpus"
-	"tofu/internal/judge/jev"
+	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
 )
 

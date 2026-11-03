@@ -16,8 +16,8 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/judge/gate"
-	"tofu/internal/judge/jev"
 	"tofu/internal/konst"
+	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
 )
 

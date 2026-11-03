@@ -4,7 +4,7 @@ import (
 	"unicode/utf8"
 
 	"tofu/internal/konst"
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/contract"
 )
 

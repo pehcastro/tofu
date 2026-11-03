@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"tofu/internal/session"
+	"tofu/internal/store/session"
 )
 
 func TestAPastedImageSurvivesAForkBeforeItIsSentAndIsTakenOnce(t *testing.T) {

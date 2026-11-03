@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	"tofu/interface/tui"
-	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
+	"tofu/internal/models/classifiers/core"
 	"tofu/internal/turn"
 )
 

@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"tofu/interface/cli"
-	"tofu/internal/llm/quota"
-	"tofu/internal/widget"
+	"tofu/internal/cli/render"
+	"tofu/internal/models/llm/quota"
 )
 
 type quotaHistoryRow struct {

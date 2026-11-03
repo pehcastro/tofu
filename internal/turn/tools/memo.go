@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/contract"
 )
 

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/llm"
-	"tofu/internal/rule"
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/models/llm/core"
 )
 
 type effortOpener struct {

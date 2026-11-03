@@ -7,12 +7,12 @@ import (
 	"strconv"
 	"time"
 
-	"tofu/internal/judge/jev"
+	roster "tofu/internal/agent/subagents"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/memory"
-	"tofu/internal/session"
-	roster "tofu/internal/subagent"
+	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/memory/entries"
+	"tofu/internal/store/session"
 	"tofu/internal/turn"
 )
 

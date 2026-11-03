@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/session"
+	"tofu/internal/store/session"
 )
 
 func runBashAs(t *testing.T, owner, command string, cancelled bool) (Result, error) {

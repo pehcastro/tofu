@@ -14,10 +14,10 @@ import (
 	"unicode"
 
 	"tofu/interface/cli"
+	"tofu/internal/cli/render"
 	"tofu/internal/host"
-	settingspkg "tofu/internal/settings"
-	"tofu/internal/skill"
-	"tofu/internal/widget"
+	"tofu/internal/librarian/skills"
+	settingspkg "tofu/internal/store/settings"
 	"tofu/library/docs"
 )
 

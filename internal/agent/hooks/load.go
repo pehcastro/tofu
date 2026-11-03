@@ -20,8 +20,8 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	"tofu/internal/shell"
 	"tofu/internal/sys"
+	"tofu/internal/tools/shell/process"
 )
 
 type Event string

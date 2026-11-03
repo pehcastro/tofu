@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/cli/render"
 	"tofu/internal/host"
-	"tofu/internal/judge/question"
-	"tofu/internal/llm/models"
-	"tofu/internal/rule"
+	"tofu/internal/judge/questions"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/models/llm/catalog"
 	"tofu/internal/sys"
-	"tofu/internal/widget"
 	shipped "tofu/library"
 	"tofu/library/questions"
 )

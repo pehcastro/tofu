@@ -10,9 +10,9 @@ import (
 	"sort"
 	"time"
 
+	"tofu/internal/agent/context/recall"
 	"tofu/internal/platform/credential"
-	"tofu/internal/recall"
-	"tofu/internal/session"
+	"tofu/internal/store/session"
 )
 
 var ErrNoWallClock = errors.New("bench/corpus: the recorded turn carries no wall clock")

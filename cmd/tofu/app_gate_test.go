@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"tofu/interface/tui"
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 )
 
 func gateEvents(t *testing.T, events []tui.Event) (failure, gateOff string) {

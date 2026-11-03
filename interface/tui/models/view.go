@@ -8,8 +8,8 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"tofu/interface/tui/look"
-	"tofu/internal/llm"
-	"tofu/internal/widget"
+	"tofu/internal/cli/render"
+	"tofu/internal/models/llm/core"
 )
 
 const (

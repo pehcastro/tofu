@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/golden"
+	"tofu/internal/testkit/golden"
 )
 
 func gatesOK() []GateResult {

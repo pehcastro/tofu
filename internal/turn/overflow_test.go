@@ -11,11 +11,11 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/llm"
-	"tofu/internal/llm/wire/anthropic"
-	"tofu/internal/llm/wire/codex"
-	"tofu/internal/recall"
-	"tofu/internal/transport"
+	"tofu/internal/agent/context/recall"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/models/llm/wire/anthropic"
+	"tofu/internal/models/llm/wire/codex"
+	"tofu/internal/models/transport"
 )
 
 type answer func(t *testing.T) (llm.Decision, error)

@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"tofu/internal/judge/gate"
-	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
-	settingspkg "tofu/internal/settings"
+	"tofu/internal/models/classifiers/core"
+	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/turn"
 )
 

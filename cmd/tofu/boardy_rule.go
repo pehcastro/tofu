@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"tofu/interface/cli"
-	"tofu/internal/boardy"
 	"tofu/internal/konst"
+	"tofu/internal/project/boardy"
 )
 
 const boardyRuleUsage = "tofu boardy rule list | show|remove <id> | add|edit <id> [--file hook.yaml] [--when before|after] [--on event] [--every 1h|--daily 09:00] [--do \"verb arg\"] [--then refuse|nudge|ask|record] [--text t] [--from s] [--to s] [--type t] [--priority p] [--labels a,b] [--actor a] [--epic E|set|empty] [--sprint S|set|empty] [--owns glob] [--in-status-for 2h] | test <id> [ticket] [--to status] [--board KEY] [--scope board|project|user] [--as name] [--json]"

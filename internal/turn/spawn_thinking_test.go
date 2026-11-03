@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 )
 
 func thought(decision llm.Decision, signature string) llm.Decision {

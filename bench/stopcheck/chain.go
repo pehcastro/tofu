@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"math"
 
-	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
 	"tofu/internal/konst"
+	"tofu/internal/models/classifiers/core"
 )
 
 const (

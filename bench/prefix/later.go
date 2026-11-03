@@ -14,8 +14,8 @@ import (
 	"strings"
 	"sync"
 
-	"tofu/internal/llm/wire/anthropic"
-	"tofu/internal/rule"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/turn"
 )
 

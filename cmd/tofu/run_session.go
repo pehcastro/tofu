@@ -6,7 +6,7 @@ import (
 
 	"tofu/internal/agent/hooks"
 	"tofu/internal/host"
-	"tofu/internal/session"
+	"tofu/internal/store/session"
 	"tofu/internal/turn"
 )
 

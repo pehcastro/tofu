@@ -5430,7 +5430,7 @@
       "switched_on": "yes, through the judged method",
       "costs": "one jev request per ticket created without an epic, 263 ms in the driven run",
       "why": "jev picks the epic a new ticket belongs to from the board's open epics, or none, on a fresh board driven through tofu boardy init; a word match cannot tell two epics that share words",
-      "called_by": "internal/boardy/hook_jev.go"
+      "called_by": "internal/project/boardy/hook_jev.go"
     },
     {
       "point": "steer_answered",
@@ -5546,7 +5546,7 @@
       "switched_on": "yes, through the judged method",
       "costs": "one jev request per move to done with a reason that is not blank; latency and cost are not measured",
       "why": "not measured against labels. no hand-labelled sample exists and no free arm, such as a phrase list over except, later and follow up, has been run beside it. a replay of the board's past done moves refuses 94 of 1740 reasons, 5.4 percent, against 27 to 41 percent a hand count found admitting an open part, and open_at 0.5 is an uncalibrated prior until a labelled sample moves it",
-      "called_by": "internal/boardy/transition.go"
+      "called_by": "internal/project/boardy/transition.go"
     },
     {
       "point": "ticket_feasibility",
@@ -5554,7 +5554,7 @@
       "switched_on": "yes, through the judged method",
       "costs": "one jev request per ticket made without a Feasibility section; latency and cost are not measured",
       "why": "not measured. no corpus and no free arm, such as a word list over blur, shader, vibrancy and tray, has been run beside it; one driven ticket asking for a blur behind the desk sidebar scored platform 0.92 and was refused, and platform_at 0.5 is an uncalibrated prior until a labelled sample moves it",
-      "called_by": "internal/boardy/transition.go"
+      "called_by": "internal/project/boardy/transition.go"
     },
     {
       "point": "keep_result",

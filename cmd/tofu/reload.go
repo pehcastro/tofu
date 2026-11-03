@@ -16,11 +16,11 @@ import (
 	"strings"
 
 	"tofu/interface/cli"
+	"tofu/internal/agent/subagents"
 	"tofu/internal/host"
-	"tofu/internal/llm/models"
-	settingspkg "tofu/internal/settings"
-	"tofu/internal/skill"
-	"tofu/internal/subagent"
+	"tofu/internal/librarian/skills"
+	"tofu/internal/models/llm/catalog"
+	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
 	"tofu/internal/ui/keymap"
 )

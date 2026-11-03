@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"tofu/bench/browser/airbnb"
-	"tofu/internal/session"
+	"tofu/internal/store/session"
 )
 
 type Page struct {

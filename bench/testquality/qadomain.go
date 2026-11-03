@@ -6,7 +6,7 @@ import (
 	"io/fs"
 	"strings"
 
-	"tofu/internal/rule"
+	"tofu/internal/librarian/rules"
 )
 
 const qaSkillSource = "library/qa/references/"

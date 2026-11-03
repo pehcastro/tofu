@@ -16,12 +16,12 @@ import (
 	"time"
 
 	"tofu/internal/host"
-	"tofu/internal/llm/models"
-	"tofu/internal/llm/quota"
-	sessionstore "tofu/internal/session"
-	settingspkg "tofu/internal/settings"
+	"tofu/internal/models/llm/catalog"
+	"tofu/internal/models/llm/quota"
+	"tofu/internal/models/transport"
+	sessionstore "tofu/internal/store/session"
+	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
-	"tofu/internal/transport"
 	"tofu/internal/turn"
 )
 

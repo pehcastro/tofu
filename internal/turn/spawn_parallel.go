@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/llm/models"
-	"tofu/internal/subagent"
+	"tofu/internal/models/llm/catalog"
+	"tofu/internal/models/llm/core"
 )
 
 type namingOrder struct {

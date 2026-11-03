@@ -6,8 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"tofu/internal/cli/render"
 	"tofu/internal/sys"
-	"tofu/internal/widget"
 )
 
 const (

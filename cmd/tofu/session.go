@@ -19,15 +19,15 @@ import (
 	"tofu/interface/cli"
 	"tofu/interface/tui/trace"
 	"tofu/internal/agent/cron"
+	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/llm"
-	"tofu/internal/llm/wire/anthropic"
-	"tofu/internal/safe"
-	"tofu/internal/session"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/models/llm/wire/anthropic"
+	"tofu/internal/platform/recover"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
-	"tofu/internal/widget"
 )
 
 const (

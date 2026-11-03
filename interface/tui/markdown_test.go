@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/session"
-	"tofu/internal/golden"
+	"tofu/internal/testkit/golden"
 )
 
 func TestAHeadingRendersWhileTheEntryStreams(t *testing.T) {

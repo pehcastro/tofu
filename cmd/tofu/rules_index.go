@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"tofu/interface/cli"
-	"tofu/internal/rule"
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/librarian/rules"
 	"tofu/internal/turn"
 )
 

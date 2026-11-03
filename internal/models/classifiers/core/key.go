@@ -1,0 +1,139 @@
+package jev
+
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"tofu/internal/models/transport"
+	"tofu/internal/sys"
+)
+
+type Source int
+
+const (
+	SourceMissing Source = iota
+	SourceEnvironment
+	SourceDotEnv
+	SourceDatabase
+)
+
+type Located struct {
+	Name   string
+	Source Source
+	Path   string
+	Length int
+}
+
+const (
+	OpenRouterVariable = sys.OpenRouterClassifierKeyName
+	TypeSafeVariable   = sys.TypeSafeKeyName
+)
+
+type Keyring struct {
+	Stored  map[string]string
+	Path    string
+	ReadErr error
+}
+
+func ReadKeyring() Keyring {
+	stored, err := sys.StoredKeys()
+	path, _ := sys.CredentialStorePath()
+	return Keyring{Stored: stored, Path: path, ReadErr: err}
+}
+
+func TypeSafeKey(envPath string) (string, error) {
+	return KeyFor(envPath, TypeSafeVariable)
+}
+
+func KeyFor(envPath, variable string) (string, error) {
+	return ReadKeyring().KeyFor(envPath, variable)
+}
+
+func (k Keyring) KeyFor(envPath, variable string) (string, error) {
+	value, _, err := k.find(envPath, variable)
+	return value, err
+}
+
+func (k Keyring) LocateFor(envPath, variable string) (Located, error) {
+	value, located, err := k.find(envPath, variable)
+	located.Length = len(value)
+	return located, err
+}
+
+type Why int
+
+const (
+	WhyUnexplained Why = iota
+	WhyNoFile
+	WhyFileLacksName
+	WhyUnreadable
+	WhyStoreUnreadable
+	WhyUnbound
+)
+
+type MissingKey struct {
+	Why     Why
+	wrapped error
+}
+
+func (m MissingKey) Error() string { return m.wrapped.Error() }
+
+func (m MissingKey) Unwrap() error { return m.wrapped }
+
+func Unbound(sentence string) error {
+	return MissingKey{Why: WhyUnbound, wrapped: errors.New(sentence)}
+}
+
+func IsUnbound(err error) bool {
+	var missing MissingKey
+	return errors.As(err, &missing) && missing.Why == WhyUnbound
+}
+
+func noKey(name, path string, why Why, cause error, format string, args ...any) (string, Located, error) {
+	failure := transport.Fail("jev.Key", transport.KindMissingCredential, cause, format, args...)
+	return "", Located{Name: name, Source: SourceMissing, Path: path}, MissingKey{Why: why, wrapped: failure}
+}
+
+func (k Keyring) find(envPath, name string) (string, Located, error) {
+	if k.ReadErr != nil {
+		return noKey(name, "", WhyStoreUnreadable, k.ReadErr, "reading the credential store")
+	}
+	if value := k.Stored[name]; value != "" {
+		return value, Located{Name: name, Source: SourceDatabase, Path: k.Path}, nil
+	}
+	hidden := sys.CredentialsHiddenFromTests()
+	value := strings.TrimSpace(os.Getenv(name))
+	if hidden && sys.EqualsOwnerCredential(name, value) {
+		value = ""
+	}
+	if value != "" {
+		return value, Located{Name: name, Source: SourceEnvironment}, nil
+	}
+	if envPath == "" {
+		return noKey(name, "", WhyUnexplained, nil, "%s is not set", name)
+	}
+	abs, err := filepath.Abs(envPath)
+	if err != nil {
+		abs = envPath
+	}
+	if hidden && sys.IsOwnerCredential(abs) {
+		return noKey(name, abs, WhyUnexplained, nil, "%s is hidden from tests: %s is one of the owner's credential files, and a test that means to spend calls sys.AllowLiveCredential first", name, abs)
+	}
+	present, err := sys.Exists(envPath)
+	if err != nil {
+		return noKey(name, abs, WhyUnreadable, err, "reading %s", envPath)
+	}
+	if !present {
+		return noKey(name, abs, WhyNoFile, nil, "%s is not set and %s does not exist", name, envPath)
+	}
+	raw, err := sys.ReadCredential(envPath)
+	if err != nil {
+		return noKey(name, abs, WhyUnreadable, err, "reading %s", envPath)
+	}
+	if key := sys.CredentialAssignment(string(raw), name); key != "" {
+		return key, Located{Name: name, Source: SourceDotEnv, Path: abs}, nil
+	}
+	return noKey(name, abs, WhyFileLacksName, nil, "%s is not set and %s does not carry it", name, envPath)
+}

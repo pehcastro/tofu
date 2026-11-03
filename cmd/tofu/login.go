@@ -19,14 +19,14 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/interface/tui/keyfield"
+	"tofu/internal/cli/render"
 	"tofu/internal/host"
-	"tofu/internal/judge/jev"
-	"tofu/internal/llm/cred"
-	"tofu/internal/llm/models"
 	"tofu/internal/models/classifiers"
+	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/llm/accounts"
+	"tofu/internal/models/llm/catalog"
+	"tofu/internal/models/transport"
 	"tofu/internal/sys"
-	"tofu/internal/transport"
-	"tofu/internal/widget"
 )
 
 const (

@@ -14,7 +14,7 @@ import (
 
 	"tofu/internal/host"
 	"tofu/internal/konst"
-	"tofu/internal/session"
+	"tofu/internal/store/session"
 )
 
 const (

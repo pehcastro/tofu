@@ -15,11 +15,11 @@ import (
 
 	"tofu/internal/agent/cron"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/memory"
-	"tofu/internal/safe"
-	"tofu/internal/session"
-	"tofu/internal/shell"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/recover"
+	"tofu/internal/store/memory/entries"
+	"tofu/internal/store/session"
+	"tofu/internal/tools/shell/process"
 )
 
 const (

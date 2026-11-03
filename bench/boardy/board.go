@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/boardy"
+	"tofu/internal/project/boardy"
 )
 
 const (

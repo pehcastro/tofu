@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/models/classifiers/core"
 )
 
 const BenchName = "sift"

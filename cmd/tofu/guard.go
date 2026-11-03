@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"tofu/internal/boardy"
-	"tofu/internal/guard"
+	"tofu/internal/project/boardy"
+	"tofu/internal/project/guard"
 )
 
 const guardUsage = "usage: tofu guard <rule> < hook.json, or tofu guard git commit-msg|release-docs <message file>"

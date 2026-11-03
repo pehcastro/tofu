@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/shell"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/shell/process"
 	"tofu/internal/turn"
 )
 

@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/agent/context/recall"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/recall"
-	"tofu/internal/session"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
 )
 
 func taskOpening(task string) llm.Message {

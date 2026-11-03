@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"tofu/internal/boardy"
+	"tofu/internal/project/boardy"
 	"tofu/library"
 )
 

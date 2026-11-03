@@ -3,7 +3,7 @@ package sys
 import (
 	"os"
 
-	"tofu/internal/safe"
+	"tofu/internal/platform/recover"
 )
 
 func Crashes(project string) safe.Report {

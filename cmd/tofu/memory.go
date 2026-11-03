@@ -12,7 +12,7 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/host"
-	"tofu/internal/memory"
+	"tofu/internal/store/memory/entries"
 )
 
 const memoryUsage = `tofu memory [list] [--json], tofu memory add [--scope user-local|project-local|project-global|user-global] [--kind person|project|reference] [--said "<your words>"] [--replace <id>] "<statement>", tofu memory remove [--scope <scope>] <id>, each with [--dir project]`

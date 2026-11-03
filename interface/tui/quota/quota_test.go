@@ -8,7 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/frame"
-	"tofu/internal/golden"
+	"tofu/internal/testkit/golden"
 )
 
 func TestQuotaGoldens(t *testing.T) {

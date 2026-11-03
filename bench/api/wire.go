@@ -5,11 +5,11 @@ import (
 	"errors"
 	"time"
 
-	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/konst"
-	"tofu/internal/llm/models"
-	"tofu/internal/transport"
+	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/typesafe"
+	"tofu/internal/models/llm/catalog"
+	"tofu/internal/models/transport"
 	shipped "tofu/library"
 )
 

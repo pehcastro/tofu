@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"tofu/interface/cli"
-	"tofu/internal/boardy"
 	"tofu/internal/host"
-	"tofu/internal/rule"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/project/boardy"
 )
 
 const boardyUsage = "tofu boardy init|new|list|show|move|log|set|lint|boards|held|manager|triage|assign|hand|widen|check|tick|fire|rule|bypass|request|view|audit|report|attention|epic|sprint|ask|catchup [--json]"

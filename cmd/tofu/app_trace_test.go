@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/llm"
-	sessionstore "tofu/internal/session"
+	"tofu/internal/models/llm/core"
+	sessionstore "tofu/internal/store/session"
 	"tofu/internal/turn"
 )
 

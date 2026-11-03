@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"tofu/interface/cli"
-	"tofu/internal/boardy"
 	"tofu/internal/konst"
+	"tofu/internal/project/boardy"
 )
 
 const boardyBypassUsage = "tofu boardy bypass list | answer <B> yes|no [--why text] [--board KEY] [--as name] [--json]"

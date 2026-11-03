@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"tofu/interface/cli"
-	"tofu/internal/llm"
-	"tofu/internal/session"
-	settingspkg "tofu/internal/settings"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
+	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/turn"
 )
 

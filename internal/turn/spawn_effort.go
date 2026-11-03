@@ -6,9 +6,9 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/internal/boardy"
-	"tofu/internal/llm"
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/project/boardy"
 )
 
 func (t *SpawnTool) open(definition subagent.Definition, effort llm.Effort) (SubAgentModel, error) {

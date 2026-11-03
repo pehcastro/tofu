@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/internal/llm/models"
+	"tofu/internal/models/llm/catalog"
 )
 
 const (

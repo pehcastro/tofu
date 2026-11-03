@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"tofu/interface/cli"
-	"tofu/internal/boardy"
 	"tofu/internal/host"
-	settingspkg "tofu/internal/settings"
+	"tofu/internal/project/boardy"
+	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
 )
 

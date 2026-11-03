@@ -15,9 +15,9 @@ import (
 	"github.com/charmbracelet/x/term"
 
 	"tofu/interface/tui/look"
+	"tofu/internal/cli/render"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
-	"tofu/internal/widget"
 )
 
 const pageMaxCells = 100

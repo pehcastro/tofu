@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/guard"
+	"tofu/internal/project/guard"
 	"tofu/internal/sys"
 )
 

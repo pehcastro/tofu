@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"tofu/bench/stat"
-	"tofu/internal/judge/jev"
+	"tofu/internal/models/classifiers/core"
 )
 
 const rerunThresholdProbe = 0.5

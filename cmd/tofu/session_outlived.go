@@ -7,7 +7,7 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/host"
-	"tofu/internal/session"
+	"tofu/internal/store/session"
 )
 
 type traceOutlived = host.TraceOutlived

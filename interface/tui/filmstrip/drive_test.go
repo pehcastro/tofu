@@ -22,13 +22,13 @@ import (
 	"tofu/interface/tui/paste"
 	"tofu/interface/tui/shells"
 	"tofu/interface/tui/subagent"
-	"tofu/internal/golden"
+	roster "tofu/internal/agent/subagents"
 	"tofu/internal/host"
 	"tofu/internal/konst"
-	library "tofu/internal/llm/models"
-	isettings "tofu/internal/settings"
-	roster "tofu/internal/subagent"
+	library "tofu/internal/models/llm/catalog"
+	isettings "tofu/internal/store/settings"
 	"tofu/internal/sys"
+	"tofu/internal/testkit/golden"
 )
 
 const (

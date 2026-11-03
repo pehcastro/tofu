@@ -15,11 +15,11 @@ import (
 
 	"tofu/interface/tui"
 	"tofu/interface/tui/paste"
+	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/cron"
 	"tofu/internal/host"
-	"tofu/internal/llm"
-	"tofu/internal/recall"
-	sessionstore "tofu/internal/session"
+	"tofu/internal/models/llm/core"
+	sessionstore "tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 )

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"tofu/internal/judge/jev"
+	"tofu/internal/models/classifiers/core"
 	"tofu/internal/tools/web"
 	"tofu/library"
 )

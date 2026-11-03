@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/llm/wire/codex"
-	"tofu/internal/session"
+	"tofu/internal/models/llm/wire/codex"
+	"tofu/internal/store/session"
 	"tofu/internal/turn"
 )
 

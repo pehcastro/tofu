@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	roster "tofu/internal/agent/subagents"
 	"tofu/internal/konst"
-	roster "tofu/internal/subagent"
 	"tofu/internal/turn"
 )
 

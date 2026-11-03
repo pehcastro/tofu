@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/rule"
-	"tofu/internal/session"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 	"tofu/internal/turn"

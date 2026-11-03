@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/boardy"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/project/boardy"
 	"tofu/internal/sys"
 )
 

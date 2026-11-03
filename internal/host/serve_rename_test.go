@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/session"
+	"tofu/internal/store/session"
 )
 
 func TestSessionRenameNamesTheWholeFamilyAndLeavesTheOpenSessionWhereItWas(t *testing.T) {

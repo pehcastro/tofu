@@ -5,7 +5,7 @@ import (
 	"errors"
 	"slices"
 
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
 )
 
 //go:embed learn_window@1.yaml

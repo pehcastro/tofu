@@ -16,12 +16,12 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"tofu/internal/agent/context/recall"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/recall"
-	"tofu/internal/session"
-	"tofu/internal/shell"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
+	"tofu/internal/tools/shell/process"
 	shipped "tofu/library"
 )
 
@@ -370,7 +370,7 @@ func TestARealProxyMeasuresWhatTheModelSawWithTheSettingOnAndOff(t *testing.T) {
 
 	for _, sheet := range []string{proxyOff, proxyOn} {
 		model := &stubModel{decisions: []llm.Decision{
-			toolCallDecision(llm.ToolCall{ID: "c1", Name: bashToolName, Arguments: json.RawMessage(`{"command":"go test -v -count=1 ./internal/recall/...","timeout_ms":600000}`)}),
+			toolCallDecision(llm.ToolCall{ID: "c1", Name: bashToolName, Arguments: json.RawMessage(`{"command":"go test -v -count=1 ./internal/agent/context/recall/...","timeout_ms":600000}`)}),
 			messageDecision(),
 		}}
 		row, err := Run(context.Background(), Config{

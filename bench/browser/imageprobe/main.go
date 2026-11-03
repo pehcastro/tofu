@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/openrouter"
-	"tofu/internal/judge/jev/wire/typesafe"
+	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/classifiers/providers/openrouter"
+	"tofu/internal/models/classifiers/providers/typesafe"
 )
 
 const (

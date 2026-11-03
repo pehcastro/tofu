@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/boardy"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/rule"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/project/boardy"
 	"tofu/internal/tools/contract"
 	"tofu/internal/turn"
 )

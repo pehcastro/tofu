@@ -3,7 +3,7 @@ package host
 import (
 	"time"
 
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/turn"
 )
 

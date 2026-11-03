@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"tofu/bench/corpus/recorded"
-	"tofu/internal/llm/quota"
+	"tofu/internal/models/llm/quota"
 )
 
 const prefixPath = "../forkcache/testdata/forks.jsonl"

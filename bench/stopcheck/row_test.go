@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
 )
 

@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"tofu/bench/api"
-	"tofu/internal/judge/jev"
-	"tofu/internal/judge/question"
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/judge/questions"
+	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
 	library "tofu/library"
 	libraryquestions "tofu/library/questions"

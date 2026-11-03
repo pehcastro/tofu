@@ -9,16 +9,16 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/hooks"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/cli/render"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/llm"
-	"tofu/internal/recall"
-	"tofu/internal/rule"
-	"tofu/internal/session"
-	"tofu/internal/subagent"
+	"tofu/internal/librarian/rules"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
-	"tofu/internal/widget"
 )
 
 func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow {

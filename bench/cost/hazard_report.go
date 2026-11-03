@@ -9,8 +9,8 @@ import (
 
 	"tofu/bench/report"
 	"tofu/bench/stat"
-	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/models/classifiers/providers/typesafe"
 )
 
 const (

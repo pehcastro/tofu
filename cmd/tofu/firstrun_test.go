@@ -18,8 +18,8 @@ import (
 
 	"tofu/interface/tui"
 	"tofu/interface/tui/session"
-	"tofu/internal/llm"
-	"tofu/internal/llm/cred"
+	"tofu/internal/models/llm/accounts"
+	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
 )
 

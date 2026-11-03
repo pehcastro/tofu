@@ -9,7 +9,7 @@ import (
 
 	"tofu/interface/tui/frame"
 	"tofu/internal/host"
-	"tofu/internal/llm/quota"
+	"tofu/internal/models/llm/quota"
 )
 
 func (a *App) followAccount(spent *host.TurnAccount) {

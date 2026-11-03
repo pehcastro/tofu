@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/llm"
-	"tofu/internal/llm/wire/anthropic"
-	"tofu/internal/recall"
-	"tofu/internal/session"
+	"tofu/internal/agent/context/recall"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/models/llm/wire/anthropic"
+	"tofu/internal/store/session"
 )
 
 func threeReads(prefix string) llm.Decision {

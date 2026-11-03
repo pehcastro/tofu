@@ -15,11 +15,11 @@ import (
 	"time"
 
 	"tofu/internal/judge/gate"
-	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	settingspkg "tofu/internal/settings"
+	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/llm/core"
+	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 )

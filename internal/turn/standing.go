@@ -8,12 +8,12 @@ import (
 	"strconv"
 	"sync"
 
-	"tofu/internal/judge/jev"
+	"tofu/internal/agent/context/recall"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/question"
+	"tofu/internal/judge/questions"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers"
-	"tofu/internal/recall"
+	"tofu/internal/models/classifiers/core"
 	"tofu/library/questions"
 )
 

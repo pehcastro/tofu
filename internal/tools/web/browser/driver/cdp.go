@@ -10,7 +10,7 @@ import (
 	"golang.org/x/net/websocket"
 
 	"tofu/internal/konst"
-	"tofu/internal/safe"
+	"tofu/internal/platform/recover"
 	"tofu/internal/sys"
 )
 

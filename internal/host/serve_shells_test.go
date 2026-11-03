@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/shell"
+	"tofu/internal/tools/shell/process"
 )
 
 func TestServeAnnouncesOnlyAKeptShellAndClosesEveryNameItAnnounced(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"tofu/internal/session"
+	"tofu/internal/store/session"
 )
 
 type trace struct {

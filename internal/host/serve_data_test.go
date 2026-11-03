@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/memory"
+	"tofu/internal/store/memory/entries"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 )

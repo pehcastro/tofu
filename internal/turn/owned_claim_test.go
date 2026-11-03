@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/llm"
-	"tofu/internal/session"
-	"tofu/internal/subagent"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
 )
 
 func claimNotes(t *testing.T, store *session.Store, owns ...string) func() error {

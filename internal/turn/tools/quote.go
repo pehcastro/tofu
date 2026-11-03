@@ -13,8 +13,8 @@ import (
 	"unicode/utf8"
 
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/session"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"

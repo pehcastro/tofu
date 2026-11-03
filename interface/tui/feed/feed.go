@@ -11,9 +11,9 @@ import (
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/pointer"
 	"tofu/interface/tui/progress"
+	roster "tofu/internal/agent/subagents"
+	"tofu/internal/cli/render"
 	"tofu/internal/konst"
-	roster "tofu/internal/subagent"
-	"tofu/internal/widget"
 )
 
 type Kind int

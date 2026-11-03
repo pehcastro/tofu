@@ -10,8 +10,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/internal/golden"
 	"tofu/internal/host"
+	"tofu/internal/testkit/golden"
 )
 
 var promptKeys = regexp.MustCompile(`\[1\] allow once\s+\[2\] deny\s+\[3\] always here\s+\[4\] never here\s+\[5\] cancel`)

@@ -10,9 +10,9 @@ import (
 
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/progress"
+	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/ui/toolcard"
-	"tofu/internal/widget"
 )
 
 const (

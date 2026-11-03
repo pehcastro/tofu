@@ -9,9 +9,9 @@ import (
 
 	"tofu/internal/agent/cron"
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/safe"
-	"tofu/internal/session"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/recover"
+	"tofu/internal/store/session"
 )
 
 func (h *Host) CronCommand(line string) (cron.Reply, error) {

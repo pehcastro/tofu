@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/llm"
-	"tofu/internal/session"
-	"tofu/internal/shell"
+	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
 	"tofu/internal/sys"
+	"tofu/internal/tools/shell/process"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 )

@@ -8,8 +8,8 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/internal/golden"
-	isettings "tofu/internal/settings"
+	isettings "tofu/internal/store/settings"
+	"tofu/internal/testkit/golden"
 )
 
 const themeSource = "global C:/Users/tester/.tofu/settings.json"

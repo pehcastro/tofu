@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"tofu/interface/cli"
-	"tofu/internal/session"
-	"tofu/internal/subagent"
-	"tofu/internal/widget"
+	"tofu/internal/agent/subagents"
+	"tofu/internal/cli/render"
+	"tofu/internal/store/session"
 )
 
 func traceMark(row traceRow) cli.Mark {

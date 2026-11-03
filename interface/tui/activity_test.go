@@ -13,8 +13,8 @@ import (
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/progress"
 	"tofu/interface/tui/subagent"
-	"tofu/internal/golden"
-	roster "tofu/internal/subagent"
+	roster "tofu/internal/agent/subagents"
+	"tofu/internal/testkit/golden"
 )
 
 const spinnerFrames = progress.Frames + progress.WorkFrames

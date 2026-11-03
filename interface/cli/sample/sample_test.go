@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/cli"
-	"tofu/internal/golden"
+	"tofu/internal/testkit/golden"
 )
 
 var (

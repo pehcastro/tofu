@@ -1,8 +1,8 @@
 package subagent
 
 import (
+	roster "tofu/internal/agent/subagents"
 	"tofu/internal/host"
-	roster "tofu/internal/subagent"
 )
 
 type State = roster.State

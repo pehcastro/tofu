@@ -1,7 +1,7 @@
 package schemas
 
 import (
-	"tofu/internal/llm"
+	"tofu/internal/models/llm/core"
 	iturn "tofu/internal/turn"
 	"tofu/internal/turn/tools"
 )

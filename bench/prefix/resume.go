@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"tofu/internal/session"
-	"tofu/internal/skill"
+	"tofu/internal/librarian/skills"
+	"tofu/internal/store/session"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 )

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/session"
+	"tofu/internal/store/session"
 )
 
 type act struct {
