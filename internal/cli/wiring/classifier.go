@@ -35,6 +35,23 @@ func LocateGateKey(keys jev.Keyring) (jev.Located, error) {
 	return keys.LocateFor(sys.CredentialFileName, classifier.KeyName(bound.Provider))
 }
 
+func JevClientOn(key string, concurrency int) (*jev.Client, error) {
+	model, err := BoundClassifier()
+	if err != nil {
+		return nil, err
+	}
+	return classifier.Route{Model: model, Key: key}.Client(concurrency)
+}
+
+func GateKey() (string, error) {
+	return GateKeyFrom(jev.ReadKeyring())
+}
+
+func GateKeyFrom(keys jev.Keyring) (string, error) {
+	route, err := classifier.Resolve(".", keys)
+	return route.Key, err
+}
+
 func CommandFor(verb string, of host.AccountRole, provider string) string {
 	return "tofu " + verb + " " + string(of) + " " + provider
 }

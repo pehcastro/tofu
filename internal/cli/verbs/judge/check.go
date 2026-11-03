@@ -1,4 +1,4 @@
-package main
+package judge
 
 import (
 	"context"
@@ -12,16 +12,18 @@ import (
 
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
-	judgeverb "tofu/internal/cli/verbs/judge"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
+	"tofu/library/questions"
 )
 
-const checkUsage = `tofu check "<command>" [--quiet] [--json]`
+const runGatePoint = questions.ToolGatePin
+
+const CheckUsage = `tofu check "<command>" [--quiet] [--json]`
 
 type checkOpts struct {
 	command string
@@ -34,8 +36,8 @@ type checkReport struct {
 	Verdict ledger.Verdict `json:"verdict"`
 }
 
-func checkVerb(args []string, out, errOut io.Writer) int {
-	o := output.Verb{Name: "check", UsageLine: checkUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
+func CheckVerb(args []string, out, errOut io.Writer) int {
+	o := output.Verb{Name: "check", UsageLine: CheckUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	opts, err := parseCheckArgs(args)
 	if err != nil {
 		return o.Usage(err)
@@ -69,15 +71,15 @@ func checkedRow(command string) (ledger.Row, error) {
 		}
 		rulePath = sys.Join(libraryDir, filepath.FromSlash(found))
 	}
-	key, err := gateKey()
+	key, err := wiring.GateKey()
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	client, err := jevClientOn(key, wiring.OneCallAtATime)
+	client, err := wiring.JevClientOn(key, wiring.OneCallAtATime)
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	return runCheck(context.Background(), client, rulePath, command)
+	return RunCheck(context.Background(), client, rulePath, command)
 }
 
 func verdictRow(v ledger.Verdict, command, id string) cli.Row {
@@ -118,12 +120,12 @@ func parseCheckArgs(args []string) (checkOpts, error) {
 	return opts, nil
 }
 
-func runCheck(ctx context.Context, client *jev.Client, rulePath, command string) (ledger.Row, error) {
+func RunCheck(ctx context.Context, client *jev.Client, rulePath, command string) (ledger.Row, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	set, err := judgeverb.ResolveLibrary(runGatePoint, "")
+	set, err := ResolveLibrary(runGatePoint, "")
 	if err != nil {
 		return ledger.Row{}, err
 	}
@@ -142,7 +144,7 @@ func runCheck(ctx context.Context, client *jev.Client, rulePath, command string)
 
 	var r gate.Rule
 	if rulePath == "" {
-		r, _, err = judgeverb.LoadRulePoint(runGatePoint, "")
+		r, _, err = LoadRulePoint(runGatePoint, "")
 	} else {
 		r, err = gate.Load(rulePath)
 	}
@@ -155,9 +157,9 @@ func runCheck(ctx context.Context, client *jev.Client, rulePath, command string)
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	return judgeverb.AppendRow(rawState, set, judgeverb.RowInput{
+	return AppendRow(rawState, set, RowInput{
 		Decision:     &decision,
-		Answers:      judgeverb.ToLedgerAnswers(set.QuestionsVersion, decision.Answers),
+		Answers:      ToLedgerAnswers(set.QuestionsVersion, decision.Answers),
 		StateBuilder: builderVersion,
 		Fingerprint:  state.FingerprintOf(call),
 	})

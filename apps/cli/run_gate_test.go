@@ -12,6 +12,7 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/cli/output"
+	settingsverb "tofu/internal/cli/verbs/settings"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
@@ -141,7 +142,7 @@ func gateScratch(t *testing.T, lockBuild string) (string, gate.Thresholds, gate.
 func enableGateAsking(t *testing.T) {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	if code := settingsVerb([]string{"set", settingspkg.GatePrompt, settingspkg.GatePromptAsk}, &out, &errOut); code != output.ExitOK {
+	if code := settingsverb.Verb([]string{"set", settingspkg.GatePrompt, settingspkg.GatePromptAsk}, &out, &errOut); code != output.ExitOK {
 		t.Fatalf("settings set %s %s exited %d: %s", settingspkg.GatePrompt, settingspkg.GatePromptAsk, code, errOut.String())
 	}
 }

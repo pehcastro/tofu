@@ -1,4 +1,4 @@
-package main
+package lint
 
 import (
 	"errors"
@@ -12,7 +12,7 @@ import (
 	"tofu/internal/sys"
 )
 
-const lintUsage = "tofu lint comments [path] [--json]"
+const Usage = "tofu lint comments [path] [--json]"
 
 type lintFinding struct {
 	File   string `json:"file"`
@@ -26,8 +26,8 @@ type lintReport struct {
 	Findings []lintFinding `json:"findings"`
 }
 
-func lintVerb(args []string, out, errOut io.Writer) int {
-	o := output.Verb{Name: "lint", UsageLine: lintUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
+func Verb(args []string, out, errOut io.Writer) int {
+	o := output.Verb{Name: "lint", UsageLine: Usage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	if len(args) == 0 || args[0] != "comments" {
 		return o.Usage(errors.New("usage: comments is the one check"))
 	}

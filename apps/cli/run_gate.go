@@ -111,23 +111,6 @@ func thresholdsInRange(r gate.Rule, set judgeverb.Battery) error {
 	return nil
 }
 
-func jevClientOn(key string, concurrency int) (*jev.Client, error) {
-	model, err := wiring.BoundClassifier()
-	if err != nil {
-		return nil, err
-	}
-	return classifier.Route{Model: model, Key: key}.Client(concurrency)
-}
-
-func gateKey() (string, error) {
-	return gateKeyFrom(jev.ReadKeyring())
-}
-
-func gateKeyFrom(keys jev.Keyring) (string, error) {
-	route, err := classifier.Resolve(".", keys)
-	return route.Key, err
-}
-
 func (g *toolGate) Decide(ctx context.Context, request turn.GateRequest) (turn.GateDecision, error) {
 	row, err := g.ask(ctx, request)
 	decision := turn.GateDecision{ID: row.ID, Verdict: row.Verdict, Answers: row.Answers, Reason: row.Reason,

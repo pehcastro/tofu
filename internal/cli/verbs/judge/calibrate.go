@@ -1,4 +1,4 @@
-package main
+package judge
 
 import (
 	"context"
@@ -16,7 +16,6 @@ import (
 
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
-	judgeverb "tofu/internal/cli/verbs/judge"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/gate"
 	"tofu/internal/konst"
@@ -24,7 +23,7 @@ import (
 	"tofu/internal/sys"
 )
 
-const calibrateUsage = "tofu calibrate <rule@version> --cases <cases.jsonl> --split <split.json> [--dry-run] [--json]"
+const CalibrateUsage = "tofu calibrate <rule@version> --cases <cases.jsonl> --split <split.json> [--dry-run] [--json]"
 
 type caseLabel string
 
@@ -90,17 +89,17 @@ type calibrateReport struct {
 	CalibrationError    float64 `json:"calibration_error,omitempty"`
 }
 
-func calibrateVerb(args []string, out, errOut io.Writer) int {
-	o := output.Verb{Name: "calibrate", UsageLine: calibrateUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
+func CalibrateVerb(args []string, out, errOut io.Writer) int {
+	o := output.Verb{Name: "calibrate", UsageLine: CalibrateUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	ref, casesPath, splitPath, dryRun, err := parseCalibrateArgs(output.WithoutJSON(args))
 	if err != nil {
 		return o.Usage(err)
 	}
-	set, err := judgeverb.ResolveLibrary(ref, "")
+	set, err := ResolveLibrary(ref, "")
 	if err != nil {
 		return o.Fail(err)
 	}
-	rule, err := judgeverb.ResolveRule(ref, set)
+	rule, err := ResolveRule(ref, set)
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -119,7 +118,7 @@ func calibrateVerb(args []string, out, errOut io.Writer) int {
 				page.Label(fmt.Sprintf("%d fit and %d held-out cases, each asked twice, nothing asked yet", report.Fit, report.Verify))}
 		})
 	}
-	resolved, err := judgeverb.ResolveRuleMode(rule)
+	resolved, err := ResolveRuleMode(rule)
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -130,7 +129,7 @@ func calibrateVerb(args []string, out, errOut io.Writer) int {
 	}
 	ask := func(ctx context.Context, c calibrationCase) (askedCase, error) {
 		report.Calls++
-		outcome, _, err := judgeverb.AskFresh(ctx, client, jev.Request{State: c.State, Questions: set.Questions}, set)
+		outcome, _, err := AskFresh(ctx, client, jev.Request{State: c.State, Questions: set.Questions}, set)
 		return askedCase{Answers: outcome.Decision.Answers, Build: outcome.Decision.Build}, err
 	}
 	result, err := calibrate(context.Background(), rule, corpus, ask, time.Now)

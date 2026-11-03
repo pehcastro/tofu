@@ -1,4 +1,4 @@
-package main
+package memory
 
 import (
 	"cmp"
@@ -16,7 +16,7 @@ import (
 	"tofu/internal/store/memory/entries"
 )
 
-const memoryUsage = `tofu memory [list] [--json], tofu memory add [--scope user-local|project-local|project-global|user-global] [--kind person|project|reference] [--said "<your words>"] [--replace <id>] "<statement>", tofu memory remove [--scope <scope>] <id>, each with [--dir project]`
+const Usage = `tofu memory [list] [--json], tofu memory add [--scope user-local|project-local|project-global|user-global] [--kind person|project|reference] [--said "<your words>"] [--replace <id>] "<statement>", tofu memory remove [--scope <scope>] <id>, each with [--dir project]`
 
 type memoryOpts struct {
 	scope              memory.Scope
@@ -66,17 +66,12 @@ func parseMemoryArgs(args []string) (memoryOpts, error) {
 	return opts, nil
 }
 
-func memoryVerb(args []string, out, errOut io.Writer) int {
+func Verb(args []string, out, errOut io.Writer) int {
 	verb := "list"
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		verb, args = args[0], args[1:]
 	}
-	o := output.Verb{Name: "memory " + verb, UsageLine: memoryUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
-	switch verb {
-	case "tree", "zoom", "recall":
-		o.UsageLine = memoryTreeUsage
-		return memoryTreeVerb(o, verb, args)
-	}
+	o := output.Verb{Name: "memory " + verb, UsageLine: Usage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	opts, err := parseMemoryArgs(args)
 	if err != nil {
 		return o.Usage(err)

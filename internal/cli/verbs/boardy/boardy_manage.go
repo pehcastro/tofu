@@ -4,23 +4,15 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 	"time"
 
-	"tofu/internal/agent/subagents"
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/project/boardy"
-)
-
-const (
-	claudeCodeEnv        = "CLAUDECODE"
-	claudeCodeSessionEnv = "CLAUDE_CODE_SESSION_ID"
-	codexThreadEnv       = "CODEX_THREAD_ID"
 )
 
 func boardyManageUsage(subcommand string) string {
@@ -39,30 +31,6 @@ func boardyManageUsage(subcommand string) string {
 		return "tofu boardy check create|move|widen|close <ticket> [--to status] [--as name] [--json]"
 	}
 	return ""
-}
-
-func Identity(as string) (actor, lead string) {
-	if session := os.Getenv(subagent.SessionEnv); session != "" {
-		if boardy.SubAgentActor(session) {
-			return session, ""
-		}
-		return session, session
-	}
-	harness, session := boardy.HarnessClaudeCode, os.Getenv(claudeCodeSessionEnv)
-	inHarness := session != "" || os.Getenv(claudeCodeEnv) != ""
-	if thread := os.Getenv(codexThreadEnv); thread != "" {
-		harness, session, inHarness = boardy.HarnessCodex, thread, true
-	}
-	switch {
-	case !inHarness && as == boardy.OrchestratorName:
-		return as, as
-	case !inHarness:
-		return cmp.Or(as, string(boardy.RolePerson)), ""
-	case as == "" || as == boardy.OrchestratorName:
-		actor = boardy.HarnessActor(harness, session, "")
-		return actor, actor
-	}
-	return boardy.HarnessActor(harness, session, as), ""
 }
 
 func (c boardyCall) manage(subcommand string) int {

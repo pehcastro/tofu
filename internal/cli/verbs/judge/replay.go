@@ -1,4 +1,4 @@
-package main
+package judge
 
 import (
 	"cmp"
@@ -15,7 +15,7 @@ import (
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
 	"tofu/internal/cli/render"
-	judgeverb "tofu/internal/cli/verbs/judge"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/questions"
@@ -24,7 +24,7 @@ import (
 	"tofu/library/questions"
 )
 
-const replayUsage = "tofu replay --point name [--set threshold=value]... [--since 7d] [--verbose] [--json]"
+const ReplayUsage = "tofu replay --point name [--set threshold=value]... [--since 7d] [--verbose] [--json]"
 
 func gateThresholdSlots(t *gate.Thresholds) map[string]*float64 {
 	return map[string]*float64{
@@ -103,8 +103,8 @@ type replayReport struct {
 	verbose     bool
 }
 
-func replayVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
-	o := output.Verb{Name: "replay", UsageLine: replayUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
+func ReplayVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
+	o := output.Verb{Name: "replay", UsageLine: ReplayUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	opts, err := parseReplayArgs(args)
 	if err != nil {
 		return o.Usage(err)
@@ -215,7 +215,7 @@ func runReplay(reader *ledger.Reader, filter ledger.Filter, sets map[string]floa
 		for key, value := range sets {
 			*named[key] = value
 		}
-		verdict, _, err := gate.Decide(judgeverb.LedgerAnswersToJev(row.Answers), pol)
+		verdict, _, err := gate.Decide(LedgerAnswersToJev(row.Answers), pol)
 		if err != nil {
 			return err
 		}
@@ -295,7 +295,7 @@ func (r *replayReport) rule(ref string, load func() replayRule) *replayRule {
 
 func gateRule(ref string, sets map[string]float64) replayRule {
 	rule := replayRule{Ref: ref, slots: gateThresholdSlots}
-	if rule.pol, rule.Origin, rule.err = judgeverb.LoadRulePoint(ref, ""); rule.err != nil {
+	if rule.pol, rule.Origin, rule.err = LoadRulePoint(ref, ""); rule.err != nil {
 		return rule
 	}
 	rule.File = rule.pol.File
@@ -383,7 +383,7 @@ func (r replayReport) lines(page cli.Page) []string {
 			rows[0].Cells[i] = page.Label(name)
 		}
 		for _, move := range r.Moves {
-			cells := []string{verdictLook(move.Before).Text + " → " + verdictLook(move.After).Text}
+			cells := []string{wiring.VerdictLook(move.Before).Text + " → " + wiring.VerdictLook(move.After).Text}
 			for _, n := range []int{move.Rows, move.Labeled, move.Agree, move.Disagree} {
 				cells = append(cells, widget.Lead(strconv.Itoa(n), len(header[len(cells)])))
 			}
@@ -393,7 +393,7 @@ func (r replayReport) lines(page cli.Page) []string {
 	}
 	if len(r.Rows) > 0 {
 		at := func(v ledger.Verdict, threshold float64) string {
-			return verdictLook(v).Text + " at " + strconv.FormatFloat(threshold, 'g', -1, 64)
+			return wiring.VerdictLook(v).Text + " at " + strconv.FormatFloat(threshold, 'g', -1, 64)
 		}
 		var rows []cli.Row
 		for _, row := range r.Rows {
@@ -414,7 +414,7 @@ func (r replayReport) lines(page cli.Page) []string {
 		if change.Outcome != nil {
 			outcome = "outcome " + change.Outcome.Detail
 		}
-		changes = append(changes, cli.Row{Mark: cli.Changed, Cells: []string{change.ID, verdictLook(change.Before).Text + " → " + verdictLook(change.After).Text}, Detail: outcome})
+		changes = append(changes, cli.Row{Mark: cli.Changed, Cells: []string{change.ID, wiring.VerdictLook(change.Before).Text + " → " + wiring.VerdictLook(change.After).Text}, Detail: outcome})
 	}
 	return append(append(lines, ""), cli.Indent(page.Rows(changes)...)...)
 }

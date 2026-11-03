@@ -1,4 +1,4 @@
-package main
+package judge
 
 import (
 	"errors"
@@ -10,13 +10,14 @@ import (
 
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/sys"
 )
 
-const labelUsage = "tofu label <id> allow|ask|deny | tofu label --last allow|ask|deny [--json]"
+const LabelUsage = "tofu label <id> allow|ask|deny | tofu label --last allow|ask|deny [--json]"
 
-const outcomeKindHandLabeled = "hand-labeled"
+const OutcomeKindHandLabeled = "hand-labeled"
 
 type labelReceipt struct {
 	ID      string         `json:"id"`
@@ -25,8 +26,8 @@ type labelReceipt struct {
 	Verdict ledger.Verdict `json:"verdict"`
 }
 
-func labelVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
-	o := output.Verb{Name: "label", UsageLine: labelUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
+func LabelVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
+	o := output.Verb{Name: "label", UsageLine: LabelUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	args = output.WithoutJSON(args)
 	last := slices.Contains(args, "--last")
 	args = slices.DeleteFunc(args, func(arg string) bool { return arg == "--last" })
@@ -71,11 +72,11 @@ func labelVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
 	case row.Outcome != nil:
 		return o.Fail(output.ProblemError{What: id + " already carries the outcome " + row.Outcome.Detail})
 	}
-	receipt := labelReceipt{ID: id, Outcome: outcome, Kind: outcomeKindHandLabeled, Verdict: row.Verdict}
+	receipt := labelReceipt{ID: id, Outcome: outcome, Kind: OutcomeKindHandLabeled, Verdict: row.Verdict}
 	if err := ledger.NewWriterWithClock(dir, now).Backfill(id, ledger.Outcome{Kind: receipt.Kind, Detail: string(outcome)}); err != nil {
 		return o.Fail(err)
 	}
 	return o.Done(true, receipt, func(page cli.Page) []string {
-		return []string{page.Glyph(cli.Done) + " " + id + " labeled " + verdictLook(outcome).Text + cli.Gap + page.Label("verdict was "+verdictLook(row.Verdict).Text)}
+		return []string{page.Glyph(cli.Done) + " " + id + " labeled " + wiring.VerdictLook(outcome).Text + cli.Gap + page.Label("verdict was "+wiring.VerdictLook(row.Verdict).Text)}
 	})
 }

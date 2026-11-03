@@ -134,7 +134,7 @@ func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaun
 	engine := &appEngine{dir: dir, arms: arms, open: wired.open, quota: wired.quota, tabs: launch.tabs, places: places}
 	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: shellsverb.CronChecker(dir), Resumed: launch.resumed.hosted(), Joins: wired.joins, Now: wired.now})
 	notes := append([]string{launch.note}, troubles...)
-	if _, err := gateKeyFrom(held.keys()); err != nil {
+	if _, err := wiring.GateKeyFrom(held.keys()); err != nil {
 		notes = append(notes, gateOffSaid(err))
 	}
 	note := strings.Join(slices.DeleteFunc(notes, func(one string) bool { return one == "" }), noteSeparator)
@@ -538,7 +538,7 @@ func jevProvider(keys jev.Keyring) settings.Provider {
 		return settings.Provider{Name: jevName, Fix: unreadableSource + err.Error()}
 	}
 	row := settings.Provider{Name: jevName, Source: dir}
-	key, keyErr := gateKeyFrom(keys)
+	key, keyErr := wiring.GateKeyFrom(keys)
 	if keyErr == nil {
 		row.Key = widget.Mask(key)
 	}

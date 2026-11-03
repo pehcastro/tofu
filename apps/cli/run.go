@@ -902,7 +902,7 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (turn.Co
 		asking = append(asking, tools.Remember{Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox, Judge: judgeverb.MemoryScopeJudge(dir, run.places.Log, run.keys.keyring(), run.notify),
 			Auto: func() bool { on, _ := settingspkg.IntFor(dir, settingspkg.AutoMemory); return on != 0 }})
 	}
-	if boardManaged(dir) {
+	if wiring.BoardManaged(dir) {
 		store, err := boardy.OpenStore(dir)
 		if err != nil {
 			return turn.Config{}, nil, err

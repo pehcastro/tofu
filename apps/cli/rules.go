@@ -87,24 +87,6 @@ func ruleSetting(id string) string {
 	return ""
 }
 
-func projectHasBoard(project string) bool {
-	store, err := boardy.OpenStore(project)
-	if err != nil {
-		return false
-	}
-	boards, _ := store.Boards()
-	return len(boards) > 0
-}
-
-func boardManaged(project string) bool {
-	store, err := settingspkg.OpenFor(project)
-	if err != nil || !projectHasBoard(project) {
-		return false
-	}
-	_, set := store.Source(boardy.ManagementSetting)
-	return !set || store.Text(boardy.ManagementSetting) == string(boardy.ManagementBoardy)
-}
-
 func ruleSettingOnValue(key string) string {
 	if key == boardy.ManagementSetting {
 		return string(boardy.ManagementBoardy)
@@ -153,7 +135,7 @@ func stackRules(library, project string) (ruleStack, error) {
 		}
 		on := settingspkg.IntSaying(project, key, nil) != 0
 		if key == boardy.ManagementSetting {
-			on = boardManaged(project)
+			on = wiring.BoardManaged(project)
 		}
 		mode := rule.ModeOff
 		if on {
@@ -173,7 +155,7 @@ func (s ruleStack) switchOn(id, project string) string {
 	switch {
 	case slices.Contains(s.bySetting, id):
 		return "off by the setting " + key + ": tofu settings set " + key + " " + ruleSettingOnValue(key)
-	case key == boardy.ManagementSetting && !projectHasBoard(project):
+	case key == boardy.ManagementSetting && !wiring.ProjectHasBoard(project):
 		return "off until the project has a board: tofu boardy init"
 	case key != "":
 		return "ships off: tofu rules restore " + id + ", or tofu settings set " + key + " " + ruleSettingOnValue(key)

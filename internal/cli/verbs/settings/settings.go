@@ -1,4 +1,4 @@
-package main
+package settings
 
 import (
 	"cmp"
@@ -14,14 +14,14 @@ import (
 
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
-	boardyverb "tofu/internal/cli/verbs/boardy"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/project/boardy"
 	settingspkg "tofu/internal/store/settings"
 )
 
 const (
-	settingsUsage    = "tofu settings [get <key> | set [--scope global|project] <key> <value>] [--json]"
+	Usage            = "tofu settings [get <key> | set [--scope global|project] <key> <value>] [--json]"
 	settingsGetUsage = "tofu settings get <key> [--json]"
 	settingsSetUsage = "tofu settings set [--scope global|project] <key> <value> [--json]"
 )
@@ -31,8 +31,8 @@ type (
 	settingsReport = host.SettingsReport
 )
 
-func settingsVerb(args []string, out, errOut io.Writer) int {
-	o := output.Verb{Name: "settings", UsageLine: settingsUsage, AsJSON: slices.Contains(args, output.JSONFlag), Out: out, ErrOut: errOut}
+func Verb(args []string, out, errOut io.Writer) int {
+	o := output.Verb{Name: "settings", UsageLine: Usage, AsJSON: slices.Contains(args, output.JSONFlag), Out: out, ErrOut: errOut}
 	args = slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return arg == output.JSONFlag })
 	dir, err := os.Getwd()
 	var store *settingspkg.Store
@@ -61,7 +61,7 @@ func settingsVerb(args []string, out, errOut io.Writer) int {
 	return o.Usage(fmt.Errorf("unknown subcommand %q", args[0]))
 }
 
-func printSettingsList(out io.Writer, store *settingspkg.Store, dir string) {
+func PrintList(out io.Writer, store *settingspkg.Store, dir string) {
 	widest, category := 0, 0
 	for _, spec := range store.Table() {
 		widest, category = max(widest, len(spec.Key)), max(category, len(spec.Category))
@@ -86,9 +86,9 @@ func joinedWhy(source, because string) string {
 func managementInForce(store *settingspkg.Store, dir string) (string, string) {
 	_, set := store.Source(boardy.ManagementSetting)
 	switch {
-	case !projectHasBoard(dir):
+	case !wiring.ProjectHasBoard(dir):
 		return string(boardy.ManagementOff), "off until the project has a board: tofu boardy init"
-	case boardManaged(dir) && !set:
+	case wiring.BoardManaged(dir) && !set:
 		return string(boardy.ManagementBoardy), "on because the project has a board"
 	}
 	return store.Text(boardy.ManagementSetting), ""
@@ -197,7 +197,7 @@ func settingsSetVerb(o output.Verb, args []string, store *settingspkg.Store, dir
 	if before == "" || strings.ContainsAny(before, " \t") {
 		before = strconv.Quote(before)
 	}
-	actor, _ := boardyverb.Identity("")
+	actor, _ := wiring.BoardyIdentity("")
 	written := host.Writing(dir, host.TopicSettings, actor)
 	err := writeSetting(store, scope, spec, rest[1])
 	written()

@@ -1,4 +1,4 @@
-package main
+package judge
 
 import (
 	"context"
@@ -12,7 +12,6 @@ import (
 
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
-	judgeverb "tofu/internal/cli/verbs/judge"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
@@ -30,7 +29,7 @@ const (
 	armJev      = "jev"
 )
 
-var siftUsage = fmt.Sprintf(`tofu sift marks each paragraph of standard input as kept or elided.
+var SiftUsage = fmt.Sprintf(`tofu sift marks each paragraph of standard input as kept or elided.
 
 Arms:
   length    default. drop a paragraph under a %d-word floor, keep the rest.
@@ -75,9 +74,9 @@ type siftReport struct {
 	Text       string  `json:"text"`
 }
 
-func siftVerb(args []string, in io.Reader, out, errOut io.Writer) int {
+func SiftVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h") {
-		_, _ = io.WriteString(out, siftUsage)
+		_, _ = io.WriteString(out, SiftUsage)
 		return output.ExitOK
 	}
 	o := output.Verb{Name: "sift", UsageLine: siftUsageLine, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
@@ -150,15 +149,15 @@ func siftMarks(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
 
 func siftJev(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
 	marks := make([]sift.Mark, len(parts))
-	set, err := judgeverb.ResolveLibrary(siftPoint, "")
+	set, err := ResolveLibrary(siftPoint, "")
 	if err != nil {
 		return nil, 0, err
 	}
-	key, err := gateKey()
+	key, err := wiring.GateKey()
 	if err != nil {
 		return nil, 0, err
 	}
-	client, err := jevClientOn(key, konst.SiftConcurrency)
+	client, err := wiring.JevClientOn(key, konst.SiftConcurrency)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -187,7 +186,7 @@ func siftJev(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
 	return marks, total, nil
 }
 
-func siftOne(client *jev.Client, set judgeverb.Battery, parts []sift.Part, index int, opts siftOpts, rule sift.Rule) (sift.Mark, float64, error) {
+func siftOne(client *jev.Client, set Battery, parts []sift.Part, index int, opts siftOpts, rule sift.Rule) (sift.Mark, float64, error) {
 	state, err := json.Marshal(sift.BuildState(parts, index, opts.task))
 	if err != nil {
 		return sift.Mark{}, 0, err
@@ -206,9 +205,9 @@ func siftOne(client *jev.Client, set judgeverb.Battery, parts []sift.Part, index
 		return sift.Mark{}, decision.Usage.Cost, err
 	}
 	if !opts.noLog {
-		if _, err := judgeverb.AppendRow(built, set, judgeverb.RowInput{
+		if _, err := AppendRow(built, set, RowInput{
 			Decision:     &decision,
-			Answers:      judgeverb.ToLedgerAnswers(set.QuestionsVersion, decision.Answers),
+			Answers:      ToLedgerAnswers(set.QuestionsVersion, decision.Answers),
 			StateBuilder: siftPoint,
 		}); err != nil {
 			return sift.Mark{}, decision.Usage.Cost, err

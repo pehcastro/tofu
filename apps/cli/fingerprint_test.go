@@ -41,9 +41,9 @@ func checkCommand(t *testing.T, rulePath, command string) ledger.Row {
 	if err != nil {
 		t.Fatalf("client: %v", err)
 	}
-	row, err := runCheck(context.Background(), client, rulePath, command)
+	row, err := judgeverb.RunCheck(context.Background(), client, rulePath, command)
 	if err != nil {
-		t.Fatalf("runCheck: %v", err)
+		t.Fatalf("judgeverb.RunCheck: %v", err)
 	}
 	return row
 }

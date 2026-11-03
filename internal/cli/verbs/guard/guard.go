@@ -1,4 +1,4 @@
-package main
+package guard
 
 import (
 	"fmt"
@@ -12,13 +12,13 @@ import (
 	"tofu/internal/store/settings"
 )
 
-const guardUsage = "usage: tofu guard <rule> < hook.json, or tofu guard git commit-msg|release-docs <message file>"
+const Usage = "usage: tofu guard <rule> < hook.json, or tofu guard git commit-msg|release-docs <message file>"
 
-func guardVerb(args []string, in io.Reader, out, errOut io.Writer) int {
+func Verb(args []string, in io.Reader, out, errOut io.Writer) int {
 	answer, err := guardAnswer(args, in)
 	if err != nil {
 		_, _ = fmt.Fprintln(errOut, "tofu guard: "+err.Error())
-		_, _ = fmt.Fprintln(errOut, guardUsage)
+		_, _ = fmt.Fprintln(errOut, Usage)
 		return output.ExitUsage
 	}
 	_, _ = fmt.Fprint(out, answer.Stdout)

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"tofu/internal/cli/output"
+	judgeverb "tofu/internal/cli/verbs/judge"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	sessionstore "tofu/internal/store/session"
@@ -107,13 +108,13 @@ func whyLedger(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := writer.Backfill(whyHeld, ledger.Outcome{Kind: outcomeKindHandLabeled, Detail: "deny"}); err != nil {
+	if err := writer.Backfill(whyHeld, ledger.Outcome{Kind: judgeverb.OutcomeKindHandLabeled, Detail: "deny"}); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func runWhyVerb(args []string) (int, string, string) {
-	verbs := map[string]func([]string, io.Writer, io.Writer, func() time.Time) int{"why": whyVerb, "replay": replayVerb, "label": labelVerb}
+	verbs := map[string]func([]string, io.Writer, io.Writer, func() time.Time) int{"why": whyVerb, "replay": judgeverb.ReplayVerb, "label": judgeverb.LabelVerb}
 	var out, errOut bytes.Buffer
 	code := verbs[args[0]](args[1:], &out, &errOut, func() time.Time { return whyNow })
 	return code, out.String(), errOut.String()

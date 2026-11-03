@@ -16,6 +16,7 @@ import (
 
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/project/boardy"
@@ -103,7 +104,7 @@ func Verb(args []string, out, errOut io.Writer) int {
 	if err = errors.Join(err, flowErr); err != nil {
 		return o.Fail(err)
 	}
-	actor, lead := Identity(flags["as"])
+	actor, lead := wiring.BoardyIdentity(flags["as"])
 	call := boardyCall{o: o, dir: dir, managed: boardy.Managed{Local: boardy.Local{Store: store}, Person: string(boardy.RolePerson), Lead: lead}, actor: actor, store: store, words: flow.Words(), flags: flags, args: rest}
 	sizes := store.EventSizes()
 	written := host.BoardyWriting(dir, actor)

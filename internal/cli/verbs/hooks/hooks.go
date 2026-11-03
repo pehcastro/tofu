@@ -1,4 +1,4 @@
-package main
+package hooks
 
 import (
 	"cmp"
@@ -15,15 +15,10 @@ import (
 	"tofu/internal/tools/shell/process"
 )
 
-const hooksSubcommands = "tofu hooks [trust] [--json]"
+const Subcommands = "tofu hooks [trust] [--json]"
 
-const (
-	sessionEndOther = "other"
-	sessionEndExit  = "prompt_input_exit"
-)
-
-func hooksVerb(args []string, out, errOut io.Writer) int {
-	o := output.Verb{Name: "hooks", UsageLine: hooksSubcommands, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
+func Verb(args []string, out, errOut io.Writer) int {
+	o := output.Verb{Name: "hooks", UsageLine: Subcommands, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	words := output.WithoutJSON(args)
 	engine := hook.Load(".", shell.Choice{})
 	switch {

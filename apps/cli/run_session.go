@@ -11,6 +11,11 @@ import (
 	"tofu/internal/store/session"
 )
 
+const (
+	sessionEndOther = "other"
+	sessionEndExit  = "prompt_input_exit"
+)
+
 type runResumed struct {
 	carry    sessionResume
 	wire     string

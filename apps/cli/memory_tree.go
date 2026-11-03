@@ -16,6 +16,7 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/cli/output"
+	memoryverb "tofu/internal/cli/verbs/memory"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/catalog"
@@ -47,6 +48,14 @@ Use the space up to the ruler, and give it by value:
 Avoid omissions. Name a minor item in a word or two rather than drop it: an absent item can never be found. Copy names, numbers, ids, paths and errors exactly. Tag each item with its kind ("user: ...; lead: ..."), and credit quoted text to its real author. Never make anything look further along than it was. Non-ASCII characters cost 2-4 bytes. Never write an em dash: use a colon, a comma or parentheses.`
 
 const compactionExample = `user: rename --fast to --quick, keep --fast working for one release, ask before touching config.toml; lead: renamed in cli/flags.go, --fast prints a warning; work: [Tester] TestFlags failed (want 3 flags, got 4), fixed the table, not the code; user: commit it; lead: committed 4f2a9c1; open: the warning wording`
+
+func memoryVerb(args []string, out, errOut io.Writer) int {
+	if len(args) == 0 || (args[0] != "tree" && args[0] != "zoom" && args[0] != "recall") {
+		return memoryverb.Verb(args, out, errOut)
+	}
+	verb, args := args[0], args[1:]
+	return memoryTreeVerb(output.Verb{Name: "memory " + verb, UsageLine: memoryTreeUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}, verb, args)
+}
 
 func memoryTreeVerb(o output.Verb, verb string, args []string) int {
 	budget := konst.MemtreeViewBytes

@@ -10,6 +10,7 @@ import (
 
 	"tofu/internal/cli/page"
 	"tofu/internal/cli/render"
+	"tofu/internal/cli/wiring"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
@@ -32,7 +33,7 @@ func whyPage(page cli.Page, report whyReport, now time.Time) []string {
 func decisionLines(page cli.Page, listing whyListing, now time.Time) []string {
 	row := listing.decision()
 	ago := func(at time.Time) string { return widget.Until(now.Sub(at)) + " ago" }
-	lines := append(page.Title(row.Point, []string{row.ID, ago(row.At)}, verdictLook(row.Verdict)), "")
+	lines := append(page.Title(row.Point, []string{row.ID, ago(row.At)}, wiring.VerdictLook(row.Verdict)), "")
 	var answers []cli.Fact
 	for _, answer := range row.Answers {
 		if answer.Kind == ledger.AnswerNoul {
@@ -79,7 +80,7 @@ func decisionLines(page cli.Page, listing whyListing, now time.Time) []string {
 	}
 	rows := make([]cli.Row, len(listing.Precedents))
 	for i, precedent := range listing.Precedents {
-		look := verdictLook(precedent.Verdict)
+		look := wiring.VerdictLook(precedent.Verdict)
 		rows[i] = cli.Row{Mark: look.Mark, Cells: []string{precedent.ID, look.Text, precedent.Why}, Detail: ago(precedent.At)}
 		if precedent.Outcome != nil {
 			rows[i].Detail += " · " + outcomeText(precedent.Outcome)
@@ -87,20 +88,6 @@ func decisionLines(page cli.Page, listing whyListing, now time.Time) []string {
 	}
 	lines = append(lines, "", page.Subject("precedents")+page.Label(" · "+strconv.Itoa(len(rows))+" at this point, nearest first"))
 	return append(lines, cli.Indent(page.Rows(rows)...)...)
-}
-
-func verdictLook(v ledger.Verdict) cli.Verdict {
-	switch v {
-	case ledger.VerdictAllow:
-		return cli.Verdict{Mark: cli.Done, Text: "ALLOW"}
-	case ledger.VerdictAsk:
-		return cli.Verdict{Mark: cli.Warn, Text: "ASK"}
-	case ledger.VerdictDeny:
-		return cli.Verdict{Mark: cli.Fail, Text: "DENY"}
-	case ledger.VerdictUnset:
-		return cli.Verdict{Mark: cli.Idle, Text: "no verdict"}
-	}
-	panic("tofu why: unknown verdict " + string(v))
 }
 
 func precedentWhy(found ledger.Precedent) string {

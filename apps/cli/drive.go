@@ -20,6 +20,7 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/render"
+	settingsverb "tofu/internal/cli/verbs/settings"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/accounts"
@@ -960,7 +961,7 @@ func printDriveSettings(out io.Writer, dir, named string) {
 		_, _ = fmt.Fprintf(out, "settings: unreadable, so every setting is its declared default: %v\n", err)
 		return
 	}
-	printSettingsList(out, store, dir)
+	settingsverb.PrintList(out, store, dir)
 }
 
 func driveFail(errOut io.Writer, err error) int {

@@ -17,6 +17,7 @@ import (
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
 	judgeverb "tofu/internal/cli/verbs/judge"
+	settingsverb "tofu/internal/cli/verbs/settings"
 	"tofu/internal/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
@@ -232,11 +233,11 @@ func labelWindows(run *learn.Run, errOut io.Writer) error {
 	for _, q := range set.Questions {
 		asked.Questions, asked.Kinds[q.Name] = append(asked.Questions, q.ToJev()), q.Kind
 	}
-	key, err := gateKey()
+	key, err := wiring.GateKey()
 	if err != nil {
 		return err
 	}
-	client, err := jevClientOn(key, 1)
+	client, err := wiring.JevClientOn(key, 1)
 	if err != nil {
 		return err
 	}
@@ -304,7 +305,7 @@ func learnApply(o output.Verb, opts learnOpts, home learn.Home, finding learn.Fi
 	case learn.TargetNone:
 		return o.Usage(fmt.Errorf("finding %d is about your project, not tofu; there is nothing to apply", finding.ID))
 	case learn.TargetSetting:
-		if code := settingsVerb([]string{"set", "--scope", "project", finding.Setting, finding.Value}, o.Out, o.ErrOut); code != output.ExitOK {
+		if code := settingsverb.Verb([]string{"set", "--scope", "project", finding.Setting, finding.Value}, o.Out, o.ErrOut); code != output.ExitOK {
 			return code
 		}
 		if err := decide(learn.ActionApply); err != nil {

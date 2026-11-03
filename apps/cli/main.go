@@ -14,7 +14,12 @@ import (
 	"tofu/internal/cli/output"
 	"tofu/internal/cli/page"
 	boardyverb "tofu/internal/cli/verbs/boardy"
+	guardverb "tofu/internal/cli/verbs/guard"
+	hooksverb "tofu/internal/cli/verbs/hooks"
 	judgeverb "tofu/internal/cli/verbs/judge"
+	lintverb "tofu/internal/cli/verbs/lint"
+	memoryverb "tofu/internal/cli/verbs/memory"
+	settingsverb "tofu/internal/cli/verbs/settings"
 	shellsverb "tofu/internal/cli/verbs/shells"
 	"tofu/internal/host"
 	"tofu/internal/konst"
@@ -292,9 +297,9 @@ func verbNamed(name string) verb {
 	case "shells":
 		return verb{run: withoutIn(shellsverb.Verb)}
 	case "hooks":
-		return verb{run: withoutIn(hooksVerb)}
+		return verb{run: withoutIn(hooksverb.Verb)}
 	case "guard":
-		return verb{guardVerb, guardUsage}
+		return verb{guardverb.Verb, guardverb.Usage}
 	case "undo":
 		return verb{withoutIn(undoVerb), undoUsage}
 	case "version":
@@ -339,17 +344,17 @@ func verbNamed(name string) verb {
 	case "judge":
 		return verb{judgeverb.Verb, judgeverb.Usage}
 	case "check":
-		return verb{withoutIn(checkVerb), checkUsage}
+		return verb{withoutIn(judgeverb.CheckVerb), judgeverb.CheckUsage}
 	case "context":
 		return verb{run: withoutIn(contextVerb)}
 	case "sift":
-		return verb{run: siftVerb}
+		return verb{run: judgeverb.SiftVerb}
 	case "label":
-		return verb{withClock(labelVerb), labelUsage}
+		return verb{withClock(judgeverb.LabelVerb), judgeverb.LabelUsage}
 	case "calibrate":
-		return verb{withoutIn(calibrateVerb), calibrateUsage}
+		return verb{withoutIn(judgeverb.CalibrateVerb), judgeverb.CalibrateUsage}
 	case "replay":
-		return verb{withClock(replayVerb), replayUsage}
+		return verb{withClock(judgeverb.ReplayVerb), judgeverb.ReplayUsage}
 	case "library":
 		return verb{withoutIn(libraryVerb), libraryUsage}
 	case "catalog":
@@ -358,7 +363,7 @@ func verbNamed(name string) verb {
 			return libraryVerb(args, out, errOut)
 		}}
 	case "lint":
-		return verb{withoutIn(lintVerb), lintUsage}
+		return verb{withoutIn(lintverb.Verb), lintverb.Usage}
 	case "rules":
 		return verb{withoutIn(rulesVerb), strings.Join([]string{rulesSubcommands, rulesListUsage, rulesOverridesUsage, rulesCheckUsage, rulesAddUsage, rulesOffUsage, rulesIDUsage, rulesWhyUsage}, " ")}
 	case "boardy":
@@ -366,11 +371,11 @@ func verbNamed(name string) verb {
 	case "scratch":
 		return verb{withoutIn(shellsverb.Scratch), shellsverb.ScratchUsage}
 	case "memory":
-		return verb{withoutIn(memoryVerb), memoryUsage + " " + memoryTreeUsage}
+		return verb{withoutIn(memoryVerb), memoryverb.Usage + " " + memoryTreeUsage}
 	case "learn":
 		return verb{withoutIn(learnVerb), learnUsage}
 	case "settings":
-		return verb{withoutIn(settingsVerb), settingsUsage}
+		return verb{withoutIn(settingsverb.Verb), settingsverb.Usage}
 	case "reload":
 		return verb{withoutIn(reloadVerb), reloadUsage}
 	case "migrate":
@@ -396,7 +401,7 @@ func verbHelp(name string, args []string) string {
 	case "run":
 		return runUsage()
 	case "sift":
-		return siftUsage
+		return judgeverb.SiftUsage
 	case "catalog":
 		return verbHelp("library", args)
 	case "boardy":
@@ -404,7 +409,7 @@ func verbHelp(name string, args []string) string {
 	case "shells":
 		text = shellsverb.Subcommands
 	case "hooks":
-		text = hooksSubcommands
+		text = hooksverb.Subcommands
 	case "version":
 		text = "tofu version [--json]"
 	case "drive":
