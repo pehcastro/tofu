@@ -16,9 +16,9 @@ import (
 	"strings"
 	"unicode"
 
-	"tofu/internal/browser/extension"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
+	"tofu/internal/tools/web/browser/extension"
 )
 
 const (

@@ -3,7 +3,7 @@ package host
 import (
 	"time"
 
-	"tofu/internal/browser"
+	"tofu/internal/tools/web/browser/driver"
 )
 
 type UsageState string

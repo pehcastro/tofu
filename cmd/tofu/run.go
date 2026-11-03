@@ -19,7 +19,6 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/boardy"
-	"tofu/internal/browser/jevloop"
 	"tofu/internal/cron"
 	"tofu/internal/hook"
 	"tofu/internal/host"
@@ -43,6 +42,7 @@ import (
 	"tofu/internal/skill"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
+	"tofu/internal/tools/web/browser/loop"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"

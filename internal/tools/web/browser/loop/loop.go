@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"slices"
 
-	"tofu/internal/browser"
 	"tofu/internal/konst"
+	"tofu/internal/tools/web/browser/driver"
 )
 
 type Browser struct {

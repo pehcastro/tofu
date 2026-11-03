@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/internal/browser"
+	"tofu/internal/tools/web/browser/driver"
 )
 
 type Case struct {

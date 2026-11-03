@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"tofu/internal/boardy"
-	"tofu/internal/browser"
 	"tofu/internal/command"
 	"tofu/internal/drain"
 	"tofu/internal/hook"
@@ -25,6 +24,7 @@ import (
 	"tofu/internal/snapshot"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
+	"tofu/internal/tools/web/browser/driver"
 	"tofu/internal/turn"
 )
 

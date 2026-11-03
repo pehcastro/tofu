@@ -15,9 +15,9 @@ import (
 
 	"tofu/bench/browser/steps"
 	"tofu/interface/cli"
-	"tofu/internal/browser"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
+	"tofu/internal/tools/web/browser/driver"
 )
 
 type unreadStdin struct{ t *testing.T }

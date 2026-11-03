@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/browser"
+	"tofu/internal/tools/web/browser/driver"
 )
 
 const benchHostsKey = `Software\tofu-bench\NativeMessagingHosts`

@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"tofu/bench/api"
-	"tofu/internal/browser"
 	"tofu/internal/judge/jev"
 	"tofu/internal/sys"
+	"tofu/internal/tools/web/browser/driver"
 )
 
 var replayAnswers = flag.String("replay", "", "rebuild the report from this recorded answers file, with no network")

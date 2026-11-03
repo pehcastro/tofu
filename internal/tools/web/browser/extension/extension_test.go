@@ -14,9 +14,9 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/browser"
-	"tofu/internal/browser/extension"
 	"tofu/internal/konst"
+	"tofu/internal/tools/web/browser/driver"
+	"tofu/internal/tools/web/browser/extension"
 )
 
 const (

@@ -9,8 +9,8 @@ import (
 
 	"tofu/bench/report"
 	"tofu/bench/stat"
-	"tofu/internal/browser"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/tools/web/browser/driver"
 )
 
 const (

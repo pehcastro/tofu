@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/browser/motion"
 	"tofu/internal/konst"
+	"tofu/internal/tools/web/browser/motion"
 )
 
 //go:embed sampler.js

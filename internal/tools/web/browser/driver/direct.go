@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"tofu/internal/browser/extension"
 	"tofu/internal/konst"
 	"tofu/internal/safe"
 	"tofu/internal/sys"
+	"tofu/internal/tools/web/browser/extension"
 )
 
 type direct struct {

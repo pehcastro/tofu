@@ -7,11 +7,11 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/internal/browser"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
 	"tofu/internal/konst"
+	"tofu/internal/tools/web/browser/driver"
 )
 
 const operationQuestion = "operation"

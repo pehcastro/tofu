@@ -18,13 +18,13 @@ import (
 
 	"tofu/bench/browser/steps"
 	"tofu/interface/cli"
-	"tofu/internal/browser"
-	"tofu/internal/browser/jevloop"
-	"tofu/internal/browser/motion"
 	"tofu/internal/konst"
 	"tofu/internal/recipe"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/sys"
+	"tofu/internal/tools/web/browser/driver"
+	"tofu/internal/tools/web/browser/loop"
+	"tofu/internal/tools/web/browser/motion"
 	"tofu/internal/turn/tools"
 	"tofu/internal/widget"
 )

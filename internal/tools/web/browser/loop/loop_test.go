@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/browser"
+	"tofu/internal/tools/web/browser/driver"
 )
 
 type fakeTab struct {

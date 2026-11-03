@@ -18,8 +18,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"tofu/internal/browser"
 	"tofu/internal/konst"
+	"tofu/internal/tools/web/browser/driver"
 )
 
 type fakeRelease struct {

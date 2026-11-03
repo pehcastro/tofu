@@ -16,8 +16,8 @@ import (
 
 	"golang.org/x/sys/windows/registry"
 
-	"tofu/internal/browser/extension"
 	"tofu/internal/konst"
+	"tofu/internal/tools/web/browser/extension"
 )
 
 const shippedExtensionID = "jednanpboiikklhkkkimnmdmjmgjgphh"

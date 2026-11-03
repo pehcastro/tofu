@@ -15,10 +15,10 @@ import (
 
 	"tofu/bench/browser/airbnb"
 	"tofu/bench/browser/tasks"
-	"tofu/internal/browser"
 	"tofu/internal/session"
 	"tofu/internal/shell"
 	"tofu/internal/sys"
+	"tofu/internal/tools/web/browser/driver"
 )
 
 func main() {

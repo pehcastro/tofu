@@ -26,11 +26,11 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/interface/tui/frame"
-	"tofu/internal/browser"
 	"tofu/internal/host"
 	"tofu/internal/konst"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/sys"
+	"tofu/internal/tools/web/browser/driver"
 	"tofu/internal/transport"
 )
 

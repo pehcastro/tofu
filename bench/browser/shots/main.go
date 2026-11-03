@@ -19,7 +19,7 @@ import (
 	"time"
 
 	browserbench "tofu/bench/browser"
-	"tofu/internal/browser"
+	"tofu/internal/tools/web/browser/driver"
 )
 
 const (

@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"tofu/bench/stat"
-	"tofu/internal/browser"
-	"tofu/internal/browser/jevloop"
+	"tofu/internal/tools/web/browser/driver"
+	"tofu/internal/tools/web/browser/loop"
 )
 
 type Move struct {

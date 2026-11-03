@@ -13,7 +13,6 @@ import (
 	"tofu/interface/cli"
 	"tofu/interface/tui/frame"
 	"tofu/internal/boardy"
-	"tofu/internal/browser"
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
@@ -22,6 +21,7 @@ import (
 	"tofu/internal/llm/quota"
 	"tofu/internal/sift"
 	"tofu/internal/sys"
+	"tofu/internal/tools/web/browser/driver"
 	"tofu/internal/turn"
 )
 

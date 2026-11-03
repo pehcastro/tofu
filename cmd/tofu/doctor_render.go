@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"tofu/interface/cli"
-	"tofu/internal/browser"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/tools/web/browser/driver"
 	"tofu/internal/turn"
 )
 

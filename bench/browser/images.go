@@ -15,11 +15,11 @@ import (
 	"time"
 
 	"tofu/bench/report"
-	"tofu/internal/browser"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
+	"tofu/internal/tools/web/browser/driver"
 )
 
 const (

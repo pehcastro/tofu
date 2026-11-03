@@ -19,8 +19,6 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/browser"
-	"tofu/internal/browser/jevloop"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
@@ -30,6 +28,8 @@ import (
 	"tofu/internal/settings"
 	"tofu/internal/subagent"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/web/browser/driver"
+	"tofu/internal/tools/web/browser/loop"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 	"tofu/library"

@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"tofu/interface/cli"
-	"tofu/internal/browser"
+	"tofu/internal/tools/web/browser/driver"
 )
 
 const profileUsage = "tofu browser profile [list | new <name> | login <name> [<url>] | stop <name> | remove <name>] [--json]"

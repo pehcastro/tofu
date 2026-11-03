@@ -17,14 +17,14 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"tofu/internal/browser"
-	"tofu/internal/browser/jevloop"
-	"tofu/internal/browser/motion"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/settings"
 	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/web/browser/driver"
+	"tofu/internal/tools/web/browser/loop"
+	"tofu/internal/tools/web/browser/motion"
 	"tofu/internal/turn"
 	"tofu/internal/web"
 )
