@@ -334,6 +334,17 @@ func TestFollowLeavesNothingListeningWhenEitherSideEnds(t *testing.T) {
 	t.Logf("here: goroutines before joining %d, after the host quit and this side closed %d; %s is gone and nothing answers a dial", before, runtime.NumGoroutine(), status.Socket)
 }
 
+func TestFollowWithTheHubKilledRefusesToStartThisTestBinary(t *testing.T) {
+	held, project := startHub(t)
+	_ = held.cmd.Process.Kill()
+	<-held.ended
+	member, troubles := host.New(host.Config{Dir: project, Play: play, Joins: true, Resumed: host.Carry{Session: held.id}})
+	t.Cleanup(member.Close)
+	if said := strings.Join(troubles, "; "); !strings.Contains(said, "test binary") {
+		t.Fatalf("joining with the hub killed said %q, want a refusal naming the test binary", said)
+	}
+}
+
 func TestFollowEventsCrossTheChannelUnchanged(t *testing.T) {
 	exit := 0
 	sent := []host.Event{

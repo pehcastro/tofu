@@ -20,6 +20,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"testing"
 	"time"
 
 	"tofu/internal/konst"
@@ -233,6 +234,9 @@ func EnsureHub(project string) (HubStatus, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return HubStatus{}, err
+	}
+	if testing.Testing() {
+		return HubStatus{}, fmt.Errorf("no tofu host answers on %s and this process, %s, is a go test binary, so it will not start itself as the host: it would run the whole suite again, detached and with no timeout. Start the host in the test", place.socket, exe)
 	}
 	if err := os.MkdirAll(filepath.Dir(place.log), 0o700); err != nil {
 		return HubStatus{}, err
