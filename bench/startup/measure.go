@@ -4,10 +4,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"time"
 
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
@@ -131,9 +131,8 @@ func nodeProjectDir() (string, error) {
 }
 
 func repoRoot() (string, error) {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		return "", errors.New("startup: runtime.Caller could not resolve this file's own path")
+	if root := sys.SourceRoot(); root != "" {
+		return root, nil
 	}
-	return filepath.Abs(filepath.Join(filepath.Dir(file), "..", ".."))
+	return "", errors.New("startup: no go.mod above the tofu source, so the repository root is unknown")
 }

@@ -5,13 +5,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"tofu/internal/sys"
 )
 
-var sourceRoots = []string{"bench", "library", "cmd", "interface", "internal"}
-
 var fixtureDirectoryNames = map[string]bool{"testdata": true, "corpus": true, "answers": true}
-
-const repositoryRootFromThisPackage = "../.."
 
 func isRecordedFixture(relative string) bool {
 	segments := strings.Split(relative, "/")
@@ -28,16 +26,21 @@ func isRecordedFixture(relative string) bool {
 
 func recordedFixtures(t *testing.T) []string {
 	t.Helper()
+	repository := sys.SourceRoot()
 	var fixtures []string
-	for _, sourceRoot := range sourceRoots {
-		err := filepath.WalkDir(filepath.Join(repositoryRootFromThisPackage, sourceRoot), func(path string, entry os.DirEntry, err error) error {
+	for _, sourceRoot := range sys.GoRoots() {
+		dir := filepath.Join(repository, filepath.FromSlash(sourceRoot))
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			continue
+		}
+		err := filepath.WalkDir(dir, func(path string, entry os.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
 			if entry.IsDir() {
 				return nil
 			}
-			relative, err := filepath.Rel(repositoryRootFromThisPackage, path)
+			relative, err := filepath.Rel(repository, path)
 			if err != nil {
 				return err
 			}
@@ -59,9 +62,9 @@ func TestEveryRecordedFixtureInTheTreeCarriesNothingOffTheRecordingMachine(t *te
 	if len(fixtures) == 0 {
 		t.Fatal("the walk found no recorded fixtures, so it proved nothing about the tree")
 	}
-	t.Logf("walked %d recorded fixtures under %v", len(fixtures), sourceRoots)
+	t.Logf("walked %d recorded fixtures under %v", len(fixtures), sys.GoRoots())
 	for _, relative := range fixtures {
-		raw, err := os.ReadFile(filepath.Join(repositoryRootFromThisPackage, filepath.FromSlash(relative)))
+		raw, err := os.ReadFile(filepath.Join(sys.SourceRoot(), filepath.FromSlash(relative)))
 		if err != nil {
 			t.Fatal(err)
 		}

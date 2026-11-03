@@ -27,8 +27,6 @@ const (
 
 var diagnostic = sys.LazyRegexp(`^(.+\.go):\d+:\d+: `)
 
-var roots = []string{"./cmd/...", "./internal/...", "./interface/...", "./library/...", "./bench/..."}
-
 type failure struct {
 	step, pkg, detail string
 	tests             []string
@@ -115,8 +113,18 @@ func (r runner) goCommand(args ...string) *exec.Cmd {
 	return cmd
 }
 
+func (r runner) roots() []string {
+	var patterns []string
+	for _, root := range sys.GoRoots() {
+		if _, err := os.Stat(filepath.Join(r.repo, filepath.FromSlash(root))); err == nil {
+			patterns = append(patterns, "./"+root+"/...")
+		}
+	}
+	return patterns
+}
+
 func (r runner) vet() ([]failure, error) {
-	out, err := r.goCommand(append([]string{"vet", "-p", testParallel}, roots...)...).CombinedOutput()
+	out, err := r.goCommand(append([]string{"vet", "-p", testParallel}, r.roots()...)...).CombinedOutput()
 	if err == nil {
 		fmt.Println("vet: clean")
 		return nil, nil
@@ -152,7 +160,7 @@ type testEvent struct {
 }
 
 func (r runner) test() ([]failure, int, error) {
-	cmd := r.goCommand(append([]string{"test", "-p", testParallel, "-count=1", "-json"}, roots...)...)
+	cmd := r.goCommand(append([]string{"test", "-p", testParallel, "-count=1", "-json"}, r.roots()...)...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, 0, err

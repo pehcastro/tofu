@@ -3,27 +3,32 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
+
+	"tofu/internal/sys"
 )
 
 const (
-	childProcs = "4"
-	panicMark  = "FLOWS-PANIC"
+	childProcs    = "4"
+	panicMark     = "FLOWS-PANIC"
+	productSymbol = `(?m)^func crashTold\(`
 )
 
 type seam struct {
-	file, pattern, replacement string
+	pattern, replacement string
 }
 
 var seams = []seam{
-	{"internal/konst/konst.go", `SubAgentWallClockSeconds\s*=\s*\d+`, "SubAgentWallClockSeconds = 5"},
-	{"internal/konst/konst.go", `SubAgentAskMillis\s*=\s*\d+`, "SubAgentAskMillis = 8000"},
-	{"internal/konst/konst.go", `CronMinIntervalSeconds\s*=\s*\d+`, "CronMinIntervalSeconds = 10"},
-	{"interface/tui/turn.go", `-konst\.SettledSubAgentFoldMinutes \* time\.Minute`, "-20 * time.Second"},
-	{"cmd/tofu/drive.go", `(\treply, err := c\.take\(request\)\r?\n\tif err != nil \{\r?\n\t\treturn llm\.Decision\{\}, err\r?\n\t\}\r?\n)`,
+	{`SubAgentWallClockSeconds\s*=\s*\d+`, "SubAgentWallClockSeconds = 5"},
+	{`SubAgentAskMillis\s*=\s*\d+`, "SubAgentAskMillis = 8000"},
+	{`CronMinIntervalSeconds\s*=\s*\d+`, "CronMinIntervalSeconds = 10"},
+	{`-konst\.SettledSubAgentFoldMinutes \* time\.Minute`, "-20 * time.Second"},
+	{`(\treply, err := c\.take\(request\)\r?\n\tif err != nil \{\r?\n\t\treturn llm\.Decision\{\}, err\r?\n\t\}\r?\n)`,
 		"${1}\tif strings.HasPrefix(reply.decision.Content, \"" + panicMark + "\") {\n\t\tpanic(reply.decision.Content)\n\t}\n"},
 }
 
@@ -36,15 +41,32 @@ func build(src, work string, seamed bool) (string, error) {
 	if os.PathSeparator == '\\' {
 		exe += ".exe"
 	}
+	files, err := goSources(src)
+	if err != nil {
+		return "", err
+	}
+	product, err := locate(files, productSymbol)
+	if err != nil {
+		return "", err
+	}
+	target, err := filepath.Rel(src, filepath.Dir(product))
+	if err != nil {
+		return "", err
+	}
+	target = "./" + filepath.ToSlash(target)
 	args := []string{"build", "-trimpath", "-p", childProcs, "-o", exe}
 	if seamed {
-		overlay, err := writeOverlay(src, filepath.Join(work, name))
+		compiled, err := productSources(src, target)
+		if err != nil {
+			return "", err
+		}
+		overlay, err := writeOverlay(compiled, filepath.Join(work, name))
 		if err != nil {
 			return "", err
 		}
 		args = append(args, "-overlay", overlay)
 	}
-	cmd := exec.Command("go", append(args, "./cmd/tofu")...)
+	cmd := exec.Command("go", append(args, target)...)
 	cmd.Dir, cmd.Env = src, append(os.Environ(), "GOMAXPROCS="+childProcs)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("go build %s in %s: %v: %s", name, src, err, out)
@@ -52,22 +74,79 @@ func build(src, work string, seamed bool) (string, error) {
 	return exe, nil
 }
 
-func writeOverlay(src, dir string) (string, error) {
+func productSources(src, target string) ([]string, error) {
+	cmd := exec.Command("go", "list", "-deps", "-f", `{{if .Module}}{{if .Module.Main}}{{$dir := .Dir}}{{range .GoFiles}}{{$dir}}{{"\t"}}{{.}}{{"\n"}}{{end}}{{end}}{{end}}`, target)
+	cmd.Dir, cmd.Env = src, append(os.Environ(), "GOMAXPROCS="+childProcs)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("go list -deps %s in %s: %w", target, src, err)
+	}
+	var files []string
+	for line := range strings.Lines(string(out)) {
+		dir, file, _ := strings.Cut(strings.TrimSpace(line), "\t")
+		files = append(files, filepath.Join(dir, file))
+	}
+	return files, nil
+}
+
+func goSources(src string) ([]string, error) {
+	var files []string
+	for _, root := range sys.GoRoots() {
+		dir := filepath.Join(src, filepath.FromSlash(root))
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			continue
+		}
+		err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+			switch {
+			case err != nil:
+				return err
+			case entry.IsDir() && entry.Name() == "testdata":
+				return filepath.SkipDir
+			case !entry.IsDir() && strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, "_test.go"):
+				files = append(files, path)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return files, nil
+}
+
+func locate(files []string, pattern string) (string, error) {
+	expression := regexp.MustCompile(pattern)
+	var found []string
+	for _, path := range files {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return "", err
+		}
+		if expression.Match(body) {
+			found = append(found, path)
+		}
+	}
+	if len(found) != 1 {
+		return "", fmt.Errorf("symbol %s is in %d Go files, not one, so the build cannot be made: %v", pattern, len(found), found)
+	}
+	return found[0], nil
+}
+
+func writeOverlay(files []string, dir string) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
 	patched := map[string]string{}
 	for _, each := range seams {
-		from := filepath.Join(src, filepath.FromSlash(each.file))
+		from, err := locate(files, each.pattern)
+		if err != nil {
+			return "", err
+		}
 		body, err := readPatched(patched, from)
 		if err != nil {
 			return "", err
 		}
-		expression := regexp.MustCompile(each.pattern)
-		if !expression.MatchString(body) {
-			return "", fmt.Errorf("seam %q is not in %s, so the seamed build cannot be made", each.pattern, from)
-		}
-		patched[from] = expression.ReplaceAllString(body, each.replacement)
+		patched[from] = regexp.MustCompile(each.pattern).ReplaceAllString(body, each.replacement)
 	}
 	replace := map[string]string{}
 	for from, body := range patched {

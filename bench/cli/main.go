@@ -9,17 +9,21 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	"tofu/internal/sys"
 )
 
 const (
-	deadProxy = "http://127.0.0.1:9"
-	benchDir  = "bench/cli"
+	deadProxy     = "http://127.0.0.1:9"
+	benchDir      = "bench/cli"
+	productSymbol = `^func crashTold\(`
 )
 
 type row struct {
@@ -96,7 +100,7 @@ func record(result pass, modfile, baseline string) error {
 	}
 	defer func() { _ = os.RemoveAll(work) }()
 	arms := []arm{{&result, filepath.Join(work, "tofu"+exeSuffix())}}
-	if err := build(arms[0].binary, ".", modfile); err != nil {
+	if err := build(arms[0].binary, ".", modfile, ""); err != nil {
 		return err
 	}
 	if baseline != "" {
@@ -108,7 +112,7 @@ func record(result pass, modfile, baseline string) error {
 		base := result
 		base.Name, base.Note, base.Commit = result.Name+"-baseline", baseline+" from git archive, run alternately with "+result.Name, commit+"-archive"
 		arms = append([]arm{{&base, filepath.Join(work, "baseline"+exeSuffix())}}, arms...)
-		if err := build(arms[0].binary, source, ""); err != nil {
+		if err := build(arms[0].binary, source, "", baseline); err != nil {
 			return err
 		}
 	}
@@ -176,8 +180,18 @@ func sample(m meter, arms []arm, work string, command []string, godebug string) 
 	return samples, nil
 }
 
-func build(binary, dir, modfile string) error {
-	cmd := exec.Command("go", "build", "-modfile="+cmp.Or(modfile, "go.mod"), "-o", binary, "./cmd/tofu")
+func build(binary, dir, modfile, revision string) error {
+	grep := []string{"grep", "-l", "-E", productSymbol}
+	if revision != "" {
+		grep = append(grep, revision)
+	}
+	found, err := exec.Command("git", append(grep, "--", "*.go")...).Output()
+	files := strings.Fields(string(found))
+	if err != nil || len(files) != 1 {
+		return fmt.Errorf("symbol %q is in %d Go files at %s, not one, so the tofu package is unknown: %v", productSymbol, len(files), cmp.Or(revision, "the working tree"), err)
+	}
+	product := strings.TrimPrefix(files[0], revision+":")
+	cmd := exec.Command("go", "build", "-modfile="+cmp.Or(modfile, "go.mod"), "-o", binary, "./"+path.Dir(product))
 	cmd.Dir, cmd.Env = dir, append(os.Environ(), "GOMAXPROCS=2")
 	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -191,7 +205,7 @@ func archive(revision, dir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolving %s: %w", revision, err)
 	}
-	tarball, err := exec.Command("git", "archive", revision, "go.mod", "go.sum", "bench", "cmd", "interface", "internal", "library", "third_party").Output()
+	tarball, err := exec.Command("git", "archive", revision, "--", ".", ":(exclude)"+sys.DeskRoot).Output()
 	if err != nil {
 		return "", fmt.Errorf("archiving %s: %w", revision, err)
 	}

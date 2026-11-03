@@ -15,6 +15,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"tofu/internal/sys"
 )
 
 const (
@@ -160,15 +162,11 @@ func here() string {
 	return filepath.Dir(file)
 }
 
-func repoRoot() string {
-	return filepath.Dir(filepath.Dir(here()))
-}
-
 func stage(args []string) error {
 	if len(args) != 1 {
 		return errors.New("stage needs the directory the bench/rivals seed is copied into")
 	}
-	seed := filepath.Join(repoRoot(), "bench", "rivals", "testdata", "seed")
+	seed := filepath.Join(sys.SourceRoot(), "bench", "rivals", "testdata", "seed")
 	entries, err := os.ReadDir(seed)
 	if err != nil {
 		return err
