@@ -1202,11 +1202,32 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			work, held := lead.work()
 			if held && work.open() && concluding == "" && !nudged {
 				nudged = true
+				asks := work.asks(leadEndedOpening, listed(work.review))
+				checked, err := DoneDecision{Verdict: DoneAccepted}, error(nil)
+				if lead.Review != nil {
+					stopping := row
+					stopping.Task, stopping.Steps, stopping.Outcome = config.Task+"\n\n"+asks, append(slices.Clone(row.Steps), stepRow), OutcomeStopped
+					checked, err = lead.decided(ctx, stopping)
+				}
+				if checked.ID != "" {
+					row.DecisionIDs = append(row.DecisionIDs, checked.ID)
+				}
+				switch {
+				case err != nil:
+					recorded.notice("stop_check did not run on the lead's stop, so the board nudge alone decides it: " + err.Error())
+				case checked.Verdict == DoneReopen:
+					stepRow.Warnings = append(stepRow.Warnings, "stop_check read the lead's stop as unfinished with board work open, so it was sent back: "+checked.Reason)
+					messages = append(messages, inserted(llm.Origin{Source: llm.SourceSlots}, asks+" "+checked.Reason))
+					keep(stepRow)
+					continue
+				case checked.ID != "":
+					recorded.notice("stop_check let the lead's stop through with board work open: " + checked.Reason)
+				}
 				if quiet := work.quietBecause(messages, saidByThePerson(taskOrigin), config.Task); quiet != "" {
 					recorded.notice("the board nudge stayed quiet: " + quiet)
 				} else {
 					stepRow.Warnings = append(stepRow.Warnings, "the lead ended with board work open, so it was asked to take it")
-					messages = append(messages, inserted(llm.Origin{Source: llm.SourceSlots}, work.asks(leadEndedOpening, listed(work.review))))
+					messages = append(messages, inserted(llm.Origin{Source: llm.SourceSlots}, asks))
 					keep(stepRow)
 					continue
 				}
