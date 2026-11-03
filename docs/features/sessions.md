@@ -2,7 +2,7 @@
 title: Sessions
 description: Every session is recorded as it runs, outside your project, and one command reopens it where you left off.
 order: 6
-updated: 2026-10-28
+updated: 2026-11-02
 ---
 
 A session is one conversation with tofu: every message, tool call and
@@ -139,6 +139,14 @@ tools.
 
 - **Continue the last session**: `tofu --continue`, or `/resume` in the app.
 - **Continue another**: `tofu session resume <name|id|head>`.
+- **Send one more turn with no window**: `tofu run --dir . --session
+  <name|id|head> "<task>"` works the task as that session's next turn. It
+  sends the conversation and the system prompt and tools the session first
+  sent, so the model's cache reads, and prints the same totals as a fresh run.
+  It runs on the model `tofu session set --model` chose unless `--model`
+  names another, and holds the session until it ends, so a session open in
+  the app or `tofu serve` is refused as busy. A name it cannot find exits 2
+  before any request. It starts with no sub-agents from earlier turns.
 - **Start fresh**: `/new`.
 - **Name one**: `tofu session rename <name|id|head> "checkout redesign"` makes it
   `checkout-redesign`, on every generation.

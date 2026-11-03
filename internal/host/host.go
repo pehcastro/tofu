@@ -761,27 +761,34 @@ func (h *Host) restorePick(resumed Carry) error {
 	if err != nil {
 		return nil
 	}
-	header, err := store.Header(resumed.Session)
-	if err != nil {
-		return nil
+	chosen, err := SessionPick(store, h.dir, resumed.Session)
+	if chosen.Model != "" {
+		h.pick.Wire, h.pick.Model = chosen.Wire, chosen.Model
 	}
-	library, chosen := libraryAt(h.dir), header.Chosen
-	side, isSide, _ := store.Side(resumed.Session)
+	return err
+}
+
+func SessionPick(store *session.Store, dir, id string) (Pick, error) {
+	header, err := store.Header(id)
+	if err != nil {
+		return Pick{}, nil
+	}
+	library, chosen := libraryAt(dir), header.Chosen
+	side, isSide, _ := store.Side(id)
 	if model, known := library.Resolve(side.Model); chosen == nil && isSide && known && model.Slug() == side.Model {
 		chosen = &session.Chosen{Wire: library.WireOf(model), Model: side.Model}
 	}
 	if chosen == nil {
-		return nil
+		return Pick{}, nil
 	}
 	if model, known := library.Resolve(chosen.Model); known && library.WireOf(model) == chosen.Wire {
-		h.pick.Wire, h.pick.Model = chosen.Wire, model.Slug()
-		return nil
+		return Pick{Wire: chosen.Wire, Model: model.Slug()}, nil
 	}
 	if !isSide {
-		return nil
+		return Pick{}, nil
 	}
-	return fmt.Errorf("side chat %s runs on %s, which the model library no longer has: pick another with tofu session set %s --model source/model",
-		resumed.Session, chosen.Model, resumed.Session)
+	return Pick{}, fmt.Errorf("side chat %s runs on %s, which the model library no longer has: pick another with tofu session set %s --model source/model",
+		id, chosen.Model, id)
 }
 
 func SettleHeld(project, id string, pick Pick) (bool, error) {

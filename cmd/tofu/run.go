@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"tofu/interface/cli"
 	"tofu/internal/boardy"
 	"tofu/internal/browser/jevloop"
 	"tofu/internal/cron"
@@ -93,6 +94,7 @@ type runOpts struct {
 	task             string
 	turnID           string
 	session          string
+	resume           string
 	wire             string
 	dryRun           bool
 	showPrompt       bool
@@ -400,6 +402,8 @@ Usage:
 
 Arguments:
   --dir <path>          the directory the task is worked in, required
+  --session <handle>    a name, an id or head: the task is the next turn of that session in
+                        the project, with its conversation and the prefix it first sent
   --model <id>          the orchestrator's model, otherwise the one the orchestrator role is bound to;
                         a meta/ model is paid by the key tofu login meta stores and picks its own wire
   --wire <name>         anthropic, codex or openrouter, otherwise the wire of the --model slug's subscription
@@ -458,6 +462,14 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return runFail(errOut, err)
 	}
+	resumed, err := resumeRun(opts.dir, opts.resume, writeNotice(errOut))
+	if err != nil {
+		hinted := problemError{What: err.Error()}
+		errors.As(err, &hinted)
+		return verbOutput{verb: "run", errOut: errOut}.refuse(exitUsage, cli.Problem(hinted))
+	}
+	defer resumed.letGo()
+	opts, modelFrom := resumed.onItsModel(opts)
 	opts = onTheBoundWire(opts)
 	clock.step("model roles")
 	dir := cmp.Or(opts.dir, ".")
@@ -483,11 +495,14 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return runFail(errOut, err)
 	}
+	if modelFrom != "" {
+		_, _ = fmt.Fprintf(out, "session %s runs on %s, from %s\n", resumed.carry.Handle, selected.Slug(), modelFrom)
+	}
 	clock.step("model choice")
 	if opts.dryRun {
 		return dryRun(opts, selected, dir, say, out, errOut)
 	}
-	return runTurn(opts, selected, clock, out, errOut)
+	return runTurn(opts, resumed, selected, clock, out, errOut)
 }
 
 func dryRun(opts runOpts, selected models.Model, dir string, say func(string), out, errOut io.Writer) int {
@@ -565,7 +580,7 @@ func guarded(model turn.Model, budget recall.Budget) (turn.Model, error) {
 	return windowGuard{inner: model, budget: budget, cfg: cfg}, nil
 }
 
-func runTurn(opts runOpts, selected models.Model, clock *startupClock, out, errOut io.Writer) int {
+func runTurn(opts runOpts, resumed runResumed, selected models.Model, clock *startupClock, out, errOut io.Writer) int {
 	open := openAppWire
 	deck, err := readCassette(os.Getenv(cassetteVariable))
 	if err != nil {
@@ -595,6 +610,7 @@ func runTurn(opts runOpts, selected models.Model, clock *startupClock, out, errO
 		return runFail(errOut, err)
 	}
 	config, spawner, sessions, gate, scorer := started.Config, started.Spawner, started.Sessions, started.gate, started.scorer
+	resumed.into(&config)
 	_, _ = fmt.Fprintln(out, "context budget "+started.budget.Record())
 	registry, registryErr := launchShellRegistry(opts.dir)
 	if registryErr == nil {
@@ -1733,6 +1749,8 @@ func parseRunArgs(args []string) (runOpts, error) {
 		switch arg {
 		case "--dir":
 			opts.dir, err = nextArg(args, &i, arg)
+		case "--session":
+			opts.resume, err = nextArg(args, &i, arg)
 		case "--dry-run":
 			opts.dryRun = true
 		case "--show-prompt":
@@ -1799,6 +1817,9 @@ func parseRunArgs(args []string) (runOpts, error) {
 	}
 	if strings.TrimSpace(opts.task) == "" {
 		return runOpts{}, errors.New("tofu run needs a task")
+	}
+	if opts.resume != "" && (opts.dryRun || opts.showPrompt) {
+		return runOpts{}, errors.New("--session sends the next turn of a session, and --dry-run and --show-prompt send nothing")
 	}
 	if opts.agent != "" && !opts.showPrompt {
 		return runOpts{}, errors.New("--agent prints the prompt a spawn of that sub-agent composes and runs nothing, so it needs --show-prompt")
