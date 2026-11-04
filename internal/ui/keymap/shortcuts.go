@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -40,7 +40,7 @@ func DefaultShortcuts() map[string]string {
 }
 
 func ShortcutsPath() (string, error) {
-	dir, err := sys.HomeConfigDir()
+	dir, err := fs.HomeConfigDir()
 	if err != nil {
 		return "", err
 	}
@@ -99,5 +99,5 @@ func SaveShortcuts(path string, bindings map[string]string) error {
 	if err != nil {
 		return err
 	}
-	return sys.WriteFile(path, append(data, '\n'), 0o600)
+	return fs.WriteFile(path, append(data, '\n'), 0o600)
 }

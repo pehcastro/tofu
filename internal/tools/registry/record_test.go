@@ -14,7 +14,7 @@ import (
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 	"tofu/internal/tools/registry"
 )
 
@@ -23,7 +23,7 @@ func recordOneDecision(t *testing.T, root string) ledger.Row {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	state, err := sys.ProjectStateDirAt(root)
+	state, err := project.ProjectStateDirAt(root)
 	if err != nil {
 		t.Fatal(err)
 	}

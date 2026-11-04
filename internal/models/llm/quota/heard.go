@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -86,7 +86,7 @@ func (p *Poller) Heard(account Account, header http.Header) error {
 	if lock == nil {
 		return err
 	}
-	defer func() { _ = sys.Unlock(lock) }()
+	defer func() { _ = fs.Unlock(lock) }()
 	held := shelf.read()
 	merged := held.Report
 	merged.Provider, merged.FetchedAt, merged.Source = heard.Provider, heard.FetchedAt, heard.Source

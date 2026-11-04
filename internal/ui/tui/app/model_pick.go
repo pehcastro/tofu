@@ -16,8 +16,8 @@ import (
 	"tofu/internal/models/classifiers/core"
 	library "tofu/internal/models/llm/catalog"
 	llm "tofu/internal/models/llm/core"
+	"tofu/internal/platform/credential"
 	isettings "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/ui/tui/chat/session"
 	"tofu/internal/ui/tui/pickers/models"
 	"tofu/internal/ui/tui/pickers/settings"
@@ -127,7 +127,7 @@ func (a *App) openPicker(assign string) {
 		rows = append(rows, settings.Row{Key: assign})
 		targets = append(targets, models.Target{Name: spec.Label, Job: spec.Description, Assigned: cmp.Or(a.store.Text(assign), notSet), Setting: assign, Pays: continuityPays(assign)})
 	}
-	envFile := filepath.Join(a.options.Root, sys.CredentialFileName)
+	envFile := filepath.Join(a.options.Root, credential.CredentialFileName)
 	keys := models.Keys{
 		Set: func(name string) bool { _, err := core.KeyFor(envFile, name); return err == nil },
 		Save: func(ctx context.Context, name, value string) error {
@@ -138,7 +138,7 @@ func (a *App) openPicker(assign string) {
 			if name == library.Meta.KeyName() {
 				return library.StoreMetaKey(ctx, value)
 			}
-			return sys.SaveKey(name, value)
+			return credential.SaveKey(name, value)
 		},
 	}
 	picker := models.Build(loaded, sources, keys, targets)

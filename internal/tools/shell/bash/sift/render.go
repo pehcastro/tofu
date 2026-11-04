@@ -5,14 +5,14 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const fenceLine = "--- sift ---"
 
 var (
-	markerPattern = sys.LazyRegexp(`^\[sift:(\d+) [^\]]*\]$`)
-	summaryLine   = sys.LazyRegexp(`^kept \d+/\d+ ends ([01])$`)
+	markerPattern = fs.LazyRegexp(`^\[sift:(\d+) [^\]]*\]$`)
+	summaryLine   = fs.LazyRegexp(`^kept \d+/\d+ ends ([01])$`)
 )
 
 func isFence(line string) bool { return strings.TrimRight(line, "\r\n") == fenceLine }

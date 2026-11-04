@@ -8,7 +8,7 @@ import (
 	"io/fs"
 	"strings"
 
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 )
 
 const customFields = "provider and id, and may name subscription, use, reason, notice, vision, plan, verbosity, reasoning_context, efforts and served_as"
@@ -64,7 +64,7 @@ func readCustom(layer Layer, into *merged) []Broken {
 	for _, kind := range []Kind{KindLLM, KindClassifier} {
 		dir := modelsDir + "/" + kind.customDir()
 		for _, entry := range entriesOf(layer.FS, dir) {
-			at := sys.Join(layer.Origin, dir, entry.Name())
+			at := platformfs.Join(layer.Origin, dir, entry.Name())
 			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
 				refused = append(refused, Broken{File: at, Why: "a custom " + string(kind) + " is one json file"})
 				continue

@@ -10,9 +10,9 @@ import (
 
 	isubagent "tofu/internal/agent/subagents"
 	library "tofu/internal/models/llm/catalog"
+	"tofu/internal/platform/fs"
 	isession "tofu/internal/store/session"
 	isettings "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/ui/keymap"
 	"tofu/internal/ui/tui/chat/feed"
 	"tofu/internal/ui/tui/input/hostkeys"
@@ -284,7 +284,7 @@ func (a *App) roleRow(id library.RoleID, label string) settings.Row {
 	row.Value = role.Model.Slug()
 	if role.File != "" {
 		scope := isettings.Global
-		if filepath.Dir(filepath.Dir(role.File)) == sys.StateDir(a.options.Root) {
+		if filepath.Dir(filepath.Dir(role.File)) == fs.StateDir(a.options.Root) {
 			scope = isettings.Project
 		}
 		row.Source = scope.String() + " " + role.File

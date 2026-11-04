@@ -7,15 +7,15 @@ import (
 	"sync"
 
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const emDash = string(rune(0x2014))
 
 var (
-	boldRun      = sys.LazyRegexp(`\*\*[^*]+\*\*`)
-	greenResult  = sys.LazyRegexp(`(ci|tests|test|suite) (is |are |will be |stays )?green`)
-	agreeingOpen = sys.LazyRegexp(`^[ \t\n]*(you are right|you.re right|great question|good catch|exactly right|absolutely right)`)
+	boldRun      = fs.LazyRegexp(`\*\*[^*]+\*\*`)
+	greenResult  = fs.LazyRegexp(`(ci|tests|test|suite) (is |are |will be |stays )?green`)
+	agreeingOpen = fs.LazyRegexp(`^[ \t\n]*(you are right|you.re right|great question|good catch|exactly right|absolutely right)`)
 	metricRules  = sync.OnceValue(func() []*regexp.Regexp {
 		return []*regexp.Regexp{
 			regexp.MustCompile(`[0-9]+ (tests?|specs?)`),

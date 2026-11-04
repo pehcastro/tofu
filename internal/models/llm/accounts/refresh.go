@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
-	"tofu/internal/sys"
 )
 
 const (
@@ -131,7 +131,7 @@ func (m *Manager) refreshOnce(ctx context.Context, row Row, stale func(Credentia
 	if !joined {
 		running = &flight{done: make(chan struct{})}
 		m.inflight[row.ID] = running
-		report := sys.Crashes(".")
+		report := project.Crashes(".")
 		safe.Go(report, "credential refresh", func() {
 			running.err = safe.Call(report, "credential refresh", func() (err error) {
 				detached, cancel := context.WithTimeout(context.WithoutCancel(ctx), refreshTimeout)

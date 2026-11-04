@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
+	"tofu/internal/platform/fs"
 	"tofu/internal/platform/safe"
-	"tofu/internal/sys"
 )
 
 const (
@@ -222,8 +222,8 @@ func (a Address) Holder() string {
 }
 
 var (
-	controlSequence = sys.LazyRegexp(`\x1b\[[0-?]*[ -/]*[@-~]`)
-	localAddress    = sys.LazyRegexp(`(?:^|[^\w.-])(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0):(\d{1,5})\b`)
+	controlSequence = fs.LazyRegexp(`\x1b\[[0-?]*[ -/]*[@-~]`)
+	localAddress    = fs.LazyRegexp(`(?:^|[^\w.-])(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0):(\d{1,5})\b`)
 )
 
 func PortInOutput(text string) int {

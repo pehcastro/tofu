@@ -11,7 +11,7 @@ import (
 	"testing/fstest"
 
 	"tofu/internal/models/llm/core"
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 )
 
 const foundToday = "2026-09-28"
@@ -178,7 +178,7 @@ func TestACatalogEntryNoLongerServedIsExcludedAndComesBackWhenServedAgain(t *tes
 	if err := plan.Write(dir); err != nil {
 		t.Fatalf("writing: %v", err)
 	}
-	library, err = Load([]Layer{shippedLayer(), sys.DirLayer(catalogLayer, dir)})
+	library, err = Load([]Layer{shippedLayer(), platformfs.DirLayer(catalogLayer, dir)})
 	if err != nil {
 		t.Fatalf("loading the written catalog: %v", err)
 	}
@@ -219,7 +219,7 @@ func TestFromAndFoundRoundTripThroughTheCatalog(t *testing.T) {
 	if err := plan.Write(dir); err != nil {
 		t.Fatalf("writing: %v", err)
 	}
-	reloaded, err := Load([]Layer{shippedLayer(), sys.DirLayer(catalogLayer, dir)})
+	reloaded, err := Load([]Layer{shippedLayer(), platformfs.DirLayer(catalogLayer, dir)})
 	if err != nil {
 		t.Fatalf("the written catalog does not load: %v", err)
 	}
@@ -297,7 +297,7 @@ func TestATemporaryFileLeftByAQuitWriteDoesNotBreakTheNextLoad(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, modelsDir, string(Anthropic), ".tofu-4071"), []byte("subscr"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Load([]Layer{shippedLayer(), sys.DirLayer(catalogLayer, dir)}); err != nil {
+	if _, err := Load([]Layer{shippedLayer(), platformfs.DirLayer(catalogLayer, dir)}); err != nil {
 		t.Fatalf("a temporary file a quit write left behind breaks the next start: %v", err)
 	}
 }

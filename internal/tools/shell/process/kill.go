@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 var ErrNotRunning = errors.New("shell: not running")
@@ -82,8 +82,8 @@ func processName(word string) string {
 }
 
 var (
-	flagShape  = sys.LazyRegexp(`^(-{1,2}|/{1,2})([A-Za-z0-9]+)(:\$?[A-Za-z]+)?$`)
-	actionWord = sys.LazyRegexp(`^[A-Za-z]+$`)
+	flagShape  = fs.LazyRegexp(`^(-{1,2}|/{1,2})([A-Za-z0-9]+)(:\$?[A-Za-z]+)?$`)
+	actionWord = fs.LazyRegexp(`^[A-Za-z]+$`)
 )
 
 func killed(fields []string) []int {

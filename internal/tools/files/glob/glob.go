@@ -20,8 +20,9 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	platformfs "tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
-	"tofu/internal/sys"
 	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
 )
@@ -417,7 +418,7 @@ type dirListing struct {
 func (w *walk) readAhead(dir string) {
 	listed := make(chan dirListing, 1)
 	w.ahead[dir] = listed
-	report := sys.Crashes(string(w.root))
+	report := project.Crashes(string(w.root))
 	safe.Go(report, "glob read ahead", func() {
 		var read dirListing
 		read.err = safe.Call(report, "glob read ahead", func() (err error) {
@@ -442,7 +443,7 @@ func (w *walk) list(dir string) ([]fs.DirEntry, error) {
 
 func neverWalked(dir string) bool {
 	switch dir {
-	case "node_modules", ".git", sys.StateDirName, sys.LegacyStateDirName:
+	case "node_modules", ".git", platformfs.StateDirName, platformfs.LegacyStateDirName:
 		return true
 	}
 	return false

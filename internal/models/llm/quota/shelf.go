@@ -12,7 +12,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/models/transport"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -70,7 +70,7 @@ func (s shelf) try() (*os.File, error) {
 	if err := os.MkdirAll(filepath.Dir(s.lock), 0o755); err != nil {
 		return nil, err
 	}
-	file, _, err := sys.TryLock(s.lock)
+	file, _, err := fs.TryLock(s.lock)
 	return file, err
 }
 

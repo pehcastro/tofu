@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"tofu/internal/models/llm/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
 )
 
 type Provider string
@@ -30,11 +30,11 @@ func (p Provider) valid() bool {
 func (p Provider) KeyName() string {
 	switch p {
 	case OpenRouter:
-		return sys.OpenRouterKeyName
+		return credential.OpenRouterKeyName
 	case TypeSafe:
-		return sys.TypeSafeKeyName
+		return credential.TypeSafeKeyName
 	case Meta:
-		return sys.MetaMuseKeyName
+		return credential.MetaMuseKeyName
 	case Anthropic, OpenAI:
 		return ""
 	}

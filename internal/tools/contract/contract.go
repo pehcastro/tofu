@@ -13,7 +13,7 @@ import (
 
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/sys"
+	platformscratch "tofu/internal/platform/scratch"
 )
 
 type ResultOutcome int
@@ -92,7 +92,7 @@ func (r Root) Resolve(requested string) (string, error) {
 }
 
 func (r Root) inScratch(requested string) (string, error) {
-	scratch, err := sys.ScratchRootAt(string(r))
+	scratch, err := platformscratch.ScratchRootAt(string(r))
 	cleaned := filepath.Clean(requested)
 	if _, inside := Within(scratch, cleaned); err != nil || !filepath.IsAbs(requested) || !inside {
 		return "", fmt.Errorf("path %q must be relative to the turn's working directory, or inside this project's scratchpad", requested)

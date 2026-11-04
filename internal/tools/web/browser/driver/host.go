@@ -18,9 +18,9 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/fs"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/settings"
-	"tofu/internal/sys"
 )
 
 const idleAfter = konst.BrowserIdleAfterMillis * time.Millisecond
@@ -87,7 +87,7 @@ func Host(origin string, stdin io.Reader, stdout io.Writer, home string) error {
 
 func sleepAfter(home string) time.Duration {
 	minutes := 0
-	if store, err := settings.Open(filepath.Join(sys.StateDir(home), settings.FileName), ""); err == nil {
+	if store, err := settings.Open(filepath.Join(fs.StateDir(home), settings.FileName), ""); err == nil {
 		minutes = store.Int(settings.BrowserSleepMinutes)
 	}
 	if minutes < 1 {
@@ -115,7 +115,7 @@ func installedBuild(exe string) (string, error) {
 }
 
 func cursorOn(home string) bool {
-	store, err := settings.Open(filepath.Join(sys.StateDir(home), settings.FileName), "")
+	store, err := settings.Open(filepath.Join(fs.StateDir(home), settings.FileName), "")
 	if err != nil {
 		return settings.DeclaredDefault(settings.BrowserCursor) != 0
 	}
@@ -152,7 +152,7 @@ func host(origin string, stdin io.Reader, stdout io.Writer, home, tofu string, i
 		return err
 	}
 	r := &relay{extension: stdout, tabs: map[int]Tab{}, claims: map[int]*session{}, pending: map[int64]route{}, sessions: map[*session]bool{}, shown: statusIdle, home: home, extensionDir: extensionDir, builds: Builds{Tofu: tofu}, restart: make(chan struct{}, 1),
-		manifestTofu: installedHost.Path, installed: installed, sleepAfter: sleepAfter, cursor: cursorOn(home), report: func(p safe.Panic) { p.Saved(sys.StateDir(home)) }}
+		manifestTofu: installedHost.Path, installed: installed, sleepAfter: sleepAfter, cursor: cursorOn(home), report: func(p safe.Panic) { p.Saved(fs.StateDir(home)) }}
 	r.idle = time.AfterFunc(idleAfter, func() {
 		_ = safe.Call(r.report, "browser idle", func() error {
 			r.mu.Lock()
@@ -340,7 +340,7 @@ func (r *relay) adopt(running string) {
 	}
 	err := writeExtension(r.extensionDir)
 	if err == nil {
-		err = sys.WriteFile(updatedFrom, []byte(running), 0o644)
+		err = fs.WriteFile(updatedFrom, []byte(running), 0o644)
 	}
 	if err != nil {
 		r.builds.Problem = fmt.Sprintf("the extension in %s runs build %s and this tofu ships %s, and tofu could not rewrite it: %v: run tofu browser install, then reload the tofu card", r.extensionDir, running, r.builds.Tofu, err)

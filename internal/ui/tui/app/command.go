@@ -8,9 +8,9 @@ import (
 
 	"tofu/internal/agent/commands"
 	"tofu/internal/agent/loop"
+	"tofu/internal/platform/project"
 	isession "tofu/internal/store/session"
 	isettings "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/ui/keymap"
 	"tofu/internal/ui/tui/chat/quote"
 	"tofu/internal/ui/tui/chat/session"
@@ -176,7 +176,7 @@ func (a *App) recordedSession() (*isession.Store, string, string) {
 	if a.sessionID == "" {
 		return nil, "", noSessionYet
 	}
-	state, err := sys.ProjectStateDirAt(a.options.Root)
+	state, err := project.ProjectStateDirAt(a.options.Root)
 	if err != nil {
 		return nil, "", err.Error()
 	}

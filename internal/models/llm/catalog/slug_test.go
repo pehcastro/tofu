@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 )
 
 func TestEveryShippedModelPaidBySubscriptionCarriesTheSuffix(t *testing.T) {
@@ -74,7 +74,7 @@ func TestABareModelNameFromARecordedSessionStillResolves(t *testing.T) {
 
 func realRecordedHeader(t *testing.T, id string) session.Header {
 	t.Helper()
-	raw, err := os.ReadFile(sys.RecordedStateDir("sessions", id+".json"))
+	raw, err := os.ReadFile(project.RecordedStateDir("sessions", id+".json"))
 	if err != nil {
 		t.Skipf("no recorded session %s to prove this against: %v", id, err)
 	}

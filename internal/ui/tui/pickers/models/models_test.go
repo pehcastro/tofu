@@ -11,7 +11,7 @@ import (
 
 	library "tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
 	"tofu/internal/testkit/golden"
 )
 
@@ -238,10 +238,10 @@ func classifierPicker(t *testing.T, loaded library.Library) Model {
 	t.Helper()
 	keys := Keys{
 		Set: func(name string) bool {
-			stored, err := sys.StoredKeys()
+			stored, err := credential.StoredKeys()
 			return err == nil && stored[name] != ""
 		},
-		Save: func(_ context.Context, name, value string) error { return sys.SaveKey(name, value) },
+		Save: func(_ context.Context, name, value string) error { return credential.SaveKey(name, value) },
 	}
 	targets := []Target{
 		{Name: "orchestrator", Job: library.RoleOrchestrator.What(), Role: library.RoleOrchestrator},
@@ -270,7 +270,7 @@ func TestAKeyModelWithNoKeyAsksForTheKeyMaskedAndEnterStoresIt(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv(sys.TypeSafeKeyName, "")
+	t.Setenv(credential.TypeSafeKeyName, "")
 	const madeUp = "ts-made-up-4d1e9a7c0b52"
 	m := classifierPicker(t, shippedLibrary(t))
 	view := ansi.Strip(m.View())
@@ -299,7 +299,7 @@ func TestAKeyModelWithNoKeyAsksForTheKeyMaskedAndEnterStoresIt(t *testing.T) {
 	if got := m.Key("esc"); got.Action != None {
 		t.Fatalf("esc on the input returned %+v, want the picker to stay", got)
 	}
-	if stored, _ := sys.StoredKeys(); len(stored) != 0 {
+	if stored, _ := credential.StoredKeys(); len(stored) != 0 {
 		t.Fatalf("esc stored %d keys", len(stored))
 	}
 	if strings.Contains(ansi.Strip(m.View()), keyHints) {
@@ -314,9 +314,9 @@ func TestAKeyModelWithNoKeyAsksForTheKeyMaskedAndEnterStoresIt(t *testing.T) {
 	if got := entered(&m); got != want {
 		t.Fatalf("enter with a key returned %+v, want %+v", got, want)
 	}
-	stored, err := sys.StoredKeys()
-	if err != nil || stored[sys.TypeSafeKeyName] != madeUp {
-		t.Fatalf("the temp home holds a %s of length %d (%v)", sys.TypeSafeKeyName, len(stored[sys.TypeSafeKeyName]), err)
+	stored, err := credential.StoredKeys()
+	if err != nil || stored[credential.TypeSafeKeyName] != madeUp {
+		t.Fatalf("the temp home holds a %s of length %d (%v)", credential.TypeSafeKeyName, len(stored[credential.TypeSafeKeyName]), err)
 	}
 	m.AssignTo(1)
 	if view := ansi.Strip(m.View()); !strings.Contains(view, "TypeSafe · key set") {
@@ -350,7 +350,7 @@ func TestAPastedKeyIsStoredWithoutItsNewline(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv(sys.OpenRouterKeyName, "")
+	t.Setenv(credential.OpenRouterKeyName, "")
 	const madeUp = "sk-or-v1-made-up-7c2a90e1f3d4"
 	m := classifierPicker(t, shippedLibrary(t))
 	m.Key("enter")
@@ -361,8 +361,8 @@ func TestAPastedKeyIsStoredWithoutItsNewline(t *testing.T) {
 	if got := entered(&m); got.Action != Bind {
 		t.Fatalf("enter after a paste returned %+v", got)
 	}
-	if stored, _ := sys.StoredKeys(); stored[sys.OpenRouterKeyName] != madeUp {
-		t.Fatalf("the temp home holds an %s of length %d, want the pasted %d", sys.OpenRouterKeyName, len(stored[sys.OpenRouterKeyName]), len(madeUp))
+	if stored, _ := credential.StoredKeys(); stored[credential.OpenRouterKeyName] != madeUp {
+		t.Fatalf("the temp home holds an %s of length %d, want the pasted %d", credential.OpenRouterKeyName, len(stored[credential.OpenRouterKeyName]), len(madeUp))
 	}
 }
 

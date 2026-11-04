@@ -14,14 +14,14 @@ import (
 
 	"tofu/internal/cli/render"
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 var (
-	commandStep = sys.LazyRegexp(`&&|\|\||;`)
-	changedDir  = sys.LazyRegexp(`(?i)^\s*(?:cd|pushd|set-location)\s+(?:/d\s+)?["']?([^"']+?)["']?\s*$`)
-	logTarget   = sys.LazyRegexp(`(?i)(?:(?:^|\s)--?log(?:-?file)?[=\s]+|(?:^|[^<>=-])[12&*]?>>?\s*|\btee\s+(?:-a\s+)?|\bout-file\s+(?:-filepath\s+)?|-RedirectStandard(?:Output|Error)\s+)["']?([^\s"'|;&<>()]+)`)
-	msysDrive   = sys.LazyRegexp(`^/([a-zA-Z])(?:/|$)`)
+	commandStep = fs.LazyRegexp(`&&|\|\||;`)
+	changedDir  = fs.LazyRegexp(`(?i)^\s*(?:cd|pushd|set-location)\s+(?:/d\s+)?["']?([^"']+?)["']?\s*$`)
+	logTarget   = fs.LazyRegexp(`(?i)(?:(?:^|\s)--?log(?:-?file)?[=\s]+|(?:^|[^<>=-])[12&*]?>>?\s*|\btee\s+(?:-a\s+)?|\bout-file\s+(?:-filepath\s+)?|-RedirectStandard(?:Output|Error)\s+)["']?([^\s"'|;&<>()]+)`)
+	msysDrive   = fs.LazyRegexp(`^/([a-zA-Z])(?:/|$)`)
 )
 
 type Tails struct {

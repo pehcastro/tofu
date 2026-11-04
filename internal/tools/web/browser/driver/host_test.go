@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/fs"
 	"tofu/internal/store/settings"
-	"tofu/internal/sys"
 )
 
 const testOrigin = "chrome-extension://abcdefghijklmnopabcdefghijklmnop/"
@@ -845,7 +845,7 @@ func TestAnExtensionThatNeverAnswersTheWakeFailsTheCallWithinTheLimit(t *testing
 
 func TestTheSleepTimeIsReadFromTheSettingsEachTimeAndDefaultsToTen(t *testing.T) {
 	home := shortHome(t)
-	file := filepath.Join(sys.StateDir(home), settings.FileName)
+	file := filepath.Join(fs.StateDir(home), settings.FileName)
 	if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
 		t.Fatal(err)
 	}

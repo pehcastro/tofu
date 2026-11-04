@@ -20,8 +20,9 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/scratch"
 	"tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/web"
 	browser "tofu/internal/tools/web/browser/driver"
@@ -1071,8 +1072,8 @@ func (t browserMotion) Run(ctx context.Context, raw json.RawMessage) (contract.R
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return contract.Result{}, fmt.Errorf("browser_motion: arguments are not the expected shape: %w", err)
 	}
-	root := filepath.Join(t.session.at.Home, sys.StateDirName, "motion")
-	if place, found := sys.ScratchOf(ctx); found {
+	root := filepath.Join(t.session.at.Home, fs.StateDirName, "motion")
+	if place, found := scratch.ScratchOf(ctx); found {
 		root = filepath.Join(place.SessionDir(), "motion")
 	}
 	var said []string

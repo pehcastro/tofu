@@ -13,7 +13,8 @@ import (
 	"testing"
 
 	"tofu/internal/models/transport"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	platformfs "tofu/internal/platform/fs"
 )
 
 func keyName() string { return "OPENROUTER" + "_KEY" }
@@ -53,7 +54,7 @@ func TestKeyFindsTheDatabaseBeforeTheEnvironmentAndTheFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte(keyName()+"=from-the-file\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := sys.SaveKey(keyName(), "from-the-database"); err != nil {
+	if err := credential.SaveKey(keyName(), "from-the-database"); err != nil {
 		t.Fatalf("storing the key: %v", err)
 	}
 	got, err := KeyFor(path, OpenRouterVariable)
@@ -72,7 +73,7 @@ func TestReadingTheKeyCreatesNoDatabase(t *testing.T) {
 	if _, err := KeyFor("", OpenRouterVariable); err != nil {
 		t.Fatal(err)
 	}
-	stored := filepath.Join(sys.StateDir(home), sys.CredentialStoreName)
+	stored := filepath.Join(platformfs.StateDir(home), credential.CredentialStoreName)
 	if _, err := os.Stat(stored); !os.IsNotExist(err) {
 		t.Fatalf("reading the key left %s behind: %v", stored, err)
 	}
@@ -90,7 +91,7 @@ func TestWithNoHomeTheEnvironmentKeyIsFoundAndNoDatabaseIsOpened(t *testing.T) {
 		t.Fatalf("expected SourceEnvironment with no home, got %v and %v", located.Source, err)
 	}
 	if err := filepath.WalkDir(temp, func(path string, entry fs.DirEntry, err error) error {
-		if err == nil && entry.Name() == sys.CredentialStoreName {
+		if err == nil && entry.Name() == credential.CredentialStoreName {
 			t.Errorf("reading the key with no home opened %s", path)
 		}
 		return err
@@ -192,7 +193,7 @@ func TestLocateWhenThereIsNone(t *testing.T) {
 
 func TestATestThatDoesNotOptInReachesNoCredentialInTheSourceTree(t *testing.T) {
 	t.Setenv(keyName(), "")
-	t.Chdir(sys.SourceRoot())
+	t.Chdir(platformfs.SourceRoot())
 	key, err := KeyFor(".env", OpenRouterVariable)
 	if key != "" {
 		t.Fatalf("a test read a credential of length %d out of the source tree", len(key))
@@ -211,7 +212,7 @@ func TestATestThatDoesNotOptInReachesNoCredentialInTheHomeStateDirectory(t *test
 	if strings.HasPrefix(home, os.TempDir()) {
 		t.Skipf("skipped, not counted as a pass: the home directory %s is a temporary one, so it is nobody's credential store", home)
 	}
-	path := filepath.Join(sys.StateDir(home), ".env")
+	path := filepath.Join(platformfs.StateDir(home), ".env")
 	key, keyErr := KeyFor(path, OpenRouterVariable)
 	if key != "" {
 		t.Fatalf("a test read a credential of length %d out of the home state directory", len(key))
@@ -222,7 +223,7 @@ func TestATestThatDoesNotOptInReachesNoCredentialInTheHomeStateDirectory(t *test
 }
 
 func TestATestThatDoesNotOptInReachesNoCredentialItPlantedFromTheOwnersOwn(t *testing.T) {
-	if !sys.PlantOwnerCredential(t, keyName()) {
+	if !credential.PlantOwnerCredential(t, keyName()) {
 		t.Skipf("skipped, not counted as a pass: this machine carries no %s in the source tree .env", keyName())
 	}
 	key, err := KeyFor("", OpenRouterVariable)
@@ -235,9 +236,9 @@ func TestATestThatDoesNotOptInReachesNoCredentialItPlantedFromTheOwnersOwn(t *te
 }
 
 func TestATestThatOptsInByNameReachesTheCredentialAgain(t *testing.T) {
-	sys.AllowLiveCredential(t)
+	credential.AllowLiveCredential(t)
 	t.Setenv(keyName(), "")
-	root := sys.SourceRoot()
+	root := platformfs.SourceRoot()
 	if _, err := os.Stat(filepath.Join(root, ".env")); err != nil {
 		t.Skipf("skipped, not counted as a pass: this machine has no .env at %s (%v)", root, err)
 	}
@@ -295,14 +296,14 @@ func TestTheKeyErrorLineIsWordForWordWhatItWas(t *testing.T) {
 
 func TestNobodyOutsideTheJudgeMatchesTheKeyErrorText(t *testing.T) {
 	_, lines := keyErrorLines(t)
-	root := sys.SourceRoot()
+	root := platformfs.SourceRoot()
 	judge := []string{
 		filepath.Join(root, "internal", "judge"),
 		filepath.Join(root, "internal", "models", "classifiers", "core"),
 		filepath.Join(root, "internal", "models", "classifiers", "providers"),
 	}
 	var found []string
-	for _, area := range sys.GoRoots() {
+	for _, area := range platformfs.GoRoots() {
 		walked := filepath.Join(root, area)
 		if err := filepath.WalkDir(walked, func(path string, entry fs.DirEntry, err error) error {
 			switch {

@@ -16,7 +16,7 @@ import (
 	"tofu/internal/models/classifiers/providers/typesafe"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/transport"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
 	shipped "tofu/library"
 )
 
@@ -36,12 +36,12 @@ type provider struct {
 func providerOf(of catalog.Provider) (provider, bool) {
 	switch of {
 	case catalog.TypeSafe:
-		return provider{key: sys.TypeSafeKeyName, build: typesafe.New, alias: typesafe.Model, serves: typesafe.Serves,
+		return provider{key: credential.TypeSafeKeyName, build: typesafe.New, alias: typesafe.Model, serves: typesafe.Serves,
 			checkPin: func(ctx context.Context, bound string, config providers.Config, _ *transport.Client) (jevcatalog.PinCheck, jevcatalog.Pin) {
 				return typesafe.CheckPin(ctx, bound, config)
 			}}, true
 	case catalog.OpenRouter:
-		return provider{key: sys.OpenRouterClassifierKeyName, build: openrouter.New, alias: openrouter.Model, serves: openrouter.Serves, checkPin: openrouter.CheckPin}, true
+		return provider{key: credential.OpenRouterClassifierKeyName, build: openrouter.New, alias: openrouter.Model, serves: openrouter.Serves, checkPin: openrouter.CheckPin}, true
 	case catalog.Anthropic, catalog.OpenAI, catalog.Meta:
 		return provider{}, false
 	}
@@ -77,7 +77,7 @@ func Bound(dir string, keys core.Keyring) (catalog.Model, error) {
 			continue
 		}
 		name := KeyName(model.Provider)
-		if key, _ := keys.KeyFor(sys.CredentialFileName, name); key != "" && !slices.Contains(stored, name) {
+		if key, _ := keys.KeyFor(credential.CredentialFileName, name); key != "" && !slices.Contains(stored, name) {
 			stored = append(stored, name)
 		}
 	}
@@ -102,7 +102,7 @@ func Resolve(dir string, keys core.Keyring) (Route, error) {
 	if err != nil {
 		return Route{}, err
 	}
-	route.Key, err = keys.KeyFor(sys.CredentialFileName, served.key)
+	route.Key, err = keys.KeyFor(credential.CredentialFileName, served.key)
 	return route, err
 }
 

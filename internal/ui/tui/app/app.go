@@ -26,10 +26,12 @@ import (
 	"tofu/internal/konst"
 	library "tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/clipboard"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	isession "tofu/internal/store/session"
 	isettings "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/ui/keymap"
 	"tofu/internal/ui/statusline"
 	"tofu/internal/ui/tui/chat/feed"
@@ -351,19 +353,19 @@ func New(options Options) *App {
 		options.Now = time.Now
 	}
 	if options.Copy == nil {
-		options.Copy = sys.WriteClipboardText
+		options.Copy = clipboard.WriteClipboardText
 	}
 	if options.Models == nil {
 		options.Models = layeredModels(options.Root)
 	}
-	if state, err := sys.ProjectStateDirAt(options.Root); err == nil && options.Promotions == "" && options.Root != "" {
+	if state, err := project.ProjectStateDirAt(options.Root); err == nil && options.Promotions == "" && options.Root != "" {
 		options.Promotions = isession.NewPromotionLog(state)
 	}
 	if options.Keymap == "" {
 		options.Keymap, _ = keymap.ShortcutsPath()
 	}
 	if options.PromptHistory == "" {
-		options.PromptHistory, _ = sys.HomeConfigDir()
+		options.PromptHistory, _ = fs.HomeConfigDir()
 	}
 	if options.Host == nil && options.Turn != nil {
 		turn := options.Turn
@@ -494,7 +496,7 @@ func Run(options Options) error {
 	signal.Notify(hangup, syscall.SIGHUP)
 	unheard := func(p safe.Panic) {
 		signal.Stop(hangup)
-		state, err := sys.ProjectStateDirAt(root)
+		state, err := project.ProjectStateDirAt(root)
 		if err != nil {
 			state = os.TempDir()
 		}

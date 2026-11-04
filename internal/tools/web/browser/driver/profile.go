@@ -17,8 +17,9 @@ import (
 	"golang.org/x/net/websocket"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
-	"tofu/internal/sys"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -65,7 +66,7 @@ const (
 )
 
 func ProfilesDir(home string) string {
-	return filepath.Join(sys.StateDir(home), "browser", "profiles")
+	return filepath.Join(fs.StateDir(home), "browser", "profiles")
 }
 
 func profileDir(home, name string) (string, error) {
@@ -264,7 +265,7 @@ func launchChrome(dir string, headless bool) (*cdpConn, error) {
 		return nil, err
 	}
 	exited := make(chan error, 1)
-	report := sys.Crashes(".")
+	report := project.Crashes(".")
 	safe.Go(report, "chrome wait", func() { exited <- safe.Call(report, "chrome wait", command.Wait) })
 	for until := time.Now().Add(konst.BrowserCallTimeoutMillis * time.Millisecond); time.Now().Before(until); {
 		if conn, err := attachChrome(dir); err == nil {

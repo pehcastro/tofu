@@ -17,7 +17,7 @@ import (
 	"unicode"
 
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 	"tofu/internal/tools/web/browser/extension"
 )
 
@@ -129,7 +129,7 @@ func Install(home, exe, hostsKey string) (id string, browserManifestsWritten []s
 	if browserCopy, err := os.Stat(CopyPath(home)); err == nil && os.SameFile(source, browserCopy) {
 		return "", nil, fmt.Errorf("%s is the copy Chrome starts: run tofu browser install from tofu itself", exe)
 	}
-	if err := sys.WriteFile(sourceRecord(home), []byte(exe), 0o644); err != nil {
+	if err := platformfs.WriteFile(sourceRecord(home), []byte(exe), 0o644); err != nil {
 		return "", nil, err
 	}
 	if _, err := Refresh(home); err != nil {
@@ -151,7 +151,7 @@ func Install(home, exe, hostsKey string) (id string, browserManifestsWritten []s
 	}
 	browsers := browserManifests(home)
 	for _, path := range append([]string{manifestPath}, browsers...) {
-		if err := sys.WriteFile(path, manifest, 0o644); err != nil {
+		if err := platformfs.WriteFile(path, manifest, 0o644); err != nil {
 			return "", nil, err
 		}
 	}
@@ -262,6 +262,6 @@ func Hosts(home, hostsKey string) []NativeHost {
 }
 
 func installPaths(home string) (extensionDir, manifestPath string) {
-	dir := filepath.Join(home, sys.StateDirName, "browser")
+	dir := filepath.Join(home, platformfs.StateDirName, "browser")
 	return filepath.Join(dir, "extension"), filepath.Join(dir, HostName+".json")
 }

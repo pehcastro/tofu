@@ -11,7 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/clipboard"
 )
 
 const (
@@ -109,7 +109,7 @@ func TestSlashCopyIsListedAndCopiesWhatTheKeyCopies(t *testing.T) {
 }
 
 func TestWithNoLocalClipboardTheTerminalCarriesTheCopyAndIsNotCalledASuccess(t *testing.T) {
-	board := &stubBoard{refuse: sys.ErrNoLocalClipboard}
+	board := &stubBoard{refuse: clipboard.ErrNoLocalClipboard}
 	app := copyApp(t, board)
 	cmd := app.update(tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
 	handed := app.update(cmd())

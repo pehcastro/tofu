@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/clipboard"
 )
 
 const shellEscapables = " '\"()[]{}&;!$#*?<>|~`\\"
@@ -16,11 +16,11 @@ func (b Board) Dropped(text string) (Board, bool) {
 	if !ok {
 		return b, false
 	}
-	b.Read = func() (sys.Clipboard, error) {
+	b.Read = func() (clipboard.Clipboard, error) {
 		if info, err := os.Stat(path); err != nil || !info.Mode().IsRegular() {
-			return sys.Clipboard{Kind: sys.ClipboardText, Text: text}, nil
+			return clipboard.Clipboard{Kind: clipboard.ClipboardText, Text: text}, nil
 		}
-		return sys.Clipboard{Kind: sys.ClipboardFiles, Files: []string{path}}, nil
+		return clipboard.Clipboard{Kind: clipboard.ClipboardFiles, Files: []string{path}}, nil
 	}
 	return b, true
 }

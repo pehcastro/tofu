@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
 )
 
 const madeUpMetaKey = "meta-made-up-9b3e71c0"
@@ -18,7 +18,7 @@ func refusedBy(t *testing.T, handler http.HandlerFunc) *KeyRefused {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv(sys.MetaMuseKeyName, "")
+	t.Setenv(credential.MetaMuseKeyName, "")
 	server := httptest.NewServer(handler)
 	if handler == nil {
 		server.Close()
@@ -31,7 +31,7 @@ func refusedBy(t *testing.T, handler http.HandlerFunc) *KeyRefused {
 	if !errors.As(err, &refused) {
 		t.Fatalf("the check returned %T %v, want a *KeyRefused", err, err)
 	}
-	if stored, _ := sys.StoredKeys(); stored[sys.MetaMuseKeyName] != "" {
+	if stored, _ := credential.StoredKeys(); stored[credential.MetaMuseKeyName] != "" {
 		t.Fatal("a refused key was written")
 	}
 	if strings.Contains(refused.Error(), madeUpMetaKey) || strings.Contains(refused.Brief(), madeUpMetaKey) {

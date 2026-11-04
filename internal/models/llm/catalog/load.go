@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"tofu/internal/models/llm/core"
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 )
 
 const (
@@ -22,19 +22,19 @@ const (
 	homeLayer        = "home"
 )
 
-type Layer = sys.Layer
+type Layer = platformfs.Layer
 
 func Layers(shipped fs.FS, dir string) ([]Layer, error) {
-	layers, err := sys.Layers(shipped, "", dir)
+	layers, err := platformfs.Layers(shipped, "", dir)
 	if err != nil {
 		return nil, err
 	}
-	home, homeless := sys.HomeConfigDir()
+	home, homeless := platformfs.HomeConfigDir()
 	if homeless != nil {
 		return layers, nil
 	}
 	shippedFiles, project := layers[0], layers[len(layers)-1]
-	return []Layer{shippedFiles, sys.DirLayer(catalogLayer, sys.Join(home, catalogLayer)), sys.DirLayer(homeLayer, home), project}, nil
+	return []Layer{shippedFiles, platformfs.DirLayer(catalogLayer, platformfs.Join(home, catalogLayer)), platformfs.DirLayer(homeLayer, home), project}, nil
 }
 
 type Broken struct {
@@ -218,7 +218,7 @@ func readFlat(layer Layer, dir, why string, allowed map[string]bool, into *merge
 			refused = append(refused, Broken{File: file, Why: err.Error()})
 			continue
 		}
-		at := sys.Join(layer.Origin, dir, entry.Name())
+		at := platformfs.Join(layer.Origin, dir, entry.Name())
 		if bad := into.take(strings.TrimSuffix(entry.Name(), ".yaml"), layer.Name, at, string(body), allowed); bad != nil {
 			refused = append(refused, *bad)
 		}
@@ -253,7 +253,7 @@ func readModels(layer Layer, allowed map[string]bool, into *merged) []Broken {
 				continue
 			}
 			slug := provider.Name() + "/" + strings.TrimSuffix(entry.Name(), ".yaml")
-			at := sys.Join(layer.Origin, dir, entry.Name())
+			at := platformfs.Join(layer.Origin, dir, entry.Name())
 			if bad := into.take(slug, layer.Name, at, string(body), allowed); bad != nil {
 				refused = append(refused, *bad)
 			}

@@ -16,7 +16,7 @@ import (
 	"golang.org/x/net/publicsuffix"
 
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 type Page struct {
@@ -50,7 +50,7 @@ const (
 )
 
 func Dir() (string, error) {
-	home, err := sys.HomeConfigDir()
+	home, err := fs.HomeConfigDir()
 	if err != nil {
 		return "", err
 	}
@@ -71,7 +71,7 @@ func List(dir string) ([]Recipe, error) {
 		if !isRecipe {
 			continue
 		}
-		body, err := sys.ReadFile(filepath.Join(dir, entry.Name()))
+		body, err := fs.ReadFile(filepath.Join(dir, entry.Name()))
 		if err != nil {
 			return nil, err
 		}
@@ -309,7 +309,7 @@ func save(dir string, r Recipe) error {
 	}
 	fmt.Fprintf(&body, "%s%s\n%s%d\n%s%d\n%s%s\n%s%s\n\n", headMark, r.Host, usesMark, r.Uses, failedMark, r.FailedInARow, asideMark, aside, learnedMark, r.LearnedFrom)
 	writePages(&body, r.Pages)
-	return sys.WriteFile(filepath.Join(dir, r.Host+fileSuffix), []byte(body.String()), 0o644)
+	return fs.WriteFile(filepath.Join(dir, r.Host+fileSuffix), []byte(body.String()), 0o644)
 }
 
 func writePages(to *strings.Builder, pages []Page) {

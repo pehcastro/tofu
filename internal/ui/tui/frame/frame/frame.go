@@ -7,7 +7,7 @@ import (
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/build"
 	"tofu/internal/ui/tui/look/look"
 )
 
@@ -68,7 +68,7 @@ type Status struct {
 }
 
 func Release(buildVersion, buildRevision string) string {
-	if buildVersion == sys.DevelVersion || strings.HasSuffix(buildRevision, dirtyMark) {
+	if buildVersion == build.DevelVersion || strings.HasSuffix(buildRevision, dirtyMark) {
 		return konst.Version + develSuffix
 	}
 	return konst.Version

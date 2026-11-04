@@ -13,7 +13,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/models/transport"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -63,7 +63,7 @@ func NewPoller(
 	urls map[Provider]string,
 	record func(Reading) error,
 ) (*Poller, error) {
-	dir, err := sys.QuotaDir()
+	dir, err := fs.QuotaDir()
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +94,7 @@ func (p *Poller) Poll(ctx context.Context, account Account) (Report, error) {
 		return p.lastGood(account, shelf.read()), transport.Fail("quota.Poll", transport.KindTimeout, err,
 			"another tofu process is asking the %s usage endpoint for this account", account.Provider)
 	}
-	defer func() { _ = sys.Unlock(lock) }()
+	defer func() { _ = fs.Unlock(lock) }()
 	held := shelf.read()
 	if report, answered, err := p.answer(account, held); answered {
 		return report, err

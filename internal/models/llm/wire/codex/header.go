@@ -4,7 +4,7 @@ import (
 	"cmp"
 
 	"tofu/internal/models/llm/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/build"
 )
 
 type Header = core.Header
@@ -47,7 +47,7 @@ func Headers(options HeaderOptions) []Header {
 		Header{Name: HeaderBeta, Value: BetaResponsesSSE},
 		Header{Name: HeaderOriginator, Value: Originator},
 		Header{Name: HeaderVersion, Value: cmp.Or(options.Version, PinnedCodexClientVersion)},
-		Header{Name: HeaderUserAgent, Value: UserAgentPrefix + sys.Version()},
+		Header{Name: HeaderUserAgent, Value: UserAgentPrefix + build.Version()},
 	)
 	if options.Identity.SessionID != "" {
 		headers = append(headers,

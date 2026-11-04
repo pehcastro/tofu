@@ -14,8 +14,8 @@ import (
 	"tofu/internal/host"
 	library "tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/fs"
 	isettings "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/chat/session"
 	"tofu/internal/ui/tui/fixture"
@@ -82,7 +82,7 @@ func workspace(home string) string {
 
 func newReel(width, height int, home string, tune func(*app.Options)) *reel {
 	root := workspace(home)
-	store, err := isettings.Open(filepath.Join(home, sys.StateDirName, isettings.FileName), filepath.Join(root, sys.StateDirName, isettings.FileName))
+	store, err := isettings.Open(filepath.Join(home, fs.StateDirName, isettings.FileName), filepath.Join(root, fs.StateDirName, isettings.FileName))
 	if err == nil {
 		err = store.SetText(isettings.Global, isettings.Hyperlinks, hyperlinksOff)
 	}
@@ -133,7 +133,7 @@ func (r *reel) open() {
 		r.driver.Close()
 	}
 	r.app = app.New(r.options)
-	r.driver = Drive(r.app, r.width, r.height, filepath.Join(r.options.Root, sys.StateDirName))
+	r.driver = Drive(r.app, r.width, r.height, filepath.Join(r.options.Root, fs.StateDirName))
 	r.app.Update(app.Event{Kind: app.EventSession, Text: fixture.SessionName, ID: fixture.SessionID})
 	r.app.Update(fixture.Quotas(r.at))
 	r.app.Update(app.Event{Kind: app.EventContext, Context: fixture.Context()})

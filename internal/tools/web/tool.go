@@ -13,7 +13,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
 	"tofu/internal/tools/contract"
 )
 
@@ -141,7 +141,7 @@ func (t webSearch) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 		switch {
 		case errors.As(err, &refused):
 			use.Failed = &ledger.KeyError{Status: refused.Status, What: err.Error()}
-		case provider.KeyVariable == sys.BraveSearchKeyName:
+		case provider.KeyVariable == credential.BraveSearchKeyName:
 			use.Charge = ledger.ChargeOf(0, konst.BraveSearchDollarsPerCall)
 		}
 		_ = ledger.Tally(use)

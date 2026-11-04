@@ -10,8 +10,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"tofu/internal/platform/clipboard"
 	isession "tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/ui/tui/composer/paste"
 )
 
@@ -160,7 +160,9 @@ func TestDownWalksForwardAndPastTheNewestRestoresTheDraft(t *testing.T) {
 func pastedLong(t *testing.T, tasks chan string, long string) *App {
 	t.Helper()
 	board, _ := pasteBoard(t)
-	board.Read = func() (sys.Clipboard, error) { return sys.Clipboard{Kind: sys.ClipboardText, Text: long}, nil }
+	board.Read = func() (clipboard.Clipboard, error) {
+		return clipboard.Clipboard{Kind: clipboard.ClipboardText, Text: long}, nil
+	}
 	app := newTestApp(Options{
 		Repo:  testRepo,
 		Wires: anthropicAlone,

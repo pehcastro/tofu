@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
 )
 
 func revealed(shape, secret, prefix string) int {
@@ -18,7 +18,7 @@ func revealed(shape, secret, prefix string) int {
 }
 
 func TestTheShapeNeverShowsMoreThanHalfOfTheSecret(t *testing.T) {
-	for _, variable := range []string{sys.OpenRouterKeyName, sys.BraveSearchKeyName} {
+	for _, variable := range []string{credential.OpenRouterKeyName, credential.BraveSearchKeyName} {
 		field, prefix := New(variable), expectedPrefix(variable)
 		for _, r := range "sk-or-v1-q8Zr2mW4kT7vX1nB5cY9pL3dF6hJ0aS" {
 			field.Type(string(r))
@@ -31,7 +31,7 @@ func TestTheShapeNeverShowsMoreThanHalfOfTheSecret(t *testing.T) {
 }
 
 func TestAPasteKeepsNoLineBreakAndTheShapeSaysTheLength(t *testing.T) {
-	field := New(sys.OpenRouterKeyName)
+	field := New(credential.OpenRouterKeyName)
 	field.Paste("sk-or-v1-made-up-0000000000003f9a\r\n")
 	if field.Value() != "sk-or-v1-made-up-0000000000003f9a" {
 		t.Fatalf("the pasted value is %q", field.Value())
@@ -42,7 +42,7 @@ func TestAPasteKeepsNoLineBreakAndTheShapeSaysTheLength(t *testing.T) {
 }
 
 func TestAWrongPrefixAsksOnceAndTypingAsksAgain(t *testing.T) {
-	field := New(sys.OpenRouterKeyName)
+	field := New(credential.OpenRouterKeyName)
 	field.Paste("sk-proj-made-up-00000000000000")
 	if field.Enter() || field.Warning() == "" {
 		t.Fatal("the first enter on a wrong prefix saved without a warning")
@@ -57,7 +57,7 @@ func TestAWrongPrefixAsksOnceAndTypingAsksAgain(t *testing.T) {
 }
 
 func TestAnUncheckedPrefixSaysSoAndNeverAsks(t *testing.T) {
-	field := New(sys.MetaMuseKeyName)
+	field := New(credential.MetaMuseKeyName)
 	field.Paste("made-up-meta-key-00000000000000")
 	if !strings.HasSuffix(field.Shape(), "prefix not checked") || !field.Enter() {
 		t.Fatalf("an unchecked prefix says %q", field.Shape())

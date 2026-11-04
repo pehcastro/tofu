@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -18,7 +18,7 @@ func DoctorState(now time.Time) string {
 	if err != nil {
 		return "unknown: " + err.Error()
 	}
-	exists, err := sys.Exists(path)
+	exists, err := fs.Exists(path)
 	if err != nil {
 		return "unreadable: " + err.Error()
 	}

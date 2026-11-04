@@ -21,8 +21,10 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/konst"
 	library "tofu/internal/models/llm/catalog"
+	"tofu/internal/platform/clipboard"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
 	isettings "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/testkit/golden"
 	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/composer/paste"
@@ -270,7 +272,7 @@ func launch(t *testing.T, path string) (*reel, *transcript) {
 	t.Setenv("TERM", "xterm-256color")
 	t.Setenv("NO_COLOR", "")
 	if planted, err := os.ReadFile(strings.TrimSuffix(path, scriptSuffix) + settingsSuffix); err == nil {
-		if err := sys.WriteFile(filepath.Join(home, sys.StateDirName, isettings.FileName), planted, 0o600); err != nil {
+		if err := fs.WriteFile(filepath.Join(home, fs.StateDirName, isettings.FileName), planted, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -289,7 +291,7 @@ func launch(t *testing.T, path string) (*reel, *transcript) {
 	r := newReel(fixture.Width, fixture.Height, home, func(options *app.Options) {
 		signed := options.Wires
 		options.Wires = func() []app.Wire {
-			if stored, _ := sys.StoredKeys(); stored[library.Meta.KeyName()] != "" {
+			if stored, _ := credential.StoredKeys(); stored[library.Meta.KeyName()] != "" {
 				return append(signed(), app.Wire{Name: string(library.Meta), Model: "muse-spark-1.3", Provider: string(library.Meta)})
 			}
 			return signed()
@@ -301,8 +303,8 @@ func launch(t *testing.T, path string) (*reel, *transcript) {
 			_, err := out.Write([]byte("clipboard: " + text + "\n"))
 			return err
 		}
-		options.Paste = paste.Board{Read: func() (sys.Clipboard, error) {
-			return sys.Clipboard{Kind: sys.ClipboardText, Text: strings.Repeat("the clipboard holds a long passage. ", clipboardRepeats)}, nil
+		options.Paste = paste.Board{Read: func() (clipboard.Clipboard, error) {
+			return clipboard.Clipboard{Kind: clipboard.ClipboardText, Text: strings.Repeat("the clipboard holds a long passage. ", clipboardRepeats)}, nil
 		}}
 		withShells(options)
 		fixed := options.Shells
@@ -452,7 +454,7 @@ func TestEveryDriveScriptPrintsItsGolden(t *testing.T) {
 
 func TestEveryWriteLandsInTheScopeItNamesAndNowhereElse(t *testing.T) {
 	root := t.TempDir()
-	dirs := [2]string{filepath.Join(root, "home", sys.StateDirName), filepath.Join(root, "project", sys.StateDirName)}
+	dirs := [2]string{filepath.Join(root, "home", fs.StateDirName), filepath.Join(root, "project", fs.StateDirName)}
 	store, err := isettings.Open(filepath.Join(dirs[isettings.Global], isettings.FileName), filepath.Join(dirs[isettings.Project], isettings.FileName))
 	if err != nil {
 		t.Fatal(err)
@@ -507,11 +509,11 @@ func TestEveryWriteLandsInTheScopeItNamesAndNowhereElse(t *testing.T) {
 
 func TestAPickAndASettingLandInTheScopeTheHeaderNames(t *testing.T) {
 	r, out := launch(t, "scope-writes"+scriptSuffix)
-	home, err := sys.HomeConfigDir()
+	home, err := fs.HomeConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}
-	project := filepath.Join(r.options.Root, sys.StateDirName)
+	project := filepath.Join(r.options.Root, fs.StateDirName)
 	bound := func(dir string) bool {
 		_, err := os.Stat(filepath.Join(dir, "roles", "orchestrator.yaml"))
 		return err == nil

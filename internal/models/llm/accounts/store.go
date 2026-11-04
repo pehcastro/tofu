@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"tofu/internal/sys"
+	platformcredential "tofu/internal/platform/credential"
 )
 
 const (
@@ -56,11 +56,11 @@ type Store struct {
 }
 
 func Path() (string, error) {
-	return sys.CredentialStorePath()
+	return platformcredential.CredentialStorePath()
 }
 
 func Open(path string) (*Store, error) {
-	db, err := sys.OpenCredentialStore(path)
+	db, err := platformcredential.OpenCredentialStore(path)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func (s *Store) Close() error {
 }
 
 func (s *Store) Keys() (map[string]string, error) {
-	return sys.ReadStoredKeys(s.db)
+	return platformcredential.ReadStoredKeys(s.db)
 }
 
 func (s *Store) Save(credential Credential, now time.Time) error {

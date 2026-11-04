@@ -12,7 +12,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"tofu/internal/cli/render"
-	"tofu/internal/sys"
+	"tofu/internal/platform/clipboard"
+	"tofu/internal/platform/fs"
 	"tofu/internal/ui/tui/look/theme"
 )
 
@@ -35,7 +36,7 @@ type Outcome struct {
 }
 
 type Board struct {
-	Read     func() (sys.Clipboard, error)
+	Read     func() (clipboard.Clipboard, error)
 	Dir      func() (string, error)
 	Write    func(path string, body []byte) error
 	Recorded func(index int, name string, bytes int, format string)
@@ -52,7 +53,7 @@ const (
 
 func Default(board Board) Board {
 	if board.Read == nil {
-		board.Read = sys.ReadClipboard
+		board.Read = clipboard.ReadClipboard
 	}
 	if board.Dir == nil {
 		board.Dir = func() (string, error) {
@@ -61,7 +62,7 @@ func Default(board Board) Board {
 	}
 	if board.Write == nil {
 		board.Write = func(path string, body []byte) error {
-			return sys.WriteFile(path, body, pastedImageFileMode)
+			return fs.WriteFile(path, body, pastedImageFileMode)
 		}
 	}
 	return board
@@ -83,13 +84,13 @@ func (b Board) read(index int) (Outcome, error) {
 		return Outcome{}, err
 	}
 	switch clip.Kind {
-	case sys.ClipboardEmpty:
+	case clipboard.ClipboardEmpty:
 		return Outcome{}, errors.New("the clipboard holds nothing to paste")
-	case sys.ClipboardText:
+	case clipboard.ClipboardText:
 		return Outcome{Index: index, State: Textual, Text: clip.Text}, nil
-	case sys.ClipboardImage:
+	case clipboard.ClipboardImage:
 		return b.store(index, clip.PNG, pngSuffix)
-	case sys.ClipboardFiles:
+	case clipboard.ClipboardFiles:
 		return b.copyFile(index, clip.Files)
 	}
 	panic("paste: unknown clipboard kind")
@@ -107,7 +108,7 @@ func (b Board) copyFile(index int, files []string) (Outcome, error) {
 	if err != nil {
 		return Outcome{}, err
 	}
-	if len(body) > sys.ClipboardMaxBytes {
+	if len(body) > clipboard.ClipboardMaxBytes {
 		return Outcome{}, errors.New(filepath.Base(files[0]) + " is " + render.Size(len(body)) + ", past the paste ceiling")
 	}
 	return b.store(index, body, suffix)

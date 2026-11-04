@@ -18,7 +18,7 @@ import (
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
 	"tofu/internal/models/transport"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
 )
 
 const recordedAnswers = `{"model":"jev-1.13.0","answers":{
@@ -229,7 +229,7 @@ func TestLiveGate(t *testing.T) {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to call the real route")
 	}
-	sys.AllowLiveCredential(t)
+	credential.AllowLiveCredential(t)
 	key, err := core.TypeSafeKey("../../../../.env")
 	if err != nil {
 		t.Fatalf("no credential: %v", err)

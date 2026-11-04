@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
 )
 
 type Choice struct {
@@ -38,7 +38,7 @@ func (c Choice) Command(ctx context.Context, dir, command string, extraEnv ...st
 	cmd.Dir = dir
 	cmd.Env = slices.DeleteFunc(os.Environ(), func(entry string) bool {
 		name, _, _ := strings.Cut(entry, "=")
-		return slices.ContainsFunc(sys.KeyNames(), func(key string) bool { return strings.EqualFold(name, key) })
+		return slices.ContainsFunc(credential.KeyNames(), func(key string) bool { return strings.EqualFold(name, key) })
 	})
 	for _, entry := range []string{"AI_AGENT=tofu", "PYTHONUNBUFFERED=1", "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never", "EDITOR=false"} {
 		if name, _, _ := strings.Cut(entry, "="); os.Getenv(name) == "" {
@@ -67,7 +67,7 @@ func CodeEnv(extra ...string) []string {
 			"LOCALAPPDATA", "HOMEDRIVE", "COMPUTERNAME"}, upper)
 		secret := slices.ContainsFunc([]string{"KEY", "TOKEN", "SECRET", "PASSWORD", "PASSWD", "CREDENTIAL", "AUTH"}, func(word string) bool {
 			return strings.Contains(upper, word)
-		}) || slices.ContainsFunc(sys.KeyNames(), func(key string) bool { return strings.EqualFold(name, key) })
+		}) || slices.ContainsFunc(credential.KeyNames(), func(key string) bool { return strings.EqualFold(name, key) })
 		if safe && !secret {
 			kept = append(kept, entry)
 		}

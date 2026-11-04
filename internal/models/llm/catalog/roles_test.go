@@ -6,13 +6,13 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 func loadWithLayer(t *testing.T, dir string) Library {
 	t.Helper()
 	shipped := Layer{Name: "library", Origin: "library", FS: os.DirFS("../../../../library")}
-	loaded, err := Load([]Layer{shipped, sys.DirLayer("project", dir)})
+	loaded, err := Load([]Layer{shipped, fs.DirLayer("project", dir)})
 	if err != nil {
 		t.Fatalf("loading the library with the bound layer: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestTheClassifierRoleBindsOnlyAClassifierModel(t *testing.T) {
 			t.Fatal(err)
 		}
 		shipped := Layer{Name: "library", Origin: "library", FS: os.DirFS("../../../../library")}
-		if _, err := Load([]Layer{shipped, sys.DirLayer("project", wrong)}); err == nil {
+		if _, err := Load([]Layer{shipped, fs.DirLayer("project", wrong)}); err == nil {
 			t.Fatalf("the %s role loaded %s, a model of the wrong kind", role, slug)
 		}
 	}

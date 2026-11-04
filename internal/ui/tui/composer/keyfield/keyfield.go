@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
 )
 
 const (
@@ -21,7 +21,7 @@ const (
 )
 
 func expectedPrefix(variable string) string {
-	if variable == sys.OpenRouterKeyName {
+	if variable == credential.OpenRouterKeyName {
 		return "sk-or-v1-"
 	}
 	return ""

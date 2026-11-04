@@ -13,7 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/clipboard"
 	"tofu/internal/testkit/golden"
 	"tofu/internal/ui/tui/composer/paste"
 )
@@ -47,8 +47,8 @@ func pasteBoard(t *testing.T) (paste.Board, string) {
 		t.Fatalf("the session directory could not be made: %v", err)
 	}
 	return paste.Board{
-		Read: func() (sys.Clipboard, error) {
-			return sys.Clipboard{Kind: sys.ClipboardImage, PNG: []byte(screenshot)}, nil
+		Read: func() (clipboard.Clipboard, error) {
+			return clipboard.Clipboard{Kind: clipboard.ClipboardImage, PNG: []byte(screenshot)}, nil
 		},
 		Dir: func() (string, error) { return dir, nil },
 	}, dir
@@ -129,8 +129,8 @@ func TestAFailedPasteKeepsThePlaceholderAndSaysWhy(t *testing.T) {
 
 func TestPastingTextLeavesNoPlaceholderAndTypesTheText(t *testing.T) {
 	board, _ := pasteBoard(t)
-	board.Read = func() (sys.Clipboard, error) {
-		return sys.Clipboard{Kind: sys.ClipboardText, Text: "rerun the gate bench"}, nil
+	board.Read = func() (clipboard.Clipboard, error) {
+		return clipboard.Clipboard{Kind: clipboard.ClipboardText, Text: "rerun the gate bench"}, nil
 	}
 	app := pasteApp(t, board)
 	_, cmd := app.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
@@ -172,8 +172,8 @@ func TestTwoImagesPastedInOrderNumberInThatOrder(t *testing.T) {
 func TestALongPastedBlockBecomesATextChip(t *testing.T) {
 	board, _ := pasteBoard(t)
 	long := strings.Repeat("the gate reads the policy before the wire. ", 10)
-	board.Read = func() (sys.Clipboard, error) {
-		return sys.Clipboard{Kind: sys.ClipboardText, Text: long}, nil
+	board.Read = func() (clipboard.Clipboard, error) {
+		return clipboard.Clipboard{Kind: clipboard.ClipboardText, Text: long}, nil
 	}
 	app := pasteApp(t, board)
 	_, cmd := app.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})

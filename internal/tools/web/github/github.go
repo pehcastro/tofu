@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"tofu/internal/models/llm/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/scratch"
 	"tofu/internal/tools/contract"
 )
 
@@ -64,7 +64,7 @@ func (t GitHubPRDiff) Run(ctx context.Context, raw json.RawMessage) (contract.Re
 		words = append(words, pr)
 	}
 	cmd := exec.CommandContext(ctx, "gh", words...)
-	cmd.Dir, cmd.Env = string(t.root), append(os.Environ(), sys.ScratchEnv(ctx)...)
+	cmd.Dir, cmd.Env = string(t.root), append(os.Environ(), scratch.ScratchEnv(ctx)...)
 	var stdout, stderr strings.Builder
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	runErr := cmd.Run()

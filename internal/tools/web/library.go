@@ -9,17 +9,18 @@ import (
 	"strings"
 
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	platformfs "tofu/internal/platform/fs"
 )
 
-type Layer = sys.Layer
+type Layer = platformfs.Layer
 
 func Layers(library fs.FS, dir string) ([]Layer, error) {
 	shipped, err := fs.Sub(library, "web")
 	if err != nil {
 		return nil, err
 	}
-	return sys.Layers(shipped, "web", dir)
+	return platformfs.Layers(shipped, "web", dir)
 }
 
 type Provider struct {
@@ -81,7 +82,7 @@ func LoadKeyed(layers []Layer, keys core.Keyring) (Config, error) {
 			name, isYAML := strings.CutSuffix(entry.Name(), ".yaml")
 			if entry.IsDir() || !isYAML {
 				return Config{}, fmt.Errorf("web: %s holds one yaml file per search provider and nothing else, found %s",
-					sys.Join(layer.Origin, "search"), entry.Name())
+					platformfs.Join(layer.Origin, "search"), entry.Name())
 			}
 			if providers[name] == nil {
 				providers[name] = &sheet{values: map[string]string{}}
@@ -123,7 +124,7 @@ func LoadKeyed(layers []Layer, keys core.Keyring) (Config, error) {
 		}
 	}
 	if config.Provider.KeyVariable != "" {
-		config.searchKey, _ = keys.KeyFor(sys.CredentialFileName, config.Provider.KeyVariable)
+		config.searchKey, _ = keys.KeyFor(credential.CredentialFileName, config.Provider.KeyVariable)
 	}
 	return config, nil
 }
@@ -138,7 +139,7 @@ func (s *sheet) read(layer Layer, name string, allowed map[string]bool) error {
 	if err != nil {
 		return nil
 	}
-	at := sys.Join(layer.Origin, name)
+	at := platformfs.Join(layer.Origin, name)
 	for i, raw := range strings.Split(strings.ReplaceAll(string(body), "\r\n", "\n"), "\n") {
 		line := strings.TrimSpace(raw)
 		if line == "" || strings.HasPrefix(line, "#") {

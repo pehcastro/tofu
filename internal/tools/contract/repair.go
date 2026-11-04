@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 )
 
 func RepairPath(requested, noun string, found []string) (string, string, error) {
@@ -91,7 +91,7 @@ func WalkListing(r Root) ([]string, error) {
 
 func neverListed(directory string) bool {
 	switch directory {
-	case "node_modules", ".git", sys.StateDirName, sys.LegacyStateDirName:
+	case "node_modules", ".git", platformfs.StateDirName, platformfs.LegacyStateDirName:
 		return true
 	}
 	return false

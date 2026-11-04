@@ -16,7 +16,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/scratch"
 	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
 	"tofu/library/docs"
@@ -263,7 +263,7 @@ func (v Verb) spawn(ctx context.Context, words []string, body string) (contract.
 
 	cmd := exec.CommandContext(ctx, running, words...)
 	cmd.Dir = string(v.root)
-	cmd.Env = append(append(os.Environ(), sys.ScratchEnv(ctx)...), verbDepthEnvar+"="+strconv.Itoa(depth+1))
+	cmd.Env = append(append(os.Environ(), scratch.ScratchEnv(ctx)...), verbDepthEnvar+"="+strconv.Itoa(depth+1))
 	if body != "" {
 		cmd.Stdin = strings.NewReader(body)
 	}

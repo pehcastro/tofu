@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 )
 
 func CopyPath(home string) string {
@@ -17,11 +17,11 @@ func CopyPath(home string) string {
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
-	return filepath.Join(home, sys.StateDirName, "bin", name)
+	return filepath.Join(home, platformfs.StateDirName, "bin", name)
 }
 
 func sourceRecord(home string) string {
-	return filepath.Join(home, sys.StateDirName, "browser", "tofu-source")
+	return filepath.Join(home, platformfs.StateDirName, "browser", "tofu-source")
 }
 
 func Refresh(home string) (refreshed bool, err error) {

@@ -13,7 +13,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/wire/codex"
 	"tofu/internal/models/transport"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
 )
 
 const MetaBaseURLVariable = "TOFU_META_BASE_URL"
@@ -45,10 +45,10 @@ func StoreMetaKey(ctx context.Context, key string) error {
 		if errors.As(err, &answered) && answered.Status != 0 {
 			refused.Status, refused.Detail = answered.Status, answered.Detail
 		}
-		refused.Detail = strings.TrimSpace(strings.ReplaceAll(refused.Detail, key, sys.KeyRedactedMark))
+		refused.Detail = strings.TrimSpace(strings.ReplaceAll(refused.Detail, key, credential.KeyRedactedMark))
 		return refused
 	}
-	return sys.SaveKey(sys.MetaMuseKeyName, key)
+	return credential.SaveKey(credential.MetaMuseKeyName, key)
 }
 
 type KeyRefused struct {

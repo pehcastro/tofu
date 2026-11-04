@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"tofu/internal/models/llm/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -19,11 +19,11 @@ const (
 type CatalogPlan []Model
 
 func CatalogDir() (string, error) {
-	home, err := sys.HomeConfigDir()
+	home, err := fs.HomeConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return sys.Join(home, catalogLayer), nil
+	return fs.Join(home, catalogLayer), nil
 }
 
 func Plan(reconciled Reconciliation, registry Registry, library Library, found string) CatalogPlan {
@@ -147,7 +147,7 @@ func (p CatalogPlan) Write(dir string) error {
 				body.WriteString(field[0] + ": " + field[1] + "\n")
 			}
 		}
-		if err := sys.WriteFile(path, []byte(body.String()), writtenFileMode); err != nil {
+		if err := fs.WriteFile(path, []byte(body.String()), writtenFileMode); err != nil {
 			return err
 		}
 	}

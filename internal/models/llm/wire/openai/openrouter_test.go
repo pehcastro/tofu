@@ -17,7 +17,7 @@ import (
 	"tofu/internal/models/classifiers/core"
 	llm "tofu/internal/models/llm/core"
 	"tofu/internal/models/transport"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const liveAttemptMillis = 30000
@@ -159,7 +159,7 @@ func liveClient(t *testing.T) *llm.Client {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to call the real route")
 	}
-	key, err := core.KeyFor(filepath.Join(sys.SourceRoot(), ".env"), core.OpenRouterVariable)
+	key, err := core.KeyFor(filepath.Join(fs.SourceRoot(), ".env"), core.OpenRouterVariable)
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
@@ -252,7 +252,7 @@ func TestLiveMarkingChangesTheProvidersReportedCacheTokens(t *testing.T) {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to call the real route")
 	}
-	key, err := core.KeyFor(filepath.Join(sys.SourceRoot(), ".env"), core.OpenRouterVariable)
+	key, err := core.KeyFor(filepath.Join(fs.SourceRoot(), ".env"), core.OpenRouterVariable)
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}

@@ -7,7 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"tofu/internal/cli/render"
-	"tofu/internal/sys"
+	"tofu/internal/platform/clipboard"
 )
 
 const (
@@ -58,7 +58,7 @@ func (a *App) copy(unit, text string, found bool) tea.Cmd {
 		switch err := write(text); {
 		case err == nil:
 			return copiedMsg{state: copyToClipboard, unit: unit, text: text}
-		case errors.Is(err, sys.ErrNoLocalClipboard):
+		case errors.Is(err, clipboard.ErrNoLocalClipboard):
 			return copiedMsg{state: copyToTerminal, unit: unit, text: text}
 		default:
 			return copiedMsg{state: copyRefused, unit: unit, cause: err.Error()}

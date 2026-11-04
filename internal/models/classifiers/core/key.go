@@ -7,7 +7,8 @@ import (
 	"strings"
 
 	"tofu/internal/models/transport"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
 )
 
 type Source int
@@ -27,8 +28,8 @@ type Located struct {
 }
 
 const (
-	OpenRouterVariable = sys.OpenRouterClassifierKeyName
-	TypeSafeVariable   = sys.TypeSafeKeyName
+	OpenRouterVariable = credential.OpenRouterClassifierKeyName
+	TypeSafeVariable   = credential.TypeSafeKeyName
 )
 
 type Keyring struct {
@@ -38,8 +39,8 @@ type Keyring struct {
 }
 
 func ReadKeyring() Keyring {
-	stored, err := sys.StoredKeys()
-	path, _ := sys.CredentialStorePath()
+	stored, err := credential.StoredKeys()
+	path, _ := credential.CredentialStorePath()
 	return Keyring{Stored: stored, Path: path, ReadErr: err}
 }
 
@@ -103,9 +104,9 @@ func (k Keyring) find(envPath, name string) (string, Located, error) {
 	if value := k.Stored[name]; value != "" {
 		return value, Located{Name: name, Source: SourceDatabase, Path: k.Path}, nil
 	}
-	hidden := sys.CredentialsHiddenFromTests()
+	hidden := credential.CredentialsHiddenFromTests()
 	value := strings.TrimSpace(os.Getenv(name))
-	if hidden && sys.EqualsOwnerCredential(name, value) {
+	if hidden && credential.EqualsOwnerCredential(name, value) {
 		value = ""
 	}
 	if value != "" {
@@ -118,21 +119,21 @@ func (k Keyring) find(envPath, name string) (string, Located, error) {
 	if err != nil {
 		abs = envPath
 	}
-	if hidden && sys.IsOwnerCredential(abs) {
+	if hidden && fs.IsOwnerCredential(abs) {
 		return noKey(name, abs, WhyUnexplained, nil, "%s is hidden from tests: %s is one of the owner's credential files, and a test that means to spend calls sys.AllowLiveCredential first", name, abs)
 	}
-	present, err := sys.Exists(envPath)
+	present, err := fs.Exists(envPath)
 	if err != nil {
 		return noKey(name, abs, WhyUnreadable, err, "reading %s", envPath)
 	}
 	if !present {
 		return noKey(name, abs, WhyNoFile, nil, "%s is not set and %s does not exist", name, envPath)
 	}
-	raw, err := sys.ReadCredential(envPath)
+	raw, err := credential.ReadCredential(envPath)
 	if err != nil {
 		return noKey(name, abs, WhyUnreadable, err, "reading %s", envPath)
 	}
-	if key := sys.CredentialAssignment(string(raw), name); key != "" {
+	if key := credential.CredentialAssignment(string(raw), name); key != "" {
 		return key, Located{Name: name, Source: SourceDotEnv, Path: abs}, nil
 	}
 	return noKey(name, abs, WhyFileLacksName, nil, "%s is not set and %s does not carry it", name, envPath)

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
-var errorShaped = sys.LazyRegexp(`(?i)\b(errors?|failed|failures?|fatal|panic|traceback|exception|denied|no such file|not found|undefined|unresolved|exited [0-9]+)\b`)
+var errorShaped = fs.LazyRegexp(`(?i)\b(errors?|failed|failures?|fatal|panic|traceback|exception|denied|no such file|not found|undefined|unresolved|exited [0-9]+)\b`)
 
 func ShellCheap(unit Unit) Mark {
 	if unit.Held != NotHeld {

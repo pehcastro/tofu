@@ -4,7 +4,7 @@ import (
 	"errors"
 	"path/filepath"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -193,5 +193,5 @@ func BindRole(layerDir string, role RoleID, slug string) error {
 	if !role.valid() {
 		return errors.New(roleFileNames + ", not " + string(role) + ".yaml")
 	}
-	return sys.WriteFile(RoleFile(layerDir, role), []byte("model: "+slug+"\n"), 0o644)
+	return fs.WriteFile(RoleFile(layerDir, role), []byte("model: "+slug+"\n"), 0o644)
 }

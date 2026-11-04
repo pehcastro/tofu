@@ -7,7 +7,7 @@ import (
 	"io/fs"
 	"path/filepath"
 
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 )
 
 const pinFileName = "jev-pin.json"
@@ -28,7 +28,7 @@ type PinCheck struct {
 }
 
 func pinPath() (string, error) {
-	dir, err := sys.HomeConfigDir()
+	dir, err := platformfs.HomeConfigDir()
 	return filepath.Join(dir, pinFileName), err
 }
 
@@ -37,7 +37,7 @@ func LoadPin() (Pin, error) {
 	if err != nil {
 		return Pin{}, err
 	}
-	body, err := sys.ReadFile(path)
+	body, err := platformfs.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return Pin{}, nil
 	}
@@ -60,5 +60,5 @@ func (p Pin) Store() error {
 	if err != nil {
 		return err
 	}
-	return sys.WriteFile(path, append(body, '\n'), 0o644)
+	return platformfs.WriteFile(path, append(body, '\n'), 0o644)
 }

@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
-	"tofu/internal/sys"
 	"tofu/internal/tools/web/browser/extension"
 )
 
@@ -51,7 +51,7 @@ func serveDirect(cdp *cdpConn, profile string) (*Client, error) {
 		return nil, err
 	}
 	near, far := net.Pipe()
-	d := &direct{cdp: cdp, profile: profile, build: build, snapshot: string(source), sessions: map[string]string{}, casts: map[string]*[]ScreencastFrame{}, report: sys.Crashes(".")}
+	d := &direct{cdp: cdp, profile: profile, build: build, snapshot: string(source), sessions: map[string]string{}, casts: map[string]*[]ScreencastFrame{}, report: project.Crashes(".")}
 	safe.Go(d.report, "browser direct", func() { d.serve(far) })
 	return &Client{conn: near, out: json.NewEncoder(near), in: json.NewDecoder(near)}, nil
 }

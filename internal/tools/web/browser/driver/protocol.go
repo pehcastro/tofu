@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -244,7 +244,7 @@ type request struct {
 }
 
 func socketPath(home string) (string, error) {
-	path, limit := filepath.Join(home, sys.StateDirName, "browser", "relay.sock"), konst.BrowserSocketPathMaxBytes
+	path, limit := filepath.Join(home, fs.StateDirName, "browser", "relay.sock"), konst.BrowserSocketPathMaxBytes
 	if runtime.GOOS == "darwin" {
 		limit = konst.BrowserSocketPathMaxBytesDarwin
 	}

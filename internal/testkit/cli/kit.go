@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
 )
 
 func ScratchProject(t *testing.T) string {
@@ -21,7 +21,7 @@ func EmptyHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("HOME", home)
-	t.Setenv(sys.TypeSafeKeyName, "")
+	t.Setenv(credential.TypeSafeKeyName, "")
 }
 
 func IsolateHome(t *testing.T) {
