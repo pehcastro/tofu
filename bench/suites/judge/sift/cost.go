@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	benchcorpus "tofu/bench/corpus"
+	benchcorpus "tofu/bench/kit/corpus"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/tools/shell/sift"
 )

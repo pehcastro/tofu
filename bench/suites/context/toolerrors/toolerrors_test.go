@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/bench/corpus"
-	"tofu/bench/corpus/recorded"
+	"tofu/bench/kit/corpus"
+	"tofu/bench/kit/corpus/recorded"
 )
 
 func exited(code int) corpus.RecordedCall {
@@ -142,7 +142,7 @@ func TestReportOverTheRealCorpus(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	rendered := Render(result)
-	for _, want := range []string{"unknown share", "worst tool", "bench/corpus.WalkSessions"} {
+	for _, want := range []string{"unknown share", "worst tool", "bench/kit/corpus.WalkSessions"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("the report carries no %q section", want)
 		}

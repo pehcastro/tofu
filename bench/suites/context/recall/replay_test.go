@@ -3,7 +3,7 @@ package recall
 import (
 	"testing"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	rc "tofu/internal/agent/context/recall"
 	"tofu/internal/dummy"
 	"tofu/internal/konst"

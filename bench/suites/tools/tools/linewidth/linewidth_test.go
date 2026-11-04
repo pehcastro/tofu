@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/sys"

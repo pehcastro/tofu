@@ -5,7 +5,7 @@
     "note": "the bench command, package main. Runs the other benches, measures 0 things of its own."
   },
   {
-    "package": "corpus",
+    "package": "kit/corpus",
     "kind": "library",
     "note": "the shared reader over recorded sessions and the 6 gate cases. Every bench that reads .tofu/sessions reads it through here."
   },

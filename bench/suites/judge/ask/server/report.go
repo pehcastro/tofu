@@ -24,13 +24,13 @@ func Render(machine, date, bobDir string) (string, error) {
 	fmt.Fprintf(b, "# bench ask/server: the declared-commands arm, %s\n\n", date)
 	fmt.Fprintf(b, "Machine: %s. Credential kind: none. Wire: none. No model call runs in this package and nothing leaves the machine.\n\n", machine)
 	b.WriteString("Cost unit: none. There is no spend to report, because no call is made.\n\n")
-	b.WriteString("TOFU-556, first round: measures only, wires nothing. The two sessions are read through `bench/corpus`, the shared reader, from `.tofu/sessions`, read only, in both this repository and the sibling project `admin-template`.\n\n")
+	b.WriteString("TOFU-556, first round: measures only, wires nothing. The two sessions are read through `bench/kit/corpus`, the shared reader, from `.tofu/sessions`, read only, in both this repository and the sibling project `admin-template`.\n\n")
 
 	b.WriteString("## The free arm, in one sentence\n\n")
 	b.WriteString("Read the project's declared commands, act when one candidate fits, ask when two fit or none does.\n\n")
 
 	b.WriteString("## Steps removed, counted from the recorded steps\n\n")
-	fmt.Fprintf(b, "`%s`: %d recorded steps, the guess at step %d, %d steps removed had the arm asked instead of guessing. The body carries two outcome segments from a mid-session restart; `bench/corpus.ReadTurnDir` now returns the second segment on its own, so this is the 18-step turn the ticket describes with no tail-taking needed here.\n\n",
+	fmt.Fprintf(b, "`%s`: %d recorded steps, the guess at step %d, %d steps removed had the arm asked instead of guessing. The body carries two outcome segments from a mid-session restart; `bench/kit/corpus.ReadTurnDir` now returns the second segment on its own, so this is the 18-step turn the ticket describes with no tail-taking needed here.\n\n",
 		first.TurnID, first.StepsTotal, first.GuessStep, first.StepsRemoved())
 	fmt.Fprintf(b, "`%s`: %d recorded steps, the guess at step %d, %d steps removed had the arm asked instead of guessing.\n\n",
 		second.TurnID, second.StepsTotal, second.GuessStep, second.StepsRemoved())

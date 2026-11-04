@@ -39,7 +39,7 @@ var DeliberatelyUnread = []UnreadKey{
 	{"step", "occupancy", "context-window occupancy at the step; bench/suites/context/recall reads this from its own fixtures, not RecordedStep"},
 	{"step", "bands", "context-window band split at the step; same as occupancy"},
 	{"step", "fork", "whether this step is where a fork happened; session lineage, see the turn-level fork fields"},
-	{"call", "gate_verdict", "pointer into the judge ledger, looked up there rather than duplicated here; bench/stopcheck looks up the row by gate_decision_id instead, checked 2026-09-20"},
+	{"call", "gate_verdict", "pointer into the judge ledger, looked up there rather than duplicated here; bench/suites/judge/stopcheck looks up the row by gate_decision_id instead, checked 2026-09-20"},
 	{"call", "rendered_bytes", "how much of the result was shown to the model, distinct from result_bytes which is already read"},
 	{"call", "result_handle", "a pointer to an off-record artifact; no bench point reads it from the corpus yet"},
 	{"call", "child_id", "session lineage: a sub-agent spawned by this call, before rc-fix8"},

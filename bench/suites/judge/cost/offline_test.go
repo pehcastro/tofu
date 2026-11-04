@@ -3,7 +3,7 @@ package cost
 import (
 	"testing"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 )
 
 func halves(t *testing.T) (train, heldOut []corpus.Record) {

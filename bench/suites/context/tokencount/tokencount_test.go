@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"tofu/bench/corpus"
-	"tofu/bench/corpus/recorded"
+	"tofu/bench/kit/corpus"
+	"tofu/bench/kit/corpus/recorded"
 )
 
 func rawCall(args string) corpus.RecordedCall {

@@ -3,7 +3,7 @@ package recall
 import (
 	"strings"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	rc "tofu/internal/agent/context/recall"
 )
 

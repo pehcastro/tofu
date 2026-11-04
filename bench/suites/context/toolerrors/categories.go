@@ -3,7 +3,7 @@ package toolerrors
 import (
 	"strings"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 )
 
 type Category string

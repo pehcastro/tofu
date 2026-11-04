@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	"tofu/internal/stat"
 )
 

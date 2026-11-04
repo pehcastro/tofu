@@ -119,13 +119,13 @@ func parseGateRecords(path string, raw []byte) ([]Record, error) {
 		}
 		var record Record
 		if err := json.Unmarshal(text, &record); err != nil {
-			return nil, fmt.Errorf("bench/corpus: %s line %d: %w", path, line, err)
+			return nil, fmt.Errorf("bench/kit/corpus:%s line %d: %w", path, line, err)
 		}
 		if record.Label != Proceed && record.Label != Block {
-			return nil, fmt.Errorf("bench/corpus: %s line %d: label %q is neither proceed nor block", path, line, record.Label)
+			return nil, fmt.Errorf("bench/kit/corpus:%s line %d: label %q is neither proceed nor block", path, line, record.Label)
 		}
 		if record.LabelBy != Owner && record.LabelBy != Agent {
-			return nil, fmt.Errorf("bench/corpus: %s line %d: label_by %q is neither owner nor agent", path, line, record.LabelBy)
+			return nil, fmt.Errorf("bench/kit/corpus:%s line %d: label_by %q is neither owner nor agent", path, line, record.LabelBy)
 		}
 		records = append(records, record)
 	}
@@ -142,7 +142,7 @@ func GateSplit() (Split, error) {
 	}
 	var split Split
 	if err := json.Unmarshal(raw, &split); err != nil {
-		return Split{}, fmt.Errorf("bench/corpus: %s: %w", toolgate.Split, err)
+		return Split{}, fmt.Errorf("bench/kit/corpus:%s: %w", toolgate.Split, err)
 	}
 	return split, nil
 }

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"tofu/bench/corpus"
-	"tofu/bench/corpus/recorded"
+	"tofu/bench/kit/corpus"
+	"tofu/bench/kit/corpus/recorded"
 )
 
 const turnsGainedFromSplitRestarts = 7

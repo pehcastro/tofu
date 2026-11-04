@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"tofu/bench/corpus"
 	benchapi "tofu/bench/kit/api"
+	"tofu/bench/kit/corpus"
 	"tofu/internal/judge/gate"
 )
 

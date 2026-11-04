@@ -85,8 +85,8 @@ func TestTheFixtureRuleIsTheOneAPersonWouldPredict(t *testing.T) {
 		"internal/ui/tui/app/testdata/session-80x24.golden",
 	}
 	notRecorded := []string{
-		"bench/corpus/scrub.go",
-		"bench/corpus/gate.go",
+		"bench/kit/corpus/scrub.go",
+		"bench/kit/corpus/gate.go",
 		"internal/agent/loop/turn.go",
 		"internal/dummy/dummy.go",
 		"internal/dummy/toolgate/toolgate.go",

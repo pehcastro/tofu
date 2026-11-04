@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"tofu/bench/corpus/recorded"
+	"tofu/bench/kit/corpus/recorded"
 )
 
 const adminTemplate = "drive tofu in the sibling project admin-template beside this repository to record it"

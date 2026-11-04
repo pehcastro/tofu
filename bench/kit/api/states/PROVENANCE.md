@@ -1,6 +1,6 @@
 # Where the embedded states came from
 
-Eleven JSON states plus `provenance.json`, 172,055 bytes, all of them **written**, none of them recorded. `embed.go` ships them and `bench/api/corpus.go` loads them.
+Eleven JSON states plus `provenance.json`, 172,055 bytes, all of them **written**, none of them recorded. `embed.go` ships them and `bench/kit/api/corpus.go` loads them.
 
 ## The six gate cases, written
 
@@ -8,7 +8,7 @@ Eleven JSON states plus `provenance.json`, 172,055 bytes, all of them **written*
 
 **Written is right for these and only for what they are used for.** They are the fixed input of a latency and rerun-agreement measurement: the same six states go to the same battery on every run so two runs are comparable. For that job an invented state is as good as a recorded one, because nothing is being scored for accuracy.
 
-**Written is not right for the thing they are also used for.** The same six appear in `bench/corpus/gate/cases.jsonl` as `auth-case-1` to `auth-case-6` with hand labels, and those six labelled rows sit beside 172 recorded ones in every accuracy number the cost bench reports. Six invented rows in 178 is 3.4% of that corpus, and no report separates them. A reader should not read a gate agreement figure as resting on 178 recorded cases.
+**Written is not right for the thing they are also used for.** The same six appear in `internal/dummy/toolgate/cases.jsonl` as `auth-case-1` to `auth-case-6` with hand labels, and those six labelled rows sit beside 172 recorded ones in every accuracy number the cost bench reports. Six invented rows in 178 is 3.4% of that corpus, and no report separates them. A reader should not read a gate agreement figure as resting on 178 recorded cases.
 
 ## The five size fixtures, written
 

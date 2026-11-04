@@ -3,7 +3,7 @@ package fire
 import (
 	"testing"
 
-	"tofu/bench/corpus/recorded"
+	"tofu/bench/kit/corpus/recorded"
 	"tofu/internal/sys"
 )
 

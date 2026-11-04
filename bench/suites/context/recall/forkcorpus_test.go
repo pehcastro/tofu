@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 )
 
 func TestTheForkCorpusReadsTwentyRealForksFromThreeLineages(t *testing.T) {

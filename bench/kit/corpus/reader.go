@@ -15,7 +15,7 @@ import (
 	"tofu/internal/store/session"
 )
 
-var ErrNoWallClock = errors.New("bench/corpus: the recorded turn carries no wall clock")
+var ErrNoWallClock = errors.New("bench/kit/corpus:the recorded turn carries no wall clock")
 
 var legacyNumericOutcomes = []string{"unset", "stopped", "step_cap", "cost_cap", "wall_clock_cap", "error"}
 
@@ -303,7 +303,7 @@ func scrubTurn(identities credential.Identities, recorded RecordedTurn) Recorded
 func finishedTurn(identities credential.Identities, recorded RecordedTurn, place string) (RecordedTurn, error) {
 	scrubbed := scrubTurn(identities, recorded)
 	if len(scrubbed.Steps) == 0 || scrubbed.WallClockMS == 0 {
-		return scrubbed, fmt.Errorf("bench/corpus: %s carries no step and no wall clock: %w", place, ErrNoWallClock)
+		return scrubbed, fmt.Errorf("bench/kit/corpus:%s carries no step and no wall clock: %w", place, ErrNoWallClock)
 	}
 	return scrubbed, nil
 }
@@ -319,7 +319,7 @@ func readTurn(identities credential.Identities, path string) (RecordedTurn, erro
 	}
 	var recorded RecordedTurn
 	if err := json.Unmarshal(data, &recorded); err != nil {
-		return RecordedTurn{}, fmt.Errorf("bench/corpus: %s is not a recorded turn: %w", path, err)
+		return RecordedTurn{}, fmt.Errorf("bench/kit/corpus:%s is not a recorded turn: %w", path, err)
 	}
 	return finishedTurn(identities, recorded, path)
 }
@@ -352,19 +352,19 @@ func segmentsOf(store *session.Store, dir string, header RecordedTurn) ([]Record
 		case session.EventStep:
 			var step RecordedStep
 			if err := json.Unmarshal(event.Body, &step); err != nil {
-				return nil, fmt.Errorf("bench/corpus: a recorded step of %s is not the expected shape: %w", dir, err)
+				return nil, fmt.Errorf("bench/kit/corpus:a recorded step of %s is not the expected shape: %w", dir, err)
 			}
 			step.Attempt = event.Attempt
 			current.Steps = append(current.Steps, step)
 		case session.EventMessage:
 			var message RecordedMessage
 			if err := json.Unmarshal(event.Body, &message); err != nil {
-				return nil, fmt.Errorf("bench/corpus: a recorded message of %s is not the expected shape: %w", dir, err)
+				return nil, fmt.Errorf("bench/kit/corpus:a recorded message of %s is not the expected shape: %w", dir, err)
 			}
 			current.Messages = append(current.Messages, message)
 		case session.EventOutcome:
 			if err := json.Unmarshal(event.Body, &current); err != nil {
-				return nil, fmt.Errorf("bench/corpus: the recorded outcome of %s is not the expected shape: %w", dir, err)
+				return nil, fmt.Errorf("bench/kit/corpus:the recorded outcome of %s is not the expected shape: %w", dir, err)
 			}
 			segments = append(segments, current)
 			current = header

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	"tofu/internal/dummy"
 )
 

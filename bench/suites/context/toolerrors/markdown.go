@@ -9,7 +9,7 @@ import (
 func Markdown(machine, date string, result Result) string {
 	b := &strings.Builder{}
 	fmt.Fprintf(b, "# bench toolerrors, a typed reason for a failed tool call: %s\n\n", date)
-	fmt.Fprintf(b, "Machine: %s, Windows 10 Pro 19045, go1.27.1 windows/amd64. No live model call, no network call, no credential: every figure comes from `bench/corpus.WalkSessions` read directly against `.tofu/sessions`, which grows while it is read because real turns are recorded in this repository. `go test ./bench/suites/context/toolerrors/... -count=1` passes, 6 test functions.\n\n", machine)
+	fmt.Fprintf(b, "Machine: %s, Windows 10 Pro 19045, go1.27.1 windows/amd64. No live model call, no network call, no credential: every figure comes from `bench/kit/corpus.WalkSessions` read directly against `.tofu/sessions`, which grows while it is read because real turns are recorded in this repository. `go test ./bench/suites/context/toolerrors/... -count=1` passes, 6 test functions.\n\n", machine)
 
 	b.WriteString("## ANSWER\n\n")
 	fmt.Fprintf(b, "**%d of %d recorded tool calls failed (%.1f%%), and %.1f%% of those failures carry no reason this corpus can classify beyond a bare nonzero exit code.** Every failure that carries any error text at all classifies cleanly into one of the five named reasons; the entire unknown share is `bash` calls that exited nonzero with an empty `Error` field, which today's harness never fills in even though the exit code itself is sitting right there. `%s` is the worst tool by failure rate among tools with at least %d calls, at %.1f%%.\n\n",
@@ -18,7 +18,7 @@ func Markdown(machine, date string, result Result) string {
 		result.Worst.Tool, minCallsForWorst, rate(result.Worst.Failures, result.Worst.Calls))
 
 	b.WriteString("## The corpus\n\n")
-	fmt.Fprintf(b, "`.tofu/sessions`, read at %s, through `bench/corpus.WalkSessions` and nothing else: no second file walk, no second JSON decode. %d entries, %d read as sessions, %d skipped.\n\n", result.ReadAt.Format("2006-01-02 15:04 -07:00"), result.Entries, result.Sessions, len(result.Skips))
+	fmt.Fprintf(b, "`.tofu/sessions`, read at %s, through `bench/kit/corpus.WalkSessions` and nothing else: no second file walk, no second JSON decode. %d entries, %d read as sessions, %d skipped.\n\n", result.ReadAt.Format("2006-01-02 15:04 -07:00"), result.Entries, result.Sessions, len(result.Skips))
 	for _, skip := range result.Skips {
 		fmt.Fprintf(b, "- skipped: `%s`: %s\n", skip.Path, skip.Reason)
 	}
@@ -41,7 +41,7 @@ func Markdown(machine, date string, result Result) string {
 	fmt.Fprintf(b, "\n**Unknown share: %.1f%%.** Every one of those calls is `bash` with an empty `Error` field and a nonzero `ExitCode` (1, 2, 126 or 127 in this corpus): the harness ran the command, saw it fail, and recorded only the bare number.\n\n", rate(result.ByCategory[Unknown], result.Failures))
 
 	b.WriteString("## The worst tool\n\n")
-	fmt.Fprintf(b, "**`%s`**, %d of %d calls failed, %.1f%%, among tools with at least %d calls. One real failing call, scrubbed by `bench/corpus.Scrub` on the way in, no token, account id or key present:\n\n", result.Worst.Tool, result.Worst.Failures, result.Worst.Calls, rate(result.Worst.Failures, result.Worst.Calls), minCallsForWorst)
+	fmt.Fprintf(b, "**`%s`**, %d of %d calls failed, %.1f%%, among tools with at least %d calls. One real failing call, scrubbed by `bench/kit/corpus.Scrub` on the way in, no token, account id or key present:\n\n", result.Worst.Tool, result.Worst.Failures, result.Worst.Calls, rate(result.Worst.Failures, result.Worst.Calls), minCallsForWorst)
 	fmt.Fprintf(b, "```\nturn: %s\nerror: %s\ncategory: %s\n```\n\n", result.Worst.Example.Turn, result.Worst.Example.Error, result.Worst.Example.Category)
 	b.WriteString("Every one of the 11 `edit` failures in this corpus is the same shape: an anchor or an occurrence count that no longer matches the file, all of it text the tool already produces today and this ticket only had to read.\n\n")
 
@@ -85,7 +85,7 @@ func Markdown(machine, date string, result Result) string {
 				firstStep = fmt.Sprintf("step %d: no tool call and no assistant text", step.Index)
 			}
 		}
-		fmt.Fprintf(b, "`%s`, the oldest turn in this corpus, loads through the same `bench/corpus.WalkSessions` used for every figure above, with no schema change in this ticket to break it. Its first step, scrubbed:\n\n```\n%s\n```\n\n", result.OldestTurn.ID, firstStep)
+		fmt.Fprintf(b, "`%s`, the oldest turn in this corpus, loads through the same `bench/kit/corpus.WalkSessions` used for every figure above, with no schema change in this ticket to break it. Its first step, scrubbed:\n\n```\n%s\n```\n\n", result.OldestTurn.ID, firstStep)
 	} else {
 		b.WriteString("No turn was read from this corpus, so no older session is named.\n\n")
 	}

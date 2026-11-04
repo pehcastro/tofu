@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	"tofu/internal/store/session"
 )
 

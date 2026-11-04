@@ -3,7 +3,7 @@ package thrift
 import (
 	"sort"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	"tofu/internal/konst"
 )
 

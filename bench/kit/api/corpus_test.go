@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/api/states"
 )
 
 const wantCorpusFileCount = 12
@@ -31,23 +31,23 @@ func parseAllJSON(fsys fs.FS) (int, error) {
 }
 
 func TestEveryCorpusFileParsesAndTheCountMatches(t *testing.T) {
-	count, err := parseAllJSON(corpus.Files())
+	count, err := parseAllJSON(states.Files())
 	if err != nil {
-		t.Fatalf("parsing bench/corpus: %v", err)
+		t.Fatalf("parsing bench/kit/api/states: %v", err)
 	}
 	if count != wantCorpusFileCount {
-		t.Fatalf("bench/corpus holds %d JSON files, want exactly %d; a file was added or removed without updating this test", count, wantCorpusFileCount)
+		t.Fatalf("bench/kit/api/states holds %d JSON files, want exactly %d; a file was added or removed without updating this test", count, wantCorpusFileCount)
 	}
 }
 
 func TestParseAllJSONFailsWhenACorpusFileIsRemoved(t *testing.T) {
 	dir := t.TempDir()
-	names, err := fs.Glob(corpus.Files(), "*.json")
+	names, err := fs.Glob(states.Files(), "*.json")
 	if err != nil {
-		t.Fatalf("listing bench/corpus: %v", err)
+		t.Fatalf("listing bench/kit/api/states: %v", err)
 	}
 	for _, name := range names {
-		raw, err := fs.ReadFile(corpus.Files(), name)
+		raw, err := fs.ReadFile(states.Files(), name)
 		if err != nil {
 			t.Fatalf("reading %s: %v", name, err)
 		}

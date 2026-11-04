@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/bench/corpus/recorded"
+	"tofu/bench/kit/corpus/recorded"
 	"tofu/internal/agent/loop"
 )
 

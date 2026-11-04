@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"tofu/bench/corpus/recorded"
+	"tofu/bench/kit/corpus/recorded"
 )
 
 func realCatalogAndFires(t *testing.T) ([]CatalogRule, []Fire) {

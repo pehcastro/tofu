@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"sort"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	"tofu/internal/sys"
 )
 

@@ -40,7 +40,7 @@ func Render(machine, date, path string, rows []session.Promotion) string {
 	}
 
 	b.WriteString("## Enough to decide anything\n\n")
-	fmt.Fprintf(b, "%d, unchanged from the first report. `bench/stopcheck` labelled 78 steps and reversed this project's own prior on that size; that is still the floor a promotion judgment would need to start at, not a promise that 78 settles it.\n\n", RowsToDecideAnything)
+	fmt.Fprintf(b, "%d, unchanged from the first report. `bench/suites/judge/stopcheck` labelled 78 steps and reversed this project's own prior on that size; that is still the floor a promotion judgment would need to start at, not a promise that 78 settles it.\n\n", RowsToDecideAnything)
 
 	b.WriteString("## Reading it\n\n")
 	b.WriteString("```\ngo run ./bench/suites/judge/promote/gen\n```\n\n")

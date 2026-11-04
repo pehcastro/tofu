@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	"tofu/internal/tools/registry"
 )
 

@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	rc "tofu/internal/agent/context/recall"
 	"tofu/internal/agent/loop"
 	"tofu/internal/store/session"

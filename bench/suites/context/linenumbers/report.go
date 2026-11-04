@@ -13,7 +13,7 @@ func Render(machine, date string, result Result) string {
 	b := &strings.Builder{}
 
 	fmt.Fprintf(b, "# bench linenumbers: no, %s\n\n", date)
-	fmt.Fprintf(b, "Machine: %s. No live model call: this reads recorded turns under `.tofu/sessions` through `bench/corpus.WalkSessions` and the read tool's own source, nothing else.\n\n", machine)
+	fmt.Fprintf(b, "Machine: %s. No live model call: this reads recorded turns under `.tofu/sessions` through `bench/kit/corpus.WalkSessions` and the read tool's own source, nothing else.\n\n", machine)
 
 	fmt.Fprintf(b, "## Threshold, stated before the number\n\n")
 	fmt.Fprintf(b, "A saving under %.1f%% of read-tool bytes or of total cache-read tokens is a no, the floor the ticket names for a change to be worth making. The number below decides it.\n\n", thresholdPercent)
@@ -22,7 +22,7 @@ func Render(machine, date string, result Result) string {
 	fmt.Fprintf(b, "`internal/agent/loop/tool_read.go` never prefixes a returned line with its number. A whole read (no `start_line`) returns the file's bytes verbatim; a ranged read prepends one header line naming the span, then the raw lines joined by newlines, still with no per-line number. `TestNoReadEverEmitsALineNumber` in this package reads a ten-line file both ways and finds no line beginning with a digit followed by a number-like separator. Every byte a sparse-numbering scheme would touch is already zero: nothing numbers every line today, so nothing would become every tenth.\n\n")
 
 	fmt.Fprintf(b, "## The corpus\n\n")
-	fmt.Fprintf(b, "`%s` through `bench/corpus.WalkSessions`: %d turns read, %d entries skipped.\n", result.SessionsDir, result.Turns, len(result.Skipped))
+	fmt.Fprintf(b, "`%s` through `bench/kit/corpus.WalkSessions`: %d turns read, %d entries skipped.\n", result.SessionsDir, result.Turns, len(result.Skipped))
 	for _, s := range result.Skipped {
 		fmt.Fprintf(b, "  skipped: %s: %s\n", s.Path, s.Reason)
 	}

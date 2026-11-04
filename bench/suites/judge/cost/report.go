@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	"tofu/bench/kit/report"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/stat"

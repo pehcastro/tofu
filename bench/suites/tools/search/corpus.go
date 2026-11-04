@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 )
 
 type Recorded struct {

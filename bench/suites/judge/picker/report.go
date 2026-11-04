@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 )
 
 const notSeparable = "n/a"

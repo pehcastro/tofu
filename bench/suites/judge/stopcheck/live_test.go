@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	"tofu/bench/kit/report"
 	"tofu/internal/judge/state"
 	"tofu/internal/models/classifiers/core"
@@ -148,7 +148,7 @@ func TestTheTypedOutcomeInTheNextState(t *testing.T) {
 		t.Logf("skipped by WalkSessions: %s: %s", skipped.Path, skipped.Reason)
 	}
 	t.Logf("%d of %d frozen-corpus turns are readable through corpus.WalkSessions(.tofu/sessions); %d missing or unreadable", found, len(frozen), missing)
-	t.Logf("corpus.RecordedTurn (bench/corpus/reader.go) carries no Outcome field, so even the %d found turns cannot report whether the recorded turn actually ended by stopping, by error or by hitting the decision cap; that distinction exists in the raw session files (\"outcome\": \"stopped\"/\"error\"/\"decision_cap\") and is dropped by the shared reader before bench/stopcheck ever sees it", found)
+	t.Logf("corpus.RecordedTurn (bench/kit/corpus/reader.go) carries no Outcome field, so even the %d found turns cannot report whether the recorded turn actually ended by stopping, by error or by hitting the decision cap; that distinction exists in the raw session files (\"outcome\": \"stopped\"/\"error\"/\"decision_cap\") and is dropped by the shared reader before bench/suites/judge/stopcheck ever sees it", found)
 }
 
 func TestLiveBatteryOverEveryRecordedStep(t *testing.T) {

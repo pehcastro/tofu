@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	"tofu/internal/konst"
 )
 

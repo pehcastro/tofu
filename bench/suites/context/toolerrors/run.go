@@ -4,7 +4,7 @@ import (
 	"sort"
 	"time"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 )
 
 const minCallsForWorst = 5

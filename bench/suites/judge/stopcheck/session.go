@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 )
 
 type Call struct {

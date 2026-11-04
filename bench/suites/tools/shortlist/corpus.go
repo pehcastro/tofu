@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 )
 
 const corpusFile = "testdata/shortlist-corpus.jsonl"

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/bench/corpus/recorded"
+	"tofu/bench/kit/corpus/recorded"
 )
 
 var reachReportGeneratedAt = time.Date(2026, time.September, 23, 14, 19, 12, 0, time.FixedZone("-03", -3*60*60))

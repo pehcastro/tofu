@@ -13,7 +13,7 @@ func Render(result Result) string {
 		fmt.Fprintf(b, "  skipped: %s: %s\n", skip.Path, skip.Reason)
 	}
 	fmt.Fprintf(b, "%d tool calls, %d failed (%.1f%%)\n", result.Calls, result.Failures, rate(result.Failures, result.Calls))
-	b.WriteString("the only reader is bench/corpus.WalkSessions\n")
+	b.WriteString("the only reader is bench/kit/corpus.WalkSessions\n")
 
 	b.WriteString("\n1. per tool, calls and failures\n")
 	fmt.Fprintf(b, "%-20s %8s %8s %10s\n", "tool", "calls", "failed", "rate")

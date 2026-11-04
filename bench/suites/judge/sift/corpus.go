@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	"tofu/internal/tools/shell/sift"
 )
 

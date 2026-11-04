@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	"tofu/internal/konst"
 	"tofu/internal/tools/registry"
 )

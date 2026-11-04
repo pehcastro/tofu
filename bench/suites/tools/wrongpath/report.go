@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	"tofu/bench/kit/report"
 )
 
@@ -21,7 +21,7 @@ func Render(result Result) string {
 	for _, skip := range result.Skips {
 		fmt.Fprintf(b, "  skipped: %s: %s\n", skip.Path, skip.Reason)
 	}
-	b.WriteString("the only reader is bench/corpus.WalkSessions\n")
+	b.WriteString("the only reader is bench/kit/corpus.WalkSessions\n")
 
 	fmt.Fprintf(b, "\n1. the three shapes over every session\n%-26s %8s %10s %8s %8s %8s %8s %8s %12s\n",
 		"shape", "total", "none", "median", "p90", "worst", "mean", "sd", "per 100 calls")

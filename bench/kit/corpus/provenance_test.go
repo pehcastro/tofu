@@ -14,7 +14,7 @@ import (
 const provenanceFile = "PROVENANCE.md"
 
 var ownedRoots = []string{
-	"bench/kit/api", "bench/corpus", "bench/suites/judge/cost", "bench/suites/context/forkcache",
+	"bench/kit/api", "bench/kit/corpus", "bench/suites/judge/cost", "bench/suites/context/forkcache",
 	"bench/suites/rules/mutate", "bench/suites/judge/readworth", "bench/suites/context/recall",
 	"bench/suites/tools/shortlist", "bench/suites/judge/stopcheck", "bench/suites/rules/testquality",
 	"bench/suites/tools/tools", "bench/suites/context/transform", "internal/dummy",

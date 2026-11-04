@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	"tofu/bench/kit/report"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/questions"

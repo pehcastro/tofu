@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	question "tofu/internal/judge/questions"

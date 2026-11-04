@@ -3,7 +3,7 @@ package schemas
 import (
 	"sort"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 )
 
 type StepUsage struct {

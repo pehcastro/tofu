@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	"tofu/internal/models/llm/quota"
 )
 

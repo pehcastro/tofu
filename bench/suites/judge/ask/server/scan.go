@@ -3,7 +3,7 @@ package server
 import (
 	"regexp"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 )
 
 var taskIntent = regexp.MustCompile(`(?i)\bstart\b.{0,20}\bserver\b|\brun\b.{0,20}\b(server|dev server)\b`)

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"tofu/bench/corpus"
-	"tofu/bench/corpus/recorded"
+	"tofu/bench/kit/corpus"
+	"tofu/bench/kit/corpus/recorded"
 )
 
 func call(tool string, args any) corpus.RecordedCall {
@@ -141,7 +141,7 @@ func TestReportOverTheRealCorpus(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	rendered := Render(result)
-	for _, want := range []string{"the three shapes over every session", "false positive", "could this separate two arms", "bench/corpus.WalkSessions"} {
+	for _, want := range []string{"the three shapes over every session", "false positive", "could this separate two arms", "bench/kit/corpus.WalkSessions"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("the report carries no %q section", want)
 		}

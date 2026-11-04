@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/bench/corpus/recorded"
+	"tofu/bench/kit/corpus/recorded"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
 	"tofu/internal/tools/registry"

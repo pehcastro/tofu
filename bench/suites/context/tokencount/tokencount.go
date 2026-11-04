@@ -4,7 +4,7 @@ import (
 	"math"
 	"sort"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	"tofu/internal/konst"
 )
 

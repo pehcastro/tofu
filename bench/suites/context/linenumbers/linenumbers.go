@@ -1,7 +1,7 @@
 package linenumbers
 
 import (
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	"tofu/internal/konst"
 )
 

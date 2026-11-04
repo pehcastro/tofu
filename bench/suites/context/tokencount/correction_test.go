@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/bench/corpus/recorded"
+	"tofu/bench/kit/corpus/recorded"
 )
 
 func TestFitFactorsFitsOnlyAccountableSamplesPerShape(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	sessions "tofu/bench/corpus"
+	sessions "tofu/bench/kit/corpus"
 	"tofu/internal/sys"
 )
 

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/api/states"
 )
 
 type GateCase struct {
@@ -59,13 +59,13 @@ func SizeFixtures() ([]SizeFixture, error) {
 }
 
 func loadState(name string) (any, error) {
-	raw, err := corpus.Files().ReadFile(name)
+	raw, err := states.Files().ReadFile(name)
 	if err != nil {
-		return nil, fmt.Errorf("bench/corpus: reading %s: %w", name, err)
+		return nil, fmt.Errorf("bench/kit/api/states: reading %s: %w", name, err)
 	}
 	var state any
 	if err := json.Unmarshal(raw, &state); err != nil {
-		return nil, fmt.Errorf("bench/corpus: %s is not valid JSON: %w", name, err)
+		return nil, fmt.Errorf("bench/kit/api/states: %s is not valid JSON: %w", name, err)
 	}
 	return state, nil
 }
