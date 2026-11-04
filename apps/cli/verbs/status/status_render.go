@@ -1,4 +1,4 @@
-package login
+package status
 
 import (
 	"math"
@@ -45,7 +45,7 @@ func stateLook(s host.AccountState) (cli.Verdict, string) {
 	panic("tofu login: unknown account state " + string(s))
 }
 
-func StatusLines(page cli.Page, data host.Accounts, now time.Time) []string {
+func LoginLines(page cli.Page, data host.Accounts, now time.Time) []string {
 	signedIn, attention := 0, 0
 	var blocks [][]string
 	for _, sub := range data.Subscriptions {

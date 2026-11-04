@@ -14,6 +14,7 @@ import (
 	"tofu/apps/cli/output"
 	cli "tofu/apps/cli/page"
 	boardyverb "tofu/apps/cli/verbs/boardy"
+	browserverb "tofu/apps/cli/verbs/browser"
 	doctorverb "tofu/apps/cli/verbs/doctor"
 	guardverb "tofu/apps/cli/verbs/guard"
 	hooksverb "tofu/apps/cli/verbs/hooks"
@@ -27,6 +28,7 @@ import (
 	rulesverb "tofu/apps/cli/verbs/rules"
 	settingsverb "tofu/apps/cli/verbs/settings"
 	shellsverb "tofu/apps/cli/verbs/shells"
+	statusverb "tofu/apps/cli/verbs/status"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/konst"
@@ -284,6 +286,14 @@ func withClock(run func(args []string, out, errOut io.Writer, now func() time.Ti
 	return func(args []string, _ io.Reader, out, errOut io.Writer) int { return run(args, out, errOut, time.Now) }
 }
 
+func whyVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
+	return statusverb.WhyVerb(args, out, errOut, now)
+}
+
+func loginVerb(args []string, in io.Reader, out, errOut io.Writer) int {
+	return loginverb.Verb(loginverb.Deps{Status: statusverb.LoginVerb})(args, in, out, errOut)
+}
+
 func verbNamed(name string) verb {
 	switch name {
 	case "--continue":
@@ -311,7 +321,7 @@ func verbNamed(name string) verb {
 	case "doctor":
 		return verb{withoutIn(doctorverb.Verb), doctorverb.Usage}
 	case "login":
-		return verb{loginverb.Verb, loginverb.Usage + " " + loginverb.AsideUsage}
+		return verb{loginVerb, loginverb.Usage + " " + loginverb.AsideUsage}
 	case "logout":
 		return verb{withoutIn(loginverb.LogoutVerb), loginverb.LogoutUsage}
 	case "usage":
@@ -321,7 +331,7 @@ func verbNamed(name string) verb {
 	case "agents":
 		return verb{withoutIn(agentsVerb), strings.Join([]string{agentsUsage, agentsAddUsage, agentsSetUsage, agentsRemoveUsage}, " ")}
 	case "why":
-		return verb{withClock(whyVerb), whyUsage}
+		return verb{withClock(whyVerb), statusverb.WhyUsage}
 	case "frame":
 		return verb{withoutIn(frameVerb), frameUsage}
 	case "drive":
@@ -377,7 +387,7 @@ func verbNamed(name string) verb {
 	case "migrate":
 		return verb{withoutIn(migrateVerb), migrateUsage}
 	case "browser":
-		return verb{run: withoutIn(browserVerb)}
+		return verb{run: withoutIn(browserverb.Verb)}
 	case "preview":
 		return verb{run: withoutIn(previewVerb)}
 	case "help", "-h", "--help":
@@ -419,7 +429,7 @@ func verbHelp(name string, args []string) string {
 	case "browser":
 		text = "tofu browser [install | uninstall | tabs | build | recipes | open <url> | close <tab id> | bench [--jev] [--n 12] [--rows file] | motion capture <scenario.json>] [--json], " +
 			"tofu browser observe [--all] | click <ref> | fill <ref> <text> | select <ref> <option> | press <key> | scroll [<ref>] [up|down] | back --tab <id> [--json], " +
-			"tofu browser read [--tab <id>] [--json], tofu browser batch [<steps.json> | -] [--tab <id>] [--json], " + profileUsage
+			"tofu browser read [--tab <id>] [--json], tofu browser batch [<steps.json> | -] [--tab <id>] [--json], " + browserverb.ProfileUsage
 	}
 	if strings.Contains(text, "\n") {
 		return text
@@ -466,7 +476,7 @@ func dispatch(args []string, in io.Reader, out io.Writer, errOut io.Writer) int 
 		return appVerb(in, out, errOut, sessionResume{})
 	}
 	if strings.HasPrefix(args[0], "chrome-extension://") {
-		return hostVerb(args[0], in, out, errOut)
+		return browserverb.HostVerb(args[0], in, out, errOut)
 	}
 	if named := verbNamed(args[0]); named.run != nil {
 		if slices.Contains(args[1:], "--help") || slices.Contains(args[1:], "-h") {

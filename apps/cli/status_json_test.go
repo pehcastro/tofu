@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"tofu/apps/cli/output"
-	loginverb "tofu/apps/cli/verbs/login"
+	statusverb "tofu/apps/cli/verbs/status"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
 	"tofu/internal/testkit/cli"
@@ -24,7 +24,7 @@ func TestLoginStatusJSONIsOneEnvelopeOfCodes(t *testing.T) {
 		savedAccount(t)
 		storeGateKey(t, madeUpGateKey)
 		var errOut bytes.Buffer
-		if code := loginverb.StatusVerb([]string{output.JSONFlag}, &out, &errOut, fixtureMoment(), nil); code != output.ExitOK {
+		if code := statusverb.LoginVerb([]string{output.JSONFlag}, &out, &errOut, fixtureMoment(), nil); code != output.ExitOK {
 			t.Fatalf("login --status --json exited %d:\n%s", code, errOut.String())
 		}
 	})
@@ -35,7 +35,7 @@ func TestDisableJSONIsOneEnvelope(t *testing.T) {
 	cli.ScratchProject(t)
 	savedAccount(t)
 	var out, errOut bytes.Buffer
-	if code := loginverb.Verb([]string{"--disable", "1", output.JSONFlag}, nil, &out, &errOut); code != output.ExitOK {
+	if code := loginVerb([]string{"--disable", "1", output.JSONFlag}, nil, &out, &errOut); code != output.ExitOK {
 		t.Fatalf("login --disable 1 --json exited %d:\n%s", code, errOut.String())
 	}
 	type accountReceipt struct {

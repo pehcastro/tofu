@@ -1,4 +1,4 @@
-package main
+package status
 
 import (
 	"errors"
@@ -16,7 +16,7 @@ import (
 	"tofu/internal/konst"
 )
 
-func whyPage(page cli.Page, report whyReport, now time.Time) []string {
+func whyPage(page cli.Page, report WhyReport, now time.Time) []string {
 	var lines []string
 	if report.Call != nil {
 		lines = callLines(page, *report.Call)

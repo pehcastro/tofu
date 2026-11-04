@@ -1,4 +1,4 @@
-package main
+package browser
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"tofu/internal/tools/web/browser/driver"
 )
 
-const profileUsage = "tofu browser profile [list | new <name> | login <name> [<url>] | stop <name> | remove <name>] [--json]"
+const ProfileUsage = "tofu browser profile [list | new <name> | login <name> [<url>] | stop <name> | remove <name>] [--json]"
 
 func (o browserOutput) profile(args []string) int {
 	verb, name := "list", ""
@@ -25,7 +25,7 @@ func (o browserOutput) profile(args []string) int {
 		return output.ExitUsage
 	}
 	if len(args) < arity[0] || len(args) > arity[1] {
-		_, _ = fmt.Fprintln(o.errOut, "usage: "+profileUsage)
+		_, _ = fmt.Fprintln(o.errOut, "usage: "+ProfileUsage)
 		return output.ExitUsage
 	}
 	o.verb = "browser profile " + verb

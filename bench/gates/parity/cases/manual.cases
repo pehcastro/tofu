@@ -32,7 +32,7 @@ step run tofu learn on a fixed project on both builds with a live key, compare t
 
 manual browser and chrome extension host
 why Chrome and HKCU are the person's own
-step start a fake relay on HOME/.tofu/browser/relay.sock as apps/cli/browser_test.go does
+step start a fake relay on HOME/.tofu/browser/relay.sock as apps/cli/verbs/browser/browser_test.go does
 step run tofu browser tabs, read, observe, click, open, close and batch on both builds against it, diff
 step never run browser install, uninstall or profile login against the real machine
 

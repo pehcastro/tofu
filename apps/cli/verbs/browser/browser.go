@@ -1,4 +1,4 @@
-package main
+package browser
 
 import (
 	"bytes"
@@ -56,7 +56,7 @@ type browserOutput struct {
 	out, errOut io.Writer
 }
 
-func hostVerb(origin string, in io.Reader, out, errOut io.Writer) int {
+func HostVerb(origin string, in io.Reader, out, errOut io.Writer) int {
 	home, err := os.UserHomeDir()
 	if err == nil {
 		err = browser.Host(origin, in, out, home)
@@ -68,7 +68,7 @@ func hostVerb(origin string, in io.Reader, out, errOut io.Writer) int {
 	return output.ExitOK
 }
 
-func browserVerb(args []string, out, errOut io.Writer) int {
+func Verb(args []string, out, errOut io.Writer) int {
 	asJSON, all := slices.Contains(args, output.JSONFlag), slices.Contains(args, "--all")
 	args = slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return arg == output.JSONFlag || arg == "--all" })
 	tab, tabErr := 0, error(nil)
@@ -105,7 +105,7 @@ func browserVerb(args []string, out, errOut io.Writer) int {
 			"       tofu browser observe [--all] | click <ref> | fill <ref> <text> | select <ref> <option> | press <key> | scroll [<ref>] [up|down] | back   --tab <id> [--json]\n"+
 			"       tofu browser read [--tab <id>] [--json]\n"+
 			"       tofu browser batch [<steps.json> | -] [--tab <id>] [--json]\n"+
-			"       "+profileUsage)
+			"       "+ProfileUsage)
 		return output.ExitUsage
 	}
 	home, err := os.UserHomeDir()

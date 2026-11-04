@@ -1,4 +1,4 @@
-package main
+package browser
 
 import (
 	"bytes"
@@ -85,7 +85,7 @@ func fakeRelay(t *testing.T, home string, tabs []driver.Tab) {
 func runBrowser(t *testing.T, args ...string) (int, string, string) {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	code := run(append([]string{"browser"}, args...), strings.NewReader(""), &out, &errOut)
+	code := Verb(args, &out, &errOut)
 	return code, stable(out.String()), errOut.String()
 }
 
@@ -396,7 +396,7 @@ func TestHostModeRefusesAWrongOriginBeforeStdin(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	var out, errOut bytes.Buffer
-	code := run([]string{"chrome-extension://ponmlkjihgfedcbaponmlkjihgfedcba/", "--parent-window=0"}, unreadStdin{t}, &out, &errOut)
+	code := HostVerb("chrome-extension://ponmlkjihgfedcbaponmlkjihgfedcba/", unreadStdin{t}, &out, &errOut)
 	if code != output.ExitVerdict || out.Len() != 0 || !strings.HasPrefix(errOut.String(), "tofu host: ") || !strings.Contains(errOut.String(), "chrome-extension://ponmlkjihgfedcbaponmlkjihgfedcba/") {
 		t.Fatalf("host mode with a wrong origin exited %d, wrote %q to Chrome and %q to stderr", code, out.String(), errOut.String())
 	}

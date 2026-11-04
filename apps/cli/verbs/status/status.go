@@ -1,4 +1,4 @@
-package login
+package status
 
 import (
 	"context"
@@ -24,7 +24,7 @@ const (
 	statusFlags    = "tofu login --status [--json] [--redact]"
 )
 
-func StatusVerb(args []string, out, errOut io.Writer, now time.Time, urls map[quota.Provider]string) int {
+func LoginVerb(args []string, out, errOut io.Writer, now time.Time, urls map[quota.Provider]string) int {
 	asJSON, redact := false, false
 	for _, arg := range args {
 		switch arg {
@@ -33,25 +33,25 @@ func StatusVerb(args []string, out, errOut io.Writer, now time.Time, urls map[qu
 		case redactFlag:
 			redact = true
 		default:
-			return loginFailed(statusVerbName, usageRefusal("unknown flag "+arg, statusFlags), asJSON, out, errOut, now)
+			return output.Refused(statusVerbName, output.UsageRefusal("unknown flag "+arg, statusFlags), asJSON, out, errOut, now)
 		}
 	}
 	data, problems, err := credentialStatus(now, redact, urls)
 	if err != nil {
-		return loginFailed(statusVerbName, failure(err.Error(), "tofu doctor"), asJSON, out, errOut, now)
+		return output.Refused(statusVerbName, output.Failure(err.Error(), "tofu doctor"), asJSON, out, errOut, now)
 	}
 	if asJSON {
-		return jsonExit(out, cli.Envelope{Verb: statusVerbName, OK: true, At: now, Data: data, Problems: problems})
+		return output.JSONExit(out, cli.Envelope{Verb: statusVerbName, OK: true, At: now, Data: data, Problems: problems})
 	}
 	page := cli.Detect(out, os.Environ())
-	if page.Print(out, StatusLines(page, data, now)) != nil {
+	if page.Print(out, LoginLines(page, data, now)) != nil {
 		return output.ExitVerdict
 	}
 	return output.ExitOK
 }
 
 func credentialStatus(now time.Time, redact bool, urls map[quota.Provider]string) (host.Accounts, []cli.Problem, error) {
-	data := host.Accounts{Keys: wiring.KeyStatuses(resolvedKey)}
+	data := host.Accounts{Keys: wiring.KeyStatuses(wiring.ResolvedKey)}
 	polled, err := withSpend(context.Background(), data.Keys, now)
 	defer polled()
 	if err != nil {
@@ -152,7 +152,7 @@ func accountOf(row accounts.Row, result wiring.PollResult, attempts []accounts.A
 
 func stateOf(row accounts.Row, result wiring.PollResult, chosen bool, now time.Time) host.AccountState {
 	switch {
-	case row.DisabledCause == setAsideCause:
+	case row.DisabledCause == wiring.SetAsideCause:
 		return host.AccountSetAside
 	case row.DisabledCause != "":
 		return host.AccountRefreshFailed

@@ -1,4 +1,4 @@
-package login
+package status
 
 import (
 	"cmp"
@@ -120,7 +120,7 @@ func readOpenRouter(ctx context.Context, variable, path string, into any) error 
 	response, err := client.Do(ctx, transport.Request{
 		Method: http.MethodGet,
 		URL:    cmp.Or(strings.TrimSpace(os.Getenv(openRouterAPIVariable)), openRouterAPI) + path,
-		Header: http.Header{"Authorization": {"Bearer " + resolvedKey(variable)}, "Accept": {"application/json"}},
+		Header: http.Header{"Authorization": {"Bearer " + wiring.ResolvedKey(variable)}, "Accept": {"application/json"}},
 	})
 	if err != nil {
 		return err

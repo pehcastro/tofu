@@ -27,7 +27,6 @@ import (
 
 	"tofu/apps/cli/output"
 	doctorverb "tofu/apps/cli/verbs/doctor"
-	loginverb "tofu/apps/cli/verbs/login"
 	settingsverb "tofu/apps/cli/verbs/settings"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/context/recall"
@@ -359,7 +358,7 @@ func TestLoginTypeSafeStoresTheKeyInTheDatabaseAndPrintsNoMoreThanItsTail(t *tes
 	jevStub(t, http.StatusOK, loginReachableReply, nil)
 
 	var out, errOut bytes.Buffer
-	if code := loginverb.Verb([]string{"classifier", wiring.TypeSafeName}, strings.NewReader(key+"\r\n"), &out, &errOut); code != output.ExitOK {
+	if code := loginVerb([]string{"classifier", wiring.TypeSafeName}, strings.NewReader(key+"\r\n"), &out, &errOut); code != output.ExitOK {
 		t.Fatalf("login typesafe exited %d: %s", code, errOut.String())
 	}
 	stored, err := sys.StoredKeys()
@@ -370,7 +369,7 @@ func TestLoginTypeSafeStoresTheKeyInTheDatabaseAndPrintsNoMoreThanItsTail(t *tes
 		t.Fatalf("login left a .env under %s: %v", home, err)
 	}
 	var status bytes.Buffer
-	if code := loginverb.Verb([]string{"--status"}, nil, &status, &errOut); code != output.ExitOK {
+	if code := loginVerb([]string{"--status"}, nil, &status, &errOut); code != output.ExitOK {
 		t.Fatalf("login --status exited %d: %s", code, errOut.String())
 	}
 	if !strings.Contains(status.String(), key[len(key)-4:]) {
@@ -391,7 +390,7 @@ func TestLoginBraveStoresTheSearchKeyInTheDatabase(t *testing.T) {
 	t.Setenv(sys.BraveSearchKeyName, "")
 	const key = "Xq2Lp9Rz4Tn8Vw3Ks6Gw1"
 	var out, errOut bytes.Buffer
-	if code := loginverb.Verb([]string{"search", "brave"}, strings.NewReader(key+"\n"), &out, &errOut); code != output.ExitOK {
+	if code := loginVerb([]string{"search", "brave"}, strings.NewReader(key+"\n"), &out, &errOut); code != output.ExitOK {
 		t.Fatalf("login brave exited %d: %s", code, errOut.String())
 	}
 	stored, err := sys.StoredKeys()
@@ -402,10 +401,10 @@ func TestLoginBraveStoresTheSearchKeyInTheDatabase(t *testing.T) {
 
 	storeGateKey(t, gateKeyForTests)
 	var status, asJSON bytes.Buffer
-	if code := loginverb.Verb([]string{"--status"}, nil, &status, &errOut); code != output.ExitOK {
+	if code := loginVerb([]string{"--status"}, nil, &status, &errOut); code != output.ExitOK {
 		t.Fatalf("login --status exited %d: %s", code, errOut.String())
 	}
-	if code := loginverb.Verb([]string{"--status", "--json"}, nil, &asJSON, &errOut); code != output.ExitOK {
+	if code := loginVerb([]string{"--status", "--json"}, nil, &asJSON, &errOut); code != output.ExitOK {
 		t.Fatalf("login --status --json exited %d: %s", code, errOut.String())
 	}
 	tails := []string{key[len(key)-4:], gateKeyForTests[len(gateKeyForTests)-4:]}

@@ -18,6 +18,7 @@ import (
 	"tofu/apps/cli/output"
 	loginverb "tofu/apps/cli/verbs/login"
 	shellsverb "tofu/apps/cli/verbs/shells"
+	statusverb "tofu/apps/cli/verbs/status"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	"tofu/internal/host"
@@ -296,7 +297,7 @@ func serveLedger(p host.LedgerParams) (host.LedgerReport, error) {
 	if p.Point != "" {
 		args = append(args, "--point", p.Point)
 	}
-	opts, err := parseWhyArgs(args)
+	opts, err := statusverb.ParseWhyArgs(args)
 	switch {
 	case err != nil:
 	case p.ID != "" && p.Session != "":
@@ -304,20 +305,20 @@ func serveLedger(p host.LedgerParams) (host.LedgerReport, error) {
 	case p.ID != "" && p.Before != "":
 		err = errors.New("before goes with last, not with an id")
 	}
-	opts.before = p.Before
+	opts.Before = p.Before
 	if err != nil {
 		return host.LedgerReport{}, &host.Refusal{Code: host.CodeBadParams, Message: err.Error()}
 	}
 	if p.Session != "" {
-		if opts.turns, opts.since, err = host.SessionTurnIDs(".", p.Session); err != nil {
+		if opts.Turns, opts.Since, err = host.SessionTurnIDs(".", p.Session); err != nil {
 			return host.LedgerReport{}, err
 		}
 	}
-	found, err := whyFind(opts)
+	found, err := statusverb.WhyFind(opts)
 	if err != nil {
 		return host.LedgerReport{}, err
 	}
-	report, err := found.report()
+	report, err := found.Report()
 	if err != nil {
 		return host.LedgerReport{}, err
 	}

@@ -1,4 +1,4 @@
-package main
+package status
 
 import (
 	"encoding/json"
@@ -19,21 +19,21 @@ import (
 	"tofu/internal/sys"
 )
 
-const whyUsage = "tofu why <id> | --last [n] [--point name] [--state | --json]"
+const WhyUsage = "tofu why <id> | --last [n] [--point name] [--state | --json]"
 
-type whyOpts struct {
+type WhyOpts struct {
 	id     string
 	last   bool
 	count  int
 	point  string
-	before string
+	Before string
 	json   bool
 	state  bool
-	turns  map[string]bool
-	since  time.Time
+	Turns  map[string]bool
+	Since  time.Time
 }
 
-type whyReport struct {
+type WhyReport struct {
 	Call *recordedCall `json:"call,omitempty"`
 	Rows []whyListing  `json:"rows"`
 }
@@ -55,13 +55,13 @@ func (l whyListing) decision() ledger.Row {
 	return l.Row
 }
 
-func whyVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
-	o := output.Verb{Name: "why", UsageLine: whyUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
-	opts, err := parseWhyArgs(args)
+func WhyVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
+	o := output.Verb{Name: "why", UsageLine: WhyUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
+	opts, err := ParseWhyArgs(args)
 	if err != nil {
 		return o.Usage(err)
 	}
-	found, err := whyFind(opts)
+	found, err := WhyFind(opts)
 	switch {
 	case err != nil, len(found.rows) > 0, found.call != nil:
 	case opts.point != "":
@@ -85,26 +85,26 @@ func whyVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
 		}
 		return output.ExitOK
 	}
-	report, err := found.report()
+	report, err := found.Report()
 	if err != nil {
 		return o.Fail(err)
 	}
 	return o.Done(true, report, func(page cli.Page) []string { return whyPage(page, report, now()) })
 }
 
-type whyFound struct {
+type WhyFound struct {
 	dir    string
 	reader *ledger.Reader
 	call   *recordedCall
 	rows   []ledger.Row
 }
 
-func whyFind(opts whyOpts) (whyFound, error) {
+func WhyFind(opts WhyOpts) (WhyFound, error) {
 	dir, err := sys.LogDir()
 	if err != nil {
-		return whyFound{}, err
+		return WhyFound{}, err
 	}
-	found := whyFound{dir: dir, reader: ledger.NewReader(dir)}
+	found := WhyFound{dir: dir, reader: ledger.NewReader(dir)}
 	found.rows, err = whyRows(found.reader, opts)
 	if err == nil {
 		return found, nil
@@ -145,8 +145,8 @@ func whyMissing(id, ledgerDir string, rowErr error) error {
 	}
 }
 
-func (f whyFound) report() (whyReport, error) {
-	report := whyReport{Call: f.call, Rows: []whyListing{}}
+func (f WhyFound) Report() (WhyReport, error) {
+	report := WhyReport{Call: f.call, Rows: []whyListing{}}
 	decisions := make([]ledger.Row, len(f.rows))
 	for i, row := range f.rows {
 		listing, err := whyListingOf(f.reader, f.dir, row)
@@ -189,8 +189,8 @@ func whyListingOf(reader *ledger.Reader, dir string, row ledger.Row) (whyListing
 	return listing, nil
 }
 
-func parseWhyArgs(args []string) (whyOpts, error) {
-	var opts whyOpts
+func ParseWhyArgs(args []string) (WhyOpts, error) {
+	var opts WhyOpts
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
@@ -201,7 +201,7 @@ func parseWhyArgs(args []string) (whyOpts, error) {
 			}
 			if n, err := strconv.Atoi(args[i+1]); err == nil {
 				if n < 1 {
-					return whyOpts{}, fmt.Errorf("--last needs a positive count, got %d", n)
+					return WhyOpts{}, fmt.Errorf("--last needs a positive count, got %d", n)
 				}
 				opts.count = n
 				i++
@@ -209,7 +209,7 @@ func parseWhyArgs(args []string) (whyOpts, error) {
 		case arg == "--point":
 			i++
 			if i >= len(args) {
-				return whyOpts{}, errors.New("--point needs a name")
+				return WhyOpts{}, errors.New("--point needs a name")
 			}
 			opts.point = args[i]
 		case arg == output.JSONFlag:
@@ -217,23 +217,23 @@ func parseWhyArgs(args []string) (whyOpts, error) {
 		case arg == "--state":
 			opts.state = true
 		case strings.HasPrefix(arg, "-"):
-			return whyOpts{}, fmt.Errorf("unknown argument %q", arg)
+			return WhyOpts{}, fmt.Errorf("unknown argument %q", arg)
 		default:
 			if opts.id != "" {
-				return whyOpts{}, fmt.Errorf("one id at a time, got %q and %q", opts.id, arg)
+				return WhyOpts{}, fmt.Errorf("one id at a time, got %q and %q", opts.id, arg)
 			}
 			opts.id = arg
 		}
 	}
 	switch {
 	case opts.id == "" && !opts.last:
-		return whyOpts{}, errors.New("an id or --last is needed")
+		return WhyOpts{}, errors.New("an id or --last is needed")
 	case opts.id != "" && opts.last:
-		return whyOpts{}, errors.New("an id or --last, not both")
+		return WhyOpts{}, errors.New("an id or --last, not both")
 	case opts.point != "" && !opts.last:
-		return whyOpts{}, errors.New("--point goes with --last")
+		return WhyOpts{}, errors.New("--point goes with --last")
 	case opts.state && opts.json:
-		return whyOpts{}, errors.New("--state or --json, not both")
+		return WhyOpts{}, errors.New("--state or --json, not both")
 	}
 	return opts, nil
 }
@@ -249,7 +249,7 @@ func blockingQuestion(row ledger.Row) string {
 	return pol.FromUntrustedQuestion
 }
 
-func whyRows(reader *ledger.Reader, opts whyOpts) ([]ledger.Row, error) {
+func whyRows(reader *ledger.Reader, opts WhyOpts) ([]ledger.Row, error) {
 	if opts.id != "" {
 		row, ok, err := reader.ByID(opts.id)
 		if err != nil {
@@ -262,8 +262,8 @@ func whyRows(reader *ledger.Reader, opts whyOpts) ([]ledger.Row, error) {
 	}
 	var window []ledger.Row
 	reachedBefore := errors.New("reached the row the page ends before")
-	if _, err := reader.Each(ledger.Filter{Point: opts.point, Turns: opts.turns, Since: opts.since}, func(row ledger.Row) error {
-		if opts.before != "" && row.ID == opts.before {
+	if _, err := reader.Each(ledger.Filter{Point: opts.point, Turns: opts.Turns, Since: opts.Since}, func(row ledger.Row) error {
+		if opts.Before != "" && row.ID == opts.Before {
 			return reachedBefore
 		}
 		window = append(window, row)

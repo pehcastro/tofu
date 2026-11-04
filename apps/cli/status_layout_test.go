@@ -13,6 +13,7 @@ import (
 	"tofu/apps/cli/output"
 	cli "tofu/apps/cli/page"
 	loginverb "tofu/apps/cli/verbs/login"
+	statusverb "tofu/apps/cli/verbs/status"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/models/llm/accounts"
@@ -72,7 +73,7 @@ func statusFixture() host.Accounts {
 func printedStatus(t *testing.T, page cli.Page) string {
 	t.Helper()
 	var out bytes.Buffer
-	if err := page.Print(&out, loginverb.StatusLines(page, statusFixture(), fixtureMoment())); err != nil {
+	if err := page.Print(&out, statusverb.LoginLines(page, statusFixture(), fixtureMoment())); err != nil {
 		t.Fatal(err)
 	}
 	return out.String()
@@ -102,7 +103,7 @@ func TestLoginTypeSafeAgainstAStubPrintsOneReceiptLine(t *testing.T) {
 	testkit.ScratchProject(t)
 	jevStub(t, http.StatusOK, loginReachableReply, nil)
 	var out, errOut bytes.Buffer
-	if code := loginverb.Verb([]string{"classifier", wiring.TypeSafeName}, strings.NewReader(madeUpGateKey+"\n"), &out, &errOut); code != output.ExitOK {
+	if code := loginVerb([]string{"classifier", wiring.TypeSafeName}, strings.NewReader(madeUpGateKey+"\n"), &out, &errOut); code != output.ExitOK {
 		t.Fatalf("login typesafe exited %d:\n%s", code, errOut.String())
 	}
 	if want := "✓ TypeSafe key ····7Qx2 checked and stored  ~/.tofu/agent.db\n"; out.String() != want {
@@ -114,7 +115,7 @@ func TestLoginTypeSafeRefusedWithA401PrintsOneErrorLineAndNoVendorBody(t *testin
 	testkit.ScratchProject(t)
 	jevStub(t, http.StatusUnauthorized, madeUpVendorBody, nil)
 	var out, errOut bytes.Buffer
-	if code := loginverb.Verb([]string{"classifier", wiring.TypeSafeName}, strings.NewReader(madeUpGateKey+"\n"), &out, &errOut); code != output.ExitVerdict {
+	if code := loginVerb([]string{"classifier", wiring.TypeSafeName}, strings.NewReader(madeUpGateKey+"\n"), &out, &errOut); code != output.ExitVerdict {
 		t.Fatalf("a refused key exited %d, want %d", code, output.ExitVerdict)
 	}
 	lines := strings.Split(strings.TrimSuffix(errOut.String(), "\n"), "\n")
@@ -132,7 +133,7 @@ func TestDisableAndEnablePrintOneReceiptLineEach(t *testing.T) {
 		{"--enable", "✓ #1 claude-sub ada@example.com enabled  ~/.tofu/agent.db\n"},
 	} {
 		var out, errOut bytes.Buffer
-		if code := loginverb.Verb([]string{c.flag, "1"}, nil, &out, &errOut); code != output.ExitOK {
+		if code := loginVerb([]string{c.flag, "1"}, nil, &out, &errOut); code != output.ExitOK {
 			t.Fatalf("login %s 1 exited %d:\n%s", c.flag, code, errOut.String())
 		}
 		if out.String() != c.want {

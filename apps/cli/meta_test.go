@@ -15,7 +15,6 @@ import (
 	"testing"
 
 	"tofu/apps/cli/output"
-	loginverb "tofu/apps/cli/verbs/login"
 	modelsverb "tofu/apps/cli/verbs/models"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
@@ -274,7 +273,7 @@ func TestLoginMetaChecksTheKeyBeforeStoringItAndNeverPrintsIt(t *testing.T) {
 	})
 
 	var out, errOut bytes.Buffer
-	if code := loginverb.Verb([]string{"llm", "meta"}, strings.NewReader(madeUpMetaKey+"\r\n"), &out, &errOut); code == output.ExitOK {
+	if code := loginVerb([]string{"llm", "meta"}, strings.NewReader(madeUpMetaKey+"\r\n"), &out, &errOut); code == output.ExitOK {
 		t.Fatalf("a refused key was stored:\n%s%s", out.String(), errOut.String())
 	}
 	stored, _ := sys.StoredKeys()
@@ -288,7 +287,7 @@ func TestLoginMetaChecksTheKeyBeforeStoringItAndNeverPrintsIt(t *testing.T) {
 	status = http.StatusOK
 	out.Reset()
 	errOut.Reset()
-	if code := loginverb.Verb([]string{"llm", "meta"}, strings.NewReader(madeUpMetaKey+"\n"), &out, &errOut); code != output.ExitOK {
+	if code := loginVerb([]string{"llm", "meta"}, strings.NewReader(madeUpMetaKey+"\n"), &out, &errOut); code != output.ExitOK {
 		t.Fatalf("login meta exited %d:\n%s", code, errOut.String())
 	}
 	stored, _ = sys.StoredKeys()
