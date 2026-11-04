@@ -12,4 +12,4 @@ No real rule could stand in for it. `TestEveryQARuleDistilledFromASkillCitesItAn
 
 ## What it does not carry
 
-Scanned on 2026-09-23 for every identity and credential pattern in `bench/corpus.Scrub`: no hit.
+Scanned on 2026-09-23 for every identity and credential pattern in `bench/kit/corpus.Scrub`: no hit.

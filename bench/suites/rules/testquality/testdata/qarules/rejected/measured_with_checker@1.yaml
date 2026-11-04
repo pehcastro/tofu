@@ -2,7 +2,7 @@ id: measured_with_checker
 domain: qa
 kind: measured
 concern: code_rules
-measurement: bench/testquality/flakerun
+measurement: bench/suites/rules/testquality/flakerun
 checker: comments
 mode: shadow
 source: .local/sources/qa-skills/skills.sh/petrkindlmann/qa-skills/skills/qa-metrics/SKILL.md

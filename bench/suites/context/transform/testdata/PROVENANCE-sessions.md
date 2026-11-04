@@ -1,6 +1,6 @@
 # Which recorded turns this bench measures, and where they live
 
-**The recordings are not here.** They live in `internal/dummy/turns/labelled`, the one committed copy, and this bench reads them from there. Until 2026-09-23 the same 17 files, 58,183 bytes, were also committed under `bench/transform/testdata/sessions`, byte identical, with nothing checking that the two copies stayed so. TOFU-456 removed this copy and left the superset.
+**The recordings are not here.** They live in `internal/dummy/turns/labelled`, the one committed copy, and this bench reads them from there. Until 2026-09-23 the same 17 files, 58,183 bytes, were also committed under `bench/suites/context/transform/testdata/sessions`, byte identical, with nothing checking that the two copies stayed so. TOFU-456 removed this copy and left the superset.
 
 **The census is 17 of the 19 turns in that corpus.** Two are measured elsewhere or carry nothing to measure, and `measure_test.go` names both with the reason:
 
@@ -21,4 +21,4 @@ The count is asserted: a turn arriving in or leaving the shared corpus fails `lo
 
 ## What it does not carry
 
-Every file is a fixed point of `bench/corpus.Scrub`. Scanned again on 2026-09-23 for every identity and credential pattern in it: no hit.
+Every file is a fixed point of `bench/kit/corpus.Scrub`. Scanned again on 2026-09-23 for every identity and credential pattern in it: no hit.

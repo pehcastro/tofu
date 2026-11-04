@@ -7,7 +7,7 @@ import (
 	shipped "tofu/library"
 )
 
-const RealTask = "write a fix for the flaky test in internal/turn/compose_test.go"
+const RealTask = "write a fix for the flaky test in internal/agent/loop/compose_test.go"
 
 const environmentPlaceholder = "excluded from Composed.Head(), so its content cannot move the measured bytes"
 

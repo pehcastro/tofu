@@ -10,7 +10,7 @@
 
 ## Leakage: three of four rows leaked, and TOFU-501 dropped them
 
-**Method**, the same rule `bench/tools/corpus/discipline_test.go` applies: split every path component and file stem of a row's own label into words of three characters or more, split on non-alphanumerics and on camel case, lowercase both sides, and look for any of them in the content words of the task.
+**Method**, the same rule `bench/suites/tools/tools/corpus/discipline_test.go` applies: split every path component and file stem of a row's own label into words of three characters or more, split on non-alphanumerics and on camel case, lowercase both sides, and look for any of them in the content words of the task.
 
 | row | label | words of the answer that appeared in the question | disposition |
 |---|---|---|---|
@@ -23,7 +23,7 @@ The task says "Update README.md so it lists the routes" and the answer is `READM
 
 ## Parked on 2026-09-23 by TOFU-449, sized and closed on 2026-09-23 by TOFU-501
 
-`population_test.go` reads `.tofu/sessions` through `bench/corpus.WalkSessions` and counts a turn as able to yield a shortlist question when it carries a non-empty task, when a `write` or an `edit` in it names a path, and when at least one changed path was already there before the turn, read off the turn's own calls: the first call touching it is a `read` or an `edit`, never a `write`. Turns are grouped by the exact task text, because a rerun of one prompt is one question asked twice.
+`population_test.go` reads `.tofu/sessions` through `bench/kit/corpus.WalkSessions` and counts a turn as able to yield a shortlist question when it carries a non-empty task, when a `write` or an `edit` in it names a path, and when at least one changed path was already there before the turn, read off the turn's own calls: the first call touching it is a `read` or an `edit`, never a `write`. Turns are grouped by the exact task text, because a rerun of one prompt is one question asked twice.
 
 TOFU-501 computed the number of questions the observed gap needs, `size.go`, `NeededQuestions`: Laplace-smooth the four-question result (4/4 judged, 1/4 BM25) to 5/6 and 2/6 to avoid a zero-variance 100% estimate, then apply the two-proportion sample size formula at 95% confidence and 80% power: n = (1.96+0.84)^2 × (0.833×0.167 + 0.333×0.667) / (0.833−0.333)^2 = 7.84 × 0.361 / 0.25 ≈ 11.3, rounds up to **12**.
 

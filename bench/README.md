@@ -9,7 +9,7 @@ A number that is measured and compared. Every suite turns a mechanism on and off
 | Folder | Holds |
 |---|---|
 | `bench/cmd/` | the `bench <target>` dispatcher |
-| `bench/corpus/` | recorded sessions and states more than one suite reads, and the reader for them; shared fixtures in `bench/corpus/recorded/` |
+| `bench/kit/corpus/` | recorded sessions and states more than one suite reads, and the reader for them; shared fixtures in `bench/kit/corpus/recorded/` |
 | `bench/kit/` | libraries suites import, never a suite: `api/`, `report/`, `harness/` |
 | `bench/gates/` | programs that stamp or compare builds: `flows/`, `treewide/`, `parity/` |
 | `bench/suites/<area>/<suite>/` | one measurement per folder |

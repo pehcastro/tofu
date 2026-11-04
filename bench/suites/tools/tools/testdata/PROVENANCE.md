@@ -14,7 +14,7 @@ Each answer is a file and a line, chosen by reading the source. **No arm output 
 
 ## Leakage: checked by a test that runs on every suite run, zero found
 
-**Method**, `bench/tools/corpus/discipline_test.go`, which is the mechanism this whole ticket asks other corpora to copy. For every described and intent question it splits every path component, file stem and declared identifier of that question's own answer into words of three characters or more, on non-alphanumerics and on camel case, and fails if any of them appears in the question's content words.
+**Method**, `bench/suites/tools/tools/corpus/discipline_test.go`, which is the mechanism this whole ticket asks other corpora to copy. For every described and intent question it splits every path component, file stem and declared identifier of that question's own answer into words of three characters or more, on non-alphanumerics and on camel case, and fails if any of them appears in the question's content words.
 
 **Count: zero of 80 eligible questions.** Zero were excluded to get there: the exclusion happened when the corpus was built, and the 30 question set that failed this rule was deleted rather than trimmed.
 
@@ -22,10 +22,10 @@ Each answer is a file and a line, chosen by reading the source. **No arm output 
 
 ## What a reader should not conclude
 
-**The corpus rots.** Six answers pointed at lines that had moved or at a file TOFU-284 deleted, and three of them were scoring zero for every arm, which is a broken control rather than a hard question. Each of the six carries a `note` saying what it was. A seventh, `tofu-07`, pointed into the file TOFU-459 shrank from 70 lines to 7 when it moved the credential detector to `internal/secret`. It was caught only because the file shrank past the cited line: **82 of the 102 answers carry no quoted term**, so a rewrite under one of those is silent. Repinned twice already; it will happen again.
+**The corpus rots.** Six answers pointed at lines that had moved or at a file TOFU-284 deleted, and three of them were scoring zero for every arm, which is a broken control rather than a hard question. Each of the six carries a `note` saying what it was. A seventh, `tofu-07`, pointed into the file TOFU-459 shrank from 70 lines to 7 when it moved the credential detector to `internal/platform/credential`. It was caught only because the file shrank past the cited line: **82 of the 102 answers carry no quoted term**, so a rewrite under one of those is silent. Repinned twice already; it will happen again.
 
 **It does not separate the arms it was built for.** `git grep` at 29 of 100 against `tofu search` at 18 is p = 0.10, not separable. The one clean result is `bm25 alone` at 0 of 20. Nothing here ranks `file_shortlist`.
 
 ## What it does not carry
 
-Scanned on 2026-09-23 for every identity and credential pattern in `internal/secret.Scrub`: no hit.
+Scanned on 2026-09-23 for every identity and credential pattern in `internal/platform/credential.Scrub`: no hit.

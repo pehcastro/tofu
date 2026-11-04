@@ -304,7 +304,7 @@
     "figure": "88.7%",
     "says": "glob is 88.7% of every result byte the model read, 48,186,030 of 54,295,422 over 109 recorded turns, and a cap of 300 paths cuts the corpus total by 88.4%.",
     "from": "prose",
-    "sample": "109 recorded turns read through bench/corpus",
+    "sample": "109 recorded turns read through bench/kit/corpus",
     "skips": "counted and named in the report's own Corpus and skips section",
     "commit": "e3c805d2",
     "version": "0.4.6"
@@ -476,7 +476,7 @@
     "figure": "69.7%",
     "says": "Description bytes are 69.7 percent of the wire schema bytes over all 18 tools, below the 79 percent another harness reports, 11,559 description bytes and 3,987 parameter bytes of a 16,574 byte whole. Seventeen of the eighteen tools measure byte for byte identical to TOFU-520's 16,575; bash alone differs by one byte, because its description embeds the shell's own pwd for the directory the generator ran from, one character shorter here than in bench/suites/context/schemas/gen, and that is the whole of the gap.",
     "from": "prose",
-    "sample": "the same 18-tool registry cmd/tofu/run.go builds for a plain tofu run, that TOFU-520 measured",
+    "sample": "the same 18-tool registry apps/cli/run.go builds for a plain tofu run, that TOFU-520 measured",
     "skips": "none: no live model call and no network call, len(Description) and marshalled len(Parameters) read straight off the registry",
     "commit": "f5920554",
     "version": "0.4.14"
@@ -486,7 +486,7 @@
     "figure": "71.2%",
     "says": "Bytes over four misses the provider's own completion_tokens by a median of 71.2 percent and 96.7 percent of 635 usable steps are out by more than a tenth, so four is not a good enough estimate on the completion side of this corpus. The comparison is honest about its limit: only what a step itself generates, assistant text or a tool call's own Args, can be checked against completion_tokens, because the bytes a prompt sent are never stored per step. The static tool schema block bench/suites/context/schemas already measured at 16574 bytes and an estimated 4143 tokens is cited rather than remeasured, and named as unmeasurable here since it never arrives as its own receipt. Tool-call arguments err worse than prose, median 74.1 against 34.6 percent, and several steps carry a completion_tokens far larger than their visible bytes could explain, consistent with a billed reasoning pass the step never writes down. Replacing four costs a real vocabulary and a merge loop this project has no dependency for.",
     "from": "prose",
-    "sample": "118 turns read through bench/corpus.WalkSessions over both wires in the corpus, anthropic and codex, 1033 steps read and 635 usable",
+    "sample": "118 turns read through bench/kit/corpus.WalkSessions over both wires in the corpus, anthropic and codex, 1033 steps read and 635 usable",
     "skips": "1 of 112 entries under .tofu/sessions is not a turn, HEAD; 58 of 118 turns carry no wire field and are excluded from the per-wire table; 398 of 1033 steps skipped, named by reason in the report's own Corpus section",
     "commit": "d4525743",
     "version": "0.4.14",
@@ -576,9 +576,9 @@
   {
     "report": "bench/suites/context/prefix/report-2026-09-23.md",
     "figure": "4135 bytes",
-    "says": "With the real composed system prompt turn.Compose sends for a real task, 9 rules firing on top of the two builtin blocks, the per-session cache rewrite is 4135 bytes, an estimated 1033 tokens, against TOFU-532's unrules floor of 2209 bytes and 552 tokens. The 9 fired rules add 2283 bytes; this package's ToolGuidance is 357 bytes short of cmd/tofu's real one, because the working-directory prefix and the spawn addendum are private constants it cannot import without copying, so 2283 minus 357 accounts for the whole 1926 byte gap. With the billing block absent, the same request with Request.Encode(false), the two fingerprinted first messages produce a byte-identical 3908-byte system array: 0 bytes rewritten per session, which is the arm.",
+    "says": "With the real composed system prompt turn.Compose sends for a real task, 9 rules firing on top of the two builtin blocks, the per-session cache rewrite is 4135 bytes, an estimated 1033 tokens, against TOFU-532's unrules floor of 2209 bytes and 552 tokens. The 9 fired rules add 2283 bytes; this package's ToolGuidance is 357 bytes short of apps/cli's real one, because the working-directory prefix and the spawn addendum are private constants it cannot import without copying, so 2283 minus 357 accounts for the whole 1926 byte gap. With the billing block absent, the same request with Request.Encode(false), the two fingerprinted first messages produce a byte-identical 3908-byte system array: 0 bytes rewritten per session, which is the arm.",
     "from": "prose",
-    "sample": "one real task, write a fix for the flaky test in internal/turn/compose_test.go, against the shipped rule library under library/, composed and encoded directly with no live call and no network call",
+    "sample": "one real task, write a fix for the flaky test in internal/agent/loop/compose_test.go, against the shipped rule library under library/, composed and encoded directly with no live call and no network call",
     "skips": "0, everything measured runs; TestGeneratorReproducesTheSameBytesTwice composes and measures the same rules twice in process rather than by re-invoking the generator, since report.Generate refuses to overwrite a dated report already on disk",
     "commit": "7b9626f3",
     "version": "0.4.14"
@@ -586,9 +586,9 @@
   {
     "report": "bench/suites/context/prefix/report-2026-09-23-corrected.md",
     "figure": "4492 bytes",
-    "says": "TOFU-538 moved the working-directory line and the spawn addendum out of cmd/tofu/run.go into exported names in internal/turn, so bench/suites/context/prefix.RealToolGuidance now composes the same text a real tofu run sends rather than a subset of it. With that fix, the per-session cache rewrite for the same real task and the same 9 fired rules is 4492 bytes, an estimated 1123 tokens: 357 bytes above the earlier report's 4135, which is exactly the working-directory line and the spawn addendum the earlier report could not reach. The builtin-only arm, no rules fired, now measures 2209 bytes, TOFU-532's floor exactly, so the whole 2283 byte gap above that floor is now the 9 fired rules and nothing else. The earlier report at bench/suites/context/prefix/report-2026-09-23.md is left in place rather than edited: it is immutable, and this report supersedes its headline figure.",
+    "says": "TOFU-538 moved the working-directory line and the spawn addendum out of apps/cli/run.go into exported names in internal/agent/loop, so bench/suites/context/prefix.RealToolGuidance now composes the same text a real tofu run sends rather than a subset of it. With that fix, the per-session cache rewrite for the same real task and the same 9 fired rules is 4492 bytes, an estimated 1123 tokens: 357 bytes above the earlier report's 4135, which is exactly the working-directory line and the spawn addendum the earlier report could not reach. The builtin-only arm, no rules fired, now measures 2209 bytes, TOFU-532's floor exactly, so the whole 2283 byte gap above that floor is now the 9 fired rules and nothing else. The earlier report at bench/suites/context/prefix/report-2026-09-23.md is left in place rather than edited: it is immutable, and this report supersedes its headline figure.",
     "from": "prose",
-    "sample": "one real task, write a fix for the flaky test in internal/turn/compose_test.go, against the shipped rule library under library/, composed and encoded directly with no live call and no network call",
+    "sample": "one real task, write a fix for the flaky test in internal/agent/loop/compose_test.go, against the shipped rule library under library/, composed and encoded directly with no live call and no network call",
     "skips": "0, everything measured runs; TestGeneratorReproducesTheSameBytesTwice composes and measures the same rules twice in process rather than by re-invoking the generator, since report.Generate refuses to overwrite a dated report already on disk",
     "commit": "386edbc8",
     "version": "0.4.14"
@@ -598,7 +598,7 @@
     "figure": "74.6%",
     "says": "67 of 1412 recorded tool calls failed, 4.7%, and 74.6% of those failures carry no reason beyond a bare nonzero exit code. Every failure that carries any error text at all classifies cleanly into bad arguments, not found in this environment or timeout; the whole unknown share is bash calls that exited nonzero with an empty Error field, a number the harness already has and never types. edit is the worst tool among those with at least 5 calls, 11 of 55, 20.0%, every one of them an anchor or an occurrence count that no longer matches the file. The categories cannot express the admin-template shape named in the ticket, a run of calls that succeed as a process and fail as work: this project's own corpus holds the same pattern in turn-18d6ea32da3230c0 and turn-18d6e1de4b235b54, hunting for a go binary, and only the probes that happened to exit nonzero land in this report at all.",
     "from": "prose",
-    "sample": "1412 tool calls over 110 recorded sessions under .tofu/sessions, read once through bench/corpus.WalkSessions, no live call and no network call",
+    "sample": "1412 tool calls over 110 recorded sessions under .tofu/sessions, read once through bench/kit/corpus.WalkSessions, no live call and no network call",
     "skips": "1 of 111 entries skipped, HEAD, not a .json file; 0 tool calls skipped; 0 of 5 test functions skipped",
     "commit": "386edbc8",
     "version": "0.4.14"
@@ -608,7 +608,7 @@
     "figure": "0",
     "says": "There is nothing to save because there is nothing there: tofu's read tool never prefixes a line with its number. A whole read returns the file bytes verbatim and a ranged read prepends one header line. Over 296 read calls in 110 recorded turns, line-number bytes are 0, which is 0.0 percent of 1,016,862 read-tool bytes and 0.0 percent of 9,257,594 cache-read tokens. The threshold was stated first, under 0.5 percent is a no. The pasted claim of 1.6 percent described a harness that numbers every line, which two clones do behind a flag that is off by default, and neither they nor any other clone numbers sparsely.",
     "from": "prose",
-    "sample": "110 turns read through bench/corpus.WalkSessions, 296 read tool calls, 1 entry skipped as not a .json file, plus the read tool's own source read both ways",
+    "sample": "110 turns read through bench/kit/corpus.WalkSessions, 296 read tool calls, 1 entry skipped as not a .json file, plus the read tool's own source read both ways",
     "skips": "1 entry under .tofu/sessions that is not a turn, logged as HEAD",
     "commit": "386edbc8",
     "version": "0.4.14"
@@ -636,7 +636,7 @@
   {
     "report": "bench/suites/perf/startup/report-2026-09-23-overlapped.md",
     "figure": "89.0 ms",
-    "says": "Starting the toolchain probe in the background moves the wait rather than removing it, and the report says so. Constructing the bash tool on a node project is now a median of 0.5 ms and a worst of 6.0, against 780.7 and 904.7 before. Realized, meaning construction plus the first read of the answer in a fresh directory, it is a median of 722.0 ms and a worst of 768.5: the same work, paid when the answer is first needed. What is genuinely saved is a second turn in the same directory sharing one cache, a median of 89.0 ms and a worst of 95.0. Shell resolution is a median of 96.0 ms. A person feels none of this yet, because cmd/tofu/run.go still resolves and probes twice per session and shares no cache.",
+    "says": "Starting the toolchain probe in the background moves the wait rather than removing it, and the report says so. Constructing the bash tool on a node project is now a median of 0.5 ms and a worst of 6.0, against 780.7 and 904.7 before. Realized, meaning construction plus the first read of the answer in a fresh directory, it is a median of 722.0 ms and a worst of 768.5: the same work, paid when the answer is first needed. What is genuinely saved is a second turn in the same directory sharing one cache, a median of 89.0 ms and a worst of 95.0. Shell resolution is a median of 96.0 ms. A person feels none of this yet, because apps/cli/run.go still resolves and probes twice per session and shares no cache.",
     "from": "prose",
     "sample": "6 rounds per shape on DESKTOP-AHUN9RO, 12 samples for shell resolution, a temporary directory carrying a package.json for the node case, no live model call and no network call",
     "skips": "none: every round completed and no probe reached its 2000 ms limit",
@@ -754,7 +754,7 @@
     "figure": "2 of 8 (25%)",
     "says": "Enforced, the seven desk_refuse rules refused no clean write from HEAD, and four of them refused every planted desk mistake. Three fall short of 90 percent planted: desk_refuse_allow_dead 6 of 8, desk_refuse_fixture 19 of 32, and desk_refuse_ui_block 2 of 8 (25%). In shadow mode no write is refused and the same planted writes are recorded.",
     "from": "prose",
-    "sample": "planted desk mistakes mocked from DESK tickets in bench/suites/rules/enforce/corpus/planted.txt and clean 40 line cuts from git HEAD, each through internal/rule CheckWrite then Weigh, once enforced and once in shadow; no model call, no network",
+    "sample": "planted desk mistakes mocked from DESK tickets in bench/suites/rules/enforce/corpus/planted.txt and clean 40 line cuts from git HEAD, each through internal/librarian/rules CheckWrite then Weigh, once enforced and once in shadow; no model call, no network",
     "skips": "one window skipped as debt already in the tree, apps/desk/crates/ui/src/component.rs:10-49 for desk_refuse_static_api; one run, deterministic",
     "commit": "038fa276",
     "version": "0.5.19"

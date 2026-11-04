@@ -10,10 +10,10 @@ A recording cannot produce this. A real test file with one defect and no others 
 
 ## Leakage: present in the name, inert today
 
-**Method, run on 2026-09-23**, the same as for `../fixture`: both arms were read to find what they consume. `pattern.go` walks the AST for comparison operators and an `err` identifier. The judgment arms in `internal/rule/gotest.go` read the AST and touch a function name only at `gotest.go:97`, for the `Test` prefix. **Neither reads the descriptive part of a name.**
+**Method, run on 2026-09-23**, the same as for `../fixture`: both arms were read to find what they consume. `pattern.go` walks the AST for comparison operators and an `err` identifier. The judgment arms in `internal/librarian/rules/gotest.go` read the AST and touch a function name only at `gotest.go:97`, for the `Test` prefix. **Neither reads the descriptive part of a name.**
 
 **Count: 1 of 1 defective test functions names its own defect.** `TestExists` says its claim is existence, and the package is called `existential`. Inert while every arm is static, live the moment a judged arm reads the source text. Not repaired here.
 
 ## What it does not carry
 
-Scanned on 2026-09-23 for every identity and credential pattern in `bench/corpus.Scrub`: no hit.
+Scanned on 2026-09-23 for every identity and credential pattern in `bench/kit/corpus.Scrub`: no hit.

@@ -8,7 +8,7 @@
   "pages": [
     {
       "id": "hotel",
-      "source": "jev-ultrafast local hotel fixture, via internal/browser/jevloop/testdata/hotel.json",
+      "source": "jev-ultrafast local hotel fixture, via internal/dummy/browser/hotel.json",
       "source_sha256": "baf6c49bf024bbe965e25d820c3e8f94380ef90f7b007e66dc715f54171928ff",
       "image": "hotel.jpg",
       "image_sha256": "dda621a1cf93ab44293597d7012a24b965d3c5eb579528fb751eb9b124c88108",

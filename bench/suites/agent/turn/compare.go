@@ -34,15 +34,15 @@ var layeredRow = regexp.MustCompile(`\| with the call memo and the repair rule \
 func ParseHeadline(body string) (Headline, error) {
 	corpus := corpusLine.FindStringSubmatch(body)
 	if corpus == nil {
-		return Headline{}, fmt.Errorf("bench/turn: no line matching \"N entries read under ...\" in the report body")
+		return Headline{}, fmt.Errorf("bench/suites/agent/turn: no line matching \"N entries read under ...\" in the report body")
 	}
 	asRecorded := asRecordedRow.FindStringSubmatch(body)
 	if asRecorded == nil {
-		return Headline{}, fmt.Errorf("bench/turn: no \"as recorded\" totals row in the report body")
+		return Headline{}, fmt.Errorf("bench/suites/agent/turn: no \"as recorded\" totals row in the report body")
 	}
 	layered := layeredRow.FindStringSubmatch(body)
 	if layered == nil {
-		return Headline{}, fmt.Errorf("bench/turn: no \"with the call memo and the repair rule\" totals row in the report body")
+		return Headline{}, fmt.Errorf("bench/suites/agent/turn: no \"with the call memo and the repair rule\" totals row in the report body")
 	}
 	return Headline{
 		EntryCount: atoi(corpus[1]),

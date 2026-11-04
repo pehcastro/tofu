@@ -18,4 +18,4 @@ One file, **recorded**, added 2026-09-20. `recorded-turn.json`, added beside it,
 
 ## What it does not carry
 
-Every row goes through `corpus.LeaksIn` on load, in `forkcorpus.go`. Scanned again on 2026-09-23 for every identity and credential pattern in `bench/corpus.Scrub`: no hit.
+Every row goes through `corpus.LeaksIn` on load, in `forkcorpus.go`. Scanned again on 2026-09-23 for every identity and credential pattern in `bench/kit/corpus.Scrub`: no hit.

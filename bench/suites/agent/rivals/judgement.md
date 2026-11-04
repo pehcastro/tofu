@@ -36,7 +36,7 @@ Fresh input is the prompt the provider served from no cache. Split per request f
 
 | source | tofu-sonnet runs 1, 2, 3 | tofu-gpt runs 1, 2, 3 | codex-gpt runs 1, 2, 3 | does it earn its cost |
 |---|---|---|---|---|
-| conversation, first request | 4, 4, 4 | 7,556, 7,556, 7,556 | 3,142, 4,142, 4,142 | Sonnet reads the prefix the previous run cached. On GPT tofu's prefix is cold every session while codex's first request reads 11,392 cached; a guess to test: `prompt_cache_key` is the session id, `internal/llm/wire/codex/request.go:159` |
+| conversation, first request | 4, 4, 4 | 7,556, 7,556, 7,556 | 3,142, 4,142, 4,142 | Sonnet reads the prefix the previous run cached. On GPT tofu's prefix is cold every session while codex's first request reads 11,392 cached; a guess to test: `prompt_cache_key` is the session id, `internal/models/llm/wire/codex/request.go:117` |
 | conversation, messages new since the last request | 8, 6, 8 | 5,727, 5,970, 6,396 | 7,535, 8,071, 6,195 | yes: tool results the model has not seen yet, about what codex sends |
 | conversation, a later request with no cache read | 0, 0, 0 | 12,890 at step 7, 12,668 at step 6, 0 | 0, 0, 0 | no, waste: the instructions, tools and first message were byte-identical to the first request of the run, checked on run 1, and the request before it did read the cache, so the cause is not found in the body; needs a ticket |
 | memory model, claude-haiku-4-5 | 2,766, 4,167, 2,772 | 2,724, 2,706, 3,209 | none | tofu's own feature: three one-shot calls of about 900 tokens, none read from cache; whether memory pays is the memory bench's question, not this one |

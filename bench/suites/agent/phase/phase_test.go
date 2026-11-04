@@ -13,7 +13,7 @@ func shell(command string) loop.ToolCallRow { return loop.ToolCallRow{Tool: "bas
 func called(tools ...string) []loop.ToolCallRow {
 	calls := make([]loop.ToolCallRow, len(tools))
 	for index, tool := range tools {
-		calls[index] = loop.ToolCallRow{Tool: tool, Command: "internal/widget/widget_test.go"}
+		calls[index] = loop.ToolCallRow{Tool: tool, Command: "internal/cli/render/text_test.go"}
 	}
 	return calls
 }
@@ -28,7 +28,7 @@ func TestPhaseLabelsAgreeWithHandLabelsOnMockedSteps(t *testing.T) {
 		{called("symbols", "read", "read"), loop.PhaseExplore},
 		{called("plan", "read"), loop.PhaseExplore},
 		{called("project_report"), loop.PhaseExplore},
-		{[]loop.ToolCallRow{shell("grep -rn test internal/widget")}, loop.PhaseExplore},
+		{[]loop.ToolCallRow{shell("grep -rn test internal/cli/render")}, loop.PhaseExplore},
 		{[]loop.ToolCallRow{shell("git log --oneline -5")}, loop.PhaseExplore},
 		{called("edit"), loop.PhaseEdit},
 		{called("write", "plan"), loop.PhaseEdit},

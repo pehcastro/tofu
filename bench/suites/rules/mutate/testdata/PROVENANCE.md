@@ -16,4 +16,4 @@ The run covers one package. Nothing here says anything about mutation scores els
 
 ## What it does not carry
 
-Scanned on 2026-09-23 for every identity and credential pattern in `bench/corpus.Scrub`: no hit. The file names source paths relative to the mutated package, never an absolute path off the recording machine.
+Scanned on 2026-09-23 for every identity and credential pattern in `bench/kit/corpus.Scrub`: no hit. The file names source paths relative to the mutated package, never an absolute path off the recording machine.

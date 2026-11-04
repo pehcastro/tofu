@@ -12,10 +12,10 @@ A recorded corpus cannot do this. Real test files carry several defects at once 
 
 ## Leakage: present in the names, inert today, and named here so it stays that way
 
-**Method, run on 2026-09-23.** Both arms were read to find what they actually consume, rather than assuming. `PatternFlagsTautologicalTests` in `pattern.go` parses the file and walks the AST for comparison operators and an `err` identifier. The judgment arms call `rule.Builtins()` in `internal/rule/gotest.go`, which reads the AST and touches a function name only at `gotest.go:97`, to check the `Test` prefix. **Neither arm reads the descriptive part of a name.**
+**Method, run on 2026-09-23.** Both arms were read to find what they actually consume, rather than assuming. `PatternFlagsTautologicalTests` in `pattern.go` parses the file and walks the AST for comparison operators and an `err` identifier. The judgment arms call `rule.Builtins()` in `internal/librarian/rules/gotest.go`, which reads the AST and touches a function name only at `gotest.go:97`, to check the `Test` prefix. **Neither arm reads the descriptive part of a name.**
 
 **But the names give the answers away to a reader.** `TestAddReturnsSomething` states that its only claim is existential and `TestSaveIsCalled` states that it asserts a call. **Count: 2 of 2 defective test functions name their own defect.** It costs nothing today because no arm reads the name. **The day a judged arm is pointed at these files and sees the source text, this fixture stops separating anything**, and that arm's score over it would be meaningless. Not repaired: renaming them would change a fixture, which this ticket does not do.
 
 ## What it does not carry
 
-Scanned on 2026-09-23 for every identity and credential pattern in `bench/corpus.Scrub`: no hit.
+Scanned on 2026-09-23 for every identity and credential pattern in `bench/kit/corpus.Scrub`: no hit.

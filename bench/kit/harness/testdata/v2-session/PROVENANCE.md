@@ -1,6 +1,6 @@
 # The v2 maintenance turn now lives in the corpus
 
-`turn-18d6a27c7dfb1644.json` was committed here and at `bench/stopcheck/corpus/turn-18d6a27c7dfb1644.json`, byte for byte the same 64,794 bytes, sha256 `7d635bbcbf21f5ec183cd7e6143b6497659f6d91260c899a1965a2193837bb52`. TOFU-458 removed this copy on 2026-09-23 after hashing both. It is the run of 2026-09-19 described in `bench/harness/report-2026-09-20.md`, which cites the old path and was not edited because it is dated.
+`turn-18d6a27c7dfb1644.json` was committed here and at `internal/dummy/turns/labelled/turn-18d6a27c7dfb1644.json`, byte for byte the same 64,794 bytes, sha256 `7d635bbcbf21f5ec183cd7e6143b6497659f6d91260c899a1965a2193837bb52`. TOFU-458 removed this copy on 2026-09-23 after hashing both. It is the run of 2026-09-19 described in `bench/kit/harness/report-2026-09-20.md`, which cites the old path and was not edited because it is dated.
 
 TOFU-2284 moved the corpus copy to `internal/dummy/turns/labelled`. Three tests read it by name now: `TestTransformArmsOverTheV2Session` here, `TestBothArmsOverTheV2MaintenanceSession` in `bench/suites/context/transform`, and `TestStoreTheV2Row` under `task`.
 

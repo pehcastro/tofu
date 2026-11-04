@@ -1,6 +1,6 @@
 # Where the embedded states came from
 
-Eleven JSON states plus `provenance.json`, 172,055 bytes, all of them **written**, none of them recorded. `embed.go` ships them and `bench/kit/api/corpus.go` loads them.
+Eleven JSON states plus `provenance.json`, 172,090 bytes, all of them **written**, none of them recorded. `embed.go` ships them and `bench/kit/api/corpus.go` loads them.
 
 ## The six gate cases, written
 
