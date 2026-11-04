@@ -1,4 +1,4 @@
-package browserbench
+package browser
 
 import (
 	"context"

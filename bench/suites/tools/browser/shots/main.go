@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	browserbench "tofu/bench/suites/tools/browser"
+	"tofu/bench/suites/tools/browser"
 	"tofu/internal/tools/web/browser/driver"
 )
 
@@ -57,7 +57,7 @@ func main() {
 }
 
 func record(pagesDir, fastbrowse, hotel, home string) (err error) {
-	cases, err := browserbench.Load(pagesDir)
+	cases, err := browser.Load(pagesDir)
 	if err != nil {
 		return err
 	}
@@ -91,7 +91,7 @@ func record(pagesDir, fastbrowse, hotel, home string) (err error) {
 	}
 	shared := driver.SharedTab{Client: client, ID: tab}
 	machine, _ := os.Hostname()
-	out := browserbench.Shots{
+	out := browser.Shots{
 		Date: time.Now().Format(time.DateOnly), Machine: machine,
 		Recorder: "go run ./bench/suites/tools/browser/shots, tofu's own headless Chrome through browser.Endpoint and the direct CDP path, a fresh home per run",
 		Viewport: fmt.Sprintf("%dx%d at device scale 1", viewportW, viewportH),
@@ -134,10 +134,10 @@ func record(pagesDir, fastbrowse, hotel, home string) (err error) {
 		var measured struct {
 			Result struct {
 				Value struct {
-					UserAgent string                       `json:"userAgent"`
-					Width     int                          `json:"width"`
-					Height    int                          `json:"height"`
-					Rects     map[string]browserbench.Rect `json:"rects"`
+					UserAgent string                  `json:"userAgent"`
+					Width     int                     `json:"width"`
+					Height    int                     `json:"height"`
+					Rects     map[string]browser.Rect `json:"rects"`
 				} `json:"value"`
 			} `json:"result"`
 		}
@@ -159,7 +159,7 @@ func record(pagesDir, fastbrowse, hotel, home string) (err error) {
 		value := measured.Result.Value
 		out.Browser = value.UserAgent
 		differences := differ(c.Page, live)
-		out.Pages = append(out.Pages, browserbench.Shot{
+		out.Pages = append(out.Pages, browser.Shot{
 			ID: c.ID, Source: c.Source, SourceSHA: digest(html), Image: name, ImageSHA: digest(frame),
 			Width: size.Width, Height: size.Height, Viewport: [2]int{value.Width, value.Height},
 			Rects: value.Rects, Matches: len(differences) == 0, Differences: differences,

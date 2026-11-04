@@ -1,4 +1,4 @@
-package browserbench
+package browser
 
 import (
 	"fmt"
@@ -47,7 +47,7 @@ func action(a driver.Action) string {
 	case driver.OpScrollUp, driver.OpScrollDown, driver.OpWait, driver.OpDone, driver.OpBlocked:
 		return a.Op.String()
 	}
-	panic(fmt.Sprintf("browserbench: unknown op %d", int(a.Op)))
+	panic(fmt.Sprintf("browser: unknown op %d", int(a.Op)))
 }
 
 const chooserHeader = "| arm | decisions | failed | correct | accuracy | wall p50 | wall p90 | wall max | median input tokens | dollars per decision |\n|---|---|---|---|---|---|---|---|---|---|\n"
