@@ -6,12 +6,12 @@ import (
 
 	"tofu/bench/kit/report"
 	"tofu/bench/suites/context/schemas"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 )
 
 func main() {
 	err := report.Generate("schemas report", func(machine, date string) (string, error) {
-		sessionsDir := sys.RecordedStateDir("sessions")
+		sessionsDir := project.RecordedStateDir("sessions")
 		usable, _, err := schemas.ReadSessions(sessionsDir)
 		if err != nil {
 			return "", err

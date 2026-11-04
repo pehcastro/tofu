@@ -14,7 +14,8 @@ import (
 	question "tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
 	"tofu/library/questions"
 )
 
@@ -80,8 +81,8 @@ func TestRequestOpenAgainstAnArmThatAlwaysRestates(t *testing.T) {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to put the question to the real jev route")
 	}
-	sys.AllowLiveCredential(t)
-	key, err := core.TypeSafeKey(filepath.Join(sys.SourceRoot(), ".env"))
+	credential.AllowLiveCredential(t)
+	key, err := core.TypeSafeKey(filepath.Join(fs.SourceRoot(), ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}

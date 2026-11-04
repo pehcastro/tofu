@@ -7,7 +7,7 @@ import (
 	"sort"
 
 	"tofu/internal/librarian/rules"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -31,7 +31,7 @@ func SetupOf(name, ruleDir, prompt string) (Setup, error) {
 	if ruleDir == "" {
 		return setup, nil
 	}
-	present, err := sys.IsDir(ruleDir)
+	present, err := fs.IsDir(ruleDir)
 	if err != nil {
 		return Setup{}, err
 	}

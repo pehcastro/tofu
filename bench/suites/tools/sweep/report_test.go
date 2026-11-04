@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 func TestRenderNamesEveryReaderAndDuplication(t *testing.T) {
@@ -29,7 +29,7 @@ func TestRenderNamesEveryReaderAndDuplication(t *testing.T) {
 }
 
 func TestCountLinesFindsTheCorpusPackage(t *testing.T) {
-	lines, err := CountLines(filepath.Join(sys.SourceRoot(), "bench"))
+	lines, err := CountLines(filepath.Join(fs.SourceRoot(), "bench"))
 	if err != nil {
 		t.Fatalf("CountLines: %v", err)
 	}

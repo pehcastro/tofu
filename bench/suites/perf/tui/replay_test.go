@@ -16,8 +16,9 @@ import (
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/host"
 	"tofu/internal/konst"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/shell/process"
 	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/frame/frame"
@@ -83,13 +84,13 @@ type sitting struct {
 
 func readRecorded(b *testing.B) recorded {
 	b.Helper()
-	store := session.NewStore(sys.RecordedStateDir("sessions"))
+	store := session.NewStore(project.RecordedStateDir("sessions"))
 	listing, err := store.Listing()
 	if err != nil {
 		b.Fatal(err)
 	}
 	if len(listing.Sessions) == 0 {
-		b.Skip("no recorded session under " + sys.RecordedStateDir("sessions"))
+		b.Skip("no recorded session under " + project.RecordedStateDir("sessions"))
 	}
 	headers := slices.Clone(listing.Sessions)
 	slices.Reverse(headers)
@@ -283,7 +284,7 @@ func summary(content string, bytes int) string {
 }
 
 func recordedShells() []shells.Entry {
-	registry := process.OpenAt(filepath.Join(filepath.Dir(filepath.Dir(sys.SourceRoot())), "admin-template", ".tofu", "shells"))
+	registry := process.OpenAt(filepath.Join(filepath.Dir(filepath.Dir(fs.SourceRoot())), "admin-template", ".tofu", "shells"))
 	found, err := registry.List()
 	if err != nil {
 		return nil

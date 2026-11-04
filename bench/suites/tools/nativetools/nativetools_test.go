@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
-var big = filepath.Join(sys.SourceRoot(), ".playground", "big")
+var big = filepath.Join(fs.SourceRoot(), ".playground", "big")
 
 func TestNativeTools(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(big, "runs")); err != nil {

@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"tofu/internal/judge/points"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 var (
@@ -89,7 +89,7 @@ func TestADecisionThatCannotNameItsMethodsIsNeverGivenANumber(t *testing.T) {
 		Source: "bench/suites/judge/ask/report-2026-09-21.md",
 	}
 	bodies := map[string]string{"bench/suites/judge/ask/report-2026-09-21.md": "a report that says none of that"}
-	if err := checkPlacement(invented, shippedTable(t), sys.SourceRoot(), bodies); err == nil {
+	if err := checkPlacement(invented, shippedTable(t), fs.SourceRoot(), bodies); err == nil {
 		t.Fatal("a percentage citing a line no report carries was accepted")
 	} else {
 		t.Logf("refused, as it must be: %v", err)
@@ -99,11 +99,11 @@ func TestADecisionThatCannotNameItsMethodsIsNeverGivenANumber(t *testing.T) {
 func TestASentenceAWithdrawalStruckIsNoLongerEvidence(t *testing.T) {
 	needReports(t)
 	const shortlist = "bench/suites/tools/shortlist/report-2026-09-21.md"
-	body, err := os.ReadFile(filepath.Join(sys.SourceRoot(), filepath.FromSlash(shortlist)))
+	body, err := os.ReadFile(filepath.Join(fs.SourceRoot(), filepath.FromSlash(shortlist)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	standing, err := standingText(sys.SourceRoot(), map[string]string{shortlist: string(body)})
+	standing, err := standingText(fs.SourceRoot(), map[string]string{shortlist: string(body)})
 	if err != nil {
 		t.Fatal(err)
 	}

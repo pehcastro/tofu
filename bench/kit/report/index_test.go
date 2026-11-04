@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 var onDisk = regexp.MustCompile(`^report-\d{4}-\d{2}-\d{2}.*\.(md|txt)$`)
@@ -15,7 +15,7 @@ var onDisk = regexp.MustCompile(`^report-\d{4}-\d{2}-\d{2}.*\.(md|txt)$`)
 const maxViewerBytes = 400 * 1024
 
 func benchTree() string {
-	return filepath.Join(sys.SourceRoot(), "bench")
+	return filepath.Join(fs.SourceRoot(), "bench")
 }
 
 func built(t *testing.T) Data {
@@ -153,7 +153,7 @@ func TestAnUnparsedHeadingIsFilledFromTheHandReadEntryInstead(t *testing.T) {
 
 func TestEveryReportOpensWithAFigureTakenFromTheReportItself(t *testing.T) {
 	for _, report := range built(t).Reports {
-		body, err := os.ReadFile(filepath.Join(sys.SourceRoot(), report.Source))
+		body, err := os.ReadFile(filepath.Join(fs.SourceRoot(), report.Source))
 		if err != nil {
 			t.Fatal(err)
 		}

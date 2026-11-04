@@ -15,7 +15,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
 	"tofu/internal/tools/shell/bash/sift"
 )
 
@@ -24,7 +24,7 @@ func liveClient(t *testing.T) Asker {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to put the question to the real jev route")
 	}
-	sys.AllowLiveCredential(t)
+	credential.AllowLiveCredential(t)
 	key, err := core.TypeSafeKey(filepath.Join(repoRoot, ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)

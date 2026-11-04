@@ -8,7 +8,7 @@ import (
 
 	"tofu/bench/kit/report"
 	"tofu/bench/suites/context/toolerrors"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 )
 
 func main() {
@@ -19,7 +19,7 @@ func main() {
 }
 
 func run() error {
-	result, err := toolerrors.Run(sys.RecordedStateDir("sessions"))
+	result, err := toolerrors.Run(project.RecordedStateDir("sessions"))
 	if err != nil {
 		return err
 	}

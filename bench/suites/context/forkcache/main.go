@@ -15,7 +15,7 @@ import (
 
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/models/llm/wire/anthropic"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -110,7 +110,7 @@ func run() error {
 }
 
 func build(repo, work string) (string, error) {
-	product, err := sys.ProductPackage(repo)
+	product, err := fs.ProductPackage(repo)
 	if err != nil {
 		return "", err
 	}

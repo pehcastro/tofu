@@ -10,7 +10,8 @@ import (
 	question "tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
 	"tofu/library/questions"
 )
 
@@ -51,8 +52,8 @@ func TestTaskKindAgainstTheWordList(t *testing.T) {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1, with a home under the temp dir whose classifier is bound, to put the question to the real jev route")
 	}
-	sys.AllowLiveCredential(t)
-	project := sys.SourceRoot()
+	credential.AllowLiveCredential(t)
+	project := fs.SourceRoot()
 	if _, err := classifiers.Open(project, core.ReadKeyring(), 1); err != nil {
 		t.Fatalf("TOFU_LIVE=1 and jev cannot be asked, so nothing is measured: %v", err)
 	}

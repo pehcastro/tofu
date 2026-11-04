@@ -8,7 +8,7 @@ import (
 
 	"tofu/bench/kit/report"
 	"tofu/bench/suites/context/tokencount"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 )
 
 const testFunctionCount = 16
@@ -21,7 +21,7 @@ func main() {
 }
 
 func run() error {
-	result, err := tokencount.Run(sys.RecordedStateDir("sessions"))
+	result, err := tokencount.Run(project.RecordedStateDir("sessions"))
 	if err != nil {
 		return err
 	}

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 )
 
 var recordingRoots = []string{"bench", filepath.Join("internal", "dummy")}
@@ -64,7 +64,7 @@ func repeatedRecordings(byID map[string][]string) []string {
 }
 
 func TestNoRecordedTurnIsCommittedTwiceUnderBenchOrDummy(t *testing.T) {
-	byID := recordingsByTurnID(t, sys.SourceRoot(), recordingRoots...)
+	byID := recordingsByTurnID(t, platformfs.SourceRoot(), recordingRoots...)
 	repeats := repeatedRecordings(byID)
 	for _, repeat := range repeats {
 		why, known := repeatsLeftForTheirOwners[repeat]

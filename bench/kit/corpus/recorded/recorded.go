@@ -6,12 +6,12 @@ import (
 	"os"
 	"testing"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 )
 
 func State(t testing.TB, name string) string {
 	t.Helper()
-	return Need(t, sys.RecordedStateDir(name), "drive tofu in this repository under this home to record it")
+	return Need(t, project.RecordedStateDir(name), "drive tofu in this repository under this home to record it")
 }
 
 func Need(t testing.TB, path, produce string) string {

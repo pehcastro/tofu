@@ -9,9 +9,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"tofu/internal/platform/project"
 	"tofu/internal/store/session"
 	"tofu/internal/store/settings"
-	"tofu/internal/sys"
 	tui "tofu/internal/ui/tui/app"
 )
 
@@ -70,7 +70,7 @@ func TestBenchReadsTheRowsTheInterfaceWrote(t *testing.T) {
 }
 
 func TestTheProjectCorpusIsCountedWhateverItsSize(t *testing.T) {
-	dir := sys.RecordedStateDir()
+	dir := project.RecordedStateDir()
 	rows, err := Read(dir)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("Read: %v", err)

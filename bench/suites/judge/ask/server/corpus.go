@@ -8,7 +8,7 @@ import (
 	"sort"
 
 	"tofu/bench/kit/corpus"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -17,7 +17,7 @@ const (
 )
 
 func SessionDir(turn string) string {
-	return filepath.Join(filepath.Dir(filepath.Dir(sys.SourceRoot())), "admin-template", ".tofu", "sessions", turn)
+	return filepath.Join(filepath.Dir(filepath.Dir(fs.SourceRoot())), "admin-template", ".tofu", "sessions", turn)
 }
 
 type Moment struct {

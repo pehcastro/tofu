@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"tofu/internal/agent/loop"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const packageJSONForNodeProbe = `{"name":"tofu-startup-bench","version":"0.0.0"}`
@@ -131,7 +131,7 @@ func nodeProjectDir() (string, error) {
 }
 
 func repoRoot() (string, error) {
-	if root := sys.SourceRoot(); root != "" {
+	if root := fs.SourceRoot(); root != "" {
 		return root, nil
 	}
 	return "", errors.New("startup: no go.mod above the tofu source, so the repository root is unknown")

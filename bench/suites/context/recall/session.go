@@ -14,7 +14,7 @@ import (
 	rc "tofu/internal/agent/context/recall"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 type SessionCall struct {
@@ -40,7 +40,7 @@ type Session struct {
 }
 
 func ReadSession(path string) (Session, error) {
-	data, err := sys.ReadFile(path)
+	data, err := fs.ReadFile(path)
 	if err != nil {
 		return Session{}, err
 	}

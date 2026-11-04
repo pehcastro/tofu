@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 func loadTestdata(t *testing.T, name string) []byte {
@@ -100,7 +100,7 @@ func TestParseClaudeOverTheFirstRealRunOfAFullTask(t *testing.T) {
 	}
 }
 
-var liveClaudeTranscript = filepath.Join(sys.SourceRoot(), ".playground", "transcripts", "claude-v1-20260919T061918Z.txt")
+var liveClaudeTranscript = filepath.Join(fs.SourceRoot(), ".playground", "transcripts", "claude-v1-20260919T061918Z.txt")
 
 func TestParseClaudeSubscriptionDollarsAreNullEvenWhenTheTranscriptReportsACost(t *testing.T) {
 	data := loadTestdata(t, "claude-p1.json")

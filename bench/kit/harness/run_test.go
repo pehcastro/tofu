@@ -14,8 +14,8 @@ import (
 
 	"tofu/bench/kit/harness/task"
 	"tofu/internal/agent/loop"
+	"tofu/internal/platform/fs"
 	sessionstore "tofu/internal/store/session"
-	"tofu/internal/sys"
 )
 
 const sleeperEnv = "TOFU_BENCH_SLEEPER"
@@ -572,7 +572,7 @@ func TestGradedDropsARecordedItemByItsStatusAndNotByItsNumber(t *testing.T) {
 
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
-	root := sys.SourceRoot()
+	root := fs.SourceRoot()
 	if root == "" {
 		t.Fatal("no go.mod above the tofu source, so the repository root is unknown")
 	}
@@ -587,7 +587,7 @@ func buildTofu(t *testing.T, root string) string {
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skipf("no go toolchain on PATH, so tofu cannot be built here at all: %v", err)
 	}
-	product, err := sys.ProductPackage(root)
+	product, err := fs.ProductPackage(root)
 	if err != nil {
 		t.Fatal(err)
 	}

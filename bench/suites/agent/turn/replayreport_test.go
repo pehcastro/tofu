@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 )
 
-func sessionsDir() string { return sys.RecordedStateDir("sessions") }
+func sessionsDir() string { return project.RecordedStateDir("sessions") }
 
 const regenerateEnvVar = "TOFU_BENCH_TURN_REGENERATE"
 

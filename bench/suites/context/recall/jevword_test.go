@@ -8,17 +8,18 @@ import (
 
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
 )
 
-var forkRepoRoot = sys.SourceRoot()
+var forkRepoRoot = fs.SourceRoot()
 
 func liveJevWire(t *testing.T) core.Wire {
 	t.Helper()
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to put the last word to the real jev route")
 	}
-	sys.AllowLiveCredential(t)
+	credential.AllowLiveCredential(t)
 	key, err := core.TypeSafeKey(filepath.Join(forkRepoRoot, ".env"))
 	if err != nil {
 		t.Skipf("no TYPESAFE_API_KEY reachable: %v", err)

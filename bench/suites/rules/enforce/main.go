@@ -11,7 +11,7 @@ import (
 	"time"
 
 	rule "tofu/internal/librarian/rules"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 type verdict struct {
@@ -89,7 +89,7 @@ func share(n, of int) string {
 }
 
 func main() {
-	root := sys.SourceRoot()
+	root := fs.SourceRoot()
 	dir := flag.String("rules", filepath.Join(root, ".tofu", "rules"), "the folder the desk_refuse rules load from")
 	size := flag.Int("window", 40, "lines in each clean write cut from a file at HEAD")
 	flag.Parse()

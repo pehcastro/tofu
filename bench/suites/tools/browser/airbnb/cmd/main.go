@@ -15,8 +15,8 @@ import (
 
 	"tofu/bench/suites/tools/browser/airbnb"
 	"tofu/bench/suites/tools/browser/tasks"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/shell/process"
 	"tofu/internal/tools/web/browser/driver"
 )
@@ -202,7 +202,7 @@ func rescore(name, dir string) error {
 }
 
 func score(task benchTask, dir string, before airbnb.Run) error {
-	state, err := sys.ProjectStateDirAt(filepath.Join(dir, "project"))
+	state, err := platformproject.ProjectStateDirAt(filepath.Join(dir, "project"))
 	if err != nil {
 		return err
 	}

@@ -8,7 +8,7 @@ import (
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 )
 
 func TestToLedgerAnswersAndBackCarryTheSameKindAndValue(t *testing.T) {
@@ -32,7 +32,7 @@ type cacheFile struct {
 }
 
 func TestStopCheckCacheOnDiskCarriesNoChoiceAnswer(t *testing.T) {
-	dir := sys.RecordedStateDir("cache")
+	dir := project.RecordedStateDir("cache")
 	entries, err := os.ReadDir(dir)
 	if os.IsNotExist(err) || dir == "" {
 		t.Skipf("%s is not on this machine", dir)

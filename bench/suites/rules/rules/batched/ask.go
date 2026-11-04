@@ -13,7 +13,7 @@ import (
 	rule "tofu/internal/librarian/rules"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 type outcome struct {
@@ -36,7 +36,7 @@ type record struct {
 }
 
 func askAll(ctx context.Context, replies []reply, rules []rule.Rule) (record, error) {
-	key, err := core.TypeSafeKey(filepath.Join(sys.SourceRoot(), ".env"))
+	key, err := core.TypeSafeKey(filepath.Join(fs.SourceRoot(), ".env"))
 	if err != nil {
 		return record{}, fmt.Errorf("no TypeSafe key for Jev, and this bench asks nothing else: %w", err)
 	}

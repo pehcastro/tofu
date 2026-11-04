@@ -6,12 +6,12 @@ import (
 
 	"tofu/bench/kit/report"
 	"tofu/bench/suites/context/linenumbers"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 )
 
 func main() {
 	err := report.Generate("read tool line-number bytes", func(machine, date string) (string, error) {
-		result, err := linenumbers.Run(sys.RecordedStateDir("sessions"))
+		result, err := linenumbers.Run(project.RecordedStateDir("sessions"))
 		if err != nil {
 			return "", err
 		}

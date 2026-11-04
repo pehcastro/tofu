@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
+	platformbuild "tofu/internal/platform/build"
 	"tofu/internal/project/guard"
-	"tofu/internal/sys"
 )
 
 type row struct {
@@ -175,7 +175,7 @@ type stamping struct {
 func stampings(repo, src string, stamped bool) ([]stamping, string, error) {
 	code := stamping{kind: guard.FlowsStamps, flows: flows, read: guard.HeadTree, tree: "none, built from " + src}
 	desk := stamping{kind: guard.DeskStamps, flows: deskFlows, read: guard.DeskTree, tree: "none"}
-	exe, built, err := sys.NewestDesk(src, "")
+	exe, built, err := platformbuild.NewestDesk(src, "")
 	if err != nil {
 		desk.held = err.Error()
 	} else {

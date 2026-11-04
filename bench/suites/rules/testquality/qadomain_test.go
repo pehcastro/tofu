@@ -8,12 +8,12 @@ import (
 	"testing"
 
 	"tofu/internal/librarian/rules"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 func qaDomain(t *testing.T) rules.Domain {
 	t.Helper()
-	domains, err := rules.LoadDomains(os.DirFS(filepath.Join(sys.SourceRoot(), "library")), "library")
+	domains, err := rules.LoadDomains(os.DirFS(filepath.Join(fs.SourceRoot(), "library")), "library")
 	if err != nil {
 		t.Fatalf("LoadDomains: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestEveryQAAgentAndSkillNamesTheReferencesItReads(t *testing.T) {
 }
 
 func TestEveryQARuleDistilledFromASkillCitesItAndCarriesEvidence(t *testing.T) {
-	faults, err := QARuleFaults(os.DirFS(filepath.Join(sys.SourceRoot(), "library", "qa")), "library/qa")
+	faults, err := QARuleFaults(os.DirFS(filepath.Join(fs.SourceRoot(), "library", "qa")), "library/qa")
 	if err != nil {
 		t.Fatalf("loading library/qa: %v", err)
 	}

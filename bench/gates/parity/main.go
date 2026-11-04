@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 )
 
 //go:embed cases drive serve inputs
@@ -92,7 +92,7 @@ func run(aExe, bExe, runs, out, only string) (bool, error) {
 	}
 	report := renderReport(sides, cat, results)
 	if out == "" {
-		out = filepath.Join(sys.SourceRoot(), "bench", "gates", "parity", "results", stamp+".md")
+		out = filepath.Join(platformfs.SourceRoot(), "bench", "gates", "parity", "results", stamp+".md")
 	}
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return false, err

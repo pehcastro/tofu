@@ -10,17 +10,18 @@ import (
 	"tofu/bench/kit/corpus"
 	"tofu/bench/kit/report"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
 )
 
-var repoRoot = sys.SourceRoot()
+var repoRoot = fs.SourceRoot()
 
 func liveClient(t *testing.T) *core.Client {
 	t.Helper()
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to put the question to the real jev route")
 	}
-	sys.AllowLiveCredential(t)
+	credential.AllowLiveCredential(t)
 	key, err := core.TypeSafeKey(repoRoot + "/.env")
 	if err != nil {
 		t.Fatalf("no credential: %v", err)

@@ -11,12 +11,13 @@ import (
 	"testing"
 
 	"tofu/internal/dummy"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 )
 
 func recordedSessionsDir() string {
-	return session.SessionsDir(sys.OwnerProjectStateDir(sys.SourceRoot()))
+	return session.SessionsDir(project.OwnerProjectStateDir(fs.SourceRoot()))
 }
 
 func firstReadableEntry(t *testing.T, wantDir bool) (string, bool) {
@@ -656,7 +657,7 @@ func TestTheCorpusCallDurationsHaveAMedianAndAWorst(t *testing.T) {
 }
 
 func TestARestartedSessionReadsAsTwoSeparateTurns(t *testing.T) {
-	restartedDir := filepath.Join(filepath.Dir(filepath.Dir(sys.SourceRoot())), "admin-template", ".tofu", "sessions", "turn-18d7f94ce7a62138")
+	restartedDir := filepath.Join(filepath.Dir(filepath.Dir(fs.SourceRoot())), "admin-template", ".tofu", "sessions", "turn-18d7f94ce7a62138")
 	if _, err := os.Stat(restartedDir); err != nil {
 		t.Skipf("no %s on this machine: %v", restartedDir, err)
 	}

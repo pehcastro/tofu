@@ -5,12 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 func corpusAndRules(t *testing.T) ([]reply, []string, func([]reply) []string) {
 	t.Helper()
-	replies, err := loadCorpus(filepath.Join(sys.SourceRoot(), packageDir, "corpus.json"))
+	replies, err := loadCorpus(filepath.Join(fs.SourceRoot(), packageDir, "corpus.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

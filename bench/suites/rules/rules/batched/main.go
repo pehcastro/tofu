@@ -13,7 +13,7 @@ import (
 
 	"tofu/bench/kit/report"
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const packageDir = "bench/suites/rules/rules/batched"
@@ -30,7 +30,7 @@ func main() {
 }
 
 func run(live bool, recordPath string, write bool) error {
-	root := sys.SourceRoot()
+	root := fs.SourceRoot()
 	replies, err := loadCorpus(filepath.Join(root, packageDir, "corpus.json"))
 	if err != nil {
 		return err

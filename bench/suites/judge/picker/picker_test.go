@@ -10,10 +10,10 @@ import (
 
 	"tofu/bench/kit/corpus/recorded"
 	"tofu/internal/models/llm/quota"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
-var prefixPath = filepath.Join(sys.SourceRoot(), "bench", "suites", "judge", "picker", "testdata", "forks.jsonl")
+var prefixPath = filepath.Join(fs.SourceRoot(), "bench", "suites", "judge", "picker", "testdata", "forks.jsonl")
 
 const restoreForks = "the fork pairs TOFU-373 recorded left the repository in 31ecff7e; git show 31ecff7e^:bench/forkcache/testdata/forks.jsonl > bench/suites/judge/picker/testdata/forks.jsonl restores them"
 

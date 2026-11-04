@@ -11,7 +11,9 @@ import (
 
 	"tofu/bench/kit/harness"
 	"tofu/bench/kit/harness/task"
-	"tofu/internal/sys"
+	"tofu/internal/platform/build"
+	platformfs "tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 )
 
 const (
@@ -37,7 +39,7 @@ type StoredRow struct {
 
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
-	root := sys.SourceRoot()
+	root := platformfs.SourceRoot()
 	if root == "" {
 		t.Fatal("no go.mod above the tofu source, so the repository root is unknown")
 	}
@@ -184,7 +186,7 @@ func TestStoreTheV2Row(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	state, err := sys.ProjectStateDir()
+	state, err := project.ProjectStateDir()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +200,7 @@ func TestStoreTheV2Row(t *testing.T) {
 		StartCommit: harness.OwnStartCommit(armDir),
 	}, harness.RunMeta{
 		Arm: harness.ArmTofu, Task: "hono", Version: v2RowVersion, Run: 1,
-		CLIVersion: sys.Version(), Commit: sys.BuildRevision(),
+		CLIVersion: build.Version(), Commit: build.BuildRevision(),
 	})
 	for i, gate := range row.Gates {
 		line, _, _ := strings.Cut(strings.TrimSpace(gate.Reason), "\n")

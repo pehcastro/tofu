@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"tofu/bench/kit/harness"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 func main() {
@@ -28,7 +28,7 @@ func main() {
 }
 
 func measure(dryRun bool) error {
-	root := filepath.Join(sys.SourceRoot(), "bench", "suites", "rules", "rules", "principles")
+	root := filepath.Join(fs.SourceRoot(), "bench", "suites", "rules", "rules", "principles")
 	sets, err := loadSets(root)
 	if err != nil {
 		return err

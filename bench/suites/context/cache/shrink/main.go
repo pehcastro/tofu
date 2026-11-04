@@ -15,8 +15,8 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 )
 
 const (
@@ -62,7 +62,7 @@ func run() (err error) {
 	}
 	projects := flag.String("projects", filepath.Join(home, ".tofu", "projects"), "the recorded sessions, read only")
 	flag.Parse()
-	paths, err := sys.ProjectGlob(*projects, "*", "sessions", "*", "events.jsonl")
+	paths, err := project.ProjectGlob(*projects, "*", "sessions", "*", "events.jsonl")
 	if err != nil {
 		return err
 	}

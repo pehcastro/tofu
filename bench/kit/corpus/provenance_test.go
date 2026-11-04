@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 )
 
 const provenanceFile = "PROVENANCE.md"
@@ -26,7 +26,7 @@ var datedReportPrefixes = []string{"report-", "sweep-", "rescore-"}
 
 func TestEveryFixtureDirectorySaysWhereItCameFrom(t *testing.T) {
 	for _, root := range ownedRoots {
-		start := filepath.Join(sys.SourceRoot(), filepath.FromSlash(root))
+		start := filepath.Join(platformfs.SourceRoot(), filepath.FromSlash(root))
 		err := filepath.WalkDir(start, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {
 				return err

@@ -11,12 +11,12 @@ import (
 	"testing"
 
 	"tofu/bench/suites/tools/tools"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const corpusPath = "../testdata/questions.jsonl"
 
-var treeRootFromCorpus = sys.SourceRoot()
+var treeRootFromCorpus = fs.SourceRoot()
 
 func readLines(path string) ([]string, error) {
 	file, err := os.Open(path)

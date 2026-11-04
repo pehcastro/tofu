@@ -18,7 +18,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 type run struct {
@@ -68,7 +68,7 @@ func buildTofu(scratch string, tree bool) (binary, project, built, commit string
 	if tree {
 		built, commit = source, commit+"+tree"
 	}
-	product, err := sys.ProductPackage(built)
+	product, err := fs.ProductPackage(built)
 	if err != nil {
 		return "", "", "", "", err
 	}

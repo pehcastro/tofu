@@ -9,11 +9,11 @@ import (
 
 	"tofu/bench/kit/corpus/recorded"
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 	"tofu/internal/tools/registry"
 )
 
-var repoRoot = sys.SourceRoot()
+var repoRoot = fs.SourceRoot()
 
 const replayFailuresInTheReport = 6
 

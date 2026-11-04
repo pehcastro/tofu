@@ -7,13 +7,14 @@ import (
 
 	"tofu/bench/kit/report"
 	"tofu/bench/suites/rules/rules/fire"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 )
 
 func main() {
 	err := report.Generate("rules fire report", func(machine, date string) (string, error) {
-		logDir := sys.RecordedStateDir("log")
-		libraryDir := filepath.Join(sys.SourceRoot(), "library")
+		logDir := project.RecordedStateDir("log")
+		libraryDir := filepath.Join(fs.SourceRoot(), "library")
 		catalog, err := fire.StructuralCatalog(libraryDir)
 		if err != nil {
 			return "", err

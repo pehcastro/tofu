@@ -8,7 +8,8 @@ import (
 	"testing"
 
 	"tofu/bench/kit/harness"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
 )
 
 func TestOfflineSkipsWithoutNetwork(t *testing.T) {
@@ -79,7 +80,7 @@ func TestParityLineNamesTheAxisAndTheArmWhenPostureDiffers(t *testing.T) {
 }
 
 func TestParityLineNamesAllThreeWhenNoMajorityAgreesOnPosture(t *testing.T) {
-	t.Chdir(sys.SourceRoot())
+	t.Chdir(fs.SourceRoot())
 	var plans []harness.Plan
 	for _, arm := range []harness.Arm{harness.ArmTofu, harness.ArmClaude, harness.ArmCodex} {
 		plan, err := harness.BuildPlan(".", arm, "hono", 1)
@@ -98,7 +99,7 @@ func TestParityLineNamesAllThreeWhenNoMajorityAgreesOnPosture(t *testing.T) {
 }
 
 func TestHarnessOfflineDefaultTranscriptProducesARow(t *testing.T) {
-	t.Chdir(sys.SourceRoot())
+	t.Chdir(fs.SourceRoot())
 	if _, err := os.Stat(filepath.Join(harnessTranscriptDir, "session.json")); err != nil {
 		t.Fatalf("the default --transcript is %q and it holds no readable session.json: %v", harnessTranscriptDir, err)
 	}
@@ -123,7 +124,7 @@ func TestHarnessOfflineNeedsNoTofuBinary(t *testing.T) {
 	if err := os.WriteFile(session, []byte(body), 0o644); err != nil {
 		t.Fatalf("writing the transcript: %v", err)
 	}
-	t.Chdir(sys.SourceRoot())
+	t.Chdir(fs.SourceRoot())
 
 	out := &bytes.Buffer{}
 	errOut := &bytes.Buffer{}
@@ -147,8 +148,8 @@ func TestAPILive(t *testing.T) {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to call the real route")
 	}
-	sys.AllowLiveCredential(t)
-	t.Chdir(sys.SourceRoot())
+	credential.AllowLiveCredential(t)
+	t.Chdir(fs.SourceRoot())
 
 	out := &bytes.Buffer{}
 	errOut := &bytes.Buffer{}

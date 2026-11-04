@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
-var repoRoot = sys.SourceRoot()
+var repoRoot = fs.SourceRoot()
 
 type RtkFilter string
 

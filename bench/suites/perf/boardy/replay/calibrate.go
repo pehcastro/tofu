@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"tofu/internal/judge/ledger"
+	"tofu/internal/platform/project"
 	"tofu/internal/project/boardy"
-	"tofu/internal/sys"
 )
 
 type labelled struct {
@@ -197,7 +197,7 @@ func judgeRound(tofu, scratch string, judged []judgedReason, workers int) error 
 	if err != nil {
 		return err
 	}
-	places, err := sys.ResolvePlaces(managed.Store.Root)
+	places, err := project.ResolvePlaces(managed.Store.Root)
 	if err != nil {
 		return err
 	}

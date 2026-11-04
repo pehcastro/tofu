@@ -12,17 +12,19 @@ import (
 	"tofu/bench/kit/report"
 	stopcheck "tofu/internal/judge/points/stop_check"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 )
 
-var repoRoot = sys.SourceRoot()
+var repoRoot = fs.SourceRoot()
 
 func liveBattery(t *testing.T) (Battery, []Turn, []corpus.SkippedTurn) {
 	t.Helper()
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to put the question to the real jev route")
 	}
-	sys.AllowLiveCredential(t)
+	credential.AllowLiveCredential(t)
 	key, err := core.TypeSafeKey(filepath.Join(repoRoot, ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
@@ -119,7 +121,7 @@ func answerValue(a core.Answer) float64 {
 }
 
 func TestTheTypedOutcomeInTheNextState(t *testing.T) {
-	dir := sys.RecordedStateDir("sessions")
+	dir := project.RecordedStateDir("sessions")
 	if _, err := os.Stat(dir); err != nil {
 		t.Skipf("%s is not on this machine: %v", dir, err)
 	}

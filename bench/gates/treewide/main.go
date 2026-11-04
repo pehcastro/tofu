@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/platform/fs"
 	"tofu/internal/project/guard"
-	"tofu/internal/sys"
 )
 
 const (
@@ -25,7 +25,7 @@ const (
 	benchPrefix  = module + "/bench/"
 )
 
-var diagnostic = sys.LazyRegexp(`^(.+\.go):\d+:\d+: `)
+var diagnostic = fs.LazyRegexp(`^(.+\.go):\d+:\d+: `)
 
 type failure struct {
 	step, pkg, detail string
@@ -115,7 +115,7 @@ func (r runner) goCommand(args ...string) *exec.Cmd {
 
 func (r runner) roots() []string {
 	var patterns []string
-	for _, root := range sys.GoRoots() {
+	for _, root := range fs.GoRoots() {
 		if _, err := os.Stat(filepath.Join(r.repo, filepath.FromSlash(root))); err == nil {
 			patterns = append(patterns, "./"+root+"/...")
 		}

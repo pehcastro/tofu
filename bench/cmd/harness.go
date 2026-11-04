@@ -13,8 +13,10 @@ import (
 
 	"tofu/bench/kit/harness"
 	"tofu/bench/kit/report"
+	platformbuild "tofu/internal/platform/build"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 )
 
 type harnessOpts struct {
@@ -91,8 +93,8 @@ func tofuUnderTest(named string) (binary string, cleanup func(), err error) {
 	if runtime.GOOS == "windows" {
 		bin += ".exe"
 	}
-	root := sys.SourceRoot()
-	product, err := sys.ProductPackage(root)
+	root := fs.SourceRoot()
+	product, err := fs.ProductPackage(root)
 	if err != nil {
 		_ = os.RemoveAll(dir)
 		return "", func() {}, fmt.Errorf("%w. Name a built binary with --tofu to measure one instead", err)
@@ -153,7 +155,7 @@ func runTofuArm(out, errOut io.Writer, plan harness.Plan, opts harnessOpts) int 
 	defer cleanup()
 	plan.Command[0] = bin
 
-	state, err := sys.ProjectStateDir()
+	state, err := project.ProjectStateDir()
 	if err != nil {
 		return fail(errOut, "harness", err)
 	}
@@ -161,7 +163,7 @@ func runTofuArm(out, errOut io.Writer, plan harness.Plan, opts harnessOpts) int 
 	sessionDir := session.SessionsDir(state)
 
 	measure := func(execution harness.Execution, meta harness.RunMeta) (harness.Row, []string, error) {
-		meta.CLIVersion, meta.Commit = sys.Version(), sys.BuildRevision()
+		meta.CLIVersion, meta.Commit = platformbuild.Version(), platformbuild.BuildRevision()
 		recorded, err := harness.LatestSession(sessionDir, execution.Start)
 		if err != nil {
 			return harness.Row{}, nil, err
@@ -243,7 +245,7 @@ func replayOneRepeat(out, errOut io.Writer, plan harness.Plan, opts harnessOpts)
 		return fail(errOut, "harness", fmt.Errorf("the offline arm replays a stored transcript and %s is not readable, name another with --transcript: %w", path, err))
 	}
 	meta := plan.Runs()[0]
-	meta.CLIVersion, meta.Commit = sys.Version(), sys.BuildRevision()
+	meta.CLIVersion, meta.Commit = platformbuild.Version(), platformbuild.BuildRevision()
 	row, gaps := harness.MeasureTofu(session, harnessSources(plan.Dir, opts.transcript, opts.version), meta)
 	execution := harness.Execution{Plan: plan, Start: session.At, End: session.At, EndReason: harness.EndReasonDone}
 	source := "offline, replayed from " + opts.transcript + ", no arm was executed and no model was called"

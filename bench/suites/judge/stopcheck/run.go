@@ -17,7 +17,7 @@ import (
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
 	"tofu/internal/models/transport"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 	libraryquestions "tofu/library/questions"
 )
 
@@ -121,7 +121,7 @@ func New(root, key string) (Battery, error) {
 	if err != nil {
 		return Battery{}, err
 	}
-	stateDir, err := sys.ProjectStateDirAt(root)
+	stateDir, err := project.ProjectStateDirAt(root)
 	if err != nil {
 		return Battery{}, err
 	}

@@ -8,7 +8,7 @@ import (
 	"tofu/bench/kit/corpus"
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 )
 
 type recordedCall struct {
@@ -20,7 +20,7 @@ func TestLineCapOverRecordedToolResults(t *testing.T) {
 	if os.Getenv("TOFU_TOOLS_LINEWIDTH") != "1" {
 		t.Skip("set TOFU_TOOLS_LINEWIDTH=1 to replay every recorded tool result through the line cap")
 	}
-	walked, err := corpus.WalkSessions(sys.RecordedStateDir("sessions"))
+	walked, err := corpus.WalkSessions(project.RecordedStateDir("sessions"))
 	if err != nil {
 		t.Fatal(err)
 	}

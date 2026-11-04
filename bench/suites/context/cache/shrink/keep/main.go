@@ -17,7 +17,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/sys"
+	platformproject "tofu/internal/platform/project"
 )
 
 //go:embed testdata/corpus.json
@@ -102,7 +102,7 @@ func runArm(dir, home string, corpus []mockedSession) (tally, error) {
 			return tally{}, err
 		}
 	}
-	places := sys.Places{State: filepath.Join(dir, "state"), Log: filepath.Join(dir, "log")}
+	places := platformproject.Places{State: filepath.Join(dir, "state"), Log: filepath.Join(dir, "log")}
 	project := filepath.Join(dir, "project")
 	if err := os.MkdirAll(project, 0o755); err != nil {
 		return tally{}, err

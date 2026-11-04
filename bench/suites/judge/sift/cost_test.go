@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/project"
 	"tofu/internal/stat"
-	"tofu/internal/sys"
 	"tofu/internal/tools/shell/bash/sift"
 )
 
@@ -45,7 +45,7 @@ func TestReadLedgerSeesAShellSiftRowWhenThereIsOne(t *testing.T) {
 }
 
 func TestTheShellSiftPointHasBeenMeasured(t *testing.T) {
-	sessionDir := sys.RecordedStateDir("sessions")
+	sessionDir := project.RecordedStateDir("sessions")
 	if _, err := os.Stat(sessionDir); err != nil {
 		t.Skipf("no recorded sessions at %s: %v", sessionDir, err)
 	}
@@ -56,7 +56,7 @@ func TestTheShellSiftPointHasBeenMeasured(t *testing.T) {
 	if len(read.Sessions) < sessionFloor {
 		t.Fatalf("%d recorded sessions, too few to state a median over", len(read.Sessions))
 	}
-	logRead, err := ReadLedger(sys.RecordedStateDir("log"))
+	logRead, err := ReadLedger(project.RecordedStateDir("log"))
 	if err != nil {
 		t.Fatalf("ReadLedger: %v", err)
 	}

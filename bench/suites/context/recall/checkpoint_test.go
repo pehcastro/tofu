@@ -10,7 +10,7 @@ import (
 	"tofu/bench/kit/corpus/recorded"
 	rc "tofu/internal/agent/context/recall"
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 )
 
 const stressForkCeiling = 6300
@@ -27,7 +27,7 @@ type checkpointCase struct {
 
 func readCorpusDirTurn(t *testing.T, id string) corpus.RecordedTurn {
 	t.Helper()
-	turn, err := corpus.ReadTurnDir(recorded.Need(t, sys.RecordedStateDir("sessions", id), ownerTurn))
+	turn, err := corpus.ReadTurnDir(recorded.Need(t, project.RecordedStateDir("sessions", id), ownerTurn))
 	if err != nil {
 		t.Fatalf("read %s: %v", id, err)
 	}
@@ -36,7 +36,7 @@ func readCorpusDirTurn(t *testing.T, id string) corpus.RecordedTurn {
 
 func readCorpusFileTurn(t *testing.T, id string) corpus.RecordedTurn {
 	t.Helper()
-	turn, err := corpus.ReadTurn(recorded.Need(t, sys.RecordedStateDir("sessions", id+".json"), ownerTurn))
+	turn, err := corpus.ReadTurn(recorded.Need(t, project.RecordedStateDir("sessions", id+".json"), ownerTurn))
 	if err != nil {
 		t.Fatalf("read %s: %v", id, err)
 	}

@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 )
 
 const (
@@ -44,7 +44,7 @@ func build(src, work string, seamed bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	product, err := locate(files, "(?m)"+sys.ProductSymbol)
+	product, err := locate(files, "(?m)"+platformfs.ProductSymbol)
 	if err != nil {
 		return "", err
 	}
@@ -90,7 +90,7 @@ func productSources(src, target string) ([]string, error) {
 
 func goSources(src string) ([]string, error) {
 	var files []string
-	for _, root := range sys.GoRoots() {
+	for _, root := range platformfs.GoRoots() {
 		dir := filepath.Join(src, filepath.FromSlash(root))
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
 			continue

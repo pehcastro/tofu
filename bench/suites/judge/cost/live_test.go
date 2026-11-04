@@ -11,17 +11,18 @@ import (
 	"tofu/bench/kit/report"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
 )
 
-var repoRoot = sys.SourceRoot()
+var repoRoot = fs.SourceRoot()
 
 func liveKey(t *testing.T, gate string) string {
 	t.Helper()
 	if os.Getenv(gate) != "1" {
 		t.Skipf("set %s=1 to spend money on the jev arms", gate)
 	}
-	sys.AllowLiveCredential(t)
+	credential.AllowLiveCredential(t)
 	key, err := core.TypeSafeKey(filepath.Join(repoRoot, ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)

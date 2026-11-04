@@ -7,11 +7,11 @@ import (
 
 	"tofu/bench/kit/report"
 	"tofu/bench/suites/context/recall"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 )
 
 func main() {
-	sessions := sys.RecordedStateDir("sessions")
+	sessions := project.RecordedStateDir("sessions")
 	if len(os.Args) > 1 {
 		sessions = os.Args[1]
 	}

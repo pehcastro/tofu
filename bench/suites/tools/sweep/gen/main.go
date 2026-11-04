@@ -7,12 +7,12 @@ import (
 
 	"tofu/bench/kit/report"
 	"tofu/bench/suites/tools/sweep"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 func main() {
 	err := report.Generate("cross-package sweep report", func(machine, date string) (string, error) {
-		lines, err := sweep.CountLines(filepath.Join(sys.SourceRoot(), "bench"))
+		lines, err := sweep.CountLines(filepath.Join(fs.SourceRoot(), "bench"))
 		if err != nil {
 			return "", err
 		}

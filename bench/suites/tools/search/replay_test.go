@@ -6,17 +6,18 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 	"tofu/internal/tools/code/search/engine"
 )
 
-var treeRoot = sys.SourceRoot()
+var treeRoot = fs.SourceRoot()
 
 var reportGeneratedAt = time.Date(2026, time.September, 23, 8, 38, 15, 0, time.FixedZone("-03", -3*60*60))
 
 func loadOrSkip(t *testing.T) Corpus {
 	t.Helper()
-	sessionsDir := sys.RecordedStateDir("sessions")
+	sessionsDir := project.RecordedStateDir("sessions")
 	if _, err := os.Stat(sessionsDir); err != nil {
 		t.Skipf("skipped: %s is not on this machine, so there is no recorded search to replay", sessionsDir)
 	}

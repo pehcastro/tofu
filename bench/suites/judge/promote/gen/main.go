@@ -8,12 +8,12 @@ import (
 
 	"tofu/bench/kit/report"
 	"tofu/bench/suites/judge/promote"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 )
 
 func main() {
 	err := report.Generate("promotion corpus count", func(machine, date string) (string, error) {
-		stateDir := sys.RecordedStateDir()
+		stateDir := project.RecordedStateDir()
 		rows, err := promote.Read(stateDir)
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return "", err

@@ -7,7 +7,8 @@ import (
 	"testing"
 
 	"tofu/internal/dummy"
-	"tofu/internal/sys"
+	"tofu/internal/platform/build"
+	"tofu/internal/platform/project"
 )
 
 const (
@@ -50,7 +51,7 @@ func TestV2TofuArmRunsLiveAndProducesARow(t *testing.T) {
 		t.Logf("arm stderr:\n%s", execution.Stderr)
 	}
 
-	state, err := sys.ProjectStateDir()
+	state, err := project.ProjectStateDir()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +73,7 @@ func TestV2TofuArmRunsLiveAndProducesARow(t *testing.T) {
 	}
 	meta := RunMeta{
 		Arm: ArmTofu, Task: "hono", Version: 2, Run: 1,
-		CLIVersion: sys.Version(), Commit: sys.BuildRevision(),
+		CLIVersion: build.Version(), Commit: build.BuildRevision(),
 	}
 	row, gaps := MeasureTofu(recorded, src, meta)
 	t.Logf("\n%s\n%s", Detail(row, gaps, execution, ledgerDir, LiveSource(execution)), Render([]Row{row}))

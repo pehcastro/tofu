@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -180,14 +180,14 @@ func sample(m meter, arms []arm, work string, command []string, godebug string) 
 }
 
 func build(binary, dir, modfile, revision string) error {
-	grep := []string{"grep", "-l", "-E", sys.ProductSymbol}
+	grep := []string{"grep", "-l", "-E", fs.ProductSymbol}
 	if revision != "" {
 		grep = append(grep, revision)
 	}
 	found, err := exec.Command("git", append(grep, "--", "*.go")...).Output()
 	files := strings.Fields(string(found))
 	if err != nil || len(files) != 1 {
-		return fmt.Errorf("symbol %q is in %d Go files at %s, not one, so the tofu package is unknown: %v", sys.ProductSymbol, len(files), cmp.Or(revision, "the working tree"), err)
+		return fmt.Errorf("symbol %q is in %d Go files at %s, not one, so the tofu package is unknown: %v", fs.ProductSymbol, len(files), cmp.Or(revision, "the working tree"), err)
 	}
 	product := strings.TrimPrefix(files[0], revision+":")
 	cmd := exec.Command("go", "build", "-modfile="+cmp.Or(modfile, "go.mod"), "-o", binary, "./"+path.Dir(product))
@@ -204,7 +204,7 @@ func archive(revision, dir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolving %s: %w", revision, err)
 	}
-	tarball, err := exec.Command("git", "archive", revision, "--", ".", ":(exclude)"+sys.DeskRoot).Output()
+	tarball, err := exec.Command("git", "archive", revision, "--", ".", ":(exclude)"+fs.DeskRoot).Output()
 	if err != nil {
 		return "", fmt.Errorf("archiving %s: %w", revision, err)
 	}

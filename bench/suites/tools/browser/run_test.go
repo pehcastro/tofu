@@ -15,7 +15,8 @@ import (
 
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
 	"tofu/internal/tools/web/browser/driver"
 )
 
@@ -72,8 +73,8 @@ func TestTheChooserOverTheCorpus(t *testing.T) {
 		if os.Getenv("TOFU_LIVE") != "1" {
 			t.Skip("set TOFU_LIVE=1 for the live pass through TypeSafe, or pass -args -replay <answers file> to rebuild its report with no network")
 		}
-		sys.AllowLiveCredential(t)
-		key, err := core.TypeSafeKey(filepath.Join(sys.SourceRoot(), ".env"))
+		credential.AllowLiveCredential(t)
+		key, err := core.TypeSafeKey(filepath.Join(fs.SourceRoot(), ".env"))
 		if err != nil {
 			t.Fatalf("no credential: %v", err)
 		}
@@ -119,8 +120,8 @@ func TestTheImageArmsOverTheCorpus(t *testing.T) {
 		if os.Getenv("TOFU_LIVE") != "1" {
 			t.Skip("set TOFU_LIVE=1 for the live pass through TypeSafe, or pass -args -replay-images <answers file> to rebuild its report with no network")
 		}
-		sys.AllowLiveCredential(t)
-		key, err := core.TypeSafeKey(filepath.Join(sys.SourceRoot(), ".env"))
+		credential.AllowLiveCredential(t)
+		key, err := core.TypeSafeKey(filepath.Join(fs.SourceRoot(), ".env"))
 		if err != nil {
 			t.Fatalf("no credential: %v", err)
 		}

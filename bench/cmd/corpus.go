@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 )
 
 type corpusSession struct {
@@ -40,7 +40,7 @@ func benchCorpus(out, errOut io.Writer, args []string) int {
 		dir = named
 	}
 	if dir == "" {
-		state, err := sys.ProjectStateDir()
+		state, err := project.ProjectStateDir()
 		if err != nil {
 			return fail(errOut, "corpus", err)
 		}

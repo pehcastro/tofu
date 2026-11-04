@@ -8,7 +8,8 @@ import (
 	"testing"
 
 	sessions "tofu/bench/kit/corpus"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 )
 
 type recordedArgs struct {
@@ -21,7 +22,7 @@ func TestExtractRecordedTextSearchCalls(t *testing.T) {
 	if os.Getenv("TOFU_TOOLS_EXTRACT") != "1" {
 		t.Skip("set TOFU_TOOLS_EXTRACT=1 to print the search calls .tofu/sessions carries, and the grep calls the sessions recorded before 2026-09-21")
 	}
-	walked, err := sessions.WalkSessions(sys.RecordedStateDir("sessions"))
+	walked, err := sessions.WalkSessions(project.RecordedStateDir("sessions"))
 	if err != nil {
 		t.Fatalf("WalkSessions: %v", err)
 	}
@@ -43,7 +44,7 @@ func TestExtractRecordedTextSearchCalls(t *testing.T) {
 				if root == "" {
 					root = "."
 				}
-				out, _ := exec.Command("git", "-C", sys.SourceRoot(), "grep", "-nE", a.Pattern, "--", root).CombinedOutput()
+				out, _ := exec.Command("git", "-C", fs.SourceRoot(), "grep", "-nE", a.Pattern, "--", root).CombinedOutput()
 				lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
 				if len(lines) == 1 && lines[0] == "" {
 					lines = nil

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 func signedIn(exe, home, dir string, env []string, batch int) error {
@@ -83,7 +83,7 @@ func build(work string) (string, error) {
 		return "", fmt.Errorf("live450 builds tofu from the repository it runs in: %w", err)
 	}
 	repo := strings.TrimSpace(string(root))
-	product, err := sys.ProductPackage(repo)
+	product, err := fs.ProductPackage(repo)
 	if err != nil {
 		return "", err
 	}

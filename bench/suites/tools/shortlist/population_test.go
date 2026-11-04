@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"tofu/bench/kit/corpus"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 )
 
-func sessionsDir() string { return sys.RecordedStateDir("sessions") }
+func sessionsDir() string { return project.RecordedStateDir("sessions") }
 
 var questionsAShortlistFigureNeeds = NeededQuestions(4, 4, 1, 4)
 

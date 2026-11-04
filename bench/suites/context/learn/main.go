@@ -17,9 +17,9 @@ import (
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
 	"tofu/internal/models/transport"
+	"tofu/internal/platform/credential"
 	"tofu/internal/store/learn"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 )
 
 const (
@@ -146,7 +146,7 @@ func askJev(windows []window) ([]labels, float64, string, error) {
 	for _, q := range set.Questions {
 		questions = append(questions, q.ToJev())
 	}
-	key, err := core.TypeSafeKey(sys.CredentialFileName)
+	key, err := core.TypeSafeKey(credential.CredentialFileName)
 	if err != nil {
 		return nil, 0, "", err
 	}
