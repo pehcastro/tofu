@@ -30,7 +30,7 @@ func outputCases() []outputCase {
 		{"list", []string{"rules", "list", "--library", "lib"}, output.ExitOK},
 		{"list-usage", []string{"rules", "list", "--nope"}, output.ExitUsage},
 		{"check", []string{"rules", "check", "docs", "--library", "lib"}, output.ExitVerdict},
-		{"index", []string{"rules", "index", "rename a field", "internal/rule/trigger.go", "--library", "lib"}, output.ExitOK},
+		{"index", []string{"rules", "index", "rename a field", "internal/librarian/rules/trigger.go", "--library", "lib"}, output.ExitOK},
 		{"fired", []string{"rules", "fired", "2026-09-28"}, output.ExitOK},
 		{"add", []string{"rules", "add", "--global", "g1", "never write yaml by hand"}, output.ExitOK},
 		{"add-refused", []string{"rules", "add", "--global", "g1", "again"}, output.ExitVerdict},

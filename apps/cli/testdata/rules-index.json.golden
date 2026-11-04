@@ -10,14 +10,14 @@ exit 0
     "task": "rename a field",
     "task_kind": "",
     "paths": [
-      "internal/rule/trigger.go"
+      "internal/librarian/rules/trigger.go"
     ],
     "firing": 3,
     "rules": [
       {
         "rule_id": "comments",
         "fires": true,
-        "why": "the scope internal/**/*.go reached internal/rule/trigger.go",
+        "why": "the scope internal/**/*.go reached internal/librarian/rules/trigger.go",
         "concern": "code_rules",
         "kind": "structural",
         "mode": "shadow"

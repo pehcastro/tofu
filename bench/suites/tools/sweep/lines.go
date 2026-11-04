@@ -2,6 +2,7 @@ package sweep
 
 import (
 	"bytes"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -15,26 +16,24 @@ type PackageLines struct {
 }
 
 func CountLines(benchRoot string) ([]PackageLines, error) {
-	entries, err := os.ReadDir(benchRoot)
-	if err != nil {
-		return nil, err
-	}
 	var counted []PackageLines
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
+	err := filepath.WalkDir(benchRoot, func(dir string, entry fs.DirEntry, err error) error {
+		if err != nil || !entry.IsDir() {
+			return err
 		}
-		source, test, err := countDir(filepath.Join(benchRoot, entry.Name()))
-		if err != nil {
-			return nil, err
+		if entry.Name() == "testdata" {
+			return filepath.SkipDir
 		}
-		if source == 0 && test == 0 {
-			continue
+		source, test, err := countDir(dir)
+		if err != nil || source == 0 && test == 0 {
+			return err
 		}
-		counted = append(counted, PackageLines{Package: entry.Name(), Source: source, Test: test})
-	}
+		rel, err := filepath.Rel(benchRoot, dir)
+		counted = append(counted, PackageLines{Package: filepath.ToSlash(rel), Source: source, Test: test})
+		return err
+	})
 	sort.Slice(counted, func(i, j int) bool { return counted[i].Package < counted[j].Package })
-	return counted, nil
+	return counted, err
 }
 
 func countDir(dir string) (source, test int, err error) {

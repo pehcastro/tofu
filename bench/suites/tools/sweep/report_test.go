@@ -12,7 +12,7 @@ func TestRenderNamesEveryReaderAndDuplication(t *testing.T) {
 	lines := []PackageLines{{Package: "corpus", Source: 483, Test: 1337}}
 	body := Render("test-machine", "2026-09-23", lines)
 
-	for _, want := range []string{"bench/corpus", "bench/suites/context/schemas", "bench/suites/agent/turn", "bench/suites/context/recall", "bench/suites/judge/picker", "bench/suites/rules/rules", "internal/judge/ledger"} {
+	for _, want := range []string{"bench/kit/corpus", "bench/suites/context/schemas", "bench/suites/agent/turn", "bench/suites/context/recall", "bench/suites/judge/picker", "bench/suites/rules/rules", "internal/judge/ledger"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("report does not name %s", want)
 		}
@@ -35,10 +35,10 @@ func TestCountLinesFindsTheCorpusPackage(t *testing.T) {
 	}
 	found := false
 	for _, l := range lines {
-		if l.Package == "corpus" {
+		if l.Package == "kit/corpus" {
 			found = true
 			if l.Source == 0 {
-				t.Fatal("bench/corpus has source files, counted 0")
+				t.Fatal("bench/kit/corpus has source files, counted 0")
 			}
 		}
 	}
