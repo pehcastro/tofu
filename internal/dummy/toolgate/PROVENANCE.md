@@ -1,6 +1,6 @@
 # Where the tool gate cases came from
 
-Moved here from `bench/corpus/gate/` and `bench/suites/judge/cost/answers/` on 2026-11-03, TOFU-2282, byte for byte, because `bench` and `internal/judge/state` both read them. `bench/corpus` reads the cases and the split; `bench/suites/judge/cost` and `internal/judge/state` read the held-out answers.
+Moved here from `bench/corpus/gate/` and `bench/suites/judge/cost/answers/` on 2026-11-03, TOFU-2282, byte for byte, because `bench` and `internal/judge/state` both read them. `bench/kit/corpus` reads the cases and the split; `bench/suites/judge/cost` and `internal/judge/state` read the held-out answers.
 
 The four corpus files are 348,428 bytes. **Recorded**, with six written rows named below.
 

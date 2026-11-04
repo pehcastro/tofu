@@ -33,7 +33,7 @@ var SiftUsage = fmt.Sprintf(`tofu sift marks each paragraph of standard input as
 
 Arms:
   length    default. drop a paragraph under a %d-word floor, keep the rest.
-            no live call. bench/readworth/report-2026-09-21.md measured this
+            no live call. bench/suites/judge/readworth measured this
             arm at 87.1%% accuracy and more bytes saved than jev, on both
             live runs against the same corpus.
   signpost  drop a markdown heading, or a short line ending in a colon.

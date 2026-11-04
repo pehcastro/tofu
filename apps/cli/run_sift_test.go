@@ -452,7 +452,7 @@ func TestWhatTheJudgedSiftSavesAndCostsOverEveryRecordedSession(t *testing.T) {
 	t.Logf("%d jev calls at the $%g a call the paid run recorded: $%.6f over the whole corpus, median session $%.6f, worst $%.6f",
 		whole.calls, recordedJudgedReplyCostUSD, float64(whole.calls)*recordedJudgedReplyCostUSD, median, prices[len(prices)-1])
 	t.Logf("%d of the %d sessions ask nothing, because a bash result of one or two chunks is all held and carries no candidate", silent, len(perSession))
-	t.Logf("the nouls are the six hand written replies of bench/sift/testdata/judged-replies.jsonl, picked by the chunk position the state names, so the bytes are a shape and only the call count and the price are measured")
+	t.Logf("the nouls are the six hand written replies of bench/suites/judge/sift/testdata/judged-replies.jsonl, picked by the chunk position the state names, so the bytes are a shape and only the call count and the price are measured")
 
 	if median > siftMedianSessionCeilingUSD {
 		t.Fatalf("the median session costs $%.6f and the ceiling this ticket carries is $%.6f", median, siftMedianSessionCeilingUSD)

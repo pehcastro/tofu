@@ -10,7 +10,7 @@ Until this pair existed, `MeasureTofu` had never read a recorded transcript: the
 
 `turn-18d69bfed2bf52a0`, started 2026-09-19 at 00:43:40 local. Model `claude-opus-5` on a subscription, so the run cost no money and `total_cost_usd` is 0. Outcome `stopped`, 13 steps, 99,906 ms wall clock, 13 tool calls: one read, five writes, seven shell commands, one of which failed.
 
-Its `task` is the v1 prompt, byte for byte the file already tracked at `bench/harness/task/v1.prompt.txt`, so the fixture reveals nothing the repository did not already carry.
+Its `task` is the v1 prompt, byte for byte the file already tracked at `bench/kit/harness/task/v1.prompt.txt`, so the fixture reveals nothing the repository did not already carry.
 
 The 91 ledger rows in `2026-09-19.jsonl` are every judge decision that names `turn_id` `turn-18d69bfed2bf52a0`: 13 `tool_gate` and 78 `stop_check`, all in shadow mode, build `typesafe/jev-1.13-20260917`, $0.001682 in total. 65 of them are replays of an earlier decision and carry zero cost and zero latency, which is why the sum is not 91 times a per call price.
 
