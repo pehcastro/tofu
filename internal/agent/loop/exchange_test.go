@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"tofu/internal/models/llm/core"
+	claudesub "tofu/internal/models/llm/providers/claude-sub"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/store/session"
 )
@@ -57,7 +58,7 @@ func TestEveryRequestIsKeptByteForByteWithTheProviderErrorBody(t *testing.T) {
 		t.Fatal(err)
 	}
 	store, id := session.NewStore(t.TempDir()), session.NewEventID()
-	_, err = Run(context.Background(), Config{Model: Subscription{Wire: wire}, Spend: SpendSubscription, Tools: NewRegistry(read), System: "you read files",
+	_, err = Run(context.Background(), Config{Model: claudesub.Subscription{Wire: wire}, Spend: SpendSubscription, Tools: NewRegistry(read), System: "you read files",
 		Task: "read a.txt", Caps: Caps{MaxSteps: 3}, ResultBytesCap: 4096, ArtifactDir: t.TempDir(), Sessions: store, Session: id})
 	if err == nil || !strings.Contains(err.Error(), "invalid_request_error") {
 		t.Fatalf("the turn ended with %v, want the provider's 400", err)

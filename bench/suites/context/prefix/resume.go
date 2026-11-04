@@ -10,6 +10,7 @@ import (
 
 	"tofu/internal/agent/loop"
 	skill "tofu/internal/librarian/skills"
+	claudesub "tofu/internal/models/llm/providers/claude-sub"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/registry"
 )
@@ -47,7 +48,7 @@ func MeasureResume(arm ResumeArm) (ResumedTurn, error) {
 		return measured, err
 	}
 	project, store, turns := filepath.Join(scratch, "project"), session.NewStore(filepath.Join(scratch, "sessions")), 0
-	config := loop.Config{Model: loop.Subscription{Wire: wire}, Spend: loop.SpendSubscription, Caps: loop.Caps{MaxSteps: 2}, ResultBytesCap: 1 << 16,
+	config := loop.Config{Model: claudesub.Subscription{Wire: wire}, Spend: loop.SpendSubscription, Caps: loop.Caps{MaxSteps: 2}, ResultBytesCap: 1 << 16,
 		ArtifactDir: filepath.Join(scratch, "artifacts"), Sessions: store, Session: "bench-resume", Inbox: loop.NewInbox(), Prefix: &loop.Prefix{},
 		NewID: func() string { turns++; return "turn-bench-" + strconv.Itoa(turns) }}
 	for at, task := range []string{RealTask, "now run the test it fixed and say what it printed", "summarise what changed"} {

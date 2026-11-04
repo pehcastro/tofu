@@ -8,7 +8,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/models/llm/wire/codex"
-	"tofu/internal/models/llm/wire/openrouter"
+	"tofu/internal/models/llm/wire/openai"
 )
 
 const (
@@ -55,7 +55,7 @@ func wireHeaders(t *testing.T) map[string][]core.Header {
 			TurnState:    stubSession,
 		}),
 		"codex key":  codex.Headers(codex.HeaderOptions{Token: stubToken}),
-		"openrouter": openrouter.Headers(stubToken),
+		"openrouter": openai.Headers(stubToken),
 	}
 }
 

@@ -22,6 +22,7 @@ import (
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/catalog"
 	llm "tofu/internal/models/llm/core"
+	claudesub "tofu/internal/models/llm/providers/claude-sub"
 	"tofu/internal/models/llm/quota"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/models/llm/wire/codex"
@@ -361,7 +362,7 @@ func (a *Accounts) modelOn(row accounts.Row) (loop.Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	return loop.Subscription{Wire: wire, Effort: a.effort, CacheTTL: settingspkg.TextSaying(a.Dir, settingspkg.LeadCache, nil)}, nil
+	return claudesub.Subscription{Wire: wire, Effort: a.effort, CacheTTL: settingspkg.TextSaying(a.Dir, settingspkg.LeadCache, nil)}, nil
 }
 
 func KeepAccountsAlive(held HeldStore, note, told func(string)) (stop func()) {

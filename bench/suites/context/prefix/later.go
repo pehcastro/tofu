@@ -16,6 +16,7 @@ import (
 
 	"tofu/internal/agent/loop"
 	rule "tofu/internal/librarian/rules"
+	claudesub "tofu/internal/models/llm/providers/claude-sub"
 	"tofu/internal/models/llm/wire/anthropic"
 )
 
@@ -108,7 +109,7 @@ func MeasureLaterTurns(arm LaterArm) (LaterTurns, error) {
 	if err != nil {
 		return measured, err
 	}
-	config := loop.Config{Model: loop.Subscription{Wire: wire}, Spend: loop.SpendSubscription,
+	config := loop.Config{Model: claudesub.Subscription{Wire: wire}, Spend: loop.SpendSubscription,
 		Caps: loop.Caps{MaxSteps: 2}, ResultBytesCap: 1 << 16, ArtifactDir: filepath.Join(scratch, "artifacts"), NewID: func() string { return "turn-bench" }}
 	if !arm.HeadRewritten {
 		config.Prefix = &loop.Prefix{}

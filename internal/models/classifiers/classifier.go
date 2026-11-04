@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	jevcatalog "tofu/internal/models/classifiers/catalog"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers"
 	"tofu/internal/models/classifiers/providers/openrouter"
@@ -28,15 +29,15 @@ type provider struct {
 	key      string
 	build    func(string, providers.Config) (*providers.Wire, error)
 	alias    func(string) (string, error)
-	checkPin func(context.Context, string, providers.Config, *transport.Client) (core.PinCheck, core.Pin)
-	serves   func(core.Pin, string) bool
+	checkPin func(context.Context, string, providers.Config, *transport.Client) (jevcatalog.PinCheck, jevcatalog.Pin)
+	serves   func(jevcatalog.Pin, string) bool
 }
 
 func providerOf(of catalog.Provider) (provider, bool) {
 	switch of {
 	case catalog.TypeSafe:
 		return provider{key: sys.TypeSafeKeyName, build: typesafe.New, alias: typesafe.Model, serves: typesafe.Serves,
-			checkPin: func(ctx context.Context, bound string, config providers.Config, _ *transport.Client) (core.PinCheck, core.Pin) {
+			checkPin: func(ctx context.Context, bound string, config providers.Config, _ *transport.Client) (jevcatalog.PinCheck, jevcatalog.Pin) {
 				return typesafe.CheckPin(ctx, bound, config)
 			}}, true
 	case catalog.OpenRouter:
@@ -154,15 +155,15 @@ func (r Route) Alias() (string, error) {
 	return served.alias(r.Model.Requested())
 }
 
-func (r Route) CheckPin(ctx context.Context, listing *transport.Client) (core.PinCheck, core.Pin) {
+func (r Route) CheckPin(ctx context.Context, listing *transport.Client) (jevcatalog.PinCheck, jevcatalog.Pin) {
 	served, err := r.served()
 	if err != nil {
-		return core.PinCheck{Skipped: "the pin stays", Error: err.Error()}, core.Pin{}
+		return jevcatalog.PinCheck{Skipped: "the pin stays", Error: err.Error()}, jevcatalog.Pin{}
 	}
 	return served.checkPin(ctx, r.Model.Requested(), r.config(1), listing)
 }
 
-func (r Route) Serves(pin core.Pin, build string) bool {
+func (r Route) Serves(pin jevcatalog.Pin, build string) bool {
 	served, err := r.served()
 	return err == nil && served.serves(pin, build)
 }

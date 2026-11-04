@@ -9,8 +9,8 @@ import (
 	"reflect"
 	"testing"
 
-	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/core"
+	claudesub "tofu/internal/models/llm/providers/claude-sub"
 	"tofu/internal/models/llm/wire/anthropic"
 )
 
@@ -46,7 +46,7 @@ func TestThinkingDeltasReachOnThinkingInOrderAndTheDecision(t *testing.T) {
 	}
 
 	var streamed []string
-	decision, err := loop.Subscription{Wire: wire, Effort: core.EffortMedium}.Ask(context.Background(), core.Request{
+	decision, err := claudesub.Subscription{Wire: wire, Effort: core.EffortMedium}.Ask(context.Background(), core.Request{
 		Messages:   []core.Message{{Role: core.RoleUser, Content: "hi"}},
 		OnThinking: func(text string) { streamed = append(streamed, text) },
 	})
@@ -114,7 +114,7 @@ func TestThinkingSummarySettingDecidesTheDisplayFieldAndThinkingTokensAreKept(t 
 		if err != nil {
 			t.Fatalf("new wire: %v", err)
 		}
-		decision, err := loop.Subscription{Wire: wire, Effort: core.EffortMedium}.Ask(context.Background(), core.Request{
+		decision, err := claudesub.Subscription{Wire: wire, Effort: core.EffortMedium}.Ask(context.Background(), core.Request{
 			Messages:            []core.Message{{Role: core.RoleUser, Content: "hi"}},
 			OmitThinkingSummary: omit,
 		})

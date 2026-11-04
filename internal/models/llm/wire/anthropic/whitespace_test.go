@@ -16,6 +16,7 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/core"
+	claudesub "tofu/internal/models/llm/providers/claude-sub"
 	"tofu/internal/models/llm/wire/anthropic"
 )
 
@@ -106,7 +107,7 @@ func TestTheRequestAfterATruncatedBlankReplyBesideAToolCallCarriesNoBlankTextBlo
 		t.Fatalf("building read: %v", err)
 	}
 	row, err := loop.Run(context.Background(), loop.Config{
-		Model: loop.Subscription{Wire: wire}, Spend: loop.SpendSubscription, Tools: loop.NewRegistry(read),
+		Model: claudesub.Subscription{Wire: wire}, Spend: loop.SpendSubscription, Tools: loop.NewRegistry(read),
 		System: "you read files", Task: "what does note.txt say", Caps: loop.Caps{MaxSteps: 3},
 		ResultBytesCap: 1 << 16, ArtifactDir: filepath.Join(root, "artifacts"), NewID: func() string { return "turn-test" },
 	})

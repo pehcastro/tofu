@@ -32,6 +32,7 @@ import (
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/core"
+	claudesub "tofu/internal/models/llm/providers/claude-sub"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
@@ -329,13 +330,13 @@ func TestASpawnedSubAgentsRequestsCarryTheEffortTheSpawnNames(t *testing.T) {
 			listening := httptest.NewServer(server)
 			t.Cleanup(listening.Close)
 			orchestrator := catalog.Model{Subscription: "claude-sub", ID: "claude-test", Efforts: anthropic.ReasoningEfforts()}
-			subscription := func(effort core.Effort) loop.Subscription {
+			subscription := func(effort core.Effort) claudesub.Subscription {
 				wire, err := anthropic.New(anthropic.Config{BaseURL: listening.URL, Model: "claude-test", Proxy: true,
 					Token: func(context.Context, string) (string, error) { return "sk-ant-oat01-test", nil }})
 				if err != nil {
 					t.Fatal(err)
 				}
-				return loop.Subscription{Wire: wire, Effort: effort}
+				return claudesub.Subscription{Wire: wire, Effort: effort}
 			}
 			open := func(opts wiring.RunOpts) (wiring.Wire, error) {
 				return wiring.Wire{Held: wiring.FixedAccounts(subscription(opts.Effort)), Spend: loop.SpendSubscription, Selected: orchestrator}, nil

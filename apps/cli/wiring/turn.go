@@ -20,7 +20,7 @@ import (
 	llm "tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/models/llm/wire/codex"
-	"tofu/internal/models/llm/wire/openrouter"
+	"tofu/internal/models/llm/wire/openai"
 	"tofu/internal/models/transport"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
@@ -147,7 +147,7 @@ func KeyModel(model string) (loop.Model, error) {
 	if err != nil {
 		return nil, fmt.Errorf("no %s %s key, run %s: %w", facts.Name, facts.Role, facts.Hint(), err)
 	}
-	wire, err := openrouter.New(openrouter.Config{
+	wire, err := openai.New(openai.Config{
 		Endpoint:  os.Getenv(OpenRouterEndpointVariable),
 		Model:     model,
 		Key:       key,

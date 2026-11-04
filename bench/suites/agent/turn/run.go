@@ -9,7 +9,7 @@ import (
 	iturn "tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/models/llm/wire/openrouter"
+	"tofu/internal/models/llm/wire/openai"
 	"tofu/internal/models/transport"
 	"tofu/internal/stat"
 )
@@ -32,7 +32,7 @@ var runArms = []armSpec{
 }
 
 func Run(ctx context.Context, key string) (Result, error) {
-	wire, err := openrouter.New(openrouter.Config{
+	wire, err := openai.New(openai.Config{
 		Model: Model,
 		Key:   key,
 		Transport: transport.Config{

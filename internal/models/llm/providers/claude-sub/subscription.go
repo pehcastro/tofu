@@ -1,4 +1,4 @@
-package loop
+package claudesub
 
 import (
 	"cmp"

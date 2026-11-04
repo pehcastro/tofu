@@ -2,13 +2,13 @@ package wiring
 
 import (
 	"tofu/internal/models/llm/catalog"
-	"tofu/internal/models/llm/wire/openrouter"
+	"tofu/internal/models/llm/wire/openai"
 )
 
 const (
 	WireSubscription = "anthropic"
 	WireCodex        = "codex"
-	WireKey          = openrouter.Name
+	WireKey          = openai.Name
 	WireMeta         = string(catalog.Meta)
 )
 

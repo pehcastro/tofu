@@ -22,6 +22,7 @@ import (
 	"tofu/internal/konst"
 	rule "tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
+	claudesub "tofu/internal/models/llm/providers/claude-sub"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
@@ -108,7 +109,7 @@ func servedSession(t *testing.T, server http.Handler) (loop.Config, []contract.T
 		t.Fatalf("building write: %v", err)
 	}
 	return loop.Config{
-		Model:          loop.Subscription{Wire: wire},
+		Model:          claudesub.Subscription{Wire: wire},
 		Spend:          loop.SpendSubscription,
 		Tools:          loop.NewRegistry(read, write),
 		Environment:    sessionEnvironment,

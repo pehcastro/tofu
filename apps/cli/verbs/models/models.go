@@ -23,6 +23,7 @@ import (
 	"tofu/internal/judge/gate"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers"
+	jevcatalog "tofu/internal/models/classifiers/catalog"
 	"tofu/internal/models/classifiers/core"
 	cred "tofu/internal/models/llm/accounts"
 	models "tofu/internal/models/llm/catalog"
@@ -288,7 +289,7 @@ func windowShort(tokens int) string {
 
 type ModelReload struct {
 	host.ModelReload
-	Jev core.PinCheck `json:"jev,omitzero"`
+	Jev jevcatalog.PinCheck `json:"jev,omitzero"`
 }
 
 func modelChangeMark(c host.ModelChange) cli.Mark {
@@ -328,10 +329,10 @@ const (
 	jevPinRaised
 )
 
-func checkJevPin(ctx context.Context, keys core.Keyring, listing *transport.Client, pinning jevPinning) core.PinCheck {
+func checkJevPin(ctx context.Context, keys core.Keyring, listing *transport.Client, pinning jevPinning) jevcatalog.PinCheck {
 	route, err := classifiers.Resolve(".", keys)
 	if route.Model.Provider == "" {
-		return core.PinCheck{Skipped: "the pin stays", Error: err.Error()}
+		return jevcatalog.PinCheck{Skipped: "the pin stays", Error: err.Error()}
 	}
 	check, newest := route.CheckPin(ctx, listing)
 	switch pinning {

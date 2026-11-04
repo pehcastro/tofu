@@ -1,4 +1,4 @@
-package openrouter
+package openai
 
 import (
 	"encoding/json"
