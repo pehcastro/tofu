@@ -13,6 +13,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/project/boardy"
+	"tofu/internal/store/session"
 )
 
 type SubAgentCommand struct {
@@ -87,7 +88,7 @@ type SubAgentReport struct {
 	Owns       []string             `json:"owns"`
 	State      string               `json:"state"`
 	Completion subagents.Completion `json:"completion"`
-	Outcome    Outcome              `json:"outcome"`
+	Outcome    session.Outcome      `json:"outcome"`
 	Steps      int                  `json:"steps"`
 	Forks      int                  `json:"forks,omitempty"`
 	Attempts   []subagents.Attempt  `json:"attempts"`

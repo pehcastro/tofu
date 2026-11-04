@@ -181,31 +181,31 @@ const (
 )
 
 type Row struct {
-	ID           string       `json:"id"`
-	Session      string       `json:"session,omitempty"`
-	Schema       int          `json:"schema"`
-	At           time.Time    `json:"at"`
-	Task         string       `json:"task"`
-	Wire         string       `json:"wire,omitempty"`
-	Model        string       `json:"model"`
-	Spend        Spend        `json:"spend"`
-	Steps        []StepRow    `json:"steps,omitempty"`
-	Root         string       `json:"root,omitempty"`
-	Account      int64        `json:"account,omitempty"`
-	SpawnedFrom  string       `json:"spawned_from,omitempty"`
-	SpawnedBy    string       `json:"spawned_by,omitempty"`
-	ForkedFrom   string       `json:"forked_from,omitempty"`
-	ForkedInto   string       `json:"forked_into,omitempty"`
-	ForkKind     ForkKind     `json:"fork_kind,omitempty"`
-	EndedInFork  *Fork        `json:"ended_in_fork,omitempty"`
-	Warnings     []string     `json:"warnings,omitempty"`
-	SubAgentIDs  []string     `json:"sub_agent_ids"`
-	Outcome      Outcome      `json:"outcome"`
-	Error        string       `json:"error,omitempty"`
-	TotalCostUSD float64      `json:"total_cost_usd"`
-	WallClockMS  int64        `json:"wall_clock_ms"`
-	DecisionIDs  []string     `json:"decision_ids,omitempty"`
-	SearchLinks  []SearchLink `json:"search_links,omitempty"`
+	ID           string          `json:"id"`
+	Session      string          `json:"session,omitempty"`
+	Schema       int             `json:"schema"`
+	At           time.Time       `json:"at"`
+	Task         string          `json:"task"`
+	Wire         string          `json:"wire,omitempty"`
+	Model        string          `json:"model"`
+	Spend        Spend           `json:"spend"`
+	Steps        []StepRow       `json:"steps,omitempty"`
+	Root         string          `json:"root,omitempty"`
+	Account      int64           `json:"account,omitempty"`
+	SpawnedFrom  string          `json:"spawned_from,omitempty"`
+	SpawnedBy    string          `json:"spawned_by,omitempty"`
+	ForkedFrom   string          `json:"forked_from,omitempty"`
+	ForkedInto   string          `json:"forked_into,omitempty"`
+	ForkKind     ForkKind        `json:"fork_kind,omitempty"`
+	EndedInFork  *Fork           `json:"ended_in_fork,omitempty"`
+	Warnings     []string        `json:"warnings,omitempty"`
+	SubAgentIDs  []string        `json:"sub_agent_ids"`
+	Outcome      session.Outcome `json:"outcome"`
+	Error        string          `json:"error,omitempty"`
+	TotalCostUSD float64         `json:"total_cost_usd"`
+	WallClockMS  int64           `json:"wall_clock_ms"`
+	DecisionIDs  []string        `json:"decision_ids,omitempty"`
+	SearchLinks  []SearchLink    `json:"search_links,omitempty"`
 
 	Budget   recall.Budget  `json:"budget"`
 	Guard    *LoopGuardStop `json:"loop_guard,omitempty"`
