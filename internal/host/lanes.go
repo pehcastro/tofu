@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
 	"tofu/internal/ui/statusline"
 )
@@ -498,9 +498,9 @@ func (s *server) pumpOn(l *lane) {
 		event.from = l.host
 		s.publish(event)
 	}
-	recover.Go(l.host.report, "serve pump", func() {
+	safe.Go(l.host.report, "serve pump", func() {
 		defer close(l.pumped)
-		recover.Loop(l.host.report, "serve pump", l.stop, func() {
+		safe.Loop(l.host.report, "serve pump", l.stop, func() {
 			for {
 				select {
 				case event := <-l.host.Events():

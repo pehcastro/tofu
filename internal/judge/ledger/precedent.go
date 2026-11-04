@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/sys"
 )
 
@@ -144,7 +144,7 @@ func (r *Reader) Precedents(targets []Row) ([][]Precedent, error) {
 				if i >= len(targets) {
 					return
 				}
-				failed[i] = recover.Call(report, "precedent shortlist", func() error {
+				failed[i] = safe.Call(report, "precedent shortlist", func() error {
 					found[i] = Shortlist(targets[i], points[targets[i].Point])
 					return nil
 				})

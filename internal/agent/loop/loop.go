@@ -25,7 +25,7 @@ import (
 	skill "tofu/internal/librarian/skills"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/transport"
-	safe "tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/tools/contract"

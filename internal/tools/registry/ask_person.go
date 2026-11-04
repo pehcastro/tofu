@@ -17,7 +17,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
@@ -159,16 +159,16 @@ func (a AskPerson) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 		}
 		recorded <- ids
 	} else {
-		recover.Go(report, "ask record", func() {
+		safe.Go(report, "ask record", func() {
 			var ids []string
 			defer func() { recorded <- ids }()
 			ids = a.recordShadow(context.WithoutCancel(ctx), questions)
 		})
 	}
 	replied := make(chan personReply, 1)
-	recover.Go(report, "ask reply", func() {
+	safe.Go(report, "ask reply", func() {
 		var reply personReply
-		if err := recover.Call(report, "ask reply", func() error {
+		if err := safe.Call(report, "ask reply", func() error {
 			reply = a.reply(ctx, raw, questions, auto)
 			return nil
 		}); err != nil {
@@ -183,7 +183,7 @@ func (a AskPerson) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 		return contract.Result{Content: string(shown)}, err
 	}
 	open := a.Inbox.Open(pollOf(questions))
-	recover.Go(report, "ask answer", func() { a.answerLater(open, replied, recorded, questions) })
+	safe.Go(report, "ask answer", func() { a.answerLater(open, replied, recorded, questions) })
 	return contract.Result{Content: askedAndWorking}, nil
 }
 

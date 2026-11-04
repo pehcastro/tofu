@@ -19,7 +19,7 @@ import (
 	"sync"
 	"time"
 
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/sys"
 )
 
@@ -62,7 +62,7 @@ func dialLoopbacks(port int, dial time.Duration) []Address {
 	died := make([]error, len(addresses))
 	for i := range addresses {
 		dialing.Go(func() {
-			died[i] = recover.Call(nil, "port dial", func() error {
+			died[i] = safe.Call(nil, "port dial", func() error {
 				addresses[i].Open = PortOpen(addresses[i].Host, port, dial)
 				return nil
 			})

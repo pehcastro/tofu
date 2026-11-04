@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/sys"
 )
 
@@ -97,8 +97,8 @@ func (c *Client) Get(ctx context.Context, address string) (Page, error) {
 		shared = &flight{done: make(chan struct{})}
 		c.flights[key] = shared
 		report := sys.Crashes(".")
-		recover.Go(report, "web fetch", func() {
-			shared.err = recover.Call(report, "web fetch", func() (err error) {
+		safe.Go(report, "web fetch", func() {
+			shared.err = safe.Call(report, "web fetch", func() (err error) {
 				shared.page, err = c.fetch(context.WithoutCancel(ctx), target)
 				return err
 			})

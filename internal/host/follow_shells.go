@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"tofu/internal/models/llm/core"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -77,7 +77,7 @@ func (h *Host) takeShell(s *seat, ask followAsk) (process.Hold, error) {
 	}
 	h.held.by[ask.Shell] = &heldShell{seat: s, next: hold.Next}
 	h.held.mu.Unlock()
-	h.held.pushing.Do(func() { recover.Go(h.report, "follow shell raw", h.pushRaw) })
+	h.held.pushing.Do(func() { safe.Go(h.report, "follow shell raw", h.pushRaw) })
 	return hold, nil
 }
 

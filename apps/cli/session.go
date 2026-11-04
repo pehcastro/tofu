@@ -26,7 +26,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
@@ -321,7 +321,7 @@ func resumeOf(store *session.Store, id string) (sessionResume, error) {
 	var keysErr error
 	var loaded sync.WaitGroup
 	loaded.Go(func() {
-		keysErr = sys.Crashed(".", recover.Call(nil, "key redactor load", func() error {
+		keysErr = sys.Crashed(".", safe.Call(nil, "key redactor load", func() error {
 			keys = sys.LoadKeyRedactor()
 			return nil
 		}))

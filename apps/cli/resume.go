@@ -8,7 +8,7 @@ import (
 	"tofu/apps/cli/output"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/cli/render"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/ui/tui/panels/progress"
 )
 
@@ -31,7 +31,7 @@ func restoring(out io.Writer, carry sessionResume) func() {
 	}
 	label := "restoring " + carry.Handle
 	stop, stopped := make(chan struct{}), make(chan struct{})
-	recover.Go(wiring.CrashTold(".", func(said string) { _, _ = io.WriteString(out, "\rtofu: "+said+"\n") }), "restoring spinner", func() {
+	safe.Go(wiring.CrashTold(".", func(said string) { _, _ = io.WriteString(out, "\rtofu: "+said+"\n") }), "restoring spinner", func() {
 		defer close(stopped)
 		tick := time.NewTicker(progress.TickInterval)
 		defer tick.Stop()

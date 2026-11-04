@@ -26,7 +26,7 @@ import (
 	"tofu/internal/konst"
 	library "tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/core"
-	safe "tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	isession "tofu/internal/store/session"
 	isettings "tofu/internal/store/settings"
 	"tofu/internal/sys"

@@ -15,7 +15,7 @@ import (
 	"tofu/apps/cli/wiring"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/sys"
 	"tofu/internal/tools/shell/sift"
 )
@@ -168,7 +168,7 @@ func siftJev(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
 	var wg sync.WaitGroup
 	for i := range parts {
 		wg.Go(func() {
-			errs[i] = sys.Crashed(".", recover.Call(nil, "sift", func() (err error) {
+			errs[i] = sys.Crashed(".", safe.Call(nil, "sift", func() (err error) {
 				marks[i], costs[i], err = siftOne(client, set, parts, i, opts, rule)
 				return err
 			}))

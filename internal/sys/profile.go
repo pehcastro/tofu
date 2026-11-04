@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 )
 
 const (
@@ -90,7 +90,7 @@ func StartProfile() (stop func()) {
 	runtime.MemProfileRate = profileMemoryRate
 	_ = pprof.StartCPUProfile(cpu)
 	started, done, sampled := time.Now(), make(chan struct{}), make(chan []memoryPoint, 1)
-	recover.Go(Crashes("."), "profile sampler", func() {
+	safe.Go(Crashes("."), "profile sampler", func() {
 		var points []memoryPoint
 		defer func() { sampled <- points }()
 		var peak uint64
@@ -150,7 +150,7 @@ func StartSnapshots(state string) (dir string, stop func(), err error) {
 		}
 	}
 	done, finished := make(chan struct{}), make(chan struct{})
-	recover.Go(Crashes("."), "profile snapshots", func() {
+	safe.Go(Crashes("."), "profile snapshots", func() {
 		defer close(finished)
 		tick := time.NewTicker(SnapshotEvery)
 		defer tick.Stop()

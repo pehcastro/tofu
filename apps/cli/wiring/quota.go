@@ -11,7 +11,7 @@ import (
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/quota"
 	"tofu/internal/models/transport"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/sys"
 	"tofu/internal/ui/tui/frame/frame"
 )
@@ -178,7 +178,7 @@ func PollRowsOn(ctx context.Context, store *accounts.Store, rows []accounts.Row,
 			return nil, err
 		}
 		polling.Go(func() {
-			results[i].Err = sys.Crashed(".", recover.Call(nil, "quota poll", func() (err error) {
+			results[i].Err = sys.Crashed(".", safe.Call(nil, "quota poll", func() (err error) {
 				results[i].Report, err = poller.Poll(ctx, quota.Account{
 					Provider:      provider,
 					AccountID:     row.Credential.Identity.AccountID,

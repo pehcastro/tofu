@@ -18,7 +18,7 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/project/boardy"
 	"tofu/internal/sys"
 )
@@ -95,8 +95,8 @@ func (t *SpawnTool) watch(held *heldSubAgent, check *checkIn) func() {
 	}
 	t.Inbox.attach(held, check)
 	stop, report := make(chan struct{}), sys.Crashes(t.Project)
-	recover.Go(report, "check-in watch", func() {
-		recover.Loop(report, "check-in watch", stop, func() {
+	safe.Go(report, "check-in watch", func() {
+		safe.Loop(report, "check-in watch", stop, func() {
 			ticker := time.NewTicker(every)
 			defer ticker.Stop()
 			for {

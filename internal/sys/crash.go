@@ -4,11 +4,11 @@ import (
 	"errors"
 	"os"
 
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 )
 
-func Crashes(project string) recover.Report {
-	return func(p recover.Panic) { p.Saved(CrashDir(project)) }
+func Crashes(project string) safe.Report {
+	return func(p safe.Panic) { p.Saved(CrashDir(project)) }
 }
 
 func CrashDir(project string) string {
@@ -20,7 +20,7 @@ func CrashDir(project string) string {
 }
 
 func Crashed(project string, err error) error {
-	var caught recover.Panic
+	var caught safe.Panic
 	if !errors.As(err, &caught) {
 		return err
 	}

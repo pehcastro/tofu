@@ -17,7 +17,7 @@ import (
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/tools/shell/process"
@@ -155,7 +155,7 @@ func (e *Engine) Fire(ctx context.Context, in Input) Verdict {
 	report := sys.Crashes(e.project)
 	for i, hook := range chosen {
 		running.Go(func() {
-			if err := recover.Call(report, "hook", func() error {
+			if err := safe.Call(report, "hook", func() error {
 				results[i] = e.run(ctx, hook, stdin)
 				return nil
 			}); err != nil {

@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/sys"
 )
 
@@ -199,7 +199,7 @@ func (s *Store) Project() string { return s.project }
 
 func (s *Store) State() string { return filepath.Dir(s.dir) }
 
-func (s *Store) crashed(p recover.Panic) { p.Saved(s.State()) }
+func (s *Store) crashed(p safe.Panic) { p.Saved(s.State()) }
 
 func (s *Store) AttachmentDir(id string) string {
 	return filepath.Join(filepath.Dir(s.dir), attachmentsName, id)

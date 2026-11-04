@@ -16,7 +16,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/store/learn/repeat"
 	"tofu/internal/store/learn/words"
 	memory "tofu/internal/store/memory/entries"
@@ -328,7 +328,7 @@ func ExitComesBack(ctx context.Context, name string) bool {
 	return inbox.watched[name]
 }
 
-func (b *Inbox) whenTyped(report recover.Report) (typedNow <-chan struct{}, stop func()) {
+func (b *Inbox) whenTyped(report safe.Report) (typedNow <-chan struct{}, stop func()) {
 	b.mu.Lock()
 	typed := b.typed
 	b.mu.Unlock()
@@ -336,7 +336,7 @@ func (b *Inbox) whenTyped(report recover.Report) (typedNow <-chan struct{}, stop
 		return nil, func() {}
 	}
 	arrived, stopped := make(chan struct{}), make(chan struct{})
-	recover.Go(report, "typed while bash runs", func() {
+	safe.Go(report, "typed while bash runs", func() {
 		poll := time.NewTicker(konst.ReadyPollMillis * time.Millisecond)
 		defer poll.Stop()
 		for len(typed) == 0 {
@@ -351,11 +351,11 @@ func (b *Inbox) whenTyped(report recover.Report) (typedNow <-chan struct{}, stop
 	return arrived, func() { close(stopped) }
 }
 
-func (b *Inbox) watchShell(report recover.Report, registry *process.Registry, name string) {
+func (b *Inbox) watchShell(report safe.Report, registry *process.Registry, name string) {
 	b.mu.Lock()
 	b.watched[name] = true
 	b.mu.Unlock()
-	recover.Go(report, "lead shell watch", func() {
+	safe.Go(report, "lead shell watch", func() {
 		ended, err := registry.AwaitEnd(context.Background(), name, konst.ShellWaitMillis*time.Millisecond)
 		for err == nil && ended.State == process.Running && !ended.HeldByPerson() {
 			ended, err = registry.AwaitEnd(context.Background(), name, konst.ShellWaitMillis*time.Millisecond)
@@ -1008,7 +1008,7 @@ func (b *Inbox) compactLater(job laterCompaction) bool {
 	if b.settling == nil {
 		b.settling = make(chan struct{})
 		report := sys.Crashes(".")
-		recover.Go(report, "later compaction", func() { b.compacting(report, job.run) })
+		safe.Go(report, "later compaction", func() { b.compacting(report, job.run) })
 	} else {
 		b.queued = job
 	}
@@ -1019,9 +1019,9 @@ func (b *Inbox) compactLater(job laterCompaction) bool {
 	return true
 }
 
-func (b *Inbox) compacting(report recover.Report, run func()) {
+func (b *Inbox) compacting(report safe.Report, run func()) {
 	for run != nil {
-		_ = recover.Call(report, "later compaction", func() error { run(); return nil })
+		_ = safe.Call(report, "later compaction", func() error { run(); return nil })
 		b.mu.Lock()
 		run, b.queued = b.queued.run, laterCompaction{}
 		if run == nil {

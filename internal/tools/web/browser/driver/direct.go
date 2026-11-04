@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/sys"
 	"tofu/internal/tools/web/browser/extension"
 )
@@ -25,7 +25,7 @@ type direct struct {
 	sessions map[string]string
 	mu       sync.Mutex
 	casts    map[string]*[]ScreencastFrame
-	report   recover.Report
+	report   safe.Report
 }
 
 type pageTarget struct {
@@ -52,14 +52,14 @@ func serveDirect(cdp *cdpConn, profile string) (*Client, error) {
 	}
 	near, far := net.Pipe()
 	d := &direct{cdp: cdp, profile: profile, build: build, snapshot: string(source), sessions: map[string]string{}, casts: map[string]*[]ScreencastFrame{}, report: sys.Crashes(".")}
-	recover.Go(d.report, "browser direct", func() { d.serve(far) })
+	safe.Go(d.report, "browser direct", func() { d.serve(far) })
 	return &Client{conn: near, out: json.NewEncoder(near), in: json.NewDecoder(near)}, nil
 }
 
 func (d *direct) serve(conn net.Conn) {
 	defer func() { _ = d.cdp.ws.Close() }()
 	requests, answers := make(chan request), json.NewEncoder(conn)
-	recover.Go(d.report, "browser direct reader", func() {
+	safe.Go(d.report, "browser direct reader", func() {
 		defer close(requests)
 		for decoder := json.NewDecoder(conn); ; {
 			var req request
@@ -71,7 +71,7 @@ func (d *direct) serve(conn net.Conn) {
 	})
 	for req := range requests {
 		var value json.RawMessage
-		err := recover.Call(d.report, "browser request", func() (err error) {
+		err := safe.Call(d.report, "browser request", func() (err error) {
 			value, err = d.handle(req)
 			return err
 		})
@@ -421,7 +421,7 @@ func (d *direct) screencast(session string, req request) (json.RawMessage, error
 			d.mu.Lock()
 			*frames = append(*frames, ScreencastFrame{Data: frame.Data, ChromeSeconds: frame.Metadata.Timestamp})
 			d.mu.Unlock()
-			recover.Go(d.report, "browser frame ack", func() {
+			safe.Go(d.report, "browser frame ack", func() {
 				_, _ = d.cdp.send(session, "Page.screencastFrameAck", map[string]any{"sessionId": frame.Session})
 			})
 		})

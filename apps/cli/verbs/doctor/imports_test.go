@@ -23,7 +23,7 @@ func everyRuleMatched(files map[string]string) map[string]string {
 		"internal/judge/questions/questions.go": "package questions\n\nimport \"tofu/internal/sys\"\n\nfunc Name() string { return sys.OS() }\n",
 		"internal/sys/sys.go":                   "package sys\n\nfunc OS() string { return \"windows\" }\n",
 		"internal/konst/konst.go":               "package konst\n",
-		"internal/platform/recover/safe.go":     "package safe\n",
+		"internal/platform/safe/safe.go":        "package safe\n",
 	}
 	maps.Copy(tree, files)
 	return tree
@@ -58,7 +58,7 @@ func TestImportsFailsOnACommandImportingBench(t *testing.T) {
 	for _, want := range []string{
 		"Imports · 10 packages · 11 rules",
 		"✗ 1 violations\n",
-		"  ✗ tofu/apps                       never tofu/bench\n",
+		"  ✗ tofu/apps                    never tofu/bench\n",
 		"violations\n  ✗ tofu/apps/cli  imports tofu/bench/suites/judge/cost\n",
 	} {
 		if !strings.Contains(out.String(), want) {
@@ -82,7 +82,7 @@ func TestImportsFailsOnJudgeImportingTurn(t *testing.T) {
 	}
 	want := importViolation{From: "tofu/internal/judge/gate", To: "tofu/internal/agent/loop", Rule: "under tofu/internal, " +
 		"a package in tofu/internal/judge imports only " +
-		"tofu/internal/judge, tofu/internal/sys, tofu/internal/konst, tofu/internal/platform/recover, " +
+		"tofu/internal/judge, tofu/internal/sys, tofu/internal/konst, tofu/internal/platform/safe, " +
 		"tofu/internal/models/transport, tofu/internal/models/classifiers/core, tofu/internal/models/classifiers/providers"}
 	if len(report.Violations) != 1 || report.Violations[0] != want {
 		t.Fatalf("violations %+v, want only %+v", report.Violations, want)

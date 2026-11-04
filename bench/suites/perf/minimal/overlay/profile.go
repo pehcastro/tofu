@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"time"
 
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 )
 
 const (
@@ -188,7 +188,7 @@ func StartSnapshots(state string) (dir string, stop func(), err error) {
 		}
 	}
 	done, finished := make(chan struct{}), make(chan struct{})
-	recover.Go(Crashes("."), "profile snapshots", func() {
+	safe.Go(Crashes("."), "profile snapshots", func() {
 		defer close(finished)
 		tick := time.NewTicker(SnapshotEvery)
 		defer tick.Stop()

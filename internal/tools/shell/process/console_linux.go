@@ -13,7 +13,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"tofu/internal/konst"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 )
 
 const resizeLosesKeys = false
@@ -29,7 +29,7 @@ func (d device) resize(size Size) error {
 	return unix.IoctlSetWinsize(int(d.leader.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Row: uint16(size.rows), Col: uint16(size.cols)})
 }
 
-func startConsole(cmd *exec.Cmd, out io.Writer, lifetime Lifetime, typed bool, report recover.Report) (tree, <-chan error, *terminal, error) {
+func startConsole(cmd *exec.Cmd, out io.Writer, lifetime Lifetime, typed bool, report safe.Report) (tree, <-chan error, *terminal, error) {
 	leader, err := os.OpenFile("/dev/ptmx", os.O_RDWR|unix.O_NOCTTY, 0)
 	if err != nil {
 		return tree{}, nil, nil, err
@@ -56,13 +56,13 @@ func startConsole(cmd *exec.Cmd, out io.Writer, lifetime Lifetime, typed bool, r
 	}
 	sink, term := readerFor(out, typed, device{leader: leader})
 	drained := make(chan struct{})
-	recover.Go(report, "shell output", func() {
+	safe.Go(report, "shell output", func() {
 		defer close(drained)
 		pipeOut(report, sink, leader)
 	})
 	waited := make(chan error, 1)
-	recover.Go(report, "shell wait", func() {
-		waited <- recover.Call(report, "shell wait", func() error {
+	safe.Go(report, "shell wait", func() {
+		waited <- safe.Call(report, "shell wait", func() error {
 			defer func() { _ = leader.Close() }()
 			err := cmd.Wait()
 			if term != nil {

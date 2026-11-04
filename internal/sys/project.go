@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 )
 
 const (
@@ -316,7 +316,7 @@ func gitIdentity(dir string) (remote, root string) {
 	}
 	var both sync.WaitGroup
 	both.Go(func() {
-		_ = recover.Call(Crashes(dir), "git identity", func() error {
+		_ = safe.Call(Crashes(dir), "git identity", func() error {
 			root = git("rev-list", "--max-parents=0", "HEAD")
 			return nil
 		})

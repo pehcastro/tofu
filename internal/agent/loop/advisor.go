@@ -11,7 +11,7 @@ import (
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
 )
@@ -29,7 +29,7 @@ func (t *SpawnTool) Advise(ctx context.Context, plan string) {
 	t.Inbox.watched[waiting] = true
 	t.Inbox.mu.Unlock()
 	reading, cancel := outlivingTheWave(ctx)
-	recover.Go(sys.Crashes(t.Project), waiting, func() {
+	safe.Go(sys.Crashes(t.Project), waiting, func() {
 		defer func() {
 			cancel()
 			t.Inbox.mu.Lock()

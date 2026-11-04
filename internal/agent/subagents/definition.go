@@ -16,7 +16,7 @@ import (
 	"tofu/internal/librarian/skills"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/sys"
 )
 
@@ -116,7 +116,7 @@ func Definitions(scan Scan) Found {
 	report := sys.Crashes(scan.Project)
 	for i := range files {
 		reading.Go(func() {
-			files[i].err = recover.Call(report, "sub-agent discovery", func() (err error) {
+			files[i].err = safe.Call(report, "sub-agent discovery", func() (err error) {
 				files[i].definition, err = read(files[i].layer.FS, files[i].match)
 				return err
 			})

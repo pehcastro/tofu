@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 )
 
 type keptLog struct {
@@ -74,7 +74,7 @@ func (l *keptLog) Close() error {
 	return l.file.Close()
 }
 
-func startLogged(cmd *exec.Cmd, lifetime Lifetime, logFile *os.File, log io.Writer, report recover.Report) (tree, <-chan struct{}, error) {
+func startLogged(cmd *exec.Cmd, lifetime Lifetime, logFile *os.File, log io.Writer, report safe.Report) (tree, <-chan struct{}, error) {
 	if lifetime == OutlivesTofu {
 		cmd.Stdout, cmd.Stderr = logFile, logFile
 		spawned, err := startTree(cmd, lifetime)
@@ -92,7 +92,7 @@ func startLogged(cmd *exec.Cmd, lifetime Lifetime, logFile *os.File, log io.Writ
 		return tree{}, nil, err
 	}
 	drained := make(chan struct{})
-	recover.Go(report, "shell output", func() {
+	safe.Go(report, "shell output", func() {
 		defer close(drained)
 		defer func() { _ = read.Close() }()
 		pipeOut(report, log, read)

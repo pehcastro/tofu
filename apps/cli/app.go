@@ -33,7 +33,7 @@ import (
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/catalog"
 	llm "tofu/internal/models/llm/core"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	memory "tofu/internal/store/memory/entries"
 	sessionstore "tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
@@ -95,7 +95,7 @@ func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 	registry, registryErr := shellsverb.LaunchShellRegistry(dir)
 	home, _ := os.UserHomeDir()
 	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: tools.NewBrowserTabs(home), release: new(func()), endSession: new(func() []string), turnRunning: new(func() (string, bool)), stopRestoring: func() {}}
-	recover.Go(sys.Crashes(dir), "state sweep", func() {
+	safe.Go(sys.Crashes(dir), "state sweep", func() {
 		state, err := sys.ProjectStateDirAt(dir)
 		if err != nil {
 			return
@@ -103,9 +103,9 @@ func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 		sys.OncePerDay(filepath.Join(state, sweptStampName), time.Now(), func() {
 			aged := time.Now().AddDate(0, 0, -stateFileKeptDays)
 			_ = sys.RemoveUnreferencedArtifacts(filepath.Join(state, artifactsDirName), filepath.Join(state, sessionsDirName), aged)
-			_ = sys.RemoveAged(state, recover.CrashPrefix, recover.CrashSuffix, aged)
+			_ = sys.RemoveAged(state, safe.CrashPrefix, safe.CrashSuffix, aged)
 			if stateHome, err := sys.HomeConfigDir(); err == nil {
-				_ = sys.RemoveAged(stateHome, recover.CrashPrefix, recover.CrashSuffix, aged)
+				_ = sys.RemoveAged(stateHome, safe.CrashPrefix, safe.CrashSuffix, aged)
 			}
 		})
 	})
@@ -258,7 +258,7 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 	var identity sync.WaitGroup
 	var identityErr error
 	identity.Go(func() {
-		identityErr = sys.Crashed(dir, recover.Call(nil, "project identity", func() error { return sys.RecordIdentity(dir) }))
+		identityErr = sys.Crashed(dir, safe.Call(nil, "project identity", func() error { return sys.RecordIdentity(dir) }))
 	})
 	err = app.Run(appOptions(dir, wiring.RunOpts{}, live, launch, held))
 	identity.Wait()

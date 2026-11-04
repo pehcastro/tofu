@@ -24,7 +24,7 @@ import (
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
-	safe "tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"

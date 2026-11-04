@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/settings"
 	"tofu/internal/sys"
@@ -105,7 +105,7 @@ func (s *server) watchBoardy(quit <-chan struct{}) {
 		return
 	}
 	told := make(chan boardy.Writing)
-	recover.Go(s.report, "serve boardy told", func() {
+	safe.Go(s.report, "serve boardy told", func() {
 		s.hear(quit, TopicBoardy, func(writing boardy.Writing) {
 			select {
 			case told <- writing:

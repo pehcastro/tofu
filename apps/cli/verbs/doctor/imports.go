@@ -24,7 +24,7 @@ type importRule struct {
 }
 
 func importRules() []importRule {
-	leaves := []string{"tofu/internal/sys", "tofu/internal/konst", "tofu/internal/platform/recover"}
+	leaves := []string{"tofu/internal/sys", "tofu/internal/konst", "tofu/internal/platform/safe"}
 	rules := []importRule{
 		{from: "tofu/apps", scope: "tofu/bench"},
 		{from: "tofu/apps", scope: "tofu/internal/dummy"},

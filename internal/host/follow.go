@@ -16,7 +16,7 @@ import (
 	"tofu/internal/agent/cron"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/shell/process"
@@ -238,7 +238,7 @@ func (h *Host) seat(conn net.Conn, in io.Reader) error {
 	if !seated {
 		return nil
 	}
-	recover.Go(h.report, "follow write", s.write)
+	safe.Go(h.report, "follow write", s.write)
 	return h.serveSeat(a, s, in)
 }
 
@@ -485,10 +485,10 @@ func (h *Host) join(id string) (*following, error) {
 func (h *Host) follow(f *following, id string) {
 	settled := followAsk{Op: followSettings, Asking: h.asking, Pick: h.pick}
 	h.following.Store(f)
-	recover.Go(h.report, "follow", func() { h.heed(f) })
-	recover.Go(h.report, "follow beat", f.beat)
+	safe.Go(h.report, "follow", func() { h.heed(f) })
+	safe.Go(h.report, "follow beat", f.beat)
 	_ = h.loadCron(id)
-	recover.Go(h.report, "follow attach", func() {
+	safe.Go(h.report, "follow attach", func() {
 		f.ask(followAsk{Op: followAttach, Terminals: h.shells != nil && h.shells.Terminals.Load()})
 		f.ask(settled)
 		if f.hub.Version != konst.Version {
@@ -725,7 +725,7 @@ func (h *Host) rejoin(f *following, now picture, seq uint64) {
 	select {
 	case <-f.joined:
 		said := "process " + strconv.Itoa(os.Getpid()) + " fell behind the tofu host, process " + strconv.Itoa(f.hub.PID) + ", on session " + id + " after event " + strconv.FormatUint(f.seq, 10) + ", so it read the session again as it stood at event " + strconv.FormatUint(seq, 10)
-		recover.Go(h.report, "follow trace", func() { f.ask(followAsk{Op: followTrace, Text: said}) })
+		safe.Go(h.report, "follow trace", func() { f.ask(followAsk{Op: followTrace, Text: said}) })
 	default:
 		close(f.joined)
 	}

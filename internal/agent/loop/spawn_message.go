@@ -11,7 +11,7 @@ import (
 
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/project/boardy"
 	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
@@ -222,7 +222,7 @@ func (t *SpawnTool) send(ctx context.Context, to, text, from string) (contract.R
 	}
 	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
 	t.Inbox.hold(held, site.log)
-	recover.Go(sys.Crashes(t.Project), "sub-agent "+held.agent.ID, func() {
+	safe.Go(sys.Crashes(t.Project), "sub-agent "+held.agent.ID, func() {
 		t.background(runCtx, cancel, held, opened, site, text, postedNow(core.SourceMessage, t.orchestratorID), nil)
 	})
 	return contract.Result{Content: to + " resumes in the background with its conversation. its report comes to you as a message when it ends.", Command: "message " + to, SubAgent: to}, nil

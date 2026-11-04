@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/sys"
 )
 
@@ -247,7 +247,7 @@ func (s Store) eachInParallel(count int, do func(at int) error) []error {
 	for range min(konst.BoardReadersMost, count) {
 		workers.Go(func() {
 			for at := int(next.Add(1)) - 1; at < count; at = int(next.Add(1)) - 1 {
-				failed[at] = recover.Call(s.crashed, "boardy read", func() error { return do(at) })
+				failed[at] = safe.Call(s.crashed, "boardy read", func() error { return do(at) })
 			}
 		})
 	}
@@ -255,7 +255,7 @@ func (s Store) eachInParallel(count int, do func(at int) error) []error {
 	return failed
 }
 
-func (s Store) crashed(p recover.Panic) {
+func (s Store) crashed(p safe.Panic) {
 	p.Saved(filepath.Dir(s.Dir))
 }
 

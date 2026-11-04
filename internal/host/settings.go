@@ -13,7 +13,7 @@ import (
 
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/catalog"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/settings"
 	"tofu/internal/sys"
@@ -198,7 +198,7 @@ func (s *server) settingsWriting(writing boardy.Writing) {
 }
 
 func (s *server) watchSettings(quit <-chan struct{}) {
-	recover.Go(s.report, "serve settings told", func() { s.hear(quit, TopicSettings, s.settingsWriting) })
+	safe.Go(s.report, "serve settings told", func() { s.hear(quit, TopicSettings, s.settingsWriting) })
 	files, assigned := ConfigSeen(s.Dir), readAgentModels(s.Dir)
 	every := time.NewTicker(servePoll)
 	defer every.Stop()

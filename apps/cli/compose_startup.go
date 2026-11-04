@@ -12,7 +12,7 @@ import (
 	"tofu/internal/agent/loop"
 	cred "tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
 )
@@ -100,7 +100,7 @@ func (c *startupClock) checkUsageAlongside(a *wiring.Accounts) (wait func()) {
 	mine := slices.DeleteFunc(rows, func(row cred.Row) bool { return row.Credential.Provider != a.Provider })
 	began := time.Now()
 	checking.Go(func() {
-		_ = recover.Call(sys.Crashes("."), "usage check alongside", func() error {
+		_ = safe.Call(sys.Crashes("."), "usage check alongside", func() error {
 			results, _ := wiring.PollRowsOn(context.Background(), a.Store, mine, a.Now, a.URLs, poller)
 			c.mu.Lock()
 			defer c.mu.Unlock()

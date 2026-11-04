@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 )
 
 const (
@@ -79,11 +79,11 @@ func spread(frames []time.Duration) (time.Duration, time.Duration) {
 
 func watchStall(t *testing.T, stop <-chan struct{}) <-chan time.Duration {
 	stalled := make(chan time.Duration, 1)
-	failed := func(p recover.Panic) {
+	failed := func(p safe.Panic) {
 		t.Errorf("%v\n\n%s", p, p.Stack)
 		stalled <- 0
 	}
-	recover.Go(failed, "stall watch", func() {
+	safe.Go(failed, "stall watch", func() {
 		last, worst := time.Now(), time.Duration(0)
 		for {
 			select {

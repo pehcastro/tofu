@@ -10,7 +10,7 @@ import (
 	"strings"
 	"syscall"
 
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/sys"
 )
 
@@ -104,8 +104,8 @@ func startCallback(path, expectedState string, port int, portFallback, ipv6 bool
 	cb.server = &http.Server{Handler: mux}
 	report := sys.Crashes(".")
 	for _, listener := range listeners {
-		recover.Go(report, "login callback", func() {
-			if err := recover.Call(report, "login callback", func() error {
+		safe.Go(report, "login callback", func() {
+			if err := safe.Call(report, "login callback", func() error {
 				_ = cb.server.Serve(listener)
 				return nil
 			}); err != nil {

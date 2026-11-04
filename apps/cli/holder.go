@@ -12,7 +12,7 @@ import (
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	"tofu/internal/host"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	sessionstore "tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/tools/registry"
@@ -48,10 +48,10 @@ func runHub(dir string, say func(string)) error {
 	}
 	home, _ := os.UserHomeDir()
 	told := wiring.CrashTold(dir, say)
-	recover.Go(told, "session sweep", func() { sweepSessions(dir, say) })
+	safe.Go(told, "session sweep", func() { sweepSessions(dir, say) })
 	hostEnded := make(chan struct{})
 	defer close(hostEnded)
-	recover.Go(told, "scratch sweep", func() { shellsverb.SweepScratch(dir, say, hostEnded) })
+	safe.Go(told, "scratch sweep", func() { shellsverb.SweepScratch(dir, say, hostEnded) })
 	return host.RunHub(dir, told, say, func(id string, projectTurn *sync.Mutex) (*host.Host, func(), []string) {
 		resumed, unrecorded, err := hostedCarry(id)
 		switch {

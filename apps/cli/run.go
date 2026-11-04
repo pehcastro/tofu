@@ -35,7 +35,7 @@ import (
 	llm "tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/models/llm/wire/codex"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/memory/tree"
@@ -546,7 +546,7 @@ func composeRun(opts wiring.RunOpts, built []contract.Tool, run runtime) (compos
 			say(said)
 			found <- subagents.Found{}
 		})
-		recover.Go(scanned, "sub-agent scan", func() { found <- offeredToSpawn(cmp.Or(opts.Dir, "."), scanSubAgents(opts.Dir, built)) })
+		safe.Go(scanned, "sub-agent scan", func() { found <- offeredToSpawn(cmp.Or(opts.Dir, "."), scanSubAgents(opts.Dir, built)) })
 	} else {
 		found <- subagents.Found{}
 	}

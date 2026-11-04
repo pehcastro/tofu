@@ -24,7 +24,7 @@ import (
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
@@ -209,7 +209,7 @@ func New(cfg Config) (*Host, []string) {
 	if h.joins {
 		return h, troubles
 	}
-	recover.Go(h.report, "follow binding", h.followBinding)
+	safe.Go(h.report, "follow binding", h.followBinding)
 	if err := h.loadCron(h.id); err != nil {
 		return h, append(troubles, err.Error())
 	}
@@ -261,7 +261,7 @@ func (h *Host) Choose(pick Pick) {
 	case f == nil:
 		h.Settle("", pick)
 	case f.chosen(pick):
-		recover.Go(h.report, "follow pick", func() { h.Settle("", pick) })
+		safe.Go(h.report, "follow pick", func() { h.Settle("", pick) })
 	}
 }
 
@@ -332,13 +332,13 @@ func (h *Host) begin(pick Pick, task string, origin core.Origin) {
 	live := Live{Turn: h.turn, Steering: h.steering.ready, LeadStop: h.stopLead, Answers: h.answers, Origin: origin, Unattended: origin.Source == core.SourceCronFire}
 	h.recordUnrecorded()
 	images := shownPending(task, h.pending)
-	recover.Go(h.report, "turn", func() {
+	safe.Go(h.report, "turn", func() {
 		defer close(turnOver)
 		out := h.emitter()
 		live.Emit = out.emit
 		out.emit(Event{Kind: EventTurnStarted, ID: live.Turn, Text: task, Origin: wireOrigin(origin), Images: images, At: h.now()})
 		crashed := ""
-		_ = recover.Call(func(p recover.Panic) {
+		_ = safe.Call(func(p safe.Panic) {
 			crashed = p.Saved(h.stateDir())
 			out.emit(Event{Kind: EventFailure, Text: crashed})
 		}, "turn", func() error {
@@ -637,7 +637,7 @@ func (h *Host) stateDir() string {
 	return dir
 }
 
-func (h *Host) report(p recover.Panic) {
+func (h *Host) report(p safe.Panic) {
 	h.note(p.Saved(h.stateDir()))
 }
 

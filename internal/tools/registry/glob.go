@@ -20,7 +20,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/sys"
 	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
@@ -418,9 +418,9 @@ func (w *walk) readAhead(dir string) {
 	listed := make(chan dirListing, 1)
 	w.ahead[dir] = listed
 	report := sys.Crashes(string(w.root))
-	recover.Go(report, "glob read ahead", func() {
+	safe.Go(report, "glob read ahead", func() {
 		var read dirListing
-		read.err = recover.Call(report, "glob read ahead", func() (err error) {
+		read.err = safe.Call(report, "glob read ahead", func() (err error) {
 			w.readers <- struct{}{}
 			defer func() { <-w.readers }()
 			read.entries, err = os.ReadDir(dir)

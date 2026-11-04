@@ -22,7 +22,7 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/quota"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
 	"tofu/internal/store/snapshot"
 	"tofu/internal/sys"
@@ -164,12 +164,12 @@ func Serve(cfg ServeConfig) error {
 	first.stop, first.pumped = make(chan struct{}), make(chan struct{})
 	s.lanes.Store(&[]*lane{first})
 	written, read := make(chan error, 1), make(chan error, 1)
-	recover.Fatal(s.report, "serve outbox", func(died error) { written <- died }, func() { written <- s.box.drain(cfg.Out) })
+	safe.Fatal(s.report, "serve outbox", func(died error) { written <- died }, func() { written <- s.box.drain(cfg.Out) })
 	quit := make(chan struct{})
 	var workers sync.WaitGroup
 	s.pumpOn(first)
 	watch := func(unit string, watcher func(quit <-chan struct{})) {
-		workers.Go(func() { recover.Loop(s.report, unit, quit, func() { watcher(quit) }) })
+		workers.Go(func() { safe.Loop(s.report, unit, quit, func() { watcher(quit) }) })
 	}
 	watch("serve shells", s.watchShells)
 	watch("serve quota", s.pollQuota)
@@ -178,7 +178,7 @@ func Serve(cfg ServeConfig) error {
 	watch("serve settings", s.watchSettings)
 	watch("serve memory", s.watchMemory)
 	watch("serve sessions", s.watchSessions)
-	recover.Fatal(s.report, "serve read", func(died error) { read <- died }, func() { read <- s.read() })
+	safe.Fatal(s.report, "serve read", func(died error) { read <- died }, func() { read <- s.read() })
 	var err error
 	select {
 	case err = <-read:
@@ -217,7 +217,7 @@ func (s *server) read() error {
 	lines.Buffer(nil, konst.ServeLineBytes)
 	for lines.Scan() {
 		if line := bytes.TrimSpace(lines.Bytes()); len(line) > 0 {
-			_ = recover.Call(s.report, "serve receive", func() error {
+			_ = safe.Call(s.report, "serve receive", func() error {
 				s.receive(line)
 				return nil
 			})
@@ -248,10 +248,10 @@ func (s *server) receive(line []byte) {
 		}
 	case in.ID == nil:
 	case strings.HasPrefix(in.Method, queryPrefix) || slices.Contains([]string{"login.start", "login.key", "login.logout", "session.info", "session.find", "session.trace", "session.turns", "session.turn", "mention.resolve", "shell.run", "session.list", "session.history", "memory.view", "memory.zoom", "memory.recall", "reload", "models.reload", "hooks.trust", "learn.scan", "setup.check"}, in.Method):
-		recover.Go(s.report, in.Method, func() { s.answer(in.ID, in.Method, in.Params) })
+		safe.Go(s.report, in.Method, func() { s.answer(in.ID, in.Method, in.Params) })
 	case in.Method == "session.open":
 		s.opening.Lock()
-		recover.Go(s.report, in.Method, func() {
+		safe.Go(s.report, in.Method, func() {
 			defer s.opening.Unlock()
 			s.answer(in.ID, in.Method, in.Params)
 		})
@@ -264,14 +264,14 @@ func (s *server) receive(line []byte) {
 
 func (s *server) answer(id json.RawMessage, method string, params json.RawMessage) {
 	var result any
-	err := recover.Call(s.report, method, func() (err error) {
+	err := safe.Call(s.report, method, func() (err error) {
 		result, err = s.call(method, params)
 		return err
 	})
 	s.respond(id, result, err)
 }
 
-func (s *server) report(p recover.Panic) {
+func (s *server) report(p safe.Panic) {
 	s.focus().host.report(p)
 }
 
@@ -324,7 +324,7 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 	case "session.open":
 		result, err := handle(raw, s.open)
 		if err == nil {
-			recover.Go(s.report, "serve quota", s.quota)
+			safe.Go(s.report, "serve quota", s.quota)
 		}
 		if opened, ok := result.(SessionOpenResult); ok {
 			opened.Members = s.focus().host.seen().Members
@@ -493,7 +493,7 @@ func (s *server) handFork(id string, ask HandFork) (Compacted, error) {
 	}
 	forked, err := s.Fork(named.host, ask)
 	if err == nil && forked.Into != "" {
-		recover.Go(s.report, "serve list", func() { s.listed(named) })
+		safe.Go(s.report, "serve list", func() { s.listed(named) })
 	}
 	return forked, err
 }
@@ -616,7 +616,7 @@ func (s *server) rename(p SessionRenameParams) (any, error) {
 	}
 	s.relabelled(labelledAs(store, Event{Kind: EventSession, ID: header.ID, Root: header.ID}))
 	focused := s.focus()
-	recover.Go(s.report, "serve list", func() { s.listed(focused) })
+	safe.Go(s.report, "serve list", func() { s.listed(focused) })
 	return Ack{OK: true}, nil
 }
 
@@ -1061,7 +1061,7 @@ func (s *server) publish(event Event) {
 	case EventAwaitPerson:
 		if event.Questions != nil && !s.answers {
 			by := cmp.Or(s.client, "this client")
-			recover.Go(s.report, "serve undelivered question", func() {
+			safe.Go(s.report, "serve undelivered question", func() {
 				l.host.AnswerQuestion(event.ID, QuestionAnswer{Outcome: QuestionUndelivered}, by)
 			})
 			return
@@ -1072,22 +1072,22 @@ func (s *server) publish(event Event) {
 		}
 	case EventTurnEnded:
 		ended := l.items.turn
-		recover.Go(s.report, "serve quota", s.quota)
-		recover.Go(s.report, "serve list", func() { s.listed(l) })
-		recover.Go(s.report, "serve turn ended", func() { s.turnEnded(l, ended) })
-		recover.Go(s.report, "serve replay", func() { s.rebuild(l) })
+		safe.Go(s.report, "serve quota", s.quota)
+		safe.Go(s.report, "serve list", func() { s.listed(l) })
+		safe.Go(s.report, "serve turn ended", func() { s.turnEnded(l, ended) })
+		safe.Go(s.report, "serve replay", func() { s.rebuild(l) })
 	case EventTurnStarted, EventForkEnd:
-		recover.Go(s.report, "serve list", func() { s.listed(l) })
+		safe.Go(s.report, "serve list", func() { s.listed(l) })
 	case EventAccount:
 		if event.Account.Reason == AccountReason(loop.AccountMoved) {
-			recover.Go(s.report, "serve quota", s.quota)
+			safe.Go(s.report, "serve quota", s.quota)
 		}
 	}
 	was := l.items.session
 	lines := l.items.translate(event, time.Now())
 	if l.items.session != was {
 		l.replace(nil)
-		recover.Go(s.report, "serve replay", func() { s.rebuild(l) })
+		safe.Go(s.report, "serve replay", func() { s.rebuild(l) })
 	}
 	for _, out := range lines {
 		if l.replay != nil && out.merge == "" && out.msg.Method != "message.delta" && l.replay.add(out) != nil {

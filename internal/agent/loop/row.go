@@ -18,7 +18,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/codex"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
 	"tofu/internal/store/snapshot"
 	"tofu/internal/sys"
@@ -641,8 +641,8 @@ func (r *record) begin(row Row, task core.Origin) {
 		r.undo = &snapshot.Repo{State: r.store.State(), Session: r.store.Dir(cmp.Or(header.Root, header.ID)), Tree: project}
 		r.undoBegun = make(chan struct{})
 		repo, turn, report := *r.undo, r.turn, sys.Crashes(project)
-		recover.Go(report, "undo snapshot", func() {
-			r.undoErr = recover.Call(report, "undo snapshot", func() error { return repo.Begin(context.Background(), turn) })
+		safe.Go(report, "undo snapshot", func() {
+			r.undoErr = safe.Call(report, "undo snapshot", func() error { return repo.Begin(context.Background(), turn) })
 			close(r.undoBegun)
 			if r.undoErr == nil {
 				_ = repo.Prune(context.Background())

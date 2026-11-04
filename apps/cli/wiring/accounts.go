@@ -26,7 +26,7 @@ import (
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/models/llm/wire/codex"
 	"tofu/internal/models/transport"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
 	"tofu/internal/ui/tui/frame/frame"
@@ -372,14 +372,14 @@ func KeepAccountsAlive(held HeldStore, note, told func(string)) (stop func()) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	report := CrashTold(".", told)
-	recover.Go(report, "credential keeper", func() {
+	safe.Go(report, "credential keeper", func() {
 		defer close(done)
 		lock := claimKeeper(ctx, held.Path+keeperLockSuffix, note)
 		if lock == nil {
 			return
 		}
 		defer func() { _ = sys.Unlock(lock) }()
-		recover.Loop(report, "credential keeper", ctx.Done(), func() { accounts.NewKeeper(held.Store, note).Run(ctx) })
+		safe.Loop(report, "credential keeper", ctx.Done(), func() { accounts.NewKeeper(held.Store, note).Run(ctx) })
 	})
 	return func() {
 		cancel()

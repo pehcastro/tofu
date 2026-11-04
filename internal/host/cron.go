@@ -10,7 +10,7 @@ import (
 	"tofu/internal/agent/cron"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
 )
 
@@ -81,7 +81,7 @@ func (h *Host) armCron() {
 		h.ticking = nil
 		h.dropRead()
 		h.mu.Unlock()
-		_ = recover.Call(h.report, "cron", func() error {
+		_ = safe.Call(h.report, "cron", func() error {
 			h.fire(h.cron.Due(context.Background(), h.now(), cron.Tick))
 			return nil
 		})
