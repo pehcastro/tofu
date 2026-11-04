@@ -282,8 +282,8 @@ func TestOnlyALeadingSlashOnItsOwnIsACommand(t *testing.T) {
 		typed string
 		sent  string
 	}{
-		{"read internal/turn/loop.go", "read internal/turn/loop.go"},
-		{"explain /internal/turn/loop.go", "explain /internal/turn/loop.go"},
+		{"read internal/agent/loop/loop.go", "read internal/agent/loop/loop.go"},
+		{"explain /internal/agent/loop/loop.go", "explain /internal/agent/loop/loop.go"},
 		{"(/ is not a command", "(/ is not a command"},
 		{"// a comment", "// a comment"},
 		{"/* a block", "/* a block"},

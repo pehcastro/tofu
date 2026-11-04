@@ -136,7 +136,7 @@ func liveApp(t *testing.T, at *time.Time) *App {
 	t.Helper()
 	app := phaseApp(t, at)
 	app.Update(Event{Kind: EventText, Text: prose})
-	app.Update(Event{Kind: EventToolCall, ID: "c0", Tool: "read", Text: "internal/turn/loop.go"})
+	app.Update(Event{Kind: EventToolCall, ID: "c0", Tool: "read", Text: "internal/agent/loop/loop.go"})
 	app.Update(Event{Kind: EventToolResult, ID: "c0", Text: "84 lines, 2.1 KB"})
 	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "read", Text: "CLAUDE.md"})
 	*at = at.Add(1200 * time.Millisecond)
@@ -1566,7 +1566,7 @@ func shellEntries() []shells.Entry {
 	return []shells.Entry{
 		{Name: "dev-server", Command: "npm run dev", State: shells.Running, Started: time.Date(2026, 9, 19, 14, 30, 0, 0, time.UTC), Log: "listening on :3000"},
 		{Name: "build", Command: "go build ./...", State: shells.Exited, Started: time.Date(2026, 9, 19, 14, 31, 0, 0, time.UTC), ExitCode: zero(), Log: "compiling\ndone"},
-		{Name: "test-run", Command: "go test ./...", State: shells.Exited, Started: time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC), ExitCode: zero(), Log: "ok tofu/internal/shell 0.4s"},
+		{Name: "test-run", Command: "go test ./...", State: shells.Exited, Started: time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC), ExitCode: zero(), Log: "ok tofu/internal/tools/shell/process 0.4s"},
 	}
 }
 
@@ -1684,7 +1684,7 @@ func TestCookedForNamesTheAnswerWhenAToolCallCameAfterIt(t *testing.T) {
 	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "bash", Text: "go test ./..."})
 	app.Update(Event{Kind: EventTextDelta, Text: halfWritten})
 	interrupt(app, 1)
-	app.Update(Event{Kind: EventToolCall, ID: "c2", Tool: "read", Text: "internal/turn/loop.go"})
+	app.Update(Event{Kind: EventToolCall, ID: "c2", Tool: "read", Text: "internal/agent/loop/loop.go"})
 	app.Update(Event{Kind: EventToolResult, ID: "c1", Text: "ok"})
 	app.Update(Event{Kind: EventToolResult, ID: "c2", Text: "84 lines"})
 	<-stopped
@@ -1948,7 +1948,7 @@ func TestOnlyTheSubAgentWithNoStepForTheWatchTimeIsStalledAndAnOldCallSeenFreshI
 	at := fixedStart()
 	app := leadIdleOnTwo(t, &at)
 	rows := twoWorking(2)
-	rows[0].Calls = []subagent.Call{{ID: "k1", At: at.Add(-15 * time.Minute), Tool: "bash", Text: "go test ./internal/shell/..."}}
+	rows[0].Calls = []subagent.Call{{ID: "k1", At: at.Add(-15 * time.Minute), Tool: "bash", Text: "go test ./internal/tools/shell/process/..."}}
 	rows[1].Calls = []subagent.Call{{ID: "k2", At: at, Tool: "read", Result: "1 KB", Text: "floor.go"}}
 	app.Update(Event{Kind: EventSubAgent, SubAgents: rows})
 	if chat := ansi.Strip(app.View().Content); strings.Contains(chat, "stalled") {

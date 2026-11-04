@@ -12,13 +12,13 @@ func TestOutputLineSemanticColors(t *testing.T) {
 		line  string
 		color Color
 	}{
-		{"ok  tofu/internal/shell  0.41s  passed", Mint},
+		{"ok  tofu/internal/tools/shell/process  0.41s  passed", Mint},
 		{"GET /health 200 3ms", Mint},
 		{"warn: the lock file is older than go.sum", Amber},
 		{"retry 2 of 3 after a reset", Amber},
 		{"panic: index out of range", Red},
 		{"build failed with 2 errors", Red},
-		{"file change: internal/turn/loop.go", Blue},
+		{"file change: internal/agent/loop/loop.go", Blue},
 		{"cache refreshed in 12ms", Blue},
 		{"waiting for input", MutedColor},
 	}

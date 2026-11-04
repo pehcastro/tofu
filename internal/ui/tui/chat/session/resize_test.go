@@ -25,7 +25,7 @@ func talked(m *Model) {
 		m.Returned()
 		for call := range 3 {
 			id := "toolu_" + number + "_" + strconv.Itoa(call)
-			m.Append(Entry{Kind: Tool, ID: id, Head: "read", Body: "internal/turn/loop.go"})
+			m.Append(Entry{Kind: Tool, ID: id, Head: "read", Body: "internal/agent/loop/loop.go"})
 			m.Finish(id, Result{Status: "84 lines"})
 		}
 		m.Append(Entry{Kind: Assistant, ID: "msg_" + number, Body: "Answer " + number + ".\n\n" +

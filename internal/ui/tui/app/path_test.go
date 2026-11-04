@@ -12,9 +12,9 @@ import (
 
 func repoPaths() []string {
 	return []string{
-		"internal/turn/loop.go",
+		"internal/agent/loop/loop.go",
 		"internal/judge/policy/toolgate.go",
-		"interface/tui/app.go",
+		"internal/ui/tui/app/app.go",
 		"CLAUDE.md",
 	}
 }
@@ -56,7 +56,7 @@ func TestAnAtInsideAWordOpensNothing(t *testing.T) {
 	if picked, open := app.view.Picked(); open {
 		t.Fatalf("an email address opened a picker on %q", picked)
 	}
-	if listed := ansi.Strip(app.View().Content); strings.Contains(listed, "internal/turn/loop.go") {
+	if listed := ansi.Strip(app.View().Content); strings.Contains(listed, "internal/agent/loop/loop.go") {
 		t.Errorf("an email address listed a path it could have matched\n%s", listed)
 	}
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -71,11 +71,11 @@ func TestADotSlashAndADotDotSlashCompleteTheSameWayAsAnAt(t *testing.T) {
 			entered := make(chan string, 1)
 			app := pathApp(t, entered)
 			typeText(app, sigil+"int")
-			if !strings.Contains(ansi.Strip(app.View().Content), sigil+"internal/turn/loop.go") {
+			if !strings.Contains(ansi.Strip(app.View().Content), sigil+"internal/agent/loop/loop.go") {
 				t.Errorf("%s int lists nothing\n%s", sigil, ansi.Strip(app.View().Content))
 			}
 			app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-			if typed := app.view.Value(); typed != sigil+"internal/turn/loop.go" {
+			if typed := app.view.Value(); typed != sigil+"internal/agent/loop/loop.go" {
 				t.Errorf("accepting the completion left %q in the composer", typed)
 			}
 		})

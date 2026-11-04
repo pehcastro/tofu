@@ -12,7 +12,7 @@ underlay underlay underlay un                                                   
 underlay underlay underlay un  Run shell command?                                     esc  nderlay underlay underlay und
 underlay underlay underlay un  This action leaves the current read-only step.              nderlay underlay underlay und
 underlay underlay underlay un                                                              nderlay underlay underlay und
-underlay underlay underlay un   go test ./interface/tui/...                                nderlay underlay underlay und
+underlay underlay underlay un   go test ./internal/ui/tui/app/...                          nderlay underlay underlay und
 underlay underlay underlay un                                                              nderlay underlay underlay und
 underlay underlay underlay un  >  Allow once                                               nderlay underlay underlay und
 underlay underlay underlay un    Run this command only                                     nderlay underlay underlay und

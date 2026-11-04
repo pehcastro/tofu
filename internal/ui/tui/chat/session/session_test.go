@@ -139,9 +139,9 @@ func TestAStreamedListNeverShowsARawBacktickOrDash(t *testing.T) {
 	model := New(fixed(), real.Lines)
 	model.SetSize(80, 24)
 	lines := []string{
-		"- `cmd/tofu/` (121 files): the verbs\n",
-		"- `internal/turn/` (40 files): the loop\n",
-		"- `interface/tui/` (30 files): the screen\n",
+		"- `apps/cli/` (121 files): the verbs\n",
+		"- `internal/agent/loop/` (40 files): the loop\n",
+		"- `internal/ui/tui/app/` (30 files): the screen\n",
 	}
 	for _, line := range lines {
 		model.Stream(line)
@@ -159,9 +159,9 @@ func TestAHalfTypedInlineSpanReadsAsTextThenBecomesASpan(t *testing.T) {
 	real := new(markdown.Renderer)
 	model := New(fixed(), real.Lines)
 	model.SetSize(80, 24)
-	model.Stream("see the file `cmd/tofu")
+	model.Stream("see the file `apps/cli")
 	before := ansi.Strip(model.View())
-	if !strings.Contains(before, "`cmd/tofu") {
+	if !strings.Contains(before, "`apps/cli") {
 		t.Fatalf("an unclosed span does not read as literal text:\n%s", before)
 	}
 	model.Stream("/run.go` for the entry point")
@@ -169,7 +169,7 @@ func TestAHalfTypedInlineSpanReadsAsTextThenBecomesASpan(t *testing.T) {
 	if strings.Contains(after, "`") {
 		t.Fatalf("the closed span still shows its backticks:\n%s", after)
 	}
-	if !strings.Contains(after, "cmd/tofu/run.go") {
+	if !strings.Contains(after, "apps/cli/run.go") {
 		t.Fatalf("the span text went missing once closed:\n%s", after)
 	}
 }
@@ -253,14 +253,14 @@ func TestAShellCallCarriesItsOwnColourNotThePlainToolColour(t *testing.T) {
 	model := New(fixed(), counted(new(int)))
 	model.SetSize(80, 24)
 	model.ChatShowsTools = true
-	model.Append(Entry{Kind: Tool, ID: "c1", Head: "read", Body: "internal/turn/loop.go", Status: "84 lines, 2.1 KB"})
-	model.Append(Entry{Kind: Tool, ID: "c2", Head: "bash", Body: "go test ./internal/turn/...", Status: "ok 0.4s"})
+	model.Append(Entry{Kind: Tool, ID: "c1", Head: "read", Body: "internal/agent/loop/loop.go", Status: "84 lines, 2.1 KB"})
+	model.Append(Entry{Kind: Tool, ID: "c2", Head: "bash", Body: "go test ./internal/agent/loop/...", Status: "ok 0.4s"})
 	var readRow, bashRow string
 	for _, line := range strings.Split(model.View(), "\n") {
 		switch {
-		case strings.Contains(line, "internal/turn/loop.go"):
+		case strings.Contains(line, "internal/agent/loop/loop.go"):
 			readRow = line
-		case strings.Contains(line, "go test ./internal/turn/..."):
+		case strings.Contains(line, "go test ./internal/agent/loop/..."):
 			bashRow = line
 		}
 	}
@@ -299,7 +299,7 @@ func TestABlankLineSitsAboveTheActivityBlock(t *testing.T) {
 	model := New(fixed(), counted(new(int)))
 	model.SetSize(80, 24)
 	model.Busy = true
-	model.Append(Entry{Kind: Tool, ID: "c1", Head: "read", Body: "internal/turn/loop.go"})
+	model.Append(Entry{Kind: Tool, ID: "c1", Head: "read", Body: "internal/agent/loop/loop.go"})
 	lines := strings.Split(model.View(), "\n")
 	rows := model.transcriptRows()
 	if strings.TrimSpace(lines[rows]) != "" {

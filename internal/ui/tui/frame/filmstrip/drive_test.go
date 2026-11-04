@@ -73,7 +73,7 @@ func seeds(at time.Time) map[string][]app.Event {
 			subAgents = event.SubAgents
 		}
 	}
-	spawned := slices.Concat(subAgents, []subagent.Row{{Name: "c4", Doing: "audit the shell registry", Owns: []string{"internal/shell/registry.go"}, Since: time.Second, Steps: 1, Total: 40, State: roster.Working}})
+	spawned := slices.Concat(subAgents, []subagent.Row{{Name: "c4", Doing: "audit the shell registry", Owns: []string{"internal/tools/shell/process/registry.go"}, Since: time.Second, Steps: 1, Total: 40, State: roster.Working}})
 	tall := make([]string, tallLines)
 	for index := range tall {
 		tall[index] = "line " + strconv.Itoa(index+1) + " of the tall result"
@@ -87,8 +87,8 @@ func seeds(at time.Time) map[string][]app.Event {
 			{Kind: app.EventSubAgent, SubAgents: spawned},
 			result("5e04aa", "spawned [&c4]"),
 		}, done()...),
-		"more": append([]app.Event{call("6f1a01", "read", "internal/turn/budget.go"), result("6f1a01", "88 lines, 2.4 KB")}, done()...),
-		"tall": append([]app.Event{call("6f2b01", "bash", "go test -v ./internal/turn/..."), result("6f2b01", strings.Join(tall, "\n"))}, done()...),
+		"more": append([]app.Event{call("6f1a01", "read", "internal/agent/loop/budget.go"), result("6f1a01", "88 lines, 2.4 KB")}, done()...),
+		"tall": append([]app.Event{call("6f2b01", "bash", "go test -v ./internal/agent/loop/..."), result("6f2b01", strings.Join(tall, "\n"))}, done()...),
 	}
 }
 

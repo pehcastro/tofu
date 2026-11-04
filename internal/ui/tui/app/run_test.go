@@ -36,18 +36,18 @@ type runCall struct {
 
 func fourteenCalls() []runCall {
 	return []runCall{
-		{tool: "read", text: "internal/turn/loop.go", result: "84 lines, 2.1 KB", bytes: 2148},
+		{tool: "read", text: "internal/agent/loop/loop.go", result: "84 lines, 2.1 KB", bytes: 2148},
 		{tool: "bash", text: "go build ./...", result: "no output", bytes: 96},
 		{tool: "read", text: "internal/judge/policy/toolgate.go", result: "412 lines, 11.8 KB", bytes: 11800},
 		{tool: "bash", text: "go test ./internal/judge/...", result: "ok tofu/internal/judge 0.42s", bytes: 412},
 		{tool: "glob", text: "internal/**/*.go", result: "184 paths", bytes: 3140},
-		{tool: "read", text: "internal/judge/jev/wire.go", result: "266 lines, 8.2 KB", bytes: 8210},
+		{tool: "read", text: "internal/models/classifiers/core/wire.go", result: "266 lines, 8.2 KB", bytes: 8210},
 		{tool: "bash", text: "go vet ./internal/...", result: "no output", bytes: 128},
 		{tool: "read", text: "internal/point/toolgate.go", result: "141 lines, 4.1 KB", bytes: 4096},
 		{tool: "bash", text: "rg toolgate internal", result: "31 lines, 2.2 KB", bytes: 2210},
 		{tool: "read", text: "library/questions/tool_gate.yaml", result: "58 lines, 1.7 KB", bytes: 1740},
 		{tool: "bash", text: "go test ./internal/point/...", result: "ok tofu/internal/point 0.31s", bytes: 380},
-		{tool: "read", text: "internal/turn/budget.go", result: "172 lines, 5.3 KB", bytes: 5310},
+		{tool: "read", text: "internal/agent/loop/budget.go", result: "172 lines, 5.3 KB", bytes: 5310},
 		{tool: "bash", text: longIntent, detail: longCommand, result: "14 lines, 64 bytes", bytes: 64},
 		{tool: "bash", text: "go tool deadcode -test ./...", result: "no output", bytes: 96},
 	}
@@ -151,7 +151,7 @@ func TestARunOfFourteenCallsDrawsNothingButTheTurnLineWhileItRuns(t *testing.T) 
 func TestTheLeadsRowNamesTheLatestCallAndDropsTheOneBefore(t *testing.T) {
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	app := startTurn(t, &at, 120, runHeight)
-	first := runCall{tool: "read", text: "internal/turn/loop.go", result: "84 lines, 2.1 KB", bytes: 2148}
+	first := runCall{tool: "read", text: "internal/agent/loop/loop.go", result: "84 lines, 2.1 KB", bytes: 2148}
 	second := runCall{tool: "bash", text: "go build ./...", result: "no output", bytes: 96}
 
 	startCall(app, 0, first)
@@ -167,7 +167,7 @@ func TestTheLeadsRowNamesTheLatestCallAndDropsTheOneBefore(t *testing.T) {
 	at = at.Add(callStep)
 	replaced := app.View().Content
 	golden.Assert(t, "session-progress-replaced-120x24.golden", replaced)
-	if strings.Contains(ansi.Strip(replaced), "internal/turn/loop.go") || strings.Contains(ansi.Strip(replaced), "running read") || !strings.Contains(ansi.Strip(replaced), "running bash · (2) steps") {
+	if strings.Contains(ansi.Strip(replaced), "internal/agent/loop/loop.go") || strings.Contains(ansi.Strip(replaced), "running read") || !strings.Contains(ansi.Strip(replaced), "running bash · (2) steps") {
 		t.Fatalf("the lead's row still names the finished call once a new one starts\n%s", ansi.Strip(replaced))
 	}
 	if callRows(ansi.Strip(replaced)) != 0 {
@@ -177,11 +177,11 @@ func TestTheLeadsRowNamesTheLatestCallAndDropsTheOneBefore(t *testing.T) {
 
 func sixKindsOfCall() []runCall {
 	return []runCall{
-		{tool: "read", text: "internal/turn/loop.go", result: "84 lines, 2.1 KB", bytes: 2148},
+		{tool: "read", text: "internal/agent/loop/loop.go", result: "84 lines, 2.1 KB", bytes: 2148},
 		{tool: "bash", text: "go build ./...", result: "no output", bytes: 96},
 		{tool: "glob", text: "internal/**/*.go", result: "184 paths", bytes: 3140},
 		{tool: "grep", text: "toolgate", result: "31 lines", bytes: 2210},
-		{tool: "edit", text: "internal/turn/loop.go", result: "1 hunk applied", bytes: 240},
+		{tool: "edit", text: "internal/agent/loop/loop.go", result: "1 hunk applied", bytes: 240},
 		{tool: "fetch", text: "https://go.dev", result: "200 ok", bytes: 512},
 	}
 }
@@ -282,8 +282,8 @@ func TestAShadowAskDrawsNoRowLikeTheRestOfTheRun(t *testing.T) {
 func failedRun() []runCall {
 	return readsAround(runCall{
 		tool:    "bash",
-		text:    "go test ./internal/recall/...",
-		result:  "FAIL tofu/internal/recall 0.18s",
+		text:    "go test ./internal/agent/context/recall/...",
+		result:  "FAIL tofu/internal/agent/context/recall 0.18s",
 		outcome: host.ToolFailed,
 	})
 }
@@ -294,7 +294,7 @@ func TestAFailedLeadCallLeavesTheChatAndStaysFailedInTheActivity(t *testing.T) {
 	finishTurn(app)
 	content := app.View().Content
 	golden.Assert(t, "session-run-failure-80x24.golden", content)
-	if plain := ansi.Strip(content); strings.Contains(plain, "internal/recall") || callRows(plain) != 0 {
+	if plain := ansi.Strip(content); strings.Contains(plain, "internal/agent/context/recall") || callRows(plain) != 0 {
 		t.Errorf("the failed lead call is still a row in the chat\n%s", plain)
 	}
 	failed := app.happenedAt(app.shortOf("c4"))
@@ -330,7 +330,7 @@ func TestTheCountOnTheLeadsRowIsRight(t *testing.T) {
 		at = at.Add(callStep)
 		endCall(app, index, one)
 	}
-	last := runCall{tool: "edit", text: "internal/turn/loop.go", result: "1 hunk applied", bytes: 240}
+	last := runCall{tool: "edit", text: "internal/agent/loop/loop.go", result: "1 hunk applied", bytes: 240}
 	startCall(app, len(calls), last)
 	endCall(app, len(calls), last)
 	if chat := ansi.Strip(app.View().Content); !strings.Contains(chat, "(13) steps") {

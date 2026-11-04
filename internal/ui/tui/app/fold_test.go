@@ -20,10 +20,10 @@ func TestTheLeadsToolCallsFoldIntoOneChatRowAndTheTurnLineStaysPlain(t *testing.
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	app := startTurn(t, &at, 120, runHeight)
 
-	startCall(app, 0, runCall{tool: "read", text: "internal/turn/loop.go", decision: allowed()})
+	startCall(app, 0, runCall{tool: "read", text: "internal/agent/loop/loop.go", decision: allowed()})
 	at = at.Add(callStep)
-	endCall(app, 0, runCall{tool: "read", text: "internal/turn/loop.go", result: "84 lines, 2.1 KB", bytes: 2148})
-	startCall(app, 1, runCall{tool: "bash", text: "go test ./internal/turn/..."})
+	endCall(app, 0, runCall{tool: "read", text: "internal/agent/loop/loop.go", result: "84 lines, 2.1 KB", bytes: 2148})
+	startCall(app, 1, runCall{tool: "bash", text: "go test ./internal/agent/loop/..."})
 	at = at.Add(callStep)
 
 	row := turnRow(t, app)
@@ -41,7 +41,7 @@ func TestTheLeadsToolCallsFoldIntoOneChatRowAndTheTurnLineStaysPlain(t *testing.
 	}
 
 	at = at.Add(callStep)
-	endCall(app, 1, runCall{tool: "bash", text: "go test ./internal/turn/...", result: "ok 0.4s", bytes: 96})
+	endCall(app, 1, runCall{tool: "bash", text: "go test ./internal/agent/loop/...", result: "ok 0.4s", bytes: 96})
 	app.Update(Event{Kind: EventText, Text: runAnswer})
 	finishTurn(app)
 	ended := ansi.Strip(app.View().Content)
@@ -82,10 +82,10 @@ func TestChatShowsToolsOnStillDrawsEveryLeadCall(t *testing.T) {
 	switchOnToolDetail(t, app)
 	app.runCommand("chat")
 	app.Update(Event{Kind: EventRequesting})
-	startCall(app, 0, runCall{tool: "read", text: "internal/turn/loop.go"})
-	endCall(app, 0, runCall{tool: "read", text: "internal/turn/loop.go", result: "84 lines, 2.1 KB", bytes: 2148})
+	startCall(app, 0, runCall{tool: "read", text: "internal/agent/loop/loop.go"})
+	endCall(app, 0, runCall{tool: "read", text: "internal/agent/loop/loop.go", result: "84 lines, 2.1 KB", bytes: 2148})
 	finishTurn(app)
-	if row := rowHolding(t, app, "read internal/turn/loop.go"); !strings.Contains(row, "84 lines") {
+	if row := rowHolding(t, app, "read internal/agent/loop/loop.go"); !strings.Contains(row, "84 lines") {
 		t.Fatalf("chatShowsTools on lost the call's own row and its status\n%s", row)
 	}
 }

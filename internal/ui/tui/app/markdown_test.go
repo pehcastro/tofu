@@ -127,7 +127,7 @@ func TestARealRecordedAnswerRendersHeadingsBulletsAndInlineCode(t *testing.T) {
 func TestABlankLineSitsAboveTheActivityBlock(t *testing.T) {
 	at := fixedClock()()
 	app := startTurn(t, &at, 80, 24)
-	startCall(app, 0, runCall{tool: "read", text: "internal/turn/loop.go"})
+	startCall(app, 0, runCall{tool: "read", text: "internal/agent/loop/loop.go"})
 	content := app.View().Content
 	plain := ansi.Strip(content)
 	if !strings.Contains(plain, "working") && !strings.Contains(plain, "requesting") {

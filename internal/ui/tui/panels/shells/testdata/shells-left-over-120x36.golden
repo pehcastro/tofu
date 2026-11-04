@@ -10,27 +10,27 @@
 [48;2;35;34;44m  [m[48;2;35;34;44m[48;2;35;34;44m  [38;2;127;132;147mpid 17812[m[48;2;35;34;44m[m[m[48;2;35;34;44m  [m[48;2;35;34;44m               [m  [48;2;48;46;58m                                                                      [m                  
 [48;2;35;34;44m  [m[48;2;35;34;44m[48;2;35;34;44m[m[48;2;35;34;44m  [m[48;2;35;34;44m                          [m                                                                                          
 [48;2;35;34;44m                              [m  [1;38;2;212;173;120mOUTPUT[m[38;2;77;81;93m  ·  wheel / PgUp / PgDn[m                                                          
-[48;2;35;34;44m                              [m  [32mok[0m  tofu/internal/shell  0.4s                                                           
+[48;2;35;34;44m                              [m  [32mok[0m  tofu/internal/tools/shell/process  0.4s                                             
 [48;2;35;34;44m                              [m  [38;2;64;210;148mGET /api/session/30 200 12ms[m                                                            
-[48;2;35;34;44m                              [m  [38;2;143;183;204mfile change: internal/turn/loop.go[m                                                      
+[48;2;35;34;44m                              [m  [38;2;143;183;204mfile change: internal/agent/loop/loop.go[m                                                
 [48;2;35;34;44m                              [m  [38;2;64;210;148mrebuilt 32 packages in 180ms[m                                                            
 [48;2;35;34;44m                              [m  [38;2;212;173;120mwarn: slow request to /api/models[m                                                       
-[48;2;35;34;44m                              [m  [32mok[0m  tofu/internal/shell  0.4s                                                           
+[48;2;35;34;44m                              [m  [32mok[0m  tofu/internal/tools/shell/process  0.4s                                             
 [48;2;35;34;44m                              [m  [38;2;64;210;148mGET /api/session/35 200 12ms[m                                                            
-[48;2;35;34;44m                              [m  [38;2;143;183;204mfile change: internal/turn/loop.go[m                                                      
+[48;2;35;34;44m                              [m  [38;2;143;183;204mfile change: internal/agent/loop/loop.go[m                                                
 [48;2;35;34;44m                              [m  [38;2;64;210;148mrebuilt 37 packages in 180ms[m                                                            
 [48;2;35;34;44m                              [m  [38;2;212;173;120mwarn: slow request to /api/models[m                                                       
-[48;2;35;34;44m                              [m  [32mok[0m  tofu/internal/shell  0.4s                                                           
+[48;2;35;34;44m                              [m  [32mok[0m  tofu/internal/tools/shell/process  0.4s                                             
 [48;2;35;34;44m                              [m  [38;2;64;210;148mGET /api/session/40 200 12ms[m                                                            
-[48;2;35;34;44m                              [m  [38;2;143;183;204mfile change: internal/turn/loop.go[m                                                      
+[48;2;35;34;44m                              [m  [38;2;143;183;204mfile change: internal/agent/loop/loop.go[m                                                
 [48;2;35;34;44m                              [m  [38;2;64;210;148mrebuilt 42 packages in 180ms[m                                                            
 [48;2;35;34;44m                              [m  [38;2;212;173;120mwarn: slow request to /api/models[m                                                       
-[48;2;35;34;44m                              [m  [32mok[0m  tofu/internal/shell  0.4s                                                           
+[48;2;35;34;44m                              [m  [32mok[0m  tofu/internal/tools/shell/process  0.4s                                             
 [48;2;35;34;44m                              [m  [38;2;64;210;148mGET /api/session/45 200 12ms[m                                                            
-[48;2;35;34;44m                              [m  [38;2;143;183;204mfile change: internal/turn/loop.go[m                                                      
+[48;2;35;34;44m                              [m  [38;2;143;183;204mfile change: internal/agent/loop/loop.go[m                                                
 [48;2;35;34;44m                              [m  [38;2;64;210;148mrebuilt 47 packages in 180ms[m                                                            
 [48;2;35;34;44m                              [m  [38;2;212;173;120mwarn: slow request to /api/models[m                                                       
-[48;2;35;34;44m                              [m  [32mok[0m  tofu/internal/shell  0.4s                                                           
+[48;2;35;34;44m                              [m  [32mok[0m  tofu/internal/tools/shell/process  0.4s                                             
 [48;2;35;34;44m                              [m                                                                                          
 [48;2;35;34;44m                              [m  [38;2;211;139;146mk[m[38;2;127;132;147m request kill · confirmation required[m                                                  
 [48;2;35;34;44m                              [m                                                                                          

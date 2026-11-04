@@ -147,7 +147,7 @@ func TestGoldens(t *testing.T) {
 	}
 	golden.Assert(t, "search-shell-120x36.golden", ansi.Strip(search.Over(testBase(), testWidth, testHeight)))
 
-	confirm := NewConfirm("Run shell command?", "This action leaves the current read-only step.", "go test ./interface/tui/...", []Item{
+	confirm := NewConfirm("Run shell command?", "This action leaves the current read-only step.", "go test ./internal/ui/tui/app/...", []Item{
 		{Title: "Allow once", Description: "Run this command only", ID: "once"},
 		{Title: "Allow for session", Description: "Remember until tofu exits", ID: "session"},
 		{Title: "Deny", Description: "Return without running it", ID: "deny"},

@@ -63,7 +63,7 @@ func TestAGapBetweenTwoCallsOfOneStepNeverDrawsThinkingAndNeverChangesColour(t *
 	at := fixedStart()
 	app := phaseApp(t, &at)
 	app.Update(Event{Kind: EventStats, Model: "claude-opus-5"})
-	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "read", Text: "internal/turn/loop.go"})
+	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "read", Text: "internal/agent/loop/loop.go"})
 	at = at.Add(2 * time.Second)
 
 	frames := []string{styledTurnRow(t, app)}
@@ -95,7 +95,7 @@ func TestACallShorterThanTheDwellIsStillCountedOnTheLeadsRow(t *testing.T) {
 	app := phaseApp(t, &at)
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 24})
 	app.Update(Event{Kind: EventStats, Model: "claude-opus-5"})
-	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "read", Text: "internal/turn/loop.go"})
+	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "read", Text: "internal/agent/loop/loop.go"})
 	at = at.Add(2 * time.Second)
 	app.Update(Event{Kind: EventToolResult, ID: "c1", Text: "84 lines, 2.1 KB"})
 	app.Update(Event{Kind: EventToolCall, ID: "c2", Tool: "read", Text: "CLAUDE.md"})
@@ -204,7 +204,7 @@ func TestTheRunningRowHoldsItsPlaceWhenAStepEndsAndNoStepIsSummarised(t *testing
 	app := phaseApp(t, &at)
 	app.Update(Event{Kind: EventStats, Model: "claude-opus-5"})
 	app.Update(Event{Kind: EventText, Text: "counting the go files under each root."})
-	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "read", Text: "internal/turn/loop.go"})
+	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "read", Text: "internal/agent/loop/loop.go"})
 	at = at.Add(2 * time.Second)
 	app.Update(Event{Kind: EventToolResult, ID: "c1", Text: "84 lines, 2.1 KB"})
 	app.Update(Event{Kind: EventToolCall, ID: "c2", Tool: "bash", Text: "go test ./internal/..."})

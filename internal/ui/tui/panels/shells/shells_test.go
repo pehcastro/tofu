@@ -22,13 +22,13 @@ func testModel() Model {
 		case 0:
 			lines = append(lines, "GET /api/session/"+strconv.Itoa(index)+" 200 12ms")
 		case 1:
-			lines = append(lines, "file change: internal/turn/loop.go")
+			lines = append(lines, "file change: internal/agent/loop/loop.go")
 		case 2:
 			lines = append(lines, "rebuilt "+strconv.Itoa(index)+" packages in 180ms")
 		case 3:
 			lines = append(lines, "warn: slow request to /api/models")
 		default:
-			lines = append(lines, "\x1b[32mok\x1b[0m  tofu/internal/shell  0.4s")
+			lines = append(lines, "\x1b[32mok\x1b[0m  tofu/internal/tools/shell/process  0.4s")
 		}
 	}
 	zero, ended := 0, testNow.Add(-2*time.Minute)

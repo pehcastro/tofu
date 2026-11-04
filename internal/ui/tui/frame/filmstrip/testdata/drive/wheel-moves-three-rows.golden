@@ -74,7 +74,7 @@
     Waiting for request    │                                                                  │    │
     [&c1]             .    │  [&orchestrator]  tool              just now  [tool#6f2b01]      │    │
     stopped · read the…    │  bash                                                            │    │
-    [&c2]             .    │  go test -v ./internal/turn/...                                  │    │
+    [&c2]             .    │  go test -v ./internal/agent/loop/...                            │    │
     in review · write …    │  complete                                                        │    │
                            │    line 1 of the tall result                                     │    │
   DEAD  1                  │    line 2 of the tall result                                     │    │
@@ -107,7 +107,7 @@
     [&c2]             .    │                                                                  │    │
     in review · write …    │  [&orchestrator]  tool              just now  [tool#6f2b01]      │    │
                            │  bash                                                            │    │
-  DEAD  1                  │  go test -v ./internal/turn/...                                  │    │
+  DEAD  1                  │  go test -v ./internal/agent/loop/...                            │    │
     [&c3]             ✗    │  complete                                                        │    │
     failed · run the s…    │    line 1 of the tall result                                     │    ┃
                            │    line 2 of the tall result                                     │    ┃

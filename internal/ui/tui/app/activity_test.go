@@ -134,7 +134,7 @@ func runningSubAgents() []subagent.Row {
 		},
 		{
 			Name:  "bench",
-			Owns:  []string{"bench/harness/**"},
+			Owns:  []string{"bench/kit/harness/**"},
 			Doing: "run the bench",
 			Since: time.Minute + 2*time.Second,
 			State: roster.Working,

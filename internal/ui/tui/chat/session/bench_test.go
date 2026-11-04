@@ -29,7 +29,7 @@ func progressedChat() (*Model, []anchor) {
 		last := ""
 		for call := range 3 {
 			last = "toolu_" + number + "_" + strconv.Itoa(call)
-			model.Append(Entry{Kind: Tool, ID: last, Head: "read", Body: "internal/turn/loop.go"})
+			model.Append(Entry{Kind: Tool, ID: last, Head: "read", Body: "internal/agent/loop/loop.go"})
 			at = at.Add(2 * time.Second)
 			model.Finish(last, Result{Status: "84 lines"})
 		}
@@ -40,7 +40,7 @@ func progressedChat() (*Model, []anchor) {
 		model.Stop()
 	}
 	model.Start()
-	model.Append(Entry{Kind: Tool, ID: "toolu_live", Head: "bash", Body: "go test ./internal/turn/..."})
+	model.Append(Entry{Kind: Tool, ID: "toolu_live", Head: "bash", Body: "go test ./internal/agent/loop/..."})
 	tail, _ := model.tailAnchor(model.transcriptRows())
 	anchors := make([]anchor, benchScrolls)
 	for step := range anchors {

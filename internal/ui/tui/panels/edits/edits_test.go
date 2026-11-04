@@ -84,9 +84,9 @@ func session(t testing.TB, width, height int) Model {
 	m.Root = "/repo"
 	m.SubAgents = []subagent.Row{{Name: "c2"}, {Name: "c1"}}
 	m.Add(changedAt(t, Self, gatePath, "call-e1a2b3"))
-	m.Add(mustChange(t, "c1", "internal/rule/generated.go", "", createdFile(largeLines), "call-b7c4d1"))
-	m.Add(mustChange(t, "c1", "internal/rule/legacy.go", deletionDiff("internal/rule/legacy.go", deleteLines), "", "call-44f0aa"))
-	m.Add(changedAt(t, "c2", "internal/turn/loop.go", "call-9d0e1f"))
+	m.Add(mustChange(t, "c1", "internal/librarian/rules/generated.go", "", createdFile(largeLines), "call-b7c4d1"))
+	m.Add(mustChange(t, "c1", "internal/librarian/rules/legacy.go", deletionDiff("internal/librarian/rules/legacy.go", deleteLines), "", "call-44f0aa"))
+	m.Add(changedAt(t, "c2", "internal/agent/loop/loop.go", "call-9d0e1f"))
 	return m
 }
 
@@ -286,7 +286,7 @@ func TestFileSidebarCacheInvalidatesOnVisibleChanges(t *testing.T) {
 	check("focus")
 	m.SetSize(168, 36)
 	check("width")
-	m.Add(changedAt(t, "c3", "internal/turn/budget.go", "call-5a6b7c"))
+	m.Add(changedAt(t, "c3", "internal/agent/loop/budget.go", "call-5a6b7c"))
 	check("new edit")
 	m.SubAgents = []subagent.Row{{Name: "c1"}, {Name: "c2"}}
 	check("sub-agents reordered")
