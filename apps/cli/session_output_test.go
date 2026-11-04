@@ -83,7 +83,7 @@ func sessionOutputProject(t *testing.T) string {
 		{ID: "ev-task", At: at(0), Kind: session.EventMessage, Body: rawJSON(t, loop.MessageRow{Role: "user", Content: "explain the session store"})},
 		{ID: "req-1", At: at(1), Turn: "turn-one", Kind: session.EventStep, Body: rawJSON(t, step)},
 		{ID: "ev-call-1", At: at(2), Turn: "turn-one", Call: "call-1", Request: "req-1", Kind: session.EventToolCall,
-			Body: rawJSON(t, session.CallBody{Tool: "read", Args: json.RawMessage(`{"path":"internal/session/store.go"}`)})},
+			Body: rawJSON(t, session.CallBody{Tool: "read", Args: json.RawMessage(`{"path":"internal/store/session/store.go"}`)})},
 		{ID: "res-1", At: at(3), Turn: "turn-one", Call: "call-1", Kind: session.EventToolResult, Body: rawJSON(t, session.ResultBody{ToolOutcome: "ran", ResultBytes: 2048})},
 		{ID: "ev-call-3", At: at(4), Turn: "turn-one", Agent: "agent-1", Call: "call-3", Kind: session.EventToolCall, Body: rawJSON(t, session.CallBody{Tool: "search"})},
 		{ID: "ev-answer", At: at(5), Kind: session.EventMessage, Body: rawJSON(t, loop.MessageRow{Role: "assistant", Content: "it keeps one log per session"})},

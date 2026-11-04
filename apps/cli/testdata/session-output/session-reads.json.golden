@@ -12,7 +12,7 @@ exit 0
       {
         "step": 1,
         "tool": "read",
-        "source": "internal/session/store.go",
+        "source": "internal/store/session/store.go",
         "bytes": 2048,
         "reasoning": "looking at the store",
         "reasoning_source": "assistant_text"

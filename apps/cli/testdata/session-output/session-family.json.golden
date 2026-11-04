@@ -23,7 +23,7 @@ exit 0
         "outcome": "stopped",
         "steps": 1,
         "active_ms": 180000,
-        "bytes": 1612,
+        "bytes": 1618,
         "cost_usd": 0.0054
       }
     ],

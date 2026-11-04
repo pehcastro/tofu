@@ -524,13 +524,13 @@ func readingSession(t *testing.T, id string, paths ...string) {
 }
 
 func TestSessionReadsNamesEveryFileTheTurnReadWithItsSizeAndWhatWasSaid(t *testing.T) {
-	readingSession(t, "turn-reader", "internal/session/store.go", "internal/turn/loop.go", "cmd/tofu/session.go")
+	readingSession(t, "turn-reader", "internal/store/session/store.go", "internal/agent/loop/loop.go", "apps/cli/session.go")
 
 	out, _, code := sessionRun(t, "session", "reads", "turn-reader")
 	if code != output.ExitOK {
 		t.Fatalf("tofu session reads exited %d", code)
 	}
-	for _, want := range []string{"3 reads", "internal/session/store.go", "internal/turn/loop.go", "cmd/tofu/session.go", "1.0 KB", "2.0 KB", "3.0 KB", "looking at the store"} {
+	for _, want := range []string{"3 reads", "internal/store/session/store.go", "internal/agent/loop/loop.go", "apps/cli/session.go", "1.0 KB", "2.0 KB", "3.0 KB", "looking at the store"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("tofu session reads does not say %q", want)
 		}
@@ -538,7 +538,7 @@ func TestSessionReadsNamesEveryFileTheTurnReadWithItsSizeAndWhatWasSaid(t *testi
 }
 
 func TestSessionReadsJSONCarriesThePathTheSizeAndWhereTheReasoningCameFrom(t *testing.T) {
-	readingSession(t, "turn-reader", "internal/session/store.go")
+	readingSession(t, "turn-reader", "internal/store/session/store.go")
 
 	out, _, code := sessionRun(t, "session", "reads", "turn-reader", output.JSONFlag)
 	if code != output.ExitOK {
@@ -550,7 +550,7 @@ func TestSessionReadsJSONCarriesThePathTheSizeAndWhereTheReasoningCameFrom(t *te
 		t.Fatalf("--json carries %d reads, want 1", len(report.Reads))
 	}
 	read := report.Reads[0]
-	if read.Source != "internal/session/store.go" || read.Bytes != 1024 || read.Artifact != "artifact-internal/session/store.go" {
+	if read.Source != "internal/store/session/store.go" || read.Bytes != 1024 || read.Artifact != "artifact-internal/store/session/store.go" {
 		t.Errorf("--json reads %+v, want the path, the size and the artifact holding it", read)
 	}
 	if read.ReasoningSource != session.ReasoningFromAssistantText || read.Reasoning != "looking at the store" {

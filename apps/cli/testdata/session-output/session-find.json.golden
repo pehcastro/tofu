@@ -20,7 +20,7 @@ exit 0
         "call": "call-1",
         "tool": "read",
         "args": {
-          "path": "internal/session/store.go"
+          "path": "internal/store/session/store.go"
         },
         "ran": {
           "outcome": "ran",

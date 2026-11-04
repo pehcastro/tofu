@@ -54,7 +54,7 @@ exit 0
         "outcome": "ran",
         "result_bytes": 2048,
         "args": {
-          "path": "internal/session/store.go"
+          "path": "internal/store/session/store.go"
         },
         "start_ms": 120000
       },

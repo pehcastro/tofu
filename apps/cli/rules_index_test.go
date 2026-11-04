@@ -173,9 +173,9 @@ func TestRulesIndexFiresWhatTheComposerSendsForEveryRole(t *testing.T) {
 	}
 	cases = append(cases,
 		indexCase{loop.ComposeSpec{Task: "write a ticket for the theme picker", Role: rule.RoleOrchestrator}, []string{"--role", "orchestrator"}},
-		indexCase{loop.ComposeSpec{Task: "fix the nil check in internal/turn/loop.go", Role: rule.RoleOrchestrator}, []string{"--role", "orchestrator"}},
+		indexCase{loop.ComposeSpec{Task: "fix the nil check in internal/agent/loop/loop.go", Role: rule.RoleOrchestrator}, []string{"--role", "orchestrator"}},
 		indexCase{loop.ComposeSpec{Task: "write a ticket for the theme picker", Role: rule.RoleSubAgent, Agent: qa}, []string{"--role", "sub-agent", "--agent", "qa"}},
-		indexCase{loop.ComposeSpec{Task: "check the change in internal/turn/loop_test.go", Role: rule.RoleSubAgent, Agent: qa}, []string{"--agent", "qa"}},
+		indexCase{loop.ComposeSpec{Task: "check the change in internal/agent/loop/loop_test.go", Role: rule.RoleSubAgent, Agent: qa}, []string{"--agent", "qa"}},
 	)
 	for _, c := range cases {
 		c.spec.Environment, c.spec.ToolGuidance, c.spec.Rules = "e", "g", rules
