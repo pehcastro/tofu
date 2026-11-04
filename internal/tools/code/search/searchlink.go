@@ -1,4 +1,4 @@
-package loop
+package search
 
 import (
 	"encoding/json"

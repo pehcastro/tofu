@@ -1,4 +1,4 @@
-package registry
+package edit
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/agent/loop"
+	"tofu/internal/tools/contract"
 )
 
 func TestEditKeepsTheLineEndingsAndBOMOfTheFile(t *testing.T) {
@@ -37,7 +37,7 @@ func TestEditKeepsTheLineEndingsAndBOMOfTheFile(t *testing.T) {
 			if err := os.WriteFile(path, []byte(row.file), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			ledger := loop.NewReadLedger()
+			ledger := contract.NewReadLedger()
 			ledger.Mark(context.Background(), "f.txt", []byte(row.file))
 			editor, err := NewEdit(dir)
 			if err != nil {

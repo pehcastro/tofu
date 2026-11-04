@@ -1,4 +1,4 @@
-package registry
+package search
 
 import (
 	"cmp"
@@ -13,6 +13,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/glob"
 )
 
 type Search struct {
@@ -73,15 +74,15 @@ func (s Search) Run(_ context.Context, raw json.RawMessage) (contract.Result, er
 		return contract.Result{}, fmt.Errorf("search: %q is not a regular expression: %w", args.Pattern, err)
 	}
 	under := cmp.Or(args.Path, ".")
-	listed, err := filesUnder(s.root, under, args.IncludeIgnored)
+	listed, err := glob.FilesUnder(s.root, under, args.IncludeIgnored)
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("search: %w", err)
 	}
-	under = listed.under
+	under = listed.Under
 	result, err := engine.Find(engine.Request{
 		Root:      string(s.root),
-		Files:     listed.files,
-		Sizes:     listed.sizes,
+		Files:     listed.Files,
+		Sizes:     listed.Sizes,
 		Pattern:   expression,
 		MaxTokens: engine.Unbudgeted,
 	})
@@ -101,7 +102,7 @@ func (s Search) Run(_ context.Context, raw json.RawMessage) (contract.Result, er
 		hits += len(unit.Matches)
 	}
 	return contract.Result{
-		Content: withNote(fmt.Sprintf("search %s under %s\n%s", args.Pattern, under, page), listed.note),
+		Content: glob.WithNote(fmt.Sprintf("search %s under %s\n%s", args.Pattern, under, page), listed.Note),
 		Command: args.Pattern + " under " + under,
 		Hits:    &hits,
 	}, nil

@@ -1,4 +1,4 @@
-package registry
+package search
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 
 	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/glob"
 )
 
 const searchProfileEnvar = "TOFU_SEARCH_PROFILE"
@@ -70,8 +71,8 @@ func TestSearchProfileOverATree(t *testing.T) {
 
 func profiledFiles(root contract.Root, under, half string) ([]string, error) {
 	if under == "" {
-		listed, err := filesUnder(root, ".", false)
-		return listed.files, err
+		listed, err := glob.FilesUnder(root, ".", false)
+		return listed.Files, err
 	}
 	var files []string
 	walked := 0

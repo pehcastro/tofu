@@ -1,4 +1,4 @@
-package registry
+package typecheck
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/agent/loop"
+	"tofu/internal/tools/code/typecheck/checkers"
 )
 
 func typecheckProject(t *testing.T, files map[string]string) (string, func(path string) string) {
@@ -26,9 +26,9 @@ func typecheckProject(t *testing.T, files map[string]string) (string, func(path 
 			t.Fatal(err)
 		}
 	}
-	checkers := loop.NewTypecheckers()
-	t.Cleanup(checkers.Close)
-	tool, err := NewTypecheck(dir, checkers)
+	warm := checkers.NewTypecheckers()
+	t.Cleanup(warm.Close)
+	tool, err := NewTypecheck(dir, warm)
 	if err != nil {
 		t.Fatal(err)
 	}

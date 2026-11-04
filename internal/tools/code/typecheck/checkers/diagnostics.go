@@ -1,4 +1,4 @@
-package loop
+package checkers
 
 import (
 	"bufio"
@@ -25,13 +25,13 @@ import (
 )
 
 const (
-	tsconfigName        = "tsconfig.json"
+	TsconfigName        = "tsconfig.json"
 	erasableSyntaxError = "error TS1294:"
 	typeStrippingNote   = " node runs this project's .ts files with type stripping, which refuses enum, parameter properties and namespaces that hold values"
-	typecheckUnanswered = "typecheck has not answered yet"
+	TypecheckUnanswered = "typecheck has not answered yet"
 )
 
-type packageManifest struct {
+type PackageManifest struct {
 	Scripts         map[string]string `json:"scripts"`
 	PackageManager  string            `json:"packageManager"`
 	Workspaces      json.RawMessage   `json:"workspaces"`
@@ -39,7 +39,7 @@ type packageManifest struct {
 	DevDependencies map[string]string `json:"devDependencies"`
 }
 
-func (m packageManifest) workspaces() []string {
+func (m PackageManifest) workspaces() []string {
 	var listed []string
 	if json.Unmarshal(m.Workspaces, &listed) == nil {
 		return listed
@@ -51,7 +51,7 @@ func (m packageManifest) workspaces() []string {
 	return nested.Packages
 }
 
-func (m packageManifest) declares(name string) bool {
+func (m PackageManifest) declares(name string) bool {
 	_, needed := m.Dependencies[name]
 	_, developed := m.DevDependencies[name]
 	return needed || developed
@@ -133,7 +133,7 @@ func (c *Typecheckers) Close() {
 
 func (c *Typecheckers) Warm(dir string) {
 	projects := largestWorkspaces(dir)
-	if _, err := os.Stat(filepath.Join(dir, tsconfigName)); err == nil {
+	if _, err := os.Stat(filepath.Join(dir, TsconfigName)); err == nil {
 		projects = append(projects, dir)
 	}
 	for _, project := range projects {
@@ -145,12 +145,12 @@ func (c *Typecheckers) Warm(dir string) {
 
 func workspacePackages(dir string) []string {
 	var packages []string
-	var manifest packageManifest
+	var manifest PackageManifest
 	if body, err := os.ReadFile(filepath.Join(dir, "package.json")); err == nil {
 		_ = json.Unmarshal(body, &manifest)
 	}
 	for _, pattern := range manifest.workspaces() {
-		found, _ := filepath.Glob(filepath.Join(dir, filepath.FromSlash(pattern), tsconfigName))
+		found, _ := filepath.Glob(filepath.Join(dir, filepath.FromSlash(pattern), TsconfigName))
 		for _, tsconfig := range found {
 			packages = append(packages, filepath.Dir(tsconfig))
 		}
@@ -164,7 +164,7 @@ func baseOnly(dir string) []string {
 		Files   []string `json:"files"`
 		Include []string `json:"include"`
 	}
-	body, err := os.ReadFile(filepath.Join(dir, tsconfigName))
+	body, err := os.ReadFile(filepath.Join(dir, TsconfigName))
 	if err != nil || json.Unmarshal(body, &config) != nil || len(config.Files)+len(config.Include) > 0 {
 		return nil
 	}
@@ -183,7 +183,7 @@ func largestWorkspaces(dir string) []string {
 
 func typescriptFiles(dir string) int {
 	count := 0
-	eachSourceFile(dir, func(name string) bool {
+	EachSourceFile(dir, func(name string) bool {
 		if strings.HasSuffix(name, ".ts") || strings.HasSuffix(name, ".tsx") {
 			count++
 		}
@@ -192,7 +192,7 @@ func typescriptFiles(dir string) int {
 	return count
 }
 
-func eachSourceFile(dir string, visit func(name string) bool) {
+func EachSourceFile(dir string, visit func(name string) bool) {
 	_ = filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
@@ -225,7 +225,7 @@ func (c *Typecheckers) Check(ctx context.Context, resolved string) (contract.Res
 	}
 	checker, skipped := typecheckerFor(from)
 	if skipped != "" {
-		return failure("typecheck skipped: " + skipped), nil
+		return contract.Failure("typecheck skipped: " + skipped), nil
 	}
 	scope, _ := filepath.Rel(checker.dir, resolved)
 	return c.check(ctx, checker, filepath.ToSlash(scope), since, waitForAnswer), nil
@@ -287,7 +287,7 @@ func (c *Typecheckers) check(ctx context.Context, checker typechecker, scope str
 	case outcome == watchAnswered || outcome == watchQuiet && wait == waitForAnswer:
 		return tscReport(cycle.output, scope, fmt.Sprintf("typecheck: %s, %d ms", watch.command, took), cycle.failed)
 	case outcome == watchCancelled:
-		return failure("typecheck skipped: the turn was cancelled while " + watch.command + " ran")
+		return contract.Failure("typecheck skipped: the turn was cancelled while " + watch.command + " ran")
 	case outcome != watchLost && wait == waitInline:
 		background := "typecheck: " + watch.command + " checks this change in the background, and the typecheck tool reports it"
 		if cycle.started.IsZero() {
@@ -299,7 +299,7 @@ func (c *Typecheckers) check(ctx context.Context, checker typechecker, scope str
 		if cycle.started.IsZero() {
 			state = "warming, on its first check of this project"
 		}
-		return contract.Result{FailureText: typecheckUnanswered, Content: fmt.Sprintf(
+		return contract.Result{FailureText: TypecheckUnanswered, Content: fmt.Sprintf(
 			"typecheck: %s is still %s after %d ms. it keeps running: call typecheck again for its answer rather than running tsc through the shell", watch.command, state, took)}
 	}
 	c.mutex.Lock()
@@ -402,7 +402,7 @@ func (w *tscWatch) next(ctx context.Context, since time.Time) (tscCycle, watchOu
 }
 
 func typecheckerFor(from string) (typechecker, string) {
-	tsconfig, found := findUp(from, tsconfigName)
+	tsconfig, found := contract.FindUp(from, TsconfigName)
 	if !found {
 		return typechecker{}, "no tsconfig.json in " + from + " or above it"
 	}
@@ -414,13 +414,13 @@ func typecheckerFor(from string) (typechecker, string) {
 		}
 		return typechecker{}, "tsconfig.json in " + dir + " only holds the settings its workspace packages extend and names no files of its own, so typecheck a package instead: " + strings.Join(packages, ", ")
 	}
-	var manifest packageManifest
-	if at, found := findUp(dir, "package.json"); found {
+	var manifest PackageManifest
+	if at, found := contract.FindUp(dir, "package.json"); found {
 		if body, err := os.ReadFile(at); err == nil {
 			_ = json.Unmarshal(body, &manifest)
 		}
 	}
-	manager := lockfileManager(dir, manifest)
+	manager := LockfileManager(dir, manifest)
 	if manifest.declares("svelte-check") {
 		return svelteChecker(dir, manager, manifest)
 	}
@@ -432,19 +432,19 @@ func typecheckerFor(from string) (typechecker, string) {
 	if skipped != "" {
 		return typechecker{}, skipped
 	}
-	argv = append(argv, "--noEmit", "--pretty", "false", "-p", tsconfigName)
+	argv = append(argv, "--noEmit", "--pretty", "false", "-p", TsconfigName)
 	if runsTypeScript(manifest) {
 		argv = append(argv, "--erasableSyntaxOnly")
 	}
 	return typechecker{dir: dir, argv: argv}, ""
 }
 
-func svelteChecker(dir, manager string, manifest packageManifest) (typechecker, string) {
+func svelteChecker(dir, manager string, manifest PackageManifest) (typechecker, string) {
 	argv, skipped := checkerFor(dir, manager, "svelte-check", "svelte-check", "bin/svelte-check")
 	if skipped != "" {
 		return typechecker{}, skipped
 	}
-	scripted := []string{"--tsconfig", "./" + tsconfigName}
+	scripted := []string{"--tsconfig", "./" + TsconfigName}
 	for _, command := range strings.Split(manifest.Scripts["check"], "&&") {
 		words := strings.Fields(command)
 		if at := slices.Index(words, "svelte-check"); at >= 0 {
@@ -467,7 +467,7 @@ func coldTypecheck(ctx context.Context, checker typechecker, relative string) co
 	ctx, cancel := context.WithTimeout(ctx, konst.TypecheckDeadlineMillis*time.Millisecond)
 	defer cancel()
 	if err := checker.prepared(ctx); err != nil {
-		return failure("typecheck skipped: " + err.Error())
+		return contract.Failure("typecheck skipped: " + err.Error())
 	}
 	cmd := exec.CommandContext(ctx, checker.argv[0], checker.argv[1:]...)
 	cmd.Dir, cmd.WaitDelay, cmd.Env = checker.dir, konst.BashWaitDelayMillis*time.Millisecond, append(os.Environ(), sys.ScratchEnv(ctx)...)
@@ -476,22 +476,22 @@ func coldTypecheck(ctx context.Context, checker typechecker, relative string) co
 	started := time.Now()
 	tracked, err := process.StartTracked(cmd)
 	if err != nil {
-		return failure(fmt.Sprintf("typecheck skipped: %s did not start: %v", command, err))
+		return contract.Failure(fmt.Sprintf("typecheck skipped: %s did not start: %v", command, err))
 	}
 	defer tracked.Release()
 	failed := cmd.Wait() != nil
 	took := time.Since(started).Milliseconds()
 	switch {
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
-		return failure(fmt.Sprintf("typecheck skipped: %s ran past its %d ms limit", command, konst.TypecheckDeadlineMillis))
+		return contract.Failure(fmt.Sprintf("typecheck skipped: %s ran past its %d ms limit", command, konst.TypecheckDeadlineMillis))
 	case ctx.Err() != nil:
-		return failure("typecheck skipped: the turn was cancelled while " + command + " ran")
+		return contract.Failure("typecheck skipped: the turn was cancelled while " + command + " ran")
 	}
 	return tscReport(output.String(), relative, fmt.Sprintf("typecheck: %s, %d ms", command, took), failed)
 }
 
 func checkerFor(dir, manager, pkg, command, bin string) ([]string, string) {
-	installed, found := findUp(dir, "node_modules", filepath.FromSlash(pkg), "package.json")
+	installed, found := contract.FindUp(dir, "node_modules", filepath.FromSlash(pkg), "package.json")
 	switch {
 	case !found && pkg == "typescript":
 		return machineChecker(manager)
@@ -532,9 +532,9 @@ func machineChecker(manager string) ([]string, string) {
 	return nil, "typescript is not installed under node_modules, and neither bun nor npx is on PATH to fetch it"
 }
 
-func lockfileManager(dir string, manifest packageManifest) string {
+func LockfileManager(dir string, manifest PackageManifest) string {
 	for _, lock := range [][2]string{{"bun.lock", "bun"}, {"bun.lockb", "bun"}, {"pnpm-lock.yaml", "pnpm"}, {"yarn.lock", "yarn"}, {"package-lock.json", "npm"}} {
-		if _, found := findUp(dir, lock[0]); found {
+		if _, found := contract.FindUp(dir, lock[0]); found {
 			return lock[1]
 		}
 	}
@@ -545,7 +545,7 @@ func lockfileManager(dir string, manifest packageManifest) string {
 	return "npm"
 }
 
-func runsTypeScript(manifest packageManifest) bool {
+func runsTypeScript(manifest PackageManifest) bool {
 	for _, script := range manifest.Scripts {
 		for _, command := range strings.FieldsFunc(script, func(r rune) bool { return r == '&' || r == '|' || r == ';' }) {
 			words := strings.Fields(command)

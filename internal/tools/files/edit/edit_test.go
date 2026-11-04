@@ -1,4 +1,4 @@
-package registry
+package edit_test
 
 import (
 	"context"
@@ -15,7 +15,9 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/judge/state"
 	rule "tofu/internal/librarian/rules"
+	"tofu/internal/tools/code/typecheck/checkers"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/edit"
 )
 
 const slowTsc = `const fs = require('fs');
@@ -37,7 +39,7 @@ say('Starting compilation in watch mode...');
 check();
 `
 
-func warmEditor(t *testing.T, files map[string]string) (string, *loop.Typecheckers, func(oldString, newString string) (string, time.Duration)) {
+func warmEditor(t *testing.T, files map[string]string) (string, *checkers.Typecheckers, func(oldString, newString string) (string, time.Duration)) {
 	dir := t.TempDir()
 	files["tsconfig.json"], files["package.json"], files["bun.lock"] = `{"compilerOptions":{"strict":true}}`, `{"name":"edited"}`, "{}"
 	files["count.ts"] = "export const count: number = 3;\n"
@@ -49,18 +51,18 @@ func warmEditor(t *testing.T, files map[string]string) (string, *loop.Typechecke
 			t.Fatal(err)
 		}
 	}
-	checkers := loop.NewTypecheckers()
-	t.Cleanup(checkers.Close)
-	checkers.Warm(dir)
-	if warm, err := checkers.Typecheck(context.Background(), dir); err != nil || !strings.Contains(warm, "errors in .: 0") {
+	warmed := checkers.NewTypecheckers()
+	t.Cleanup(warmed.Close)
+	warmed.Warm(dir)
+	if warm, err := warmed.Typecheck(context.Background(), dir); err != nil || !strings.Contains(warm, "errors in .: 0") {
 		t.Fatalf("the watcher did not finish its first check: %v\n%s", err, warm)
 	}
-	editor, err := NewEdit(dir)
+	editor, err := edit.NewEdit(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	editor = editor.Checking(checkers)
-	return dir, checkers, func(oldString, newString string) (string, time.Duration) {
+	editor = editor.Checking(warmed)
+	return dir, warmed, func(oldString, newString string) (string, time.Duration) {
 		raw, _ := json.Marshal(map[string]string{"path": "count.ts", "old_string": oldString, "new_string": newString})
 		started := time.Now()
 		result, err := editor.Run(context.Background(), raw)
@@ -112,7 +114,7 @@ func TestReplaceAllRenamesEveryExactMatchAndSaysHowMany(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(dir, "cart.go"), []byte(cart), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			editor, err := NewEdit(dir)
+			editor, err := edit.NewEdit(dir)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -144,8 +146,8 @@ func TestAnEditOnAFastProjectKeepsItsInlineTypecheck(t *testing.T) {
 	t.Logf("edit, %s:\n%s", took, edited)
 }
 
-func severalFiles(t *testing.T) (string, *loop.ReadLedger, map[string]string) {
-	dir, ledger := t.TempDir(), loop.NewReadLedger()
+func severalFiles(t *testing.T) (string, *contract.ReadLedger, map[string]string) {
+	dir, ledger := t.TempDir(), contract.NewReadLedger()
 	files := map[string]string{
 		"a.go":       "package a\n\nconst A = 1\n",
 		"b.go":       "package a\n\nconst B = 2\n",
@@ -245,7 +247,7 @@ func TestOneEditCallChangesEveryFileItNamesOrNone(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			dir, ledger, files := severalFiles(t)
-			editor, err := NewEdit(dir)
+			editor, err := edit.NewEdit(dir)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -287,7 +289,7 @@ func TestAnEditBesideARepeatedLineIsWrittenAsMatched(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "transfer_test.go"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	editor, err := NewEdit(dir)
+	editor, err := edit.NewEdit(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,7 +323,7 @@ func TestEveryCheckOnAnEditCallReadsFileTwo(t *testing.T) {
 	}
 
 	dir, ledger, files := severalFiles(t)
-	editor, err := NewEdit(dir)
+	editor, err := edit.NewEdit(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -354,7 +356,7 @@ func TestAnEnforcedPatternRefusesTheWholeEditCallAndAShadowOneWritesAndSaysSo(t 
 		if err != nil {
 			t.Fatal(err)
 		}
-		editor, err := NewEdit(dir)
+		editor, err := edit.NewEdit(dir)
 		if err != nil {
 			t.Fatal(err)
 		}

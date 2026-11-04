@@ -1,21 +1,20 @@
-package registry
+package test
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 
-	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/contract"
 )
 
 type Test struct {
 	root    contract.Root
-	runners *loop.TestRunners
+	runners *TestRunners
 }
 
-func NewTest(dir string, runners *loop.TestRunners) (Test, error) {
+func NewTest(dir string, runners *TestRunners) (Test, error) {
 	root, err := contract.NewRoot(dir)
 	return Test{root: root, runners: runners}, err
 }

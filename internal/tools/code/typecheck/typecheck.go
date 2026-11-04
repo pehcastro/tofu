@@ -1,4 +1,4 @@
-package registry
+package typecheck
 
 import (
 	"cmp"
@@ -6,17 +6,17 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/code/typecheck/checkers"
 	"tofu/internal/tools/contract"
 )
 
 type Typecheck struct {
 	root     contract.Root
-	checkers *loop.Typecheckers
+	checkers *checkers.Typecheckers
 }
 
-func NewTypecheck(dir string, checkers *loop.Typecheckers) (Typecheck, error) {
+func NewTypecheck(dir string, checkers *checkers.Typecheckers) (Typecheck, error) {
 	root, err := contract.NewRoot(dir)
 	return Typecheck{root: root, checkers: checkers}, err
 }

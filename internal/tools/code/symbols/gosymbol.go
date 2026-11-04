@@ -1,4 +1,4 @@
-package registry
+package symbols
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ func goParse(shown, body string) error {
 	return err
 }
 
-func goStillParses(shown, before, after string) error {
+func GoStillParses(shown, before, after string) error {
 	if !strings.HasSuffix(shown, ".go") || goParse(shown, before) != nil {
 		return nil
 	}
@@ -37,7 +37,7 @@ func declarations(found []engine.Definition) string {
 	return strings.Join(named, " and ")
 }
 
-func replaceDeclaration(root contract.Root, shown, symbol, before, becomes string) (string, error) {
+func ReplaceDeclaration(root contract.Root, shown, symbol, before, becomes string) (string, error) {
 	if !strings.HasSuffix(shown, ".go") {
 		return "", fmt.Errorf("edit: symbol names a go declaration and %s is not a go file: replace a stretch of text in it with old_string instead", shown)
 	}

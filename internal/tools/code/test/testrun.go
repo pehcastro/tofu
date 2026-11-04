@@ -1,4 +1,4 @@
-package loop
+package test
 
 import (
 	"bufio"
@@ -18,12 +18,13 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/platform/safe"
 	"tofu/internal/sys"
+	"tofu/internal/tools/code/typecheck/checkers"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/shell/process"
 )
 
 const (
-	testNoTests      = "test: this project has no tests"
+	NoTests          = "test: this project has no tests"
 	testThroughShell = "test runs through the shell: "
 	testReplyMarker  = "TOFU-TEST-REPLY "
 	testRunnerScript = `process.env.TEST = 'true';
@@ -147,7 +148,7 @@ func (r *TestRunners) Test(ctx context.Context, resolved string) (contract.Resul
 	if !info.IsDir() {
 		from = filepath.Dir(resolved)
 	}
-	dir, refused := vitestPackage(from)
+	dir, refused := VitestPackage(from)
 	if dir == "" {
 		return refused, nil
 	}
@@ -178,11 +179,11 @@ func (r *TestRunners) Test(ctx context.Context, resolved string) (contract.Resul
 	r.drop(dir, runner)
 	switch {
 	case errors.Is(ctx.Err(), context.Canceled):
-		return failure("test skipped: the turn was cancelled while vitest ran, so its runner was stopped"), nil
+		return contract.Failure("test skipped: the turn was cancelled while vitest ran, so its runner was stopped"), nil
 	case errors.Is(err, context.DeadlineExceeded):
-		return failure(fmt.Sprintf("test: vitest in %s did not answer %s in %d ms, so its runner was stopped and the next test call starts a new one", dir, resolved, took)), nil
+		return contract.Failure(fmt.Sprintf("test: vitest in %s did not answer %s in %d ms, so its runner was stopped and the next test call starts a new one", dir, resolved, took)), nil
 	}
-	return failure(fmt.Sprintf("test: vitest in %s, %d ms, vitest stopped before it answered. its last lines:\n%s", dir, took, strings.Join(runner.lastSaid(), "\n"))), nil
+	return contract.Failure(fmt.Sprintf("test: vitest in %s, %d ms, vitest stopped before it answered. its last lines:\n%s", dir, took, strings.Join(runner.lastSaid(), "\n"))), nil
 }
 
 func colocatedTests(dir, stem string) ([]string, error) {
@@ -199,13 +200,13 @@ func colocatedTests(dir, stem string) ([]string, error) {
 	return tests, nil
 }
 
-func vitestPackage(from string) (string, contract.Result) {
-	manifestPath, found := findUp(from, "package.json")
+func VitestPackage(from string) (string, contract.Result) {
+	manifestPath, found := contract.FindUp(from, "package.json")
 	if !found {
-		return "", failure("test skipped: no package.json in " + from + " or above it, so run this project's tests through the shell")
+		return "", contract.Failure("test skipped: no package.json in " + from + " or above it, so run this project's tests through the shell")
 	}
 	dir := filepath.Dir(manifestPath)
-	var manifest packageManifest
+	var manifest checkers.PackageManifest
 	if body, err := os.ReadFile(manifestPath); err == nil {
 		_ = json.Unmarshal(body, &manifest)
 	}
@@ -213,7 +214,7 @@ func vitestPackage(from string) (string, contract.Result) {
 	_, depended := manifest.Dependencies["vitest"]
 	command := manifest.Scripts["test"]
 	usesVitest := declared || depended || strings.Contains(command, "vitest")
-	installedPath, installed := findUp(dir, "node_modules", "vitest", "package.json")
+	installedPath, installed := contract.FindUp(dir, "node_modules", "vitest", "package.json")
 	var vitest struct{ Version string }
 	if body, err := os.ReadFile(installedPath); err == nil {
 		_ = json.Unmarshal(body, &vitest)
@@ -222,22 +223,22 @@ func vitestPackage(from string) (string, contract.Result) {
 	_, unread := fmt.Sscanf(vitest.Version, "%d.%d", &major, &minor)
 	switch {
 	case !usesVitest && command == "" && !holdsTests(dir):
-		return "", failure(testNoTests + "\n" + manifestPath + " names no test runner and no test script, and no .test. or .spec. file is under " + dir + ", so there is nothing to run")
+		return "", contract.Failure(NoTests + "\n" + manifestPath + " names no test runner and no test script, and no .test. or .spec. file is under " + dir + ", so there is nothing to run")
 	case !usesVitest && command == "":
-		return "", failure("test skipped: " + manifestPath + " does not use vitest and has no test script, so find how this project runs its tests and run that through the shell")
+		return "", contract.Failure("test skipped: " + manifestPath + " does not use vitest and has no test script, so find how this project runs its tests and run that through the shell")
 	case !usesVitest:
-		return "", failure(testThroughShell + lockfileManager(dir, manifest) + " run test\nthe test tool runs vitest, and " + manifestPath + " tests with " + command + ": run that through the shell")
+		return "", contract.Failure(testThroughShell + checkers.LockfileManager(dir, manifest) + " run test\nthe test tool runs vitest, and " + manifestPath + " tests with " + command + ": run that through the shell")
 	case !installed:
-		return "", failure("test skipped: vitest is not installed under node_modules in " + dir + " or above it: install the project's dependencies first")
+		return "", contract.Failure("test skipped: vitest is not installed under node_modules in " + dir + " or above it: install the project's dependencies first")
 	case unread == nil && (major < konst.OldestVitestMajor || major == konst.OldestVitestMajor && minor < konst.OldestVitestMinor):
-		return "", failure(fmt.Sprintf("test skipped: %s holds vitest %s, older than %d.%d, the oldest the test tool runs, so run this project's tests through the shell", installedPath, vitest.Version, konst.OldestVitestMajor, konst.OldestVitestMinor))
+		return "", contract.Failure(fmt.Sprintf("test skipped: %s holds vitest %s, older than %d.%d, the oldest the test tool runs, so run this project's tests through the shell", installedPath, vitest.Version, konst.OldestVitestMajor, konst.OldestVitestMinor))
 	}
 	return dir, contract.Result{}
 }
 
 func holdsTests(dir string) bool {
 	found := false
-	eachSourceFile(dir, func(name string) bool {
+	checkers.EachSourceFile(dir, func(name string) bool {
 		found = strings.Contains(name, ".test.") || strings.Contains(name, ".spec.")
 		return !found
 	})
@@ -377,7 +378,7 @@ func (t *testRunner) ask(ctx context.Context, files []string) (testReply, error)
 
 func testReport(reply testReply, dir, head string) contract.Result {
 	if reply.Failure != "" {
-		return failure(head + ", vitest could not run it:\n" + firstLines(reply.Failure))
+		return contract.Failure(head + ", vitest could not run it:\n" + firstLines(reply.Failure))
 	}
 	if reply.None {
 		return contract.Result{Content: head + ": no test file in this package runs it, directly or through what it imports"}
@@ -412,7 +413,7 @@ func testReport(reply testReply, dir, head string) contract.Result {
 	if len(lines) == 0 {
 		return contract.Result{Content: report}
 	}
-	return failure(report)
+	return contract.Failure(report)
 }
 
 func firstLines(text string) string {

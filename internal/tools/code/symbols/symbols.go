@@ -1,4 +1,4 @@
-package registry
+package symbols
 
 import (
 	"cmp"
@@ -11,6 +11,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/glob"
 )
 
 type Symbols struct {
@@ -32,7 +33,7 @@ func (s Symbols) Definition() core.Tool {
 			"reach for it before changing a function, because it says what the change breaks: search says the name appears in these declarations and this says the name is declared here and called from these three places. " +
 			"it reads only .go, .rs, .ts and .tsx files, it matches on the identifier rather than resolving types, " +
 			"so two symbols sharing one name come back as one answer and a call made through an interface or a function value is not found, and the result says so. " +
-			ignoredWalkDescription,
+			glob.IgnoredWalkDescription,
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -60,17 +61,17 @@ func (s Symbols) Run(_ context.Context, raw json.RawMessage) (contract.Result, e
 		return contract.Result{}, errors.New("symbols: name is required, and it is one identifier rather than a pattern")
 	}
 	under := cmp.Or(args.Path, ".")
-	listed, err := filesUnder(s.root, under, args.IncludeIgnored)
+	listed, err := glob.FilesUnder(s.root, under, args.IncludeIgnored)
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("symbols: %w", err)
 	}
-	under = listed.under
-	graph, err := engine.Symbols(string(s.root), listed.files, args.Name)
+	under = listed.Under
+	graph, err := engine.Symbols(string(s.root), listed.Files, args.Name)
 	if err != nil {
 		return contract.Result{}, err
 	}
 	return contract.Result{
-		Content: withNote("symbols "+args.Name+" under "+under+"\n"+graph.Text, listed.note),
+		Content: glob.WithNote("symbols "+args.Name+" under "+under+"\n"+graph.Text, listed.Note),
 		Command: args.Name + " under " + under,
 	}, nil
 }

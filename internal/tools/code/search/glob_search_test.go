@@ -1,4 +1,4 @@
-package registry
+package search
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/glob"
 )
 
 func linkTo(t *testing.T, name, target string) {
@@ -66,7 +67,7 @@ func TestWalkNeverFollowsALinkOutsideTheProject(t *testing.T) {
 		}
 	}
 	const counted = "links not followed: 2,"
-	glob, err := NewGlob(project)
+	globber, err := glob.NewGlob(project)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,10 +77,10 @@ func TestWalkNeverFollowsALinkOutsideTheProject(t *testing.T) {
 		args string
 		want []string
 	}{
-		{glob, `{"pattern":"**/*"}`, []string{"3 of 3 files", ".gitignore", "inner/y.txt", "near.txt", counted}},
-		{glob, `{"pattern":"**/*","path":"in"}`, []string{"1 of 1 files", "in/y.txt"}},
-		{glob, `{"pattern":"**/*","path":"inner/y.txt"}`, []string{"1 of 1 files", "inner/y.txt"}},
-		{glob, `{"pattern":"**/*","path":"node_modules"}`, []string{"no file under node_modules"}},
+		{globber, `{"pattern":"**/*"}`, []string{"3 of 3 files", ".gitignore", "inner/y.txt", "near.txt", counted}},
+		{globber, `{"pattern":"**/*","path":"in"}`, []string{"1 of 1 files", "in/y.txt"}},
+		{globber, `{"pattern":"**/*","path":"inner/y.txt"}`, []string{"1 of 1 files", "inner/y.txt"}},
+		{globber, `{"pattern":"**/*","path":"node_modules"}`, []string{"no file under node_modules"}},
 		{search, `{"pattern":"secret"}`, []string{"inner/y.txt", "near.txt", counted}},
 	}
 	for _, row := range rows {
