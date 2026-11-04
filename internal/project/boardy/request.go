@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 )
 
 const (
@@ -111,7 +111,7 @@ func (s Store) savePersonRequest(key string, r PersonRequest) error {
 }
 
 func (s Store) requestIDs(key string) ([]string, error) {
-	names, err := sys.ListFiles(filepath.Join(s.BoardDir(key), requestsName), ".json")
+	names, err := platformfs.ListFiles(filepath.Join(s.BoardDir(key), requestsName), ".json")
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 var callAssertions = map[string]bool{
@@ -36,7 +36,7 @@ func goPackageSources(a Artifact) (testSources, error) {
 }
 
 func readTestSources(dir string) (testSources, error) {
-	names, err := sys.ListFiles(dir, ".go")
+	names, err := fs.ListFiles(dir, ".go")
 	if err != nil {
 		return testSources{}, err
 	}

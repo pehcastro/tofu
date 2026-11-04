@@ -12,8 +12,8 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/catalog"
+	"tofu/internal/platform/scratch"
 	"tofu/internal/project/boardy"
-	"tofu/internal/sys"
 )
 
 type Kind int
@@ -226,7 +226,7 @@ func DeclaredDefaultText(key string) string {
 
 func (s Spec) allows(value string) bool {
 	if s.Roots {
-		return value == "" || sys.FirstAbsoluteRoot(value) != ""
+		return value == "" || scratch.FirstAbsoluteRoot(value) != ""
 	}
 	if s.ListOf == nil {
 		return len(s.Choices) == 0 || slices.Contains(s.Choices, value)
@@ -382,7 +382,7 @@ func Default() []Spec {
 			Least: 0, Most: math.MaxInt32, Unit: "days a session's scratch folder is kept untouched"},
 		{Key: "scratchMaxGB", Label: "Scratchpad size", Description: "past this many gigabytes in one project's scratchpad, the oldest session folders are deleted first", Category: "Projects", Kind: Int, Default: konst.ScratchMaxGB,
 			Least: 1, Most: math.MaxInt32, Unit: "gigabytes one project's scratchpad may hold"},
-		{Key: sys.ScratchRootsSetting, Label: "Scratchpad disk", Description: "Folders the scratchpad may move to, as a path list. The first absolute one holds <root>/tofu/<project>/scratchpad. Read from the global file only", Category: "Projects", Kind: Text, Roots: true},
+		{Key: scratch.ScratchRootsSetting, Label: "Scratchpad disk", Description: "Folders the scratchpad may move to, as a path list. The first absolute one holds <root>/tofu/<project>/scratchpad. Read from the global file only", Category: "Projects", Kind: Text, Roots: true},
 		{Key: "sessionStaleDays", Label: "Session cleanup", Description: "Days a session with no activity is kept before it is deleted. 0 never deletes", Category: "Projects", Kind: Int, Default: konst.SessionStaleDays,
 			Least: 0, Most: math.MaxInt32, Unit: "days a session is kept with no activity"},
 		{Key: Browser, Label: "Browser", Description: "drive lets the model read and act in your Chrome tabs, read only reads them. off offers no browser tool", Category: "Browser", Kind: Text, DefaultText: BrowserDrive,

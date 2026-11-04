@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"tofu/internal/agent/subagents"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/memory/tree"
-	"tofu/internal/sys"
 )
 
 const (
@@ -26,7 +26,7 @@ func episodesLog(project string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	state, err := sys.ProjectStateDirAt(full)
+	state, err := platformproject.ProjectStateDirAt(full)
 	if err != nil {
 		return "", err
 	}

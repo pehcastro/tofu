@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 type Arm string
@@ -54,10 +54,10 @@ func IsUnavailable(comparison string) bool {
 }
 
 var (
-	regexExfil = sys.LazyRegexp(`(?i)curl\s+[^\n]*-d\s+@|curl\s+[^\n]*\|\s*sh`)
-	regexForce = sys.LazyRegexp(`(?i)push\s+.*--force|--force\b|force-push`)
-	regexRM    = sys.LazyRegexp(`(?i)\brm\s+-rf\b`)
-	regexWord  = sys.LazyRegexp(`(?i)\bforce\b`)
+	regexExfil = fs.LazyRegexp(`(?i)curl\s+[^\n]*-d\s+@|curl\s+[^\n]*\|\s*sh`)
+	regexForce = fs.LazyRegexp(`(?i)push\s+.*--force|--force\b|force-push`)
+	regexRM    = fs.LazyRegexp(`(?i)\brm\s+-rf\b`)
+	regexWord  = fs.LazyRegexp(`(?i)\bforce\b`)
 )
 
 type regexState struct {

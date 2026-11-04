@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 type CalibrationMap string
@@ -116,9 +116,9 @@ func WriteLock(path string, l Lock) error {
 		fmt.Fprintf(&b, "thresholds:\n  risk_ask_at: %g\n  risk_deny_at: %g\n  user_requested_relax_at: %g\n  approval_relax_at: %g\n  from_untrusted_block_at: %g\n",
 			t.RiskAskAt, t.RiskDenyAt, t.UserRequestedRelaxAt, t.ApprovalRelaxAt, t.FromUntrustedBlockAt)
 	}
-	return sys.WriteFile(path, []byte(b.String()), 0o644)
+	return fs.WriteFile(path, []byte(b.String()), 0o644)
 }
 
 func LockPath(dir string, r Rule) string {
-	return sys.Join(dir, fmt.Sprintf("%s@%d.lock", r.Name, r.RuleVersion))
+	return fs.Join(dir, fmt.Sprintf("%s@%d.lock", r.Name, r.RuleVersion))
 }

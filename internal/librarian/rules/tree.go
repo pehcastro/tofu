@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 )
 
 var proseExtensions = map[string]bool{".go": true, ".md": true}
@@ -27,7 +27,7 @@ func CheckTree(rules []Rule, checkers map[string]Checker, root string, now func(
 		}
 		return nil
 	}
-	err := sys.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	err := platformfs.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -56,7 +56,7 @@ func CheckTree(rules []Rule, checkers map[string]Checker, root string, now func(
 
 func skipTreeDir(name string) bool {
 	switch name {
-	case ".git", sys.StateDirName, sys.LegacyStateDirName, "node_modules", "vendor":
+	case ".git", platformfs.StateDirName, platformfs.LegacyStateDirName, "node_modules", "vendor":
 		return true
 	}
 	return false

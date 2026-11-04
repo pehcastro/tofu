@@ -7,16 +7,16 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
 )
 
 func TestAKeyInAJudgedCommandNeverReachesTheLedgerLineOrTheElidedState(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("HOME", home)
-	t.Setenv(sys.OpenRouterKeyName, "")
+	t.Setenv(credential.OpenRouterKeyName, "")
 	const key = "sk-or-v1-made-up-for-the-ledger-8Tn3"
-	if err := sys.SaveKey(sys.OpenRouterKeyName, key); err != nil {
+	if err := credential.SaveKey(credential.OpenRouterKeyName, key); err != nil {
 		t.Fatalf("storing the key: %v", err)
 	}
 	dir := t.TempDir()
@@ -49,7 +49,7 @@ func TestAKeyInAJudgedCommandNeverReachesTheLedgerLineOrTheElidedState(t *testin
 	if strings.Contains(written, key) {
 		t.Fatalf("the ledger holds the key of length %d", len(key))
 	}
-	if strings.Count(written, sys.KeyRedactedMark) < 4 {
-		t.Fatalf("the ledger shows %d redaction marks, want both fields of both rows", strings.Count(written, sys.KeyRedactedMark))
+	if strings.Count(written, credential.KeyRedactedMark) < 4 {
+		t.Fatalf("the ledger shows %d redaction marks, want both fields of both rows", strings.Count(written, credential.KeyRedactedMark))
 	}
 }

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -23,12 +23,12 @@ func (s Store) locked(key, name string, work func() error) error {
 	}
 	path := filepath.Join(dir, name+".lock")
 	for deadline := time.Now().Add(lockWait); ; time.Sleep(lockRetry) {
-		file, held, err := sys.TryLock(path)
+		file, held, err := fs.TryLock(path)
 		switch {
 		case err != nil:
 			return err
 		case !held:
-			return errors.Join(work(), sys.Unlock(file))
+			return errors.Join(work(), fs.Unlock(file))
 		case time.Now().After(deadline):
 			return fmt.Errorf("%s stayed locked by another tofu for %s", path, lockWait)
 		}

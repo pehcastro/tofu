@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -25,10 +25,10 @@ func (m *Memory) migrate(oldGlobal, oldProject string) (err error) {
 		return err
 	}
 	lock := filepath.Join(oldGlobal, "migrate.lock")
-	file, held, err := sys.TryLock(lock)
+	file, held, err := fs.TryLock(lock)
 	for deadline := time.Now().Add(konst.MemtreeLockWaitMillis * time.Millisecond); err == nil && held && time.Now().Before(deadline); {
 		time.Sleep(konst.MemtreeLockRetryMillis * time.Millisecond)
-		file, held, err = sys.TryLock(lock)
+		file, held, err = fs.TryLock(lock)
 	}
 	if err != nil {
 		return err
@@ -36,7 +36,7 @@ func (m *Memory) migrate(oldGlobal, oldProject string) (err error) {
 	if held {
 		return fmt.Errorf("%s is held by another tofu past %d ms, and copying the 0.5.8 shelves takes it", lock, konst.MemtreeLockWaitMillis)
 	}
-	defer func() { err = errors.Join(err, sys.Unlock(file)) }()
+	defer func() { err = errors.Join(err, fs.Unlock(file)) }()
 	var copying []Entry
 	markers := map[string][]string{}
 	for _, dir := range []string{oldGlobal, oldProject} {
@@ -86,7 +86,7 @@ func (m *Memory) migrate(oldGlobal, oldProject string) (err error) {
 		said = append(said, e.ID+" to "+string(e.Scope))
 	}
 	for marker, names := range markers {
-		if err := sys.WriteFile(marker, []byte(strings.Join(names, "\n")+"\n"), 0o644); err != nil {
+		if err := fs.WriteFile(marker, []byte(strings.Join(names, "\n")+"\n"), 0o644); err != nil {
 			return err
 		}
 	}

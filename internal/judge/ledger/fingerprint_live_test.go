@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 )
 
-func realLedgerDir() string { return sys.RecordedStateDir("log") }
+func realLedgerDir() string { return project.RecordedStateDir("log") }
 
 func TestSchemaBumpedForTheFingerprint(t *testing.T) {
 	if SchemaVersion < FingerprintSchema {

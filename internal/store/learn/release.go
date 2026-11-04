@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/platform/fs"
 	"tofu/internal/store/learn/words"
-	"tofu/internal/sys"
 )
 
 var (
-	releaseHeading = sys.LazyRegexp(`^## \[?(\d+\.\d+\.\d+[^\]\s]*)\]? - (\d{4}-\d{2}-\d{2})`)
+	releaseHeading = fs.LazyRegexp(`^## \[?(\d+\.\d+\.\d+[^\]\s]*)\]? - (\d{4}-\d{2}-\d{2})`)
 	noteMarkup     = strings.NewReplacer("**", "", "`", "")
 )
 

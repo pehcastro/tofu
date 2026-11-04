@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const cacheSuffix = ".json"
@@ -59,7 +59,7 @@ func (c *Cache) Key(req Request) (string, error) {
 }
 
 func (c *Cache) Load(key string) (Entry, bool, error) {
-	raw, err := sys.ReadFile(filepath.Join(c.dir, key+cacheSuffix))
+	raw, err := fs.ReadFile(filepath.Join(c.dir, key+cacheSuffix))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return Entry{}, false, nil
@@ -91,5 +91,5 @@ func (c *Cache) Store(key string, req Request, entry Entry) error {
 	if err != nil {
 		return err
 	}
-	return sys.WriteFile(filepath.Join(c.dir, key+cacheSuffix), body, 0o644)
+	return fs.WriteFile(filepath.Join(c.dir, key+cacheSuffix), body, 0o644)
 }

@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
 )
 
 func freshHistory(t *testing.T) (*PromptHistory, string) {
@@ -96,11 +96,11 @@ func TestPromptHistoryRedactsAStoredKeyBeforeWriting(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("HOME", home)
 	const key = "sk-or-v1-made-up-history-7Rk2Qa"
-	if err := sys.SaveKey(sys.OpenRouterKeyName, key); err != nil {
+	if err := credential.SaveKey(credential.OpenRouterKeyName, key); err != nil {
 		t.Fatal(err)
 	}
 	history, dir := freshHistory(t)
-	if err := history.Add("use " + key + " and " + sys.TypeSafeKeyName + "=ts-made-up-loose-9Xw3"); err != nil {
+	if err := history.Add("use " + key + " and " + credential.TypeSafeKeyName + "=ts-made-up-loose-9Xw3"); err != nil {
 		t.Fatal(err)
 	}
 	raw, err := os.ReadFile(filepath.Join(dir, promptHistoryName))
@@ -110,7 +110,7 @@ func TestPromptHistoryRedactsAStoredKeyBeforeWriting(t *testing.T) {
 	if strings.Contains(string(raw), key) || strings.Contains(string(raw), "ts-made-up-loose") {
 		t.Fatalf("the history file holds a key in clear: %s", raw)
 	}
-	if got := history.Prompts(); len(got) != 1 || strings.Count(got[0], sys.KeyRedactedMark) != 2 {
+	if got := history.Prompts(); len(got) != 1 || strings.Count(got[0], credential.KeyRedactedMark) != 2 {
 		t.Fatalf("the redacted prompt reads %q", got)
 	}
 }

@@ -11,7 +11,7 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
 )
 
 const convertingPrefix = ".converting-"
@@ -297,7 +297,7 @@ func (s *Store) writeConverted(converted Converted) error {
 	}
 	body, err := json.MarshalIndent(converted.Header, "", "  ")
 	if err == nil {
-		redact := sys.LoadKeyRedactor()
+		redact := credential.LoadKeyRedactor()
 		err = errors.Join(appendLines(filepath.Join(staging, eventsName), []byte(redact.Redact(string(lines)))),
 			os.WriteFile(filepath.Join(staging, headerName), []byte(redact.Redact(string(body))), 0o644))
 	}

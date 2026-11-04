@@ -8,16 +8,16 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"tofu/internal/platform/fs"
 	"tofu/internal/store/learn/words"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 )
 
 var (
-	askedPerson = sys.LazyRegexp(`(?i)(decision for you|your call|you need to decide|until you decide|what i need from you|tell me (if|when|which|whether)|should i (start|do|go|build)|do you want|want me to|let me know|still open for you|\?\s*$)`)
-	turnEnded   = sys.LazyRegexp(`(?i)\byou should be the one\b|\bwhy (?:u |you )?(?:idle|stopp?ed|stop|waiting|ask)\b|\bcan't i just\b|\byou can just\b|\byour job\b|\bkeep working\b`)
-	directing   = sys.LazyRegexp(`(?i)\b(?:yourself|you should|your job|you can just|i want|must)\b`)
+	askedPerson = fs.LazyRegexp(`(?i)(decision for you|your call|you need to decide|until you decide|what i need from you|tell me (if|when|which|whether)|should i (start|do|go|build)|do you want|want me to|let me know|still open for you|\?\s*$)`)
+	turnEnded   = fs.LazyRegexp(`(?i)\byou should be the one\b|\bwhy (?:u |you )?(?:idle|stopp?ed|stop|waiting|ask)\b|\bcan't i just\b|\byou can just\b|\byour job\b|\bkeep working\b`)
+	directing   = fs.LazyRegexp(`(?i)\b(?:yourself|you should|your job|you can just|i want|must)\b`)
 	toTheLead   = strings.NewReplacer(" yourself ", " itself ", " you are ", " the lead is ", " you're ", " the lead is ", " your ", " the lead's ", " you ", " the lead ", " u ", " the lead ", " lol ", " ", " pls ", " ", " please ", " ", " ok ", " ")
 )
 

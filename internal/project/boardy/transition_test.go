@@ -13,7 +13,8 @@ import (
 
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/llm/catalog"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -49,8 +50,8 @@ func jevSaysNothingOpen(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv(classifiers.EndpointVariable, server.URL)
-	t.Setenv(sys.TypeSafeKeyName, "stub-key-not-a-real-credential")
-	dir, err := sys.HomeConfigDir()
+	t.Setenv(credential.TypeSafeKeyName, "stub-key-not-a-real-credential")
+	dir, err := fs.HomeConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}

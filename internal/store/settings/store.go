@@ -12,7 +12,7 @@ import (
 
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/catalog"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const FileName = "settings.json"
@@ -97,11 +97,11 @@ func readValues(path string) (map[string]int, map[string]string, map[string]json
 	if path == "" {
 		return ints, texts, objects, nil
 	}
-	present, err := sys.Exists(path)
+	present, err := fs.Exists(path)
 	if err != nil || !present {
 		return ints, texts, objects, err
 	}
-	data, err := sys.ReadFile(path)
+	data, err := fs.ReadFile(path)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -299,7 +299,7 @@ func (s *Store) write(scope Scope) error {
 	if err != nil {
 		return err
 	}
-	return sys.WriteFile(path, data, 0o600)
+	return fs.WriteFile(path, data, 0o600)
 }
 
 func (s *Store) RestartPending() []string {

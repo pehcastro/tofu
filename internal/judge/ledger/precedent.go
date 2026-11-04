@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
-	"tofu/internal/sys"
 )
 
 const precedentShortlistMax = 10
@@ -136,7 +136,7 @@ func (r *Reader) Precedents(targets []Row) ([][]Precedent, error) {
 	found, failed := make([][]Precedent, len(targets)), make([]error, len(targets))
 	var shortlisting sync.WaitGroup
 	var taken atomic.Int64
-	report := sys.Crashes(".")
+	report := project.Crashes(".")
 	for range min(max(runtime.GOMAXPROCS(0)/konst.CPUsPerReadWorker, 1), len(targets)) {
 		shortlisting.Go(func() {
 			for {

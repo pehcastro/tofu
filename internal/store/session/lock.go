@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 )
 
 const (
@@ -64,7 +64,7 @@ func (s *Store) Hold(id string) (func() error, error) {
 	if file == nil {
 		return nil, err
 	}
-	return func() error { return sys.Unlock(file) }, nil
+	return func() error { return platformfs.Unlock(file) }, nil
 }
 
 func (s *Store) HoldTurn() (func() error, error) {
@@ -78,12 +78,12 @@ func (s *Store) HoldTurn() (func() error, error) {
 	case err != nil:
 		return nil, err
 	}
-	return func() error { return sys.Unlock(file) }, nil
+	return func() error { return platformfs.Unlock(file) }, nil
 }
 
 func takeLock(path string) (*os.File, *lockHolder, error) {
 	for deadline := time.Now().Add(lockStaleGrace); ; time.Sleep(lockRetry) {
-		file, held, err := sys.TryLock(path)
+		file, held, err := platformfs.TryLock(path)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -94,7 +94,7 @@ func takeLock(path string) (*os.File, *lockHolder, error) {
 				_, err = file.Write(body)
 			}
 			if err != nil {
-				return nil, nil, errors.Join(err, sys.Unlock(file))
+				return nil, nil, errors.Join(err, platformfs.Unlock(file))
 			}
 			return file, nil, nil
 		}
@@ -110,7 +110,7 @@ func (s *Store) Busy(id string) error {
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
-	file, held, err := sys.TryLock(path)
+	file, held, err := platformfs.TryLock(path)
 	switch {
 	case err != nil:
 		return err

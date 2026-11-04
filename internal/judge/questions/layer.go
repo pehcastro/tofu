@@ -7,13 +7,13 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 )
 
-type Layer = sys.Layer
+type Layer = platformfs.Layer
 
 func Layers(shipped fs.FS, dir string) ([]Layer, error) {
-	return sys.Layers(shipped, "questions", dir)
+	return platformfs.Layers(shipped, "questions", dir)
 }
 
 type Field struct {
@@ -57,7 +57,7 @@ func Resolve(name string, layers []Layer) (Set, []Field, error) {
 		if err != nil {
 			return Set{}, nil, err
 		}
-		hits = append(hits, hit{display: sys.Join(layer.Origin, m.file), data: data, version: m.version})
+		hits = append(hits, hit{display: platformfs.Join(layer.Origin, m.file), data: data, version: m.version})
 		if m.version > best {
 			best = m.version
 		}
@@ -92,7 +92,7 @@ func ambiguityError(name string, layer Layer, ms []fileMatch) error {
 	sort.Slice(ms, func(i, j int) bool { return ms[i].version < ms[j].version })
 	parts := make([]string, len(ms))
 	for i, m := range ms {
-		parts[i] = fmt.Sprintf("%s@%d (%s)", name, m.version, sys.Join(layer.Origin, m.file))
+		parts[i] = fmt.Sprintf("%s@%d (%s)", name, m.version, platformfs.Join(layer.Origin, m.file))
 	}
 	return fmt.Errorf("%q is ambiguous in the %s layer: %s", name, layer.Name, strings.Join(parts, ", "))
 }

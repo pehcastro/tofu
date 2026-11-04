@@ -11,7 +11,7 @@ import (
 	"unicode"
 	"unicode/utf16"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 type Rule string
@@ -133,7 +133,7 @@ func foldSuffix(s, suffix string) bool {
 
 func utf16Len(s string) int { return len(utf16.Encode([]rune(s))) }
 
-var newline = sys.LazyRegexp(`\r?\n`)
+var newline = fs.LazyRegexp(`\r?\n`)
 
 const byteOrderMark = string(rune(0xFEFF))
 
@@ -189,8 +189,8 @@ func ownsGlobs(lines []string) []string {
 }
 
 var (
-	ownsKey  = sys.LazyRegexp(`(?i)^owns:\s*$`)
-	listItem = sys.LazyRegexp(`^\s*-\s*(.+?)\s*$`)
+	ownsKey  = fs.LazyRegexp(`(?i)^owns:\s*$`)
+	listItem = fs.LazyRegexp(`^\s*-\s*(.+?)\s*$`)
 )
 
 func ownsMatch(rel string, globs []string) bool {
@@ -205,7 +205,7 @@ func ownsMatch(rel string, globs []string) bool {
 	return false
 }
 
-var drivePath = sys.LazyRegexp(`^[A-Za-z]:/`)
+var drivePath = fs.LazyRegexp(`^[A-Za-z]:/`)
 
 func relativePath(root, path string) string {
 	normRoot := strings.ReplaceAll(strings.TrimRight(root, `\/`), `\`, "/")

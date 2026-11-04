@@ -10,8 +10,8 @@ import (
 	"slices"
 	"time"
 
+	platformfs "tofu/internal/platform/fs"
 	"tofu/internal/store/memory/entries"
-	"tofu/internal/sys"
 )
 
 const (
@@ -101,7 +101,7 @@ func quiet(f Finding, decisions []Decision) bool {
 type Home struct{ Dir string }
 
 func OpenHome() (Home, error) {
-	home, err := sys.HomeConfigDir()
+	home, err := platformfs.HomeConfigDir()
 	return Home{Dir: filepath.Join(home, dirName)}, err
 }
 
@@ -113,7 +113,7 @@ func (h Home) Save(run Run) (string, error) {
 		return "", err
 	}
 	file := filepath.Join(h.Dir, runsDir, run.ID+".json")
-	return file, sys.WriteFile(file, data, 0o600)
+	return file, platformfs.WriteFile(file, data, 0o600)
 }
 
 func (h Home) Last() (Run, error) {

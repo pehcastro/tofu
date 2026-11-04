@@ -9,36 +9,36 @@ import (
 	"strings"
 	"unicode"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 var (
-	interpreterReadsScript = sys.LazyRegexp(`(?is)\b(python[23]?(\.exe)?|node|perl|ruby|bun|deno|php|powershell|pwsh)\b[^\r\n|]*(<<-?\s*['"]?[A-Za-z_]|\s-\s|\s-[cep]\s|\s-[cep]['"])`)
-	scriptWritesGo         = sys.LazyRegexp(`(?is)(\.go['"]\s*,\s*['"][wax]|\.go['"]\s*\)\s*\.\s*write|writeFileSync\s*\(\s*['"][^'"\r\n]*\.go['"]|Set-Content[^\r\n]{0,60}\.go['"]|['"][^'"\r\n]*\.go['"][^\r\n]{0,40}\bmode\s*=\s*['"][wax])`)
-	scriptOpensForWrite    = sys.LazyRegexp(`(?is)\bopen\s*\([^)\r\n]{0,120},\s*['"][wax]`)
-	goWord                 = sys.LazyRegexp(`(?i)\.go\b`)
-	shellWritesSource      = sys.LazyRegexp(`(?i)((^|[;&|(\n]|\$\()\s*((echo|printf|cat)\b[^;&|\n]*)?>>?\s*\S+\.(go|ya?ml|json)\b|\btee\s+(-a\s+)?\S+\.(go|ya?ml|json)\b|\b(cp|mv)\s+\S+\s+\S*\.(go|ya?ml|json)\b)`)
-	sourceFile             = sys.LazyRegexp(`(?i)\.(go|ya?ml|json)\b`)
-	gitChangesTree         = sys.LazyRegexp(`(?i)` + gitThen + `(reset|checkout|restore|clean|stash|revert|merge|rebase|switch|add|commit|rm|mv|push|pull|filter-branch|gc|prune|update-ref|branch\s+-[dD]|tag\s+-d)` + wordEnds)
-	gitDiscardsWork        = sys.LazyRegexp(`(?i)` + gitThen + `(reset\s+(--hard|--merge|--keep)|checkout\s+(--|\.)|restore\b|clean\s+-[a-z]*[fdx]|filter-branch|update-ref)`)
-	gitStash               = sys.LazyRegexp(`(?i)` + gitThen + `stash\b`)
-	tofuRunsAtCommand      = sys.LazyRegexp(`(?im)(^|[;&|(\x60]|\$\()\s*[^\s;&|]*\b(tofu|boji)(\.exe)?["']?\s+run\b`)
-	exeRuns                = sys.LazyRegexp(`(?i)\S+\.exe["']?\s+run\s`)
-	wireOpenrouter         = sys.LazyRegexp(`(?i)--wire[=\s]+openrouter`)
-	dryRun                 = sys.LazyRegexp(`(?i)--dry-run`)
-	liveCost               = sys.LazyRegexp(`(?i)\b(TOFU|BOJI)_LIVE_COST\b`)
-	gitWorktree            = sys.LazyRegexp(`(?i)` + gitThen + `worktree\b`)
-	goTestPattern          = sys.LazyRegexp(`(?i)go\s+test\b[^&|;]*/\.\.\.`)
-	parallelBound          = sys.LazyRegexp(`(?i)-p[= ]\d`)
+	interpreterReadsScript = fs.LazyRegexp(`(?is)\b(python[23]?(\.exe)?|node|perl|ruby|bun|deno|php|powershell|pwsh)\b[^\r\n|]*(<<-?\s*['"]?[A-Za-z_]|\s-\s|\s-[cep]\s|\s-[cep]['"])`)
+	scriptWritesGo         = fs.LazyRegexp(`(?is)(\.go['"]\s*,\s*['"][wax]|\.go['"]\s*\)\s*\.\s*write|writeFileSync\s*\(\s*['"][^'"\r\n]*\.go['"]|Set-Content[^\r\n]{0,60}\.go['"]|['"][^'"\r\n]*\.go['"][^\r\n]{0,40}\bmode\s*=\s*['"][wax])`)
+	scriptOpensForWrite    = fs.LazyRegexp(`(?is)\bopen\s*\([^)\r\n]{0,120},\s*['"][wax]`)
+	goWord                 = fs.LazyRegexp(`(?i)\.go\b`)
+	shellWritesSource      = fs.LazyRegexp(`(?i)((^|[;&|(\n]|\$\()\s*((echo|printf|cat)\b[^;&|\n]*)?>>?\s*\S+\.(go|ya?ml|json)\b|\btee\s+(-a\s+)?\S+\.(go|ya?ml|json)\b|\b(cp|mv)\s+\S+\s+\S*\.(go|ya?ml|json)\b)`)
+	sourceFile             = fs.LazyRegexp(`(?i)\.(go|ya?ml|json)\b`)
+	gitChangesTree         = fs.LazyRegexp(`(?i)` + gitThen + `(reset|checkout|restore|clean|stash|revert|merge|rebase|switch|add|commit|rm|mv|push|pull|filter-branch|gc|prune|update-ref|branch\s+-[dD]|tag\s+-d)` + wordEnds)
+	gitDiscardsWork        = fs.LazyRegexp(`(?i)` + gitThen + `(reset\s+(--hard|--merge|--keep)|checkout\s+(--|\.)|restore\b|clean\s+-[a-z]*[fdx]|filter-branch|update-ref)`)
+	gitStash               = fs.LazyRegexp(`(?i)` + gitThen + `stash\b`)
+	tofuRunsAtCommand      = fs.LazyRegexp(`(?im)(^|[;&|(\x60]|\$\()\s*[^\s;&|]*\b(tofu|boji)(\.exe)?["']?\s+run\b`)
+	exeRuns                = fs.LazyRegexp(`(?i)\S+\.exe["']?\s+run\s`)
+	wireOpenrouter         = fs.LazyRegexp(`(?i)--wire[=\s]+openrouter`)
+	dryRun                 = fs.LazyRegexp(`(?i)--dry-run`)
+	liveCost               = fs.LazyRegexp(`(?i)\b(TOFU|BOJI)_LIVE_COST\b`)
+	gitWorktree            = fs.LazyRegexp(`(?i)` + gitThen + `worktree\b`)
+	goTestPattern          = fs.LazyRegexp(`(?i)go\s+test\b[^&|;]*/\.\.\.`)
+	parallelBound          = fs.LazyRegexp(`(?i)-p[= ]\d`)
 	treeWide               = []func() *regexp.Regexp{
-		sys.LazyRegexp(`(?i)go\s+(test|build|vet)\s+\./\.\.\.`),
-		sys.LazyRegexp(`(?i)\bgofmt\s+-w\s+\.`),
-		sys.LazyRegexp(`(?i)\bgo\s+run\b.*\bserve\b`),
+		fs.LazyRegexp(`(?i)go\s+(test|build|vet)\s+\./\.\.\.`),
+		fs.LazyRegexp(`(?i)\bgofmt\s+-w\s+\.`),
+		fs.LazyRegexp(`(?i)\bgo\s+run\b.*\bserve\b`),
 	}
-	gitPublishes = sys.LazyRegexp(`(?i)` + gitThen + `(add|commit|push)` + wordEnds)
-	inlineScript = sys.LazyRegexp(`(?i)(^|[\s;&|(/\\])` + interpreters + `\s+(-\S+\s+)*(-[a-z]*[ce]|--eval|-p|--print|-command)(\s|['"])`)
-	scriptFile   = sys.LazyRegexp(`(?i)>\s*\S+\.(py|sh|bash|js|mjs|cjs|ts|rb|pl|ps1)\b`)
-	interpreter  = sys.LazyRegexp(`(?i)^` + interpreters + `$`)
+	gitPublishes = fs.LazyRegexp(`(?i)` + gitThen + `(add|commit|push)` + wordEnds)
+	inlineScript = fs.LazyRegexp(`(?i)(^|[\s;&|(/\\])` + interpreters + `\s+(-\S+\s+)*(-[a-z]*[ce]|--eval|-p|--print|-command)(\s|['"])`)
+	scriptFile   = fs.LazyRegexp(`(?i)>\s*\S+\.(py|sh|bash|js|mjs|cjs|ts|rb|pl|ps1)\b`)
+	interpreter  = fs.LazyRegexp(`(?i)^` + interpreters + `$`)
 )
 
 const (
@@ -323,7 +323,7 @@ If you are the orchestrator: move the ticket to review/ first. That is the phase
 
 func ownsGo(globs []string) bool {
 	return slices.ContainsFunc(globs, func(glob string) bool {
-		return slices.ContainsFunc(sys.GoRoots(), func(root string) bool {
+		return slices.ContainsFunc(fs.GoRoots(), func(root string) bool {
 			return strings.EqualFold(glob, root) || foldPrefix(glob, root+"/")
 		})
 	})

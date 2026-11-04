@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 )
 
 type DraftKind string
@@ -140,7 +140,7 @@ func (h Home) markKey() ([]byte, error) {
 	if _, err := rand.Read(key); err != nil {
 		return nil, err
 	}
-	return key, sys.WriteFile(file, []byte(hex.EncodeToString(key)+"\n"), 0o600)
+	return key, platformfs.WriteFile(file, []byte(hex.EncodeToString(key)+"\n"), 0o600)
 }
 
 func (h Home) WriteDraft(d Draft) (string, string, error) {
@@ -149,7 +149,7 @@ func (h Home) WriteDraft(d Draft) (string, string, error) {
 		return "", "", err
 	}
 	file, text := filepath.Join(h.UpstreamDir(), d.Key+".md"), d.Encode(key)
-	return file, text, sys.WriteFile(file, []byte(text), 0o600)
+	return file, text, platformfs.WriteFile(file, []byte(text), 0o600)
 }
 
 type Listed struct {

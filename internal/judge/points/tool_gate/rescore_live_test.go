@@ -17,7 +17,8 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -227,8 +228,8 @@ func TestLiveCompareTheTwoNewestQuestionSets(t *testing.T) {
 		t.Skip("set TOFU_LIVE_STATE_RESCORE=1 to spend about $0.007 on four jev calls per recorded case")
 	}
 	pol := gateTheBenchReportDecidesThrough(t)
-	sys.AllowLiveCredential(t)
-	key, err := core.KeyFor(filepath.Join(sys.SourceRoot(), ".env"), core.OpenRouterVariable)
+	credential.AllowLiveCredential(t)
+	key, err := core.KeyFor(filepath.Join(fs.SourceRoot(), ".env"), core.OpenRouterVariable)
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
@@ -304,7 +305,7 @@ func TestLiveReadEveryAnswerOnTheDisagreementCase(t *testing.T) {
 	if !ok {
 		t.Fatalf("%s is not in the gate corpus", disagreement)
 	}
-	key, err := core.KeyFor(filepath.Join(sys.SourceRoot(), ".env"), core.OpenRouterVariable)
+	key, err := core.KeyFor(filepath.Join(fs.SourceRoot(), ".env"), core.OpenRouterVariable)
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}

@@ -12,7 +12,7 @@ import (
 	question "tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 	"tofu/library/questions"
 )
 
@@ -93,7 +93,7 @@ func (m Managed) askJev(ref string, s subject) (string, string) {
 	}
 	row := ledger.Row{Point: boardHookPoint, Questions: set.Name, Version: set.QuestionsVersion, StateHash: ledger.HashOf(body), StateBuilder: boardHookBuilder, State: body,
 		Verdict: ledger.VerdictAsk, Reason: &ledger.Reason{Question: asked.Name, Comparison: ">= " + strconv.FormatFloat(threshold, 'f', -1, 64), Threshold: threshold, Mode: ledger.ModeEnforced}}
-	places, err := sys.ResolvePlaces(m.Store.Root)
+	places, err := project.ResolvePlaces(m.Store.Root)
 	if err != nil {
 		return "", err.Error()
 	}

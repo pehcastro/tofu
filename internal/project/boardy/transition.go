@@ -19,7 +19,8 @@ import (
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 	"tofu/library/questions"
 )
 
@@ -434,7 +435,7 @@ const (
 	reasonPartPrefix   = "part_"
 )
 
-var reasonBreak = sys.LazyRegexp(`[,;!?\n]|\.(?:\s|$)`)
+var reasonBreak = fs.LazyRegexp(`[,;!?\n]|\.(?:\s|$)`)
 
 func openPart(answers map[string]core.Answer, reason string, parts []string, threshold float64) (string, bool) {
 	if answers[doneReasonDecides].Noul < threshold {
@@ -525,7 +526,7 @@ func (m Managed) judged(ref, decides string, state any, options []core.Option) r
 			row.Verdict = ledger.VerdictDeny
 		}
 	}
-	places, err := sys.ResolvePlaces(m.Store.Root)
+	places, err := project.ResolvePlaces(m.Store.Root)
 	if err == nil {
 		_, err = ledger.NewWriter(places.Log).Append(row)
 	}

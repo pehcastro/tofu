@@ -11,7 +11,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -34,10 +34,10 @@ type Question struct {
 }
 
 var (
-	questionHeading = sys.LazyRegexp(`^### Q([1-9][0-9]*) (.+)$`)
-	optionLine      = sys.LazyRegexp(`^([1-9])\. (.+)$`)
-	recommendLine   = sys.LazyRegexp(`^Recommend ([1-9]): (.+)$`)
-	answerLine      = sys.LazyRegexp(`^Answer: (.+)$`)
+	questionHeading = fs.LazyRegexp(`^### Q([1-9][0-9]*) (.+)$`)
+	optionLine      = fs.LazyRegexp(`^([1-9])\. (.+)$`)
+	recommendLine   = fs.LazyRegexp(`^Recommend ([1-9]): (.+)$`)
+	answerLine      = fs.LazyRegexp(`^Answer: (.+)$`)
 )
 
 func (t Ticket) OpenQuestions() []Question {

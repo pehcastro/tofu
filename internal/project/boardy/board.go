@@ -15,8 +15,9 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	platformfs "tofu/internal/platform/fs"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
-	"tofu/internal/sys"
 )
 
 const (
@@ -48,11 +49,11 @@ type Store struct {
 }
 
 func OpenStore(project string) (Store, error) {
-	state, err := sys.ProjectStateDirAt(project)
+	state, err := platformproject.ProjectStateDirAt(project)
 	return Store{Dir: filepath.Join(state, BoardsDirName), Root: project}, err
 }
 
-var boardKey = sys.LazyRegexp(`^[A-Z][A-Z0-9]{1,9}$`)
+var boardKey = platformfs.LazyRegexp(`^[A-Z][A-Z0-9]{1,9}$`)
 
 func (s Store) BoardDir(key string) string { return filepath.Join(s.Dir, key) }
 
@@ -67,7 +68,7 @@ func (s Store) Init(key, name string) (Board, error) {
 	}
 	board := Board{Key: key, Name: name, Holds: []Status{Doing}, Created: time.Now().UTC().Truncate(time.Second), Dir: s.BoardDir(key)}
 	err := s.locked(key, "board", func() error {
-		if found, err := sys.Exists(filepath.Join(board.Dir, BoardFileName)); found || err != nil {
+		if found, err := platformfs.Exists(filepath.Join(board.Dir, BoardFileName)); found || err != nil {
 			return errors.Join(err, fmt.Errorf("the board %s already exists at %s", key, board.Dir))
 		}
 		for _, dir := range append(Collections(), TicketsDirName) {
@@ -275,7 +276,7 @@ func (s Store) Create(key string, ticket Ticket) (Ticket, error) {
 	ticket.Status, ticket.Type, ticket.Priority = cmp.Or(ticket.Status, Backlog), cmp.Or(ticket.Type, Task), cmp.Or(ticket.Priority, DefaultPriority)
 	path, _ := s.TicketPath(ticket.ID)
 	err = s.locked(key, ticket.ID, func() error {
-		if found, err := sys.Exists(path); found || err != nil {
+		if found, err := platformfs.Exists(path); found || err != nil {
 			return errors.Join(err, fmt.Errorf("%s already exists, and the counter of %s is behind its tickets", ticket.ID, key))
 		}
 		return writeAtomic(path, ticket.Markdown())

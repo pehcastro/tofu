@@ -9,8 +9,9 @@ import (
 	"unicode/utf8"
 
 	"tofu/internal/agent/loop"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 )
 
 const (
@@ -23,7 +24,7 @@ const (
 	learnTask    = "tofu learn"
 )
 
-var ruleNoteAhead = sys.LazyRegexp(`\A\[[^\]\n]+, from the rule [^\]\n]+\]\n(?:[^\n]+\n)*?\n`)
+var ruleNoteAhead = fs.LazyRegexp(`\A\[[^\]\n]+, from the rule [^\]\n]+\]\n(?:[^\n]+\n)*?\n`)
 
 type Said struct {
 	Session  string    `json:"session"`
@@ -188,7 +189,7 @@ func heardIn(sittings []sitting) []heard {
 	}
 	slices.Sort(wrapped)
 	wrapped = slices.Compact(wrapped)
-	redact := sys.LoadKeyRedactor()
+	redact := credential.LoadKeyRedactor()
 	var all []heard
 	for seat, s := range sittings {
 		for _, one := range s.spoken {
@@ -206,7 +207,7 @@ func heardIn(sittings []sitting) []heard {
 }
 
 func distil(sittings []sitting, all []heard, read Read) ([]Said, Read) {
-	redact := sys.LoadKeyRedactor()
+	redact := credential.LoadKeyRedactor()
 	kept, repeated := firstOfEach(all)
 	read.Repeated, read.Typed = repeated, len(kept)
 	out := make([]Said, len(kept))

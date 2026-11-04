@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	rule "tofu/internal/librarian/rules"
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 	"tofu/library"
 )
 
@@ -112,7 +112,7 @@ func (s Store) writeHooks(key string, plan hookPlan) error {
 	}
 	for _, h := range plan.starters {
 		path := filepath.Join(dir, h.id+".yaml")
-		kept, err := sys.Exists(path)
+		kept, err := platformfs.Exists(path)
 		switch {
 		case err != nil:
 			return err
@@ -150,7 +150,7 @@ func Unruled(boards []Board) []Board {
 	return slices.DeleteFunc(slices.Clone(boards), func(board Board) bool {
 		rules, _ := filepath.Glob(filepath.Join(board.Dir, RulesDirName, "*.yaml"))
 		removed, _ := filepath.Glob(filepath.Join(board.Dir, RulesDirName, "*"+removedSuffix))
-		chosen, _ := sys.Exists(filepath.Join(board.Dir, RulesDirName, initModeFileName))
+		chosen, _ := platformfs.Exists(filepath.Join(board.Dir, RulesDirName, initModeFileName))
 		return chosen || len(rules)+len(removed) > 0
 	})
 }

@@ -14,8 +14,9 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	platformfs "tofu/internal/platform/fs"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/settings"
-	"tofu/internal/sys"
 )
 
 const (
@@ -165,15 +166,15 @@ func Placed(project string) (Memory, error) {
 	if err != nil {
 		return Memory{}, err
 	}
-	home, err := sys.HomeConfigDir()
+	home, err := platformfs.HomeConfigDir()
 	if err != nil {
 		return Memory{}, err
 	}
-	state, err := sys.ProjectStateDirAt(full)
+	state, err := platformproject.ProjectStateDirAt(full)
 	if err != nil {
 		return Memory{}, err
 	}
-	repo := sys.StateDir(full)
+	repo := platformfs.StateDir(full)
 	chosen, err := settings.Open(filepath.Join(home, settings.FileName), filepath.Join(repo, settings.FileName))
 	if err != nil {
 		return Memory{}, err

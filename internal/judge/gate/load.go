@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"tofu/internal/judge/questions"
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 )
 
 type Origin string
@@ -34,14 +34,14 @@ func (o Origin) String() string {
 }
 
 func LoadPoint(shipped fs.FS, ref string, set questions.Set, dir string) (Rule, Origin, error) {
-	libraryDir := sys.Join(sys.StateDir(dir), libraryRoot)
+	libraryDir := platformfs.Join(platformfs.StateDir(dir), libraryRoot)
 	if dir == "" {
 		var err error
-		if libraryDir, err = sys.LibraryDir(); err != nil {
+		if libraryDir, err = platformfs.LibraryDir(); err != nil {
 			return Rule{}, "", err
 		}
 	}
-	isDir, err := sys.IsDir(libraryDir)
+	isDir, err := platformfs.IsDir(libraryDir)
 	if err != nil {
 		return Rule{}, "", err
 	}
@@ -55,7 +55,7 @@ func LoadPoint(shipped fs.FS, ref string, set questions.Set, dir string) (Rule, 
 	origin := OriginBinary
 	if found != "" {
 		origin = OriginProject
-		r, err = Load(sys.Join(libraryDir, filepath.FromSlash(found)))
+		r, err = Load(platformfs.Join(libraryDir, filepath.FromSlash(found)))
 	} else {
 		r, err = LoadFS(shipped, ref)
 	}
@@ -150,14 +150,14 @@ func LoadFS(shipped fs.FS, ref string) (Rule, error) {
 }
 
 func Load(path string) (Rule, error) {
-	data, err := sys.ReadFile(path)
+	data, err := platformfs.ReadFile(path)
 	if err != nil {
 		return Rule{}, err
 	}
 	return parse(data, path)
 }
 
-var schemaName = sys.LazyRegexp(`^[a-z][a-z_0-9]*$`)
+var schemaName = platformfs.LazyRegexp(`^[a-z][a-z_0-9]*$`)
 
 func declaredSchema(data []byte, path string) (string, error) {
 	schema := SchemaGate
@@ -248,7 +248,7 @@ func parse(data []byte, path string) (Rule, error) {
 }
 
 func scanKV(path string, fn func(indent int, key, value string, line int) error) error {
-	data, err := sys.ReadFile(path)
+	data, err := platformfs.ReadFile(path)
 	if err != nil {
 		return err
 	}

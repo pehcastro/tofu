@@ -14,7 +14,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 )
 
 const CatchupFileName = "catchup.md"
@@ -50,7 +50,7 @@ type Catchup struct {
 	Flagged  []FlaggedHook   `json:"flagged"`
 }
 
-var catchupHeading = sys.LazyRegexp(`^## ([A-Z][A-Z0-9]*-[1-9][0-9]*(?:-[1-9][0-9]*)?) Q([1-9][0-9]*): (.*)$`)
+var catchupHeading = platformfs.LazyRegexp(`^## ([A-Z][A-Z0-9]*-[1-9][0-9]*(?:-[1-9][0-9]*)?) Q([1-9][0-9]*): (.*)$`)
 
 func (m Managed) Catchup(key string) (Catchup, error) {
 	c, err := m.OpenQuestions(key)

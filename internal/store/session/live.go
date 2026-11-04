@@ -15,7 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	platformfs "tofu/internal/platform/fs"
 )
 
 type Log struct {
@@ -27,7 +28,7 @@ type Log struct {
 	seq        int
 	last       map[string]string
 	prompts    map[string][sha256.Size]byte
-	redact     sys.KeyRedactor
+	redact     credential.KeyRedactor
 	blobs      map[string]bool
 	blobsBytes int64
 	eventBytes int64
@@ -63,7 +64,7 @@ func (s *Store) Reopen(header Header, closed *Log) (log *Log, err error) {
 	}
 	defer func() {
 		if err != nil && lock != nil {
-			err = errors.Join(err, sys.Unlock(lock))
+			err = errors.Join(err, platformfs.Unlock(lock))
 		}
 	}()
 	log = &Log{store: s, lock: lock, last: map[string]string{}, prompts: map[string][sha256.Size]byte{}, redact: s.redactor(), side: map[string]*os.File{}}
@@ -255,7 +256,7 @@ func (l *Log) Close() error {
 	if l.lock == nil {
 		return closed
 	}
-	return errors.Join(closed, sys.Unlock(l.lock))
+	return errors.Join(closed, platformfs.Unlock(l.lock))
 }
 
 func (l *Log) leaveResumable() {

@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 type scan struct {
@@ -175,13 +175,13 @@ func (s *scan) sink(token string) {
 }
 
 var (
-	assignment    = sys.LazyRegexp(`^[A-Za-z_][A-Za-z0-9_]*=`)
-	variableRef   = sys.LazyRegexp(`\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?`)
-	heredocMarker = sys.LazyRegexp(`^<<-?\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?`)
-	pythonOpen    = sys.LazyRegexp(`open\(\s*([^,()]+?)\s*,\s*['"]([^'"]+)['"]`)
-	pythonString  = sys.LazyRegexp(`^['"]([^'"]*)['"]$`)
-	codeRunner    = sys.LazyRegexp(`^(python[0-9.]*w?|py|node|deno|bun|ruby|perl|php|pwsh|powershell|sh|bash|zsh|rscript|eval|source|\.)$`)
-	codeWrapper   = sys.LazyRegexp(`^(env|uv|uvx|npx|bunx|pnpx|xargs|exec|command|nohup|time|timeout|nice|sudo)$`)
+	assignment    = fs.LazyRegexp(`^[A-Za-z_][A-Za-z0-9_]*=`)
+	variableRef   = fs.LazyRegexp(`\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?`)
+	heredocMarker = fs.LazyRegexp(`^<<-?\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?`)
+	pythonOpen    = fs.LazyRegexp(`open\(\s*([^,()]+?)\s*,\s*['"]([^'"]+)['"]`)
+	pythonString  = fs.LazyRegexp(`^['"]([^'"]*)['"]$`)
+	codeRunner    = fs.LazyRegexp(`^(python[0-9.]*w?|py|node|deno|bun|ruby|perl|php|pwsh|powershell|sh|bash|zsh|rscript|eval|source|\.)$`)
+	codeWrapper   = fs.LazyRegexp(`^(env|uv|uvx|npx|bunx|pnpx|xargs|exec|command|nohup|time|timeout|nice|sudo)$`)
 )
 
 func (s *scan) expand(value string) string {

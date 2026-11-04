@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"tofu/internal/librarian/rules"
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 )
 
 const (
@@ -96,7 +96,7 @@ func (s Store) Requests(key string) ([]Request, error) {
 			requests = append(requests, Request{ID: ticket.ID, By: unknownAuthor(""), At: ticket.Created, Ticket: ticket})
 		}
 	}
-	names, listErr := sys.ListFiles(filepath.Join(s.BoardDir(key), TriageDirName), ".json")
+	names, listErr := platformfs.ListFiles(filepath.Join(s.BoardDir(key), TriageDirName), ".json")
 	if !errors.Is(listErr, fs.ErrNotExist) {
 		err = errors.Join(err, listErr)
 	}

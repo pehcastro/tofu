@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 type Role string
@@ -120,7 +120,7 @@ const (
 	aliasMostRunes    = 24
 )
 
-var tofuSessionID = sys.LazyRegexp(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+var tofuSessionID = fs.LazyRegexp(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 func HarnessActor(harness Harness, session, agent string) string {
 	actor := sessioned(string(harness), session)

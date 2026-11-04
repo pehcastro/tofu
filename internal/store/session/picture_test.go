@@ -9,14 +9,14 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
 )
 
 func pictureStore(t *testing.T) (*Store, *Log, []byte, string) {
 	data := bytes.Repeat([]byte("a screenshot of a page with text on it "), 400)
 	secret := base64.StdEncoding.EncodeToString(data)[120:160]
 	store := OpenAt(t.TempDir())
-	store.Redacts(func() sys.KeyRedactor { return sys.KeyRedactorOf(map[string]string{"SHOT_KEY": secret}) })
+	store.Redacts(func() credential.KeyRedactor { return credential.KeyRedactorOf(map[string]string{"SHOT_KEY": secret}) })
 	log, err := store.Open(Header{})
 	if err != nil {
 		t.Fatal(err)
@@ -50,7 +50,7 @@ func TestARequestBodyHoldsEachPictureOnceAndAssemblesWhole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := strings.Replace(body, "the key is "+secret, "the key is "+sys.KeyRedactedMark, 1)
+	want := strings.Replace(body, "the key is "+secret, "the key is "+credential.KeyRedactedMark, 1)
 	if got := string(Assemble(parts, blobs)); got != want {
 		t.Errorf("the body assembles to %d bytes, want the %d sent with only the key in its text masked", len(got), len(want))
 	}

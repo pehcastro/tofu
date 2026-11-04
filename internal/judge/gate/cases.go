@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 )
 
 type BlockCase struct {
@@ -74,11 +74,11 @@ func (r BlockCase) AppendTo(file string) error {
 }
 
 func HomeCasesFiles() ([]string, error) {
-	home, err := sys.HomeConfigDir()
+	home, err := platformfs.HomeConfigDir()
 	if err != nil {
 		return nil, err
 	}
-	projects := filepath.Join(home, sys.ProjectsDirName)
+	projects := filepath.Join(home, platformfs.ProjectsDirName)
 	entries, err := os.ReadDir(projects)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil

@@ -21,16 +21,16 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 	"tofu/internal/tools/code/search/engine"
 )
 
 const notOwnedOnPurpose = "not-owned-on-purpose"
 
 var (
-	rustPublic = sys.LazyRegexp(`^\s*pub(?:\([^)]*\))?\s+(?:(?:const|async|unsafe|extern\s+"[^"]*")\s+)*(fn|struct|enum|trait|type|union|const|static|mod)\s+([A-Za-z_]\w*)`)
-	rustField  = sys.LazyRegexp(`^\s*pub(?:\([^)]*\))?\s+([a-z_]\w*)\s*:[^:]`)
-	rustMod    = sys.LazyRegexp(`^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+\w+\s*;`)
+	rustPublic = platformfs.LazyRegexp(`^\s*pub(?:\([^)]*\))?\s+(?:(?:const|async|unsafe|extern\s+"[^"]*")\s+)*(fn|struct|enum|trait|type|union|const|static|mod)\s+([A-Za-z_]\w*)`)
+	rustField  = platformfs.LazyRegexp(`^\s*pub(?:\([^)]*\))?\s+([a-z_]\w*)\s*:[^:]`)
+	rustMod    = platformfs.LazyRegexp(`^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+\w+\s*;`)
 )
 
 type callerItem struct {

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 )
 
 const SchemaVersion = 9
@@ -294,7 +294,7 @@ func CacheDir() (string, error) {
 }
 
 func CacheDirAt(dir string) (string, error) {
-	state, err := sys.ProjectStateDirAt(dir)
+	state, err := project.ProjectStateDirAt(dir)
 	if err != nil {
 		return "", err
 	}

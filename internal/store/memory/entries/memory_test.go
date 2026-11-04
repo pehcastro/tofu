@@ -14,8 +14,9 @@ import (
 	"testing"
 	"time"
 
+	platformfs "tofu/internal/platform/fs"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/settings"
-	"tofu/internal/sys"
 )
 
 const (
@@ -85,7 +86,7 @@ func TestFourScopesKeepTheIdentityOutOfTheRepositoryAndShowAnotherAuthorOnlyWhen
 	if !regexp.MustCompile(`^[0-9a-f]{32}$`).MatchString(local.Author) {
 		t.Errorf("the user local author is %q, want an opaque 32 hex digit id", local.Author)
 	}
-	salt, err := os.ReadFile(filepath.Join(repo, sys.StateDirName, "memory", "salt"))
+	salt, err := os.ReadFile(filepath.Join(repo, platformfs.StateDirName, "memory", "salt"))
 	if err != nil || len(strings.TrimSpace(string(salt))) == 0 {
 		t.Fatalf("no salt in the repository: %v", err)
 	}
@@ -106,7 +107,7 @@ func TestFourScopesKeepTheIdentityOutOfTheRepositoryAndShowAnotherAuthorOnlyWhen
 	t.Setenv("USERPROFILE", firstHome)
 	t.Setenv("HOME", firstHome)
 	walked := 0
-	err = filepath.WalkDir(filepath.Join(repo, sys.StateDirName), func(path string, entry fs.DirEntry, err error) error {
+	err = filepath.WalkDir(filepath.Join(repo, platformfs.StateDirName), func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
 			return err
 		}
@@ -123,8 +124,8 @@ func TestFourScopesKeepTheIdentityOutOfTheRepositoryAndShowAnotherAuthorOnlyWhen
 	if err != nil || walked != 4 {
 		t.Fatalf("walked %d files under the repository, want two user local, one project local and the salt: %v", walked, err)
 	}
-	home, _ := sys.HomeConfigDir()
-	store, err := settings.Open(filepath.Join(home, settings.FileName), filepath.Join(repo, sys.StateDirName, settings.FileName))
+	home, _ := platformfs.HomeConfigDir()
+	store, err := settings.Open(filepath.Join(home, settings.FileName), filepath.Join(repo, platformfs.StateDirName, settings.FileName))
 	if err == nil {
 		err = store.SetText(settings.Project, settings.MemoryFromAllUsers, settings.AllUsersOn)
 	}
@@ -186,8 +187,8 @@ func TestOldShelvesAreCopiedOnceSayingSoAndStayForAnOlderTofu(t *testing.T) {
 	freshHome(t)
 	repo := t.TempDir()
 	gitAs(t, repo, firstAuthor)
-	home, _ := sys.HomeConfigDir()
-	state, _ := sys.ProjectStateDirAt(repo)
+	home, _ := platformfs.HomeConfigDir()
+	state, _ := platformproject.ProjectStateDirAt(repo)
 	old := map[string]string{
 		filepath.Join(home, "memory", "m1.yaml"):  "id: m1\nkind: person\ntext: replies stay short\nsaid: \"keep it short\"\nat: 2026-09-01T10:00:00Z\nby: person\n",
 		filepath.Join(state, "memory", "m2.yaml"): "id: m2\r\nkind: person\r\ntext: one ticket at a time\r\nat: 2026-09-02T10:00:00Z\r\nby: lead\r\n",
@@ -228,7 +229,7 @@ func TestOldShelvesAreCopiedOnceSayingSoAndStayForAnOlderTofu(t *testing.T) {
 			}
 		}
 	}
-	if _, err := os.Stat(filepath.Join(repo, sys.StateDirName)); err == nil {
+	if _, err := os.Stat(filepath.Join(repo, platformfs.StateDirName)); err == nil {
 		t.Errorf("the copy wrote into the repository")
 	}
 	if _, err := copied.Remove(Project, "m3"); err != nil {
@@ -262,8 +263,8 @@ func TestAHomeAnEarlierBuildMovedSaysSoOnceAndAFreshHomeSaysNothing(t *testing.T
 	if said != "" {
 		t.Fatalf("a fresh home said %q, want nothing, since it never had shelves", said)
 	}
-	home, _ := sys.HomeConfigDir()
-	state, _ := sys.ProjectStateDirAt(repo)
+	home, _ := platformfs.HomeConfigDir()
+	state, _ := platformproject.ProjectStateDirAt(repo)
 	for _, dir := range []string{filepath.Join(home, "memory"), filepath.Join(state, "memory")} {
 		if err := os.Remove(filepath.Join(dir, copiedShelves)); err != nil {
 			t.Fatalf("no marker beside %s, so a home with nothing to copy would say it was moved earlier: %v", dir, err)

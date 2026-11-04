@@ -19,8 +19,9 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/credential"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
-	"tofu/internal/sys"
 )
 
 const (
@@ -45,7 +46,7 @@ type Store struct {
 	rename   func(from, to string) error
 	parsed   map[string][]Event
 	headers  map[string]Header
-	redactor func() sys.KeyRedactor
+	redactor func() credential.KeyRedactor
 	recent   *Recent
 }
 
@@ -186,12 +187,12 @@ func (s *Store) ReadOnce() *Store {
 func (s *Store) ForgetRead() { s.parsed, s.headers = nil, nil }
 
 func NewStore(dir string) *Store {
-	return &Store{dir: dir, settings: DefaultSettings(), readFile: os.ReadFile, rename: os.Rename, redactor: sync.OnceValue(sys.LoadKeyRedactor)}
+	return &Store{dir: dir, settings: DefaultSettings(), readFile: os.ReadFile, rename: os.Rename, redactor: sync.OnceValue(credential.LoadKeyRedactor)}
 }
 
 func (s *Store) Use(settings Settings) { s.settings = settings }
 
-func (s *Store) Redacts(redactor func() sys.KeyRedactor) { s.redactor = redactor }
+func (s *Store) Redacts(redactor func() credential.KeyRedactor) { s.redactor = redactor }
 
 func (s *Store) Dir(id string) string { return filepath.Join(s.dir, id) }
 
@@ -232,7 +233,7 @@ func OpenAt(state string) *Store { return NewStore(SessionsDir(state)) }
 func Open() (*Store, error) { return OpenIn(".") }
 
 func OpenIn(project string) (*Store, error) {
-	state, err := sys.ProjectStateDirAt(project)
+	state, err := platformproject.ProjectStateDirAt(project)
 	if err != nil {
 		return nil, err
 	}
@@ -280,7 +281,7 @@ func (s *Store) AppendEvent(id string, kind EventKind, body any) error {
 	return errors.Join(err, log.Close())
 }
 
-func (s *Store) writeHeader(header Header, redact sys.KeyRedactor) error {
+func (s *Store) writeHeader(header Header, redact credential.KeyRedactor) error {
 	body, err := json.MarshalIndent(header, "", "  ")
 	if err != nil {
 		return err

@@ -15,8 +15,8 @@ import (
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
 	"tofu/internal/models/transport"
+	"tofu/internal/platform/credential"
 	"tofu/internal/store/learn/words"
-	"tofu/internal/sys"
 )
 
 const liveModel = "jev-latest"
@@ -45,7 +45,7 @@ func TestEvalCorpus(t *testing.T) {
 	if corpus == "" {
 		t.Skip("TOFU_REPEAT_EVAL names no corpus")
 	}
-	sys.AllowLiveCredential(t)
+	credential.AllowLiveCredential(t)
 	raw, err := os.ReadFile(corpus)
 	if err != nil {
 		t.Fatal(err)
@@ -65,7 +65,7 @@ func TestEvalCorpus(t *testing.T) {
 	if err := json.Unmarshal(raw, &eval); err != nil {
 		t.Fatal(err)
 	}
-	key, err := core.TypeSafeKey(sys.CredentialFileName)
+	key, err := core.TypeSafeKey(credential.CredentialFileName)
 	if err != nil {
 		t.Fatal(err)
 	}

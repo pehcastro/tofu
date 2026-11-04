@@ -12,7 +12,7 @@ import (
 	"unicode"
 
 	"tofu/internal/agent/subagents"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 type Finding struct {
@@ -110,7 +110,7 @@ func (s Store) lintTicket(ticket Ticket, tickets map[string]Ticket, agents []str
 	return findings
 }
 
-var agentName = sys.LazyRegexp(`(?im)^name:\s*(\S+)\s*$`)
+var agentName = fs.LazyRegexp(`(?im)^name:\s*(\S+)\s*$`)
 
 func AgentTypes(root string) []string {
 	known := []string{"orchestrator", "general-purpose"}

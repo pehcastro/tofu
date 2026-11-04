@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -21,10 +21,10 @@ const (
 )
 
 var (
-	corrected   = sys.LazyRegexp(`(?i)\b(?:you|u)\b[^.?!,;:\n]*\bagain\b|\bagain\b[^.?!,;:\n]*\b(?:you|u)\b|\b(?:i said|i asked|i told|as i said|lol|you should|your job|yourself|where is|never asked|can't i just|you can just|not verified|nothing i asked)\b|\bwhy\b[^.!?\n]*\?`)
-	sentenceEnd = sys.LazyRegexp(`[.?!]+\s+|\n+`)
-	clauseEnd   = sys.LazyRegexp(`[.?!,;:()]+\s*|\s+(?:and|then|but|so)\s+|\n+`)
-	tokens      = sys.LazyRegexp(`[\pL\pN']+`)
+	corrected   = fs.LazyRegexp(`(?i)\b(?:you|u)\b[^.?!,;:\n]*\bagain\b|\bagain\b[^.?!,;:\n]*\b(?:you|u)\b|\b(?:i said|i asked|i told|as i said|lol|you should|your job|yourself|where is|never asked|can't i just|you can just|not verified|nothing i asked)\b|\bwhy\b[^.!?\n]*\?`)
+	sentenceEnd = fs.LazyRegexp(`[.?!]+\s+|\n+`)
+	clauseEnd   = fs.LazyRegexp(`[.?!,;:()]+\s*|\s+(?:and|then|but|so)\s+|\n+`)
+	tokens      = fs.LazyRegexp(`[\pL\pN']+`)
 )
 
 const (

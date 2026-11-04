@@ -18,7 +18,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 	"tofu/library"
 )
 
@@ -112,7 +112,7 @@ func (s Store) libraryHooks(key string) ([]rules.Hook, []rules.Hook, error) {
 			broken = append(broken, brokenHooks(file, declaredEvents(data), err)...)
 			continue
 		}
-		if removed, _ := sys.Exists(filepath.Join(s.BoardDir(key), RulesDirName, h.ID+removedSuffix)); !removed {
+		if removed, _ := platformfs.Exists(filepath.Join(s.BoardDir(key), RulesDirName, h.ID+removedSuffix)); !removed {
 			hooks = append(hooks, h)
 		}
 	}
@@ -166,7 +166,7 @@ func leafErrors(err error) []error {
 }
 
 func userHooksDir() (string, error) {
-	home, err := sys.HomeConfigDir()
+	home, err := platformfs.HomeConfigDir()
 	return filepath.Join(home, userBoardyDirName, RulesDirName), err
 }
 

@@ -12,7 +12,7 @@ import (
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 )
 
 func gitIn(t *testing.T, dir string, args ...string) string {
@@ -414,7 +414,7 @@ func TestDoneReasonHeldWhenJevCannotJudgeIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	proved(t, m, made.ID)
-	places, err := sys.ResolvePlaces(m.Store.Root)
+	places, err := project.ResolvePlaces(m.Store.Root)
 	if err != nil {
 		t.Fatal(err)
 	}

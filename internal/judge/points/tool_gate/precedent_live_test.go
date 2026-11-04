@@ -11,10 +11,10 @@ import (
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 )
 
-func realLedgerDir() string { return sys.RecordedStateDir("log") }
+func realLedgerDir() string { return project.RecordedStateDir("log") }
 
 type recordedCall struct {
 	Tool  string         `json:"tool"`

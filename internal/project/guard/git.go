@@ -8,25 +8,25 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const subjectLimit = 72
 
 var (
-	commentLine = sys.LazyRegexp(`^\s*#`)
-	attribution = sys.LazyRegexp(`(?i)^\s*(co-authored-by|signed-off-by|assisted-by|generated-by)\s*:`)
+	commentLine = fs.LazyRegexp(`^\s*#`)
+	attribution = fs.LazyRegexp(`(?i)^\s*(co-authored-by|signed-off-by|assisted-by|generated-by)\s*:`)
 	toolCredits = []func() *regexp.Regexp{
-		sys.LazyRegexp(`(?i)\b(generated|written|authored|created|produced|assisted|helped|co-?authored|made)\b[^.]{0,40}\b(by|with|using)\b[^.]{0,20}\b(claude|anthropic|copilot|cursor|chatgpt|openai|an? (ai|agent|bot|llm|model))\b`),
-		sys.LazyRegexp(`(?i)\b(claude|anthropic|copilot|cursor|chatgpt|openai)\b[^.]{0,20}\b(wrote|generated|authored|made|helped|assisted)\b`),
-		sys.LazyRegexp(`(?i)\bwith\s+(claude|copilot|cursor|chatgpt)\s*$`),
+		fs.LazyRegexp(`(?i)\b(generated|written|authored|created|produced|assisted|helped|co-?authored|made)\b[^.]{0,40}\b(by|with|using)\b[^.]{0,20}\b(claude|anthropic|copilot|cursor|chatgpt|openai|an? (ai|agent|bot|llm|model))\b`),
+		fs.LazyRegexp(`(?i)\b(claude|anthropic|copilot|cursor|chatgpt|openai)\b[^.]{0,20}\b(wrote|generated|authored|made|helped|assisted)\b`),
+		fs.LazyRegexp(`(?i)\bwith\s+(claude|copilot|cursor|chatgpt)\s*$`),
 	}
-	conventional     = sys.LazyRegexp(`(?i)^(feat|fix|docs|refactor|test|chore|bench|hook)(\([a-z0-9._/-]+\))?!?: .+`)
-	releaseSubject   = sys.LazyRegexp(`(?i)^chore\(release\): (\S+)$`)
-	changelogSection = sys.LazyRegexp(`(?i)^### (\w+)`)
-	versionHeading   = sys.LazyRegexp(`(?i)^## `)
-	quotedName       = sys.LazyRegexp("`([A-Za-z_][A-Za-z0-9_.-]*)`")
-	docsWaiver       = sys.LazyRegexp(`(?i)^Docs: none, (\S+\s+){2,}\S+`)
+	conventional     = fs.LazyRegexp(`(?i)^(feat|fix|docs|refactor|test|chore|bench|hook)(\([a-z0-9._/-]+\))?!?: .+`)
+	releaseSubject   = fs.LazyRegexp(`(?i)^chore\(release\): (\S+)$`)
+	changelogSection = fs.LazyRegexp(`(?i)^### (\w+)`)
+	versionHeading   = fs.LazyRegexp(`(?i)^## `)
+	quotedName       = fs.LazyRegexp("`([A-Za-z_][A-Za-z0-9_.-]*)`")
+	docsWaiver       = fs.LazyRegexp(`(?i)^Docs: none, (\S+\s+){2,}\S+`)
 )
 
 func CommitMsg(dir, file string) Answer {

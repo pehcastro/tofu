@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 var knownForeignSchemaConsumers = map[string][]string{
@@ -33,7 +33,7 @@ func TestEveryConsumerOfAForeignSchemaRuleIsAccountedFor(t *testing.T) {
 			return err
 		}
 		if info.IsDir() {
-			if info.Name() == ".git" || info.Name() == sys.StateDirName || info.Name() == ".local" || info.Name() == sys.LegacyStateDirName || info.Name() == ".claude" || info.Name() == ".playground" {
+			if info.Name() == ".git" || info.Name() == fs.StateDirName || info.Name() == ".local" || info.Name() == fs.LegacyStateDirName || info.Name() == ".claude" || info.Name() == ".playground" {
 				return filepath.SkipDir
 			}
 			return nil

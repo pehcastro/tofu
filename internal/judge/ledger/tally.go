@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const tallyDirName = "keyuse"
@@ -92,7 +92,7 @@ func lastNumber(header string) (int, bool) {
 }
 
 func tallyDir() (string, error) {
-	home, err := sys.HomeConfigDir()
+	home, err := fs.HomeConfigDir()
 	return filepath.Join(home, tallyDirName), err
 }
 

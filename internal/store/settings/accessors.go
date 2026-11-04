@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 func Paths(dir string) (global, project string) {
-	home, _ := sys.HomeConfigDir()
-	return filepath.Join(home, FileName), filepath.Join(sys.StateDir(dir), FileName)
+	home, _ := fs.HomeConfigDir()
+	return filepath.Join(home, FileName), filepath.Join(fs.StateDir(dir), FileName)
 }
 
 func OpenFor(dir string) (*Store, error) {

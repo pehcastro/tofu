@@ -9,14 +9,15 @@ import (
 	"slices"
 
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
 )
 
 const promptHistoryName = "prompts.jsonl"
 
 type PromptHistory struct {
 	path   string
-	redact *sys.KeyRedactor
+	redact *credential.KeyRedactor
 	newest string
 }
 
@@ -35,7 +36,7 @@ func encodedPrompt(prompt string) ([]byte, error) {
 
 func (h *PromptHistory) Add(prompt string) error {
 	if h.redact == nil {
-		loaded := sys.LoadKeyRedactor()
+		loaded := credential.LoadKeyRedactor()
 		h.redact = &loaded
 	}
 	prompt = h.redact.Redact(prompt)
@@ -94,5 +95,5 @@ func (h *PromptHistory) trim() error {
 		lines, size = append(lines, line), size+len(line)
 	}
 	slices.Reverse(lines)
-	return sys.WriteFile(h.path, bytes.Join(lines, nil), 0o600)
+	return fs.WriteFile(h.path, bytes.Join(lines, nil), 0o600)
 }

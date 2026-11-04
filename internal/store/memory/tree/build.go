@@ -12,8 +12,8 @@ import (
 	"unicode/utf8"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
-	"tofu/internal/sys"
 )
 
 type Compact func(ctx context.Context, before, left, right string) (string, error)
@@ -70,7 +70,7 @@ func (s *Store) Build(ctx context.Context, compact Compact) (Built, error) {
 		built.Calls++
 		running++
 		before := s.before(ref)
-		report := sys.Crashes(".")
+		report := project.Crashes(".")
 		safe.Go(report, "memtree compaction", func() {
 			finished := compacted{ref: ref}
 			finished.err = safe.Call(report, "memtree compaction", func() (err error) {
@@ -130,7 +130,7 @@ func BuildInReplies(ctx context.Context, open func(func(*Store) error) error, on
 		}
 		total.Calls += built.Calls - len(built.Failed)
 		var asking sync.WaitGroup
-		report := sys.Crashes(".")
+		report := project.Crashes(".")
 		if len(steps) > 0 {
 			asking.Go(func() {
 				var lines []string

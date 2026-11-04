@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const lineCeiling = 1 << 20
@@ -73,7 +73,7 @@ func (r *Reader) State(row Row) (json.RawMessage, error) {
 	if len(segments) == 0 || filepath.IsAbs(named) || slices.Contains(segments, "..") {
 		return nil, EscapingStateError{File: named, Dir: r.dir}
 	}
-	return sys.ReadFile(filepath.Join(r.dir, named))
+	return fs.ReadFile(filepath.Join(r.dir, named))
 }
 
 func (r *Reader) ByID(id string) (Row, bool, error) {

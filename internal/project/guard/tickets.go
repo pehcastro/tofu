@@ -7,13 +7,13 @@ import (
 	"slices"
 	"strings"
 
+	"tofu/internal/platform/fs"
 	"tofu/internal/project/boardy"
-	"tofu/internal/sys"
 )
 
 const reviewLogFloor = 200
 
-var citedTicket = sys.LazyRegexp(`(TOFU|BOJI|DESK)-\d+(?:-\d+)?`)
+var citedTicket = fs.LazyRegexp(`(TOFU|BOJI|DESK)-\d+(?:-\d+)?`)
 
 func requireTicket(env Env, ev event) (Answer, error) {
 	kind := ev.ToolInput.SubagentType
@@ -120,8 +120,8 @@ func globsOverlap(a, b string) bool {
 }
 
 var (
-	agentName  = sys.LazyRegexp(`(?im)^name:\s*(\S+)\s*$`)
-	agentTools = sys.LazyRegexp(`(?im)^tools:[ \t]*(\S.*?)[ \t]*$`)
+	agentName  = fs.LazyRegexp(`(?im)^name:\s*(\S+)\s*$`)
+	agentTools = fs.LazyRegexp(`(?im)^tools:[ \t]*(\S.*?)[ \t]*$`)
 )
 
 type agentCatalog struct {
@@ -174,7 +174,7 @@ func ownPaths(env Env, ev event) (Answer, error) {
 		return Answer{}, nil
 	}
 	rel, inside := underRoot(env.Root, target)
-	gated := slices.ContainsFunc(sys.GoRoots(), func(root string) bool { return foldPrefix(rel, root+"/") })
+	gated := slices.ContainsFunc(fs.GoRoots(), func(root string) bool { return foldPrefix(rel, root+"/") })
 	if !inside || !gated || blank(ev.AgentID) {
 		return Answer{}, nil
 	}
@@ -204,11 +204,11 @@ If this file genuinely belongs to your ticket, the ticket's owns: is wrong: stop
 }
 
 var (
-	logHeredocOpener = sys.LazyRegexp(`^<<'?(\w+)'?\r?\n`)
-	movedTicketFile  = sys.LazyRegexp(`(?i)(TOFU|BOJI|DESK)-\d+(?:-\d+)?\.md`)
-	moveCommand      = sys.LazyRegexp(`(?i)\b(mv|move|move-item|git\s+mv)\b`)
-	reviewFolder     = sys.LazyRegexp(`(?i)review[\\/]`)
-	boardyMove       = sys.LazyRegexp(`(?i)\bboardy\s+move\s+((?:TOFU|BOJI|DESK)-\d+(?:-\d+)?)\s+([A-Za-z-]+)`)
+	logHeredocOpener = fs.LazyRegexp(`^<<'?(\w+)'?\r?\n`)
+	movedTicketFile  = fs.LazyRegexp(`(?i)(TOFU|BOJI|DESK)-\d+(?:-\d+)?\.md`)
+	moveCommand      = fs.LazyRegexp(`(?i)\b(mv|move|move-item|git\s+mv)\b`)
+	reviewFolder     = fs.LazyRegexp(`(?i)review[\\/]`)
+	boardyMove       = fs.LazyRegexp(`(?i)\bboardy\s+move\s+((?:TOFU|BOJI|DESK)-\d+(?:-\d+)?)\s+([A-Za-z-]+)`)
 )
 
 func ticketLog(env Env, ev event) (Answer, error) {

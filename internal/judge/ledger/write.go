@@ -11,7 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
 )
 
 const logSuffix = ".jsonl"
@@ -31,7 +32,7 @@ const stateExcerptBytes = 512
 type Writer struct {
 	dir    string
 	now    func() time.Time
-	redact sys.KeyRedactor
+	redact credential.KeyRedactor
 }
 
 func NewWriter(dir string) *Writer {
@@ -39,7 +40,7 @@ func NewWriter(dir string) *Writer {
 }
 
 func NewWriterWithClock(dir string, now func() time.Time) *Writer {
-	return &Writer{dir: dir, now: now, redact: sys.LoadKeyRedactor()}
+	return &Writer{dir: dir, now: now, redact: credential.LoadKeyRedactor()}
 }
 
 func (w *Writer) Append(row Row) (Row, error) {
@@ -84,7 +85,7 @@ func (w *Writer) elideState(row *Row) error {
 		return nil
 	}
 	name := row.ID + stateSuffix
-	if err := sys.WriteFile(filepath.Join(w.dir, stateDirName, name), body, 0o644); err != nil {
+	if err := fs.WriteFile(filepath.Join(w.dir, stateDirName, name), body, 0o644); err != nil {
 		return err
 	}
 	row.State = nil

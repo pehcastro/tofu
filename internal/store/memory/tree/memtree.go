@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 type Item struct {
@@ -55,10 +55,10 @@ type Store struct {
 
 func Open(logPath string) (*Store, error) {
 	base := strings.TrimSuffix(logPath, ".jsonl")
-	lock, held, err := sys.TryLock(base + ".lock")
+	lock, held, err := fs.TryLock(base + ".lock")
 	for deadline := time.Now().Add(konst.MemtreeLockWaitMillis * time.Millisecond); held && time.Now().Before(deadline); {
 		time.Sleep(konst.MemtreeLockRetryMillis * time.Millisecond)
-		lock, held, err = sys.TryLock(base + ".lock")
+		lock, held, err = fs.TryLock(base + ".lock")
 	}
 	if held {
 		return nil, fmt.Errorf("%s.lock is held by another writer past %d ms, and a log takes one", base, konst.MemtreeLockWaitMillis)

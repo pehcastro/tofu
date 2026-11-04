@@ -16,7 +16,7 @@ import (
 	"golang.org/x/crypto/scrypt"
 
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -69,7 +69,7 @@ func (m *Memory) identity() string {
 	if !testing.Testing() {
 		id, err := exec.CommandContext(ctx, "gh", "api", "user", "--jq", ".id").Output()
 		if id = bytes.TrimSpace(id); err == nil && len(id) > 0 {
-			_ = sys.WriteFile(cached, id, 0o600)
+			_ = fs.WriteFile(cached, id, 0o600)
 			return "gh:" + string(id)
 		}
 	}

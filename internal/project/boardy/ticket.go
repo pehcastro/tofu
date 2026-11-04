@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"tofu/internal/librarian/skills"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 type Status string
@@ -164,7 +164,7 @@ func (t Ticket) undrafted() []Drafted {
 
 func (t Ticket) Board() string { key, _, _ := strings.Cut(t.ID, "-"); return key }
 
-var ticketID = sys.LazyRegexp(`^([A-Z][A-Z0-9]*)-([1-9][0-9]*)(?:-([1-9][0-9]*))?$`)
+var ticketID = fs.LazyRegexp(`^([A-Z][A-Z0-9]*)-([1-9][0-9]*)(?:-([1-9][0-9]*))?$`)
 
 type Ref struct {
 	Key    string

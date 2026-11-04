@@ -9,10 +9,10 @@ import (
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/points"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 )
 
-func recordedLedger() string { return sys.RecordedStateDir("log") }
+func recordedLedger() string { return project.RecordedStateDir("log") }
 
 func TestTheStopCheckCostTheTableStatesIsTheOneTheRecordedLedgerCarries(t *testing.T) {
 	if _, err := os.Stat(recordedLedger()); err != nil {

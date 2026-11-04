@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/internal/sys"
+	platformproject "tofu/internal/platform/project"
 )
 
 type TargetClass string
@@ -189,7 +189,7 @@ func projectBoards(project string) string {
 	if project == "" {
 		return ""
 	}
-	state, err := sys.ProjectStateDirAt(project)
+	state, err := platformproject.ProjectStateDirAt(project)
 	if err != nil {
 		return ""
 	}

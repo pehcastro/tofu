@@ -7,11 +7,11 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 )
 
 func Load(path string) (Set, error) {
-	data, err := sys.ReadFile(path)
+	data, err := platformfs.ReadFile(path)
 	if err != nil {
 		return Set{}, err
 	}

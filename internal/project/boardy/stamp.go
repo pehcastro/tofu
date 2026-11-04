@@ -11,14 +11,14 @@ import (
 	"strings"
 
 	"tofu/internal/librarian/rules"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const (
 	FlowsStamps    = "flows"
 	TreewideStamps = "treewide"
 	DeskStamps     = "desk"
-	deskArea       = sys.DeskRoot
+	deskArea       = fs.DeskRoot
 )
 
 func StampDir(repo string) string {
@@ -136,7 +136,7 @@ func lostFlowsAreas(repo string) []string {
 	}
 	var lost []string
 	for _, area := range flowsAreaList() {
-		if folder, _ := sys.IsDir(filepath.Join(repo, area)); !folder {
+		if folder, _ := fs.IsDir(filepath.Join(repo, area)); !folder {
 			lost = append(lost, area)
 		}
 	}
