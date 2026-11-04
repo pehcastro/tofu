@@ -19,6 +19,28 @@ CLAUDE.md
 .tofu.partial
 
 bench/kit/harness/testdata/gates/
+bench/**/report-[0-9]*
+bench/**/report.md
+bench/**/report.html
+bench/**/runs/
+bench/**/results.jsonl
+bench/gates/parity/results/
+bench/kit/report/INDEX.md
+bench/kit/report/reports.json
+bench/kit/report/index.html
+bench/kit/report/api-*.md
+bench/kit/report/artifact-*.md
+bench/suites/judge/cost/hazard-*.md
+bench/suites/judge/cost/rescore-*.md
+bench/suites/judge/cost/sweep-*.md
+bench/suites/judge/cost/answers/hazard-*.jsonl
+bench/suites/perf/scale/wall.jsonl
+bench/suites/perf/scale/wall.md
+bench/suites/perf/cli/measured.json
+bench/suites/perf/cli/passes.md
+bench/suites/perf/cli/passes/
+bench/suites/perf/boardy/replay/calibrate-*.txt
+bench/suites/tools/browser/answers-*.json
 
 rtk/
 .zed/

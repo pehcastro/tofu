@@ -6,12 +6,12 @@ import (
 	"strings"
 	"testing"
 
-	benchcorpus "tofu/bench/corpus"
+	benchcorpus "tofu/bench/kit/corpus"
 )
 
 func TestRewriteTheCorpusThroughTheScrub(t *testing.T) {
 	if os.Getenv("TOFU_REWRITE_CORPUS") != "1" {
-		t.Skip("set TOFU_REWRITE_CORPUS=1 to rewrite the fixture through bench/corpus")
+		t.Skip("set TOFU_REWRITE_CORPUS=1 to rewrite the fixture through bench/kit/corpus")
 	}
 	raw, err := os.ReadFile(corpusFile)
 	if err != nil {

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/bench/corpus"
+	"tofu/bench/kit/corpus"
 	"tofu/bench/kit/report"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"

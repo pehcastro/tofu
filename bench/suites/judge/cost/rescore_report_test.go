@@ -104,18 +104,3 @@ func TestTheCommittedRescoreReportCarriesWhatTheRescorePrints(t *testing.T) {
 		}
 	}
 }
-
-func TestThePublishedReportIsUntouchedByThisTicket(t *testing.T) {
-	published, err := os.ReadFile("report-2026-09-19.md")
-	if err != nil {
-		t.Fatalf("reading the published report: %v", err)
-	}
-	for _, phrase := range []string{
-		"user_requested and approval are the two answers the decision reads",
-		"| Arm | Case | Answer | Label | Labelled by | user_requested | approval |",
-	} {
-		if !strings.Contains(string(published), phrase) {
-			t.Fatalf("report-2026-09-19.md no longer carries %q, so it was edited", phrase)
-		}
-	}
-}

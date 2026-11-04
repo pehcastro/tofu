@@ -97,6 +97,7 @@ func TestADecisionThatCannotNameItsMethodsIsNeverGivenANumber(t *testing.T) {
 }
 
 func TestASentenceAWithdrawalStruckIsNoLongerEvidence(t *testing.T) {
+	needReports(t)
 	const shortlist = "bench/suites/tools/shortlist/report-2026-09-21.md"
 	body, err := os.ReadFile(filepath.Join(sys.SourceRoot(), filepath.FromSlash(shortlist)))
 	if err != nil {

@@ -1,7 +1,9 @@
 package report
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"math"
 	"os"
 	"path/filepath"
@@ -67,8 +69,9 @@ type Stat struct {
 }
 
 type Answers struct {
-	JevCosts   []Stat      `json:"jev_costs"`
-	Placements []Placement `json:"judgments"`
+	JevCosts       []Stat      `json:"jev_costs"`
+	Placements     []Placement `json:"judgments"`
+	SkippedMissing int         `json:"-"`
 }
 
 type Reading struct {
@@ -165,28 +168,37 @@ func standingText(tree string, bodies map[string]string) (map[string]string, err
 	return standing, nil
 }
 
-func checkAnswers(answers Answers, table method.Table, tree string, reports map[string]string) error {
+func checkAnswers(answers Answers, table method.Table, tree string, reports map[string]string) (Answers, error) {
 	bodies, err := standingText(tree, reports)
 	if err != nil {
-		return err
+		return Answers{}, err
 	}
 	if len(answers.JevCosts) == 0 {
-		return fmt.Errorf("%s: a reader comparing Jev with a regular expression is told what a Jev call costs", AnswersPath)
-	}
-	for _, stat := range answers.JevCosts {
-		if err := checkStat(stat, bodies); err != nil {
-			return err
-		}
+		return Answers{}, fmt.Errorf("%s: a reader comparing Jev with a regular expression is told what a Jev call costs", AnswersPath)
 	}
 	if len(answers.Placements) == 0 {
-		return fmt.Errorf("%s names no Jev decision, and that is the one table this project can fill", AnswersPath)
+		return Answers{}, fmt.Errorf("%s names no Jev decision, and that is the one table this project can fill", AnswersPath)
+	}
+	listed := len(answers.JevCosts) + len(answers.Placements)
+	answers.JevCosts = slices.DeleteFunc(answers.JevCosts, func(stat Stat) bool { return missingFrom(tree, stat.Source) })
+	answers.Placements = slices.DeleteFunc(answers.Placements, func(one Placement) bool { return missingFrom(tree, one.Source) })
+	answers.SkippedMissing = listed - len(answers.JevCosts) - len(answers.Placements)
+	for _, stat := range answers.JevCosts {
+		if err := checkStat(stat, bodies); err != nil {
+			return Answers{}, err
+		}
 	}
 	for _, one := range answers.Placements {
 		if err := checkPlacement(one, table, tree, bodies); err != nil {
-			return err
+			return Answers{}, err
 		}
 	}
-	return nil
+	return answers, nil
+}
+
+func missingFrom(tree, source string) bool {
+	_, err := os.Stat(filepath.Join(tree, filepath.FromSlash(source)))
+	return errors.Is(err, fs.ErrNotExist)
 }
 
 func checkStat(stat Stat, bodies map[string]string) error {

@@ -17,6 +17,7 @@ var (
 )
 
 func TestEveryDatedReportCarriesTheUnitOfItsCostFigures(t *testing.T) {
+	needReports(t)
 	awaiting := map[string]string{
 		"suites/agent/turn/report-2026-09-18.md":    "money, from usage.cost on an OpenRouter key; BOJI-064 could not write the line, bench/suites/agent/turn is outside its owns",
 		"suites/judge/wording/report-2026-09-18.md": "money, from usage.cost on an OpenRouter key; BOJI-064 could not write the line, bench/suites/judge/wording is outside its owns",

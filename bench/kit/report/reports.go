@@ -145,7 +145,8 @@ func Build(benchRoot string) (Data, error) {
 	if err := checkCallers(table, callers, tree); err != nil {
 		return Data{}, err
 	}
-	if err := checkAnswers(data.Answers, table, tree, bodies); err != nil {
+	data.Answers, err = checkAnswers(data.Answers, table, tree, bodies)
+	if err != nil {
 		return Data{}, err
 	}
 	data.Wiring = wiringOf(table, callers)
@@ -161,6 +162,7 @@ func Build(benchRoot string) (Data, error) {
 		}
 	}
 	data.History, err = readHistory(filepath.Join(benchRoot, reportDir, "history.json"), tree)
+	data.History.SkippedMissing += data.Answers.SkippedMissing
 	return data, err
 }
 

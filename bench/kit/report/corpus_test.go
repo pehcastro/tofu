@@ -11,6 +11,7 @@ import (
 )
 
 func TestEveryBenchCorpusHasADatedReport(t *testing.T) {
+	needReports(t)
 	root := benchTree()
 	declared, err := readPackages(filepath.Join(root, reportDir, "packages.json"))
 	if err != nil {
@@ -66,7 +67,7 @@ func readsRecordedSessions(pkgPath string) bool {
 			return false
 		}
 		for _, imported := range file.Imports {
-			if imported.Path.Value == `"tofu/bench/corpus"` {
+			if imported.Path.Value == `"tofu/bench/kit/corpus"` {
 				return true
 			}
 		}
@@ -77,13 +78,22 @@ func readsRecordedSessions(pkgPath string) bool {
 func anyFile(root string, matches func(path, name string) bool) bool {
 	found := false
 	_ = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil || entry.IsDir() || found {
+		if err != nil || entry.IsDir() {
 			return err
 		}
-		found = matches(path, entry.Name())
+		if found = matches(path, entry.Name()); found {
+			return filepath.SkipAll
+		}
 		return nil
 	})
 	return found
+}
+
+func needReports(t *testing.T) {
+	t.Helper()
+	if !anyFile(benchTree(), func(_, name string) bool { return datedReport.MatchString(name) }) {
+		t.Skip("no dated report on disk: bench run outputs stay out of git, so a clean clone has none until a bench runs")
+	}
 }
 
 func hasDatedReport(pkgPath string) bool {

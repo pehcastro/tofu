@@ -20,6 +20,7 @@ func benchTree() string {
 
 func built(t *testing.T) Data {
 	t.Helper()
+	needReports(t)
 	data, err := Build(benchTree())
 	if err != nil {
 		t.Fatalf("building the index: %v", err)
@@ -101,7 +102,7 @@ func TestEveryBenchWithNoDatedReportIsNamedAndClassified(t *testing.T) {
 	for _, pkg := range data.NoReport {
 		named[pkg.Package] = pkg.Kind
 	}
-	for _, want := range []string{"cmd", "corpus", reportDir, "suites/agent/phase"} {
+	for _, want := range []string{"cmd", "kit/corpus", reportDir, "suites/agent/phase"} {
 		if _, ok := named[want]; !ok {
 			t.Errorf("bench/%s has no dated report and is not named in the index", want)
 		}

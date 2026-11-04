@@ -28,7 +28,10 @@ const (
 	KindLibrary     PackageKind = "library"
 	KindRunner      PackageKind = "runner"
 	KindUnpublished PackageKind = "measurement with no dated report"
+	KindNotRunHere  PackageKind = "no dated report on disk"
 )
+
+const notRunHereNote = "bench outputs stay out of git, so a report exists only where the bench ran; run it to write one"
 
 const (
 	SelfDeclared    = "the file's own text"
@@ -115,7 +118,7 @@ func readIndex(benchRoot string) (benchIndex, error) {
 		}
 		pkg, named := declared[name]
 		if !named {
-			return benchIndex{}, fmt.Errorf("bench/%s has no dated report and is not named in %s: say whether it is a library, a runner or a measurement still owing one", name, PackagesPath)
+			pkg = Package{Package: name, Kind: KindNotRunHere, Note: notRunHereNote}
 		}
 		delete(declared, name)
 		index.NoReport = append(index.NoReport, pkg)

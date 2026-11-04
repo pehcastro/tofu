@@ -193,6 +193,14 @@ type History struct {
 	Tables    []Table    `json:"tables"`
 	Measures  []Measure  `json:"measures"`
 	Stated    []Stated   `json:"-"`
+
+	SkippedMissing int `json:"-"`
+}
+
+func (h History) carries(one Headline) bool {
+	return slices.ContainsFunc(h.Measures, func(m Measure) bool {
+		return m.Pairing == one.Pairing && m.Short == one.Short && slices.ContainsFunc(m.Rivals, func(rival Run) bool { return rival.Label == one.Rival })
+	})
 }
 
 func (h History) Rows(table Table) []Measure {
@@ -251,7 +259,14 @@ func (h History) DateLine() string {
 			newest = max(newest, run.Date)
 		}
 	}
-	return fmt.Sprintf("Read on %s from the tree at %s, tofu %s. The newest measurement ran on %s. Every number names its bench, the day it ran, the commit and the tofu version it measured.", h.ReadOn, h.Tree, h.Version, newest)
+	if newest == "" {
+		newest = "no day, since none is on disk"
+	}
+	line := fmt.Sprintf("Read on %s from the tree at %s, tofu %s. The newest measurement ran on %s. Every number names its bench, the day it ran, the commit and the tofu version it measured.", h.ReadOn, h.Tree, h.Version, newest)
+	if h.SkippedMissing > 0 {
+		line += fmt.Sprintf(" Skipped %d entries citing reports not on disk.", h.SkippedMissing)
+	}
+	return line
 }
 
 var (
@@ -268,6 +283,7 @@ func readHistory(path, tree string) (History, error) {
 		return History{}, fmt.Errorf("%s: says no day it was read on, no tree, no version or no rule for level", HistoryPath)
 	}
 	texts := map[string]string{}
+	var kept []Measure
 	for _, m := range history.Measures {
 		switch m.Better {
 		case BetterHigher, BetterLower, BetterNeither:
@@ -277,30 +293,49 @@ func readHistory(path, tree string) (History, error) {
 		if m.Bench == "" || m.Task == "" || m.Name == "" || m.Short == "" || m.Unit == "" || m.Gain == "" || m.Loss == "" || len(m.Tofu) == 0 {
 			return History{}, fmt.Errorf("%s: a measure needs a bench, a task, a name, a short name, a unit, the words for better and worse, and one tofu run: %+v", HistoryPath, m)
 		}
+		listed := len(m.Tofu) + len(m.Rivals)
+		m.Tofu = slices.DeleteFunc(m.Tofu, func(run Run) bool { return missingFrom(tree, run.Source) })
+		m.Rivals = slices.DeleteFunc(m.Rivals, func(run Run) bool { return missingFrom(tree, run.Source) })
+		history.SkippedMissing += listed - len(m.Tofu) - len(m.Rivals)
+		if len(m.Tofu) == 0 {
+			history.SkippedMissing += len(m.Rivals)
+			continue
+		}
 		for _, run := range m.Runs() {
 			if err := checkRun(m, run, tree, texts); err != nil {
 				return History{}, err
 			}
 		}
+		kept = append(kept, m)
 	}
+	history.Measures = kept
 	if len(history.Headlines) < 3 || len(history.Headlines) > 6 {
 		return History{}, fmt.Errorf("%s: the page opens on 3 to 6 headlines and this names %d", HistoryPath, len(history.Headlines))
 	}
 	for _, one := range history.Headlines {
+		if history.SkippedMissing > 0 && !history.carries(one) {
+			continue
+		}
 		stated, err := history.state(one)
 		if err != nil {
 			return History{}, err
 		}
 		history.Stated = append(history.Stated, stated)
 	}
+	var tables []Table
 	for _, table := range history.Tables {
-		if table.Title == "" || table.Tag == "" || len(history.Rows(table)) == 0 {
+		empty := len(history.Rows(table)) == 0
+		if table.Title == "" || table.Tag == "" || (empty && history.SkippedMissing == 0) {
 			return History{}, fmt.Errorf("%s: the table %q needs a title, a tag and a measure of %s against %s", HistoryPath, table.Title, table.Pairing, table.Rival)
 		}
 		if dated := dateOrCommit.FindString(table.Title + " " + table.Tag); dated != "" {
 			return History{}, fmt.Errorf("%s: the table %q shows %s, and the page carries no date and no commit", HistoryPath, table.Title, dated)
 		}
+		if !empty {
+			tables = append(tables, table)
+		}
 	}
+	history.Tables = tables
 	return history, nil
 }
 

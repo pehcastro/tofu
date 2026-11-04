@@ -7,7 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	"tofu/bench/corpus/recorded"
+	"tofu/bench/kit/corpus/recorded"
 )
 
 const (

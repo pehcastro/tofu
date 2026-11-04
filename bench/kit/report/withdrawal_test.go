@@ -97,6 +97,7 @@ func TestQuotingOneRowOfATableStrikesEveryRowOfIt(t *testing.T) {
 }
 
 func TestARowOfAStruckTableCannotBeCitedAsEvidence(t *testing.T) {
+	needReports(t)
 	const source = "bench/suites/tools/shortlist/report-2026-09-21.md"
 	body, err := os.ReadFile(filepath.Join(benchTree(), "suites", "tools", "shortlist", "report-2026-09-21.md"))
 	if err != nil {
