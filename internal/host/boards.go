@@ -16,8 +16,9 @@ import (
 	"tofu/internal/librarian/rules"
 	"tofu/internal/librarian/skills"
 	"tofu/internal/models/llm/quota"
+	"tofu/internal/platform/fs"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/shell/bash/sift"
 	"tofu/library"
 )
@@ -104,7 +105,7 @@ type LedgerSummary struct {
 }
 
 func logDir(project string) (string, error) {
-	state, err := sys.ProjectStateDirAt(project)
+	state, err := platformproject.ProjectStateDirAt(project)
 	return filepath.Join(state, "log"), err
 }
 
@@ -173,7 +174,7 @@ func (s *server) usageHistory(p UsageHistoryParams) (any, error) {
 
 func (s *server) limits(NoParams) (any, error) {
 	now := time.Now()
-	dir, err := sys.QuotaDir()
+	dir, err := fs.QuotaDir()
 	if err != nil {
 		return nil, err
 	}

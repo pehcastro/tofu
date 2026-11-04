@@ -12,8 +12,8 @@ import (
 
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
+	platformscratch "tofu/internal/platform/scratch"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 )
 
@@ -29,7 +29,7 @@ type heldSubAgent struct {
 	prefix      Prefix
 	readPrefix  func() (*Prefix, error)
 	boundary    *subagents.Boundary
-	scratch     sys.ScratchPlace
+	scratch     platformscratch.ScratchPlace
 	inbox       *Inbox
 	trace       spawnTrace
 	history     []core.Message

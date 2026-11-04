@@ -15,7 +15,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 	"tofu/internal/tools/contract"
 )
 
@@ -141,7 +141,7 @@ func TestTheTextBesideAToolCallIsInTheNextRequestAndMovesNoEarlierMessage(t *tes
 func hookedProject(t *testing.T, hooks string) (string, *BashTool) {
 	t.Helper()
 	project := t.TempDir()
-	if err := sys.WriteFile(filepath.Join(project, ".claude", "settings.json"), []byte(`{"hooks":`+hooks+`}`), 0o644); err != nil {
+	if err := fs.WriteFile(filepath.Join(project, ".claude", "settings.json"), []byte(`{"hooks":`+hooks+`}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	bash, err := NewBashTool(project)

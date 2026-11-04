@@ -7,12 +7,12 @@ import (
 	"runtime"
 	"testing"
 
-	"tofu/internal/sys"
+	platformscratch "tofu/internal/platform/scratch"
 )
 
 func TestPersonOnlyBashHarnessCases(t *testing.T) {
 	project := t.TempDir()
-	scratch, err := sys.ScratchRootAt(project)
+	scratch, err := platformscratch.ScratchRootAt(project)
 	if err != nil {
 		t.Fatal(err)
 	}

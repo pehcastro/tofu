@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"path/filepath"
 
+	"tofu/internal/platform/fs"
 	"tofu/internal/platform/safe"
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/settings"
-	"tofu/internal/sys"
 )
 
 const (
@@ -43,8 +43,8 @@ func (s *server) boardyAPI() (boardy.API, error) {
 		return boardy.API{}, err
 	}
 	flow := ""
-	home, _ := sys.HomeConfigDir()
-	if values, openErr := settings.Open(filepath.Join(home, settings.FileName), filepath.Join(sys.StateDir(s.Dir), settings.FileName)); openErr == nil {
+	home, _ := fs.HomeConfigDir()
+	if values, openErr := settings.Open(filepath.Join(home, settings.FileName), filepath.Join(fs.StateDir(s.Dir), settings.FileName)); openErr == nil {
 		flow = values.Text(boardy.FlowSetting)
 	}
 	parsed, err := boardy.ParseFlow(flow)

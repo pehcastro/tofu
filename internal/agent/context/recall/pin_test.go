@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"tofu/internal/agent/context/recall"
+	"tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 )
 
 const (
@@ -250,7 +250,7 @@ func recordedRequests(t *testing.T) (recall.Config, []recordedRequest) {
 func liveRequests(t *testing.T) ([]recordedRequest, int) {
 	t.Helper()
 	cfg := shippedConfig(t)
-	store := session.NewStore(sys.RecordedStateDir("sessions"))
+	store := session.NewStore(project.RecordedStateDir("sessions"))
 	listing, err := store.Listing()
 	if err != nil {
 		t.Skipf("the live sessions are not readable from here, so the pin cannot be checked against them: %v", err)

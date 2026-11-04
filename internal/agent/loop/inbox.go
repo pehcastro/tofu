@@ -16,12 +16,12 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/learn/repeat"
 	"tofu/internal/store/learn/words"
 	memory "tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -1007,7 +1007,7 @@ func (b *Inbox) compactLater(job laterCompaction) bool {
 	superseded := b.queued
 	if b.settling == nil {
 		b.settling = make(chan struct{})
-		report := sys.Crashes(".")
+		report := platformproject.Crashes(".")
 		safe.Go(report, "later compaction", func() { b.compacting(report, job.run) })
 	} else {
 		b.queued = job

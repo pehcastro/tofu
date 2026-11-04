@@ -10,8 +10,8 @@ import (
 	"tofu/internal/agent/loop"
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/credential"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 )
 
 type recordedCall struct {
@@ -72,7 +72,7 @@ func resumedChat(carry Carry, dir string) Opened {
 	}
 	keys := carry.Keys
 	if keys == nil {
-		loaded := sys.LoadKeyRedactor()
+		loaded := credential.LoadKeyRedactor()
 		keys = &loaded
 	}
 	earlier.mask = keys.Redact

@@ -18,9 +18,10 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	platformfs "tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/project/boardy"
-	"tofu/internal/sys"
 )
 
 type checkIn struct {
@@ -94,7 +95,7 @@ func (t *SpawnTool) watch(held *heldSubAgent, check *checkIn) func() {
 		return func() {}
 	}
 	t.Inbox.attach(held, check)
-	stop, report := make(chan struct{}), sys.Crashes(t.Project)
+	stop, report := make(chan struct{}), project.Crashes(t.Project)
 	safe.Go(report, "check-in watch", func() {
 		safe.Loop(report, "check-in watch", stop, func() {
 			ticker := time.NewTicker(every)
@@ -144,7 +145,7 @@ func readBoardNotifies(board *boardy.Managed, foreseen ...string) (string, func(
 	notes = append(notes, foreseen...)
 	markRead := func() {
 		if raw, err := json.Marshal(read); err == nil && !maps.Equal(read, sizes) {
-			_ = sys.WriteFile(path, raw, 0o600)
+			_ = platformfs.WriteFile(path, raw, 0o600)
 		}
 	}
 	if len(notes) == 0 {
@@ -200,7 +201,7 @@ func keptFronts(store boardy.Store, boards []boardy.Board) map[string][]keptFron
 	}
 	if reread || len(fresh) != len(kept) {
 		if raw, err := json.Marshal(fresh); err == nil {
-			_ = sys.WriteFile(path, raw, 0o600)
+			_ = platformfs.WriteFile(path, raw, 0o600)
 		}
 	}
 	return byBoard

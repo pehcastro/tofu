@@ -20,9 +20,11 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
+	"tofu/internal/platform/scratch"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/shell/process"
 )
@@ -83,7 +85,7 @@ type toolchainProbe struct {
 
 func startToolchainProbe(dir string, run toolchainRunner, timeout time.Duration) *toolchainProbe {
 	probe := &toolchainProbe{done: make(chan struct{})}
-	safe.Go(sys.Crashes(dir), "toolchain probe", func() {
+	safe.Go(project.Crashes(dir), "toolchain probe", func() {
 		defer close(probe.done)
 		probe.states = probeToolchain(dir, run, timeout)
 	})
@@ -361,7 +363,7 @@ func (t *BashTool) checkPort(ctx context.Context, port int) contract.Result {
 }
 
 func (t *BashTool) command(lifetime, scope context.Context, command string) *exec.Cmd {
-	env := append(sys.ScratchEnv(scope), subAgentDepthVar+"="+strconv.Itoa(processDepth()+1))
+	env := append(scratch.ScratchEnv(scope), subAgentDepthVar+"="+strconv.Itoa(processDepth()+1))
 	if actor := boardActor(scope); actor != "" {
 		env = append(env, subagents.SessionEnv+"="+actor)
 	}
@@ -376,7 +378,7 @@ func boardActor(ctx context.Context) string {
 	if actor, found := ctx.Value(boardActorKey{}).(string); found {
 		return actor
 	}
-	place, _ := sys.ScratchOf(ctx)
+	place, _ := scratch.ScratchOf(ctx)
 	return place.SessionID
 }
 
@@ -441,7 +443,7 @@ func (t *BashTool) runOrMove(ctx context.Context, registry *process.Registry, co
 	}
 	if wait.Kept == process.KeptMoved && inbox != nil {
 		var stop func()
-		wait.Early, stop = inbox.whenTyped(sys.Crashes(string(t.root)))
+		wait.Early, stop = inbox.whenTyped(project.Crashes(string(t.root)))
 		defer stop()
 	}
 	got, err := registry.YieldReady(ctx, t.command(context.Background(), ctx, command), command, shellOwnerFrom(ctx), wait)
@@ -472,7 +474,7 @@ func (t *BashTool) runOrMove(ctx context.Context, registry *process.Registry, co
 	readBack := fmt.Sprintf("read it back with the shell tool: wait %s returns as soon as it ends, or after %d ms, with its exit code and last lines; logs %[1]s returns its last lines now. never wait on it with another bash call",
 		ran.Name, konst.ShellWaitMillis)
 	if inbox != nil {
-		inbox.watchShell(sys.Crashes(string(t.root)), registry, ran.Name)
+		inbox.watchShell(project.Crashes(string(t.root)), registry, ran.Name)
 		readBack = "its exit comes back to you as a message when it ends, so do not wait on it: answer the person, go on with other work, or end your turn. logs " + ran.Name + " returns its last lines now"
 		if got.Took < limit {
 			readBack = "the person wrote while it ran, so it moved before the " + limit.String() + " limit. " + readBack
@@ -674,7 +676,7 @@ func (t inlineCodeTool) Run(ctx context.Context, _ json.RawMessage) (contract.Re
 		extension = ".py"
 	}
 	snapshot := filepath.Join(code.Cwd, "code", CodeSum(code)+extension)
-	if err := sys.WriteFile(snapshot, []byte(code.Code), 0o600); err != nil {
+	if err := fs.WriteFile(snapshot, []byte(code.Code), 0o600); err != nil {
 		return contract.Result{}, fmt.Errorf("bash: the inline code was not copied to run: %w", err)
 	}
 	deadline := konst.BashDeadlineMillis * time.Millisecond

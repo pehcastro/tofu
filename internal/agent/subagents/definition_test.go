@@ -13,12 +13,12 @@ import (
 
 	"tofu/internal/konst"
 	models "tofu/internal/models/llm/catalog"
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 	shipped "tofu/library"
 )
 
 func scanOf(t testing.TB, home string, sources ...string) Scan {
-	catalog, err := models.Load([]sys.Layer{{Name: "library", Origin: "library", FS: shipped.Files()}})
+	catalog, err := models.Load([]platformfs.Layer{{Name: "library", Origin: "library", FS: shipped.Files()}})
 	if err != nil {
 		t.Fatal(err)
 	}

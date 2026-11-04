@@ -19,8 +19,8 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
 	llm "tofu/internal/models/llm/core"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/registry"
 )
 
@@ -364,9 +364,9 @@ func gateRowFixture(t *testing.T) (string, ledger.Row) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	dir, err := sys.LogDir()
+	dir, err := platformproject.LogDir()
 	if err != nil {
-		t.Fatalf("sys.LogDir: %v", err)
+		t.Fatalf("platformproject.LogDir: %v", err)
 	}
 	row, err := ledger.NewWriter(dir).Append(ledger.Row{Point: "tool_gate"})
 	if err != nil {

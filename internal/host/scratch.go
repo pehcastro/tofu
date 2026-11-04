@@ -3,7 +3,7 @@ package host
 import (
 	"encoding/json"
 
-	"tofu/internal/sys"
+	platformscratch "tofu/internal/platform/scratch"
 )
 
 const scratchPrefix = "scratch."
@@ -15,14 +15,14 @@ type ScratchCleanParams struct {
 }
 
 type ScratchCleaned struct {
-	Root    string              `json:"root"`
-	DryRun  bool                `json:"dry_run"`
-	Removed []sys.ScratchFolder `json:"removed"`
+	Root    string                          `json:"root"`
+	DryRun  bool                            `json:"dry_run"`
+	Removed []platformscratch.ScratchFolder `json:"removed"`
 }
 
 func scratchRequests() []method {
 	return []method{
-		{name: scratchPrefix + "list", params: NoParams{}, result: sys.ScratchReport{}},
+		{name: scratchPrefix + "list", params: NoParams{}, result: platformscratch.ScratchReport{}},
 		{name: scratchPrefix + "clean", params: ScratchCleanParams{}, result: ScratchCleaned{}},
 	}
 }
@@ -30,7 +30,7 @@ func scratchRequests() []method {
 func (s *server) scratch(method string, raw json.RawMessage) (any, error) {
 	switch method {
 	case scratchPrefix + "list":
-		return handle(raw, func(NoParams) (any, error) { return sys.ReadScratch(s.Dir) })
+		return handle(raw, func(NoParams) (any, error) { return platformscratch.ReadScratch(s.Dir) })
 	case scratchPrefix + "clean":
 		return handle(raw, s.scratchClean)
 	}
@@ -41,7 +41,7 @@ func (s *server) scratchClean(p ScratchCleanParams) (any, error) {
 	args := verbLine([]string{"scratch", "clean"}, map[string]bool{"--cache": p.Cache, "--dry-run": p.DryRun}, map[string]string{"--session": p.Session})
 	cleaned, err := verbAs[ScratchCleaned](s, args...)
 	if err == nil && !cleaned.DryRun {
-		if report, readErr := sys.ReadScratch(s.Dir); readErr == nil {
+		if report, readErr := platformscratch.ReadScratch(s.Dir); readErr == nil {
 			s.box.push(notify(scratchPrefix+"changed", report))
 		}
 	}

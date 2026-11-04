@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
 	"tofu/internal/tools/registry"
 )
 
@@ -31,10 +31,10 @@ type keyMask struct {
 }
 
 func loadKeyMask() keyMask {
-	redactor := sys.LoadKeyRedactor()
-	stored, _ := sys.StoredKeys()
+	redactor := credential.LoadKeyRedactor()
+	stored, _ := credential.StoredKeys()
 	secrets := slices.Collect(maps.Values(stored))
-	for _, name := range sys.KeyNames() {
+	for _, name := range credential.KeyNames() {
 		secrets = append(secrets, strings.TrimSpace(os.Getenv(name)))
 	}
 	return keyMask{mask: redactor.Redact, secrets: slices.DeleteFunc(secrets, func(secret string) bool { return secret == "" })}

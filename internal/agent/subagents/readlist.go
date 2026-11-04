@@ -10,7 +10,8 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/scratch"
 )
 
 type Grammar int
@@ -450,7 +451,7 @@ func (b *Boundary) built(program shellWord) (bool, error) {
 
 func (b *Boundary) scratchpad() string {
 	agents := path.Dir(normalizePath(b.Scratch))
-	if b.Scratch == "" || path.Base(agents) != sys.ScratchAgents {
+	if b.Scratch == "" || path.Base(agents) != scratch.ScratchAgents {
 		return ""
 	}
 	return path.Dir(path.Dir(path.Dir(agents)))
@@ -458,7 +459,7 @@ func (b *Boundary) scratchpad() string {
 
 func (b *Boundary) sharedTarget() string {
 	if pad := b.scratchpad(); pad != "" {
-		return path.Join(pad, sys.ScratchCache, "cargo")
+		return path.Join(pad, scratch.ScratchCache, "cargo")
 	}
 	return ""
 }
@@ -480,7 +481,7 @@ func (c simpleCommand) mentions() []shellWord {
 func inTofuState(named string) bool {
 	segments := strings.FieldsFunc(path.Clean(normalizePath(named)), func(r rune) bool { return r == '/' || r == ':' })
 	for i, segment := range segments {
-		if segment == sys.StateDirName && (i+1 == len(segments) || segments[i+1] != "rules") {
+		if segment == fs.StateDirName && (i+1 == len(segments) || segments[i+1] != "rules") {
 			return true
 		}
 	}

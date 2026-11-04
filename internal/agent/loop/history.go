@@ -15,8 +15,8 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 )
 
 type ForkKind string
@@ -306,7 +306,7 @@ func BranchCarried(wire string, carried []core.Message, message int) (Compacted,
 	return Compacted{Kind: ForkBranch, Message: message, Words: words, Kept: at, TokensBefore: HistoryTokens(preview, carried), TokensAfter: HistoryTokens(preview, kept), Before: carried, Messages: kept}, nil
 }
 
-func CompactCarried(project string, places sys.Places, wire, task, focus string, carried []core.Message) (Compacted, error) {
+func CompactCarried(project string, places platformproject.Places, wire, task, focus string, carried []core.Message) (Compacted, error) {
 	artifacts, err := NewArtifacts(filepath.Join(places.State, "artifacts"), true)
 	if err != nil {
 		return Compacted{}, err

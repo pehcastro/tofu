@@ -18,10 +18,10 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/codex"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
 	"tofu/internal/store/snapshot"
-	"tofu/internal/sys"
 )
 
 const SchemaVersion = 1
@@ -640,7 +640,7 @@ func (r *record) begin(row Row, task core.Origin) {
 		header := r.log.Header()
 		r.undo = &snapshot.Repo{State: r.store.State(), Session: r.store.Dir(cmp.Or(header.Root, header.ID)), Tree: project}
 		r.undoBegun = make(chan struct{})
-		repo, turn, report := *r.undo, r.turn, sys.Crashes(project)
+		repo, turn, report := *r.undo, r.turn, platformproject.Crashes(project)
 		safe.Go(report, "undo snapshot", func() {
 			r.undoErr = safe.Call(report, "undo snapshot", func() error { return repo.Begin(context.Background(), turn) })
 			close(r.undoBegun)

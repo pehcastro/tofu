@@ -6,8 +6,8 @@ import (
 	"slices"
 
 	"tofu/internal/agent/loop"
+	"tofu/internal/platform/credential"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 )
 
 func (h *Host) SubAgentEvents(names []string, visit func(Event) bool) error {
@@ -35,7 +35,7 @@ func (h *Host) SubAgentEvents(names []string, visit func(Event) bool) error {
 	stopped := false
 	var failed error
 	var logged *session.Event
-	mask := sys.LoadKeyRedactor().Redact
+	mask := credential.LoadKeyRedactor().Redact
 	watch := &watcher{seen: &shownResults{ids: map[string]bool{}}, spawner: &loop.SpawnTool{}, emit: func(event Event) {
 		event.Logged = logged
 		stopped = stopped || !visit(redacted(event, mask))

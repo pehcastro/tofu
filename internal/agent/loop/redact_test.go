@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/credential"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 )
 
 const (
@@ -24,12 +24,12 @@ func keyedTurn(t *testing.T, command string) (row Row, seen string, recorded map
 	home := t.TempDir()
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("HOME", home)
-	t.Setenv(sys.OpenRouterKeyName, "")
-	if err := sys.SaveKey(sys.OpenRouterKeyName, storedForRedaction); err != nil {
+	t.Setenv(credential.OpenRouterKeyName, "")
+	if err := credential.SaveKey(credential.OpenRouterKeyName, storedForRedaction); err != nil {
 		t.Fatalf("storing the key: %v", err)
 	}
 	tool, root := bashRoot(t)
-	for name, body := range map[string]string{"secret.txt": storedForRedaction + "\n", "dotenv.txt": sys.OpenRouterKeyName + "=" + looseForRedaction + "\n"} {
+	for name, body := range map[string]string{"secret.txt": storedForRedaction + "\n", "dotenv.txt": credential.OpenRouterKeyName + "=" + looseForRedaction + "\n"} {
 		if err := os.WriteFile(filepath.Join(root, name), []byte(body), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -77,8 +77,8 @@ func keyedTurn(t *testing.T, command string) (row Row, seen string, recorded map
 
 func assertRedacted(t *testing.T, where, text string) {
 	t.Helper()
-	if !strings.Contains(text, sys.KeyRedactedMark) {
-		t.Errorf("%s carries no %s", where, sys.KeyRedactedMark)
+	if !strings.Contains(text, credential.KeyRedactedMark) {
+		t.Errorf("%s carries no %s", where, credential.KeyRedactedMark)
 	}
 	for _, key := range []string{storedForRedaction, looseForRedaction} {
 		if strings.Contains(text, key) {
@@ -103,7 +103,7 @@ func TestABashResultThatPrintsAStoredKeyComesBackRedactedInTheResultAndTheSessio
 }
 
 func TestAKeyInABashCommandIsRedactedInEveryRecordedEvent(t *testing.T) {
-	row, _, recorded := keyedTurn(t, "echo "+storedForRedaction+" && echo "+sys.OpenRouterKeyName+"="+looseForRedaction)
+	row, _, recorded := keyedTurn(t, "echo "+storedForRedaction+" && echo "+credential.OpenRouterKeyName+"="+looseForRedaction)
 	var called string
 	for _, step := range row.Steps {
 		for _, call := range step.ToolCalls {

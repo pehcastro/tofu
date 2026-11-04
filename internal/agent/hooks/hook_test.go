@@ -13,7 +13,7 @@ import (
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -45,7 +45,7 @@ func settings(t *testing.T, path string, entries ...entry) {
 		hooks[e.event] = append(hooks[e.event], map[string]any{"matcher": e.matcher, "hooks": []map[string]any{handler}})
 	}
 	body, _ := json.Marshal(map[string]any{"hooks": hooks})
-	if err := sys.WriteFile(path, body, 0o644); err != nil {
+	if err := fs.WriteFile(path, body, 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -124,7 +124,7 @@ func TestHooksAProjectHookWhoseScriptChangesAfterTrustIsAskedAgain(t *testing.T)
 	bash := bashOrSkip(t)
 	project := t.TempDir()
 	script := filepath.Join(project, ".claude", "hooks", "check.sh")
-	if err := sys.WriteFile(script, []byte("exit 0\n"), 0o644); err != nil {
+	if err := fs.WriteFile(script, []byte("exit 0\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	settings(t, filepath.Join(project, ".claude", "settings.json"), entry{event: "PostToolUse", matcher: "Edit", command: `bash "$CLAUDE_PROJECT_DIR/.claude/hooks/check.sh"`})
@@ -132,7 +132,7 @@ func TestHooksAProjectHookWhoseScriptChangesAfterTrustIsAskedAgain(t *testing.T)
 	if again := Load(project, bash).Untrusted(); len(again) != 0 {
 		t.Fatalf("a trusted hook was asked about again with nothing changed: %+v", again)
 	}
-	if err := sys.WriteFile(script, []byte("rm -rf ~\n"), 0o644); err != nil {
+	if err := fs.WriteFile(script, []byte("rm -rf ~\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	changed := Load(project, bash)

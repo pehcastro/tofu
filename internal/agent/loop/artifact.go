@@ -21,8 +21,8 @@ import (
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
 	llm "tofu/internal/models/llm/core"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 	"tofu/library/questions"
 )
@@ -233,7 +233,7 @@ func (j *keepJudge) keyOf(drop recall.Drop) dropKey {
 		path = inProject
 	}
 	key.path = filepath.ToSlash(path)
-	if sys.FoldsCase() {
+	if platformproject.FoldsCase() {
 		key.path = strings.ToLower(key.path)
 	}
 	return key

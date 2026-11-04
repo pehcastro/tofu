@@ -22,10 +22,11 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/quota"
+	"tofu/internal/platform/credential"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
 	"tofu/internal/store/snapshot"
-	"tofu/internal/sys"
 	"tofu/internal/tools/registry"
 	"tofu/internal/tools/shell/process"
 	"tofu/internal/ui/statusline"
@@ -156,7 +157,7 @@ func Serve(cfg ServeConfig) error {
 	s := &server{ServeConfig: cfg, box: newOutbox(), shells: map[string]*watchedShell{}, items: newItems(cfg.Host.ID()),
 		status: statusFeed{board: statusline.Board{Now: time.Now}, acked: map[string]bool{}}, requota: make(chan struct{}, 1), accounts: map[string]AccountCondition{}, labels: map[string]string{}}
 	s.seen.files = readSettingsFiles(cfg.Dir)
-	if state, err := sys.ProjectStateDirAt(cfg.Dir); err == nil {
+	if state, err := platformproject.ProjectStateDirAt(cfg.Dir); err == nil {
 		s.replays = filepath.Join(state, replayDir)
 		_ = os.RemoveAll(s.replays)
 	}
@@ -282,7 +283,7 @@ func (s *server) respond(id json.RawMessage, result any, err error) {
 	case errors.As(err, &refused):
 		reply.Error = refused
 	case err != nil:
-		reply.Error = &Refusal{Code: CodeRefused, Message: sys.LoadKeyRedactor().Redact(err.Error())}
+		reply.Error = &Refusal{Code: CodeRefused, Message: credential.LoadKeyRedactor().Redact(err.Error())}
 	default:
 		reply.Result = result
 	}
@@ -546,7 +547,7 @@ func (h *Host) Fork(ask HandFork) (Compacted, error) {
 	if err != nil {
 		return Compacted{}, err
 	}
-	places, err := sys.ResolvePlaces(h.dir)
+	places, err := platformproject.ResolvePlaces(h.dir)
 	if err != nil {
 		return Compacted{}, err
 	}
@@ -773,7 +774,7 @@ func (s *server) shellRead(p ShellParams) (any, error) {
 	if read == nil || read.state != process.Running {
 		read = &watchedShell{}
 	}
-	if err := s.follow(p.Shell, read, sys.LoadKeyRedactor().Redact); err != nil {
+	if err := s.follow(p.Shell, read, credential.LoadKeyRedactor().Redact); err != nil {
 		return nil, err
 	}
 	if read != s.shells[p.Shell] {
@@ -858,7 +859,7 @@ func (s *server) shellTakeOver(p ShellSizeParams) (any, error) {
 	watched := s.caughtUp(p.Shell)
 	held := ShellHeld{Shell: p.Shell, Holder: ShellHolder(process.HolderPerson), Since: *hold.Shell.HeldSince, Offset: watched.next()}
 	if watched.holder != process.HolderPerson {
-		s.changeHolder(hold.Shell.Owner, held, "", "The person took over "+p.Shell+" ("+sys.LoadKeyRedactor().Redact(hold.Shell.Command)+"). Do not read, wait on, stop or restart it until it is handed back.")
+		s.changeHolder(hold.Shell.Owner, held, "", "The person took over "+p.Shell+" ("+credential.LoadKeyRedactor().Redact(hold.Shell.Command)+"). Do not read, wait on, stop or restart it until it is handed back.")
 	}
 	watched.raw = hold.Next
 	return ShellTakenOver{ShellHeld: held, Cols: p.Cols, Rows: p.Rows, Base: hold.Base, Next: hold.Next, Replay: hold.Replay}, nil
@@ -1208,7 +1209,7 @@ func (s *server) watched(name string) *watchedShell {
 
 func (s *server) caughtUp(name string) *watchedShell {
 	watched := s.watched(name)
-	_ = s.follow(name, watched, sys.LoadKeyRedactor().Redact)
+	_ = s.follow(name, watched, credential.LoadKeyRedactor().Redact)
 	return watched
 }
 
@@ -1282,7 +1283,7 @@ func (s *server) scanShells(first bool) {
 	background := slices.DeleteFunc(found, process.Shell.OneShot)
 	mask := func(text string) string { return text }
 	if len(background) > 0 {
-		mask = sys.LoadKeyRedactor().Redact
+		mask = credential.LoadKeyRedactor().Redact
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

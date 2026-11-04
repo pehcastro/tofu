@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing/fstest"
 
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 )
 
 func Assign(parent, name, model string) (string, error) {
@@ -31,7 +31,7 @@ func Unassign(parent, name string) (path, was string, err error) {
 }
 
 func assignmentsWithout(parent, name string) (path string, kept []string, was string, err error) {
-	path = filepath.Join(parent, sys.StateDirName, AssignmentFile)
+	path = filepath.Join(parent, platformfs.StateDirName, AssignmentFile)
 	data, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return path, nil, "", err

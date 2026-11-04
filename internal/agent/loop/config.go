@@ -18,9 +18,10 @@ import (
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/project"
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 	"tofu/library/changelog"
 )
@@ -113,8 +114,8 @@ type Config struct {
 	Sift            *ShellSift
 	ResultBytesCap  int
 	ArtifactDir     string
-	Places          sys.Places
-	Redactor        *sys.KeyRedactor
+	Places          project.Places
+	Redactor        *credential.KeyRedactor
 	TruncateResults bool
 	NoCompaction    bool
 	NoFork          bool
@@ -141,11 +142,11 @@ type Config struct {
 	NewID           func() string
 }
 
-func (c Config) ResolvedPlaces() (sys.Places, error) {
-	if c.Places != (sys.Places{}) {
+func (c Config) ResolvedPlaces() (project.Places, error) {
+	if c.Places != (project.Places{}) {
 		return c.Places, nil
 	}
-	return sys.ResolvePlaces(".")
+	return project.ResolvePlaces(".")
 }
 
 const (

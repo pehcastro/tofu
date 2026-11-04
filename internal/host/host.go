@@ -24,10 +24,11 @@ import (
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/credential"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -62,7 +63,7 @@ type Carry struct {
 	Messages []core.Message
 	Tasks    []string
 	Store    *session.Store
-	Keys     *sys.KeyRedactor
+	Keys     *credential.KeyRedactor
 }
 
 type Config struct {
@@ -633,7 +634,7 @@ func (h *Host) note(text string) {
 }
 
 func (h *Host) stateDir() string {
-	dir, _ := sys.ProjectStateDirAt(h.dir)
+	dir, _ := platformproject.ProjectStateDirAt(h.dir)
 	return dir
 }
 
@@ -936,7 +937,7 @@ func (h *Host) Compacted(into string, messages []core.Message) error {
 }
 
 func (h *Host) Ran(command, output string, stopped bool) string {
-	redactor := sys.LoadKeyRedactor()
+	redactor := credential.LoadKeyRedactor()
 	output = ansi.Strip(redactor.Redact(output))
 	if f := h.following.Load(); f != nil {
 		f.ask(followAsk{Op: followRan, Command: command, Text: output, Stopped: stopped})

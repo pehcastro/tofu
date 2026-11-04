@@ -16,10 +16,10 @@ import (
 	"tofu/internal/konst"
 	rule "tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/shell/process"
 	shipped "tofu/library"
@@ -211,7 +211,7 @@ func (t *SpawnTool) askThePerson(ctx context.Context, agent string, ticket board
 		return note + fmt.Sprintf("\n\nnothing here shows the person a question, so put Q%d to them in this turn with %s, its reason and every option, the recommended one marked", q.ID, AskPersonToolName)
 	}
 	open := t.Inbox.Open(asked.Header + ": " + asked.Question)
-	safe.Go(sys.Crashes(t.Project), "not possible question", func() {
+	safe.Go(project.Crashes(t.Project), "not possible question", func() {
 		defer open.Close()
 		replies, err := form(context.WithoutCancel(ctx), []PersonQuestion{asked}, 0)
 		said := t.answeredOnBoard(ticket.ID, q, replies, err)

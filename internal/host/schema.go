@@ -17,6 +17,7 @@ import (
 	"tofu/internal/judge/points"
 	"tofu/internal/librarian/skills"
 	"tofu/internal/models/llm/quota"
+	"tofu/internal/platform/scratch"
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/learn"
 	"tofu/internal/store/memory/entries"
@@ -24,7 +25,6 @@ import (
 	"tofu/internal/store/session/drain"
 	"tofu/internal/store/settings"
 	"tofu/internal/store/snapshot"
-	"tofu/internal/sys"
 	"tofu/internal/tools/web/browser/driver"
 )
 
@@ -86,7 +86,7 @@ func pinnedNames() map[reflect.Type]string {
 			subagents.Broken{}, subagents.Definition{}, subagents.Found{}, subagents.Reference{},
 			subagents.Transition{},
 		},
-		"sys": {sys.ScratchFolder{}, sys.ScratchReport{}},
+		"sys": {scratch.ScratchFolder{}, scratch.ScratchReport{}},
 		"turn": {
 			loop.HookRun{}, loop.LoopGuardStop{}, loop.PersonOption{}, loop.PersonQuestion{}, loop.PersonReply{},
 			loop.ProxyRow{}, loop.ToolCallRow{},

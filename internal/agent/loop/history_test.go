@@ -13,8 +13,8 @@ import (
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/web"
 )
@@ -351,7 +351,7 @@ func TestForkAtTheDefaultCeilingRecordsTheCountThatDecidedAndKeepsANewestStepOve
 func TestCompactCarriedKeepsTheWarmHeadAndTheNewSessionReadsBackShrunk(t *testing.T) {
 	big := strings.Repeat("a numbered line of a large file\n", 400)
 	carried := compactFixture(big)
-	places := sys.Places{State: t.TempDir(), Log: t.TempDir()}
+	places := project.Places{State: t.TempDir(), Log: t.TempDir()}
 	preview, err := recall.LoadConfig()
 	if err != nil {
 		t.Fatal(err)
@@ -466,7 +466,7 @@ func compactFixture(big string) []core.Message {
 func TestCompactWithAFocusKeepsTheResultItNamesWhole(t *testing.T) {
 	big := strings.Repeat("a numbered line of a large file\n", 400)
 	carried := compactFixture(big)
-	places := sys.Places{State: t.TempDir(), Log: t.TempDir()}
+	places := project.Places{State: t.TempDir(), Log: t.TempDir()}
 	for _, c := range []struct {
 		focus   string
 		results int

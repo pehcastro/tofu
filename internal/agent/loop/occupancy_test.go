@@ -10,13 +10,13 @@ import (
 
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 )
 
 func TestAStepRowRecordedBeforeThisChangeStillDecodesWithItsWorkingSet(t *testing.T) {
-	store := session.NewStore(sys.RecordedStateDir("sessions"))
+	store := session.NewStore(project.RecordedStateDir("sessions"))
 	listing, err := store.Listing()
 	if err != nil {
 		t.Skipf("the live sessions are not readable from here, so nothing recorded by an earlier build is checked: %v", err)

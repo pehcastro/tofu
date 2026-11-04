@@ -12,12 +12,12 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/points"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/scratch"
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/learn"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
 	"tofu/internal/store/snapshot"
-	"tofu/internal/sys"
 	"tofu/internal/tools/registry"
 	"tofu/internal/tools/shell/process"
 )
@@ -1333,7 +1333,7 @@ func notifications() []method {
 		{name: statusMethod, params: StatusReport{}},
 		{name: resyncMethod, params: Resync{}},
 		{name: boardyPrefix + "changed", params: boardy.Changed{}},
-		{name: scratchPrefix + "changed", params: sys.ScratchReport{}},
+		{name: scratchPrefix + "changed", params: scratch.ScratchReport{}},
 	}
 }
 

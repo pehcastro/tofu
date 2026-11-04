@@ -20,7 +20,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -136,7 +136,7 @@ const (
 func Load(project string, bash process.Choice) *Engine {
 	full, err := filepath.Abs(project)
 	engine := &Engine{project: full, bash: bash}
-	tofuHome, homeErr := sys.HomeConfigDir()
+	tofuHome, homeErr := platformfs.HomeConfigDir()
 	if err = errors.Join(err, homeErr); err != nil {
 		engine.problems = append(engine.problems, "no hook runs: "+err.Error())
 		return engine
@@ -159,7 +159,7 @@ func Load(project string, bash process.Choice) *Engine {
 		{filepath.Join(full, ".claude", "settings.json"), Project},
 		{filepath.Join(full, ".codex", "hooks.json"), Project},
 		{filepath.Join(full, ".codex", "config.toml"), Project},
-		{filepath.Join(sys.StateDir(full), "hooks.json"), Project},
+		{filepath.Join(platformfs.StateDir(full), "hooks.json"), Project},
 		{filepath.Join(full, ".claude", "settings.local.json"), Local},
 	} {
 		body, err := os.ReadFile(source.path)
@@ -295,7 +295,7 @@ func (e *Engine) Answer(hooks []Hook, answer Answer) error {
 	if err != nil {
 		return err
 	}
-	return sys.WriteFile(filepath.Join(e.state, trustFile), body, 0o644)
+	return platformfs.WriteFile(filepath.Join(e.state, trustFile), body, 0o644)
 }
 
 func sameHandler(record trustRecord, hook Hook) bool {

@@ -13,8 +13,10 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/clipboard"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/registry"
 	"tofu/internal/tools/shell/process"
 )
@@ -234,7 +236,7 @@ func (s *server) shellsNow() []ShellNow {
 		return now
 	}
 	found, _ := s.Shells.List()
-	mask := sys.LoadKeyRedactor().Redact
+	mask := credential.LoadKeyRedactor().Redact
 	for _, one := range slices.DeleteFunc(found, process.Shell.OneShot) {
 		now = append(now, ShellNow{Shell: one.Name, Session: one.Session, Command: mask(one.Command), PID: one.PID, State: ShellState(one.State), StartedAt: one.Started, ExitCode: one.ExitCode, EndedAt: one.Ended,
 			Kept: ShellKept(one.Kept), Dir: one.Dir, Port: one.Port, Ready: ShellReady(one.Ready), LeftOver: one.LeftOver(), Ref: registry.QuoteRef(one.Call), ShellHolding: holdingOf(one)})
@@ -323,8 +325,8 @@ func attach(h *Host, images []AttachedImage) (string, error) {
 		if err != nil {
 			return "", &Refusal{Code: CodeBadParams, Message: err.Error()}
 		}
-		if len(body) > sys.ClipboardMaxBytes {
-			return "", &Refusal{Code: CodeBadParams, Message: image.Path + " is past the attachment ceiling of " + strconv.Itoa(sys.ClipboardMaxBytes) + " bytes"}
+		if len(body) > clipboard.ClipboardMaxBytes {
+			return "", &Refusal{Code: CodeBadParams, Message: image.Path + " is past the attachment ceiling of " + strconv.Itoa(clipboard.ClipboardMaxBytes) + " bytes"}
 		}
 		bodies[index] = body
 	}
@@ -340,7 +342,7 @@ func attach(h *Host, images []AttachedImage) (string, error) {
 	for index, image := range images {
 		suffix := strings.ToLower(filepath.Ext(image.Path))
 		name := fmt.Sprintf(attachedImageName, filepath.Base(dir), len(held)+index+1, suffix)
-		if err := sys.WriteFile(filepath.Join(dir, name), bodies[index], attachedImageMode); err != nil {
+		if err := fs.WriteFile(filepath.Join(dir, name), bodies[index], attachedImageMode); err != nil {
 			return "", err
 		}
 		h.Attached(index+1, name, len(bodies[index]), strings.ToUpper(strings.TrimPrefix(suffix, ".")))

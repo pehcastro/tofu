@@ -15,7 +15,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/sys"
+	platformproject "tofu/internal/platform/project"
 )
 
 func settingsAsk(value string) loop.GateRequest {
@@ -122,7 +122,7 @@ func TestAnApprovalNamesItsAnswersRefusesAWrongOneAndAStandingRefusalIsARow(t *t
 	if len(state.Standing) != 2 {
 		t.Errorf("session.state standing after a trust always and a never here = %+v, want the settings always and the never here alone", state.Standing)
 	}
-	dir, err := sys.LogDir()
+	dir, err := platformproject.LogDir()
 	if err != nil {
 		t.Fatal(err)
 	}

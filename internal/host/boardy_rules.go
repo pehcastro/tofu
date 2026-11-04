@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/fs"
 	"tofu/internal/project/boardy"
-	"tofu/internal/sys"
 )
 
 func boardyRuleRequests() []method {
@@ -56,7 +56,7 @@ func (s *server) tickBoardy(quit <-chan struct{}) {
 	var held *os.File
 	defer func() {
 		if held != nil {
-			_ = sys.Unlock(held)
+			_ = fs.Unlock(held)
 		}
 	}()
 	every := time.NewTicker(konst.CronMinIntervalSeconds * time.Second)
@@ -64,7 +64,7 @@ func (s *server) tickBoardy(quit <-chan struct{}) {
 	said := map[string]string{}
 	for {
 		if held == nil {
-			held, _, _ = sys.TryLock(ticker)
+			held, _, _ = fs.TryLock(ticker)
 		}
 		if api, err := s.boardyAPI(); held != nil && err == nil {
 			boards, _ := api.Board.Store.Boards()

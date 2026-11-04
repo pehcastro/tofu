@@ -14,8 +14,8 @@ import (
 	"tofu/internal/agent/hooks"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/credential"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 )
 
@@ -94,7 +94,7 @@ type gatedCall struct {
 	author  string
 	task    string
 	sift    *ShellSift
-	redact  sys.KeyRedactor
+	redact  credential.KeyRedactor
 	site    spawnSite
 	model   Model
 	verdict GateDecision

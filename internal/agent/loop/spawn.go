@@ -24,12 +24,13 @@ import (
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
+	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
+	platformscratch "tofu/internal/platform/scratch"
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
 	"tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 )
 
@@ -577,7 +578,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 	site.notice(site.agent, timing.words(subAgentID))
 	started = true
 	t.Inbox.hold(held, site.log)
-	safe.Go(sys.Crashes(t.Project), "sub-agent "+subAgentID, func() {
+	safe.Go(project.Crashes(t.Project), "sub-agent "+subAgentID, func() {
 		t.background(runCtx, cancel, held, opened, site, task, core.Origin{Source: core.SourceBrief, Name: t.orchestratorID}, warm)
 	})
 	said := narrowed + clampedWords(effort, opened) + held.runningWords()
@@ -623,7 +624,7 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 	}
 	ctx = context.WithValue(context.WithValue(ctx, subAgentKey{}, held.agent.ID), boardActorKey{}, t.ticketActor(cmp.Or(held.agent.Ticket, held.agent.ID)))
 	if held.scratch.Root != "" {
-		ctx = sys.WithScratch(ctx, held.scratch)
+		ctx = platformscratch.WithScratch(ctx, held.scratch)
 	}
 	limits := t.limits()
 	if limits.CacheTTL != "" {

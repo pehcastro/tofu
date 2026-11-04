@@ -25,9 +25,10 @@ import (
 	skill "tofu/internal/librarian/skills"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/transport"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/shell/process"
 	shipped "tofu/library"
@@ -201,7 +202,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	artifacts.keep.index = cmp.Or(config.Drops, artifacts.keep.index)
 	sifter := siftOrNothing(config.Sift)
 	if config.Redactor == nil {
-		loaded := sys.LoadKeyRedactor()
+		loaded := credential.LoadKeyRedactor()
 		config.Redactor = &loaded
 	}
 	redactor := *config.Redactor
@@ -851,7 +852,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	if config.Boundary != nil {
 		recordedGrants = config.Boundary.Asked()
 	}
-	crashes := sys.Crashes(config.Project)
+	crashes := project.Crashes(config.Project)
 	recordPictureDrops := func(step, tokensBefore int, after []core.Message, drops []recall.Drop) {
 		artifacts.keep.remember(drops)
 		recorded.add(session.Event{Kind: session.EventCompaction}, compactionRow{Compaction: &Compaction{Step: step,

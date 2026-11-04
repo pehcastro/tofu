@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"path/filepath"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const storeIDBytes = 16
@@ -25,7 +25,7 @@ func (s *Store) Dir() string {
 }
 
 func (s *Store) Fetch(id string) ([]byte, error) {
-	return sys.ReadFile(s.path(id))
+	return fs.ReadFile(s.path(id))
 }
 
 func (s *Store) put(body []byte) (string, error) {
@@ -33,7 +33,7 @@ func (s *Store) put(body []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := sys.WriteFile(s.path(id), body, 0o644); err != nil {
+	if err := fs.WriteFile(s.path(id), body, 0o644); err != nil {
 		return "", err
 	}
 	return id, nil

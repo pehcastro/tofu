@@ -16,8 +16,9 @@ import (
 	"tofu/internal/librarian/skills"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/core"
+	platformfs "tofu/internal/platform/fs"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
-	"tofu/internal/sys"
 )
 
 const (
@@ -113,7 +114,7 @@ func Definitions(scan Scan) Found {
 		}
 	}
 	var reading sync.WaitGroup
-	report := sys.Crashes(scan.Project)
+	report := platformproject.Crashes(scan.Project)
 	for i := range files {
 		reading.Go(func() {
 			files[i].err = safe.Call(report, "sub-agent discovery", func() (err error) {
@@ -144,31 +145,31 @@ func Definitions(scan Scan) Found {
 }
 
 type file struct {
-	layer      sys.Layer
+	layer      platformfs.Layer
 	match      string
 	definition Definition
 	err        error
 }
 
-func (s Scan) layers() ([]sys.Layer, []string) {
-	var layers []sys.Layer
+func (s Scan) layers() ([]platformfs.Layer, []string) {
+	var layers []platformfs.Layer
 	for _, source := range s.Sources {
-		layers = append(layers, sys.DirLayer("."+source, filepath.Join(s.Project, "."+source, "agents")))
+		layers = append(layers, platformfs.DirLayer("."+source, filepath.Join(s.Project, "."+source, "agents")))
 	}
 	var notices []string
 	switch {
 	case s.Home == "":
 		notices = append(notices, "no home directory is known, so ~/.tofu/agents, the only agent folder tofu reads from a home, was not read")
 	case slices.Contains(s.Sources, "tofu"):
-		layers = append(layers, sys.DirLayer("~/"+sys.StateDirName, filepath.Join(sys.StateDir(s.Home), "agents")))
+		layers = append(layers, platformfs.DirLayer("~/"+platformfs.StateDirName, filepath.Join(platformfs.StateDir(s.Home), "agents")))
 	}
-	return append(layers, sys.Layer{Name: libraryOrigin, Origin: libraryOrigin, FS: s.Library}), notices
+	return append(layers, platformfs.Layer{Name: libraryOrigin, Origin: libraryOrigin, FS: s.Library}), notices
 }
 
 func (s Scan) assignments() (map[string]assignment, []Broken) {
-	paths := []string{filepath.Join(s.Project, sys.StateDirName, AssignmentFile)}
+	paths := []string{filepath.Join(s.Project, platformfs.StateDirName, AssignmentFile)}
 	if s.Home != "" {
-		paths = append(paths, filepath.Join(s.Home, sys.StateDirName, AssignmentFile))
+		paths = append(paths, filepath.Join(s.Home, platformfs.StateDirName, AssignmentFile))
 	}
 	assigned := map[string]assignment{}
 	var broken []Broken

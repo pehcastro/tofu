@@ -24,9 +24,9 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
 	llm "tofu/internal/models/llm/core"
+	"tofu/internal/platform/fs"
 	"tofu/internal/store/session"
 	"tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/tools/registry"
 )
 
@@ -744,8 +744,8 @@ type unansweredAsk struct {
 }
 
 func unansweredIn(project string) unansweredAsk {
-	home, _ := sys.HomeConfigDir()
-	store, err := settings.Open(filepath.Join(home, settings.FileName), filepath.Join(sys.StateDir(project), settings.FileName))
+	home, _ := fs.HomeConfigDir()
+	store, err := settings.Open(filepath.Join(home, settings.FileName), filepath.Join(fs.StateDir(project), settings.FileName))
 	if err != nil {
 		return unansweredAsk{waited: time.Duration(settings.DeclaredDefault(settings.GateAskWaitSeconds)) * time.Second, outcome: settings.GateAskRefuse}
 	}

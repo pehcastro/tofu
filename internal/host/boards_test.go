@@ -10,8 +10,9 @@ import (
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/llm/quota"
+	"tofu/internal/platform/fs"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 )
 
 func TestBoardQueriesAnswerTypedReportsFromTheProjectsOwnRecords(t *testing.T) {
@@ -65,7 +66,7 @@ func TestBoardQueriesAnswerTypedReportsFromTheProjectsOwnRecords(t *testing.T) {
 		session.Event{At: started.Add(time.Minute), Turn: "t1", ID: "r1", Kind: session.EventRequest, Attempt: 1, Body: json.RawMessage(`{"model":"haiku","prompt_tokens":100,"completion_tokens":7}`)})
 	record(session.Header{ID: "g", At: started.Add(2 * time.Minute), CarriedFrom: &session.Carried{Session: "f"}},
 		session.Event{At: started.Add(3 * time.Minute), Turn: "t1-f2", Kind: session.EventMessage, Body: json.RawMessage(`{"role":"user","content":"carry on"}`)})
-	state, err := sys.ProjectStateDirAt(project)
+	state, err := platformproject.ProjectStateDirAt(project)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +77,7 @@ func TestBoardQueriesAnswerTypedReportsFromTheProjectsOwnRecords(t *testing.T) {
 	if err != nil || written.StateElision == nil {
 		t.Fatalf("writing a row whose state is held beside the ledger: %v, elided %v", err, written.StateElision)
 	}
-	readings, err := sys.QuotaDir()
+	readings, err := fs.QuotaDir()
 	if err != nil {
 		t.Fatal(err)
 	}

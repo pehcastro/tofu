@@ -12,8 +12,8 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
 	"tofu/internal/librarian/skills"
+	"tofu/internal/platform/fs"
 	"tofu/internal/store/settings"
-	"tofu/internal/sys"
 )
 
 const EveryToolIsRelativeToTheWorkingDirectory = "you are working inside one directory. every path you name is relative to it and nothing above it exists. "
@@ -103,7 +103,7 @@ func environmentBlock(dir string, now time.Time, shell *RunShell) string {
 	lines := []string{
 		"<env>",
 		"working directory: " + absolute(dir),
-		"platform: " + sys.OS() + "/" + sys.Arch(),
+		"platform: " + fs.OS() + "/" + fs.Arch(),
 		todaysDate + now.Format(time.DateOnly),
 	}
 	if branch := gitBranch(dir); branch != "" {
@@ -143,7 +143,7 @@ func ProjectInstructionsInOrder(dir, home string, capBytes int, choice string) (
 	capBytes = InstructionCap(capBytes)
 	var files []instructionFile
 	if home != "" {
-		files = append(files, instructionFile{"your ~/.tofu/AGENTS.md", readInstructions(filepath.Join(sys.StateDir(home), "AGENTS.md"))})
+		files = append(files, instructionFile{"your ~/.tofu/AGENTS.md", readInstructions(filepath.Join(fs.StateDir(home), "AGENTS.md"))})
 	}
 	folders := skills.ProjectFolders(dir, home)
 	chosenIn := map[string]string{}

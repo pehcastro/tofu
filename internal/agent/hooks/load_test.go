@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -15,7 +15,7 @@ func TestHooksReadACodexConfigTomlBesideItsOtherTablesAndNameTheLineOfABrokenOne
 	config := filepath.Join(project, ".codex", "config.toml")
 	write := func(body string) {
 		t.Helper()
-		if err := sys.WriteFile(config, []byte(body), 0o644); err != nil {
+		if err := fs.WriteFile(config, []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}

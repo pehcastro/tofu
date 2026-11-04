@@ -17,9 +17,10 @@ import (
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -152,7 +153,7 @@ func (e *Engine) Fire(ctx context.Context, in Input) Verdict {
 	stdin, _ := json.Marshal(payload)
 	results := make([]Result, len(chosen))
 	var running sync.WaitGroup
-	report := sys.Crashes(e.project)
+	report := project.Crashes(e.project)
 	for i, hook := range chosen {
 		running.Go(func() {
 			if err := safe.Call(report, "hook", func() error {
@@ -401,7 +402,7 @@ func (e *Engine) remember(chosen []Hook, results []Result) {
 		last[hook.Hash] = &results[i]
 	}
 	if body, err := json.MarshalIndent(last, "", "  "); err == nil {
-		_ = sys.WriteFile(filepath.Join(e.state, lastFile), body, 0o644)
+		_ = fs.WriteFile(filepath.Join(e.state, lastFile), body, 0o644)
 	}
 }
 
@@ -411,12 +412,12 @@ func takeSlot(ctx context.Context, dir string) (func(), error) {
 	}
 	for {
 		for slot := range konst.HookProcessesAtOnce {
-			file, held, err := sys.TryLock(filepath.Join(dir, strconv.Itoa(slot)))
+			file, held, err := fs.TryLock(filepath.Join(dir, strconv.Itoa(slot)))
 			if err != nil {
 				return nil, err
 			}
 			if !held {
-				return func() { _ = sys.Unlock(file) }, nil
+				return func() { _ = fs.Unlock(file) }, nil
 			}
 		}
 		select {

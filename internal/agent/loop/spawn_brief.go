@@ -12,8 +12,8 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
+	platformscratch "tofu/internal/platform/scratch"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 )
 
@@ -54,35 +54,35 @@ func WithLeadScratch(ctx context.Context, config Config) (context.Context, error
 	if err != nil {
 		return ctx, err
 	}
-	return sys.WithScratch(ctx, place), place.Make()
+	return platformscratch.WithScratch(ctx, place), place.Make()
 }
 
-func leadScratch(project string, sessions *session.Store, id string) (sys.ScratchPlace, error) {
+func leadScratch(project string, sessions *session.Store, id string) (platformscratch.ScratchPlace, error) {
 	name, tag := "", session.FamilyTag(id)
 	if sessions != nil && id != "" {
 		if identity, err := sessions.Identity(id); err == nil {
 			name, tag = identity.Name, identity.Tag
 		}
 	}
-	return sys.ScratchFor(project, id, name, tag)
+	return platformscratch.ScratchFor(project, id, name, tag)
 }
 
-func (t *SpawnTool) scratch(ctx context.Context, id string) (sys.ScratchPlace, error) {
-	lead, found := sys.ScratchOf(ctx)
+func (t *SpawnTool) scratch(ctx context.Context, id string) (platformscratch.ScratchPlace, error) {
+	lead, found := platformscratch.ScratchOf(ctx)
 	if !found && t.Project == "" {
-		return sys.ScratchPlace{}, nil
+		return platformscratch.ScratchPlace{}, nil
 	}
 	if !found {
 		var err error
 		if lead, err = leadScratch(t.Project, t.base.Sessions, t.base.Session); err != nil {
-			return sys.ScratchPlace{}, err
+			return platformscratch.ScratchPlace{}, err
 		}
 	}
 	place := lead.For(id)
 	return place, place.Make()
 }
 
-func scratchWords(place sys.ScratchPlace) string {
+func scratchWords(place platformscratch.ScratchPlace) string {
 	if place.Root == "" {
 		return ""
 	}

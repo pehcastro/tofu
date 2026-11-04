@@ -13,10 +13,10 @@ import (
 
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/catalog"
+	platformfs "tofu/internal/platform/fs"
 	"tofu/internal/platform/safe"
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/settings"
-	"tofu/internal/sys"
 	shipped "tofu/library"
 )
 
@@ -68,8 +68,8 @@ type fileMark struct{ modified, size int64 }
 type ConfigFiles map[string]fileMark
 
 func configRoots(dir string) map[SettingScope]string {
-	roots := map[SettingScope]string{SettingProject: sys.StateDir(dir)}
-	if home, err := sys.HomeConfigDir(); err == nil {
+	roots := map[SettingScope]string{SettingProject: platformfs.StateDir(dir)}
+	if home, err := platformfs.HomeConfigDir(); err == nil {
 		roots[SettingGlobal] = home
 	}
 	return roots

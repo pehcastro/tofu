@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"tofu/internal/judge/points"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 	"tofu/internal/tools/shell/bash/sift"
 )
 
@@ -19,7 +19,7 @@ const recordedSessionFloor = 20
 
 func recordedSessionsDir(t *testing.T) string {
 	t.Helper()
-	sessions := sys.RecordedStateDir("sessions")
+	sessions := project.RecordedStateDir("sessions")
 	if info, err := os.Stat(sessions); err != nil || !info.IsDir() {
 		t.Skipf("no recorded sessions at %s, so no recorded turn can be measured", sessions)
 	}

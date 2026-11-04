@@ -11,8 +11,8 @@ import (
 
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/fs"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 )
 
@@ -124,7 +124,7 @@ func (t *SpawnTool) backup(to string) (contract.Result, error) {
 		return contract.Result{}, err
 	}
 	name := to + "-" + kept.Taken.Format(backupStamp)
-	if err := sys.WriteFile(filepath.Join(dir, backupsDir, name+backupSuffix), raw, 0o644); err != nil {
+	if err := fs.WriteFile(filepath.Join(dir, backupsDir, name+backupSuffix), raw, 0o644); err != nil {
 		return contract.Result{}, fmt.Errorf("message: the backup of %s was not written: %w", to, err)
 	}
 	said := fmt.Sprintf("%s is backed up as %s: %d messages, and %d files it wrote as they are now. message with text and from %s resumes it from this conversation.",

@@ -24,9 +24,9 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/fs"
 	"tofu/internal/platform/safe"
 	"tofu/internal/project/boardy"
-	"tofu/internal/sys"
 )
 
 const (
@@ -136,12 +136,12 @@ func placeOf(project string) (hubPlace, error) {
 	if final, err := filepath.EvalSymlinks(abs); err == nil {
 		abs = final
 	}
-	home, err := sys.HomeConfigDir()
+	home, err := fs.HomeConfigDir()
 	if err != nil {
 		return hubPlace{}, err
 	}
 	keyed := abs
-	if sys.OS() == "windows" || sys.OS() == "darwin" {
+	if fs.OS() == "windows" || fs.OS() == "darwin" {
 		keyed = strings.ToLower(abs)
 	}
 	sum := sha256.Sum256([]byte(keyed))
@@ -156,7 +156,7 @@ func placeOf(project string) (hubPlace, error) {
 
 func socketWithinLimit(socket string) (string, error) {
 	if limit := len(syscall.RawSockaddrUnix{}.Path); len(socket) >= limit {
-		return "", fmt.Errorf("the host socket %s is %d bytes and a unix socket path on %s must stay under %d, so the tofu host cannot start under this home: use a shorter home", socket, len(socket), sys.OS(), limit)
+		return "", fmt.Errorf("the host socket %s is %d bytes and a unix socket path on %s must stay under %d, so the tofu host cannot start under this home: use a shorter home", socket, len(socket), fs.OS(), limit)
 	}
 	return socket, nil
 }
@@ -320,7 +320,7 @@ func MembersOf(project string) map[string][]Member {
 
 func takeHubLock(place hubPlace) (*os.File, error) {
 	for deadline := time.Now().Add(konst.HostReadyMillis * time.Millisecond); ; time.Sleep(hubRetry) {
-		if file, held, err := sys.TryLock(place.lock); err != nil || !held {
+		if file, held, err := fs.TryLock(place.lock); err != nil || !held {
 			return file, err
 		}
 		if _, err := askStatus(place); err == nil {
@@ -352,7 +352,7 @@ func RunHub(project string, report safe.Report, say func(string), open HubSessio
 	if err != nil {
 		return err
 	}
-	defer func() { _ = sys.Unlock(lock) }()
+	defer func() { _ = fs.Unlock(lock) }()
 	_ = os.Remove(place.socket)
 	var listener *net.UnixListener
 	if err := throughSocketDir(place.socket, func(reachable string) (err error) {

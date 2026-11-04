@@ -27,8 +27,8 @@ import (
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
 	llm "tofu/internal/models/llm/core"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 	shipped "tofu/library"
 	"tofu/library/questions"
@@ -647,7 +647,7 @@ func (j *pointJudge) open(project, ref, name string, kind question.Kind) error {
 	if j.threshold, err = strconv.ParseFloat(fields[at].Value, 64); err != nil {
 		return err
 	}
-	places, err := sys.ResolvePlaces(project)
+	places, err := platformproject.ResolvePlaces(project)
 	if err != nil {
 		return err
 	}
