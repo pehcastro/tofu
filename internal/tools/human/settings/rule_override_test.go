@@ -1,4 +1,4 @@
-package registry_test
+package settings_test
 
 import (
 	"context"
@@ -12,13 +12,13 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/human/settings"
 )
 
 const overrideArgs = `{"rule":"no_unit_test_after_code","reason_from_rule":"made up by the model","why_now":"the person asked for unit tests on the parser","change":"off"}`
 
 type overrideRun struct {
-	tool          registry.RuleOverride
+	tool          settings.RuleOverride
 	asked         int
 	question      string
 	project, home string
@@ -27,7 +27,7 @@ type overrideRun struct {
 func newOverrideRun(t *testing.T, answer loop.PersonAnswer, askErr error) *overrideRun {
 	t.Helper()
 	run := &overrideRun{project: t.TempDir(), home: t.TempDir()}
-	run.tool = registry.RuleOverride{
+	run.tool = settings.RuleOverride{
 		Running: func() ([]rules.Rule, error) {
 			return []rules.Rule{{ID: "no_unit_test_after_code", Version: 3, Text: "never a unit test after the code", Notes: "written after, it agrees with every bug"}}, nil
 		},

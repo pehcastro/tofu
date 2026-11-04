@@ -1,4 +1,4 @@
-package registry
+package scratch
 
 import (
 	"context"

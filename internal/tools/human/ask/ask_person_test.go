@@ -1,4 +1,4 @@
-package registry_test
+package ask_test
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"tofu/internal/agent/loop"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/human/ask"
 )
 
 type askedAnswer struct {
@@ -34,7 +34,7 @@ func personSays(answer loop.PersonAnswer, err error) loop.Person {
 	}
 }
 
-func asked(t *testing.T, tool registry.AskPerson, args string) askedResult {
+func asked(t *testing.T, tool ask.AskPerson, args string) askedResult {
 	t.Helper()
 	result, err := tool.Run(t.Context(), json.RawMessage(args))
 	if err != nil {
@@ -71,7 +71,7 @@ func TestAskPersonRefusesAQuestionSetOutsideTheShape(t *testing.T) {
 		{"text with options", `{"questions":[` + question("x", "h", "text", two, "") + `]}`, "text"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			tool := registry.AskPerson{Person: personSays(loop.PersonAllowedOnce, nil), Auto: func() bool { return false }}
+			tool := ask.AskPerson{Person: personSays(loop.PersonAllowedOnce, nil), Auto: func() bool { return false }}
 			_, err := tool.Run(t.Context(), json.RawMessage(c.args))
 			if err == nil || !strings.Contains(err.Error(), c.says) {
 				t.Fatalf("got %v, want a refusal saying %q", err, c.says)
@@ -81,7 +81,7 @@ func TestAskPersonRefusesAQuestionSetOutsideTheShape(t *testing.T) {
 }
 
 func TestAskPersonTakesAFourWordHeaderLongerThanThirtyCharacters(t *testing.T) {
-	tool := registry.AskPerson{Person: personSays(loop.PersonAllowedOnce, nil), Auto: func() bool { return false }}
+	tool := ask.AskPerson{Person: personSays(loop.PersonAllowedOnce, nil), Auto: func() bool { return false }}
 	got := asked(t, tool, strings.Replace(twoLibraries, "HTTP client", "Préférences  concernant client HTTPS", 1))
 	if got.Outcome != "submitted" {
 		t.Fatalf("outcome %q, want submitted", got.Outcome)
@@ -108,7 +108,7 @@ func TestAskPersonSaysWhatHappenedToEachQuestion(t *testing.T) {
 		{"stopped while it waited", personSays(loop.PersonDenied, context.Canceled), twoLibraries, "cancelled", []string{"unanswered"}, [][]string{{"net/http"}}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			got := asked(t, registry.AskPerson{Person: c.person, Auto: func() bool { return false }}, c.args)
+			got := asked(t, ask.AskPerson{Person: c.person, Auto: func() bool { return false }}, c.args)
 			if got.Outcome != c.outcome || len(got.Answers) != len(c.statuses) {
 				t.Fatalf("got %+v, want outcome %s and %d answers", got, c.outcome, len(c.statuses))
 			}
@@ -131,7 +131,7 @@ func TestAskPersonInAutoATimeoutIsNeverAnAnswer(t *testing.T) {
 		return loop.PersonAllowedOnce, nil
 	}
 	inbox := loop.NewInbox()
-	tool := registry.AskPerson{Person: slow, Auto: func() bool { return true }, Wait: 20 * time.Millisecond, Inbox: inbox}
+	tool := ask.AskPerson{Person: slow, Auto: func() bool { return true }, Wait: 20 * time.Millisecond, Inbox: inbox}
 	result, err := tool.Run(t.Context(), json.RawMessage(twoLibraries))
 	if err != nil || !strings.Contains(result.Content, "comes as a message") || strings.Contains(result.Content, "recommended") {
 		t.Fatalf("got %q, %v, want the call back at once saying the answer comes as a message and naming no option to take", result.Content, err)
@@ -171,7 +171,7 @@ func inboxSays(t *testing.T, inbox *loop.Inbox) string {
 
 func TestAskPersonInAutoTakesAnAnswerThatArrivesInTime(t *testing.T) {
 	inbox := loop.NewInbox()
-	tool := registry.AskPerson{Person: personSays(loop.PersonAllowedOnce, nil), Auto: func() bool { return true }, Wait: time.Minute, Inbox: inbox}
+	tool := ask.AskPerson{Person: personSays(loop.PersonAllowedOnce, nil), Auto: func() bool { return true }, Wait: time.Minute, Inbox: inbox}
 	if _, err := tool.Run(t.Context(), json.RawMessage(twoLibraries)); err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +185,7 @@ func TestAskPersonInAskModeWaitsPastTheAutoWait(t *testing.T) {
 		time.Sleep(60 * time.Millisecond)
 		return loop.PersonAllowedOnce, nil
 	}
-	tool := registry.AskPerson{Person: slow, Auto: func() bool { return false }, Wait: 10 * time.Millisecond}
+	tool := ask.AskPerson{Person: slow, Auto: func() bool { return false }, Wait: 10 * time.Millisecond}
 	if got := asked(t, tool, twoLibraries); got.Outcome != "submitted" {
 		t.Fatalf("got %+v, want submitted, since ask mode has no timeout", got)
 	}
@@ -198,7 +198,7 @@ func TestAskPersonSendsNoLateAnswerAfterAStop(t *testing.T) {
 		return loop.PersonDenied, ctx.Err()
 	}
 	inbox := loop.NewInbox()
-	tool := registry.AskPerson{Person: waits, Auto: func() bool { return true }, Wait: time.Minute, Inbox: inbox}
+	tool := ask.AskPerson{Person: waits, Auto: func() bool { return true }, Wait: time.Minute, Inbox: inbox}
 	if _, err := tool.Run(ctx, json.RawMessage(twoLibraries)); err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,7 @@ func TestAskPersonThroughTheFormSaysWhatWasChosenTypedAndSkipped(t *testing.T) {
 		shown, waited = questions, wait
 		return []loop.PersonReply{{ID: "lib", Chosen: []string{"resty"}}, {ID: "push", Chosen: []string{}}, {ID: "name", Chosen: []string{}, Text: "fetchx"}}, nil
 	}
-	tool := registry.AskPerson{Person: personSays(loop.PersonDenied, nil), Auto: func() bool { return false }, Wait: time.Minute}
+	tool := ask.AskPerson{Person: personSays(loop.PersonDenied, nil), Auto: func() bool { return false }, Wait: time.Minute}
 	result, err := tool.Run(loop.WithPersonForm(t.Context(), form), json.RawMessage(threeKinds))
 	if err != nil {
 		t.Fatal(err)
@@ -266,7 +266,7 @@ func TestAskPersonFormOutcomesWhenNobodyChooses(t *testing.T) {
 			form := func(context.Context, []loop.PersonQuestion, time.Duration) ([]loop.PersonReply, error) {
 				return nil, c.err
 			}
-			tool := registry.AskPerson{Person: personSays(loop.PersonAllowedOnce, nil), Auto: func() bool { return false }}
+			tool := ask.AskPerson{Person: personSays(loop.PersonAllowedOnce, nil), Auto: func() bool { return false }}
 			result, err := tool.Run(loop.WithPersonForm(t.Context(), form), json.RawMessage(twoLibraries))
 			if err != nil || !strings.Contains(result.Content, `"outcome":"`+c.outcome+`"`) || !strings.Contains(result.Content, `"chosen":["net/http"]`) {
 				t.Fatalf("got %q, %v, want %s with the recommended standing", result.Content, err, c.outcome)
@@ -284,7 +284,7 @@ func TestAskPersonInAutoKeepsTheFormOpenPastTheWait(t *testing.T) {
 		return []loop.PersonReply{{ID: "lib", Chosen: []string{"resty"}}}, nil
 	}
 	inbox := loop.NewInbox()
-	tool := registry.AskPerson{Person: personSays(loop.PersonDenied, nil), Auto: func() bool { return true }, Wait: 20 * time.Millisecond, Inbox: inbox}
+	tool := ask.AskPerson{Person: personSays(loop.PersonDenied, nil), Auto: func() bool { return true }, Wait: 20 * time.Millisecond, Inbox: inbox}
 	if _, err := tool.Run(loop.WithPersonForm(t.Context(), form), json.RawMessage(twoLibraries)); err != nil {
 		t.Fatal(err)
 	}

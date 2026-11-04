@@ -1,4 +1,4 @@
-package registry
+package quote
 
 import (
 	"cmp"
@@ -19,6 +19,7 @@ import (
 	"tofu/internal/sys"
 	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/glob"
 )
 
 const (
@@ -111,16 +112,16 @@ func (q Quote) Run(_ context.Context, raw json.RawMessage) (contract.Result, err
 	case QuoteAmbiguous:
 		return contract.Result{}, fmt.Errorf("quote: %w in %s: %q: ask for the reference again rather than quoting the nearest item", session.ErrEventHashAmbiguous, found.Session, found.Hash)
 	case QuoteItem:
-		body, note := quoteCut(found.Noun, found.Words)
+		body, note := Cut(found.Noun, found.Words)
 		header := fmt.Sprintf("quote %s, %s, recorded in %s", found.Hash, found.Speaker, found.Session)
-		return contract.Result{Content: withNote(header+"\n"+body+"\n", note), Command: found.Hash}, nil
+		return contract.Result{Content: glob.WithNote(header+"\n"+body+"\n", note), Command: found.Hash}, nil
 	}
 	panic("quote: unknown outcome " + string(found.Outcome))
 }
 
 func ResolveQuote(store *session.Store, recorded, ref string) (Quoted, error) {
 	trimmed := strings.TrimSpace(ref)
-	hash, _ := quoteHash(trimmed)
+	hash, _ := Hash(trimmed)
 	find, refOf := quotedIn, QuoteRef
 	if agent, named := strings.CutPrefix(trimmed, agentOpenMark); named {
 		hash, find = strings.TrimSuffix(agent, quoteCloseMark), quotedAgent
@@ -158,7 +159,7 @@ func ResolveQuote(store *session.Store, recorded, ref string) (Quoted, error) {
 	return Quoted{Outcome: QuoteNotFound, Hash: hash}, nil
 }
 
-func quoteHash(ref string) (string, bool) {
+func Hash(ref string) (string, bool) {
 	trimmed := strings.TrimSuffix(strings.TrimSpace(ref), quoteCloseMark)
 	for _, open := range []string{quoteOpenMark, toolOpenMark} {
 		if hash, marked := strings.CutPrefix(trimmed, open); marked {
@@ -285,7 +286,7 @@ func quoteWords(said session.Utterance) string {
 	return words
 }
 
-func quoteCut(noun, words string) (string, string) {
+func Cut(noun, words string) (string, string) {
 	if len(words) <= konst.TurnResultBytesCap {
 		return words, ""
 	}

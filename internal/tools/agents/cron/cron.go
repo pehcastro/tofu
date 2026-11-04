@@ -1,4 +1,4 @@
-package registry
+package cron
 
 import (
 	"context"

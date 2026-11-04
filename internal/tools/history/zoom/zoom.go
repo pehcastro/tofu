@@ -1,4 +1,4 @@
-package registry
+package zoom
 
 import (
 	"context"
@@ -16,9 +16,9 @@ import (
 	"tofu/internal/tools/contract"
 )
 
-const wholeBeforeYouAct = "zoom until you have the part you need whole before you act on it, guess at it or ask the person about it: a summary line is a pointer, not the thing. "
+const WholeBeforeYouAct = "zoom until you have the part you need whole before you act on it, guess at it or ask the person about it: a summary line is a pointer, not the thing. "
 
-func memoryStores() []string {
+func MemoryStores() []string {
 	return []string{entries.EpisodesStore, string(entries.Global), string(entries.Project), string(entries.UserLocal), string(entries.ProjectLocal)}
 }
 
@@ -34,12 +34,12 @@ func (*Zoom) Definition() core.Tool {
 	return core.Tool{
 		Name: "zoom",
 		Description: "opens one line of a memory view into the two lines it sums up, and a line of one item into the item itself, word for word. " +
-			"store is episodes for the conversation view, or a memory scope; id and n are the line's id+n. " + wholeBeforeYouAct +
+			"store is episodes for the conversation view, or a memory scope; id and n are the line's id+n. " + WholeBeforeYouAct +
 			"recall finds the words when no line points at them.",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"store": map[string]any{"type": "string", "enum": memoryStores()},
+				"store": map[string]any{"type": "string", "enum": MemoryStores()},
 				"id":    map[string]any{"type": "integer"},
 				"n":     map[string]any{"type": "integer"},
 			},
@@ -65,14 +65,14 @@ func (z *Zoom) Run(_ context.Context, raw json.RawMessage) (contract.Result, err
 	if !kept {
 		return contract.Result{}, fmt.Errorf("zoom: %s holds nothing in this project yet", args.Store)
 	}
-	lines, err := z.open(log, func(store *tree.Store) ([]string, error) { return store.Zoom(args.ID, args.N) })
+	lines, err := z.Open(log, func(store *tree.Store) ([]string, error) { return store.Zoom(args.ID, args.N) })
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("zoom: %w", err)
 	}
 	return contract.Result{Content: strings.Join(lines, "\n"), Command: "zoom " + args.Store + " " + strconv.Itoa(args.ID) + "+" + strconv.Itoa(args.N)}, nil
 }
 
-func (z *Zoom) open(log string, reading func(*tree.Store) ([]string, error)) ([]string, error) {
+func (z *Zoom) Open(log string, reading func(*tree.Store) ([]string, error)) ([]string, error) {
 	z.held.Lock()
 	defer z.held.Unlock()
 	store, err := tree.Open(log)
@@ -107,7 +107,7 @@ func (z *Zoom) Compact(ctx context.Context, ask loop.RecordedAsk) error {
 	one, all, release := z.Compactor(ask)
 	defer release()
 	built, err := tree.BuildInReplies(ctx, func(building func(*tree.Store) error) error {
-		_, err := z.open(logs[entries.EpisodesStore], func(store *tree.Store) ([]string, error) { return nil, building(store) })
+		_, err := z.Open(logs[entries.EpisodesStore], func(store *tree.Store) ([]string, error) { return nil, building(store) })
 		return err
 	}, one, all)
 	if err != nil {

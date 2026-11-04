@@ -1,4 +1,4 @@
-package registry_test
+package settings_test
 
 import (
 	"context"
@@ -13,8 +13,22 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/settings"
-	"tofu/internal/tools/registry"
+	settingstool "tofu/internal/tools/human/settings"
 )
+
+type scriptedModel struct {
+	calls []core.ToolCall
+	step  int
+}
+
+func (m *scriptedModel) Ask(context.Context, core.Request) (core.Decision, error) {
+	if m.step >= len(m.calls) {
+		return core.Decision{Build: "scripted", Outcome: core.OutcomeMessage, Content: "done"}, nil
+	}
+	call := m.calls[m.step]
+	m.step++
+	return core.Decision{Build: "scripted", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{call}}, nil
+}
 
 type askingGate struct{}
 
@@ -34,7 +48,7 @@ func TestTheSettingsToolChangesSubAgentsPerTurnOnlyAfterTheGateSaysYes(t *testin
 				{ID: "c1", Name: "settings", Arguments: json.RawMessage(`{"key":"subAgentsPerTurn","value":15}`)},
 			}},
 			Spend:    loop.SpendSubscription,
-			Tools:    loop.NewRegistry(registry.NewSettings(global, "")),
+			Tools:    loop.NewRegistry(settingstool.NewSettings(global, "")),
 			Gate:     askingGate{},
 			GateMode: loop.GateEnforce,
 			Person: func(context.Context, loop.GateRequest, loop.GateDecision) (loop.PersonAnswer, error) {
@@ -60,7 +74,7 @@ func TestTheSettingsToolChangesSubAgentsPerTurnOnlyAfterTheGateSaysYes(t *testin
 
 func TestTheSettingsToolRefusesAnyOtherKey(t *testing.T) {
 	global := filepath.Join(t.TempDir(), settings.FileName)
-	_, err := registry.NewSettings(global, "").Run(context.Background(), json.RawMessage(`{"key":"decisionCap","value":15}`))
+	_, err := settingstool.NewSettings(global, "").Run(context.Background(), json.RawMessage(`{"key":"decisionCap","value":15}`))
 	if err == nil || !strings.Contains(err.Error(), settings.DecisionCap) {
 		t.Errorf("a decisionCap change was not refused by name: %v", err)
 	}
