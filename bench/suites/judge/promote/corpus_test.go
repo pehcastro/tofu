@@ -31,7 +31,7 @@ func drive(t *testing.T, dir string) {
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	app.Update(tui.Event{Kind: tui.EventToolCall, ID: "r1", Tool: "read", Text: "internal/turn/loop.go"})
+	app.Update(tui.Event{Kind: tui.EventToolCall, ID: "r1", Tool: "read", Text: "internal/agent/loop/loop.go"})
 	app.Update(tui.Event{Kind: tui.EventToolResult, ID: "r1", Text: "384 lines"})
 
 	app.Update(tea.KeyPressMsg{Code: tea.KeyTab})

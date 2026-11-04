@@ -2,7 +2,7 @@
 
 Machine: DESKTOP-AHUN9RO. Wire: openrouter. Date: 2026-09-19. Model calls: 0. Nothing was discarded and nothing was warmed up, because nothing was called.
 
-This sits beside `bench/cost/report-2026-09-19.md` and `bench/cost/sweep-2026-09-19.md`. It edits neither.
+This sits beside `bench/suites/judge/cost/report-2026-09-19.md` and `bench/suites/judge/cost/sweep-2026-09-19.md`. It edits neither.
 
 Cost unit: money. A money figure is dollars that left the account behind the credential named above, read from the response of the call it names and never from a rate card. Every dollar figure below is carried over from the run of 2026-09-19 and none was recomputed here, because this file made no model call.
 
@@ -40,15 +40,15 @@ The bench arm never measured the gate this project ships and the accuracy readin
 
 ## The frontier arms are retired, 2026-09-19
 
-Separately from the re-score and decided by the owner while this ticket was open: every arm that calls a model through the OpenRouter API key is deleted from `bench/cost`. That is the opus arm and the fable arm.
+Separately from the re-score and decided by the owner while this ticket was open: every arm that calls a model through the OpenRouter API key is deleted from `bench/suites/judge/cost`. That is the opus arm and the fable arm.
 
-The reason is spend and where measurement is supposed to happen. The OpenRouter bill reached $2.29 on Claude Fable 5.1 against $0.11 for every Jev call this project has ever made. The key is now scoped to Jev on the account side, so those arms could not run even if something tried. The project's stance is that a frontier comparison runs the vendor's own command line on the owner's subscription and reads its raw output, which is what BOJI-097 is building in `bench/harness`, rather than paying per token through an API key.
+The reason is spend and where measurement is supposed to happen. The OpenRouter bill reached $2.29 on Claude Fable 5.1 against $0.11 for every Jev call this project has ever made. The key is now scoped to Jev on the account side, so those arms could not run even if something tried. The project's stance is that a frontier comparison runs the vendor's own command line on the owner's subscription and reads its raw output, which is what BOJI-097 is building in `bench/kit/harness`, rather than paying per token through an API key.
 
-Deleted from the code: `bench/cost/model.go` whole, 198 lines, which held the OpenRouter chat wire, the four-answer JSON schema, `ModelWire`, `ModelResult` and the two model id constants. `runOpus` and the model-arm branch in `Run`. The `Headline` type and the `headline` function, which existed only to divide a frontier arm's cost per correct decision by Jev's. The `FrontierUnit`, `FrontierRatePerToken`, `FrontierRateFromMoney`, `FrontierRateFromTokens` and `ContextDollarsAvoided` fields of `Result`, because with no frontier arm there is no measured rate per token and the only honest figure for context tokens avoided is the token count itself.
+Deleted from the code: `bench/suites/judge/cost/model.go` whole, 198 lines, which held the OpenRouter chat wire, the four-answer JSON schema, `ModelWire`, `ModelResult` and the two model id constants. `runOpus` and the model-arm branch in `Run`. The `Headline` type and the `headline` function, which existed only to divide a frontier arm's cost per correct decision by Jev's. The `FrontierUnit`, `FrontierRatePerToken`, `FrontierRateFromMoney`, `FrontierRateFromTokens` and `ContextDollarsAvoided` fields of `Result`, because with no frontier arm there is no measured rate per token and the only honest figure for context tokens avoided is the token count itself.
 
 Kept: one struct from the deleted file, the four answers as plain numbers, renamed `GateAnswers` because it is about the gate and not about a model wire. It is what `AnswerMap` turns into the `map[string]jev.Answer` the policy reads.
 
-**A deleted arm is not a deleted result.** Every recorded number stays. `report-2026-09-18.md` and `report-2026-09-19.md` are unedited and still carry opus at 82 of 89 and fable at 44 of 51 with their money, tokens and wall clock. The 229 recorded rows in `answers/heldout-2026-09-19.jsonl` still carry the opus and fable rows and they appear in the re-score table below, as history. What is gone is the ability to produce new ones from `bench/cost`, which is the point.
+**A deleted arm is not a deleted result.** Every recorded number stays. `report-2026-09-18.md` and `report-2026-09-19.md` are unedited and still carry opus at 82 of 89 and fable at 44 of 51 with their money, tokens and wall clock. The 229 recorded rows in `answers/heldout-2026-09-19.jsonl` still carry the opus and fable rows and they appear in the re-score table below, as history. What is gone is the ability to produce new ones from `bench/suites/judge/cost`, which is the point.
 
 Three arms remain: jev, which is what the key is for, a regular expression, and a constant that always proceeds. All three are free or nearly so, and all three run from the recorded answers with no network.
 
@@ -56,17 +56,17 @@ Three arms remain: jev, which is what the key is for, a regular expression, and 
 
 `library/general/rules/tool_gate@1.yaml` decides on `risk`: allow below 1.5, ask above it, deny above 2.5, then relaxes one step when `user_requested` is above 0.85 or `approval` is below 0.15, and refuses to relax anything when `from_untrusted` reaches 0.5.
 
-The arm in `bench/cost/decision.go` read `user_requested` and `approval` and never read `risk` or `from_untrusted` at all. It proceeded when `user_requested` cleared 0.5 and otherwise blocked when `approval` cleared 0.5.
+The arm in `bench/suites/judge/cost/decision.go` read `user_requested` and `approval` and never read `risk` or `from_untrusted` at all. It proceeded when `user_requested` cleared 0.5 and otherwise blocked when `approval` cleared 0.5.
 
 Over a grid of 7,865 answer sets spanning every combination of the four answers at a fixed step, the two functions reach different verdicts on 3,875 of them, 49.3 percent. That number is produced by `TestTheSupersededArmDisagreesWithTheGateOnMostOfTheGrid`, it is a property of the two functions and not of any corpus, and it is the reason a sweep of the old arm's threshold cannot repair the published accuracy reading. A threshold sweep moves a boundary inside the wrong function.
 
 ## The arm now decides through policy.Decide
 
-`bench/cost/gate.go` loads `library/general/rules/tool_gate@1.yaml` with `policy.LintFile` and decides with `policy.Decide`, the same two calls `bench/stopcheck` already makes and the same ones the engine will make. There is no second copy of the rule in `bench/cost`. `allow` is scored as proceed; `ask` and `deny` are both scored as block, because either one stops the call.
+`bench/suites/judge/cost/gate.go` loads `library/general/rules/tool_gate@1.yaml` with `policy.LintFile` and decides with `policy.Decide`, the same two calls `bench/suites/judge/stopcheck` already makes and the same ones the engine will make. There is no second copy of the rule in `bench/suites/judge/cost`. `allow` is scored as proceed; `ask` and `deny` are both scored as block, because either one stops the call.
 
 `TestTheArmAndTheGateReachTheSameVerdictFromTheSameAnswers` walks all 7,865 grid points and asserts the arm's verdict is the mapping of `policy.Decide`'s verdict on the same answers. `TestTheArmRefusesAnAnswerSetTheGateWouldRefuse` removes the `risk` answer and then supplies it as a noul where the policy needs a score, and asserts the arm errors both times, which a private copy of the rule would not do.
 
-`TestNeitherTheSupersededArmNorTheGateCarriesAThresholdInItsOwnSource` scans both files for `1.5`, `2.5`, `0.5`, `0.75` and `0.8` and fails on any of them. The gate's numbers come from the catalog file, the superseded arm's from `bench/cost/calibration/tool_gate@1.json`.
+`TestNeitherTheSupersededArmNorTheGateCarriesAThresholdInItsOwnSource` scans both files for `1.5`, `2.5`, `0.5`, `0.75` and `0.8` and fails on any of them. The gate's numbers come from the catalog file, the superseded arm's from `bench/suites/judge/cost/calibration/tool_gate@1.json`.
 
 The shipped policy resolves to **shadow**, reason: declared shadow in `library/general/rules/tool_gate@1.yaml`. Its own `sample_floor` is 300 and nothing has been fitted. So the gate that this reading measures against is, by its own declaration, not allowed to decide anything yet either.
 
@@ -90,11 +90,11 @@ Every number below is decided by `gate.Decide` reading `library/general/rules/to
 
 The re-score makes no model call of its own. 178 of its rows carry answers that came from a live call when they were first recorded, 178 of those from the calibration pass of BOJI-122 in `bench/suites/judge/cost/calibration/fit-2026-09-19.jsonl` and `bench/suites/judge/cost/calibration/verify-2026-09-19.jsonl`, which is the only source that kept all four answers. The others come from `internal/dummy/toolgate/heldout-2026-09-19.jsonl`, and the regex and always-proceed arms were recomputed from the held-out half: these two arms read the state and ask no question, so no rule decides for them and nothing about them can change
 
-The opus and fable rows are history: those arms are retired and `bench/cost` can no longer produce a new row for either. Their recorded rows are kept and re-scored here on the same terms as every other row, which is to say not at all, for want of a `risk` answer.
+The opus and fable rows are history: those arms are retired and `bench/suites/judge/cost` can no longer produce a new row for either. Their recorded rows are kept and re-scored here on the same terms as every other row, which is to say not at all, for want of a `risk` answer.
 
 ### Reading the columns
 
-**Re-scored through the gate: 178, all of them from the calibration pass.** Zero for every arm recorded by the paid run, and that part of revision 1 stands. The paid run asked all four questions. `library/questions/tool_gate@1.yaml` carries `risk`, `approval`, `user_requested` and `from_untrusted`, `bench/api.GateBattery` sends all four, and `bench/cost/model.go` already parsed all four out of the opus and fable responses into a `ModelAnswer`. `run.go` then read two fields off it and dropped the other two on the floor, and the `Result` it returned carried only those two into the report. So `risk` was paid for 229 times and persisted zero times.
+**Re-scored through the gate: 178, all of them from the calibration pass.** Zero for every arm recorded by the paid run, and that part of revision 1 stands. The paid run asked all four questions. `library/questions/tool_gate@1.yaml` carries `risk`, `approval`, `user_requested` and `from_untrusted`, `bench/kit/api.GateBattery` sends all four, and `bench/suites/judge/cost/model.go` already parsed all four out of the opus and fable responses into a `ModelAnswer`. `run.go` then read two fields off it and dropped the other two on the floor, and the `Result` it returned carried only those two into the report. So `risk` was paid for 229 times and persisted zero times.
 
 **Answers without risk: 31.** These are the rows BOJI-091 recovered from the published disagreement table, which printed `user_requested` and `approval` and nothing else. They are enough to sweep the superseded arm's threshold, which is what BOJI-091 did. They are not enough to run the real policy, which needs `risk` first and only consults `approval` to relax an already non-allow verdict.
 
@@ -104,7 +104,7 @@ The opus and fable rows are history: those arms are retired and `bench/cost` can
 
 **Refusals: 4.** Fable's four content refusals. No policy moves them.
 
-**jev-calibration, 178 rows, 164 correct.** The arm BOJI-122 recorded, the only one that kept all four answers. 164 of 178 is 92.1 percent, and it is not a headline: on the same rows a constant that always proceeds scores 166 of 178, because the corpus holds 12 blocks. Read `bench/cost/calibration/tool_gate@1.json` and `.local/boji/planning/gate-evidence.md` before quoting this figure anywhere.
+**jev-calibration, 178 rows, 164 correct.** The arm BOJI-122 recorded, the only one that kept all four answers. 164 of 178 is 92.1 percent, and it is not a headline: on the same rows a constant that always proceeds scores 166 of 178, because the corpus holds 12 blocks. Read `bench/suites/judge/cost/calibration/tool_gate@1.json` and `.local/boji/planning/gate-evidence.md` before quoting this figure anywhere.
 
 ## Which standing changes
 
@@ -122,7 +122,7 @@ The published headline, "jev scored 68 against a regular expression at 86", ther
 
 ## What the published report still says correctly
 
-`bench/cost/report-2026-09-19.md` is unedited and remains the record of the paid run. Standing:
+`bench/suites/judge/cost/report-2026-09-19.md` is unedited and remains the record of the paid run. Standing:
 
 - every money figure, every list price, every unpriced-call count and the total spend
 - every billed input and output token count, and the context-tokens-avoided arithmetic built on them
@@ -135,7 +135,7 @@ Withdrawn: the agreement column, the blocks-caught column, the false-blocks colu
 
 ## The answers artifact, so this cannot happen a second time
 
-A paid run now writes `bench/cost/answers/heldout-YYYY-MM-DD.jsonl`, one row per arm per case, carrying `risk`, `approval`, `user_requested`, `from_untrusted`, the verdict, the label and the source. `Run` writes it before it computes anything else from the arms, so a run that finishes cannot fail to leave the answers behind.
+A paid run now writes `bench/suites/judge/cost/answers/heldout-YYYY-MM-DD.jsonl`, one row per arm per case, carrying `risk`, `approval`, `user_requested`, `from_untrusted`, the verdict, the label and the source. `Run` writes it before it computes anything else from the arms, so a run that finishes cannot fail to leave the answers behind.
 
 The format is the one BOJI-091 already created, with `risk` and `from_untrusted` added as optional fields. That is deliberate: the 2026-09-19 file parses unchanged and reads back as a row that is missing two answers, which is exactly what it is.
 
@@ -149,7 +149,7 @@ Jev's recall at a calibrated operating point is still somewhere between 0 and 3 
 
 Three fresh jev calls over those three states would settle it, at roughly $0.0002. Those calls now write the artifact, so they would settle it permanently rather than for one afternoon. **The calls were not made: this ticket spent nothing.**
 
-A full jev re-run over all 89 held-out cases is now the only paid option, at roughly $0.005 by the recorded rate of $0.000041 per call, and it would produce the first accuracy reading of the gate this project actually ships. The frontier side of that comparison is no longer a `bench/cost` arm and comes from `bench/harness` running the vendor's command line on a subscription.
+A full jev re-run over all 89 held-out cases is now the only paid option, at roughly $0.005 by the recorded rate of $0.000041 per call, and it would produce the first accuracy reading of the gate this project actually ships. The frontier side of that comparison is no longer a `bench/suites/judge/cost` arm and comes from `bench/kit/harness` running the vendor's command line on a subscription.
 
 ## Conditions
 
@@ -160,7 +160,7 @@ A full jev re-run over all 89 held-out cases is now the only paid option, at rou
 | Wire | none, no call was made |
 | Credential kind | none, no credential was read |
 | Model build id | none. The recorded rows came from `typesafe/jev-1.13-20260917`, `anthropic/claude-opus-5` and `anthropic/claude-fable-5-1` as `report-2026-09-19.md` records |
-| Model calls | 0 by this re-score. The counter named `ModelCalls` counts rows whose answers came from a live call when first recorded, which is 178, not calls this run made. The name is wrong and `bench/cost/rescore.go` cannot be renamed from BOJI-125, because `bench/cost/gate_test.go` reads the field |
+| Model calls | 0 by this re-score. The counter named `ModelCalls` counts rows whose answers came from a live call when first recorded, which is 178, not calls this run made. The name is wrong and `bench/suites/judge/cost/rescore.go` cannot be renamed from BOJI-125, because `bench/suites/judge/cost/gate_test.go` reads the field |
 | Warm-up discarded | none, nothing was called |
 | Network required | no. Every number here is reproducible offline with `go test ./bench/cost/` |
 

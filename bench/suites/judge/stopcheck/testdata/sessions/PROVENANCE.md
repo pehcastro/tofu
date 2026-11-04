@@ -2,7 +2,7 @@
 
 **Written**, on 2026-09-19, two files, 1,302 bytes, and written is right for both: they are schema probes, not a corpus. `turn-modern.json` is the current lowercase turn schema and must be read, keeping its command, its failure and its gate decision id. `turn-legacy.json` is the older PascalCase schema and must be skipped with a stated reason, because it carries no step the reader can bind and no wall clock. `session_test.go` asserts exactly one of each.
 
-**No measurement in `bench/stopcheck` reads these.** The corpus every stop-check number comes from is `bench/stopcheck/corpus/`, 19 real turns with its own `PROVENANCE.md`. These two are parser fixtures that happen to live under a directory called `sessions`, and confusing the two directories would be easy, which is why this file says it plainly.
+**No measurement in `bench/suites/judge/stopcheck` reads these.** The corpus every stop-check number comes from is `internal/dummy/turns/labelled/`, 19 real turns with its own `PROVENANCE.md`. These two are parser fixtures that happen to live under a directory called `sessions`, and confusing the two directories would be easy, which is why this file says it plainly.
 
 A recording could not do this job. The point is to hold two schema shapes side by side in one directory, and no single real session ever produced both.
 
@@ -16,4 +16,4 @@ Both carry a model string naming a vendor model this project does not use and re
 
 ## What it does not carry
 
-Scanned on 2026-09-23 for every identity and credential pattern in `bench/corpus.Scrub`: no hit. Every byte of both files was invented, so there was nothing off a recording machine to remove.
+Scanned on 2026-09-23 for every identity and credential pattern in `bench/kit/corpus.Scrub`: no hit. Every byte of both files was invented, so there was nothing off a recording machine to remove.

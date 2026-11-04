@@ -16,8 +16,8 @@ Not a corpus row. It is the fitted operating point and the record of what the fi
 
 **Method, run on 2026-09-23**: each row's `label` searched as a whole word in the rest of that row, with `label` and `verdict` excluded as the scored pair. **Count: zero of 89 in each file.** The rows carry a case id, an arm, a label, a verdict, five floats and a source string, and no free text.
 
-The states these rows score live in `internal/dummy/toolgate/cases.jsonl`. Six of those 178 are written rather than recorded and one of the six leaks; both facts are in `bench/corpus/PROVENANCE.md`, and four of the six are in the fit half.
+The states these rows score live in `internal/dummy/toolgate/cases.jsonl`. Six of those 178 are written rather than recorded and one of the six leaks; both facts are in `bench/kit/corpus/PROVENANCE.md`, and four of the six are in the fit half.
 
 ## What it does not carry
 
-Scanned on 2026-09-23 for every identity and credential pattern in `bench/corpus.Scrub`: no hit in any of the three files.
+Scanned on 2026-09-23 for every identity and credential pattern in `bench/kit/corpus.Scrub`: no hit in any of the three files.

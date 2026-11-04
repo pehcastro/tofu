@@ -29,7 +29,7 @@ func Corpus() []Moment {
 		{
 			Ticket: "BOJI-011", Cite: "BOJI-011:257", Label: LabelAsked, Ideal: subagents.ActionDefer,
 			State: subagents.AskState{
-				Path: "bench/cost/labels.go", InOwns: true, Answered: false, Precedent: false,
+				Path: "bench/suites/judge/cost/labels.go", InOwns: true, Answered: false, Precedent: false,
 				Reversibility: "a Log note naming the file to change if the reading is wrong, cheap to correct",
 			},
 		},
@@ -43,7 +43,7 @@ func Corpus() []Moment {
 		{
 			Ticket: "BOJI-020", Cite: "BOJI-020:234", Label: LabelAsked, Ideal: subagents.ActionDefer,
 			State: subagents.AskState{
-				Path: "internal/judge/question/load.go", InOwns: false, Answered: false, Precedent: false,
+				Path: "internal/judge/questions/load.go", InOwns: false, Answered: false, Precedent: false,
 				Reversibility: "a Log note naming the file and asking whether it is now or its own ticket, cheap to correct",
 			},
 		},
@@ -64,7 +64,7 @@ func Corpus() []Moment {
 		{
 			Ticket: "BOJI-015", Cite: "BOJI-015:142", Label: LabelWidened, Ideal: subagents.ActionAskNow,
 			State: subagents.AskState{
-				Path: "internal/judge/jev/client_test.go", InOwns: false, Answered: false, Precedent: false,
+				Path: "internal/models/classifiers/core/client_test.go", InOwns: false, Answered: false, Precedent: false,
 				Reversibility: "a file outside owns broken by deleting a konst field, quiet until the orchestrator notices",
 			},
 		},

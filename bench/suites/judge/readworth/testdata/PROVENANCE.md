@@ -1,8 +1,8 @@
 # Where readworth-corpus.jsonl came from
 
-**Recorded**, in the text, with **hand labels**. 70 rows, 115,028 bytes, added 2026-09-20 for the read-worth measurement.
+**Recorded**, in the text, with **hand labels**. 70 rows, 115,028 bytes, added 2026-09-20 for the read-worth measurement. On 2026-11-04 TOFU-2300 rewrote the folder paths in the text to the tree's new layout, which made the file 115,046 bytes; no label or row changed.
 
-Every paragraph is a real paragraph this harness wrote, drawn from `.tofu/sessions` through `bench/corpus.WalkSessions` rather than by reading a session file directly. The `task` is the user's own request from the session the paragraph came out of. `position` (`opening`, `middle`, `closing`) and `already_said`, the earlier paragraphs of the same reply, are carried through unchanged, because the question set reads both.
+Every paragraph is a real paragraph this harness wrote, drawn from `.tofu/sessions` through `bench/kit/corpus.WalkSessions` rather than by reading a session file directly. The `task` is the user's own request from the session the paragraph came out of. `position` (`opening`, `middle`, `closing`) and `already_said`, the earlier paragraphs of the same reply, are carried through unchanged, because the question set reads both.
 
 **The `keep` label is written, and by one person.** 35 keep, 35 drop, labelled against the `read_worth@1` criteria: does the paragraph carry the answer, a finding, a measurement or a caveat the reader has to act on, versus preamble, recap, hedging, jargon or selling with nothing under it. No second reviewer was in the loop. That is a limitation of every accuracy figure this corpus produces and it is named in `report-2026-09-21.md` as well.
 
@@ -10,7 +10,7 @@ Every paragraph is a real paragraph this harness wrote, drawn from `.tofu/sessio
 
 25 distinct tasks are represented, but the tree exposes roughly 246 candidate paragraphs at production split granularity. **70 rows is a sample of that ceiling, not the whole of it.** It is also one person, one repository and a narrow band of tasks.
 
-The corpus could not exist before `bench/corpus/reader.go` learned to carry `AssistantText`: both session schemas silently dropped reply text, so `WalkSessions` reported zero paragraphs. Any measurement dated before that change did not see this data.
+The corpus could not exist before `bench/kit/corpus/reader.go` learned to carry `AssistantText`: both session schemas silently dropped reply text, so `WalkSessions` reported zero paragraphs. Any measurement dated before that change did not see this data.
 
 ## Leakage, checked on 2026-09-23, none that separates a label
 

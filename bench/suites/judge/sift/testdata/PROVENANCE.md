@@ -4,13 +4,13 @@
 
 ## How it was taken
 
-Every `body.jsonl` under `.tofu/sessions` was read. A record with `kind: message` and `role: assistant` names the tool for each `tool_call_id`; the matching record with `role: tool` carries that call's result whole. Every result whose call was `bash` was taken, and results identical byte for byte were kept once, because a forked session replays its parent's results. 48 bash results reduce to 34 distinct ones, 108,396 bytes.
+Every `body.jsonl` under `.tofu/sessions` was read. A record with `kind: message` and `role: assistant` names the tool for each `tool_call_id`; the matching record with `role: tool` carries that call's result whole. Every result whose call was `bash` was taken, and results identical byte for byte were kept once, because a forked session replays its parent's results. 48 bash results reduce to 34 distinct ones, 108,396 bytes. On 2026-11-04 TOFU-2300 rewrote the folder paths inside the outputs to the tree's new layout, which made the outputs 110,901 bytes; no newline was added or removed, so every unit boundary stands.
 
 `task` is the user's own request from the session's `header.json`, not a task anybody wrote for this measurement. Four distinct tasks appear across the 34 rows, and three of them are a form of asking what this repository is, which is the largest known weakness of the corpus: it is one person, one repository and a narrow band of questions.
 
 ## What was removed before it was written here
 
-Every field of every row went through `bench/corpus.Scrub`, which is what the other 177 recorded fixtures in this tree go through. Two rows changed, 21 bytes in 108,396:
+Every field of every row went through `bench/kit/corpus.Scrub`, which is what the other 177 recorded fixtures in this tree go through. Two rows changed, 21 bytes in 108,396:
 
 - Row 5, a `head -70 .local/boji/tickets/BOARD.md`, captured a board entry naming the owner's home directory in an install path. The account name became `owner`, +1 byte.
 - Row 8, a `sed -n '1,40p' .local/boji/planning/connectors.md`, captured the line of that document which says how an Anthropic OAuth token is recognised, so it quotes the prefix a scanner looks for. It is the detector rather than a credential, and it is masked anyway, because a scanner that learns an exception is worth less than one that is blunt. +20 bytes.
