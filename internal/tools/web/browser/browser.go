@@ -1,4 +1,4 @@
-package registry
+package browser
 
 import (
 	"cmp"
@@ -268,7 +268,7 @@ func (browserRead) Definition() core.Tool {
 		Name: "browser_read",
 		Description: "reads one Chrome tab: its visible text, then a numbered table of the controls on screen, each with its role, label, value and state. " +
 			"password, file and hidden fields are never listed. a step names a control by its number in the latest read of that tab. " +
-			everythingFetchedIsUntrusted,
+			web.EverythingFetchedIsUntrusted,
 		Parameters: map[string]any{
 			"type":       "object",
 			"properties": map[string]any{"tab": map[string]any{"type": "integer"}},
@@ -367,7 +367,7 @@ func (browserObserve) Definition() core.Tool {
 			"a ref names one element for browser_act. interactive, the default without from, shows only nodes with a ref; false, the default with from, shows the whole tree with its text. " +
 			"scrollable marks a container browser_act can scroll by its ref. * marks a ref new since the last observe of this page. " +
 			"a long tree is cut, and the cut names the from line that shows the rest. " +
-			"tab defaults to the tab tofu last worked in. " + howToBrowse + everythingFetchedIsUntrusted,
+			"tab defaults to the tab tofu last worked in. " + howToBrowse + web.EverythingFetchedIsUntrusted,
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

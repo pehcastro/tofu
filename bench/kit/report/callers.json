@@ -6,7 +6,7 @@
   },
   {
     "point": "browser_step",
-    "file": "internal/tools/registry/browser.go",
+    "file": "internal/tools/web/browser/browser.go",
     "symbol": "browserDo"
   },
   {
@@ -41,7 +41,7 @@
   },
   {
     "point": "memory_same",
-    "file": "internal/tools/registry/remember.go",
+    "file": "internal/tools/human/remember/remember.go",
     "symbol": "duplicate"
   },
   {

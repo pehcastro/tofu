@@ -1,4 +1,4 @@
-package registry
+package remember
 
 import (
 	"cmp"

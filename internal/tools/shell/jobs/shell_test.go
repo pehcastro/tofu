@@ -1,4 +1,4 @@
-package registry_test
+package jobs_test
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/tools/contract"
-	tools "tofu/internal/tools/registry"
+	tools "tofu/internal/tools/shell/jobs"
 	"tofu/internal/tools/shell/process"
 )
 

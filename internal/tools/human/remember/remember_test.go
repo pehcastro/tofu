@@ -1,4 +1,4 @@
-package registry_test
+package remember_test
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/human/remember"
 )
 
 const (
@@ -29,9 +29,9 @@ func said(t *testing.T, id, origin, text string) session.Event {
 }
 
 type chain struct {
-	tool    registry.Remember
+	tool    remember.Remember
 	picking context.Context
-	offered []registry.MemoryOffer
+	offered []remember.MemoryOffer
 }
 
 func rememberChain(t *testing.T, answer entries.Scope) *chain {
@@ -52,8 +52,8 @@ func rememberChain(t *testing.T, answer entries.Scope) *chain {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	c := &chain{tool: registry.Remember{Store: store, Session: newerSession, Project: t.TempDir(), Inbox: loop.NewInbox(), Auto: func() bool { return false }}}
-	c.picking = registry.WithMemoryPick(context.Background(), func(_ context.Context, offer registry.MemoryOffer) (entries.Scope, error) {
+	c := &chain{tool: remember.Remember{Store: store, Session: newerSession, Project: t.TempDir(), Inbox: loop.NewInbox(), Auto: func() bool { return false }}}
+	c.picking = remember.WithMemoryPick(context.Background(), func(_ context.Context, offer remember.MemoryOffer) (entries.Scope, error) {
 		c.offered = append(c.offered, offer)
 		return answer, nil
 	})
@@ -165,15 +165,15 @@ func TestRememberKeepsNothingOnANoOrWithNobodyToAsk(t *testing.T) {
 func TestRememberWritesWithoutAskingOnceAutoMemoryIsOn(t *testing.T) {
 	c := rememberChain(t, "")
 	c.tool.Auto = func() bool { return true }
-	var told []registry.MemoryKept
-	c.picking = registry.WithMemoryKept(c.picking, func(kept registry.MemoryKept) { told = append(told, kept) })
+	var told []remember.MemoryKept
+	c.picking = remember.WithMemoryKept(c.picking, func(kept remember.MemoryKept) { told = append(told, kept) })
 	if _, err := c.remembered(t, "cargo runs with 2 jobs", "never run cargo", "person"); err != nil || len(c.offered) != 0 {
 		t.Fatalf("auto memory asked %d times, err %v", len(c.offered), err)
 	}
 	if shelves := c.kept(t); len(shelves.Global.Entries) != 1 {
 		t.Errorf("auto memory kept %d entries", len(shelves.Global.Entries))
 	}
-	if len(told) != 1 || told[0] != (registry.MemoryKept{Statement: "cargo runs with 2 jobs", Offered: entries.Global, Kept: entries.Global}) {
+	if len(told) != 1 || told[0] != (remember.MemoryKept{Statement: "cargo runs with 2 jobs", Offered: entries.Global, Kept: entries.Global}) {
 		t.Errorf("auto memory told the host %+v, want one keep of user-global offered and kept", told)
 	}
 }
