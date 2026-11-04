@@ -25,6 +25,9 @@ func everyRuleMatched(files map[string]string) map[string]string {
 		"internal/konst/konst.go":               "package konst\n",
 		"internal/platform/safe/safe.go":        "package safe\n",
 	}
+	for _, platform := range []string{"fs", "project", "clipboard", "console", "scratch", "credential", "profile", "build"} {
+		tree["internal/platform/"+platform+"/"+platform+".go"] = "package " + platform + "\n"
+	}
 	maps.Copy(tree, files)
 	return tree
 }
@@ -56,9 +59,9 @@ func TestImportsFailsOnACommandImportingBench(t *testing.T) {
 		t.Fatalf("exit = %d, want %d, output %q", code, output.ExitVerdict, out.String())
 	}
 	for _, want := range []string{
-		"Imports · 10 packages · 11 rules",
+		"Imports · 18 packages · 19 rules",
 		"✗ 1 violations\n",
-		"  ✗ tofu/apps                    never tofu/bench\n",
+		"  ✗ tofu/apps                          never tofu/bench\n",
 		"violations\n  ✗ tofu/apps/cli  imports tofu/bench/suites/judge/cost\n",
 	} {
 		if !strings.Contains(out.String(), want) {
@@ -83,6 +86,9 @@ func TestImportsFailsOnJudgeImportingTurn(t *testing.T) {
 	want := importViolation{From: "tofu/internal/judge/gate", To: "tofu/internal/agent/loop", Rule: "under tofu/internal, " +
 		"a package in tofu/internal/judge imports only " +
 		"tofu/internal/judge, tofu/internal/sys, tofu/internal/konst, tofu/internal/platform/safe, " +
+		"tofu/internal/platform/fs, tofu/internal/platform/project, tofu/internal/platform/clipboard, " +
+		"tofu/internal/platform/console, tofu/internal/platform/scratch, tofu/internal/platform/credential, " +
+		"tofu/internal/platform/profile, tofu/internal/platform/build, " +
 		"tofu/internal/models/transport, tofu/internal/models/classifiers/core, tofu/internal/models/classifiers/providers"}
 	if len(report.Violations) != 1 || report.Violations[0] != want {
 		t.Fatalf("violations %+v, want only %+v", report.Violations, want)
@@ -100,7 +106,7 @@ func TestImportsPassesOnATreeThatObeysTheRules(t *testing.T) {
 	if code != output.ExitOK {
 		t.Fatalf("exit = %d, want %d, output %q", code, output.ExitOK, out.String())
 	}
-	if first := strings.SplitN(out.String(), "\n", 2)[0]; !strings.HasPrefix(first, "Imports · 10 packages · 11 rules ") || !strings.HasSuffix(first, " ✓ no violations") {
+	if first := strings.SplitN(out.String(), "\n", 2)[0]; !strings.HasPrefix(first, "Imports · 18 packages · 19 rules ") || !strings.HasSuffix(first, " ✓ no violations") {
 		t.Fatalf("title %q, want the counts and no violations", first)
 	}
 	if strings.Contains(out.String(), "✗") {

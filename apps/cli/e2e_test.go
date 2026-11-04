@@ -35,7 +35,7 @@ func tofuBinary(t *testing.T) string {
 		if sys.OS() == "windows" {
 			path += ".exe"
 		}
-		ldflags := "-X tofu/internal/sys.builtGuarded=1"
+		ldflags := "-X tofu/internal/platform/credential.builtGuarded=1"
 		said, err := exec.Command("go", "build", "-ldflags", ldflags, "-o", path, ".").CombinedOutput()
 		if err != nil {
 			builtTofu.err = fmt.Errorf("go build -o %s .: %w: %s", path, err, said)
