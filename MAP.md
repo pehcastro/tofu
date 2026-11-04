@@ -7,7 +7,7 @@ Go code lives in four roots: `apps/` for the programs a person runs; `internal/`
 | Folder | Holds | Never holds |
 |---|---|---|
 | `apps/` | every program a person runs: `cli/` is the `tofu` binary and its verbs, `desk/` is the desktop app in Rust and gpui | code another app or package imports |
-| `internal/` | every Go package the apps share, one folder per area: agent, tools, models, judge, librarian, store, project, host, cli, ui, platform, sys, konst, testkit | a `main` package, data a person edits |
+| `internal/` | every Go package the apps share, one folder per area: agent, tools, models, judge, librarian, store, project, host, cli, ui, platform, sys, konst, testkit, dummy | a `main` package, data a person edits |
 | `library/` | data a person can change, embedded in the binary: rules, references, agents, skills, questions, models, subscriptions, decisions, in-app docs, changelog | logic beyond the embed and the tests that read it |
 | `bench/` | suites by area in `suites/`, the dispatcher in `cmd/`, shared data in `corpus/`, libraries in `kit/`, build gates and parity in `gates/`; the contract is `bench/README.md` | product code, or anything another root imports or needs to run |
 | `docs/` | the public documentation site, built with Petit | the in-app pages, which are `library/docs/` |
@@ -36,6 +36,7 @@ Not in git: `.local/`, `.tofu/`, `.claude/`, `.agents/`, `.playground/`, `.zed/`
 | skill | `library/dev/skills/` | `library/dev/skills/` |
 | slash command | `internal/agent/commands/` | `internal/agent/commands/` |
 | interface panel | `internal/ui/tui/panels/<name>/` | `internal/ui/tui/panels/shells/` |
+| test data two package trees share | `internal/dummy/<category>/`, read through `dummy.Path` | `internal/dummy/turns/` |
 | limit or constant | `internal/konst/` | `internal/konst/` |
 | operating system call | `internal/sys/`, one file per OS | `internal/sys/` |
 | bench suite | `bench/suites/<area>/<suite>/`, area one of judge, rules, context, tools, agent, perf | `bench/suites/tools/search/` |
@@ -59,6 +60,7 @@ Not in git: `.local/`, `.tofu/`, `.claude/`, `.agents/`, `.playground/`, `.zed/`
 
 - nothing under `apps/` or `internal/` imports `bench/`
 - nothing under `internal/` imports `apps/`
+- nothing under `apps/` imports `internal/dummy` outside a `_test.go` file
 - nothing under `apps/cli/wiring` imports `apps/cli/verbs`
 - each package under `apps/cli/verbs` imports no other one under it
 - `library/` imports no tofu package
@@ -119,6 +121,11 @@ tofu/
 │   │   └── subagents/
 │   ├── cli/
 │   │   └── render/
+│   ├── dummy/
+│   │   ├── browser/
+│   │   ├── projects/
+│   │   ├── toolgate/
+│   │   └── turns/
 │   ├── host/
 │   ├── judge/
 │   │   ├── gate/

@@ -27,6 +27,7 @@ func importRules() []importRule {
 	leaves := []string{"tofu/internal/sys", "tofu/internal/konst", "tofu/internal/platform/recover"}
 	rules := []importRule{
 		{from: "tofu/apps", scope: "tofu/bench"},
+		{from: "tofu/apps", scope: "tofu/internal/dummy"},
 		{from: "tofu/internal", scope: "tofu/bench"},
 		{from: "tofu/internal", scope: "tofu/apps"},
 		{from: "tofu/apps/cli/wiring", scope: "tofu/apps/cli/verbs"},

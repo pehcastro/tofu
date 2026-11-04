@@ -14,7 +14,8 @@ import (
 
 func everyRuleMatched(files map[string]string) map[string]string {
 	tree := map[string]string{
-		"bench/cost/cost.go":                    "package cost\n\nfunc Run() int { return 1 }\n",
+		"bench/suites/judge/cost/cost.go":       "package cost\n\nfunc Run() int { return 1 }\n",
+		"internal/dummy/dummy.go":               "package dummy\n",
 		"apps/cli/main.go":                      "package main\n\nfunc main() {}\n",
 		"apps/cli/wiring/wiring.go":             "package wiring\n",
 		"apps/cli/verbs/doctor/doctor.go":       "package doctor\n",
@@ -46,7 +47,7 @@ func writeFixtureModule(t *testing.T, files map[string]string) string {
 
 func TestImportsFailsOnACommandImportingBench(t *testing.T) {
 	dir := writeFixtureModule(t, everyRuleMatched(map[string]string{
-		"apps/cli/main.go": "package main\n\nimport \"tofu/bench/cost\"\n\nfunc main() { _ = cost.Run() }\n",
+		"apps/cli/main.go": "package main\n\nimport \"tofu/bench/suites/judge/cost\"\n\nfunc main() { _ = cost.Run() }\n",
 	}))
 
 	out := &bytes.Buffer{}
@@ -55,10 +56,10 @@ func TestImportsFailsOnACommandImportingBench(t *testing.T) {
 		t.Fatalf("exit = %d, want %d, output %q", code, output.ExitVerdict, out.String())
 	}
 	for _, want := range []string{
-		"Imports · 9 packages · 10 rules",
+		"Imports · 10 packages · 11 rules",
 		"✗ 1 violations\n",
 		"  ✗ tofu/apps                       never tofu/bench\n",
-		"violations\n  ✗ tofu/apps/cli  imports tofu/bench/cost\n",
+		"violations\n  ✗ tofu/apps/cli  imports tofu/bench/suites/judge/cost\n",
 	} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("output\n%s\nwant a line %q", out.String(), want)
@@ -68,8 +69,8 @@ func TestImportsFailsOnACommandImportingBench(t *testing.T) {
 
 func TestImportsFailsOnJudgeImportingTurn(t *testing.T) {
 	dir := writeFixtureModule(t, everyRuleMatched(map[string]string{
-		"internal/turn/turn.go":              "package turn\n\nfunc Step() int { return 1 }\n",
-		"internal/judge/gate/rule.go":        "package gate\n\nimport \"tofu/internal/turn\"\n\nfunc Decide() int { return turn.Step() }\n",
+		"internal/agent/loop/loop.go":        "package loop\n\nfunc Step() int { return 1 }\n",
+		"internal/judge/gate/rule.go":        "package gate\n\nimport \"tofu/internal/agent/loop\"\n\nfunc Decide() int { return loop.Step() }\n",
 		"internal/models/transport/retry.go": "package transport\n\nfunc Retries() int { return 3 }\n",
 		"internal/judge/ledger/row.go":       "package ledger\n\nimport \"tofu/internal/models/transport\"\n\nfunc N() int { return transport.Retries() }\n",
 		"internal/judge/state/state.go":      "package state\n\nimport \"tofu/internal/judge/ledger\"\n\nfunc N() int { return ledger.N() }\n",
@@ -79,7 +80,7 @@ func TestImportsFailsOnJudgeImportingTurn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := importViolation{From: "tofu/internal/judge/gate", To: "tofu/internal/turn", Rule: "under tofu/internal, " +
+	want := importViolation{From: "tofu/internal/judge/gate", To: "tofu/internal/agent/loop", Rule: "under tofu/internal, " +
 		"a package in tofu/internal/judge imports only " +
 		"tofu/internal/judge, tofu/internal/sys, tofu/internal/konst, tofu/internal/platform/recover, " +
 		"tofu/internal/models/transport, tofu/internal/models/classifiers/core, tofu/internal/models/classifiers/providers"}
@@ -90,8 +91,8 @@ func TestImportsFailsOnJudgeImportingTurn(t *testing.T) {
 
 func TestImportsPassesOnATreeThatObeysTheRules(t *testing.T) {
 	dir := writeFixtureModule(t, everyRuleMatched(map[string]string{
-		"bench/cost/cost.go": "package cost\n\nimport \"tofu/internal/judge/questions\"\n\nfunc Run() string { return questions.Name() }\n",
-		"apps/cli/main.go":   "package main\n\nimport \"tofu/internal/judge/questions\"\n\nfunc main() { _ = questions.Name() }\n",
+		"bench/suites/judge/cost/cost.go": "package cost\n\nimport \"tofu/internal/judge/questions\"\n\nfunc Run() string { return questions.Name() }\n",
+		"apps/cli/main.go":                "package main\n\nimport \"tofu/internal/judge/questions\"\n\nfunc main() { _ = questions.Name() }\n",
 	}))
 
 	out := &bytes.Buffer{}
@@ -99,7 +100,7 @@ func TestImportsPassesOnATreeThatObeysTheRules(t *testing.T) {
 	if code != output.ExitOK {
 		t.Fatalf("exit = %d, want %d, output %q", code, output.ExitOK, out.String())
 	}
-	if first := strings.SplitN(out.String(), "\n", 2)[0]; !strings.HasPrefix(first, "Imports · 9 packages · 10 rules ") || !strings.HasSuffix(first, " ✓ no violations") {
+	if first := strings.SplitN(out.String(), "\n", 2)[0]; !strings.HasPrefix(first, "Imports · 10 packages · 11 rules ") || !strings.HasSuffix(first, " ✓ no violations") {
 		t.Fatalf("title %q, want the counts and no violations", first)
 	}
 	if strings.Contains(out.String(), "✗") {
@@ -135,7 +136,7 @@ func TestImportsNamesEveryRuleItChecked(t *testing.T) {
 
 func TestImportsFailsOnARuleThatMatchesNoPackage(t *testing.T) {
 	tree := everyRuleMatched(nil)
-	delete(tree, "bench/cost/cost.go")
+	delete(tree, "bench/suites/judge/cost/cost.go")
 	dir := writeFixtureModule(t, tree)
 
 	report, err := readImports(dir)
