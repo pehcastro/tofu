@@ -8,8 +8,8 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/librarian/rules"
+	platformfs "tofu/internal/platform/fs"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	shipped "tofu/library"
 )
 
@@ -21,11 +21,11 @@ const (
 )
 
 func LibrarySource() (fs.FS, string, string) {
-	dir, err := sys.LibraryDir()
+	dir, err := platformfs.LibraryDir()
 	if err != nil {
 		return shipped.Files(), LibraryRoot, RulesFromTheBinary
 	}
-	isDir, err := sys.IsDir(dir)
+	isDir, err := platformfs.IsDir(dir)
 	if err != nil || !isDir {
 		return shipped.Files(), LibraryRoot, RulesFromTheBinary
 	}

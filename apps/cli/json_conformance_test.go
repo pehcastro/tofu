@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"tofu/apps/cli/output"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
 	"tofu/internal/testkit/cli"
 )
 
@@ -30,7 +30,7 @@ func inProcess(_ *testing.T, args []string) (int, string, string) { return runOu
 
 func conformanceHome(t *testing.T) {
 	cli.IsolateHome(t)
-	for _, name := range sys.KeyNames() {
+	for _, name := range credential.KeyNames() {
 		t.Setenv(name, "")
 	}
 	project := filepath.Join(os.Getenv("USERPROFILE"), "project")

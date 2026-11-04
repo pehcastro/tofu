@@ -9,7 +9,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/llm/catalog"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 )
 
 type RowInput struct {
@@ -37,7 +37,7 @@ func OpenRowLedger(log string) (RowLedger, error) {
 }
 
 func openedRowLedger() (RowLedger, error) {
-	dir, err := sys.LogDir()
+	dir, err := project.LogDir()
 	if err != nil {
 		return RowLedger{}, err
 	}

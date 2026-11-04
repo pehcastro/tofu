@@ -13,8 +13,9 @@ import (
 	"tofu/apps/cli/output"
 	cli "tofu/apps/cli/page"
 	"tofu/internal/cli/render"
+	"tofu/internal/platform/fs"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 )
 
 const migrateUsage = "tofu migrate [--dry-run | --relink] [--json]"
@@ -51,18 +52,18 @@ type migrateReport struct {
 }
 
 func plannedStateMoves(project string) (config string, moves []stateMove, err error) {
-	config = sys.StateDir(project)
-	state, err := sys.ProjectStateDirAt(project)
+	config = fs.StateDir(project)
+	state, err := platformproject.ProjectStateDirAt(project)
 	if err != nil {
 		return "", nil, err
 	}
-	quota, err := sys.QuotaDir()
+	quota, err := fs.QuotaDir()
 	if err != nil {
 		return "", nil, err
 	}
-	for _, name := range sys.MovedStateNames() {
+	for _, name := range fs.MovedStateNames() {
 		move := stateMove{Name: name, From: filepath.Join(config, name), To: filepath.Join(state, name)}
-		if name == sys.QuotaDirName {
+		if name == fs.QuotaDirName {
 			move.To = quota
 		}
 		if _, err := os.Stat(move.From); err == nil && move.From != move.To {
@@ -91,7 +92,7 @@ func moveProjectState(out io.Writer, project string) []stateMove {
 	page := cli.Detect(out, os.Environ())
 	_, moves, err := plannedStateMoves(project)
 	if err != nil {
-		_ = page.Print(out, page.ErrorLine("the state in "+page.Path(sys.StateDir(project))+" was not moved: "+err.Error(), ""))
+		_ = page.Print(out, page.ErrorLine("the state in "+page.Path(fs.StateDir(project))+" was not moved: "+err.Error(), ""))
 		return nil
 	}
 	moves = moveStates(moves)
@@ -146,7 +147,7 @@ func migrateVerb(args []string, out, errOut io.Writer) int {
 		report.From, moves, err = plannedStateMoves(project)
 	}
 	if err == nil {
-		state, err = sys.ProjectStateDirAt(project)
+		state, err = platformproject.ProjectStateDirAt(project)
 	}
 	if err != nil {
 		return o.Fail(err)

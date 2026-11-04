@@ -15,7 +15,7 @@ import (
 	"tofu/apps/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/librarian/rules"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -140,7 +140,7 @@ func AddVerb(args []string, out, errOut io.Writer) int {
 		return o.Usage(err)
 	}
 	file := cmp.Or(existing.File, filepath.Join(opts.layer.Dir, id+"@1.yaml"))
-	if err := sys.WriteFile(file, data, 0o644); err != nil {
+	if err := fs.WriteFile(file, data, 0o644); err != nil {
 		return o.Fail(err)
 	}
 	change := host.FileChange{Change: host.ChangeAdded, What: "rule " + id, File: file}
@@ -194,7 +194,7 @@ func offVerb(args []string, out, errOut io.Writer) int {
 		return o.Fail(err)
 	}
 	file := filepath.Join(opts.layer.Dir, id+"@1.yaml")
-	if err := sys.WriteFile(file, data, 0o644); err != nil {
+	if err := fs.WriteFile(file, data, 0o644); err != nil {
 		return o.Fail(err)
 	}
 	return o.Receipt(host.WriteReceipt{Changes: []host.FileChange{{Change: host.ChangeChanged, What: "rule " + id + " off", File: file}}, Undo: "tofu rules restore" + opts.layer.Flag + " " + id})
@@ -269,7 +269,7 @@ func switchOn(o output.Verb, opts writeOpts, id string) int {
 		return o.Usage(err)
 	}
 	file := filepath.Join(opts.layer.Dir, id+"@1.yaml")
-	if err := sys.WriteFile(file, data, 0o644); err != nil {
+	if err := fs.WriteFile(file, data, 0o644); err != nil {
 		return o.Fail(err)
 	}
 	return o.Receipt(host.WriteReceipt{Changes: []host.FileChange{{Change: host.ChangeAdded, What: "rule " + id + " on", File: file}}, Undo: "tofu rules remove" + opts.layer.Flag + " " + id})

@@ -14,7 +14,7 @@ import (
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	"tofu/internal/host"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 	"tofu/internal/testkit/cli"
 )
 
@@ -235,7 +235,7 @@ func TestRulesOverridesNamesAnOverrideTheLibraryMovedPast(t *testing.T) {
 		".tofu/rules/no_unit_test_after_code@1.yaml":            "id: no_unit_test_after_code\noverrides: no_unit_test_after_code@1\nmode: off\nreason: public SDK\nby: person\nat: 2026-10-05\n",
 	}
 	for name, body := range files {
-		if err := sys.WriteFile(filepath.Join(project, filepath.FromSlash(name)), []byte(body), 0o644); err != nil {
+		if err := fs.WriteFile(filepath.Join(project, filepath.FromSlash(name)), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}

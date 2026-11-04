@@ -42,9 +42,10 @@ import (
 	"tofu/internal/models/llm/quota"
 	"tofu/internal/models/llm/wire/codex"
 	"tofu/internal/models/transport"
+	platformcredential "tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
 	sessionstore "tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/testkit/cli"
 	"tofu/internal/tools/contract"
 	tools "tofu/internal/tools/registry"
@@ -161,7 +162,7 @@ func TestSetupAsksForBothLoginsAndTheSecondOneStoresTheKey(t *testing.T) {
 	if !slices.Equal(logins, []string{"login llm claude-sub", "login llm codex-sub"}) {
 		t.Fatalf("with nothing signed in step 1 offers %q, want a login for every subscription in the library", logins)
 	}
-	if required[0].Choices[2].Key != sys.MetaMuseKeyName {
+	if required[0].Choices[2].Key != platformcredential.MetaMuseKeyName {
 		t.Fatalf("the key choices are %+v", required[0].Choices)
 	}
 	var binds []string
@@ -215,7 +216,7 @@ func TestASignInWithNothingBoundAsksForTheOrchestratorAndBindingItClearsTheStep(
 
 func bindOrchestrator(t *testing.T, slug string) {
 	t.Helper()
-	home, err := sys.HomeConfigDir()
+	home, err := fs.HomeConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,9 +249,9 @@ func TestLiveAppRunsATurnOnEachWire(t *testing.T) {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to spend the subscription quota")
 	}
-	sys.AllowLiveCredential(t)
+	platformcredential.AllowLiveCredential(t)
 	if key, err := core.TypeSafeKey("../../.env"); err == nil {
-		t.Setenv(sys.TypeSafeKeyName, key)
+		t.Setenv(platformcredential.TypeSafeKeyName, key)
 	}
 	offered := heldForTest(t).Wires()
 	if len(offered) != 2 {
@@ -319,7 +320,7 @@ func storeCredential(t *testing.T, provider accounts.Provider) {
 
 func storeGateKey(t *testing.T, key string) {
 	t.Helper()
-	if err := sys.SaveKey(core.TypeSafeVariable, key); err != nil {
+	if err := platformcredential.SaveKey(core.TypeSafeVariable, key); err != nil {
 		t.Fatal(err)
 	}
 	bindTypeSafe(t)
@@ -327,7 +328,7 @@ func storeGateKey(t *testing.T, key string) {
 
 func bindTypeSafe(t *testing.T) {
 	t.Helper()
-	home, err := sys.HomeConfigDir()
+	home, err := fs.HomeConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +351,7 @@ func assertOnlyTheTail(t *testing.T, where, body, key string) {
 
 func TestLoginTypeSafeStoresTheKeyInTheDatabaseAndPrintsNoMoreThanItsTail(t *testing.T) {
 	cli.ScratchProject(t)
-	home, err := sys.HomeConfigDir()
+	home, err := fs.HomeConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,11 +362,11 @@ func TestLoginTypeSafeStoresTheKeyInTheDatabaseAndPrintsNoMoreThanItsTail(t *tes
 	if code := loginVerb([]string{"classifier", wiring.TypeSafeName}, strings.NewReader(key+"\r\n"), &out, &errOut); code != output.ExitOK {
 		t.Fatalf("login typesafe exited %d: %s", code, errOut.String())
 	}
-	stored, err := sys.StoredKeys()
+	stored, err := platformcredential.StoredKeys()
 	if err != nil || stored[core.TypeSafeVariable] != key {
 		t.Fatalf("the database holds a value of length %d for the key, and %v", len(stored[core.TypeSafeVariable]), err)
 	}
-	if _, err := os.Stat(filepath.Join(home, sys.CredentialFileName)); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(home, platformcredential.CredentialFileName)); !os.IsNotExist(err) {
 		t.Fatalf("login left a .env under %s: %v", home, err)
 	}
 	var status bytes.Buffer
@@ -387,15 +388,15 @@ func TestLoginTypeSafeStoresTheKeyInTheDatabaseAndPrintsNoMoreThanItsTail(t *tes
 
 func TestLoginBraveStoresTheSearchKeyInTheDatabase(t *testing.T) {
 	cli.ScratchProject(t)
-	t.Setenv(sys.BraveSearchKeyName, "")
+	t.Setenv(platformcredential.BraveSearchKeyName, "")
 	const key = "Xq2Lp9Rz4Tn8Vw3Ks6Gw1"
 	var out, errOut bytes.Buffer
 	if code := loginVerb([]string{"search", "brave"}, strings.NewReader(key+"\n"), &out, &errOut); code != output.ExitOK {
 		t.Fatalf("login brave exited %d: %s", code, errOut.String())
 	}
-	stored, err := sys.StoredKeys()
-	if err != nil || stored[sys.BraveSearchKeyName] != key {
-		t.Fatalf("the database holds a search key of length %d, and %v", len(stored[sys.BraveSearchKeyName]), err)
+	stored, err := platformcredential.StoredKeys()
+	if err != nil || stored[platformcredential.BraveSearchKeyName] != key {
+		t.Fatalf("the database holds a search key of length %d, and %v", len(stored[platformcredential.BraveSearchKeyName]), err)
 	}
 	assertOnlyTheTail(t, "what login brave printed", out.String()+errOut.String(), key)
 
@@ -410,7 +411,7 @@ func TestLoginBraveStoresTheSearchKeyInTheDatabase(t *testing.T) {
 	tails := []string{key[len(key)-4:], gateKeyForTests[len(gateKeyForTests)-4:]}
 	for shown, names := range map[string][]string{
 		status.String(): {"Brave", "OpenRouter", "TypeSafe"},
-		asJSON.String(): {sys.BraveSearchKeyName, sys.OpenRouterKeyName, sys.TypeSafeKeyName},
+		asJSON.String(): {platformcredential.BraveSearchKeyName, platformcredential.OpenRouterKeyName, platformcredential.TypeSafeKeyName},
 	} {
 		for _, want := range append(names, tails...) {
 			if !strings.Contains(shown, want) {
@@ -425,17 +426,17 @@ func TestLoginBraveStoresTheSearchKeyInTheDatabase(t *testing.T) {
 
 func TestAHomeDotEnvMovesIntoTheDatabaseOnStartAndIsRemoved(t *testing.T) {
 	cli.ScratchProject(t)
-	home, err := sys.HomeConfigDir()
+	home, err := fs.HomeConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}
 	const key = "sk-or-v1-made-up-for-the-move-3Kd9"
-	dotEnv := filepath.Join(home, sys.CredentialFileName)
-	cli.WriteFile(t, home, sys.CredentialFileName, "# written by an older tofu\nOPENROUTER_KEY="+key+"\n")
+	dotEnv := filepath.Join(home, platformcredential.CredentialFileName)
+	cli.WriteFile(t, home, platformcredential.CredentialFileName, "# written by an older tofu\nOPENROUTER_KEY="+key+"\n")
 
 	var said bytes.Buffer
 	moveHomeKeys(&said)
-	stored, err := sys.StoredKeys()
+	stored, err := platformcredential.StoredKeys()
 	if err != nil || stored[core.OpenRouterVariable] != key {
 		t.Fatalf("the database holds a value of length %d after the move, and %v", len(stored[core.OpenRouterVariable]), err)
 	}
@@ -457,14 +458,14 @@ func TestAHomeDotEnvMovesIntoTheDatabaseOnStartAndIsRemoved(t *testing.T) {
 
 func TestAHomeDotEnvWithOtherNamesKeepsThemAndLosesOnlyTheKey(t *testing.T) {
 	cli.ScratchProject(t)
-	home, err := sys.HomeConfigDir()
+	home, err := fs.HomeConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}
-	cli.WriteFile(t, home, sys.CredentialFileName, "OPENROUTER_KEY=sk-or-v1-made-up-kept-apart-9Zt1\nUNRELATED_SETTING=1\n")
+	cli.WriteFile(t, home, platformcredential.CredentialFileName, "OPENROUTER_KEY=sk-or-v1-made-up-kept-apart-9Zt1\nUNRELATED_SETTING=1\n")
 	var said bytes.Buffer
 	moveHomeKeys(&said)
-	body, err := os.ReadFile(filepath.Join(home, sys.CredentialFileName))
+	body, err := os.ReadFile(filepath.Join(home, platformcredential.CredentialFileName))
 	if err != nil {
 		t.Fatalf("the file with another name in it is gone: %v", err)
 	}
@@ -475,21 +476,21 @@ func TestAHomeDotEnvWithOtherNamesKeepsThemAndLosesOnlyTheKey(t *testing.T) {
 
 func TestTheSearchKeyMovesWithTheGateKeyAndWebSearchReadsItFromTheStore(t *testing.T) {
 	cli.ScratchProject(t)
-	t.Setenv(sys.BraveSearchKeyName, "")
-	home, err := sys.HomeConfigDir()
+	t.Setenv(platformcredential.BraveSearchKeyName, "")
+	home, err := fs.HomeConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}
 	const search = "made-up-search-key-5Pv7"
-	cli.WriteFile(t, home, sys.CredentialFileName, "OPENROUTER_KEY=sk-or-v1-made-up-moved-too-1Lc4\nBRAVE_SEARCH_KEY="+search+"\n")
+	cli.WriteFile(t, home, platformcredential.CredentialFileName, "OPENROUTER_KEY=sk-or-v1-made-up-moved-too-1Lc4\nBRAVE_SEARCH_KEY="+search+"\n")
 	var said bytes.Buffer
 	moveHomeKeys(&said)
-	if _, err := os.Stat(filepath.Join(home, sys.CredentialFileName)); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(home, platformcredential.CredentialFileName)); !os.IsNotExist(err) {
 		t.Fatalf("the .env is still there after both keys moved: %v", err)
 	}
-	stored, err := sys.StoredKeys()
-	if err != nil || stored[sys.BraveSearchKeyName] != search {
-		t.Fatalf("the database holds a search key of length %d, and %v", len(stored[sys.BraveSearchKeyName]), err)
+	stored, err := platformcredential.StoredKeys()
+	if err != nil || stored[platformcredential.BraveSearchKeyName] != search {
+		t.Fatalf("the database holds a search key of length %d, and %v", len(stored[platformcredential.BraveSearchKeyName]), err)
 	}
 	layers, err := web.Layers(shipped.Files(), "")
 	if err != nil {
@@ -573,7 +574,7 @@ func TestAProviderThatCannotBeReadSaysSo(t *testing.T) {
 	}
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv(sys.TypeSafeKeyName, "")
+	t.Setenv(platformcredential.TypeSafeKeyName, "")
 
 	providers := heldForTest(t).Providers()
 	if len(providers) != 4 {
@@ -741,7 +742,7 @@ func TestAToolResultThatArrivesAfterTheTurnIsStoppedStillReachesTheView(t *testi
 func TestEveryEventTheAppSendsHasTheStoredKeyMasked(t *testing.T) {
 	dir := cli.ScratchProject(t)
 	const key = "sk-or-v1-made-up-Wq7Tn3Kd"
-	if err := sys.SaveKey(sys.OpenRouterKeyName, key); err != nil {
+	if err := platformcredential.SaveKey(platformcredential.OpenRouterKeyName, key); err != nil {
 		t.Fatalf("storing the key: %v", err)
 	}
 	model := &queuedModel{decisions: []llm.Decision{
@@ -757,7 +758,7 @@ func TestEveryEventTheAppSendsHasTheStoredKeyMasked(t *testing.T) {
 	if events := string(encoded); strings.Contains(events, key[9:20]) {
 		t.Fatalf("an event the app sent carries the key:\n%s", strings.ReplaceAll(events, key, "<THE KEY>"))
 	}
-	if !strings.Contains(string(encoded), "the key is "+sys.KeyRedactedMark) {
+	if !strings.Contains(string(encoded), "the key is "+platformcredential.KeyRedactedMark) {
 		t.Fatalf("the model's text never reached the frontend masked:\n%s", encoded)
 	}
 }
@@ -2595,7 +2596,7 @@ func TestABrowserRunTeachesItsHostARecipeTheNextRunIsGivenUntilItFailsTwice(t *t
 	}
 	navigate := toolCallDecisionFor("browser_act", `{"actions":[{"action":"navigate","value":"https://www.fake.test/"}]}`)
 	cleanHandBack := answer("**Found:** a house for 4\n**Tab:** tab 1 is left open on " + final + "\n**Failed:** nothing material")
-	home, err := sys.HomeConfigDir()
+	home, err := fs.HomeConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}

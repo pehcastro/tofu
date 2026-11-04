@@ -19,8 +19,10 @@ import (
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/quota"
+	"tofu/internal/platform/build"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 	"tofu/internal/project/boardy"
-	"tofu/internal/sys"
 	"tofu/internal/tools/web/browser/driver"
 	"tofu/internal/ui/tui/frame/frame"
 )
@@ -96,7 +98,7 @@ func State(now time.Time) host.DoctorReport {
 	}
 	home, _ := os.UserHomeDir()
 	report := host.DoctorReport{
-		Version:     frame.Release(sys.Version(), sys.BuildRevision()),
+		Version:     frame.Release(build.Version(), build.BuildRevision()),
 		Verdict:     host.DoctorReady,
 		Blockers:    wiring.DoctorBlockers(),
 		Credentials: credentials(now),
@@ -111,8 +113,8 @@ func State(now time.Time) host.DoctorReport {
 		Proxy:       proxyState(root),
 		Browser:     driver.Hosts(home, driver.ChromeHostsKey),
 		Root:        root,
-		Go:          sys.GoVersion(),
-		OS:          sys.OS() + "/" + sys.Arch(),
+		Go:          build.GoVersion(),
+		OS:          fs.OS() + "/" + fs.Arch(),
 	}
 	stack, err := wiring.StackRules("", root)
 	if err != nil {
@@ -132,11 +134,11 @@ func withLockStanding(point host.DoctorRule) host.DoctorRule {
 		return point
 	}
 	r, _, err := wiring.LoadRulePoint(point.Point, "")
-	dir, dirErr := sys.CalibrationDir()
+	dir, dirErr := project.CalibrationDir()
 	if err != nil || dirErr != nil {
 		return point
 	}
-	if present, _ := sys.Exists(gate.LockPath(dir, r)); !present {
+	if present, _ := fs.Exists(gate.LockPath(dir, r)); !present {
 		return point
 	}
 	res, err := wiring.ResolveRuleMode(r)
@@ -205,7 +207,7 @@ func proxyState(root string) host.DoctorProxy {
 }
 
 func RtkInstall() string {
-	switch sys.OS() {
+	switch fs.OS() {
 	case "windows":
 		return "winget install rtk-ai.rtk"
 	case "darwin":

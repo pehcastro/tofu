@@ -19,8 +19,8 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/host"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/clipboard"
 	sessionstore "tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/testkit/cli"
 	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/composer/paste"
@@ -282,8 +282,8 @@ func TestTwoSendsAppendToOneSessionBody(t *testing.T) {
 func screenshotBoard(t *testing.T, live *appSession) paste.Board {
 	t.Helper()
 	return paste.Default(paste.Board{
-		Read: func() (sys.Clipboard, error) {
-			return sys.Clipboard{Kind: sys.ClipboardImage, PNG: []byte("pretend this is a screenshot")}, nil
+		Read: func() (clipboard.Clipboard, error) {
+			return clipboard.Clipboard{Kind: clipboard.ClipboardImage, PNG: []byte("pretend this is a screenshot")}, nil
 		},
 		Dir:      live.AttachmentDir,
 		Recorded: live.Attached,

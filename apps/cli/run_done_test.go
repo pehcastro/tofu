@@ -22,8 +22,9 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
 	llm "tofu/internal/models/llm/core"
+	"tofu/internal/platform/credential"
+	platformproject "tofu/internal/platform/project"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/testkit/cli"
 )
 
@@ -62,7 +63,7 @@ func stubJev(t *testing.T, status int, body string) {
 	}))
 	t.Cleanup(server.Close)
 	t.Setenv(judgeEndpointEnvar, server.URL)
-	t.Setenv(sys.TypeSafeKeyName, "stub-key-not-a-real-credential")
+	t.Setenv(credential.TypeSafeKeyName, "stub-key-not-a-real-credential")
 	bindTypeSafe(t)
 }
 
@@ -93,9 +94,9 @@ func reviewIn(t *testing.T, mode gate.Mode) typedDoneReview {
 
 func stopCheckRow(t *testing.T, id string) ledger.Row {
 	t.Helper()
-	dir, err := sys.LogDir()
+	dir, err := platformproject.LogDir()
 	if err != nil {
-		t.Fatalf("sys.LogDir: %v", err)
+		t.Fatalf("platformproject.LogDir: %v", err)
 	}
 	row, found, err := ledger.NewReader(dir).ByID(id)
 	if err != nil || !found {
@@ -203,7 +204,7 @@ func TestTheDoneReviewIsScreenUnlessTheSettingOrTheCommandLineSaysOtherwise(t *t
 
 func TestATypedDoneReviewWithNoJevKeyFallsBackToTheScreenAndSaysSo(t *testing.T) {
 	cli.EmptyHome(t)
-	t.Setenv(sys.OpenRouterClassifierKeyName, "")
+	t.Setenv(credential.OpenRouterClassifierKeyName, "")
 	t.Chdir(t.TempDir())
 	var said []string
 	review := newDoneReview(settingspkg.DoneReviewTyped, func(note string) { said = append(said, note) })
@@ -275,9 +276,9 @@ func TestTheTypedDoneReviewArmReopensASubAgentAndLogsTheDecision(t *testing.T) {
 		t.Fatal("the typed arm returned no decision id, so nothing points at the ledger row")
 	}
 
-	dir, err := sys.LogDir()
+	dir, err := platformproject.LogDir()
 	if err != nil {
-		t.Fatalf("sys.LogDir: %v", err)
+		t.Fatalf("platformproject.LogDir: %v", err)
 	}
 	row, found, err := ledger.NewReader(dir).ByID(decision.ID)
 	if err != nil || !found {
@@ -345,9 +346,9 @@ func TestAJevErrorLeavesTheSubAgentsClaimStandingAndSaysSoOnTheRow(t *testing.T)
 	}
 	t.Logf("sub-agent warning: %s", subAgent.Warnings[0])
 
-	dir, err := sys.LogDir()
+	dir, err := platformproject.LogDir()
 	if err != nil {
-		t.Fatalf("sys.LogDir: %v", err)
+		t.Fatalf("platformproject.LogDir: %v", err)
 	}
 	var logged []ledger.Row
 	if _, err := ledger.NewReader(dir).Each(ledger.Filter{Point: "stop_check"}, func(row ledger.Row) error {
@@ -441,12 +442,12 @@ func TestLiveTheTypedDoneReviewReadsTwoRecordedSubAgents(t *testing.T) {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to spend a fraction of a cent on two live stop_check@1 decisions")
 	}
-	sys.AllowLiveCredential(t)
+	credential.AllowLiveCredential(t)
 	key, err := core.TypeSafeKey(filepath.Join("..", "..", ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
-	t.Setenv(sys.TypeSafeKeyName, key)
+	t.Setenv(credential.TypeSafeKeyName, key)
 
 	review := reviewIn(t, gate.ModeEnforced)
 	nothing := recordedTurn(t, turnThatRecordedNothing)

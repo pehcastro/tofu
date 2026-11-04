@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 
 	"tofu/internal/models/llm/catalog"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -13,7 +13,7 @@ const (
 )
 
 func RegistryPath() (string, error) {
-	dir, err := sys.HomeConfigDir()
+	dir, err := fs.HomeConfigDir()
 	if err != nil {
 		return "", err
 	}

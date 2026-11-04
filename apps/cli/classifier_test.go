@@ -12,7 +12,8 @@ import (
 	"tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/llm/catalog"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
 )
 
 type heardRequest struct {
@@ -22,13 +23,13 @@ type heardRequest struct {
 
 func TestEachBindingOpensItsOwnWireWithItsOwnClassifierKey(t *testing.T) {
 	keys := map[string]string{
-		sys.OpenRouterKeyName:           "or-v1-made-up-llm-5b7e21c9d0a4",
-		sys.OpenRouterClassifierKeyName: "or-v1-made-up-classifier-71c0e3",
-		sys.TypeSafeKeyName:             "ts-made-up-8f3c60a2e1b7",
+		credential.OpenRouterKeyName:           "or-v1-made-up-llm-5b7e21c9d0a4",
+		credential.OpenRouterClassifierKeyName: "or-v1-made-up-classifier-71c0e3",
+		credential.TypeSafeKeyName:             "ts-made-up-8f3c60a2e1b7",
 	}
 	for _, bound := range []struct{ slug, wire, key, model string }{
-		{"typesafe/jev-latest", "typesafe", sys.TypeSafeKeyName, `"model":"jev-latest"`},
-		{"openrouter/jev-latest", "openrouter", sys.OpenRouterClassifierKeyName, `"model":"~typesafe/jev-latest"`},
+		{"typesafe/jev-latest", "typesafe", credential.TypeSafeKeyName, `"model":"jev-latest"`},
+		{"openrouter/jev-latest", "openrouter", credential.OpenRouterClassifierKeyName, `"model":"~typesafe/jev-latest"`},
 	} {
 		t.Run(bound.wire, func(t *testing.T) {
 			home, project := t.TempDir(), t.TempDir()
@@ -45,11 +46,11 @@ func TestEachBindingOpensItsOwnWireWithItsOwnClassifierKey(t *testing.T) {
 			t.Setenv(judgeEndpointEnvar, server.URL)
 			for name, value := range keys {
 				t.Setenv(name, "")
-				if err := sys.SaveKey(name, value); err != nil {
+				if err := credential.SaveKey(name, value); err != nil {
 					t.Fatal(err)
 				}
 			}
-			if err := catalog.BindRole(sys.StateDir(project), catalog.RoleClassifier, bound.slug); err != nil {
+			if err := catalog.BindRole(fs.StateDir(project), catalog.RoleClassifier, bound.slug); err != nil {
 				t.Fatal(err)
 			}
 

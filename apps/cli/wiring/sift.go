@@ -12,8 +12,8 @@ import (
 	"tofu/internal/judge/points"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
+	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
-	"tofu/internal/sys"
 	"tofu/internal/tools/shell/bash/sift"
 	shipped "tofu/library"
 )
@@ -152,7 +152,7 @@ func (s *ShellScorer) scorePerChunk(ctx context.Context, shell sift.Shell, units
 		}
 		states[i] = state
 		asking.Go(func() {
-			failed[i] = sys.Crashed(".", safe.Call(nil, "shell sift", func() error {
+			failed[i] = project.Crashed(".", safe.Call(nil, "shell sift", func() error {
 				if decision, err := s.client.Ask(ctx, core.Request{State: states[i], Questions: s.set.Questions}); err == nil {
 					replies[i] = &decision
 				}

@@ -22,8 +22,9 @@ import (
 	"tofu/internal/host"
 	skill "tofu/internal/librarian/skills"
 	"tofu/internal/models/llm/catalog"
+	platformfs "tofu/internal/platform/fs"
+	platformproject "tofu/internal/platform/project"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/ui/keymap"
 )
 
@@ -119,7 +120,7 @@ func takeInventory(dir string) ([]reloadPart, error) {
 		}
 	}
 	instructions := map[string]string{}
-	candidates := []string{filepath.Join(sys.StateDir(home), "AGENTS.md")}
+	candidates := []string{filepath.Join(platformfs.StateDir(home), "AGENTS.md")}
 	for _, folder := range skill.ProjectFolders(dir, home) {
 		for _, name := range settingspkg.InstructionFiles(store.Text(settingspkg.InstructionSources)) {
 			candidates = append(candidates, filepath.Join(folder, name))
@@ -191,7 +192,7 @@ func reloadReport(dir string) (reloadDiff, error) {
 	if err != nil {
 		return reloadDiff{}, err
 	}
-	state, err := sys.ProjectStateDirAt(dir)
+	state, err := platformproject.ProjectStateDirAt(dir)
 	if err != nil {
 		return reloadDiff{}, err
 	}
@@ -209,7 +210,7 @@ func reloadReport(dir string) (reloadDiff, error) {
 	if err != nil {
 		return reloadDiff{}, err
 	}
-	if err := sys.WriteFile(path, encoded, 0o600); err != nil {
+	if err := platformfs.WriteFile(path, encoded, 0o600); err != nil {
 		return reloadDiff{}, err
 	}
 	report.Parts = describeReload(now, last)

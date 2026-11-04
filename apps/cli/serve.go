@@ -25,9 +25,9 @@ import (
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/quota"
 	"tofu/internal/models/transport"
+	platformproject "tofu/internal/platform/project"
 	sessionstore "tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/sys"
 )
 
 const serveUsage = `usage: tofu serve --stdio [--dir PATH] [--cassette PATH] [--done-review off|cheap|screen|typed]
@@ -149,7 +149,7 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	}
 	say(launch.note)
 	say("speaking " + host.Protocol + " for " + dir)
-	places, err := sys.ResolvePlaces(".")
+	places, err := platformproject.ResolvePlaces(".")
 	if err != nil {
 		return serveFail(errOut, err)
 	}

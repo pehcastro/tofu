@@ -11,7 +11,8 @@ import (
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	question "tofu/internal/judge/questions"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 	shipped "tofu/library"
 	"tofu/library/questions"
 )
@@ -38,7 +39,7 @@ func ReadLibrary() (host.DoctorLibrary, []host.DoctorRule) {
 }
 
 func ruleRefs() (string, []string, error) {
-	dir, err := sys.LibraryDir()
+	dir, err := fs.LibraryDir()
 	if err != nil {
 		return "", nil, err
 	}
@@ -46,7 +47,7 @@ func ruleRefs() (string, []string, error) {
 	if err != nil {
 		return dir, nil, err
 	}
-	isDir, err := sys.IsDir(dir)
+	isDir, err := fs.IsDir(dir)
 	if err != nil {
 		return dir, nil, err
 	}
@@ -70,18 +71,18 @@ func ruleRefs() (string, []string, error) {
 }
 
 func CalibrationState() string {
-	dir, err := sys.CalibrationDir()
+	dir, err := project.CalibrationDir()
 	if err != nil {
 		return "unknown: " + err.Error()
 	}
-	isDir, err := sys.IsDir(dir)
+	isDir, err := fs.IsDir(dir)
 	if err != nil {
 		return Unreadable + err.Error()
 	}
 	if !isDir {
 		return "none, no lock in " + dir
 	}
-	names, err := sys.ListFiles(dir, ".lock")
+	names, err := fs.ListFiles(dir, ".lock")
 	if err != nil {
 		return Unreadable + err.Error()
 	}
@@ -147,7 +148,7 @@ func rulePoint(ref string, layers []question.Layer) host.DoctorRule {
 }
 
 func LedgerState() string {
-	dir, err := sys.LogDir()
+	dir, err := project.LogDir()
 	if err != nil {
 		return "unknown: " + err.Error()
 	}

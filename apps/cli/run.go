@@ -35,13 +35,15 @@ import (
 	llm "tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/models/llm/wire/codex"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/memory/tree"
 	"tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 	tools "tofu/internal/tools/registry"
 	"tofu/internal/tools/web"
@@ -81,7 +83,7 @@ type runtime struct {
 	tabs         *tools.BrowserTabs
 	leadAsks     loop.Person
 	cron         *cron.Book
-	places       sys.Places
+	places       platformproject.Places
 	startup      *startupClock
 	keys         *storedKeys
 	memory       *wiring.SessionMemoryModel
@@ -405,7 +407,7 @@ func dryRun(opts wiring.RunOpts, selected models.Model, dir string, say func(str
 }
 
 func runTurn(opts wiring.RunOpts, resumed runResumed, selected models.Model, clock *startupClock, out, errOut io.Writer) int {
-	places, err := sys.ResolvePlaces(".")
+	places, err := platformproject.ResolvePlaces(".")
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -889,7 +891,7 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (loop.Co
 
 func leadAttached(board boardy.Managed, session string, run runtime) string {
 	if run.sessions != nil {
-		if begun, _ := sys.Exists(run.sessions.EventsPath(session)); begun {
+		if begun, _ := fs.Exists(run.sessions.EventsPath(session)); begun {
 			return ""
 		}
 	}
@@ -1053,11 +1055,11 @@ type storedKeys struct {
 	stamp    string
 	read     bool
 	keys     core.Keyring
-	redacted sys.KeyRedactor
+	redacted credential.KeyRedactor
 }
 
 func credentialStoreStamp() string {
-	path, err := sys.CredentialStorePath()
+	path, err := credential.CredentialStorePath()
 	if err != nil {
 		return ""
 	}
@@ -1070,13 +1072,13 @@ func credentialStoreStamp() string {
 	return stamp
 }
 
-func (s *storedKeys) current() (core.Keyring, sys.KeyRedactor) {
+func (s *storedKeys) current() (core.Keyring, credential.KeyRedactor) {
 	stamp := credentialStoreStamp()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.read || stamp != s.stamp {
 		s.keys = core.ReadKeyring()
-		s.redacted = sys.KeyRedactorOf(s.keys.Stored)
+		s.redacted = credential.KeyRedactorOf(s.keys.Stored)
 		s.stamp, s.read = stamp, true
 	}
 	return s.keys, s.redacted
@@ -1087,7 +1089,7 @@ func (s *storedKeys) keyring() core.Keyring {
 	return keys
 }
 
-func (s *storedKeys) redactor() sys.KeyRedactor {
+func (s *storedKeys) redactor() credential.KeyRedactor {
 	_, redactor := s.current()
 	return redactor
 }

@@ -3,7 +3,7 @@ package wiring
 import (
 	"tofu/internal/judge/ledger"
 	question "tofu/internal/judge/questions"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 	"tofu/internal/tools/web/browser/loop"
 	"tofu/library/questions"
 )
@@ -23,7 +23,7 @@ func BrowserJudge(dir string) (loop.Jev, error) {
 	if err != nil {
 		return loop.Jev{}, err
 	}
-	logDir, err := sys.LogDir()
+	logDir, err := project.LogDir()
 	if err != nil {
 		return loop.Jev{}, err
 	}

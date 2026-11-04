@@ -14,7 +14,9 @@ import (
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/catalog"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/pickers/settings"
 )
@@ -33,7 +35,7 @@ func OpenStoredCredentials() (*accounts.Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	present, err := sys.Exists(path)
+	present, err := fs.Exists(path)
 	if err != nil || !present {
 		return nil, err
 	}
@@ -91,7 +93,7 @@ func (h HeldStore) Wires() []app.Wire {
 			wires = append(wires, app.Wire{Name: spec.Wire, Model: selected.ID, Provider: string(spec.ID), Efforts: WireEfforts(spec.Wire)})
 		}
 	}
-	if _, err := h.Keys().KeyFor(sys.CredentialFileName, catalog.Meta.KeyName()); err != nil {
+	if _, err := h.Keys().KeyFor(credential.CredentialFileName, catalog.Meta.KeyName()); err != nil {
 		return wires
 	}
 	if chosen, err := library.Default(catalog.Subscription(catalog.Meta)); err == nil {
@@ -142,7 +144,7 @@ func (h HeldStore) OrchestratorStep() StartStep {
 		}
 	}
 	if !slices.ContainsFunc(wires, func(wire app.Wire) bool { return wire.Name == WireMeta }) {
-		step.Choices = append(step.Choices, app.Choice{Label: catalog.Meta.Display() + " API key", Key: sys.MetaMuseKeyName})
+		step.Choices = append(step.Choices, app.Choice{Label: catalog.Meta.Display() + " API key", Key: credential.MetaMuseKeyName})
 	}
 	return step
 }
@@ -227,12 +229,12 @@ func (h HeldStore) SubscriptionProvider(provider accounts.Provider) settings.Pro
 }
 
 func OpenRouterProvider(keys core.Keyring) settings.Provider {
-	located, err := keys.LocateFor(sys.CredentialFileName, core.OpenRouterVariable)
+	located, err := keys.LocateFor(credential.CredentialFileName, core.OpenRouterVariable)
 	row := settings.Provider{Name: OpenRouterName, Source: located.Path}
 	if located.Source == core.SourceEnvironment {
 		row.Source = located.Name + " in the environment"
 	}
-	key, keyErr := keys.KeyFor(sys.CredentialFileName, core.OpenRouterVariable)
+	key, keyErr := keys.KeyFor(credential.CredentialFileName, core.OpenRouterVariable)
 	if err != nil || keyErr != nil {
 		row.Fix = OpenRouterFix
 		return row
@@ -242,7 +244,7 @@ func OpenRouterProvider(keys core.Keyring) settings.Provider {
 }
 
 func JevProvider(keys core.Keyring) settings.Provider {
-	dir, err := sys.LogDir()
+	dir, err := project.LogDir()
 	if err != nil {
 		return settings.Provider{Name: JevName, Fix: UnreadableSource + err.Error()}
 	}

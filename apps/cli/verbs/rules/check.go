@@ -15,7 +15,8 @@ import (
 	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	rule "tofu/internal/librarian/rules"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 )
 
 const FireSuffix = ".rules.jsonl"
@@ -56,14 +57,14 @@ func checkVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return o.Fail(err)
 	}
-	roots := sys.GoRoots()
+	roots := fs.GoRoots()
 	if len(opts.rest) == 1 {
 		roots = opts.rest
 	}
 
 	var fires []rule.Fire
 	for _, root := range roots {
-		present, err := sys.Exists(root)
+		present, err := fs.Exists(root)
 		if err != nil {
 			return o.Fail(err)
 		}
@@ -85,7 +86,7 @@ func checkVerb(args []string, out, errOut io.Writer) int {
 		fires = append(append(fires, found...), patterned...)
 	}
 
-	logDir, err := sys.LogDir()
+	logDir, err := project.LogDir()
 	if err != nil {
 		return o.Fail(err)
 	}

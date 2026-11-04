@@ -13,7 +13,8 @@ import (
 	"tofu/apps/cli/output"
 	cli "tofu/apps/cli/page"
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
+	platformproject "tofu/internal/platform/project"
 )
 
 const (
@@ -52,26 +53,26 @@ func temporaryProject(args []string) ([]string, bool) {
 }
 
 func reapTemporaryProjects(out io.Writer) {
-	home, err := sys.HomeConfigDir()
+	home, err := fs.HomeConfigDir()
 	var reaped []string
 	if err == nil {
-		reaped, err = sys.ReapTemporaryProjects(home, time.Now())
+		reaped, err = platformproject.ReapTemporaryProjects(home, time.Now())
 	}
 	page := cli.Detect(out, os.Environ())
 	if err != nil {
 		_ = page.Print(out, page.ErrorLine("temporary projects not all removed: "+err.Error(), ""))
 	}
 	if len(reaped) > 0 {
-		_ = page.Print(out, []string{page.Receipt(cli.Removed, output.Plural(len(reaped), "temporary project")+" unused for "+strconv.Itoa(konst.TemporaryProjectIdleHours)+" hours", filepath.Join(home, sys.ProjectsDirName))})
+		_ = page.Print(out, []string{page.Receipt(cli.Removed, output.Plural(len(reaped), "temporary project")+" unused for "+strconv.Itoa(konst.TemporaryProjectIdleHours)+" hours", filepath.Join(home, fs.ProjectsDirName))})
 	}
 }
 
-func openProject(out io.Writer, in io.Reader, dir string, mayAsk, temporary bool, register func(sys.Project) error) {
-	if isDir, _ := sys.IsDir(dir); !isDir {
+func openProject(out io.Writer, in io.Reader, dir string, mayAsk, temporary bool, register func(platformproject.Project) error) {
+	if isDir, _ := fs.IsDir(dir); !isDir {
 		return
 	}
 	page := cli.Detect(out, os.Environ())
-	project, err := sys.OpenProject(dir)
+	project, err := platformproject.OpenProject(dir)
 	if err != nil {
 		_ = page.Print(out, page.ErrorLine("the project folder of "+page.Path(dir)+" was not opened: "+err.Error(), ""))
 		return
@@ -108,7 +109,7 @@ func openProject(out io.Writer, in io.Reader, dir string, mayAsk, temporary bool
 	}
 }
 
-func offerRelink(page cli.Page, out io.Writer, in io.Reader, project sys.Project, mayAsk bool) (answered bool) {
+func offerRelink(page cli.Page, out io.Writer, in io.Reader, project platformproject.Project, mayAsk bool) (answered bool) {
 	offer := page.Glyph(cli.Warn) + " " + page.Path(project.Path) + " looks like " + page.Path(strings.Join(project.Moved.Paths, ", ")) + ", moved here · " +
 		output.Plural(countSessions(filepath.Join(filepath.Dir(project.State), project.Moved.Folder)), "session")
 	if !mayAsk {
@@ -129,7 +130,7 @@ func offerRelink(page cli.Page, out io.Writer, in io.Reader, project sys.Project
 	return true
 }
 
-func relink(project sys.Project) (relinkReport, error) {
+func relink(project platformproject.Project) (relinkReport, error) {
 	state, err := project.Relink()
 	if err != nil {
 		return relinkReport{}, err
@@ -143,9 +144,9 @@ func relinkLine(page cli.Page, report relinkReport) string {
 
 func relinkVerb(o output.Verb) int {
 	dir, err := os.Getwd()
-	var project sys.Project
+	var project platformproject.Project
 	if err == nil {
-		project, err = sys.OpenProject(dir)
+		project, err = platformproject.OpenProject(dir)
 	}
 	var report relinkReport
 	if err == nil {

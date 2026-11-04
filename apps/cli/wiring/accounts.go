@@ -27,9 +27,10 @@ import (
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/models/llm/wire/codex"
 	"tofu/internal/models/transport"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
 	"tofu/internal/platform/safe"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/ui/tui/frame/frame"
 )
 
@@ -379,7 +380,7 @@ func KeepAccountsAlive(held HeldStore, note, told func(string)) (stop func()) {
 		if lock == nil {
 			return
 		}
-		defer func() { _ = sys.Unlock(lock) }()
+		defer func() { _ = fs.Unlock(lock) }()
 		safe.Loop(report, "credential keeper", ctx.Done(), func() { accounts.NewKeeper(held.Store, note).Run(ctx) })
 	})
 	return func() {
@@ -391,7 +392,7 @@ func KeepAccountsAlive(held HeldStore, note, told func(string)) (stop func()) {
 func claimKeeper(ctx context.Context, path string, note func(string)) *os.File {
 	told := false
 	for {
-		lock, held, err := sys.TryLock(path)
+		lock, held, err := fs.TryLock(path)
 		switch {
 		case err != nil:
 			note("signed-in accounts are not kept alive: the keeper lock " + path + " does not open: " + err.Error())
@@ -431,7 +432,7 @@ func SubFingerprint(dir string) (settingspkg.Fingerprint, func(version string) e
 }
 
 func MetaModel(selected catalog.Model, effort llm.Effort) (loop.Model, error) {
-	key, err := core.KeyFor(sys.CredentialFileName, sys.MetaMuseKeyName)
+	key, err := core.KeyFor(credential.CredentialFileName, credential.MetaMuseKeyName)
 	if err != nil {
 		return nil, fmt.Errorf("%w: run %s", err, LoginHint(MetaName))
 	}
@@ -461,7 +462,7 @@ func ListUSD(price catalog.Price, input, cached, output int) float64 {
 
 func tallyMetaCall(model string, price catalog.Price, result codex.Result, header http.Header, failed error) {
 	usage := result.Usage
-	use := ledger.KeyUse{Key: sys.MetaMuseKeyName, Provider: MetaName, Model: cmp.Or(result.Model, model),
+	use := ledger.KeyUse{Key: credential.MetaMuseKeyName, Provider: MetaName, Model: cmp.Or(result.Model, model),
 		Usage:      ledger.Usage{InputTokens: usage.Input, OutputTokens: usage.Output, CacheReadInputTokens: usage.CacheRead, ReasoningOutputTokens: usage.Reasoning},
 		Charge:     ledger.ChargeOf(0, ListUSD(price, usage.Input, usage.CacheRead, usage.Output)),
 		Allowances: ledger.PerUnitAllowance(header, ledger.ScopeTeam)}

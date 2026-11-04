@@ -17,7 +17,7 @@ import (
 	"tofu/apps/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/models/llm/accounts"
-	"tofu/internal/sys"
+	platformcredential "tofu/internal/platform/credential"
 	testkit "tofu/internal/testkit/cli"
 	"tofu/internal/testkit/golden"
 )
@@ -53,7 +53,7 @@ func statusFixture() host.Accounts {
 			}},
 		},
 		Keys: wiring.KeyStatuses(func(variable string) string {
-			if variable == sys.OpenRouterKeyName {
+			if variable == platformcredential.OpenRouterKeyName {
 				return "sk-or-v1-made-up-000000003498"
 			}
 			return ""

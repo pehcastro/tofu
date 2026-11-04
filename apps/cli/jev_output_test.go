@@ -12,7 +12,7 @@ import (
 
 	"tofu/apps/cli/output"
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 	"tofu/internal/testkit/cli"
 	"tofu/internal/testkit/golden"
 )
@@ -64,7 +64,7 @@ func jevProject(t *testing.T) {
 		"clean/b.go":   "package clean\n\nfunc B() {}\n",
 	}
 	for name, body := range files {
-		if err := sys.WriteFile(filepath.Join(project, filepath.FromSlash(name)), []byte(body), 0o644); err != nil {
+		if err := fs.WriteFile(filepath.Join(project, filepath.FromSlash(name)), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -24,9 +24,10 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/llm/quota"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 	"tofu/internal/store/session"
 	"tofu/internal/store/session/drain"
-	"tofu/internal/sys"
 )
 
 const (
@@ -80,7 +81,7 @@ type usageAnswer struct {
 }
 
 func readClassifierSpend(now time.Time) (classifierSpend, error) {
-	dir, err := sys.LogDir()
+	dir, err := project.LogDir()
 	if err != nil {
 		return classifierSpend{}, err
 	}
@@ -155,7 +156,7 @@ func windowSpends(results []wiring.PollResult, now time.Time) ([]host.WindowSpen
 	if len(spends) == 0 {
 		return nil, 0, nil
 	}
-	readings, err := sys.QuotaDir()
+	readings, err := fs.QuotaDir()
 	if err != nil {
 		return nil, 0, err
 	}
@@ -183,11 +184,11 @@ func tofuSpend(spends []host.WindowSpend, earliest, now time.Time) (int, error) 
 	if err != nil {
 		return 0, err
 	}
-	home, err := sys.HomeConfigDir()
+	home, err := fs.HomeConfigDir()
 	if err != nil {
 		return 0, err
 	}
-	states, err := sys.ProjectGlob(filepath.Join(home, sys.ProjectsDirName), "*")
+	states, err := project.ProjectGlob(filepath.Join(home, fs.ProjectsDirName), "*")
 	if err != nil {
 		return 0, err
 	}

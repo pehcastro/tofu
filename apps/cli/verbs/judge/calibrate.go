@@ -20,7 +20,8 @@ import (
 	"tofu/internal/judge/gate"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 )
 
 const CalibrateUsage = "tofu calibrate <rule@version> --cases <cases.jsonl> --split <split.json> [--dry-run] [--json]"
@@ -140,7 +141,7 @@ func CalibrateVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return wiring.Failed(o, err)
 	}
-	dir, err := sys.CalibrationDir()
+	dir, err := project.CalibrationDir()
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -192,11 +193,11 @@ func parseCalibrateArgs(args []string) (ref, casesPath, splitPath string, dryRun
 }
 
 func readCalibrationCorpus(casesPath, splitPath string) (calibrationCorpus, error) {
-	casesRaw, err := sys.ReadFile(casesPath)
+	casesRaw, err := fs.ReadFile(casesPath)
 	if err != nil {
 		return calibrationCorpus{}, err
 	}
-	splitRaw, err := sys.ReadFile(splitPath)
+	splitRaw, err := fs.ReadFile(splitPath)
 	if err != nil {
 		return calibrationCorpus{}, err
 	}

@@ -12,7 +12,7 @@ import (
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 	"tofu/library/changelog"
 )
 
@@ -27,10 +27,10 @@ const (
 )
 
 var (
-	prereleaseRun = sys.LazyRegexp(`\d+|\D+`)
-	markdownLink  = sys.LazyRegexp(`\[([^\]]*)\]\([^)]*\)`)
-	markdownBold  = sys.LazyRegexp(`\*\*([^*]+)\*\*`)
-	markdownCode  = sys.LazyRegexp("`([^`]*)`")
+	prereleaseRun = fs.LazyRegexp(`\d+|\D+`)
+	markdownLink  = fs.LazyRegexp(`\[([^\]]*)\]\([^)]*\)`)
+	markdownBold  = fs.LazyRegexp(`\*\*([^*]+)\*\*`)
+	markdownCode  = fs.LazyRegexp("`([^`]*)`")
 )
 
 type semver struct {
@@ -185,11 +185,11 @@ func changelogLines(page cli.Page, all bool, seen string, shown []changelogVersi
 }
 
 func changelogSeen() string {
-	dir, err := sys.HomeConfigDir()
+	dir, err := fs.HomeConfigDir()
 	if err != nil {
 		return ""
 	}
-	data, err := sys.ReadFile(filepath.Join(dir, changelogSeenFile))
+	data, err := fs.ReadFile(filepath.Join(dir, changelogSeenFile))
 	if err != nil {
 		return ""
 	}
@@ -197,11 +197,11 @@ func changelogSeen() string {
 }
 
 func recordChangelogSeen() error {
-	dir, err := sys.HomeConfigDir()
+	dir, err := fs.HomeConfigDir()
 	if err != nil {
 		return err
 	}
-	return sys.WriteFile(filepath.Join(dir, changelogSeenFile), []byte(konst.Version+"\n"), changelogSeenMode)
+	return fs.WriteFile(filepath.Join(dir, changelogSeenFile), []byte(konst.Version+"\n"), changelogSeenMode)
 }
 
 func changelogVerb(args []string, markdown string, out, errOut io.Writer) int {

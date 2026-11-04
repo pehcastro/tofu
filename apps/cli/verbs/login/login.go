@@ -25,7 +25,7 @@ import (
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/quota"
 	"tofu/internal/models/transport"
-	"tofu/internal/sys"
+	platformcredential "tofu/internal/platform/credential"
 	"tofu/internal/ui/tui/composer/keyfield"
 )
 
@@ -209,7 +209,7 @@ func Logout(args []string) (Receipt, *output.Refusal) {
 
 func removeKey(facts wiring.KeyFacts) (Receipt, *output.Refusal) {
 	before := facts.Status(wiring.ResolvedKey)
-	removed, err := sys.RemoveKey(facts.Variable)
+	removed, err := platformcredential.RemoveKey(facts.Variable)
 	if err != nil {
 		return Receipt{}, output.Failure(err.Error(), "")
 	}
@@ -366,7 +366,7 @@ func storeKey(ctx context.Context, stored host.KeyStatus, key string) (Receipt, 
 	if err != nil {
 		return Receipt{}, refusedBy(facts.Name, facts.Hint(), err)
 	}
-	if err := sys.SaveKey(stored.Variable, key); err != nil {
+	if err := platformcredential.SaveKey(stored.Variable, key); err != nil {
 		return Receipt{}, output.Failure(err.Error(), facts.Hint())
 	}
 	return Receipt{Text: facts.Name + " key " + stored.Key + done, Data: stored}, nil

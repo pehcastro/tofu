@@ -11,8 +11,10 @@ import (
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/quota"
 	"tofu/internal/models/transport"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
-	"tofu/internal/sys"
 	"tofu/internal/ui/tui/frame/frame"
 )
 
@@ -112,7 +114,7 @@ func PollCredentials(ctx context.Context, now func() time.Time, kept *quota.Poll
 	if err != nil {
 		return nil, err
 	}
-	present, err := sys.Exists(path)
+	present, err := fs.Exists(path)
 	if err != nil || !present {
 		return nil, err
 	}
@@ -136,7 +138,7 @@ func pollStore(ctx context.Context, store *accounts.Store, now func() time.Time,
 }
 
 func PollRows(ctx context.Context, store *accounts.Store, rows []accounts.Row, now func() time.Time, urls map[quota.Provider]string) ([]PollResult, error) {
-	readings, recordErr := sys.QuotaDir()
+	readings, recordErr := fs.QuotaDir()
 	var recording sync.Mutex
 	record := func(reading quota.Reading) error {
 		recording.Lock()
@@ -166,7 +168,7 @@ func PollRowsOn(ctx context.Context, store *accounts.Store, rows []accounts.Row,
 	for i, row := range rows {
 		provider := quota.Provider(row.Credential.Provider)
 		results[i] = PollResult{Row: row.ID, Name: AccountName(row.Credential.Identity, false), Report: quota.Report{Provider: provider}}
-		if urls == nil && sys.CredentialsHiddenFromTests() {
+		if urls == nil && credential.CredentialsHiddenFromTests() {
 			results[i].Unusable = noVendorInATest
 			continue
 		}
@@ -178,7 +180,7 @@ func PollRowsOn(ctx context.Context, store *accounts.Store, rows []accounts.Row,
 			return nil, err
 		}
 		polling.Go(func() {
-			results[i].Err = sys.Crashed(".", safe.Call(nil, "quota poll", func() (err error) {
+			results[i].Err = project.Crashed(".", safe.Call(nil, "quota poll", func() (err error) {
 				results[i].Report, err = poller.Poll(ctx, quota.Account{
 					Provider:      provider,
 					AccountID:     row.Credential.Identity.AccountID,
@@ -194,7 +196,7 @@ func PollRowsOn(ctx context.Context, store *accounts.Store, rows []accounts.Row,
 }
 
 func RecordQuotaReading(reading quota.Reading) error {
-	readings, err := sys.QuotaDir()
+	readings, err := fs.QuotaDir()
 	if err != nil {
 		return err
 	}

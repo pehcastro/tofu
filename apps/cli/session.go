@@ -26,10 +26,12 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
+	"tofu/internal/platform/credential"
+	platformfs "tofu/internal/platform/fs"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/ui/tui/panels/trace"
 )
 
@@ -43,7 +45,7 @@ const (
 	sessionDate        = "2 Jan 15:04"
 )
 
-var failureShaped = sys.LazyRegexp(`(?i)\b(fail|failed|failure|errors?|fatal|panic|exception|denied|not found|no such file|undefined)\b`)
+var failureShaped = platformfs.LazyRegexp(`(?i)\b(fail|failed|failure|errors?|fatal|panic|exception|denied|not found|no such file|undefined)\b`)
 
 type sessionSkip = host.SessionSkip
 
@@ -87,7 +89,7 @@ type sessionResume struct {
 	messages []core.Message
 	tasks    []string
 	read     *session.Store
-	keys     *sys.KeyRedactor
+	keys     *credential.KeyRedactor
 }
 
 func sessionOperands(subcommand string) (string, int, bool) {
@@ -317,12 +319,12 @@ func continueCarry(store *session.Store) sessionResume {
 }
 
 func resumeOf(store *session.Store, id string) (sessionResume, error) {
-	var keys sys.KeyRedactor
+	var keys credential.KeyRedactor
 	var keysErr error
 	var loaded sync.WaitGroup
 	loaded.Go(func() {
-		keysErr = sys.Crashed(".", safe.Call(nil, "key redactor load", func() error {
-			keys = sys.LoadKeyRedactor()
+		keysErr = platformproject.Crashed(".", safe.Call(nil, "key redactor load", func() error {
+			keys = credential.LoadKeyRedactor()
 			return nil
 		}))
 	})

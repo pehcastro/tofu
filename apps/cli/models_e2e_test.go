@@ -20,8 +20,8 @@ import (
 	models "tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/models/llm/wire/codex"
+	"tofu/internal/platform/credential"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	testkit "tofu/internal/testkit/cli"
 )
 
@@ -243,7 +243,7 @@ func stubbedHome(t *testing.T) {
 	}))
 	t.Cleanup(typeSafe.Close)
 	t.Setenv(judgeEndpointEnvar, typeSafe.URL)
-	t.Setenv(sys.TypeSafeKeyName, "stub-key-not-a-real-credential")
+	t.Setenv(credential.TypeSafeKeyName, "stub-key-not-a-real-credential")
 	bindTypeSafe(t)
 }
 

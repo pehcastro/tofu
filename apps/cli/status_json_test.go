@@ -9,7 +9,7 @@ import (
 	"tofu/apps/cli/output"
 	statusverb "tofu/apps/cli/verbs/status"
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
 	"tofu/internal/testkit/cli"
 	"tofu/internal/testkit/golden"
 )
@@ -18,7 +18,7 @@ func TestLoginStatusJSONIsOneEnvelopeOfCodes(t *testing.T) {
 	var out bytes.Buffer
 	t.Run("in a scratch home", func(t *testing.T) {
 		cli.ScratchProject(t)
-		for _, variable := range sys.KeyNames() {
+		for _, variable := range credential.KeyNames() {
 			t.Setenv(variable, "")
 		}
 		savedAccount(t)

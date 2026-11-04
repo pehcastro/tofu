@@ -21,7 +21,8 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/testkit/cli"
 	tui "tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/chat/session"
@@ -204,7 +205,7 @@ func TestTheKeyIsNeverInAFrameALogOrARecordedSession(t *testing.T) {
 	dir := cli.ScratchProject(t)
 	const key = "sk-or-v1-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd"
 	storeGateKey(t, key)
-	t.Setenv(sys.TypeSafeKeyName, key)
+	t.Setenv(credential.TypeSafeKeyName, key)
 	storeCredential(t, accounts.ClaudeSub)
 	var authorization string
 	jevStub(t, http.StatusOK, untrustedDenyReply, &authorization)
@@ -235,11 +236,11 @@ func TestTheKeyIsNeverInAFrameALogOrARecordedSession(t *testing.T) {
 		frames += plainFrame(app)
 	}
 
-	state, err := sys.ProjectStateDir()
+	state, err := platformproject.ProjectStateDir()
 	if err != nil {
 		t.Fatal(err)
 	}
-	logDir, err := sys.LogDir()
+	logDir, err := platformproject.LogDir()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -12,7 +12,9 @@ import (
 
 	"tofu/apps/cli/output"
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/testkit/cli"
 	"tofu/internal/testkit/golden"
 )
@@ -64,7 +66,7 @@ func notesProject(t *testing.T) string {
 		"refused/.tofu/tools/shell/proxy.yaml": "use: maybe\ntimeout_ms: 5000\n",
 	}
 	for name, body := range files {
-		if err := sys.WriteFile(filepath.Join(project, filepath.FromSlash(name)), []byte(body), 0o644); err != nil {
+		if err := fs.WriteFile(filepath.Join(project, filepath.FromSlash(name)), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -136,11 +138,11 @@ func startUpNotes(t *testing.T, home string) string {
 	t.Helper()
 	legacy := filepath.Join(home, "legacy")
 	for name, body := range map[string]string{"sessions/turn-a/header.json": `{"id":"turn-a"}`, "log/decisions.jsonl": "{}\n"} {
-		if err := sys.WriteFile(filepath.Join(legacy, sys.LegacyStateDirName, filepath.FromSlash(name)), []byte(body), 0o644); err != nil {
+		if err := fs.WriteFile(filepath.Join(legacy, fs.LegacyStateDirName, filepath.FromSlash(name)), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := sys.WriteFile(filepath.Join(home, sys.StateDirName, sys.CredentialFileName), []byte("OPENROUTER_KEY=sk-or-v1-thistestwroteit\n"), 0o600); err != nil {
+	if err := fs.WriteFile(filepath.Join(home, fs.StateDirName, credential.CredentialFileName), []byte("OPENROUTER_KEY=sk-or-v1-thistestwroteit\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	var notes bytes.Buffer
@@ -161,7 +163,7 @@ func TestTheStartUpNotesMatchTheirGolden(t *testing.T) {
 
 func projectFolder(t *testing.T, home string) string {
 	t.Helper()
-	state, err := sys.ProjectStateDirAt(filepath.Join(home, "project"))
+	state, err := platformproject.ProjectStateDirAt(filepath.Join(home, "project"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -11,7 +11,7 @@ import (
 	memoryscope "tofu/internal/judge/points/memory_scope"
 	question "tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 	"tofu/internal/tools/registry"
 	"tofu/library/questions"
 )
@@ -93,7 +93,7 @@ func RunJudge(ctx context.Context, client *core.Client, req core.Request, set wi
 		}
 		return outcome, nil
 	}
-	dir, err := sys.LogDir()
+	dir, err := project.LogDir()
 	if err != nil {
 		return Outcome{}, err
 	}

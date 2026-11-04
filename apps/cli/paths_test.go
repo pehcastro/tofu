@@ -10,7 +10,8 @@ import (
 	"testing"
 
 	"tofu/apps/cli/output"
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
+	platformproject "tofu/internal/platform/project"
 )
 
 func legacyTree(t *testing.T) string {
@@ -23,7 +24,7 @@ func legacyTree(t *testing.T) string {
 		"log/decisions.jsonl":          "{\"point\":\"tool_gate\"}\n",
 		"calibration/tool_gate.lock":   "threshold: 0.8\n",
 	} {
-		full := filepath.Join(parent, sys.LegacyStateDirName, filepath.FromSlash(path))
+		full := filepath.Join(parent, platformfs.LegacyStateDirName, filepath.FromSlash(path))
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -72,14 +73,14 @@ func sameTree(t *testing.T, want, got map[string]string, what string) {
 
 func TestTheFirstRunCopiesTheOldDirectoryAndLeavesItByteForByte(t *testing.T) {
 	parent := legacyTree(t)
-	old := filepath.Join(parent, sys.LegacyStateDirName)
+	old := filepath.Join(parent, platformfs.LegacyStateDirName)
 	before := snapshot(t, old)
 
 	var out bytes.Buffer
 	copyLegacyStateDir(&out, parent)
 
 	sameTree(t, before, snapshot(t, old), "the old directory changed")
-	sameTree(t, before, snapshot(t, filepath.Join(parent, sys.StateDirName)), "the copy does not match the old directory")
+	sameTree(t, before, snapshot(t, filepath.Join(parent, platformfs.StateDirName)), "the copy does not match the old directory")
 
 	said := out.String()
 	for _, want := range []string{".tofu", ".boji", "2 sessions", "5 files", ".boji kept"} {
@@ -97,7 +98,7 @@ func TestTheSecondRunCopiesNothingAndSaysNothing(t *testing.T) {
 	if first.Len() == 0 {
 		t.Fatal("the first run said nothing, so there is no second run to test")
 	}
-	copied := snapshot(t, filepath.Join(parent, sys.StateDirName))
+	copied := snapshot(t, filepath.Join(parent, platformfs.StateDirName))
 
 	var second bytes.Buffer
 	copyLegacyStateDir(&second, parent)
@@ -105,7 +106,7 @@ func TestTheSecondRunCopiesNothingAndSaysNothing(t *testing.T) {
 	if second.Len() != 0 {
 		t.Fatalf("the second run printed:\n%s", second.String())
 	}
-	sameTree(t, copied, snapshot(t, filepath.Join(parent, sys.StateDirName)), "the second run wrote into the new directory")
+	sameTree(t, copied, snapshot(t, filepath.Join(parent, platformfs.StateDirName)), "the second run wrote into the new directory")
 }
 
 type refusingFS struct {
@@ -122,8 +123,8 @@ func (r refusingFS) Open(name string) (fs.File, error) {
 
 func TestACopyInterruptedPartWayNeverBecomesTheNewDirectory(t *testing.T) {
 	parent := legacyTree(t)
-	source := filepath.Join(parent, sys.LegacyStateDirName)
-	target := filepath.Join(parent, sys.StateDirName)
+	source := filepath.Join(parent, platformfs.LegacyStateDirName)
+	target := filepath.Join(parent, platformfs.StateDirName)
 	partial := target + partialSuffix
 
 	if _, err := copyTreeInto(refusingFS{FS: os.DirFS(source), refuse: "log/decisions.jsonl"}, ".", partial); err == nil {
@@ -135,7 +136,7 @@ func TestACopyInterruptedPartWayNeverBecomesTheNewDirectory(t *testing.T) {
 	if half := snapshot(t, partial); len(half) != 1 {
 		t.Fatalf("the interrupted copy holds %d files, want the one it managed: %v", len(half), half)
 	}
-	if dir := sys.StateDir(parent); dir != source {
+	if dir := platformfs.StateDir(parent); dir != source {
 		t.Fatalf("after an interrupted copy the resolver reads %s, want the old directory", dir)
 	}
 
@@ -150,7 +151,7 @@ func TestACopyInterruptedPartWayNeverBecomesTheNewDirectory(t *testing.T) {
 
 func TestSomethingAlreadyAtTheNewPathIsLeftAlone(t *testing.T) {
 	parent := legacyTree(t)
-	target := filepath.Join(parent, sys.StateDirName)
+	target := filepath.Join(parent, platformfs.StateDirName)
 	his := "a file of his, not a data directory"
 	if err := os.WriteFile(target, []byte(his), 0o644); err != nil {
 		t.Fatal(err)
@@ -170,14 +171,14 @@ func TestSomethingAlreadyAtTheNewPathIsLeftAlone(t *testing.T) {
 
 func TestAHalfCopyLeftBehindIsThrownAwayAndTheNextRunStartsOver(t *testing.T) {
 	parent := legacyTree(t)
-	partial := filepath.Join(parent, sys.StateDirName+partialSuffix)
+	partial := filepath.Join(parent, platformfs.StateDirName+partialSuffix)
 	if err := os.MkdirAll(filepath.Join(partial, "sessions", "turn-a"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(partial, "sessions", "turn-a", "header.json"), []byte("half"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if dir := sys.StateDir(parent); dir != filepath.Join(parent, sys.LegacyStateDirName) {
+	if dir := platformfs.StateDir(parent); dir != filepath.Join(parent, platformfs.LegacyStateDirName) {
 		t.Fatalf("a half copy was read as the data directory: %s", dir)
 	}
 
@@ -187,15 +188,15 @@ func TestAHalfCopyLeftBehindIsThrownAwayAndTheNextRunStartsOver(t *testing.T) {
 	if _, err := os.Stat(partial); !os.IsNotExist(err) {
 		t.Fatalf("the half copy survived at %s", partial)
 	}
-	sameTree(t, snapshot(t, filepath.Join(parent, sys.LegacyStateDirName)),
-		snapshot(t, filepath.Join(parent, sys.StateDirName)), "the copy that started over is not complete")
+	sameTree(t, snapshot(t, filepath.Join(parent, platformfs.LegacyStateDirName)),
+		snapshot(t, filepath.Join(parent, platformfs.StateDirName)), "the copy that started over is not complete")
 }
 
 func TestWithTheNewDirectoryPresentTheOldOneIsNeverRead(t *testing.T) {
 	parent := legacyTree(t)
 	copyLegacyStateDir(io.Discard, parent)
 
-	old := filepath.Join(parent, sys.LegacyStateDirName)
+	old := filepath.Join(parent, platformfs.LegacyStateDirName)
 	if err := os.RemoveAll(old); err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +209,7 @@ func TestWithTheNewDirectoryPresentTheOldOneIsNeverRead(t *testing.T) {
 	if second.Len() != 0 {
 		t.Fatalf("the old directory was touched:\n%s", second.String())
 	}
-	if dir := sys.StateDir(parent); dir != filepath.Join(parent, sys.StateDirName) {
+	if dir := platformfs.StateDir(parent); dir != filepath.Join(parent, platformfs.StateDirName) {
 		t.Fatalf("the resolver reads %s with the new directory present", dir)
 	}
 	if _, err := os.ReadDir(old); err == nil {
@@ -232,7 +233,7 @@ func projectWithState(t *testing.T) (home, project string) {
 		"quota/readings.jsonl":         "{\"window\":\"5h\"}\n",
 		"promotions.jsonl":             "{\"turn\":\"turn-a\"}\n",
 	} {
-		full := filepath.Join(project, sys.StateDirName, filepath.FromSlash(path))
+		full := filepath.Join(project, platformfs.StateDirName, filepath.FromSlash(path))
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -245,9 +246,9 @@ func projectWithState(t *testing.T) (home, project string) {
 
 func TestTheMoveTakesTheStateAndLeavesWhatThePersonWrote(t *testing.T) {
 	home, project := projectWithState(t)
-	config := filepath.Join(project, sys.StateDirName)
+	config := filepath.Join(project, platformfs.StateDirName)
 	before := snapshot(t, config)
-	state, err := sys.ProjectStateDirAt(project)
+	state, err := platformproject.ProjectStateDirAt(project)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +270,7 @@ func TestTheMoveTakesTheStateAndLeavesWhatThePersonWrote(t *testing.T) {
 		"log/decisions.jsonl":          before["log/decisions.jsonl"],
 		"promotions.jsonl":             before["promotions.jsonl"],
 	}, snapshot(t, state), "the state folder under the home")
-	quota := snapshot(t, filepath.Join(home, sys.StateDirName, sys.QuotaDirName))
+	quota := snapshot(t, filepath.Join(home, platformfs.StateDirName, platformfs.QuotaDirName))
 	if quota["readings.jsonl"] != before["quota/readings.jsonl"] {
 		t.Fatalf("the quota readings are not under the home: %v", quota)
 	}
@@ -296,7 +297,7 @@ func movedAndFailed(moves []stateMove) (moved, failed int) {
 
 func TestAFileAlreadyMovedWithOtherBytesIsSettledByItsKind(t *testing.T) {
 	_, project := projectWithState(t)
-	state, err := sys.ProjectStateDirAt(project)
+	state, err := platformproject.ProjectStateDirAt(project)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -304,7 +305,7 @@ func TestAFileAlreadyMovedWithOtherBytesIsSettledByItsKind(t *testing.T) {
 	at := func(clock, from string) string { return `{"at":"2026-09-20T` + clock + `Z","from":"` + from + `"}` }
 	write := func(root string, files map[string]string) {
 		for path, body := range files {
-			if err := sys.WriteFile(filepath.Join(root, filepath.FromSlash(path)), []byte(body), 0o644); err != nil {
+			if err := platformfs.WriteFile(filepath.Join(root, filepath.FromSlash(path)), []byte(body), 0o644); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -315,7 +316,7 @@ func TestAFileAlreadyMovedWithOtherBytesIsSettledByItsKind(t *testing.T) {
 		day:                           at("10:00:00", "home") + "\n" + at("12:00:00", "both") + "\n",
 		"cache/v1-tree.json":          `{"from":"home"}`,
 	})
-	config := filepath.Join(project, sys.StateDirName)
+	config := filepath.Join(project, platformfs.StateDirName)
 	write(config, map[string]string{
 		day:                  "no time here\n" + at("11:00:00", "repo") + "\r\n" + at("12:00:00", "both") + "\n" + at("13:00:00", "repo"),
 		"cache/v1-tree.json": `{"from":"repo"}`,
@@ -356,17 +357,17 @@ func TestAFileAlreadyMovedWithOtherBytesIsSettledByItsKind(t *testing.T) {
 func TestAProjectThatIsTheHomeMovesItsStateAndLeavesQuotaWhereItIs(t *testing.T) {
 	home, _ := projectWithState(t)
 	project := home
-	if err := os.MkdirAll(filepath.Join(project, sys.StateDirName, sys.QuotaDirName), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(project, platformfs.StateDirName, platformfs.QuotaDirName), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(project, sys.StateDirName, sys.QuotaDirName, "readings.jsonl"), []byte("{}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(project, platformfs.StateDirName, platformfs.QuotaDirName, "readings.jsonl"), []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
 	if moves := moveProjectState(&out, project); len(moves) != 0 {
 		t.Fatalf("a home holding only quota planned %v:\n%s", moves, out.String())
 	}
-	if _, err := os.Stat(filepath.Join(project, sys.StateDirName, sys.QuotaDirName, "readings.jsonl")); err != nil {
+	if _, err := os.Stat(filepath.Join(project, platformfs.StateDirName, platformfs.QuotaDirName, "readings.jsonl")); err != nil {
 		t.Fatalf("the quota under the home was moved: %v", err)
 	}
 }
@@ -374,7 +375,7 @@ func TestAProjectThatIsTheHomeMovesItsStateAndLeavesQuotaWhereItIs(t *testing.T)
 func TestADryRunListsTheMoveAndTouchesNothing(t *testing.T) {
 	_, project := projectWithState(t)
 	t.Chdir(project)
-	config := filepath.Join(project, sys.StateDirName)
+	config := filepath.Join(project, platformfs.StateDirName)
 	before := snapshot(t, config)
 
 	var out, errOut bytes.Buffer

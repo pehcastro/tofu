@@ -15,8 +15,8 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/llm/core"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/library/questions"
 )
 
@@ -242,7 +242,7 @@ func jevRows(events []session.Event, since time.Time) ([]traceRow, error) {
 		turns[event.Turn], turns[event.Agent], agents[event.Agent] = true, true, true
 	}
 	delete(turns, "")
-	dir, err := sys.LogDir()
+	dir, err := platformproject.LogDir()
 	if err != nil || len(turns) == 0 {
 		return nil, err
 	}

@@ -32,8 +32,11 @@ import (
 	"tofu/apps/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/konst"
+	"tofu/internal/platform/console"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/profile"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
-	"tofu/internal/sys"
 	"tofu/library/changelog"
 )
 
@@ -125,7 +128,7 @@ func loadLocalTimeZone() { _ = time.Local.String() }
 
 func main() {
 	safe.Go(wiring.CrashTold(".", func(said string) { _, _ = fmt.Fprintln(os.Stderr, "tofu: "+said) }), "time zone load", loadLocalTimeZone)
-	stopProfile := sys.StartProfile()
+	stopProfile := profile.StartProfile()
 	reapTemporaryProjects(os.Stderr)
 	args, temporary := temporaryProject(os.Args[1:])
 	args, profiled := withoutProjectFlag(args, profileFlag)
@@ -138,14 +141,14 @@ func main() {
 		copyLegacyStateDirs(os.Stderr)
 	}
 	dir, opens := openedProject(args)
-	register := sys.Project.Register
+	register := platformproject.Project.Register
 	if opensTheApp {
-		register = sys.Project.RegisterIdentityLater
+		register = platformproject.Project.RegisterIdentityLater
 	}
 	letGo := func() {}
 	if opens {
 		openProject(os.Stderr, os.Stdin, dir, opensTheApp && isTerminal(os.Stdin) && isTerminal(os.Stderr), temporary, register)
-		letGo = sys.HoldProjectOpen(dir)
+		letGo = platformproject.HoldProjectOpen(dir)
 	}
 	stopSnapshots := func() {}
 	if profiled {
@@ -155,7 +158,7 @@ func main() {
 		moveProjectState(os.Stderr, wd)
 	}
 	moveHomeKeys(os.Stderr)
-	pages := sys.ReadConsolePages()
+	pages := console.ReadConsolePages()
 	code := run(args, os.Stdin, os.Stdout, os.Stderr)
 	pages.Restore()
 	letGo()
@@ -174,17 +177,17 @@ func withoutProjectFlag(args []string, flag string) ([]string, bool) {
 
 func startSnapshots(errOut io.Writer, project string) func() {
 	page := cli.Detect(errOut, os.Environ())
-	state, err := sys.ProjectStateDirAt(project)
+	state, err := platformproject.ProjectStateDirAt(project)
 	var dir string
 	var stop func()
 	if err == nil {
-		dir, stop, err = sys.StartSnapshots(state)
+		dir, stop, err = profile.StartSnapshots(state)
 	}
 	if err != nil {
 		_ = page.Print(errOut, page.ErrorLine("tofu: profiling not started: "+err.Error(), ""))
 		return func() {}
 	}
-	_ = page.Print(errOut, []string{page.Receipt(cli.Changed, "profiling: CPU, heap and goroutines every "+sys.SnapshotEvery.String()+" and at exit, the last "+strconv.Itoa(sys.SnapshotsKept)+" kept", dir)})
+	_ = page.Print(errOut, []string{page.Receipt(cli.Changed, "profiling: CPU, heap and goroutines every "+profile.SnapshotEvery.String()+" and at exit, the last "+strconv.Itoa(profile.SnapshotsKept)+" kept", dir)})
 	return func() {
 		stop()
 		_ = page.Print(errOut, []string{page.Receipt(cli.Changed, "profile written", dir)})
@@ -192,7 +195,7 @@ func startSnapshots(errOut io.Writer, project string) func() {
 }
 
 func moveHomeKeys(errOut io.Writer) {
-	migration, err := sys.MigrateHomeKeys()
+	migration, err := credential.MigrateHomeKeys()
 	page := cli.Detect(errOut, os.Environ())
 	if err != nil {
 		_ = page.Print(errOut, page.ErrorLine(page.Path(migration.From)+" not moved into the credential store: "+err.Error(), ""))

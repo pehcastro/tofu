@@ -11,7 +11,7 @@ import (
 
 	"tofu/apps/cli/output"
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 	"tofu/internal/testkit/cli"
 	"tofu/internal/testkit/golden"
 )
@@ -52,12 +52,12 @@ func listProject(t *testing.T) string {
 		".tofu/agents/idle.md":    "---\nname: idle\ndescription: runs on the orchestrator's model\nmodel: inherit\n---\nwait\n",
 	}
 	for name, body := range files {
-		if err := sys.WriteFile(filepath.Join(project, filepath.FromSlash(name)), []byte(body), 0o644); err != nil {
+		if err := fs.WriteFile(filepath.Join(project, filepath.FromSlash(name)), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
 	global := "---\nname: reviewer\ndescription: reviews a diff\nmodel: codex-sub/gpt-5.6-sol\n---\nreview\n"
-	if err := sys.WriteFile(filepath.Join(sys.StateDir(home), "agents", "reviewer.md"), []byte(global), 0o644); err != nil {
+	if err := fs.WriteFile(filepath.Join(fs.StateDir(home), "agents", "reviewer.md"), []byte(global), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Chdir(project)

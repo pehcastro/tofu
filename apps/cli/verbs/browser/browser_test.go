@@ -16,7 +16,7 @@ import (
 	"tofu/apps/cli/output"
 	cli "tofu/apps/cli/page"
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 	"tofu/internal/tools/web/browser/driver"
 	"tofu/internal/tools/web/browser/steps"
 )
@@ -46,7 +46,7 @@ func browserHome(t *testing.T) string {
 
 func fakeRelay(t *testing.T, home string, tabs []driver.Tab) {
 	t.Helper()
-	dir := filepath.Join(home, sys.StateDirName, "browser")
+	dir := filepath.Join(home, fs.StateDirName, "browser")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestBrowserNoColourWritesNoEscape(t *testing.T) {
 		}
 	}
 	t.Setenv("NO_COLOR", "1")
-	_ = os.RemoveAll(filepath.Join(home, sys.StateDirName))
+	_ = os.RemoveAll(filepath.Join(home, fs.StateDirName))
 	if _, _, errOut := runBrowser(t); strings.Contains(errOut, "\x1b") {
 		t.Errorf("with NO_COLOR the not connected error printed %q", errOut)
 	}

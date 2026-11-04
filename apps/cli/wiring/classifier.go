@@ -10,7 +10,7 @@ import (
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/transport"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
 )
 
 const OneCallAtATime = 1
@@ -32,7 +32,7 @@ func LocateGateKey(keys core.Keyring) (core.Located, error) {
 	if err != nil {
 		return core.Located{}, err
 	}
-	return keys.LocateFor(sys.CredentialFileName, classifiers.KeyName(bound.Provider))
+	return keys.LocateFor(credential.CredentialFileName, classifiers.KeyName(bound.Provider))
 }
 
 func JevClientOn(key string, concurrency int) (*core.Client, error) {

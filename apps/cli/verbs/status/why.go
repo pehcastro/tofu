@@ -15,8 +15,8 @@ import (
 	"tofu/apps/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/platform/project"
 	sessionstore "tofu/internal/store/session"
-	"tofu/internal/sys"
 )
 
 const WhyUsage = "tofu why <id> | --last [n] [--point name] [--state | --json]"
@@ -100,7 +100,7 @@ type WhyFound struct {
 }
 
 func WhyFind(opts WhyOpts) (WhyFound, error) {
-	dir, err := sys.LogDir()
+	dir, err := project.LogDir()
 	if err != nil {
 		return WhyFound{}, err
 	}
@@ -131,7 +131,7 @@ func whyMissing(id, ledgerDir string, rowErr error) error {
 	if !shapeless && !errors.As(rowErr, &noRow) {
 		return rowErr
 	}
-	state, err := sys.ProjectStateDirAt(".")
+	state, err := project.ProjectStateDirAt(".")
 	if err != nil {
 		return err
 	}

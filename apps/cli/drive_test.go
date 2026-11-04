@@ -19,8 +19,9 @@ import (
 	"tofu/apps/cli/wiring"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/testkit/cli"
 	"tofu/internal/ui/tui/chat/session"
 	"tofu/internal/ui/tui/panels/progress"
@@ -437,7 +438,7 @@ func realHomeIs(t *testing.T, home string) string {
 func pollutedHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
-	state := filepath.Join(home, sys.StateDirName)
+	state := filepath.Join(home, fs.StateDirName)
 	if err := os.MkdirAll(state, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -630,7 +631,7 @@ func TestDrivenRequestsPrintEachMessageAndItsTextWithTheKeyMasked(t *testing.T) 
 	deck := written(t, dir, "read.cassette", readingCassette)
 	script := written(t, dir, "roles.drive", strings.Join([]string{
 		"wait " + session.Placeholder,
-		"type read note.txt, the key is " + sys.OpenRouterKeyName + "=" + fakeKey,
+		"type read note.txt, the key is " + credential.OpenRouterKeyName + "=" + fakeKey,
 		"key enter",
 		"wait cooked for",
 		"requests",
@@ -647,7 +648,7 @@ func TestDrivenRequestsPrintEachMessageAndItsTextWithTheKeyMasked(t *testing.T) 
 		" tool: ",
 		", result of cassette_1_1",
 		"    read {\"path\":\"note.txt\"}",
-		sys.OpenRouterKeyName + "=" + sys.KeyRedactedMark,
+		credential.OpenRouterKeyName + "=" + credential.KeyRedactedMark,
 	} {
 		if !strings.Contains(printed, want) {
 			t.Errorf("requests never printed %q:\n%s", want, printed)
@@ -731,7 +732,7 @@ func TestADriveRefusesTheRealHomeAndEveryPathUnderItBeforeTouchingIt(t *testing.
 	}
 	before := listing()
 	script := written(t, dir, "look.drive", "wait "+session.Placeholder+"\n")
-	named := []string{real, real + string(filepath.Separator), filepath.Join(real, sys.StateDirName, "x"), filepath.Join(real, "projects", "x")}
+	named := []string{real, real + string(filepath.Separator), filepath.Join(real, fs.StateDirName, "x"), filepath.Join(real, "projects", "x")}
 	if filepath.VolumeName(real) != "" {
 		named = append(named, strings.ToUpper(real))
 	}
@@ -774,7 +775,7 @@ func TestAFreshTempHomeDrivesWhenTheTempFolderLivesInsideTheRealHome(t *testing.
 	if code := driveVerb([]string{script, "--home", fresh, "--timeout", "30s"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
 		t.Errorf("a home made by mktemp under %s exited %d, so every scratch home on Windows is refused: %s", temp, code, errOut.String())
 	}
-	if _, err := os.Stat(filepath.Join(fresh, sys.StateDirName)); err != nil {
+	if _, err := os.Stat(filepath.Join(fresh, fs.StateDirName)); err != nil {
 		t.Errorf("the drive left no state under the fresh home it was named: %v", err)
 	}
 }

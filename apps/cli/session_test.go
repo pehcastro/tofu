@@ -20,8 +20,8 @@ import (
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/models/llm/wire/codex"
 	"tofu/internal/models/transport"
+	"tofu/internal/platform/fs"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	testkit "tofu/internal/testkit/cli"
 )
 
@@ -473,7 +473,7 @@ func TestTheSessionsAlreadyOnDiskListWithNoNameRatherThanFailing(t *testing.T) {
 		"header.json": `{"id":"turn-old","at":"2026-09-01T10:00:00Z","task":"written before the name","root":"turn-old"}`,
 		"body.jsonl":  `{"at":"2026-09-01T10:00:01Z","kind":"step","body":{"index":1}}` + "\n",
 	} {
-		if err := sys.WriteFile(filepath.Join(store.Dir("turn-old"), name), []byte(body), 0o644); err != nil {
+		if err := fs.WriteFile(filepath.Join(store.Dir("turn-old"), name), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}

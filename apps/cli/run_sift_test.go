@@ -24,7 +24,8 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/points"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/testkit/cli"
 	"tofu/internal/tools/shell/bash/sift"
 	shipped "tofu/library"
@@ -79,7 +80,7 @@ func stubRecordedJudgedReplies(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 	t.Setenv(judgeEndpointEnvar, server.URL)
-	t.Setenv(sys.TypeSafeKeyName, "stub-key-not-a-real-credential")
+	t.Setenv(credential.TypeSafeKeyName, "stub-key-not-a-real-credential")
 }
 
 func chunkAsked(t *testing.T, id, request string) int {
@@ -463,9 +464,9 @@ func TestWhatTheJudgedSiftSavesAndCostsOverEveryRecordedSession(t *testing.T) {
 }
 
 func logHere(t *testing.T) string {
-	dir, err := sys.LogDir()
+	dir, err := platformproject.LogDir()
 	if err != nil {
-		t.Fatalf("sys.LogDir: %v", err)
+		t.Fatalf("platformproject.LogDir: %v", err)
 	}
 	return dir
 }
@@ -483,9 +484,9 @@ func TestEveryShellSiftDecisionIsWrittenToTheLedger(t *testing.T) {
 	if _, err := sifter.Cut(t.Context(), siftedShell(), "find the line that says what failed"); err != nil {
 		t.Fatalf("Cut: %v", err)
 	}
-	dir, err := sys.LogDir()
+	dir, err := platformproject.LogDir()
 	if err != nil {
-		t.Fatalf("sys.LogDir: %v", err)
+		t.Fatalf("platformproject.LogDir: %v", err)
 	}
 	rows := 0
 	if _, err := ledger.NewReader(dir).Each(ledger.Filter{Point: sift.ShellSchema}, func(row ledger.Row) error {

@@ -21,8 +21,8 @@ import (
 	"tofu/apps/cli/wiring"
 	"tofu/internal/cli/render"
 	"tofu/internal/konst"
+	"tofu/internal/platform/fs"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/tools/registry"
 	browser "tofu/internal/tools/web/browser/driver"
 	"tofu/internal/tools/web/browser/loop"
@@ -328,7 +328,7 @@ func (o browserOutput) bench(args []string) int {
 	}
 	defer func() { _ = stop() }()
 	if report.RowsFile == "" {
-		report.RowsFile = filepath.Join(home, sys.StateDirName, "bench", "browser-steps-"+time.Now().Format("20060102-150405")+".jsonl")
+		report.RowsFile = filepath.Join(home, fs.StateDirName, "bench", "browser-steps-"+time.Now().Format("20060102-150405")+".jsonl")
 	}
 	err = o.withBrowser(home, func(client *browser.Client) error {
 		tab, err := client.Open(address)
@@ -340,7 +340,7 @@ func (o browserOutput) bench(args []string) int {
 		var written bytes.Buffer
 		err = errors.Join(client.CloseTab(tab), steps.Write(&written, rows))
 		if err == nil {
-			err = sys.WriteFile(report.RowsFile, written.Bytes(), 0o644)
+			err = fs.WriteFile(report.RowsFile, written.Bytes(), 0o644)
 		}
 		return err
 	})
@@ -373,7 +373,7 @@ func (o browserOutput) motion(tab int, args []string) int {
 	if err == nil {
 		home, err = os.UserHomeDir()
 	}
-	root := filepath.Join(home, sys.StateDirName, "motion")
+	root := filepath.Join(home, fs.StateDirName, "motion")
 	var saved []motion.Take
 	if err == nil {
 		err = o.withBrowser(home, func(client *browser.Client) (err error) {

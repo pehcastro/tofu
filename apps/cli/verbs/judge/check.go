@@ -17,7 +17,7 @@ import (
 	"tofu/internal/judge/ledger"
 	toolgate "tofu/internal/judge/points/tool_gate"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 	"tofu/library/questions"
 )
 
@@ -55,12 +55,12 @@ func CheckVerb(args []string, out, errOut io.Writer) int {
 }
 
 func checkedRow(command string) (ledger.Row, error) {
-	libraryDir, err := sys.LibraryDir()
+	libraryDir, err := fs.LibraryDir()
 	if err != nil {
 		return ledger.Row{}, err
 	}
 	rulePath := ""
-	isDir, err := sys.IsDir(libraryDir)
+	isDir, err := fs.IsDir(libraryDir)
 	if err != nil {
 		return ledger.Row{}, err
 	}
@@ -69,7 +69,7 @@ func checkedRow(command string) (ledger.Row, error) {
 		if err != nil {
 			return ledger.Row{}, err
 		}
-		rulePath = sys.Join(libraryDir, filepath.FromSlash(found))
+		rulePath = fs.Join(libraryDir, filepath.FromSlash(found))
 	}
 	key, err := wiring.GateKey()
 	if err != nil {

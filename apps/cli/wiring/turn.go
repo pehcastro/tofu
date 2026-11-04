@@ -22,8 +22,8 @@ import (
 	"tofu/internal/models/llm/wire/codex"
 	"tofu/internal/models/llm/wire/openai"
 	"tofu/internal/models/transport"
+	"tofu/internal/platform/credential"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/sys"
 )
 
 const (
@@ -143,7 +143,7 @@ func TurnTransport() transport.Config {
 
 func KeyModel(model string) (loop.Model, error) {
 	facts := KeyFactsOf(host.RoleLLM, OpenRouterName)
-	key, err := core.KeyFor(sys.CredentialFileName, facts.Variable)
+	key, err := core.KeyFor(credential.CredentialFileName, facts.Variable)
 	if err != nil {
 		return nil, fmt.Errorf("no %s %s key, run %s: %w", facts.Name, facts.Role, facts.Hint(), err)
 	}

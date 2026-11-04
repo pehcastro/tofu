@@ -14,7 +14,7 @@ import (
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/hooks"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 	"tofu/internal/testkit/cli"
 	"tofu/internal/tools/shell/process"
 )
@@ -26,7 +26,7 @@ func sessionHooks(t *testing.T, project string) string {
 	}
 	logged := `{"type":"command","command":"cat >> session.log; echo >> session.log"}`
 	settings := `{"hooks":{"SessionStart":[{"hooks":[` + logged + `]}],"SessionEnd":[{"hooks":[` + logged + `]}]}}`
-	if err := sys.WriteFile(filepath.Join(project, ".claude", "settings.json"), []byte(settings), 0o644); err != nil {
+	if err := fs.WriteFile(filepath.Join(project, ".claude", "settings.json"), []byte(settings), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	engine := hooks.Load(project, process.Choice{})
@@ -119,7 +119,7 @@ func TestHooksListsEverySourceWithItsTrustAndTrustTrustsTheProjectsOnce(t *testi
 		filepath.Join(project, ".claude", "settings.local.json"): `{"hooks":{"PreToolUse":[{"matcher":"Write","hooks":[{"type":"prompt","prompt":"is this ok"}]}]}}`,
 	}
 	for path, body := range files {
-		if err := sys.WriteFile(path, []byte(body), 0o644); err != nil {
+		if err := fs.WriteFile(path, []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}

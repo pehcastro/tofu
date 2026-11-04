@@ -28,8 +28,9 @@ import (
 	cred "tofu/internal/models/llm/accounts"
 	models "tofu/internal/models/llm/catalog"
 	"tofu/internal/models/transport"
+	platformfs "tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	shipped "tofu/library"
 )
 
@@ -96,7 +97,7 @@ func bindVerb(args []string, out, errOut io.Writer) int {
 	if _, err := library.Fits(role, slug); err != nil {
 		return o.Fail(err)
 	}
-	home, err := sys.HomeConfigDir()
+	home, err := platformfs.HomeConfigDir()
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -350,12 +351,12 @@ func checkJevPin(ctx context.Context, keys core.Keyring, listing *transport.Clie
 		return check
 	}
 	check.To = newest.Model
-	dir, err := sys.CalibrationDir()
+	dir, err := project.CalibrationDir()
 	if err != nil {
 		check.Shadowed = append(check.Shadowed, "calibration locks unreadable: "+err.Error())
 		return check
 	}
-	names, _ := sys.ListFiles(dir, ".lock")
+	names, _ := platformfs.ListFiles(dir, ".lock")
 	for _, name := range names {
 		path := filepath.Join(dir, name)
 		lock, err := gate.LoadLock(path)

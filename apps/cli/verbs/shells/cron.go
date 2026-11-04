@@ -8,12 +8,12 @@ import (
 	"tofu/internal/agent/cron"
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
+	"tofu/internal/platform/fs"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 )
 
-var gitPush = sys.LazyRegexp(`\bgit\b[^;&|\n]*\bpush\b`)
+var gitPush = fs.LazyRegexp(`\bgit\b[^;&|\n]*\bpush\b`)
 
 func CronChecker(dir string) cron.Checker {
 	return func(ctx context.Context, command string) (int, string, error) {

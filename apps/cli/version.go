@@ -9,7 +9,7 @@ import (
 
 	"tofu/apps/cli/output"
 	cli "tofu/apps/cli/page"
-	"tofu/internal/sys"
+	"tofu/internal/platform/build"
 	"tofu/internal/ui/tui/frame/frame"
 )
 
@@ -24,7 +24,7 @@ func version(args []string, out, errOut io.Writer) int {
 	if unknown := output.WithoutJSON(args); len(unknown) > 0 {
 		return output.Verb{Name: "version", UsageLine: "tofu version [--json]", AsJSON: asJSON, Out: out, ErrOut: errOut}.Usage(errors.New("unknown argument " + strconv.Quote(unknown[0])))
 	}
-	report := versionReport{Version: frame.Release(sys.Version(), sys.BuildRevision()), Commit: sys.BuildRevision(), Go: sys.GoVersion()}
+	report := versionReport{Version: frame.Release(build.Version(), build.BuildRevision()), Commit: build.BuildRevision(), Go: build.GoVersion()}
 	var err error
 	if asJSON {
 		err = output.WriteJSON(out, cli.Envelope{Verb: "version", OK: true, At: time.Now(), Data: report})

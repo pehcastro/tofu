@@ -29,8 +29,9 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/models/transport"
+	platformbuild "tofu/internal/platform/build"
+	"tofu/internal/platform/fs"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/tools/web/browser/driver"
 	"tofu/internal/ui/tui/frame/frame"
 )
@@ -59,7 +60,7 @@ type latestRelease struct {
 type updateReport = host.UpdateReport
 
 func updateVerb(args []string, out, errOut io.Writer) int {
-	build := frame.Release(sys.Version(), sys.BuildRevision())
+	build := frame.Release(platformbuild.Version(), platformbuild.BuildRevision())
 	return updateFrom(build, build == konst.Version, args, out, errOut)
 }
 
@@ -183,11 +184,11 @@ type updateWatch struct {
 }
 
 func appUpdates(dir string) func() string {
-	if frame.Release(sys.Version(), sys.BuildRevision()) != konst.Version {
+	if frame.Release(platformbuild.Version(), platformbuild.BuildRevision()) != konst.Version {
 		return nil
 	}
 	target, err := updateTarget()
-	home, homeErr := sys.HomeConfigDir()
+	home, homeErr := fs.HomeConfigDir()
 	if errors.Join(err, homeErr) != nil {
 		return nil
 	}

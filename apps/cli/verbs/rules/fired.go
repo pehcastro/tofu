@@ -10,7 +10,7 @@ import (
 	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/cli/render"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 )
 
 type firedReport struct {
@@ -39,7 +39,7 @@ func firedVerb(args []string, out, errOut io.Writer) int {
 			return o.Usage(fmt.Errorf("%q is not a date in the form 2006-01-02", day))
 		}
 	}
-	dir, err := sys.LogDir()
+	dir, err := project.LogDir()
 	if err != nil {
 		return o.Fail(err)
 	}

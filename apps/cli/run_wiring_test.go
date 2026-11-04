@@ -34,8 +34,9 @@ import (
 	"tofu/internal/models/llm/core"
 	claudesub "tofu/internal/models/llm/providers/claude-sub"
 	"tofu/internal/models/llm/wire/anthropic"
+	"tofu/internal/platform/fs"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/testkit/cli"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/registry"
@@ -44,7 +45,7 @@ import (
 
 func projectSessions(t *testing.T, dir string) *session.Store {
 	t.Helper()
-	state, err := sys.ProjectStateDirAt(dir)
+	state, err := platformproject.ProjectStateDirAt(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -812,9 +813,9 @@ func armOpts(t *testing.T, args ...string) wiring.RunOpts {
 
 func mustConfig(t *testing.T, opts wiring.RunOpts, built []contract.Tool, run runtime) (loop.Config, *loop.SpawnTool) {
 	t.Helper()
-	places, err := sys.ResolvePlaces(".")
+	places, err := platformproject.ResolvePlaces(".")
 	if err != nil {
-		t.Fatalf("sys.ResolvePlaces: %v", err)
+		t.Fatalf("platformproject.ResolvePlaces: %v", err)
 	}
 	run.places = places
 	config, spawner, err := runConfig(opts, built, run)
@@ -1096,7 +1097,7 @@ func TestAnOffOverrideLeavesOneLineInThePromptAndAStaleOneLeavesTheRule(t *testi
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := sys.WriteFile(filepath.Join(project, ".tofu", "rules", overrideAsked+"@1.yaml"), data, 0o644); err != nil {
+		if err := fs.WriteFile(filepath.Join(project, ".tofu", "rules", overrideAsked+"@1.yaml"), data, 0o644); err != nil {
 			t.Fatal(err)
 		}
 		prompt, err := composeRun(wiring.RunOpts{Dir: project, Task: "add unit tests to the parser"}, nil, runtime{open: wiring.OpenWire})
@@ -1200,7 +1201,7 @@ func TestTheThinkingSummaryFlagWinsOverTheStoredSettingForThatRunOnly(t *testing
 		dir := t.TempDir()
 		settingsFile := filepath.Join(dir, ".tofu", "settings.json")
 		written := `{"thinkingSummary":"` + stored + `"}`
-		if err := sys.WriteFile(settingsFile, []byte(written), 0o644); err != nil {
+		if err := fs.WriteFile(settingsFile, []byte(written), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		opts, err := parseRunArgs([]string{"--dir", dir, "--wire", wiring.WireCodex, "--thinking-summary", flag, "--dry-run", "a task"})

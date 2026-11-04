@@ -13,8 +13,9 @@ import (
 	"tofu/apps/cli/output"
 	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
+	platformfs "tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -57,11 +58,11 @@ func Verb(args []string, out, errOut io.Writer) int {
 }
 
 func LaunchShellRegistry(dir string) (*process.Registry, error) {
-	state, err := sys.ProjectStateDir()
+	state, err := project.ProjectStateDir()
 	if err != nil {
 		return nil, err
 	}
-	registry := process.OpenAt(sys.Join(state, "shells"))
+	registry := process.OpenAt(platformfs.Join(state, "shells"))
 	if settingspkg.IntSaying(dir, settingspkg.PersistentRegistry, nil) != 0 {
 		registry.Lifetime = process.OutlivesTofu
 	}

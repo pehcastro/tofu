@@ -12,9 +12,9 @@ import (
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	"tofu/internal/host"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	sessionstore "tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/registry"
 )
 
@@ -23,7 +23,7 @@ func runHub(dir string, say func(string)) error {
 	if err != nil {
 		return err
 	}
-	defer sys.HoldProjectOpen(dir)()
+	defer platformproject.HoldProjectOpen(dir)()
 	collectForALongLife()
 	deck, err := readCassette(os.Getenv(cassetteVariable))
 	if err != nil {
@@ -42,7 +42,7 @@ func runHub(dir string, say func(string)) error {
 	if launch.note != "" {
 		say(launch.note)
 	}
-	places, err := sys.ResolvePlaces(dir)
+	places, err := platformproject.ResolvePlaces(dir)
 	if err != nil {
 		return err
 	}

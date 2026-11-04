@@ -13,9 +13,9 @@ import (
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/points"
 	rule "tofu/internal/librarian/rules"
+	"tofu/internal/platform/fs"
 	"tofu/internal/project/boardy"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/tools/shell/bash/sift"
 	shipped "tofu/library"
 )
@@ -166,11 +166,11 @@ func BaseRules(override string) ([]rule.Rule, string, error) {
 		rules, err := rule.LoadDir(override)
 		return rules, override, err
 	}
-	libraryDir, err := sys.LibraryDir()
+	libraryDir, err := fs.LibraryDir()
 	if err != nil {
 		return nil, "", err
 	}
-	isDir, err := sys.IsDir(libraryDir)
+	isDir, err := fs.IsDir(libraryDir)
 	if err != nil {
 		return nil, "", err
 	}
@@ -242,7 +242,7 @@ func OverrideStaleWhy(o host.OverrideListing) string {
 }
 
 func UserRuleLayers(project string) ([]RuleLayer, error) {
-	home, err := sys.HomeConfigDir()
+	home, err := fs.HomeConfigDir()
 	if err != nil {
 		return nil, err
 	}
@@ -254,11 +254,11 @@ func UserRuleLayers(project string) ([]RuleLayer, error) {
 	if project != "." {
 		projectFlag = " --dir " + full
 	}
-	return []RuleLayer{{"global", filepath.Join(home, "rules"), " --global"}, {"project", filepath.Join(sys.StateDir(full), "rules"), projectFlag}}, nil
+	return []RuleLayer{{"global", filepath.Join(home, "rules"), " --global"}, {"project", filepath.Join(fs.StateDir(full), "rules"), projectFlag}}, nil
 }
 
 func (l RuleLayer) Load() ([]rule.Rule, error) {
-	isDir, err := sys.IsDir(l.Dir)
+	isDir, err := fs.IsDir(l.Dir)
 	if err != nil || !isDir {
 		return nil, err
 	}

@@ -16,9 +16,9 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/host"
 	"tofu/internal/konst"
+	"tofu/internal/platform/scratch"
 	"tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/sys"
 )
 
 const (
@@ -30,7 +30,7 @@ const (
 func Scratch(args []string, out, errOut io.Writer) int {
 	o := output.Verb{Name: "scratch", UsageLine: ScratchUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	args = output.WithoutJSON(args)
-	report, err := sys.ReadScratch(".")
+	report, err := scratch.ReadScratch(".")
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -61,7 +61,7 @@ func Scratch(args []string, out, errOut io.Writer) int {
 		}
 	}
 	sweep.Leftovers = sweep.Session == ""
-	cleaned := host.ScratchCleaned{Root: report.Root, DryRun: dryRun, Removed: append([]sys.ScratchFolder{}, report.Removable(sweep)...)}
+	cleaned := host.ScratchCleaned{Root: report.Root, DryRun: dryRun, Removed: append([]scratch.ScratchFolder{}, report.Removable(sweep)...)}
 	if !dryRun {
 		if err := removeScratch(".", cleaned.Removed); err != nil {
 			return o.Fail(err)
@@ -82,7 +82,7 @@ func Scratch(args []string, out, errOut io.Writer) int {
 	})
 }
 
-func scratchLines(report sys.ScratchReport) []string {
+func scratchLines(report scratch.ScratchReport) []string {
 	lines := []string{"root " + report.Root}
 	for _, folder := range report.Folders {
 		name := string(folder.Kind)
@@ -94,7 +94,7 @@ func scratchLines(report sys.ScratchReport) []string {
 	sweep := scratchSweep(".", busyIn(session.OpenIn(".")))
 	next := report.Removable(sweep)
 	lines = append(lines, fmt.Sprintf("cleanup removes sessions untouched for %d days and the oldest past %d GB; next: %d folders", sweep.CleanupDays, sweep.MaxGB, len(next)))
-	if slices.ContainsFunc(report.Folders, func(folder sys.ScratchFolder) bool { return folder.Kind == sys.ScratchKindLeftover }) {
+	if slices.ContainsFunc(report.Folders, func(folder scratch.ScratchFolder) bool { return folder.Kind == scratch.ScratchKindLeftover }) {
 		lines = append(lines, "leftovers sit in this repository's .tofu/scratch: tofu scratch clean removes them")
 	}
 	return lines
@@ -110,7 +110,7 @@ func sizeOf(bytes int64) string {
 	return fmt.Sprintf("%d GB", bytes)
 }
 
-func scratchSweep(dir string, live func(string) bool) sys.ScratchSweep {
+func scratchSweep(dir string, live func(string) bool) scratch.ScratchSweep {
 	store, _ := settingspkg.OpenFor(dir)
 	setting := func(key string, fallback int) int {
 		if store == nil || !slices.ContainsFunc(store.Table(), func(spec settingspkg.Spec) bool { return spec.Key == key }) {
@@ -118,7 +118,7 @@ func scratchSweep(dir string, live func(string) bool) sys.ScratchSweep {
 		}
 		return store.Int(key)
 	}
-	return sys.ScratchSweep{
+	return scratch.ScratchSweep{
 		CleanupDays: setting(scratchCleanupSetting, konst.ScratchCleanupDays),
 		MaxGB:       setting(scratchMaxGBSetting, konst.ScratchMaxGB),
 		Now:         time.Now(),
@@ -136,13 +136,13 @@ func SweepScratch(dir string, say func(string), stop <-chan struct{}) {
 		if openErr != nil || sessions.Busy(id) != nil {
 			return true
 		}
-		_, locked := os.Stat(filepath.Join(sessions.Dir(id), sys.SessionLockFile))
+		_, locked := os.Stat(filepath.Join(sessions.Dir(id), scratch.SessionLockFile))
 		return !errors.Is(locked, fs.ErrNotExist)
 	}
 	ticker := time.NewTicker(konst.ScratchSweepHours * time.Hour)
 	defer ticker.Stop()
 	for {
-		report, err := sys.ReadScratch(dir)
+		report, err := scratch.ReadScratch(dir)
 		sweep := scratchSweep(dir, live)
 		if removable := report.Removable(sweep); err == nil && len(removable) > 0 {
 			if err = removeScratch(dir, removable); err == nil {
@@ -160,12 +160,12 @@ func SweepScratch(dir string, say func(string), stop <-chan struct{}) {
 	}
 }
 
-func removeScratch(dir string, folders []sys.ScratchFolder) error {
+func removeScratch(dir string, folders []scratch.ScratchFolder) error {
 	registry, err := LaunchShellRegistry(dir)
 	if err != nil {
 		return err
 	}
-	return sys.RemoveScratch(folders, func(dir string) { registry.StopUnder(dir) }, konst.ScratchRemoveTries, konst.ScratchRemoveRetryMillis*time.Millisecond)
+	return scratch.RemoveScratch(folders, func(dir string) { registry.StopUnder(dir) }, konst.ScratchRemoveTries, konst.ScratchRemoveRetryMillis*time.Millisecond)
 }
 
 func LeadScratch(ctx context.Context, config loop.Config, errOut io.Writer) (context.Context, error) {
@@ -173,8 +173,8 @@ func LeadScratch(ctx context.Context, config loop.Config, errOut io.Writer) (con
 	if err != nil {
 		return ctx, fmt.Errorf("the scratchpad was not made: %w", err)
 	}
-	place, _ := sys.ScratchOf(leading)
-	report, err := sys.ReadScratch(config.Project)
+	place, _ := scratch.ScratchOf(leading)
+	report, err := scratch.ReadScratch(config.Project)
 	sweep := scratchSweep(config.Project, busyIn(session.OpenIn(config.Project)))
 	sweep.Keep = place.Session
 	if removable := report.Removable(sweep); err == nil && len(removable) > 0 {

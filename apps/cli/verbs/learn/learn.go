@@ -22,11 +22,13 @@ import (
 	"tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
 	llm "tofu/internal/models/llm/core"
+	platformbuild "tofu/internal/platform/build"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 	"tofu/internal/store/learn"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/ui/tui/frame/frame"
 	"tofu/library/changelog"
 )
@@ -174,11 +176,11 @@ func learnSources(opts learnOpts) ([]learn.Source, string, error) {
 		headers, err := learn.Recent(store, opts.last)
 		return []learn.Source{{Store: store, Headers: headers}}, output.Plural(len(headers), "session") + " of the last " + strconv.Itoa(opts.last) + " conversations of this project", err
 	}
-	home, err := sys.HomeConfigDir()
+	home, err := fs.HomeConfigDir()
 	if err != nil {
 		return nil, "", err
 	}
-	states, err := sys.ProjectGlob(filepath.Join(home, sys.ProjectsDirName), "*")
+	states, err := project.ProjectGlob(filepath.Join(home, fs.ProjectsDirName), "*")
 	var sources []learn.Source
 	for _, state := range states {
 		store := session.OpenAt(state)
@@ -366,7 +368,7 @@ func learnApply(o output.Verb, deps Deps, opts learnOpts, home learn.Home, findi
 }
 
 func learnDraft(o output.Verb, home learn.Home, finding learn.Finding, decide func(learn.Action) error) int {
-	build := learn.Build{Version: frame.Release(sys.Version(), sys.BuildRevision()), Commit: sys.BuildRevision(), Platform: sys.OS() + "/" + sys.Arch()}
+	build := learn.Build{Version: frame.Release(platformbuild.Version(), platformbuild.BuildRevision()), Commit: platformbuild.BuildRevision(), Platform: fs.OS() + "/" + fs.Arch()}
 	file, text, err := home.WriteDraft(learn.DraftOf(finding, build, time.Now()))
 	if err = errors.Join(err, decide(learn.ActionDraft)); err != nil {
 		return o.Fail(err)

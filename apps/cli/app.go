@@ -33,11 +33,14 @@ import (
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/catalog"
 	llm "tofu/internal/models/llm/core"
+	platformclipboard "tofu/internal/platform/clipboard"
+	"tofu/internal/platform/fs"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
+	"tofu/internal/platform/scratch"
 	memory "tofu/internal/store/memory/entries"
 	sessionstore "tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 	tools "tofu/internal/tools/registry"
 	"tofu/internal/tools/shell/process"
@@ -71,7 +74,7 @@ type appWiring struct {
 	open      wiring.Opener
 	wires     func() []app.Wire
 	blockers  func() []app.Requirement
-	clipboard func() (sys.Clipboard, error)
+	clipboard func() (platformclipboard.Clipboard, error)
 	quota     func() []frame.Quota
 	reload    func(ctx context.Context, out io.Writer) int
 	now       func() time.Time
@@ -95,17 +98,17 @@ func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 	registry, registryErr := shellsverb.LaunchShellRegistry(dir)
 	home, _ := os.UserHomeDir()
 	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: tools.NewBrowserTabs(home), release: new(func()), endSession: new(func() []string), turnRunning: new(func() (string, bool)), stopRestoring: func() {}}
-	safe.Go(sys.Crashes(dir), "state sweep", func() {
-		state, err := sys.ProjectStateDirAt(dir)
+	safe.Go(platformproject.Crashes(dir), "state sweep", func() {
+		state, err := platformproject.ProjectStateDirAt(dir)
 		if err != nil {
 			return
 		}
-		sys.OncePerDay(filepath.Join(state, sweptStampName), time.Now(), func() {
+		scratch.OncePerDay(filepath.Join(state, sweptStampName), time.Now(), func() {
 			aged := time.Now().AddDate(0, 0, -stateFileKeptDays)
-			_ = sys.RemoveUnreferencedArtifacts(filepath.Join(state, artifactsDirName), filepath.Join(state, sessionsDirName), aged)
-			_ = sys.RemoveAged(state, safe.CrashPrefix, safe.CrashSuffix, aged)
-			if stateHome, err := sys.HomeConfigDir(); err == nil {
-				_ = sys.RemoveAged(stateHome, safe.CrashPrefix, safe.CrashSuffix, aged)
+			_ = scratch.RemoveUnreferencedArtifacts(filepath.Join(state, artifactsDirName), filepath.Join(state, sessionsDirName), aged)
+			_ = scratch.RemoveAged(state, safe.CrashPrefix, safe.CrashSuffix, aged)
+			if stateHome, err := fs.HomeConfigDir(); err == nil {
+				_ = scratch.RemoveAged(stateHome, safe.CrashPrefix, safe.CrashSuffix, aged)
 			}
 		})
 	})
@@ -122,7 +125,7 @@ func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 
 func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaunch, held wiring.HeldStore) app.Options {
 	defer launch.stopRestoring()
-	places, _ := sys.ResolvePlaces(".")
+	places, _ := platformproject.ResolvePlaces(".")
 	engine := &appEngine{dir: dir, arms: arms, open: wired.open, quota: wired.quota, tabs: launch.tabs, places: places}
 	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: shellsverb.CronChecker(dir), Resumed: launch.resumed.hosted(), Joins: wired.joins, Now: wired.now})
 	notes := append([]string{launch.note}, troubles...)
@@ -258,7 +261,7 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 	var identity sync.WaitGroup
 	var identityErr error
 	identity.Go(func() {
-		identityErr = sys.Crashed(dir, safe.Call(nil, "project identity", func() error { return sys.RecordIdentity(dir) }))
+		identityErr = platformproject.Crashed(dir, safe.Call(nil, "project identity", func() error { return platformproject.RecordIdentity(dir) }))
 	})
 	err = app.Run(appOptions(dir, wiring.RunOpts{}, live, launch, held))
 	identity.Wait()
@@ -472,7 +475,7 @@ type appEngine struct {
 	quota        func() []frame.Quota
 	tabs         *tools.BrowserTabs
 	warm         *warmProcesses
-	places       sys.Places
+	places       platformproject.Places
 	timed        string
 	missingJudge missingJudge
 }
@@ -568,8 +571,8 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 	}
 	clock.step("shell, tools and session store")
 	places := e.places
-	if places == (sys.Places{}) {
-		if places, err = sys.ResolvePlaces("."); err != nil {
+	if places == (platformproject.Places{}) {
+		if places, err = platformproject.ResolvePlaces("."); err != nil {
 			return started, err
 		}
 	}

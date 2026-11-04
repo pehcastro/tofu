@@ -15,7 +15,7 @@ import (
 	toolgate "tofu/internal/judge/points/tool_gate"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/scratch"
 	"tofu/library/questions"
 )
 
@@ -143,7 +143,7 @@ func (g *toolGate) ask(ctx context.Context, request loop.GateRequest) (ledger.Ro
 		ProjectDir: g.cwd,
 		Context:    toolgate.ToolGateContext{UserRecentMessages: []string{request.Task}},
 	}
-	if place, found := sys.ScratchOf(ctx); found {
+	if place, found := scratch.ScratchOf(ctx); found {
 		call.ScratchDir = place.Dir()
 	}
 	built, builder, err := toolgate.BuildToolGateV3(call)

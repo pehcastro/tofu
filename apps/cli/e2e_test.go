@@ -14,7 +14,8 @@ import (
 	"tofu/apps/cli/output"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/models/classifiers"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
 	"tofu/internal/testkit/cli"
 )
 
@@ -32,7 +33,7 @@ func tofuBinary(t *testing.T) string {
 			return
 		}
 		path := filepath.Join(dir, "tofu")
-		if sys.OS() == "windows" {
+		if fs.OS() == "windows" {
 			path += ".exe"
 		}
 		ldflags := "-X tofu/internal/platform/credential.builtGuarded=1"
@@ -99,12 +100,12 @@ func (p project) run(t *testing.T, wantCode int, args ...string) string {
 }
 
 func TestE2ETheCredentialGuardRefusesAPlantedFileWithNoUSERPROFILE(t *testing.T) {
-	plant := filepath.Join(sys.SourceRoot(), "apps", "cli", "credential-guard-plant")
+	plant := filepath.Join(fs.SourceRoot(), "apps", "cli", "credential-guard-plant")
 	if err := os.MkdirAll(plant, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(plant) })
-	cli.WriteFile(t, plant, ".env", sys.TypeSafeKeyName+"=planted-not-real\n")
+	cli.WriteFile(t, plant, ".env", credential.TypeSafeKeyName+"=planted-not-real\n")
 	cli.WriteFile(t, plant, ".tofu/roles/classifier.yaml", "model: typesafe/jev-latest\n")
 	plantedEnv, err := filepath.Abs(filepath.Join(plant, ".env"))
 	if err != nil {

@@ -14,7 +14,8 @@ import (
 	"tofu/apps/cli/output"
 	rulesverb "tofu/apps/cli/verbs/rules"
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/testkit/cli"
 	"tofu/internal/testkit/golden"
 )
@@ -64,12 +65,12 @@ func outputProject(t *testing.T) string {
 		"docs/b.md":                        "three " + dash + " four " + dash + " five\n",
 	}
 	for name, body := range files {
-		if err := sys.WriteFile(filepath.Join(project, filepath.FromSlash(name)), []byte(body), 0o644); err != nil {
+		if err := fs.WriteFile(filepath.Join(project, filepath.FromSlash(name)), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
 	t.Chdir(project)
-	logDir, err := sys.LogDir()
+	logDir, err := platformproject.LogDir()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +78,7 @@ func outputProject(t *testing.T) string {
 	fired := `{"rule_id":"em_dash","target":"docs/a.md","mode":"enforced","blocked":true,"findings":1,"at":"` + at + `"}` + "\n" +
 		`{"rule_id":"comments","target":"internal/x.go","mode":"shadow","blocked":false,"findings":2,"at":"` + at + `"}` + "\n" +
 		"not json\n"
-	if err := sys.WriteFile(filepath.Join(logDir, "2026-09-28"+rulesverb.FireSuffix), []byte(fired), 0o644); err != nil {
+	if err := fs.WriteFile(filepath.Join(logDir, "2026-09-28"+rulesverb.FireSuffix), []byte(fired), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return home

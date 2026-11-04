@@ -13,7 +13,7 @@ import (
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/host"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 type agentLayer struct{ name, parent, agents, flag string }
@@ -56,13 +56,13 @@ func parseAgentWriteArgs(args []string) (agentWriteOpts, error) {
 	if opts.dir != "." {
 		projectFlag = " --dir " + project
 	}
-	opts.dir, opts.layer = project, agentLayer{"project", project, filepath.Join(project, sys.StateDirName, "agents"), projectFlag}
+	opts.dir, opts.layer = project, agentLayer{"project", project, filepath.Join(project, fs.StateDirName, "agents"), projectFlag}
 	if global {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return agentWriteOpts{}, err
 		}
-		opts.layer = agentLayer{"global", home, filepath.Join(sys.StateDir(home), "agents"), " --global"}
+		opts.layer = agentLayer{"global", home, filepath.Join(fs.StateDir(home), "agents"), " --global"}
 	}
 	return opts, nil
 }
@@ -140,7 +140,7 @@ func agentsAddVerb(args []string, out, errOut io.Writer) int {
 	if _, err := os.Stat(file); err == nil {
 		return o.Fail(output.ProblemError{What: "the " + opts.layer.name + " layer already has " + name, Hint: "tofu agents set" + opts.layer.flag + " " + name + " <source/model>"})
 	}
-	if err := sys.WriteFile(file, data, 0o644); err != nil {
+	if err := fs.WriteFile(file, data, 0o644); err != nil {
 		return o.Fail(err)
 	}
 	found, err := agentsIn(opts.dir)

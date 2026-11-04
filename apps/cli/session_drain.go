@@ -17,10 +17,10 @@ import (
 	"tofu/internal/agent/context/recall"
 	widget "tofu/internal/cli/render"
 	"tofu/internal/judge/ledger"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/session"
 	"tofu/internal/store/session/drain"
 	"tofu/internal/store/session/drain/claudecode"
-	"tofu/internal/sys"
 )
 
 const (
@@ -103,7 +103,7 @@ func sessionDrain(store *session.Store, handles []string) (drainReport, error) {
 	if err != nil {
 		return drainReport{}, err
 	}
-	logs, err := sys.LogDir()
+	logs, err := platformproject.LogDir()
 	if err != nil {
 		return drainReport{}, err
 	}

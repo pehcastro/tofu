@@ -18,8 +18,8 @@ import (
 	"tofu/internal/cli/render"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/fs"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 )
 
 func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow {
@@ -295,7 +295,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 	return rows
 }
 
-var checkCounts = sys.LazyRegexp(`[^\s,;][^,;]*: \d+ passed, \d+ failed(, \d+ skipped)?|errors in [^,]*: \d+(, in other files: \d+)?`)
+var checkCounts = fs.LazyRegexp(`[^\s,;][^,;]*: \d+ passed, \d+ failed(, \d+ skipped)?|errors in [^,]*: \d+(, in other files: \d+)?`)
 
 func checkSummary(tool, content string) string {
 	if tool != "test" && tool != "typecheck" {

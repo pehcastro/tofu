@@ -9,7 +9,8 @@ import (
 	stopcheck "tofu/internal/judge/points/stop_check"
 	question "tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/project"
 	shipped "tofu/library"
 	"tofu/library/questions"
 )
@@ -25,12 +26,12 @@ type Battery struct {
 }
 
 func ResolveRuleMode(r gate.Rule) (gate.Resolution, error) {
-	calibDir, err := sys.CalibrationDir()
+	calibDir, err := project.CalibrationDir()
 	if err != nil {
 		return gate.Resolution{}, err
 	}
 	lookup := lookupLock(gate.LockPath(calibDir, r))
-	ledgerDir, err := sys.LogDir()
+	ledgerDir, err := project.LogDir()
 	if err != nil {
 		return gate.Resolution{}, err
 	}
@@ -42,7 +43,7 @@ func ResolveRuleMode(r gate.Rule) (gate.Resolution, error) {
 }
 
 func lookupLock(path string) gate.LockLookup {
-	present, err := sys.Exists(path)
+	present, err := fs.Exists(path)
 	if err != nil {
 		return gate.LockLookup{Present: true, Err: err}
 	}

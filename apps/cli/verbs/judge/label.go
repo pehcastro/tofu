@@ -12,7 +12,7 @@ import (
 	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 )
 
 const LabelUsage = "tofu label <id> allow|ask|deny | tofu label --last allow|ask|deny [--json]"
@@ -42,7 +42,7 @@ func LabelVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
 	if outcome != ledger.VerdictAllow && outcome != ledger.VerdictAsk && outcome != ledger.VerdictDeny {
 		return o.Usage(fmt.Errorf("%q is not an outcome, want allow, ask or deny", string(outcome)))
 	}
-	dir, err := sys.LogDir()
+	dir, err := project.LogDir()
 	if err != nil {
 		return o.Fail(err)
 	}

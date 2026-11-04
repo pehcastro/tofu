@@ -18,16 +18,16 @@ import (
 	toolgate "tofu/internal/judge/points/tool_gate"
 	"tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/sys"
+	platformproject "tofu/internal/platform/project"
 )
 
 const forcePush = "git push --force origin main"
 
 func rowByID(t *testing.T, id string) ledger.Row {
 	t.Helper()
-	dir, err := sys.LogDir()
+	dir, err := platformproject.LogDir()
 	if err != nil {
-		t.Fatalf("sys.LogDir: %v", err)
+		t.Fatalf("platformproject.LogDir: %v", err)
 	}
 	row, found, err := ledger.NewReader(dir).ByID(id)
 	if err != nil || !found {
@@ -167,9 +167,9 @@ func TestAReplayedRowCarriesTheFingerprintOfTheRowItReplays(t *testing.T) {
 		t.Fatalf("the judge asked the wire %d times, so this is not the replay path", wire.calls)
 	}
 
-	dir, err := sys.LogDir()
+	dir, err := platformproject.LogDir()
 	if err != nil {
-		t.Fatalf("sys.LogDir: %v", err)
+		t.Fatalf("platformproject.LogDir: %v", err)
 	}
 	var replay ledger.Row
 	if _, err := ledger.NewReader(dir).Each(ledger.Filter{}, func(row ledger.Row) error {

@@ -16,7 +16,7 @@ import (
 
 	"tofu/internal/cli/render"
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/console"
 	"tofu/internal/ui/tui/look/look"
 )
 
@@ -51,7 +51,7 @@ func Detect(out io.Writer, environ []string) Page {
 	}
 	if file, ok := out.(*os.File); ok {
 		forced, _ := strconv.ParseBool(env("CLICOLOR_FORCE"))
-		if page.Profile > colorprofile.NoTTY && sys.EnableVT(file.Fd()) != nil && !forced {
+		if page.Profile > colorprofile.NoTTY && console.EnableVT(file.Fd()) != nil && !forced {
 			page.Profile = colorprofile.NoTTY
 		}
 		if columns, _, err := term.GetSize(file.Fd()); err == nil && columns > 0 {

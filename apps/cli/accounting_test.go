@@ -11,12 +11,12 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/sys"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/testkit/cli"
 	"tofu/internal/ui/tui/app"
 )
 
-var recordedSessionsDir = sys.RecordedStateDir("sessions")
+var recordedSessionsDir = platformproject.RecordedStateDir("sessions")
 
 type recordedLine struct {
 	Kind string          `json:"kind"`

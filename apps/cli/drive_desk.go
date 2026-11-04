@@ -17,7 +17,8 @@ import (
 
 	"tofu/apps/cli/output"
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/build"
+	"tofu/internal/platform/fs"
 )
 
 const driveDeskUsage = `usage: tofu drive desk [--out DIR] [--exe PATH] [--first-run STATE] [STEP...] [-- DESK ARGS]
@@ -156,8 +157,8 @@ func deskFolder(named string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if real, err := os.UserHomeDir(); err != nil || strings.HasPrefix(folder+string(filepath.Separator), filepath.Join(real, sys.StateDirName)+string(filepath.Separator)) {
-		return "", fmt.Errorf("--out %s is inside your real %s, or your real home cannot be found, so the drive does not start", named, sys.StateDirName)
+	if real, err := os.UserHomeDir(); err != nil || strings.HasPrefix(folder+string(filepath.Separator), filepath.Join(real, fs.StateDirName)+string(filepath.Separator)) {
+		return "", fmt.Errorf("--out %s is inside your real %s, or your real home cannot be found, so the drive does not start", named, fs.StateDirName)
 	}
 	if err := os.MkdirAll(folder, 0o755); err != nil {
 		return "", err
@@ -226,7 +227,7 @@ func driveDeskVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return fail(err)
 	}
-	exe, built, err := sys.NewestDesk("", plan.exe)
+	exe, built, err := build.NewestDesk("", plan.exe)
 	if err != nil {
 		return fail(err)
 	}

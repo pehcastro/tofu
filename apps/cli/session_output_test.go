@@ -17,8 +17,9 @@ import (
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
+	"tofu/internal/platform/fs"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/testkit/cli"
 	"tofu/internal/testkit/golden"
 	"tofu/internal/tools/shell/process"
@@ -94,10 +95,10 @@ func sessionOutputProject(t *testing.T) string {
 			t.Fatal(err)
 		}
 	}
-	if err := sys.WriteFile(filepath.Join(store.Dir("turn-broken"), "header.json"), []byte("{not json"), 0o644); err != nil {
+	if err := fs.WriteFile(filepath.Join(store.Dir("turn-broken"), "header.json"), []byte("{not json"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	state, err := sys.ProjectStateDir()
+	state, err := platformproject.ProjectStateDir()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,13 +108,13 @@ func sessionOutputProject(t *testing.T) string {
 		{Name: "build", Command: "go build ./...", Dir: project, PID: 4242, State: process.Exited, Started: now.Add(-2 * time.Minute), Ended: &ended, ExitCode: &exit},
 		{Name: "web", Command: "npm run dev", Dir: project, Owner: "tofu", PID: 4343, State: process.Killed, Started: now.Add(-time.Minute), Ended: &ended},
 	} {
-		if err := sys.WriteFile(filepath.Join(state, "shells", entry.Name+".json"), rawJSON(t, entry), 0o644); err != nil {
+		if err := fs.WriteFile(filepath.Join(state, "shells", entry.Name+".json"), rawJSON(t, entry), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
 	built := filepath.Join(state, "shells", "build.log")
 	printedAt := now.Add(-90 * time.Second)
-	if err := cmp.Or(sys.WriteFile(built, []byte("compiling\ndone\n"), 0o644), os.Chtimes(built, printedAt, printedAt)); err != nil {
+	if err := cmp.Or(fs.WriteFile(built, []byte("compiling\ndone\n"), 0o644), os.Chtimes(built, printedAt, printedAt)); err != nil {
 		t.Fatal(err)
 	}
 	return home

@@ -16,8 +16,8 @@ import (
 	"tofu/apps/cli/output"
 	cli "tofu/apps/cli/page"
 	"tofu/internal/cli/render"
+	platformfs "tofu/internal/platform/fs"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 )
 
 const (
@@ -35,10 +35,10 @@ func copyLegacyStateDirs(out io.Writer) {
 }
 
 func copyLegacyStateDir(out io.Writer, parent string) {
-	target := filepath.Join(parent, sys.StateDirName)
-	source := filepath.Join(parent, sys.LegacyStateDirName)
-	somethingAtTarget, _ := sys.Exists(target)
-	sourceIsADir, _ := sys.IsDir(source)
+	target := filepath.Join(parent, platformfs.StateDirName)
+	source := filepath.Join(parent, platformfs.LegacyStateDirName)
+	somethingAtTarget, _ := platformfs.Exists(target)
+	sourceIsADir, _ := platformfs.IsDir(source)
 	if somethingAtTarget || !sourceIsADir {
 		return
 	}
@@ -54,11 +54,11 @@ func copyLegacyStateDir(out io.Writer, parent string) {
 	}
 	if err != nil {
 		_ = os.RemoveAll(partial)
-		_ = page.Print(out, page.ErrorLine(sys.LegacyStateDirName+" not copied to "+sys.StateDirName+", still read from "+page.Path(source)+": "+err.Error(), ""))
+		_ = page.Print(out, page.ErrorLine(platformfs.LegacyStateDirName+" not copied to "+platformfs.StateDirName+", still read from "+page.Path(source)+": "+err.Error(), ""))
 		return
 	}
-	said := strings.Join([]string{sys.LegacyStateDirName + " copied to " + sys.StateDirName, output.Plural(countSessions(source), "session"),
-		output.Plural(copied.Files, "file"), render.Size(int(copied.Bytes)), sys.LegacyStateDirName + " kept"}, " · ")
+	said := strings.Join([]string{platformfs.LegacyStateDirName + " copied to " + platformfs.StateDirName, output.Plural(countSessions(source), "session"),
+		output.Plural(copied.Files, "file"), render.Size(int(copied.Bytes)), platformfs.LegacyStateDirName + " kept"}, " · ")
 	_ = page.Print(out, []string{page.Receipt(cli.Added, said, target)})
 }
 
@@ -86,7 +86,7 @@ func copyTreeInto(source fs.FS, root, target string) (copied treeCopy, err error
 		there, err := os.ReadFile(to)
 		switch {
 		case errors.Is(err, fs.ErrNotExist):
-			return sys.WriteFile(to, body, 0o644)
+			return platformfs.WriteFile(to, body, 0o644)
 		case err != nil || bytes.Equal(there, body):
 			return err
 		}
@@ -98,7 +98,7 @@ func copyTreeInto(source fs.FS, root, target string) (copied treeCopy, err error
 		if settled == nil {
 			return nil
 		}
-		return sys.WriteFile(to+suffix, settled, 0o644)
+		return platformfs.WriteFile(to+suffix, settled, 0o644)
 	})
 	return copied, err
 }

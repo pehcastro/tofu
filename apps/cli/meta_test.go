@@ -20,7 +20,8 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/host"
 	"tofu/internal/models/llm/catalog"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
+	platformfs "tofu/internal/platform/fs"
 	"tofu/internal/testkit/cli"
 )
 
@@ -64,7 +65,7 @@ func metaHome(t *testing.T) (string, string) {
 	home, project := t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv(sys.MetaMuseKeyName, "")
+	t.Setenv(credential.MetaMuseKeyName, "")
 	t.Chdir(project)
 	return home, project
 }
@@ -140,7 +141,7 @@ func TestAMetaTurnSendsTheKeyAndTheModelAndRunsTheStreamedToolCall(t *testing.T)
 	if err := os.WriteFile(filepath.Join(project, "note.txt"), []byte("42\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := sys.SaveKey(sys.MetaMuseKeyName, madeUpMetaKey); err != nil {
+	if err := credential.SaveKey(credential.MetaMuseKeyName, madeUpMetaKey); err != nil {
 		t.Fatal(err)
 	}
 	heard := metaStub(t, func(request heardMeta, w http.ResponseWriter) {
@@ -207,10 +208,10 @@ func TestABoundMetaOrchestratorRunsOnMetaWithNoModelAndTheAppListsItsWire(t *tes
 	if wires := heldForTest(t).Wires(); len(wires) != 0 {
 		t.Errorf("with no meta key the app lists %+v", wires)
 	}
-	if err := sys.SaveKey(sys.MetaMuseKeyName, madeUpMetaKey); err != nil {
+	if err := credential.SaveKey(credential.MetaMuseKeyName, madeUpMetaKey); err != nil {
 		t.Fatal(err)
 	}
-	if err := catalog.BindRole(sys.StateDir(project), catalog.RoleOrchestrator, "meta/muse-spark-1.3-contributor"); err != nil {
+	if err := catalog.BindRole(platformfs.StateDir(project), catalog.RoleOrchestrator, "meta/muse-spark-1.3-contributor"); err != nil {
 		t.Fatal(err)
 	}
 	heard := metaStub(t, func(_ heardMeta, w http.ResponseWriter) {
@@ -276,8 +277,8 @@ func TestLoginMetaChecksTheKeyBeforeStoringItAndNeverPrintsIt(t *testing.T) {
 	if code := loginVerb([]string{"llm", "meta"}, strings.NewReader(madeUpMetaKey+"\r\n"), &out, &errOut); code == output.ExitOK {
 		t.Fatalf("a refused key was stored:\n%s%s", out.String(), errOut.String())
 	}
-	stored, _ := sys.StoredKeys()
-	if stored[sys.MetaMuseKeyName] != "" {
+	stored, _ := credential.StoredKeys()
+	if stored[credential.MetaMuseKeyName] != "" {
 		t.Errorf("a refused key reached the store")
 	}
 	if strings.Contains(out.String()+errOut.String(), madeUpMetaKey) {
@@ -290,9 +291,9 @@ func TestLoginMetaChecksTheKeyBeforeStoringItAndNeverPrintsIt(t *testing.T) {
 	if code := loginVerb([]string{"llm", "meta"}, strings.NewReader(madeUpMetaKey+"\n"), &out, &errOut); code != output.ExitOK {
 		t.Fatalf("login meta exited %d:\n%s", code, errOut.String())
 	}
-	stored, _ = sys.StoredKeys()
-	if stored[sys.MetaMuseKeyName] != madeUpMetaKey {
-		t.Errorf("the store holds a value of length %d", len(stored[sys.MetaMuseKeyName]))
+	stored, _ = credential.StoredKeys()
+	if stored[credential.MetaMuseKeyName] != madeUpMetaKey {
+		t.Errorf("the store holds a value of length %d", len(stored[credential.MetaMuseKeyName]))
 	}
 	if strings.Contains(out.String()+errOut.String(), madeUpMetaKey) || !strings.Contains(out.String(), madeUpMetaKey[len(madeUpMetaKey)-4:]) {
 		t.Errorf("login meta printed more than the last four, or not even those:\n%s", out.String())
@@ -306,8 +307,8 @@ func TestLoginMetaChecksTheKeyBeforeStoringItAndNeverPrintsIt(t *testing.T) {
 
 func TestAMetaKeyOnlyInTheEnvironmentIsRedacted(t *testing.T) {
 	metaHome(t)
-	t.Setenv(sys.MetaMuseKeyName, madeUpMetaKey)
-	said := sys.LoadKeyRedactor().Redact("env printed META_MUSE_API_KEY=" + madeUpMetaKey + " and " + madeUpMetaKey)
+	t.Setenv(credential.MetaMuseKeyName, madeUpMetaKey)
+	said := credential.LoadKeyRedactor().Redact("env printed META_MUSE_API_KEY=" + madeUpMetaKey + " and " + madeUpMetaKey)
 	if strings.Contains(said, madeUpMetaKey) {
 		t.Fatalf("the redactor let the key through: %s", said)
 	}

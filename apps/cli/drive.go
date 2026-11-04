@@ -29,9 +29,12 @@ import (
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/models/llm/wire/codex"
 	"tofu/internal/models/transport"
+	platformclipboard "tofu/internal/platform/clipboard"
+	"tofu/internal/platform/credential"
+	"tofu/internal/platform/fs"
+	platformproject "tofu/internal/platform/project"
 	sessionstore "tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	tui "tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/fixture"
 	"tofu/internal/ui/tui/frame/filmstrip"
@@ -464,7 +467,7 @@ func (c *cassette) take(request core.Request) (recordedReply, error) {
 	}
 	c.sent = append(c.sent, sent)
 	if c.dump != "" {
-		if err := appendLines(c.dump, sent.lines(requestsForm{}, 0, sys.KeyRedactor{})); err != nil {
+		if err := appendLines(c.dump, sent.lines(requestsForm{}, 0, credential.KeyRedactor{})); err != nil {
 			return recordedReply{}, fmt.Errorf("%s: %w", requestsVariable, err)
 		}
 	}
@@ -484,7 +487,7 @@ func (c *cassette) requests(form requestsForm, width int) string {
 	if form.only > len(c.sent) {
 		return fmt.Sprintf("%d requests were sent, so there is no request %d", len(c.sent), form.only)
 	}
-	redactor := sys.LoadKeyRedactor()
+	redactor := credential.LoadKeyRedactor()
 	var lines []string
 	for number, sent := range c.sent {
 		if form.only == 0 || form.only == number+1 {
@@ -494,7 +497,7 @@ func (c *cassette) requests(form requestsForm, width int) string {
 	return cmp.Or(strings.Join(lines, "\n"), noRequest)
 }
 
-func (sent sentRequest) lines(form requestsForm, width int, redactor sys.KeyRedactor) []string {
+func (sent sentRequest) lines(form requestsForm, width int, redactor credential.KeyRedactor) []string {
 	lines := []string{sent.summary}
 	for index, message := range sent.messages {
 		text := message.Sent()
@@ -720,11 +723,11 @@ func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePla
 			}
 			return nil
 		},
-		clipboard: func() (sys.Clipboard, error) {
+		clipboard: func() (platformclipboard.Clipboard, error) {
 			if plan.clipboard == "" {
-				return sys.Clipboard{Kind: sys.ClipboardEmpty}, nil
+				return platformclipboard.Clipboard{Kind: platformclipboard.ClipboardEmpty}, nil
 			}
-			return sys.Clipboard{Kind: sys.ClipboardFiles, Files: []string{plan.clipboard}}, nil
+			return platformclipboard.Clipboard{Kind: platformclipboard.ClipboardFiles, Files: []string{plan.clipboard}}, nil
 		},
 		quota: quotas,
 		now:   clock,
@@ -938,9 +941,9 @@ func refuseTheRealHome(named string) error {
 	}
 	temp := os.TempDir()
 	insideTemp := func(path string) bool { return within(temp, path) && !within(path, temp) }
-	state := within(filepath.Join(real, sys.StateDirName), named) && !insideTemp(real)
+	state := within(filepath.Join(real, fs.StateDirName), named) && !insideTemp(real)
 	if state || !insideTemp(named) && (within(named, real) || within(real, named)) {
-		return fmt.Errorf("--home %s is your real home %s, its %s, a folder above it, or a folder under it outside %s, and a drive never runs against it; name a folder made for the run, or leave --home out for a fresh one", named, real, sys.StateDirName, temp)
+		return fmt.Errorf("--home %s is your real home %s, its %s, a folder above it, or a folder under it outside %s, and a drive never runs against it; name a folder made for the run, or leave --home out for a fresh one", named, real, fs.StateDirName, temp)
 	}
 	return nil
 }
@@ -1024,7 +1027,7 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	launch := launchOf(dir, resumed, plan.fresh)
 	defer leaveShells(launch.registry)
 	app := drivenApp(dir, deck, clock, plan, launch, held, quotas)
-	driver := filmstrip.Drive(app, plan.width, plan.height, sys.CrashDir(dir))
+	driver := filmstrip.Drive(app, plan.width, plan.height, platformproject.CrashDir(dir))
 	defer driver.Close()
 	defer (*launch.release)()
 	defer func() {

@@ -14,7 +14,7 @@ import (
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/catalog"
-	"tofu/internal/sys"
+	"tofu/internal/platform/credential"
 )
 
 const (
@@ -76,11 +76,11 @@ func KeyTable() []KeyFacts {
 		return bound.Slug()
 	}
 	return []KeyFacts{
-		{host.RoleLLM, MetaName, sys.MetaMuseKeyName, catalog.Meta.Display(), "serves the meta models", metaReports, ""},
-		{host.RoleLLM, OpenRouterName, sys.OpenRouterKeyName, catalog.OpenRouter.Display(), "serves the openrouter models on your own key", openRouterReports, ""},
+		{host.RoleLLM, MetaName, credential.MetaMuseKeyName, catalog.Meta.Display(), "serves the meta models", metaReports, ""},
+		{host.RoleLLM, OpenRouterName, credential.OpenRouterKeyName, catalog.OpenRouter.Display(), "serves the openrouter models on your own key", openRouterReports, ""},
 		{host.RoleClassifier, TypeSafeName, classifiers.KeyName(catalog.TypeSafe), catalog.TypeSafe.Display(), classifierKeyUse(bound, err, catalog.TypeSafe), typeSafeReports, boundOn(catalog.TypeSafe)},
 		{host.RoleClassifier, OpenRouterName, classifiers.KeyName(catalog.OpenRouter), catalog.OpenRouter.Display(), classifierKeyUse(bound, err, catalog.OpenRouter), openRouterReports, boundOn(catalog.OpenRouter)},
-		{host.RoleSearch, BraveName, sys.BraveSearchKeyName, BraveDisplay, "backs the web search tool", BraveReports(), ""},
+		{host.RoleSearch, BraveName, credential.BraveSearchKeyName, BraveDisplay, "backs the web search tool", BraveReports(), ""},
 	}
 }
 

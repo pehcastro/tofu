@@ -20,8 +20,9 @@ import (
 	toolgate "tofu/internal/judge/points/tool_gate"
 	"tofu/internal/models/classifiers/core"
 	llm "tofu/internal/models/llm/core"
+	"tofu/internal/platform/fs"
+	platformproject "tofu/internal/platform/project"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/sys"
 	"tofu/internal/testkit/cli"
 	"tofu/internal/ui/tui/app"
 	library "tofu/library"
@@ -37,7 +38,7 @@ const gateFixtureThresholds = "  risk_ask_at: 1.5\n  risk_deny_at: 2.5\n" +
 
 func writeGateRuleWithThresholds(t *testing.T, thresholds string) string {
 	t.Helper()
-	libraryDir, err := sys.LibraryDir()
+	libraryDir, err := fs.LibraryDir()
 	if err != nil {
 		t.Fatalf("library dir: %v", err)
 	}
@@ -70,7 +71,7 @@ func writeGateRuleFixture(t *testing.T) gate.Thresholds {
 
 func writeGateLockFixture(t *testing.T, build string) gate.Thresholds {
 	t.Helper()
-	calibDir, err := sys.CalibrationDir()
+	calibDir, err := platformproject.CalibrationDir()
 	if err != nil {
 		t.Fatalf("calibration dir: %v", err)
 	}
@@ -97,9 +98,9 @@ func writeGateLockFixture(t *testing.T, build string) gate.Thresholds {
 
 func writeGateLedgerRowFixture(t *testing.T) {
 	t.Helper()
-	dir, err := sys.LogDir()
+	dir, err := platformproject.LogDir()
 	if err != nil {
-		t.Fatalf("sys.LogDir: %v", err)
+		t.Fatalf("platformproject.LogDir: %v", err)
 	}
 	row := ledger.Row{Point: "tool_gate", Questions: "tool_gate", Version: gateFixtureVersion, Build: gateFixtureBuild}
 	if _, err := ledger.NewWriter(dir).Append(row); err != nil {
@@ -167,7 +168,7 @@ func TestADecisionMadeNowCarriesTheFingerprintOfTheCallItJudged(t *testing.T) {
 		t.Fatalf("the gate did not decide: %v", err)
 	}
 
-	ledgerDir, err := sys.LogDir()
+	ledgerDir, err := platformproject.LogDir()
 	if err != nil {
 		t.Fatalf("ledger dir: %v", err)
 	}

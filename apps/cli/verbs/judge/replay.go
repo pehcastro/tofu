@@ -20,7 +20,7 @@ import (
 	"tofu/internal/judge/ledger"
 	stopcheck "tofu/internal/judge/points/stop_check"
 	question "tofu/internal/judge/questions"
-	"tofu/internal/sys"
+	"tofu/internal/platform/project"
 	"tofu/library/questions"
 )
 
@@ -109,7 +109,7 @@ func ReplayVerb(args []string, out, errOut io.Writer, now func() time.Time) int 
 	if err != nil {
 		return o.Usage(err)
 	}
-	dir, err := sys.LogDir()
+	dir, err := project.LogDir()
 	if err != nil {
 		return o.Fail(err)
 	}

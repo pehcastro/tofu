@@ -16,8 +16,8 @@ import (
 	judgeverb "tofu/apps/cli/verbs/judge"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
+	platformproject "tofu/internal/platform/project"
 	sessionstore "tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/testkit/cli"
 	"tofu/internal/testkit/golden"
 )
@@ -80,7 +80,7 @@ func whyLedger(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Chdir(project)
-	dir, err := sys.LogDir()
+	dir, err := platformproject.LogDir()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,11 +126,11 @@ func TestWhyReplayAndLabelMatchTheirTextAndJSONGoldens(t *testing.T) {
 	for _, mode := range []string{"text", "json"} {
 		t.Run(mode, func(t *testing.T) {
 			whyLedger(t)
-			ledgerDir, err := sys.LogDir()
+			ledgerDir, err := platformproject.LogDir()
 			if err != nil {
 				t.Fatal(err)
 			}
-			state, err := sys.ProjectStateDirAt(".")
+			state, err := platformproject.ProjectStateDirAt(".")
 			if err != nil {
 				t.Fatal(err)
 			}
