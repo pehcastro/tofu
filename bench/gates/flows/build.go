@@ -27,7 +27,7 @@ var seams = []seam{
 	{`SubAgentAskMillis\s*=\s*\d+`, "SubAgentAskMillis = 8000"},
 	{`CronMinIntervalSeconds\s*=\s*\d+`, "CronMinIntervalSeconds = 10"},
 	{`-konst\.SettledSubAgentFoldMinutes \* time\.Minute`, "-20 * time.Second"},
-	{`(\treply, err := c\.take\(request\)\r?\n\tif err != nil \{\r?\n\t\treturn llm\.Decision\{\}, err\r?\n\t\}\r?\n)`,
+	{`(\treply, err := c\.take\(request\)\r?\n\tif err != nil \{\r?\n\t\treturn core\.Decision\{\}, err\r?\n\t\}\r?\n)`,
 		"${1}\tif strings.HasPrefix(reply.decision.Content, \"" + panicMark + "\") {\n\t\tpanic(reply.decision.Content)\n\t}\n"},
 }
 
