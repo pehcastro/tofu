@@ -131,12 +131,12 @@ func main() {
 	cassette := flag.String("cassette", filepath.Join("bench", "suites", "agent", "thread", "testdata", "run.jsonl"), "the recorded lead and sub-agent run both arms replay")
 	flag.Parse()
 	if *before == "" || *after == "" {
-		fmt.Fprintln(os.Stderr, "bench/thread: name both --before and --after")
+		fmt.Fprintln(os.Stderr, "bench/suites/agent/thread: name both --before and --after")
 		os.Exit(2)
 	}
 	fail := func(err error) {
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "bench/thread:", err)
+			fmt.Fprintln(os.Stderr, "bench/suites/agent/thread:", err)
 			os.Exit(1)
 		}
 	}
@@ -152,7 +152,7 @@ func main() {
 		fail(err)
 		rows = append(rows, row)
 	}
-	fmt.Printf("bench/thread %s, %s/%s\n", time.Now().Format(time.DateOnly), runtime.GOOS, runtime.GOARCH)
+	fmt.Printf("bench/suites/agent/thread %s, %s/%s\n", time.Now().Format(time.DateOnly), runtime.GOOS, runtime.GOARCH)
 	fmt.Printf("  credential  none: each arm runs tofu run on %s in a fresh home under %s\n\n", recorded, work)
 	fmt.Printf("%-7s %-7s %6s %9s %13s %15s %15s %16s %13s\n", "arm", "ticket", "said", "evidence", "thread chars", "engineer chars", "evidence chars", "evidence/lines", "proof in Log")
 	for _, r := range rows {

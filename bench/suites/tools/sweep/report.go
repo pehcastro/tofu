@@ -37,7 +37,7 @@ func renderDuplications(b *strings.Builder) {
 }
 
 func renderShapes(b *strings.Builder) {
-	b.WriteString("## Shapes computed in more than one place, against bench/stat\n\n")
+	b.WriteString("## Shapes computed in more than one place, against internal/stat\n\n")
 	for _, s := range RepeatedShapes() {
 		fmt.Fprintf(b, "- **%s**: %s. %s\n", s.Name, strings.Join(s.Packages, ", "), s.Against)
 	}

@@ -13,7 +13,6 @@ A number that is measured and compared. Every suite turns a mechanism on and off
 | `bench/kit/` | libraries suites import, never a suite: `api/`, `report/`, `harness/` |
 | `bench/gates/` | programs that stamp or compare builds: `flows/`, `treewide/`, `parity/` |
 | `bench/suites/<area>/<suite>/` | one measurement per folder |
-| `bench/stopcheck/` | a judge suite waiting to move to `bench/suites/judge/` |
 
 Areas:
 

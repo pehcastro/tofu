@@ -24,7 +24,7 @@ func SessionReaders() []Reader {
 func LogReaders() []Reader {
 	return []Reader{
 		{Package: "internal/judge/ledger", Dir: ".tofu/log",
-			Differs: "the shared one. NewReader reads the day-stamped NNNN-NN-NN.jsonl ledger rows. bench/suites/judge/calibration, bench/kit/harness (parse_tofu.go) and bench/stopcheck (run.go) call it rather than reading the directory themselves."},
+			Differs: "the shared one. NewReader reads the day-stamped NNNN-NN-NN.jsonl ledger rows. bench/suites/judge/calibration, bench/kit/harness (parse_tofu.go) and bench/suites/judge/stopcheck (run.go) call it rather than reading the directory themselves."},
 		{Package: "bench/suites/rules/rules", Dir: ".tofu/log",
 			Differs: "ReadDir globs *.rules.jsonl, a different file suffix carrying rule-fire records (RuleID, Target, Mode, Blocked, Findings, At), not a ledger row. No overlap with ledger.NewReader's file glob, so this is a second stream in the same directory rather than the same one read twice."},
 		{Package: "bench/suites/judge/picker", Dir: ".tofu/sessions and .tofu/log",
@@ -52,17 +52,17 @@ func Duplications() []Duplication {
 		},
 		{
 			A:              "bench/corpus/reader.go: type SkippedTurn{Path, Reason}",
-			B:              "bench/suites/agent/turn/corpus.go: type SkippedTurn{Path, Reason} (same name, same shape, different package) and bench/suites/context/schemas/turns.go: type SkippedSession{Path, Reason}, bench/suites/context/recall/reach.go: type SkippedSession{ID, Reason}, bench/stopcheck/session.go: type Skipped{File, Why}, bench/suites/judge/picker/reading.go: type Skip{Path, Field}",
+			B:              "bench/suites/agent/turn/corpus.go: type SkippedTurn{Path, Reason} (same name, same shape, different package) and bench/suites/context/schemas/turns.go: type SkippedSession{Path, Reason}, bench/suites/context/recall/reach.go: type SkippedSession{ID, Reason}, bench/suites/judge/stopcheck/session.go: type Skipped{File, Why}, bench/suites/judge/picker/reading.go: type Skip{Path, Field}",
 			Recommendation: "merge: six hand-rolled two-field skip records for the same idea, a path or id and a reason a row did not count. One exported type in bench/corpus, reused everywhere a walker skips a row.",
 		},
 		{
 			A:              "bench/kit/harness/repeats.go: SpreadOf (sorts, takes the middle, low, high by hand)",
-			B:              "bench/stat/stat.go: Median, Percentile, Spread (the same three numbers, one call each)",
+			B:              "internal/stat/stat.go: Median, Percentile, Spread (the same three numbers, one call each)",
 			Recommendation: "merge: SpreadOf should call stat.Median and stat.Spread instead of re-sorting and re-deriving the middle index.",
 		},
 		{
 			A:              "bench/suites/context/thrift/spread.go: percentile (nearest-rank, int64, truncated index)",
-			B:              "bench/stat/stat.go: Percentile (linear interpolation, float64)",
+			B:              "internal/stat/stat.go: Percentile (linear interpolation, float64)",
 			Recommendation: "leave, with a reason: thrift measures byte and token counts, where a fractional value between two real counts is not a meaningful answer, so nearest-rank is the right rule and float64 interpolation is not a drop-in replacement.",
 		},
 	}
@@ -77,14 +77,14 @@ type Shape struct {
 func RepeatedShapes() []Shape {
 	return []Shape{
 		{Name: "percentile / median of a float64 series",
-			Packages: []string{"bench/suites/judge/cost/report.go (medianLatency, calls stat.Median correctly)", "bench/kit/harness/repeats.go (SpreadOf, does not call bench/stat)", "bench/suites/tools/search/cost_test.go (median, a test-local helper on time.Duration)"},
-			Against:  "bench/stat.Median and bench/stat.Percentile cover this. Only bench/suites/judge/cost uses it; harness and the search test each grew their own."},
+			Packages: []string{"bench/suites/judge/cost/report.go (medianLatency, calls stat.Median correctly)", "bench/kit/harness/repeats.go (SpreadOf, does not call internal/stat)", "bench/suites/tools/search/cost_test.go (median, a test-local helper on time.Duration)"},
+			Against:  "internal/stat.Median and internal/stat.Percentile cover this. Only bench/suites/judge/cost uses it; harness and the search test each grew their own."},
 		{Name: "percentile / spread of an int64 series (byte and token counts)",
 			Packages: []string{"bench/suites/context/thrift/spread.go (Measure/percentile, nearest-rank)"},
-			Against:  "bench/stat has no int64 form and no nearest-rank form. Not a bug: see the not-duplication note below."},
+			Against:  "internal/stat has no int64 form and no nearest-rank form. Not a bug: see the not-duplication note below."},
 		{Name: "a two-field skip record with a path/id and a reason",
-			Packages: []string{"bench/corpus (SkippedTurn)", "bench/suites/agent/turn (SkippedTurn)", "bench/suites/context/schemas (SkippedSession)", "bench/suites/context/recall (SkippedSession)", "bench/stopcheck (Skipped)", "bench/suites/judge/picker (Skip)"},
-			Against:  "bench/stat has nothing for this; it is not a stat/stat.go shape at all, but it is the single most repeated shape found in this sweep."},
+			Packages: []string{"bench/corpus (SkippedTurn)", "bench/suites/agent/turn (SkippedTurn)", "bench/suites/context/schemas (SkippedSession)", "bench/suites/context/recall (SkippedSession)", "bench/suites/judge/stopcheck (Skipped)", "bench/suites/judge/picker (Skip)"},
+			Against:  "internal/stat has nothing for this; it is not a stat/stat.go shape at all, but it is the single most repeated shape found in this sweep."},
 	}
 }
 

@@ -219,15 +219,15 @@ func main() {
 	flag.Parse()
 	arms, err := parseArms(*armsFlag)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "bench/fanin:", err)
+		fmt.Fprintln(os.Stderr, "bench/suites/agent/fanin:", err)
 		os.Exit(2)
 	}
 	work, err := os.MkdirTemp("", "tofu-bench-fanin-")
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "bench/fanin:", err)
+		fmt.Fprintln(os.Stderr, "bench/suites/agent/fanin:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("bench/fanin %s, %s/%s, %d cpus\n", time.Now().Format(time.DateOnly), runtime.GOOS, runtime.GOARCH, runtime.NumCPU())
+	fmt.Printf("bench/suites/agent/fanin %s, %s/%s, %d cpus\n", time.Now().Format(time.DateOnly), runtime.GOOS, runtime.GOARCH, runtime.NumCPU())
 	fmt.Printf("  credential  none: every arm drives tofu serve on a cassette in a fresh home under %s\n", work)
 	fmt.Printf("  window      quiet %dms, cap %dms, as built into this bench; each binary carries its own\n", konst.ReportGatherQuietMillis, konst.ReportGatherCapMillis)
 	for _, a := range arms {
