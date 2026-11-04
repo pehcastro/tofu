@@ -48,13 +48,6 @@ func ShellRegistryFrom(ctx context.Context) *process.Registry {
 	return registry
 }
 
-type shellOwnerKey struct{}
-
-func shellOwnerFrom(ctx context.Context) string {
-	owner, _ := ctx.Value(shellOwnerKey{}).(string)
-	return owner
-}
-
 type shellCallKey struct{}
 
 func withShellCall(ctx context.Context, callEvent string) context.Context {

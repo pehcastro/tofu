@@ -1,7 +1,6 @@
 package loop
 
 import (
-	"context"
 	"errors"
 	"slices"
 	"time"
@@ -38,13 +37,6 @@ type spawnTrace struct {
 	ticket     string
 	depth      int
 	stagger    stagger
-}
-
-type subAgentKey struct{}
-
-func SubAgentAsking(ctx context.Context) string {
-	id, _ := ctx.Value(subAgentKey{}).(string)
-	return id
 }
 
 func (s spawnTrace) begin(id string) error {

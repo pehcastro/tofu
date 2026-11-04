@@ -1,4 +1,4 @@
-package loop
+package contract
 
 import (
 	"context"
@@ -37,15 +37,15 @@ func (l *ReadLedger) seen(ctx context.Context) map[string]readMark {
 	return l.byAgent[agent]
 }
 
-func ledgerKey(path string) string {
+func LedgerKey(path string) string {
 	return filepath.ToSlash(filepath.Clean(path))
 }
 
 func readKey(path string) string {
 	if runtime.GOOS == "windows" {
-		return strings.ToLower(ledgerKey(path))
+		return strings.ToLower(LedgerKey(path))
 	}
-	return ledgerKey(path)
+	return LedgerKey(path)
 }
 
 func lineCount(body []byte) int {

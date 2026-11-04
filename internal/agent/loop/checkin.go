@@ -343,10 +343,6 @@ func waitingReviews(reviews []boardy.Front, now time.Time) string {
 	return said
 }
 
-func listed(ids []string) string {
-	return cmp.Or(strings.Join(ids, ", "), "none")
-}
-
 type LeadCheckIn struct {
 	Every time.Duration
 	Due   func() (string, bool)

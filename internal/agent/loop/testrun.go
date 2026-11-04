@@ -185,11 +185,6 @@ func (r *TestRunners) Test(ctx context.Context, resolved string) (contract.Resul
 	return failure(fmt.Sprintf("test: vitest in %s, %d ms, vitest stopped before it answered. its last lines:\n%s", dir, took, strings.Join(runner.lastSaid(), "\n"))), nil
 }
 
-func failure(content string) contract.Result {
-	first, _, _ := strings.Cut(content, "\n")
-	return contract.Result{Content: content, FailureText: first}
-}
-
 func colocatedTests(dir, stem string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {

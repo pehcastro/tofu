@@ -1,4 +1,4 @@
-package loop
+package contract
 
 import (
 	"fmt"
@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"tofu/internal/sys"
-	"tofu/internal/tools/contract"
 )
 
 func RepairPath(requested, noun string, found []string) (string, string, error) {
@@ -28,20 +27,20 @@ func RepairPath(requested, noun string, found []string) (string, string, error) 
 		requested, noun, len(found), base, strings.Join(found, ", "))
 }
 
-func lookalikes(r contract.Root, requested string) ([]string, error) {
-	if listed, err := gitListing(r); err == nil {
+func Lookalikes(r Root, requested string) ([]string, error) {
+	if listed, err := GitListing(r); err == nil {
 		if found := namedLike(r, listed, requested); len(found) > 0 {
 			return found, nil
 		}
 	}
-	walked, err := walkListing(r)
+	walked, err := WalkListing(r)
 	if err != nil {
 		return nil, err
 	}
 	return namedLike(r, walked, requested), nil
 }
 
-func realPaths(r contract.Root, candidates []string) []string {
+func RealPaths(r Root, candidates []string) []string {
 	var real, listed []string
 	var listErr error
 	for _, candidate := range candidates {
@@ -52,8 +51,8 @@ func realPaths(r contract.Root, candidates []string) []string {
 			}
 		}
 		if listed == nil && listErr == nil {
-			if listed, listErr = gitListing(r); listErr != nil {
-				listed, listErr = walkListing(r)
+			if listed, listErr = GitListing(r); listErr != nil {
+				listed, listErr = WalkListing(r)
 			}
 		}
 		if len(namedLike(r, listed, candidate)) > 0 {
@@ -63,7 +62,7 @@ func realPaths(r contract.Root, candidates []string) []string {
 	return real
 }
 
-func gitListing(r contract.Root) ([]string, error) {
+func GitListing(r Root) ([]string, error) {
 	listed, err := exec.Command("git", "-C", string(r), "ls-files", "-z", "--cached", "--others", "--exclude-standard").Output()
 	if err != nil {
 		return nil, err
@@ -71,7 +70,7 @@ func gitListing(r contract.Root) ([]string, error) {
 	return strings.FieldsFunc(string(listed), func(c rune) bool { return c == 0 }), nil
 }
 
-func walkListing(r contract.Root) ([]string, error) {
+func WalkListing(r Root) ([]string, error) {
 	var listed []string
 	err := filepath.WalkDir(string(r), func(full string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -98,7 +97,7 @@ func neverListed(directory string) bool {
 	return false
 }
 
-func namedLike(r contract.Root, listed []string, requested string) []string {
+func namedLike(r Root, listed []string, requested string) []string {
 	wanted := strings.ToLower(path.Clean(filepath.ToSlash(requested)))
 	base := path.Base(wanted)
 	var found []string

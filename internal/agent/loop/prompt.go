@@ -230,34 +230,7 @@ func gitBranch(dir string) string {
 	}
 }
 
-func findUp(dir string, name ...string) (string, bool) {
-	at := absolute(dir)
-	for {
-		if path := filepath.Join(append([]string{at}, name...)...); isFile(path) {
-			return path, true
-		}
-		parent := filepath.Dir(at)
-		if parent == at {
-			return "", false
-		}
-		at = parent
-	}
-}
-
-func isFile(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && !info.IsDir()
-}
-
 func isDir(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
-}
-
-func absolute(dir string) string {
-	abs, err := filepath.Abs(dir)
-	if err != nil {
-		return dir
-	}
-	return abs
 }

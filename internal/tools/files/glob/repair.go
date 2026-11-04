@@ -1,4 +1,4 @@
-package registry
+package glob
 
 import (
 	"fmt"
@@ -7,18 +7,17 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/internal/agent/loop"
 	"tofu/internal/tools/contract"
 )
 
 func lookalikes(root contract.Root, requested string, withDirectories bool) ([]string, error) {
-	listed, err := filesUnder(root, ".", false)
+	listed, err := FilesUnder(root, ".", false)
 	if err != nil {
 		return nil, err
 	}
-	names := listed.files
+	names := listed.Files
 	if withDirectories {
-		names = slices.Concat(listed.files, directoriesOf(listed.files))
+		names = slices.Concat(listed.Files, directoriesOf(listed.Files))
 	}
 	wanted := strings.ToLower(path.Clean(filepath.ToSlash(requested)))
 	base := path.Base(wanted)
@@ -47,7 +46,7 @@ func directoriesOf(files []string) []string {
 	return dirs
 }
 
-func repairPath(root contract.Root, requested string, withDirectories bool) (string, string, error) {
+func Repair(root contract.Root, requested string, withDirectories bool) (string, string, error) {
 	noun := "file"
 	if withDirectories {
 		noun = "path"
@@ -56,7 +55,7 @@ func repairPath(root contract.Root, requested string, withDirectories bool) (str
 	if err != nil {
 		return "", "", err
 	}
-	return loop.RepairPath(requested, noun, found)
+	return contract.RepairPath(requested, noun, found)
 }
 
 func exactOccurrences(body, wanted string) []int {
@@ -105,7 +104,7 @@ func listLines(lines []string, at []int) string {
 	return strings.Join(parts, "; ")
 }
 
-func replaceOnce(before, shown, wanted, becomes string) (string, string, error) {
+func ReplaceOnce(before, shown, wanted, becomes string) (string, string, error) {
 	lines := strings.Split(before, "\n")
 	exact := exactOccurrences(before, wanted)
 	if len(exact) == 1 {

@@ -1,4 +1,4 @@
-package registry
+package glob
 
 import (
 	"cmp"
@@ -37,7 +37,7 @@ func NewGlob(dir string) (Glob, error) {
 
 func (g Glob) Name() string { return "glob" }
 
-const ignoredWalkDescription = "it skips node_modules, .git, .tofu and every path a .gitignore excludes, but always lists AGENTS.md and CLAUDE.md; " +
+const IgnoredWalkDescription = "it skips node_modules, .git, .tofu and every path a .gitignore excludes, but always lists AGENTS.md and CLAUDE.md; " +
 	"include_ignored true walks everything"
 
 func (g Glob) Definition() core.Tool {
@@ -47,7 +47,7 @@ func (g Glob) Definition() core.Tool {
 			"the pattern is matched against the whole path relative to the working directory and against the file name alone, " +
 			"so *.ts finds every typescript file at any depth and src/*.ts finds only the ones directly under src. " +
 			"** matches any number of directories, so src/**/*.ts finds every typescript file under src, and {ts,tsx} matches either. " +
-			ignoredWalkDescription + ". " +
+			IgnoredWalkDescription + ". " +
 			fmt.Sprintf("it lists %d paths a page, and skip passes over that many to reach the next. ", konst.GlobPathsResultCap) +
 			"it does not read a file and it does not search file contents: search does that",
 		Parameters: map[string]any{
@@ -86,14 +86,14 @@ func (g Glob) Run(_ context.Context, raw json.RawMessage) (contract.Result, erro
 		return contract.Result{}, fmt.Errorf("glob: %q is not a shell pattern: %w", args.Pattern, err)
 	}
 	under := cmp.Or(args.Path, ".")
-	listed, err := filesUnder(g.root, under, args.IncludeIgnored)
+	listed, err := FilesUnder(g.root, under, args.IncludeIgnored)
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("glob: %w", err)
 	}
-	under = listed.under
+	under = listed.Under
 
 	var found []string
-	for _, rel := range listed.files {
+	for _, rel := range listed.Files {
 		if glob.MatchString(rel) || glob.MatchString(path.Base(rel)) {
 			found = append(found, rel)
 		}
@@ -102,21 +102,21 @@ func (g Glob) Run(_ context.Context, raw json.RawMessage) (contract.Result, erro
 	command, matched := args.Pattern+" under "+under, len(found)
 	if matched == 0 {
 		return contract.Result{
-			Content: withNote(fmt.Sprintf("no file under %s matches %q, out of %d files searched. the directory exists and was read: this is an answer, not a failure",
-				under, args.Pattern, len(listed.files)), listed.note),
+			Content: WithNote(fmt.Sprintf("no file under %s matches %q, out of %d files searched. the directory exists and was read: this is an answer, not a failure",
+				under, args.Pattern, len(listed.Files)), listed.Note),
 			Command: command,
 			Hits:    &matched,
 		}, nil
 	}
-	note := listed.note
-	header := fmt.Sprintf("%d of %d files under %s match %q", matched, len(listed.files), under, args.Pattern)
+	note := listed.Note
+	header := fmt.Sprintf("%d of %d files under %s match %q", matched, len(listed.Files), under, args.Pattern)
 	if first, last := min(args.Skip, matched), min(args.Skip+konst.GlobPathsResultCap, matched); first > 0 || last < matched {
 		found = found[first:last]
 		header += fmt.Sprintf(", showing %d to %d", first+1, last)
 		next := "this is the last page"
 		switch {
 		case first == matched:
-			header = fmt.Sprintf("%d of %d files under %s match %q, and skip %d is past the end", matched, len(listed.files), under, args.Pattern, args.Skip)
+			header = fmt.Sprintf("%d of %d files under %s match %q, and skip %d is past the end", matched, len(listed.Files), under, args.Pattern, args.Skip)
 			next = "skip 0 shows the first page"
 		case last < matched:
 			next = fmt.Sprintf("skip %d shows the next page, or narrow the pattern", last)
@@ -125,7 +125,7 @@ func (g Glob) Run(_ context.Context, raw json.RawMessage) (contract.Result, erro
 			fmt.Sprintf("%d files matched and %d a page are shown: %s", matched, konst.GlobPathsResultCap, next)))
 	}
 	return contract.Result{
-		Content: withNote(header+"\n"+strings.Join(found, "\n")+"\n", note),
+		Content: WithNote(header+"\n"+strings.Join(found, "\n")+"\n", note),
 		Command: command,
 		Hits:    &matched,
 	}, nil
@@ -136,8 +136,8 @@ func ListPaths(dir string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	listed, err := filesUnder(root, ".", false)
-	return listed.files, err
+	listed, err := FilesUnder(root, ".", false)
+	return listed.Files, err
 }
 
 func globExpression(pattern string) (*regexp.Regexp, error) {
@@ -251,19 +251,19 @@ func classRune(pattern string, i, class int) (string, int, error) {
 	return string(r), i + size, nil
 }
 
-func withNote(content, note string) string {
+func WithNote(content, note string) string {
 	if note == "" {
 		return content
 	}
 	return strings.TrimSuffix(content, "\n") + "\n" + note + "\n"
 }
 
-type listing struct {
-	under string
-	files []string
-	sizes []int64
-	bytes int64
-	note  string
+type Listing struct {
+	Under string
+	Files []string
+	Sizes []int64
+	Bytes int64
+	Note  string
 }
 
 type ignoreRule struct {
@@ -297,20 +297,20 @@ type walk struct {
 	notFollowed int
 }
 
-func filesUnder(root contract.Root, under string, includeIgnored bool) (listing, error) {
+func FilesUnder(root contract.Root, under string, includeIgnored bool) (Listing, error) {
 	from, err := root.Resolve(under)
 	if err != nil {
-		return listing{}, err
+		return Listing{}, err
 	}
 	walked := walk{root: root, unfiltered: includeIgnored,
 		ahead: map[string]chan dirListing{}, readers: make(chan struct{}, runtime.GOMAXPROCS(0))}
 	if _, err := os.Stat(from); err != nil {
-		repaired, note, refusal := repairPath(root, under, true)
+		repaired, note, refusal := Repair(root, under, true)
 		if refusal != nil {
-			return listing{}, refusal
+			return Listing{}, refusal
 		}
 		if from, err = root.Resolve(repaired); err != nil {
-			return listing{}, err
+			return Listing{}, err
 		}
 		under = repaired
 		walked.notes = append(walked.notes, note)
@@ -336,7 +336,7 @@ func filesUnder(root contract.Root, under string, includeIgnored bool) (listing,
 		walked.notes = append(walked.notes, engine.Note(engine.Partial,
 			fmt.Sprintf("%d of the %d files listed could not be measured, so the total size is lower than the real one", walked.unsized, len(walked.files))))
 	}
-	return listing{under: under, files: walked.files, sizes: walked.sizes, bytes: walked.bytes, note: strings.Join(walked.notes, " ")}, walkErr
+	return Listing{Under: under, Files: walked.files, Sizes: walked.sizes, Bytes: walked.bytes, Note: strings.Join(walked.notes, " ")}, walkErr
 }
 
 func (w *walk) visit(full string, entry fs.DirEntry) error {
