@@ -1,4 +1,4 @@
-package registry
+package report
 
 import (
 	"cmp"
@@ -15,13 +15,14 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/glob"
 )
 
 type Project struct {
 	root contract.Root
 }
 
-func NewProject(dir string) (Project, error) {
+func New(dir string) (Project, error) {
 	root, err := contract.NewRoot(dir)
 	return Project{root: root}, err
 }
@@ -34,7 +35,7 @@ func (p Project) Definition() core.Tool {
 		Description: "answers what is this repository in one call. when the task already names the files or symbols to change, read or search those instead; otherwise send it in the same reply as the glob, search or read calls you already know you need. " +
 			"it returns how many files there are and how many bytes they hold, the languages by file count, the top level directories by file count, " +
 			"the entry points and manifests the project is built and started from, and its documentation files. " +
-			ignoredWalkDescription + ". " +
+			glob.IgnoredWalkDescription + ". " +
 			"it costs one walk: never assemble this from find, ls -R or wc, which descend into every ignored directory and take minutes on a tree this one walks in milliseconds. " +
 			"beside it, glob lists files by name, search finds text and returns the whole declaration around a match, and read reads one file whole",
 		Parameters: map[string]any{
@@ -63,14 +64,14 @@ func (p Project) Run(_ context.Context, raw json.RawMessage) (contract.Result, e
 		return contract.Result{}, fmt.Errorf("project_report: limit is %d and a section lists at least one line", args.Limit)
 	}
 	limit := cmp.Or(args.Limit, konst.ProjectSectionCap)
-	listed, err := filesUnder(p.root, ".", args.IncludeIgnored)
+	listed, err := glob.FilesUnder(p.root, ".", args.IncludeIgnored)
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("project_report: %w", err)
 	}
 
 	languages, roots := map[string]int{}, map[string]int{}
 	var entries, docs []string
-	for _, rel := range listed.files {
+	for _, rel := range listed.Files {
 		languages[languageOf(rel)]++
 		roots[rootOf(rel)]++
 		if isEntryPoint(rel) {
@@ -86,7 +87,7 @@ func (p Project) Run(_ context.Context, raw json.RawMessage) (contract.Result, e
 
 	var out strings.Builder
 	fmt.Fprintf(&out, "project report for %s\n%d files holding %s, from one ignore-aware walk\n",
-		string(p.root), len(listed.files), sizeText(listed.bytes))
+		string(p.root), len(listed.Files), sizeText(listed.Bytes))
 	var cut []string
 	for _, part := range []struct {
 		title string
@@ -107,12 +108,12 @@ func (p Project) Run(_ context.Context, raw json.RawMessage) (contract.Result, e
 		fmt.Fprintf(&out, "\n%s\n  %s\n", part.title, strings.Join(part.lines, "\n  "))
 	}
 
-	note := listed.note
+	note := listed.Note
 	if len(cut) > 0 {
 		note = strings.TrimSpace(note + " " + engine.Note(engine.Truncated,
 			"limit is "+strconv.Itoa(limit)+" and "+strings.Join(cut, ", ")+": raise limit, or glob the one you want in full"))
 	}
-	return contract.Result{Content: withNote(out.String(), note), Command: strconv.Itoa(len(listed.files)) + " files"}, nil
+	return contract.Result{Content: glob.WithNote(out.String(), note), Command: strconv.Itoa(len(listed.Files)) + " files"}, nil
 }
 
 func shallowestFirst(left, right string) int {

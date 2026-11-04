@@ -1,4 +1,4 @@
-package registry
+package ticket
 
 import (
 	"cmp"
@@ -18,6 +18,7 @@ import (
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/project/board"
 )
 
 type ticketVerb string
@@ -71,12 +72,12 @@ type ticketTool struct {
 	manager bool
 }
 
-func TicketTools(board boardy.Managed, actor string) ([]contract.Tool, error) {
-	boards, err := board.Store.Boards()
+func Tools(managed boardy.Managed, actor string) ([]contract.Tool, error) {
+	boards, err := managed.Store.Boards()
 	if err != nil {
 		return nil, err
 	}
-	manager := slices.ContainsFunc(boards, func(b boardy.Board) bool { return board.Manages(b.Key, actor, "") == nil })
+	manager := slices.ContainsFunc(boards, func(b boardy.Board) bool { return managed.Manages(b.Key, actor, "") == nil })
 	verbs := []ticketVerb{ticketRead, ticketLog, ticketAsk, ticketRequest, ticketMove}
 	if manager {
 		verbs = append(verbs, ticketCreate, ticketAssign, ticketList)
@@ -85,29 +86,27 @@ func TicketTools(board boardy.Managed, actor string) ([]contract.Tool, error) {
 	}
 	list := make([]contract.Tool, len(verbs))
 	for i, verb := range verbs {
-		list[i] = ticketTool{verb: verb, board: board, actor: actor, manager: manager}
+		list[i] = ticketTool{verb: verb, board: managed, actor: actor, manager: manager}
 	}
 	if manager {
-		for _, verb := range []boardVerb{boardRule, boardEpic, boardSprint, boardMilestone, boardTriage, boardRequest} {
-			list = append(list, boardTool{verb: verb, board: board, actor: actor})
-		}
+		list = append(list, board.Tools(managed, actor)...)
 	}
 	return list, nil
 }
 
-func TicketGrant(board boardy.Managed, id, lead, agent string) ([]string, error) {
-	ticket, err := board.Get(id)
+func Grant(managed boardy.Managed, id, lead, agent string) ([]string, error) {
+	ticket, err := managed.Get(id)
 	if err != nil {
 		return nil, err
 	}
 	if len(ticket.Owns) == 0 {
 		return nil, fmt.Errorf("%s owns no paths, so a sub-agent spawned for it could write nothing: widen it first with tofu boardy widen", id)
 	}
-	if _, err := board.Assign(id, agent, lead); err != nil {
+	if _, err := managed.Assign(id, agent, lead); err != nil {
 		return nil, err
 	}
 	if ticket.Status != boardy.Doing {
-		if _, err := board.Move(id, boardy.Doing, "", lead); err != nil {
+		if _, err := managed.Move(id, boardy.Doing, "", lead); err != nil {
 			return nil, err
 		}
 	}
@@ -127,15 +126,15 @@ func (t ticketTool) spokenBoard() boardy.Managed {
 	if !found {
 		return t.board
 	}
-	board := t.board
-	board.Store.Speakers = map[string]boardy.Author{t.actor: *lead}
-	return board
+	spoken := t.board
+	spoken.Store.Speakers = map[string]boardy.Author{t.actor: *lead}
+	return spoken
 }
 
 func (t ticketTool) Name() string { return string(t.verb) }
 
 func (t ticketTool) Definition() core.Tool {
-	describe, properties, required := "", map[string]any{"id": stringParam("the ticket id, such as DEMO-2")}, []string{"id"}
+	describe, properties, required := "", map[string]any{"id": board.StringParam("the ticket id, such as DEMO-2")}, []string{"id"}
 	switch t.verb {
 	case ticketRead:
 		describe = "reads a ticket by its id from any board of this project: front matter, Problem, Scope, every Acceptance revision (the last one is in force) and Log"
@@ -143,40 +142,40 @@ func (t ticketTool) Definition() core.Tool {
 		describe = fmt.Sprintf("adds one entry to your own ticket, under your name, so never start it with your name. kind say is you talking to the lead in the first person, at most %d sentences and %d words on one line and no command output: a decision and why, a finding that changes the plan, what stops you, what you need, or that you are done. kind evidence proves one acceptance line, named by line: the command exactly as you ran it and the output lines that matter; the lead reads it at review and it stays out of the conversation. kind before captures how things work now, before you change anything: the same steps as the driven path and what they printed; a ticket that changes behaviour reaches done only with one, and one logged after an evidence entry or after a commit touching the ticket's owns is refused as late. your last say entry is where you ended, and the lead reads it as your report: say it plainly, with no heading and no bold label. progress nobody acts on is not an entry", konst.BoardSaidSentencesMost, konst.BoardSaidWordsMost)
 		properties["kind"] = map[string]any{"type": "string", "enum": []logKind{logSay, logEvidence, logBefore}}
 		properties["line"] = map[string]any{"type": "integer", "description": "for kind evidence, the acceptance line in force it proves, counted from 1"}
-		properties["late"] = stringParam("for kind before logged after the change was proved: the pre-change build or commit it ran on; the ticket then reaches done only with a reason saying late")
-		properties["text"], required = stringParam("what you say, or the evidence"), append(required, "kind", "text")
+		properties["late"] = board.StringParam("for kind before logged after the change was proved: the pre-change build or commit it ran on; the ticket then reaches done only with a reason saying late")
+		properties["text"], required = board.StringParam("what you say, or the evidence"), append(required, "kind", "text")
 	case ticketAsk:
 		describe = "puts a question to the board's managers by writing it into your own ticket's Log; a manager answers there, so read the ticket again with ticket_read before you act on the answer"
-		properties["question"], required = stringParam("the question"), append(required, "question")
+		properties["question"], required = board.StringParam("the question"), append(required, "question")
 		if t.manager {
 			describe = "puts a decision to the person on a ticket of a board you manage: it opens a question in the ticket's Questions, which the person answers in catch up, and lets the ticket move to needs-decision"
-			properties["question"] = stringParam("the tldr: one line saying what is to be decided")
-			properties["eli5"] = stringParam("one to three plain lines explaining it to someone who has not read the code")
+			properties["question"] = board.StringParam("the tldr: one line saying what is to be decided")
+			properties["eli5"] = board.StringParam("one to three plain lines explaining it to someone who has not read the code")
 			properties["options"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "two to four options, one line each"}
 			properties["recommend"] = map[string]any{"type": "integer", "description": "the option you recommend, counted from 1"}
-			properties["why"] = stringParam("one line saying why you recommend it")
+			properties["why"] = board.StringParam("one line saying why you recommend it")
 			required = append(required, "eli5", "options", "recommend", "why")
 		}
 	case ticketRequest, ticketCreate:
 		describe = "writes a request for a new ticket into the triage of a board, where a manager accepts or drops it"
 		properties = map[string]any{
-			"board": stringParam("the board key, such as DEMO"), "title": stringParam("one line"), "problem": stringParam("why the work is needed"),
-			"scope": stringParam("what is in and out"), "acceptance": stringParam("acceptance lines, one per line, each starting with - "),
+			"board": board.StringParam("the board key, such as DEMO"), "title": board.StringParam("one line"), "problem": board.StringParam("why the work is needed"),
+			"scope": board.StringParam("what is in and out"), "acceptance": board.StringParam("acceptance lines, one per line, each starting with - "),
 			"owns":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "the path globs the work may write"},
-			"parent": stringParam("a ticket to split, such as DEMO-2: the new one becomes its sub-ticket DEMO-2-1, and its owns must sit inside the parent's"),
+			"parent": board.StringParam("a ticket to split, such as DEMO-2: the new one becomes its sub-ticket DEMO-2-1, and its owns must sit inside the parent's"),
 			"labels": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "labels; " + boardy.DocsOnlyLabel + " marks a ticket that changes no behaviour, which reaches done with no before capture"},
 		}
 		required = []string{"board", "title", "acceptance"}
 		var drafted boardy.Ticket
 		for _, section := range drafted.Drafted() {
-			properties[section.Field] = stringParam(section.Heading + ": " + section.Says)
+			properties[section.Field] = board.StringParam(section.Heading + ": " + section.Says)
 			if section.Heading != boardy.FeasibilityHeading {
 				required = append(required, section.Field)
 			}
 		}
 		if t.verb == ticketCreate {
 			describe = "creates a ticket on a board you manage, numbered by the board; put it in an epic and a sprint, and make them first with epic and sprint when none fits. a sub-ticket's owns sit inside its parent's owns, which are the ceiling, so a parent that owns nothing takes no sub-ticket and the new one is made without a parent; no owns glob may overlap the owns of a ticket in doing on any board, and the refusal names the glob and the ticket"
-			properties["epic"], properties["sprint"] = stringParam("the epic id it belongs to, from epic list"), stringParam("the sprint id it is planned in, from sprint list")
+			properties["epic"], properties["sprint"] = board.StringParam("the epic id it belongs to, from epic list"), board.StringParam("the sprint id it is planned in, from sprint list")
 		}
 		describe += ". a ticket carries before, driven, still_works and error_case, and one asking for a visual or platform effect, such as a blur or transparency, carries feasibility too; a ticket missing one is refused naming it"
 	case ticketMove:
@@ -185,21 +184,21 @@ func (t ticketTool) Definition() core.Tool {
 		if t.manager {
 			statuses, describe = boardy.Statuses(), "moves a ticket on a board you manage to a status; blocked needs a reason. a ticket reaches doing, review or done only with Acceptance, review only with a Log entry, done only when every acceptance line in force has evidence naming it, it has an entry of kind before unless it is labelled docs-only, and the reason names nothing still open, and a parent reaches review or done only once its sub-tickets are done or dropped. a ticket moving into doing may not own a path a ticket in doing already owns; the refusal names the glob and the ticket. a ticket a sub-agent reported not possible stays in needs-decision until the person answers its question, and no move of yours takes it out"
 		}
-		properties["to"], properties["reason"], required = map[string]any{"type": "string", "enum": statuses}, stringParam("why, required for blocked"), append(required, "to")
+		properties["to"], properties["reason"], required = map[string]any{"type": "string", "enum": statuses}, board.StringParam("why, required for blocked"), append(required, "to")
 		describe += ". a reason is one sentence on one line, and anything longer goes in ticket_log"
 		properties["leave"] = map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "on a move to review, the acceptance lines, counted from 1, that are not yours to prove and that the lead proves"}
-		properties["bypass"] = stringParam("the id of a board hook refusing this move whose refusal names a bypass you may ask; the hook's accept decides whether it passes now, waits for an answer, or is reviewed after")
-		properties["why"] = stringParam(fmt.Sprintf("with bypass, one line of at most %d characters saying why the hook does not fit this move", konst.BoardBypassWhyRunesMost))
+		properties["bypass"] = board.StringParam("the id of a board hook refusing this move whose refusal names a bypass you may ask; the hook's accept decides whether it passes now, waits for an answer, or is reviewed after")
+		properties["why"] = board.StringParam(fmt.Sprintf("with bypass, one line of at most %d characters saying why the hook does not fit this move", konst.BoardBypassWhyRunesMost))
 	case ticketNotPossible:
 		describe = "reports that your own ticket cannot be done as asked, which is your status for this work beside done: the reason and the options go to the person as a question, the ticket moves to needs-decision, and nobody but the person moves it on, the lead included. use it when the platform, the library or the code does not give what the ticket asks, never for work that is only hard, and then end your work"
-		properties["reason"] = stringParam(fmt.Sprintf("one to %d plain lines: what cannot be done as asked and how you know, such as a vendor doc, an upstream issue or a probe you ran", konst.BoardELI5LinesMost))
+		properties["reason"] = board.StringParam(fmt.Sprintf("one to %d plain lines: what cannot be done as asked and how you know, such as a vendor doc, an upstream issue or a probe you ran", konst.BoardELI5LinesMost))
 		properties["options"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": fmt.Sprintf("%d to %d ways the person may go, one line each, such as the nearest thing that can be done or dropping the ask", konst.AskPersonOptionsLeast, konst.AskPersonOptionsMost)}
 		properties["recommend"] = map[string]any{"type": "integer", "description": "the option you recommend, counted from 1"}
-		properties["why"] = stringParam("one line saying why you recommend it")
+		properties["why"] = board.StringParam("one line saying why you recommend it")
 		required = append(required, "reason", "options", "recommend", "why")
 	case ticketAssign:
 		describe = "assigns a ticket on a board you manage to a session or the person, by name"
-		properties["to"], required = stringParam("who the ticket goes to"), append(required, "to")
+		properties["to"], required = board.StringParam("who the ticket goes to"), append(required, "to")
 	case ticketList:
 		describe = fmt.Sprintf("lists the tickets in one status across the boards of this project, oldest first, with the time since each last changed; it shows %d and counts the rest", konst.LeadCheckInReviewsMost)
 		properties, required = map[string]any{"status": map[string]any{"type": "string", "enum": boardy.Statuses()}}, []string{"status"}
@@ -223,7 +222,7 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (contract.Result
 		return contract.Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.verb, err)
 	}
 	t.board = t.spokenBoard()
-	return nudged(t.board.Store, string(t.verb), func() (contract.Result, error) {
+	return board.Nudged(t.board.Store, string(t.verb), func() (contract.Result, error) {
 		command := string(t.verb) + " " + args.ID
 		var ticket boardy.Ticket
 		var err error

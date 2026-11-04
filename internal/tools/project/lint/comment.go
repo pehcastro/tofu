@@ -1,11 +1,13 @@
-package sys
+package lint
 
 import (
 	"go/parser"
 	"go/token"
-	"io/fs"
+	iofs "io/fs"
 	"path/filepath"
 	"strings"
+
+	"tofu/internal/platform/fs"
 )
 
 type Comment struct {
@@ -56,7 +58,7 @@ func FileCommentViolations(path string) ([]Comment, error) {
 func TreeCommentViolations(root string) ([]Comment, int, error) {
 	var all []Comment
 	files := 0
-	err := WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(root, func(path string, d iofs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}

@@ -1,4 +1,4 @@
-package registry
+package board
 
 import (
 	"cmp"
@@ -39,11 +39,19 @@ type boardArgs struct {
 	Tickets                                                                                                                                             []string
 }
 
-func stringParam(about string) map[string]any {
+func Tools(board boardy.Managed, actor string) []contract.Tool {
+	var list []contract.Tool
+	for _, verb := range []boardVerb{boardRule, boardEpic, boardSprint, boardMilestone, boardTriage, boardRequest} {
+		list = append(list, boardTool{verb: verb, board: board, actor: actor})
+	}
+	return list
+}
+
+func StringParam(about string) map[string]any {
 	return map[string]any{"type": "string", "description": about}
 }
 
-func nudged(store boardy.Store, name string, run func() (contract.Result, error)) (contract.Result, error) {
+func Nudged(store boardy.Store, name string, run func() (contract.Result, error)) (contract.Result, error) {
 	sizes := store.EventSizes()
 	result, err := run()
 	note := loop.BoardNudges(store, sizes)
@@ -57,48 +65,48 @@ func nudged(store boardy.Store, name string, run func() (contract.Result, error)
 func (t boardTool) Name() string { return string(t.verb) }
 
 func (t boardTool) Definition() core.Tool {
-	properties := map[string]any{"board": stringParam("the board key, such as DEMO")}
+	properties := map[string]any{"board": StringParam("the board key, such as DEMO")}
 	var describe string
 	var actions []string
 	switch t.verb {
 	case boardRule:
 		describe = "reads and writes the board hooks that run on every board event, so a check you would run by hand on every ticket runs itself. list shows each hook with its scope, trigger and last fire; show prints one hook's YAML; add writes a new hook from source; edit replaces the hook source names; remove deletes one; test runs one against a ticket and writes nothing. a hook is YAML lines: id, when (before or after), on (ticket.create, ticket.move, ticket.assign, ticket.log, ticket.widen, ticket.close, epic.create, sprint.open, sprint.close, milestone.reach, triage.request, triage.accept, question.ask, question.answer, agent.spawn, agent.report, lead.attach, schedule with every 1h or daily 09:00), if: with indented conditions (from, to, type, priority, labels, actor, epic set or empty, sprint, owns, in_status_for 2h), do (a check: command, field, person or check evidenced, then refuse, nudge, ask or record; or after an event an effect: create, move, assign, log, notify, set), text, the words the actor reads, and for a refuse or ask an optional bypass: block with indented who, accept and wait. one hook runs per id, board over project over user"
 		actions = []string{"list", "show", "add", "edit", "remove", "test"}
-		properties["id"] = stringParam("the hook id, for show, remove and test")
-		properties["source"] = stringParam("the hook's whole YAML, for add and edit, or for test of a hook not yet written")
+		properties["id"] = StringParam("the hook id, for show, remove and test")
+		properties["source"] = StringParam("the hook's whole YAML, for add and edit, or for test of a hook not yet written")
 		properties["scope"] = map[string]any{"type": "string", "enum": boardy.HookScope("").Enum(), "description": "where the hook lives: board (the default), project for every board here, user for every board the person works on"}
-		properties["ticket"] = stringParam("the ticket test runs the hook against")
-		properties["to"] = stringParam("the status test assumes a move goes to")
+		properties["ticket"] = StringParam("the ticket test runs the hook against")
+		properties["to"] = StringParam("the status test assumes a move goes to")
 	case boardEpic:
 		describe = "lists a board's epics with their milestones, makes an epic, records its research and its design, puts a ticket in one, or marks one done; every ticket belongs to one, so make the epic before the tickets that serve it. a new epic takes its first ticket only after research (what two rivals do and the options, from a research spawn) and a design naming the smallest first version that runs, and its second only once the first is done with a driven path"
 		actions = []string{"list", "new", "research", "design", "add", "done"}
-		properties["id"], properties["title"] = stringParam("the epic id: letters, digits and dashes"), stringParam("one line, for new")
-		properties["milestone"], properties["ticket"] = stringParam("the milestone the epic reaches, for new"), stringParam("the ticket add puts in the epic")
-		properties["note"], properties["design"] = stringParam("what the rivals do and the options, for research"), stringParam("the shape of the work, for design")
-		properties["first"] = stringParam("the smallest first version that runs, for design")
+		properties["id"], properties["title"] = StringParam("the epic id: letters, digits and dashes"), StringParam("one line, for new")
+		properties["milestone"], properties["ticket"] = StringParam("the milestone the epic reaches, for new"), StringParam("the ticket add puts in the epic")
+		properties["note"], properties["design"] = StringParam("what the rivals do and the options, for research"), StringParam("the shape of the work, for design")
+		properties["first"] = StringParam("the smallest first version that runs, for design")
 	case boardSprint:
 		describe = "lists a board's sprints, plans a new one, puts a ticket in one, starts one (closing the active one) or closes one"
 		actions = []string{"list", "new", "add", "start", "close"}
-		properties["id"], properties["title"] = stringParam("the sprint id: letters, digits and dashes"), stringParam("one line, for new")
-		properties["start"], properties["end"] = stringParam("its first day, YYYY-MM-DD, for new"), stringParam("its last day, YYYY-MM-DD, for new")
-		properties["ticket"] = stringParam("the ticket add puts in the sprint")
+		properties["id"], properties["title"] = StringParam("the sprint id: letters, digits and dashes"), StringParam("one line, for new")
+		properties["start"], properties["end"] = StringParam("its first day, YYYY-MM-DD, for new"), StringParam("its last day, YYYY-MM-DD, for new")
+		properties["ticket"] = StringParam("the ticket add puts in the sprint")
 	case boardMilestone:
 		describe = "lists a board's milestones or makes one; an epic names the milestone it reaches"
 		actions = []string{"list", "new"}
-		properties["id"], properties["title"] = stringParam("the milestone id: letters, digits and dashes"), stringParam("one line, for new")
-		properties["due"] = stringParam("the day it is due, YYYY-MM-DD, for new")
+		properties["id"], properties["title"] = StringParam("the milestone id: letters, digits and dashes"), StringParam("one line, for new")
+		properties["due"] = StringParam("the day it is due, YYYY-MM-DD, for new")
 	case boardTriage:
 		describe = "lists the requests waiting in a board's triage, accepts one into the backlog as a ticket in an epic and a sprint, or drops one with a reason"
 		actions = []string{"list", "accept", "drop"}
-		properties["request"], properties["reason"] = stringParam("the request id, for accept and drop"), stringParam("why it is dropped")
-		properties["epic"], properties["sprint"] = stringParam("the epic the accepted ticket goes in"), stringParam("the sprint the accepted ticket is planned in")
+		properties["request"], properties["reason"] = StringParam("the request id, for accept and drop"), StringParam("why it is dropped")
+		properties["epic"], properties["sprint"] = StringParam("the epic the accepted ticket goes in"), StringParam("the sprint the accepted ticket is planned in")
 	case boardRequest:
 		describe = "holds what the person asked, in their own words, with every ticket cut from it. a request is done only when every ticket is done and a review against the words passes; a ticket moved after the review asks for a new one. say done to the person only for a request whose state is done, never for a ticket, and when part of the ask is left, cut it as its own ticket, add it here, and say the request is open. new quotes the words verbatim with the tickets; add puts a later ticket in; review records pass or fail with a note on how the work holds against the words, once every ticket is done; show and list say each request's state"
 		actions = []string{"list", "show", "new", "add", "review"}
-		properties["id"], properties["words"] = stringParam("the request id, such as R1, for show, add and review"), stringParam("the person's words exactly as written, for new")
+		properties["id"], properties["words"] = StringParam("the request id, such as R1, for show, add and review"), StringParam("the person's words exactly as written, for new")
 		properties["tickets"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "the ticket ids cut from it, for new and add"}
 		properties["verdict"] = map[string]any{"type": "string", "enum": []string{string(boardy.ReviewPass), string(boardy.ReviewFail)}, "description": "the review's verdict"}
-		properties["note"] = stringParam("how the work holds against the words, for review")
+		properties["note"] = StringParam("how the work holds against the words, for review")
 	}
 	properties["action"] = map[string]any{"type": "string", "enum": actions}
 	return core.Tool{Name: string(t.verb), Description: describe, Parameters: map[string]any{"type": "object", "properties": properties, "required": []string{"board", "action"}}}
@@ -109,7 +117,7 @@ func (t boardTool) Run(_ context.Context, raw json.RawMessage) (contract.Result,
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return contract.Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.verb, err)
 	}
-	return nudged(t.board.Store, string(t.verb), func() (contract.Result, error) {
+	return Nudged(t.board.Store, string(t.verb), func() (contract.Result, error) {
 		var said string
 		var err error
 		switch t.verb {

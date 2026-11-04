@@ -10,6 +10,7 @@ import (
 	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/sys"
+	golint "tofu/internal/tools/project/lint"
 )
 
 const Usage = "tofu lint comments [path] [--json]"
@@ -65,7 +66,7 @@ func lintComments(targets []string) (lintReport, error) {
 		if !present {
 			continue
 		}
-		found, files, err := sys.TreeCommentViolations(target)
+		found, files, err := golint.TreeCommentViolations(target)
 		if err != nil {
 			return lintReport{}, err
 		}

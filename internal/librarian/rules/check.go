@@ -11,6 +11,7 @@ import (
 
 	"tofu/internal/agent/subagents"
 	"tofu/internal/sys"
+	"tofu/internal/tools/project/lint"
 )
 
 const emDashRune = rune(0x2014)
@@ -86,7 +87,7 @@ func checkComments(_ Rule, a Artifact) ([]Finding, error) {
 	if !ok {
 		return nil, artifactMismatch(SubjectGoFile, a)
 	}
-	comments, err := sys.FileCommentViolations(gf.Path)
+	comments, err := lint.FileCommentViolations(gf.Path)
 	if err != nil {
 		return nil, err
 	}

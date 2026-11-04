@@ -1,4 +1,4 @@
-package sys
+package lint
 
 import "testing"
 
@@ -83,6 +83,6 @@ func TestTreeCommentViolationsSelf(t *testing.T) {
 		t.Fatalf("TreeCommentViolations: %v", err)
 	}
 	if len(violations) != 0 {
-		t.Fatalf("comment violations in internal/sys: %v", violations)
+		t.Fatalf("comment violations in internal/tools/project/lint: %v", violations)
 	}
 }
