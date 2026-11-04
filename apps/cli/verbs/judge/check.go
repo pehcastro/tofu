@@ -15,7 +15,7 @@ import (
 	"tofu/apps/cli/wiring"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/state"
+	toolgate "tofu/internal/judge/points/tool_gate"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
 	"tofu/library/questions"
@@ -129,14 +129,14 @@ func RunCheck(ctx context.Context, client *core.Client, rulePath, command string
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	call := state.ToolGateInput{
+	call := toolgate.ToolGateInput{
 		Agent:      "owner-shell",
 		Tool:       "bash",
 		Input:      map[string]any{"command": command},
 		Cwd:        cwd,
 		ProjectDir: cwd,
 	}
-	built, builderVersion, err := state.BuildToolGateV3(call)
+	built, builderVersion, err := toolgate.BuildToolGateV3(call)
 	if err != nil {
 		return ledger.Row{}, err
 	}
@@ -161,6 +161,6 @@ func RunCheck(ctx context.Context, client *core.Client, rulePath, command string
 		Decision:     &decision,
 		Answers:      wiring.ToLedgerAnswers(set.QuestionsVersion, decision.Answers),
 		StateBuilder: builderVersion,
-		Fingerprint:  state.FingerprintOf(call),
+		Fingerprint:  toolgate.FingerprintOf(call),
 	})
 }

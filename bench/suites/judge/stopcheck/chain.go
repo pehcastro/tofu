@@ -7,7 +7,7 @@ import (
 	"math"
 
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/state"
+	stopcheck "tofu/internal/judge/points/stop_check"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
 )
@@ -50,7 +50,7 @@ type toolResult struct {
 }
 
 type chainState struct {
-	state.StopCheckState
+	stopcheck.StopCheckState
 	Brief           string       `json:"brief"`
 	LastToolResults []toolResult `json:"last_tool_results"`
 }
@@ -100,7 +100,7 @@ func readNext(choice string) (Answer, ledger.Verdict, error) {
 }
 
 func (b Battery) chain(ctx context.Context, turn Turn, at int) (Chain, error) {
-	first, _, err := state.BuildStopCheck(StateAt(turn, at))
+	first, _, err := stopcheck.BuildStopCheck(StateAt(turn, at))
 	if err != nil {
 		return Chain{}, err
 	}

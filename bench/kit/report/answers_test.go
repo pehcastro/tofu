@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/judge/method"
+	"tofu/internal/judge/points"
 	"tofu/internal/sys"
 )
 
@@ -82,7 +82,7 @@ func TestADecisionThatCannotNameItsMethodsIsNeverGivenANumber(t *testing.T) {
 	}
 	invented := Placement{
 		Point: "invented", Question: "nothing a person asks",
-		SampleSize: 1, SampleOf: "case", Decides: "ask", InUse: method.Unwired,
+		SampleSize: 1, SampleOf: "case", Decides: "ask", InUse: points.Unwired,
 		Axis:   Axis{Name: "accuracy", Unit: "percent", BetterWhen: BetterHigher},
 		Free:   Method{Name: "a regular expression", Does: "matches a pattern", DoesFrom: "bench/kit/report/figure.go", Percent: 50, Hits: 1, OutOf: 2, Evidence: "no such line is in any report"},
 		Judged: Method{Name: "Jev", Does: "scores the state", DoesFrom: "bench/kit/report/figure.go", Percent: 100, Hits: 2, OutOf: 2, Evidence: "nor is this one"},
@@ -291,9 +291,9 @@ func TestAnAxisIsDeclaredByTheBenchAndNotFixedByTheViewer(t *testing.T) {
 	added := Placement{
 		Point: "shell_sift", Question: "how long did the tools take",
 		Axis:       Axis{Name: "tool calls per turn", Unit: "percent of the cheaper method's calls", BetterWhen: BetterLower},
-		Free:       Method{Name: "regex on error lines", Does: "keeps the head and the tail", DoesFrom: "internal/tools/shell/sift/shellarm.go", Percent: 100, Hits: 34, OutOf: 34, Evidence: "34 shell results this harness really returned to a model"},
+		Free:       Method{Name: "regex on error lines", Does: "keeps the head and the tail", DoesFrom: "internal/tools/shell/bash/sift/shellarm.go", Percent: 100, Hits: 34, OutOf: 34, Evidence: "34 shell results this harness really returned to a model"},
 		Judged:     Method{Name: "Jev", Does: "scores each chunk", DoesFrom: "bench/suites/judge/sift/arm.go", Percent: 50, Hits: 17, OutOf: 34, Evidence: "34 shell results this harness really returned to a model"},
-		SampleSize: 34, SampleOf: "recorded shell results", Decides: "shell_sift", InUse: method.Judged,
+		SampleSize: 34, SampleOf: "recorded shell results", Decides: "shell_sift", InUse: points.Judged,
 		Source: "bench/suites/judge/sift/report-2026-09-21.md",
 	}
 	before := Page(data)

@@ -9,7 +9,7 @@ import (
 
 	"tofu/internal/agent/subagents"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/method"
+	"tofu/internal/judge/points"
 	"tofu/internal/models/llm/core"
 	shipped "tofu/library"
 )
@@ -38,7 +38,7 @@ func spawnGreeting(t *testing.T, spawn *SpawnTool) {
 }
 
 func TestTheTableSendingStopCheckToTheJudgedMethodActsOnTheAnswer(t *testing.T) {
-	review, subAgents := reviewedSubAgent(t, string(method.Judged))
+	review, subAgents := reviewedSubAgent(t, string(points.Judged))
 
 	if review.reviewed != 3 {
 		t.Fatalf("the judged arm ran %d times, want 3: a review that always reopens should run out against the round cap, not stop early", review.reviewed)
@@ -56,7 +56,7 @@ func TestTheTableSendingStopCheckToTheJudgedMethodActsOnTheAnswer(t *testing.T) 
 }
 
 func TestAnUnwiredStopCheckLeavesTheSubAgentsOwnClaimStanding(t *testing.T) {
-	review, subAgents := reviewedSubAgent(t, string(method.Unwired))
+	review, subAgents := reviewedSubAgent(t, string(points.Unwired))
 
 	if review.reviewed != 0 {
 		t.Fatalf("an unwired point still asked: %d times", review.reviewed)
@@ -78,7 +78,7 @@ func TestTheStopCheckMethodComesFromTheShippedTableWhenNobodyPassesOne(t *testin
 	spawn.Review = review
 	spawnGreeting(t, spawn)
 
-	table, err := method.Load(shipped.Files())
+	table, err := points.Load(shipped.Files())
 	if err != nil {
 		t.Fatalf("loading the shipped table: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestTheStopCheckMethodComesFromTheShippedTableWhenNobodyPassesOne(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if chosen.Method != method.Judged {
+	if chosen.Method != points.Judged {
 		t.Skipf("the shipped table names %s for stop_check, and this test reads the judged row", chosen.Method)
 	}
 	if review.reviewed != 1 {
@@ -106,7 +106,7 @@ func TestASubAgentStillUnbelievedAtTheRoundCapReachesTheLeadBlockedNamingTheLine
 	} {
 		_, spawn := orchestratorTurn(t, t.TempDir(), []core.Decision{claimDecision("all done"), claimDecision("done again"), claimDecision("done a third time")})
 		spawn.Review = ContractDoneReview{}
-		spawn.Methods = methodTable(t, string(method.Judged))
+		spawn.Methods = methodTable(t, string(points.Judged))
 		var endedFinished []bool
 		var endedCompletion subagents.Completion
 		spawn.SubAgents.Ended = func(_ subagents.Definition, _ string, _ []Row, ended SubAgentReport, finished bool) {
@@ -130,16 +130,16 @@ func TestASubAgentStillUnbelievedAtTheRoundCapReachesTheLeadBlockedNamingTheLine
 	}
 }
 
-func methodTable(t *testing.T, named string) method.Table {
+func methodTable(t *testing.T, named string) points.Table {
 	t.Helper()
 	rows := "kind: method_table\ntable_version: 1\nnotes: a fixture\nmethods:\n"
 	for _, point := range []string{shellSiftPoint, "stop_check"} {
 		rows += "  " + point + ":\n    method: " + named + "\n    why: a fixture\n"
-		if named != string(method.Unwired) {
+		if named != string(points.Unwired) {
 			rows += "    cost: nothing, it is a fixture\n"
 		}
 	}
-	table, err := method.Parse([]byte(rows), "testdata/methods@1.yaml")
+	table, err := points.Parse([]byte(rows), "testdata/methods@1.yaml")
 	if err != nil {
 		t.Fatalf("parsing the fixture table: %v", err)
 	}

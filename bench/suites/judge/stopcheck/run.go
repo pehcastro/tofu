@@ -11,8 +11,8 @@ import (
 	"tofu/bench/kit/corpus"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
+	stopcheck "tofu/internal/judge/points/stop_check"
 	question "tofu/internal/judge/questions"
-	"tofu/internal/judge/state"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
@@ -21,7 +21,7 @@ import (
 	libraryquestions "tofu/library/questions"
 )
 
-const Point = state.StopCheckRuleRef
+const Point = stopcheck.StopCheckRuleRef
 
 const BenchName = "stopcheck"
 
@@ -90,7 +90,7 @@ func New(root, key string) (Battery, error) {
 	if err != nil {
 		return Battery{}, err
 	}
-	pol, _, err := state.StopCheckRule()
+	pol, _, err := stopcheck.StopCheckRule()
 	if err != nil {
 		return Battery{}, err
 	}
@@ -192,7 +192,7 @@ func (b Battery) Run(ctx context.Context, turns []Turn, skipped []corpus.Skipped
 }
 
 func (b Battery) decide(ctx context.Context, turn Turn, at int) (StepResult, error) {
-	built, builder, err := state.BuildStopCheck(StateAt(turn, at))
+	built, builder, err := stopcheck.BuildStopCheck(StateAt(turn, at))
 	if err != nil {
 		return StepResult{}, err
 	}

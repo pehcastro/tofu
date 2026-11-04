@@ -3,7 +3,7 @@ package readworth
 import (
 	"testing"
 
-	"tofu/internal/tools/shell/sift"
+	"tofu/internal/tools/shell/bash/sift"
 )
 
 type tallyResult struct {

@@ -16,7 +16,7 @@ import (
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
 	"tofu/internal/sys"
-	"tofu/internal/tools/shell/sift"
+	"tofu/internal/tools/shell/bash/sift"
 )
 
 func liveClient(t *testing.T) Asker {

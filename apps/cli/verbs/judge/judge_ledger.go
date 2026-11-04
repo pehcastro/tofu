@@ -8,8 +8,8 @@ import (
 	"tofu/apps/cli/wiring"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
+	memoryscope "tofu/internal/judge/points/memory_scope"
 	question "tofu/internal/judge/questions"
-	"tofu/internal/judge/state"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
 	"tofu/internal/tools/registry"
@@ -151,7 +151,7 @@ func MemoryScopeJudge(dir, log string, keys core.Keyring, say func(string)) *reg
 	layers, err := question.Layers(questions.Files(), dir)
 	var set question.Set
 	if err == nil {
-		set, _, err = question.Resolve(state.MemoryScopeRef, layers)
+		set, _, err = question.Resolve(memoryscope.MemoryScopeRef, layers)
 	}
 	var client *core.Client
 	if err == nil {

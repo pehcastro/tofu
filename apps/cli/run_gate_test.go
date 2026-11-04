@@ -17,7 +17,7 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/state"
+	toolgate "tofu/internal/judge/points/tool_gate"
 	"tofu/internal/models/classifiers/core"
 	llm "tofu/internal/models/llm/core"
 	settingspkg "tofu/internal/store/settings"
@@ -175,13 +175,13 @@ func TestADecisionMadeNowCarriesTheFingerprintOfTheCallItJudged(t *testing.T) {
 	if err != nil || !found {
 		t.Fatalf("reading row %s back: found %v, err %v", decision.ID, found, err)
 	}
-	want := state.FingerprintOf(state.ToolGateInput{
+	want := toolgate.FingerprintOf(toolgate.ToolGateInput{
 		Agent:      "tofu-run",
 		Tool:       "write",
 		Input:      map[string]any{"path": "note.txt", "content": "hello"},
 		Cwd:        dir,
 		ProjectDir: dir,
-		Context:    state.ToolGateContext{UserRecentMessages: []string{"write the note the README asked for"}},
+		Context:    toolgate.ToolGateContext{UserRecentMessages: []string{"write the note the README asked for"}},
 	})
 	if row.Fingerprint != want || want == "" {
 		t.Fatalf("the row carries fingerprint %q and the call fingerprints as %q", row.Fingerprint, want)

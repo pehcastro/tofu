@@ -22,7 +22,7 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/state"
+	toolgate "tofu/internal/judge/points/tool_gate"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
@@ -483,7 +483,7 @@ func CallPlace(request GateRequest, cwd string) string {
 	if json.Unmarshal(request.Args, &args) != nil {
 		return request.Tool + " " + string(request.Args)
 	}
-	sum, code := state.CodeHash(args.Command, cwd)
+	sum, code := toolgate.CodeHash(args.Command, cwd)
 	switch {
 	case request.Code != nil:
 		return request.Tool + " " + codePlace + CodeSum(*request.Code)

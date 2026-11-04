@@ -3,7 +3,7 @@ package stopcheck
 import (
 	"strings"
 
-	"tofu/internal/judge/state"
+	stopcheck "tofu/internal/judge/points/stop_check"
 )
 
 type Answer string
@@ -52,18 +52,18 @@ func ranEarlier(earlier []Step, command string) bool {
 	return false
 }
 
-func StateAt(turn Turn, at int) state.StopCheckState {
-	built := state.StopCheckState{Task: turn.Task}
+func StateAt(turn Turn, at int) stopcheck.StopCheckState {
+	built := stopcheck.StopCheckState{Task: turn.Task}
 	for i := 0; i <= at; i++ {
 		step := turn.Steps[i]
-		converted := state.StopCheckStep{
+		converted := stopcheck.StopCheckStep{
 			Index:              step.Index,
 			AssistantText:      step.AssistantText,
 			StopReason:         step.StopReason,
 			RepeatsEarlierStep: repeatsEarlierStep(turn, i),
 		}
 		for _, call := range step.Calls {
-			converted.ToolCalls = append(converted.ToolCalls, state.StopCheckCall{
+			converted.ToolCalls = append(converted.ToolCalls, stopcheck.StopCheckCall{
 				Tool: call.Tool, Command: call.Command, Failed: call.Failed,
 			})
 		}

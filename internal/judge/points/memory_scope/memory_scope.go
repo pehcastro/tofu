@@ -1,9 +1,10 @@
-package state
+package memoryscope
 
 import (
 	"strings"
 
 	"tofu/internal/judge/ledger"
+	"tofu/internal/judge/points"
 )
 
 const (
@@ -23,7 +24,7 @@ type MemoryScopeState struct {
 
 func BuildMemoryScope(in MemoryScopeState) ([]byte, string, error) {
 	canon, err := ledger.Canonical(in)
-	return canon, deriveVersion(MemoryScopePoint, MemoryScopeState{}), err
+	return canon, points.DeriveVersion(MemoryScopePoint, MemoryScopeState{}), err
 }
 
 func MemoryScopeOf(option string) string { return strings.ReplaceAll(option, "_", "-") }

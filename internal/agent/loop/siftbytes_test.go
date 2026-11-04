@@ -10,9 +10,9 @@ import (
 	"sort"
 	"testing"
 
-	"tofu/internal/judge/method"
+	"tofu/internal/judge/points"
 	"tofu/internal/sys"
-	"tofu/internal/tools/shell/sift"
+	"tofu/internal/tools/shell/bash/sift"
 )
 
 const recordedSessionFloor = 20
@@ -101,7 +101,7 @@ func TestTheBytesTheCheapMethodSavesOverEveryRecordedTurn(t *testing.T) {
 	results := recordedShellResults(t, recordedSessionsDir(t))
 	type bytes struct{ raw, sent int }
 	perSession := map[string]bytes{}
-	sifter := ShellSift{Methods: methodTable(t, string(method.Cheap)), KeepAt: 0.5}
+	sifter := ShellSift{Methods: methodTable(t, string(points.Cheap)), KeepAt: 0.5}
 	whole := bytes{}
 	for _, one := range results {
 		cut, err := sifter.Cut(context.Background(), one.shell, one.task)

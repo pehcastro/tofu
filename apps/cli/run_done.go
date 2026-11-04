@@ -10,12 +10,12 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/state"
+	stopcheck "tofu/internal/judge/points/stop_check"
 	"tofu/internal/models/classifiers/core"
 	settingspkg "tofu/internal/store/settings"
 )
 
-const doneReviewPoint = state.StopCheckRuleRef
+const doneReviewPoint = stopcheck.StopCheckRuleRef
 
 func newDoneReview(arm string, say func(string)) loop.DoneReview {
 	switch arm {
@@ -62,7 +62,7 @@ func resolveStopCheckPoint() (wiring.Battery, error) {
 	if err != nil {
 		return wiring.Battery{}, err
 	}
-	pol, origin, err := state.StopCheckRule()
+	pol, origin, err := stopcheck.StopCheckRule()
 	if err != nil {
 		return wiring.Battery{}, err
 	}
@@ -85,7 +85,7 @@ func resolveStopCheckPoint() (wiring.Battery, error) {
 
 func (r typedDoneReview) Review(ctx context.Context, subAgent loop.Row) (loop.DoneDecision, error) {
 	screened, _ := (loop.ContractDoneReview{}).Review(ctx, subAgent)
-	built, builder, err := state.BuildStopCheck(doneState(subAgent))
+	built, builder, err := stopcheck.BuildStopCheck(doneState(subAgent))
 	if err != nil {
 		return loop.DoneDecision{}, err
 	}
@@ -148,24 +148,24 @@ func doneReason(row ledger.Row) string {
 		doneReviewPoint, strings.Join(answered, ", "), row.Verdict.String(), row.ID)
 }
 
-func doneState(subAgent loop.Row) state.StopCheckState {
-	built := state.StopCheckState{
+func doneState(subAgent loop.Row) stopcheck.StopCheckState {
+	built := stopcheck.StopCheckState{
 		Task: subAgent.Task,
-		Budget: state.StopCheckBudget{
+		Budget: stopcheck.StopCheckBudget{
 			AtStepCap:      subAgent.Outcome == loop.OutcomeStepCap || subAgent.Outcome == loop.OutcomeForkStop,
 			AtDecisionCap:  subAgent.Outcome == loop.OutcomeDecisionCap,
 			AtWallClockCap: subAgent.Outcome == loop.OutcomeRetiredWallClockCap,
 		},
 	}
 	for at, step := range subAgent.Steps {
-		recent := state.StopCheckStep{
+		recent := stopcheck.StopCheckStep{
 			Index:              step.Index,
 			AssistantText:      step.AssistantText,
 			StopReason:         step.StopReason,
 			RepeatsEarlierStep: repeatsEarlierStep(subAgent.Steps, at),
 		}
 		for _, call := range step.ToolCalls {
-			recent.ToolCalls = append(recent.ToolCalls, state.StopCheckCall{
+			recent.ToolCalls = append(recent.ToolCalls, stopcheck.StopCheckCall{
 				Tool:    call.Tool,
 				Command: call.Command,
 				Failed:  call.Outcome().Failed(),

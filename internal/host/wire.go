@@ -10,7 +10,7 @@ import (
 	"tofu/internal/agent/loop"
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/state"
+	"tofu/internal/judge/points"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/learn"
@@ -1195,7 +1195,7 @@ type LedgerRow struct {
 	Chain      *ledger.Row       `json:"chain,omitempty"`
 	BlockedBy  string            `json:"blocked_by,omitempty"`
 	Precedents []LedgerPrecedent `json:"precedents"`
-	Subject    *state.Subject    `json:"subject,omitempty"`
+	Subject    *points.Subject   `json:"subject,omitempty"`
 }
 
 type LedgerPrecedent struct {

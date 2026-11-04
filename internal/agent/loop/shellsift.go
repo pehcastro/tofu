@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"tofu/internal/judge/method"
+	"tofu/internal/judge/points"
 	"tofu/internal/tools/contract"
-	"tofu/internal/tools/shell/sift"
+	"tofu/internal/tools/shell/bash/sift"
 	shipped "tofu/library"
 )
 
@@ -20,14 +20,14 @@ type ShellScores interface {
 }
 
 type ShellSift struct {
-	Methods method.Table
+	Methods points.Table
 	KeepAt  float64
 	Mode    sift.Mode
 	Scores  ShellScores
 }
 
 type RuleContradictsTheTableError struct {
-	Method method.Method
+	Method points.Method
 	Mode   sift.Mode
 	Rule   string
 	Table  string
@@ -39,7 +39,7 @@ func (e RuleContradictsTheTableError) Error() string {
 }
 
 func NewShellSift(scores ShellScores) (ShellSift, error) {
-	table, err := method.Load(shipped.Files())
+	table, err := points.Load(shipped.Files())
 	if err != nil {
 		return ShellSift{}, err
 	}
@@ -53,12 +53,12 @@ func NewShellSift(scores ShellScores) (ShellSift, error) {
 	return ShellSift{Methods: table, KeepAt: rule.KeepAt, Mode: rule.Mode, Scores: scores}, nil
 }
 
-func ruleAgreesWithTheTable(table method.Table, rule sift.ShellRule) error {
+func ruleAgreesWithTheTable(table points.Table, rule sift.ShellRule) error {
 	chosen, err := table.Of(shellSiftPoint)
 	if err != nil {
 		return err
 	}
-	if chosen.Method == method.Unwired || !rule.ModeDeclared || rule.Mode != sift.ModeShadow {
+	if chosen.Method == points.Unwired || !rule.ModeDeclared || rule.Mode != sift.ModeShadow {
 		return nil
 	}
 	return RuleContradictsTheTableError{Method: chosen.Method, Mode: rule.Mode, Rule: rule.File, Table: table.File}
@@ -67,7 +67,7 @@ func ruleAgreesWithTheTable(table method.Table, rule sift.ShellRule) error {
 type ShellCut struct {
 	Text   string
 	Saved  int
-	Method method.Method
+	Method points.Method
 }
 
 func siftOrNothing(given *ShellSift) *ShellSift {
@@ -101,7 +101,7 @@ func (g gatedCall) cutShellResult(ctx context.Context, tool string, result contr
 func (s ShellSift) Cut(ctx context.Context, shell sift.Shell, task string) (ShellCut, error) {
 	units := sift.SplitShell(shell)
 	whole := sift.JoinUnits(units)
-	marks, chosen, err := method.Run(ctx, s.Methods, shellSiftPoint, method.Arms[[]sift.Mark]{
+	marks, chosen, err := points.Run(ctx, s.Methods, shellSiftPoint, points.Arms[[]sift.Mark]{
 		Cheap:  func(context.Context) ([]sift.Mark, error) { return cheapMarks(units), nil },
 		Judged: s.judged(shell, units, task),
 	})

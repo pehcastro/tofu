@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"tofu/internal/judge/method"
+	"tofu/internal/judge/points"
 	shipped "tofu/library"
 )
 
@@ -133,7 +133,7 @@ func Build(benchRoot string) (Data, error) {
 	if err := readJSON(filepath.Join(benchRoot, reportDir, "answers.json"), &data.Answers); err != nil {
 		return Data{}, err
 	}
-	table, err := method.Load(shipped.Files())
+	table, err := points.Load(shipped.Files())
 	if err != nil {
 		return Data{}, err
 	}

@@ -12,7 +12,7 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/state"
+	toolgate "tofu/internal/judge/points/tool_gate"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
@@ -135,22 +135,22 @@ func (g *toolGate) ask(ctx context.Context, request loop.GateRequest) (ledger.Ro
 	if err := json.Unmarshal(request.Args, &input); err != nil {
 		return ledger.Row{}, fmt.Errorf("the %s call carries arguments the gate cannot read: %w", request.Tool, err)
 	}
-	call := state.ToolGateInput{
+	call := toolgate.ToolGateInput{
 		Agent:      "tofu-run",
 		Tool:       request.Tool,
 		Input:      input,
 		Cwd:        g.cwd,
 		ProjectDir: g.cwd,
-		Context:    state.ToolGateContext{UserRecentMessages: []string{request.Task}},
+		Context:    toolgate.ToolGateContext{UserRecentMessages: []string{request.Task}},
 	}
 	if place, found := sys.ScratchOf(ctx); found {
 		call.ScratchDir = place.Dir()
 	}
-	built, builder, err := state.BuildToolGateV3(call)
+	built, builder, err := toolgate.BuildToolGateV3(call)
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	written := wiring.RowInput{TurnID: request.TurnID, StateBuilder: builder, Fingerprint: state.FingerprintOf(call)}
+	written := wiring.RowInput{TurnID: request.TurnID, StateBuilder: builder, Fingerprint: toolgate.FingerprintOf(call)}
 	builtState := json.RawMessage(built)
 	if own := loop.OwnShellsCalled(ctx, request); len(own) > 0 {
 		return g.rows.AppendOwnShell(builtState, g.set, written, own)

@@ -1,4 +1,4 @@
-package state
+package points
 
 import (
 	"crypto/sha256"
@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func deriveVersion(point string, envelope any) string {
+func DeriveVersion(point string, envelope any) string {
 	sum := sha256.Sum256([]byte(shapeOf(reflect.TypeOf(envelope))))
 	return point + "." + hex.EncodeToString(sum[:])[:8]
 }

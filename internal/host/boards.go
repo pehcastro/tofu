@@ -11,14 +11,14 @@ import (
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/loop"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/state"
+	"tofu/internal/judge/points"
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/librarian/skills"
 	"tofu/internal/models/llm/quota"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
-	"tofu/internal/tools/shell/sift"
+	"tofu/internal/tools/shell/bash/sift"
 	"tofu/library"
 )
 
@@ -301,7 +301,7 @@ func (s *server) withSubjects(report LedgerReport) (LedgerReport, error) {
 		if len(body) == 0 {
 			continue
 		}
-		subject, err := state.SubjectOf(body)
+		subject, err := points.SubjectOf(body)
 		if err != nil {
 			return report, err
 		}

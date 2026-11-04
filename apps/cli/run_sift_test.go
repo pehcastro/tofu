@@ -22,11 +22,11 @@ import (
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/method"
+	"tofu/internal/judge/points"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
 	"tofu/internal/testkit/cli"
-	"tofu/internal/tools/shell/sift"
+	"tofu/internal/tools/shell/bash/sift"
 	shipped "tofu/library"
 )
 
@@ -115,7 +115,7 @@ func assumesTheRuleIsOutOfShadow(t *testing.T) {
 	}
 	if rule.Mode == sift.ModeShadow {
 		t.Skipf("skipped, and counted: %s declares mode %s against the %s the table names, so the run attaches no sieve and cuts nothing",
-			rule.File, rule.Mode, method.Judged)
+			rule.File, rule.Mode, points.Judged)
 	}
 }
 
@@ -146,7 +146,7 @@ func TestTheRunAttachesAScorerBuiltOverTheJevClient(t *testing.T) {
 	}
 	if sifter == nil || scorer == nil {
 		t.Fatalf("the table names %s for %s and the run built sifter %v scorer %v",
-			method.Judged, sift.ShellSchema, sifter, scorer)
+			points.Judged, sift.ShellSchema, sifter, scorer)
 	}
 	if sifter.Scores != loop.ShellScores(scorer) {
 		t.Fatalf("the sieve scores through %#v, not the scorer the run built", sifter.Scores)
@@ -273,10 +273,10 @@ func TestTheThreeStatesOfTheShellSiftCountedInBytes(t *testing.T) {
 		t.Fatal("a sieve with no arm cut the output and reported no error")
 	}
 
-	if len(cutJudged.Text) >= whole || cutJudged.Method != method.Judged {
+	if len(cutJudged.Text) >= whole || cutJudged.Method != points.Judged {
 		t.Fatalf("judged: %d of %d bytes through %s", len(cutJudged.Text), whole, cutJudged.Method)
 	}
-	if len(cutFree.Text) >= whole || cutFree.Method != method.Cheap {
+	if len(cutFree.Text) >= whole || cutFree.Method != points.Cheap {
 		t.Fatalf("free: %d of %d bytes through %s", len(cutFree.Text), whole, cutFree.Method)
 	}
 	if len(cutNothing.Text) != whole {
@@ -287,9 +287,9 @@ func TestTheThreeStatesOfTheShellSiftCountedInBytes(t *testing.T) {
 }
 
 func TestTheHelpTextSaysWhatTheJudgedShellSiftCosts(t *testing.T) {
-	table, err := method.Load(shipped.Files())
+	table, err := points.Load(shipped.Files())
 	if err != nil {
-		t.Fatalf("method.Load: %v", err)
+		t.Fatalf("points.Load: %v", err)
 	}
 	chosen, err := table.Of(sift.ShellSchema)
 	if err != nil {

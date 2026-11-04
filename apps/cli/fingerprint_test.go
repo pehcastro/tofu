@@ -15,8 +15,8 @@ import (
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	"tofu/internal/judge/ledger"
+	toolgate "tofu/internal/judge/points/tool_gate"
 	"tofu/internal/judge/questions"
-	"tofu/internal/judge/state"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
 )
@@ -59,7 +59,7 @@ func TestCheckWritesARowCarryingTheFingerprintOfTheCommandItJudged(t *testing.T)
 
 	row := rowByID(t, checkCommand(t, rulePath, forcePush).ID)
 
-	want := state.FingerprintOf(state.ToolGateInput{
+	want := toolgate.FingerprintOf(toolgate.ToolGateInput{
 		Agent:      "owner-shell",
 		Tool:       "bash",
 		Input:      map[string]any{"command": forcePush},

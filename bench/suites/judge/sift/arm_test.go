@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/tools/shell/sift"
+	"tofu/internal/tools/shell/bash/sift"
 	library "tofu/library"
 )
 

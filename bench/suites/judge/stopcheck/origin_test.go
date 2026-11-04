@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/state"
+	stopcheck "tofu/internal/judge/points/stop_check"
 )
 
 func offlineBattery(t *testing.T, dir string) Battery {
@@ -41,7 +41,7 @@ func firstCorpusTurn(t *testing.T) Turn {
 
 func primeCache(t *testing.T, b Battery, turn Turn) {
 	t.Helper()
-	built, _, err := state.BuildStopCheck(StateAt(turn, 0))
+	built, _, err := stopcheck.BuildStopCheck(StateAt(turn, 0))
 	if err != nil {
 		t.Fatalf("BuildStopCheck: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestTheBenchOriginSelectsTheMeasurementsAndNotTheTurns(t *testing.T) {
 		t.Fatalf("decide: %v", err)
 	}
 
-	built, builder, err := state.BuildStopCheck(StateAt(turn, 0))
+	built, builder, err := stopcheck.BuildStopCheck(StateAt(turn, 0))
 	if err != nil {
 		t.Fatalf("BuildStopCheck: %v", err)
 	}

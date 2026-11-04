@@ -17,7 +17,7 @@ import (
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/platform/safe"
 	"tofu/internal/sys"
-	"tofu/internal/tools/shell/sift"
+	"tofu/internal/tools/shell/bash/sift"
 )
 
 const siftPoint = "read_worth@1"

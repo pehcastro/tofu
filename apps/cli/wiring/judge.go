@@ -6,8 +6,8 @@ import (
 
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
+	stopcheck "tofu/internal/judge/points/stop_check"
 	question "tofu/internal/judge/questions"
-	"tofu/internal/judge/state"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
 	shipped "tofu/library"
@@ -95,8 +95,8 @@ func ResolveRule(ref string, set Battery) (gate.Rule, error) {
 }
 
 func LoadRulePoint(ref, dir string) (gate.Rule, gate.Origin, error) {
-	if ref == state.StopCheckRuleRef {
-		return state.StopCheckRule()
+	if ref == stopcheck.StopCheckRuleRef {
+		return stopcheck.StopCheckRule()
 	}
 	layers, err := question.Layers(questions.Files(), dir)
 	if err != nil {

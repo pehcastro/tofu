@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"tofu/internal/judge/method"
+	"tofu/internal/judge/points"
 )
 
 const (
@@ -43,13 +43,13 @@ func readCallers(path string) (map[string]caller, error) {
 	return byPoint, nil
 }
 
-func checkCallers(table method.Table, callers map[string]caller, tree string) error {
+func checkCallers(table points.Table, callers map[string]caller, tree string) error {
 	for _, item := range callers {
 		chosen, err := table.Of(item.Point)
 		if err != nil {
 			return fmt.Errorf("%s names %s and %s names no such decision", CallersPath, item.Point, table.File)
 		}
-		if chosen.Method == method.Unwired {
+		if chosen.Method == points.Unwired {
 			return fmt.Errorf("%s says what calls %s and %s:%d leaves it unwired, so nothing calls it", CallersPath, item.Point, table.File, chosen.Line)
 		}
 		if item.File == "" {
@@ -67,20 +67,20 @@ func checkCallers(table method.Table, callers map[string]caller, tree string) er
 		}
 	}
 	for _, chosen := range table.Choices {
-		if _, named := callers[chosen.Point]; !named && chosen.Method != method.Unwired {
+		if _, named := callers[chosen.Point]; !named && chosen.Method != points.Unwired {
 			return fmt.Errorf("%s:%d says %s decides %s and %s does not say what calls it", table.File, chosen.Line, chosen.Method, chosen.Point, CallersPath)
 		}
 	}
 	return nil
 }
 
-func wiringOf(table method.Table, callers map[string]caller) []Wiring {
+func wiringOf(table points.Table, callers map[string]caller) []Wiring {
 	rows := make([]Wiring, 0, len(table.Choices))
 	for _, chosen := range table.Choices {
 		called := callers[chosen.Point]
 		row := Wiring{Point: chosen.Point, SwitchedOn: NotWired, Costs: "nothing, and no call is made", Why: chosen.Why, Measured: chosen.Measured, CalledBy: called.File}
 		switch {
-		case chosen.Method == method.Unwired:
+		case chosen.Method == points.Unwired:
 		case called.File == "":
 			row.SwitchedOn = NotWired + ": " + called.Nothing
 		default:

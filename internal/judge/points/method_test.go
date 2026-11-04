@@ -1,4 +1,4 @@
-package method_test
+package points_test
 
 import (
 	"context"
@@ -9,23 +9,23 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/judge/method"
+	"tofu/internal/judge/points"
 )
 
 const libraryDir = "../../../library"
 
-func shipped(t *testing.T) method.Table {
+func shipped(t *testing.T) points.Table {
 	t.Helper()
-	table, err := method.Load(os.DirFS(libraryDir))
+	table, err := points.Load(os.DirFS(libraryDir))
 	if err != nil {
 		t.Fatalf("loading the shipped method table: %v", err)
 	}
 	return table
 }
 
-func armThatRan(t *testing.T, table method.Table, point string) string {
+func armThatRan(t *testing.T, table points.Table, point string) string {
 	t.Helper()
-	ran, chosen, err := method.Run(t.Context(), table, point, method.Arms[string]{
+	ran, chosen, err := points.Run(t.Context(), table, point, points.Arms[string]{
 		Cheap:  func(context.Context) (string, error) { return "cheap", nil },
 		Judged: func(context.Context) (string, error) { return "judged", nil },
 	})
@@ -59,7 +59,7 @@ func questionsOnDisk(t *testing.T) map[string]bool {
 	return points
 }
 
-func rowsWithNoQuestion(table method.Table, onDisk map[string]bool) []string {
+func rowsWithNoQuestion(table points.Table, onDisk map[string]bool) []string {
 	var missing []string
 	for _, chosen := range table.Choices {
 		if !onDisk[chosen.Point] && !slices.Contains(parkedWithNoQuestion, chosen.Point) {
@@ -93,13 +93,13 @@ func TestTheTableNamesAMethodForEveryDecisionPointOnDisk(t *testing.T) {
 }
 
 func TestARowNamingNoQuestionFileIsCaught(t *testing.T) {
-	file := path.Join(libraryDir, method.TableFile)
+	file := path.Join(libraryDir, points.TableFile)
 	body, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatalf("reading %s: %v", file, err)
 	}
 	planted := string(body) + "  no_such_question:\n    method: unwired\n    why: a planted row naming a question that does not exist\n"
-	table, err := method.Parse([]byte(planted), file)
+	table, err := points.Parse([]byte(planted), file)
 	if err != nil {
 		t.Fatalf("parsing the planted table: %v", err)
 	}
@@ -126,15 +126,15 @@ func TestReadWorthIsDecidedByTheCheapMethod(t *testing.T) {
 func TestAnUnwiredPointRunsNeitherArmAndSaysWhy(t *testing.T) {
 	table := shipped(t)
 	for _, point := range []string{"ask", "file_shortlist", "tool_gate", "spawn_gate"} {
-		_, chosen, err := method.Run(t.Context(), table, point, method.Arms[bool]{
+		_, chosen, err := points.Run(t.Context(), table, point, points.Arms[bool]{
 			Cheap:  func(context.Context) (bool, error) { t.Fatalf("%s ran the cheap arm", point); return false, nil },
 			Judged: func(context.Context) (bool, error) { t.Fatalf("%s ran the judged arm", point); return false, nil },
 		})
-		var unwired method.UnwiredError
+		var unwired points.UnwiredError
 		if !errors.As(err, &unwired) {
 			t.Fatalf("%s: err = %v, and an unwired point refuses rather than picks", point, err)
 		}
-		if chosen != method.Unwired {
+		if chosen != points.Unwired {
 			t.Errorf("%s: chose %s", point, chosen)
 		}
 		if unwired.Choice.Why == "" {
@@ -144,7 +144,7 @@ func TestAnUnwiredPointRunsNeitherArmAndSaysWhy(t *testing.T) {
 }
 
 func TestChangingOnePointsMethodIsOneEdit(t *testing.T) {
-	file := path.Join(libraryDir, method.TableFile)
+	file := path.Join(libraryDir, points.TableFile)
 	before, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatalf("reading %s: %v", file, err)
@@ -177,7 +177,7 @@ func TestChangingOnePointsMethodIsOneEdit(t *testing.T) {
 	if differing != 1 {
 		t.Fatalf("%d lines differ, and changing a point's method is one edit", differing)
 	}
-	table, err := method.Parse([]byte(strings.Join(lines, "\n")), file)
+	table, err := points.Parse([]byte(strings.Join(lines, "\n")), file)
 	if err != nil {
 		t.Fatalf("parsing the edited table: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestChangingOnePointsMethodIsOneEdit(t *testing.T) {
 }
 
 func TestAWiredPointStatingNoCostIsRefused(t *testing.T) {
-	_, err := method.Parse([]byte("kind: method_table\ntable_version: 1\nmethods:\n  shell_sift:\n    method: judged\n    why: jev keeps more needles\n"), "in the test")
+	_, err := points.Parse([]byte("kind: method_table\ntable_version: 1\nmethods:\n  shell_sift:\n    method: judged\n    why: jev keeps more needles\n"), "in the test")
 	if err == nil || !strings.Contains(err.Error(), "states no cost") {
 		t.Fatalf("err = %v, and a point that spends money without a figure is refused", err)
 	}

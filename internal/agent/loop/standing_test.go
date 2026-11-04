@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"tofu/internal/agent/subagents"
-	"tofu/internal/judge/state"
+	toolgate "tofu/internal/judge/points/tool_gate"
 	"tofu/internal/models/llm/core"
 )
 
@@ -179,14 +179,14 @@ func TestAWriteToTheTempFolderReadsAsTempToJev(t *testing.T) {
 	project := t.TempDir()
 	for _, c := range []struct {
 		command string
-		want    state.TargetLocation
+		want    toolgate.TargetLocation
 	}{
-		{"cat > /tmp/peek.mjs", state.LocationTemp},
-		{"cat > " + filepath.ToSlash(filepath.Join(os.TempDir(), "peek.mjs")), state.LocationTemp},
-		{"cat > " + filepath.ToSlash(filepath.Join(project, "peek.mjs")), state.LocationInsideProject},
-		{"cat > /etc/peek.mjs", state.LocationOutsideProject},
+		{"cat > /tmp/peek.mjs", toolgate.LocationTemp},
+		{"cat > " + filepath.ToSlash(filepath.Join(os.TempDir(), "peek.mjs")), toolgate.LocationTemp},
+		{"cat > " + filepath.ToSlash(filepath.Join(project, "peek.mjs")), toolgate.LocationInsideProject},
+		{"cat > /etc/peek.mjs", toolgate.LocationOutsideProject},
 	} {
-		got := state.TargetsOf(state.ToolGateInput{Tool: "bash", Input: map[string]any{"command": c.command}, Cwd: project, ProjectDir: project})
+		got := toolgate.TargetsOf(toolgate.ToolGateInput{Tool: "bash", Input: map[string]any{"command": c.command}, Cwd: project, ProjectDir: project})
 		if len(got.Targets) != 1 || got.Targets[0].Location != c.want {
 			t.Errorf("%s reads as %+v, want one target at %s", c.command, got, c.want)
 		}

@@ -1,4 +1,4 @@
-package state
+package toolgate
 
 import (
 	"bufio"
@@ -21,15 +21,15 @@ import (
 )
 
 const (
-	toolGateV5Path = "../../../library/questions/tool_gate@5.yaml"
-	toolGateV6Path = "../../../library/questions/tool_gate@6.yaml"
+	toolGateV5Path = "../../../../library/questions/tool_gate@5.yaml"
+	toolGateV6Path = "../../../../library/questions/tool_gate@6.yaml"
 )
 
 var comparedSets = []string{toolGateV5Path, toolGateV6Path}
 
 const (
-	gatePolicyPath = "../../../library/general/rules/tool_gate@1.yaml"
-	gateLibraryDir = "../../../library"
+	gatePolicyPath = "../../../../library/general/rules/tool_gate@1.yaml"
+	gateLibraryDir = "../../../../library"
 	labelProceed   = "proceed"
 	labelBlock     = "block"
 )

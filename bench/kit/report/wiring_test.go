@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/judge/method"
+	"tofu/internal/judge/points"
 	"tofu/internal/sys"
 	shipped "tofu/library"
 )
@@ -26,9 +26,9 @@ methods:
     cost: a median $0.000540 a session and 838 ms on a shell call
 `
 
-func shippedTable(t *testing.T) method.Table {
+func shippedTable(t *testing.T) points.Table {
 	t.Helper()
-	table, err := method.Load(shipped.Files())
+	table, err := points.Load(shipped.Files())
 	if err != nil {
 		t.Fatalf("loading the shipped method table: %v", err)
 	}
@@ -37,7 +37,7 @@ func shippedTable(t *testing.T) method.Table {
 
 func fixturePage(t *testing.T, rows string) string {
 	t.Helper()
-	table, err := method.Parse([]byte(rows), "a fixture table")
+	table, err := points.Parse([]byte(rows), "a fixture table")
 	if err != nil {
 		t.Fatalf("parsing the fixture table: %v", err)
 	}
@@ -67,9 +67,9 @@ func TestOneLineOfTheMethodTableChangesWhatThePageSaysDecides(t *testing.T) {
 func TestTheBuildRefusesAPageThatContradictsTheMethodTable(t *testing.T) {
 	table := shippedTable(t)
 	claimed := Placement{
-		Point: "shell_sift", Question: "how much of a shell result to keep", Decides: "shell_sift", InUse: method.Unwired,
+		Point: "shell_sift", Question: "how much of a shell result to keep", Decides: "shell_sift", InUse: points.Unwired,
 		Axis:       Axis{Name: "planted needles kept", Unit: "percent of results", BetterWhen: BetterHigher},
-		Free:       Method{Name: "regex on error lines", Does: "keeps the head and the tail", DoesFrom: "internal/tools/shell/sift/shellarm.go", Percent: 52.9, Hits: 18, OutOf: 34, Evidence: "18 of 34"},
+		Free:       Method{Name: "regex on error lines", Does: "keeps the head and the tail", DoesFrom: "internal/tools/shell/bash/sift/shellarm.go", Percent: 52.9, Hits: 18, OutOf: 34, Evidence: "18 of 34"},
 		Judged:     Method{Name: "Jev", Does: "scores each chunk", DoesFrom: "bench/suites/judge/sift/arm.go", Percent: 79.4, Hits: 27, OutOf: 34, Evidence: "27 of 34"},
 		SampleSize: 34, SampleOf: "recorded shell results",
 		Source: "bench/suites/judge/sift/report-2026-09-21.md",
@@ -80,7 +80,7 @@ func TestTheBuildRefusesAPageThatContradictsTheMethodTable(t *testing.T) {
 		t.Fatal("the page said shell_sift is not wired and the table says judged, and the build accepted it")
 	}
 	t.Logf("refused, as it must be: %v", err)
-	claimed.InUse = method.Judged
+	claimed.InUse = points.Judged
 	if err := checkPlacement(claimed, table, sys.SourceRoot(), bodies); err != nil {
 		t.Fatalf("the page and the table agree and the build still refused: %v", err)
 	}

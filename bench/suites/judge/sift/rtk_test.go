@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"tofu/internal/tools/shell/sift"
+	"tofu/internal/tools/shell/bash/sift"
 )
 
 func rtkOnPath(t *testing.T) {

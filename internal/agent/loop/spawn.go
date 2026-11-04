@@ -18,7 +18,7 @@ import (
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/hooks"
 	"tofu/internal/agent/subagents"
-	"tofu/internal/judge/method"
+	"tofu/internal/judge/points"
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/catalog"
@@ -170,7 +170,7 @@ type SubAgentLimits struct {
 
 type SpawnTool struct {
 	Review         DoneReview
-	Methods        method.Table
+	Methods        points.Table
 	SubAgents      SubAgents
 	Limits         func() SubAgentLimits
 	SettingsTool   bool

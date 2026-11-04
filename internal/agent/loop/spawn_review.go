@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"tofu/internal/agent/subagents"
-	"tofu/internal/judge/method"
-	"tofu/internal/judge/state"
+	"tofu/internal/judge/points"
+	stopcheck "tofu/internal/judge/points/stop_check"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/project/boardy"
@@ -100,13 +100,13 @@ func acceptanceOf(subAgent Row) []boardy.AcceptanceLine {
 func (t *SpawnTool) decided(ctx context.Context, first Row) (DoneDecision, error) {
 	table := t.Methods
 	if table.Version == 0 {
-		loaded, err := method.Load(shipped.Files())
+		loaded, err := points.Load(shipped.Files())
 		if err != nil {
 			return DoneDecision{}, err
 		}
 		table = loaded
 	}
-	decision, _, err := method.Run(ctx, table, state.StopCheckPoint, method.Arms[DoneDecision]{
+	decision, _, err := points.Run(ctx, table, stopcheck.StopCheckPoint, points.Arms[DoneDecision]{
 		Cheap:  func(ctx context.Context) (DoneDecision, error) { return CheapDoneReview{}.Review(ctx, first) },
 		Judged: func(ctx context.Context) (DoneDecision, error) { return t.Review.Review(ctx, first) },
 	})

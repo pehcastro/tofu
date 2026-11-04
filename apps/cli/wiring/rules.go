@@ -11,12 +11,12 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
-	"tofu/internal/judge/method"
+	"tofu/internal/judge/points"
 	rule "tofu/internal/librarian/rules"
 	"tofu/internal/project/boardy"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
-	"tofu/internal/tools/shell/sift"
+	"tofu/internal/tools/shell/bash/sift"
 	shipped "tofu/library"
 )
 
@@ -206,12 +206,12 @@ func ShellSiftRule(point host.DoctorRule) host.DoctorRule {
 	point.Fallback, point.Unusable, point.ThresholdsFrom = "", "", "the rule"
 	sifter, _, err := BuildShellSift(SiftFollowsTheTable, "")
 	if err == nil {
-		if chosen, _ := sifter.Methods.Of(sift.ShellSchema); chosen.Method == method.Unwired {
-			err = method.UnwiredError{Choice: chosen, File: sifter.Methods.File}
+		if chosen, _ := sifter.Methods.Of(sift.ShellSchema); chosen.Method == points.Unwired {
+			err = points.UnwiredError{Choice: chosen, File: sifter.Methods.File}
 		}
 	}
 	var contradiction loop.RuleContradictsTheTableError
-	var unwired method.UnwiredError
+	var unwired points.UnwiredError
 	switch {
 	case errors.As(err, &contradiction) || errors.As(err, &unwired):
 		point.Mode, point.Fallback = "off", "no shell result is cut: "+err.Error()

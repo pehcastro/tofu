@@ -13,7 +13,7 @@ import (
 
 var knownForeignSchemaConsumers = map[string][]string{
 	"stop_check@1": {
-		"internal/judge/state/stop_check_rule.go",
+		"internal/judge/points/stop_check/stop_check_rule.go",
 	},
 	"shell_sift@1": {
 		"bench/suites/judge/sift/arm.go",

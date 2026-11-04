@@ -1,6 +1,9 @@
-package state
+package stopcheck
 
-import "tofu/internal/judge/ledger"
+import (
+	"tofu/internal/judge/ledger"
+	"tofu/internal/judge/points"
+)
 
 const StopCheckPoint = "stop_check"
 
@@ -31,7 +34,7 @@ type StopCheckState struct {
 }
 
 func StopCheckVersion() string {
-	return deriveVersion(StopCheckPoint, StopCheckState{})
+	return points.DeriveVersion(StopCheckPoint, StopCheckState{})
 }
 
 func BuildStopCheck(in StopCheckState) ([]byte, string, error) {

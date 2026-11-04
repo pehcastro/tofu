@@ -10,7 +10,7 @@ import (
 
 	"tofu/bench/kit/corpus"
 	"tofu/bench/kit/report"
-	"tofu/internal/judge/state"
+	stopcheck "tofu/internal/judge/points/stop_check"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
 )
@@ -38,9 +38,9 @@ func liveBattery(t *testing.T) (Battery, []Turn, []corpus.SkippedTurn) {
 	return battery, turns, skipped
 }
 
-func askDirect(t *testing.T, b Battery, built state.StopCheckState) core.Decision {
+func askDirect(t *testing.T, b Battery, built stopcheck.StopCheckState) core.Decision {
 	t.Helper()
-	raw, _, err := state.BuildStopCheck(built)
+	raw, _, err := stopcheck.BuildStopCheck(built)
 	if err != nil {
 		t.Fatalf("BuildStopCheck: %v", err)
 	}

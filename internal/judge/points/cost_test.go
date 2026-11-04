@@ -1,4 +1,4 @@
-package method_test
+package points_test
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/method"
+	"tofu/internal/judge/points"
 	"tofu/internal/sys"
 )
 
@@ -42,7 +42,7 @@ func TestTheStopCheckCostTheTableStatesIsTheOneTheRecordedLedgerCarries(t *testi
 	t.Logf("ledger: %d files, %d rows scanned, %d stop_check rows over %d sessions, median $%.6f, worst $%.6f, $%.4f in total, %d corrupt",
 		report.Files, report.Scanned, report.Matched, len(spent), median, spent[len(spent)-1], total, len(report.Corrupt))
 
-	stopCheck, err := method.Load(os.DirFS(libraryDir))
+	stopCheck, err := points.Load(os.DirFS(libraryDir))
 	if err != nil {
 		t.Fatalf("loading the shipped method table: %v", err)
 	}

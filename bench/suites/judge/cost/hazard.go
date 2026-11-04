@@ -11,8 +11,8 @@ import (
 	"tofu/bench/kit/corpus"
 	"tofu/bench/kit/report"
 	"tofu/internal/judge/ledger"
+	toolgate "tofu/internal/judge/points/tool_gate"
 	"tofu/internal/judge/questions"
-	"tofu/internal/judge/state"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
 	libraryquestions "tofu/library/questions"
@@ -150,16 +150,16 @@ func gateStateOf(record corpus.Record) (json.RawMessage, error) {
 		return nil, err
 	}
 	var call struct {
-		Agent   string                `json:"agent"`
-		Tool    string                `json:"tool"`
-		Input   map[string]any        `json:"input"`
-		Cwd     string                `json:"cwd"`
-		Context state.ToolGateContext `json:"context"`
+		Agent   string                   `json:"agent"`
+		Tool    string                   `json:"tool"`
+		Input   map[string]any           `json:"input"`
+		Cwd     string                   `json:"cwd"`
+		Context toolgate.ToolGateContext `json:"context"`
 	}
 	if err := json.Unmarshal(raw, &call); err != nil {
 		return nil, fmt.Errorf("case %s: %w", record.ID, err)
 	}
-	built, _, err := state.BuildToolGateV3(state.ToolGateInput{
+	built, _, err := toolgate.BuildToolGateV3(toolgate.ToolGateInput{
 		Agent: call.Agent, Tool: call.Tool, Input: call.Input,
 		Cwd: call.Cwd, ProjectDir: call.Cwd, Context: call.Context,
 	})

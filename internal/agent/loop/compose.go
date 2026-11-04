@@ -19,7 +19,7 @@ import (
 	"tofu/internal/agent/prompt"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/method"
+	"tofu/internal/judge/points"
 	question "tofu/internal/judge/questions"
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
@@ -601,7 +601,7 @@ const (
 )
 
 type pointJudge struct {
-	methods   method.Table
+	methods   points.Table
 	asked     question.Question
 	version   int
 	threshold float64
@@ -628,7 +628,7 @@ func NewRuleJudge(project string) *RuleJudge {
 
 func (j *pointJudge) open(project, ref, name string, kind question.Kind) error {
 	var err error
-	if j.methods, err = method.Load(shipped.Files()); err != nil {
+	if j.methods, err = points.Load(shipped.Files()); err != nil {
 		return err
 	}
 	layers, err := question.Layers(questions.Files(), project)
@@ -660,14 +660,14 @@ func (j *KindJudge) Of(task string, named rules.Verb) (rules.Verb, error) {
 	if strings.TrimSpace(task) == "" {
 		return named, errors.New("the task is blank, so jev is not asked")
 	}
-	kind, chosen, err := method.Run(context.Background(), j.methods, taskKindPoint, method.Arms[rules.Verb]{
+	kind, chosen, err := points.Run(context.Background(), j.methods, taskKindPoint, points.Arms[rules.Verb]{
 		Cheap:  func(context.Context) (rules.Verb, error) { return named, nil },
 		Judged: func(ctx context.Context) (rules.Verb, error) { return j.ask(ctx, task) },
 	})
 	switch {
 	case err != nil:
 		return named, err
-	case chosen == method.Cheap:
+	case chosen == points.Cheap:
 		return named, fmt.Errorf("%s names %s for %s", j.methods.File, chosen, taskKindPoint)
 	}
 	return kind, nil
@@ -714,11 +714,11 @@ func (j *RuleJudge) Of(task rules.Task, asked []rules.Rule) (map[string]rules.Ju
 	if strings.TrimSpace(task.Text) == "" {
 		return nil, errors.New("the task is blank, so jev is not asked")
 	}
-	judged, chosen, err := method.Run(context.Background(), j.methods, ruleAppliesPoint, method.Arms[map[string]rules.Judged]{
+	judged, chosen, err := points.Run(context.Background(), j.methods, ruleAppliesPoint, points.Arms[map[string]rules.Judged]{
 		Cheap:  func(context.Context) (map[string]rules.Judged, error) { return nil, nil },
 		Judged: func(ctx context.Context) (map[string]rules.Judged, error) { return j.ask(ctx, task, asked) },
 	})
-	if err == nil && chosen == method.Cheap {
+	if err == nil && chosen == points.Cheap {
 		err = fmt.Errorf("%s names %s for %s", j.methods.File, chosen, ruleAppliesPoint)
 	}
 	return judged, err

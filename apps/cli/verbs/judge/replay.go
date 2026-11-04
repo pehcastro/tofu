@@ -18,8 +18,8 @@ import (
 	"tofu/internal/cli/render"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
+	stopcheck "tofu/internal/judge/points/stop_check"
 	question "tofu/internal/judge/questions"
-	"tofu/internal/judge/state"
 	"tofu/internal/sys"
 	"tofu/library/questions"
 )
@@ -300,8 +300,8 @@ func gateRule(ref string, sets map[string]float64) replayRule {
 	}
 	rule.File = rule.pol.File
 	switch {
-	case ref == state.StopCheckRuleRef:
-		rule.slots = state.StopCheckThresholdSlots
+	case ref == stopcheck.StopCheckRuleRef:
+		rule.slots = stopcheck.StopCheckThresholdSlots
 	case rule.pol.Schema != gate.SchemaGate:
 		rule.Schema = rule.pol.Schema
 		return rule

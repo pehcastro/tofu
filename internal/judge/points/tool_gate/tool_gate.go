@@ -1,6 +1,9 @@
-package state
+package toolgate
 
-import "tofu/internal/judge/ledger"
+import (
+	"tofu/internal/judge/ledger"
+	"tofu/internal/judge/points"
+)
 
 const ToolGatePoint = "tool_gate"
 
@@ -40,7 +43,7 @@ type toolGateV3Envelope struct {
 }
 
 func ToolGateV3Version() string {
-	return deriveVersion(ToolGatePoint, toolGateV3Envelope{})
+	return points.DeriveVersion(ToolGatePoint, toolGateV3Envelope{})
 }
 
 func BuildToolGateV3(in ToolGateInput) ([]byte, string, error) {

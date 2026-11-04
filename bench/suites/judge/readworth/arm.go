@@ -8,7 +8,7 @@ import (
 
 	question "tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/tools/shell/sift"
+	"tofu/internal/tools/shell/bash/sift"
 )
 
 const Point = "read_worth@1"

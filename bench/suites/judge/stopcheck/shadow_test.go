@@ -12,7 +12,7 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/state"
+	stopcheck "tofu/internal/judge/points/stop_check"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/contract"
@@ -58,9 +58,9 @@ type shadowGate struct {
 func (g *shadowGate) Decide(_ context.Context, request loop.GateRequest) (loop.GateDecision, error) {
 	g.deciding.Lock()
 	defer g.deciding.Unlock()
-	built, builder, err := state.BuildStopCheck(state.StopCheckState{
+	built, builder, err := stopcheck.BuildStopCheck(stopcheck.StopCheckState{
 		Task:        request.Task,
-		RecentSteps: []state.StopCheckStep{{Index: len(g.written) + 1, ToolCalls: []state.StopCheckCall{{Tool: request.Tool}}}},
+		RecentSteps: []stopcheck.StopCheckStep{{Index: len(g.written) + 1, ToolCalls: []stopcheck.StopCheckCall{{Tool: request.Tool}}}},
 	})
 	if err != nil {
 		return loop.GateDecision{}, err
@@ -216,7 +216,7 @@ func TestTheMockedHandbackCorpusDoesNotNameItsLabel(t *testing.T) {
 
 func shippedRule(t *testing.T) (gate.Rule, gate.Resolution) {
 	t.Helper()
-	pol, _, err := state.StopCheckRule()
+	pol, _, err := stopcheck.StopCheckRule()
 	if err != nil {
 		t.Fatalf("loading the shipped stop_check rule: %v", err)
 	}

@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"tofu/bench/kit/corpus"
-	"tofu/internal/tools/shell/sift"
+	"tofu/internal/tools/shell/bash/sift"
 )
 
 const corpusFile = "testdata/shell-corpus.jsonl"

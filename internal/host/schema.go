@@ -14,7 +14,7 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/state"
+	"tofu/internal/judge/points"
 	"tofu/internal/librarian/skills"
 	"tofu/internal/models/llm/quota"
 	"tofu/internal/project/boardy"
@@ -81,7 +81,7 @@ func pinnedNames() map[reflect.Type]string {
 		"settings": {settings.RaisedVersion{}},
 		"skill":    {skills.Skill{}},
 		"snapshot": {snapshot.Refusal{}, snapshot.Report{}},
-		"state":    {state.Subject{}},
+		"state":    {points.Subject{}},
 		"subagent": {
 			subagents.Broken{}, subagents.Definition{}, subagents.Found{}, subagents.Reference{},
 			subagents.Transition{},

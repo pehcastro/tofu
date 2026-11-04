@@ -1,4 +1,4 @@
-package state
+package toolgate
 
 import (
 	"encoding/json"
@@ -8,7 +8,7 @@ import (
 	"tofu/internal/judge/questions"
 )
 
-const toolGateV3Path = "../../../library/questions/tool_gate@3.yaml"
+const toolGateV3Path = "../../../../library/questions/tool_gate@3.yaml"
 
 func TestToolGateV3QuestionSetLintsClean(t *testing.T) {
 	set, err := questions.Load(toolGateV3Path)

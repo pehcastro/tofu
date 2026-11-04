@@ -9,12 +9,12 @@ import (
 	"sync"
 
 	"tofu/internal/agent/loop"
-	"tofu/internal/judge/method"
+	"tofu/internal/judge/points"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/platform/safe"
 	"tofu/internal/sys"
-	"tofu/internal/tools/shell/sift"
+	"tofu/internal/tools/shell/bash/sift"
 	shipped "tofu/library"
 )
 
@@ -29,7 +29,7 @@ const (
 func SiftArms() []string { return []string{SiftFree, SiftJudged} }
 
 func ShellSiftCost() string {
-	table, err := method.Load(shipped.Files())
+	table, err := points.Load(shipped.Files())
 	if err != nil {
 		return err.Error()
 	}
@@ -57,15 +57,15 @@ func BuildShellSift(arm, log string) (*loop.ShellSift, *ShellScorer, error) {
 }
 
 func ShellSiftOn(arm, log string, keys core.Keyring) (*loop.ShellSift, *ShellScorer, error) {
-	table, err := method.Load(shipped.Files())
+	table, err := points.Load(shipped.Files())
 	if err != nil {
 		return nil, nil, err
 	}
 	switch arm {
 	case SiftFree:
-		table = decidedBy(table, method.Cheap)
+		table = decidedBy(table, points.Cheap)
 	case SiftJudged:
-		table = decidedBy(table, method.Judged)
+		table = decidedBy(table, points.Judged)
 	}
 	chosen, err := table.Of(sift.ShellSchema)
 	if err != nil {
@@ -73,7 +73,7 @@ func ShellSiftOn(arm, log string, keys core.Keyring) (*loop.ShellSift, *ShellSco
 	}
 	var scorer *ShellScorer
 	var scores loop.ShellScores
-	if chosen.Method == method.Judged {
+	if chosen.Method == points.Judged {
 		set, setErr := ResolveLibrary(ShellSiftPoint, "")
 		if setErr != nil {
 			return nil, nil, setErr
@@ -105,7 +105,7 @@ func ShellSiftOn(arm, log string, keys core.Keyring) (*loop.ShellSift, *ShellSco
 	return &built, scorer, nil
 }
 
-func decidedBy(table method.Table, chosen method.Method) method.Table {
+func decidedBy(table points.Table, chosen points.Method) points.Table {
 	table.Choices = slices.Clone(table.Choices)
 	for i, choice := range table.Choices {
 		if choice.Point == sift.ShellSchema {

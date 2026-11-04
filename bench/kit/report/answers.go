@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"tofu/internal/judge/method"
+	"tofu/internal/judge/points"
 )
 
 const AnswersPath = "bench/kit/report/answers.json"
@@ -54,7 +54,7 @@ type Placement struct {
 	SampleSize      int           `json:"sample_size"`
 	SampleOf        string        `json:"sample_of"`
 	Decides         string        `json:"decides"`
-	InUse           method.Method `json:"wiring"`
+	InUse           points.Method `json:"wiring"`
 	Source          string        `json:"source"`
 	Missing         string        `json:"unanswerable_because,omitempty"`
 	MissingEvidence string        `json:"unanswerable_evidence,omitempty"`
@@ -168,7 +168,7 @@ func standingText(tree string, bodies map[string]string) (map[string]string, err
 	return standing, nil
 }
 
-func checkAnswers(answers Answers, table method.Table, tree string, reports map[string]string) (Answers, error) {
+func checkAnswers(answers Answers, table points.Table, tree string, reports map[string]string) (Answers, error) {
 	bodies, err := standingText(tree, reports)
 	if err != nil {
 		return Answers{}, err
@@ -248,7 +248,7 @@ func checkWithdrawnCorrection(method Method, source, tree string) error {
 		AnswersPath, method.Name, WithdrawalsPath, source, method.Hits, method.OutOf, method.Percent)
 }
 
-func checkPlacement(one Placement, table method.Table, tree string, bodies map[string]string) error {
+func checkPlacement(one Placement, table points.Table, tree string, bodies map[string]string) error {
 	if one.Point == "" || one.Question == "" {
 		return fmt.Errorf("%s: a decision is listed with no name, or with no plain question a person would ask", AnswersPath)
 	}
@@ -282,7 +282,7 @@ func checkPlacement(one Placement, table method.Table, tree string, bodies map[s
 	return nil
 }
 
-func checkAgainstTheTable(one Placement, table method.Table) error {
+func checkAgainstTheTable(one Placement, table points.Table) error {
 	chosen, err := table.Of(one.Decides)
 	if err != nil {
 		return fmt.Errorf("%s: %s says it decides %q, and %s names no such point", AnswersPath, one.Point, one.Decides, table.File)
